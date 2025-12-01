@@ -1,0 +1,99 @@
+{:secrets   #or [#include ".secrets.edn"
+                 #include #join [#env HOME "/.secrets.edn"]]
+
+ :database  {:dbtype   "postgresql"
+             :host     "localhost"
+             :user     "app_user"
+             :password #profile
+                        {:dev  #ref [:secrets :db :dev-password]
+                         :test #ref [:secrets :db :test-password]}
+            ;; Profile-specific settings
+             :port     #profile {:dev  55432
+                                 :test 55433}
+             :dbname   #profile {:dev  "single_tenant"
+                                 :test "single_tenant_test"}
+             :jdbc-url #profile
+                        {:dev  #join ["jdbc:postgresql://localhost:55432/single_tenant?user=app_user&password=" #ref [:secrets :db :dev-password]]
+                         :test #join ["jdbc:postgresql://localhost:55433/single_tenant_test?user=app_user&password=" #ref [:secrets :db :test-password]]}}
+
+ ;; HikariCP Connection Pool Configuration
+ :hikari-cp {:maximum-pool-size        20
+             :minimum-idle             5
+             :connection-timeout       30000
+             :idle-timeout             600000
+             :max-lifetime             1800000
+             :validation-timeout       5000
+             :leak-detection-threshold 60000
+             :register-mbeans          true}
+
+ ;; Metrics Configuration
+ :metrics   {:hikari     true
+             :database   true
+             :prometheus {:enabled true
+                          :port    9190}}
+
+ :webserver {:host "localhost"
+             :port #profile {:dev  8085
+                             :test 8086}}
+
+ :cache     {:size 1000
+             :ttl  3600}
+
+ ;; OAuth Configuration (optional)
+ :oauth     {:google {:client-id         #ref [:secrets :oauth :google :client-id]
+                      :client-secret     #ref [:secrets :oauth :google :client-secret]
+                      :scopes            ["email" "profile" "openid"]
+                      :authorize-uri     "https://accounts.google.com/o/oauth2/auth"
+                      :access-token-uri  "https://oauth2.googleapis.com/token"
+                      :user-info-uri     "https://www.googleapis.com/oauth2/v3/userinfo"
+                      :redirect-uri      #profile {:dev  "http://localhost:8085/oauth/google/callback"
+                                                   :test "http://localhost:8086/oauth/google/callback"
+                                                   :prod #ref [:secrets :oauth :google :redirect-uri]}
+                      :launch-uri        "/login/google"
+                      :landing-uri       "/"
+                      :basic-auth?       false}
+             :github {:client-id         #ref [:secrets :oauth :github :client-id]
+                      :client-secret     #ref [:secrets :oauth :github :client-secret]
+                      :scopes            ["user:email"]
+                      :authorize-uri     "https://github.com/login/oauth/authorize"
+                      :access-token-uri  "https://github.com/login/oauth/access_token"
+                      :user-info-uri     "https://api.github.com/user"
+                      :redirect-uri      #profile {:dev  "http://localhost:8085/oauth2/github/callback"
+                                                   :test "http://localhost:8086/oauth2/github/callback"
+                                                   :prod #ref [:secrets :oauth :github :redirect-uri]}
+                      :launch-uri        "/oauth2/github"
+                      :landing-uri       "/"
+                      :basic-auth?       false}}
+
+ ;; Stripe Configuration (optional for template)
+ :stripe    {:api-key                 #profile
+                                       {:dev  #ref [:secrets :stripe :test-api-key]
+                                        :test #ref [:secrets :stripe :test-api-key]
+                                        :prod #ref [:secrets :stripe :live-api-key]}
+             :webhook-endpoint-secret #profile
+                                       {:dev  #ref [:secrets :stripe :test-webhook-secret]
+                                        :test #ref [:secrets :stripe :test-webhook-secret]
+                                        :prod #ref [:secrets :stripe :live-webhook-secret]}
+             :api-version             "2024-12-18"
+             :max-network-retries     3
+             :timeout                 80000
+             :use-connection-pool?    true
+             :pool-options            {:timeout           5
+                                       :threads           4
+                                       :default-per-route 2
+                                       :insecure?         false}}
+
+ ;; Email Configuration - Choose between :postmark or :gmail-smtp
+ :email     {:type :gmail-smtp  ; Change to :postmark when you have a domain
+
+             ;; Postmark configuration (for production)
+             :postmark {:api-key    #ref [:secrets :postmark :api-key]
+                        :from-email #ref [:secrets :postmark :from-email]}
+
+             ;; Gmail SMTP configuration (for development)
+             :smtp {:host #ref [:secrets :gmail :smtp-host]
+                    :port #ref [:secrets :gmail :smtp-port]
+                    :user #ref [:secrets :gmail :smtp-user]
+                    :pass #ref [:secrets :gmail :smtp-pass]
+                    :tls  true}
+             :from-email #ref [:secrets :gmail :from-email]}}
