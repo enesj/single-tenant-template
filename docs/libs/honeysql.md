@@ -1,0 +1,1613 @@
+<!-- ai: {:tags [:libs] :kind :reference} -->
+
+# Honey SQL [![Clojure CI Release](https://github.com/seancorfield/honeysql/actions/workflows/test-and-release.yml/badge.svg)]](https://github.com/seancorfield/honeysql/actions/workflows/test.yml)
+
+SQL as Clojure data structures. Build queries programmatically -- even at runtime -- without having to bash strings together.
+
+## Build
+
+[![Clojars](](https://clojars.org/com.github.seancorfield/honeysql)
+[![cljdoc](https://cljdoc.org/badge/com.github.seancorfield/honeysql?2.6.1230)](https://cljdoc.org/d/com.github.seancorfield/honeysql/CURRENT)
+[![Slack](https://img.shields.io/badge/slack-HoneySQL-orange.svg?logo=slack)](https://clojurians.slack.com/app_redirect?channel=honeysql)
+[![Join Slack](https://img.shields.io/badge/slack-join_clojurians-orange.svg?logo=slack)](http://clojurians.net)
+
+
+This project follows the version scheme MAJOR.MINOR.COMMITS where MAJOR and MINOR provide some relative indication of the size of the change, but do not follow semantic versioning. In general, all changes endeavor to be non-breaking (by moving to new names rather than by breaking existing names). COMMITS is an ever-increasing counter of commits since the beginning of this repository.
+
+> Note: every commit to the **develop** branch runs CI (GitHub Actions) and successful runs push a MAJOR.MINOR.9999-SNAPSHOT build to Clojars so the very latest version of HoneySQL is always available either via that [snapshot on Clojars](https://clojars.org/com.github.seancorfield/honeysql) or via a git dependency on the latest SHA.
+
+HoneySQL 2.x requires Clojure 1.9 or later.
+It also supports recent versions of ClojureScript and Babashka.
+
+Compared to the [legacy 1.x version](#1.x), HoneySQL 2.x provides a streamlined codebase and a simpler method for extending the DSL. It also supports SQL dialects out-of-the-box and will be extended to support vendor-specific language features over time (unlike 1.x).
+
+> Note: you can use 1.x and 2.x side-by-side as they use different group IDs and different namespaces. This allows for a piecemeal migration. See this [summary of differences between 1.x and 2.x](doc/differences-from-1-x.md) if you are migrating from 1.x!
+
+## Try HoneySQL Online!
+
+[John Shaffer](https://github.com/john-shaffer) has created this awesome
+[HoneySQL web app](https://john.shaffe.rs/honeysql/), written in ClojureScript,
+so you can experiment with HoneySQL in a browser, including setting different
+options so you can generate pretty SQL with inline values (via `:inline true`)
+for copying and pasting directly into your SQL tool of choice!
+
+## Note on code samples
+
+Sample code in this documentation is verified via
+[lread/test-doc-blocks](https://github.com/lread/test-doc-blocks).
+
+Some of these samples show pretty-printed SQL: HoneySQL 2.x supports `:pretty true` which inserts newlines between clauses in the generated SQL strings.
+
+## Usage
+
+This section includes a number of usage examples but does not dive deep into the
+way the data structure acts as a DSL that can specify SQL statements (as hash maps)
+and SQL expressions and function calls (as vectors). It is recommended that you read the
+[**Getting Started**](https://cljdoc.org/d/com.github.seancorfield/honeysql/CURRENT/doc/getting-started)
+section of the documentation before trying to use HoneySQL to build your own queries!
+
+From Clojure:
+<!-- {:test-doc-blocks/reader-cond :clj} -->
+```clojure
+(refer-clojure :exclude '[distinct filter for group-by into partition-by set update])
+(require '[honey.sql :as sql]
+         ;; CAUTION: this overwrites several clojure.core fns:
+         ;;
+         ;; distinct, filter, for, group-by, into, partition-by, set, and update
+         ;;
+         ;; you should generally only refer in the specific
+         ;; helpers that you want to use!
+         '[honey.sql.helpers :refer :all :as h]
+         ;; so we can still get at clojure.core functions:
+         '[clojure.core :as c])
+```
+
+From ClojureScript, we don't have `:refer :all`. If we want to use `:refer`, we have no choice but to be specific:
+<!-- {:test-doc-blocks/reader-cond :cljs} -->
+```Clojure
+(refer-clojure :exclude '[filter for group-by into partition-by set update])
+(require '[honey.sql :as sql]
+         '[honey.sql.helpers :refer [select select-distinct from
+                                     join left-join right-join
+                                     where for group-by having union
+                                     order-by limit offset values columns
+                                     update insert-into set composite
+                                     delete delete-from truncate] :as h]
+         '[clojure.core :as c])
+```
+
+Everything is built on top of maps representing SQL queries:
+
+```clojure
+(def sqlmap {:select [:a :b :c]
+             :from   [:foo]
+             :where  [:= :foo.a "baz"]})
+```
+
+Column names can be provided as keywords or symbols (but not strings -- HoneySQL treats strings as values that should be lifted out of the SQL as parameters).
+
+### `format`
+
+`format` turns maps into `next.jdbc`-compatible (and `clojure.java.jdbc`-compatible), parameterized SQL:
+
+```clojure
+(sql/format sqlmap)
+=> ["SELECT a, b, c FROM foo WHERE foo.a = ?" "baz"]
+;; sqlmap as symbols instead of keywords:
+(-> '{select (a, b, c) from (foo) where (= foo.a "baz")}
+    (sql/format))
+=> ["SELECT a, b, c FROM foo WHERE foo.a = ?" "baz"]
+```
+
+HoneySQL is a relatively "pure" library, it does not manage your JDBC connection
+or run queries for you, it simply generates SQL strings. You can then pass them
+to a JDBC library, such as [`next.jdbc`](https://github.com/seancorfield/next-jdbc):
+
+<!-- :test-doc-blocks/skip -->
+```clojure
+(jdbc/execute! conn (sql/format sqlmap))
+```
+
+> Note: you'll need to add your preferred JDBC library as a dependency in your project -- HoneySQL deliberately does not make that choice for you.
+
+If you want to format the query as a string with no parameters (e.g. to use the SQL statement in a SQL console), pass `:inline true` as an option to `sql/format`:
+
+```clojure
+(sql/format sqlmap {:inline true})
+=> ["SELECT a, b, c FROM foo WHERE foo.a = 'baz'"]
+```
+
+As seen above, the default parameterization uses positional parameters (`?`) with the order of values in the generated vector matching the order of those placeholders in the SQL. As of 2.4.962, you can specified `:numbered true` as an option to produce numbered parameters (`$1`, `$2`, etc):
+
+```clojure
+(sql/format sqlmap {:numbered true})
+=> ["SELECT a, b, c FROM foo WHERE foo.a = $1" "baz"]
+```
+
+Namespace-qualified keywords (and symbols) are generally treated as table-qualified columns: `:foo/bar` becomes `foo.bar`, except in contexts where that would be illegal (such as the list of columns in an `INSERT` statement). This approach is likely to be more compatible with code that uses libraries like [`next.jdbc`](https://github.com/seancorfield/next-jdbc) and [`seql`](https://github.com/exoscale/seql), as well as being more convenient in a world of namespace-qualified keywords, following the example of `clojure.spec` etc.
+
+```clojure
+(def q-sqlmap {:select [:foo/a :foo/b :foo/c]
+               :from   [:foo]
+               :where  [:= :foo/a "baz"]})
+(sql/format q-sqlmap)
+=> ["SELECT foo.a, foo.b, foo.c FROM foo WHERE foo.a = ?" "baz"]
+;; this also works with symbols instead of keywords:
+(-> '{select (foo/a, foo/b, foo/c)
+      from   (foo)
+      where  (= foo/a "baz")}
+    (sql/format))
+=> ["SELECT foo.a, foo.b, foo.c FROM foo WHERE foo.a = ?" "baz"]
+```
+
+As of 2.6.1126, there is a helper macro you can use with quoted symbolic
+queries (that are purely literal, not programmatically constructed) to
+provide "escape hatches" for certain symbols that you want to be treated
+as locally bound symbols (and, hence, their values):
+
+<!-- :test-doc-blocks/skip -->
+```clojure
+;; quoted symbolic query with local substitution:
+(let [search-value "baz"]
+  (sql/formatv [search-value]
+   '{select (foo/a, foo/b, foo/c)
+     from   (foo)
+     where  (= foo/a search-value)}))
+=> ["SELECT foo.a, foo.b, foo.c FROM foo WHERE foo.a = ?" "baz"]
+```
+
+> Note: this is a Clojure-only feature and is not available in ClojureScript, and it is intended for literal, inline symbolic queries only, not for programmatically constructed queries (where you would be able to substitute the values directly, as you build the query).
+
+Documentation for the entire data DSL can be found in the
+[Clause Reference](doc/clause-reference.md), the
+[Operator Reference](doc/operator-reference.md), and the
+[Special Syntax reference](doc/special-syntax.md).
+
+### Vanilla SQL clause helpers
+
+For every single SQL clause supported by HoneySQL (as keywords or symbols
+in the data structure that is the DSL), there is also a corresponding
+function in the `honey.sql.helpers` namespace:
+
+```clojure
+(-> (select :a :b :c)
+    (from :foo)
+    (where [:= :foo.a "baz"]))
+=> {:select [:a :b :c] :from [:foo] :where [:= :foo.a "baz"]}
+```
+
+In general, `(helper :foo expr)` will produce `{:helper [:foo expr]}`
+(with a few exceptions -- see the docstring of the helper function
+for details).
+
+Order doesn't matter (for independent clauses):
+
+```clojure
+(= (-> (select :*) (from :foo))
+   (-> (from :foo) (select :*)))
+=> true
+```
+
+When using the vanilla helper functions, repeated clauses will be merged into existing clauses, in the natural evaluation order (where that makes sense):
+
+```clojure
+(-> sqlmap (select :d))
+=> {:from [:foo], :where [:= :foo.a "baz"], :select [:a :b :c :d]}
+```
+
+If you want to replace a clause, you can `dissoc` the existing clause first, since this is all data:
+
+```clojure
+(-> sqlmap
+    (dissoc :select)
+    (select :*)
+    (where [:> :b 10])
+    sql/format)
+=> ["SELECT * FROM foo WHERE (foo.a = ?) AND (b > ?)" "baz" 10]
+```
+
+> Note: the helpers always produce keywords so you can rely on `dissoc` with the desired keyword to remove. If you are building the data DSL "manually" and using symbols instead of keywords, you'll need to `dissoc` the symbol form instead.
+
+`where` will combine multiple clauses together using SQL's `AND`:
+
+```clojure
+(-> (select :*)
+    (from :foo)
+    (where [:= :a 1] [:< :b 100])
+    sql/format)
+=> ["SELECT * FROM foo WHERE (a = ?) AND (b < ?)" 1 100]
+```
+
+The power of this approach comes from the abiliity to programmatically and
+conditionally build up queries:
+
+<!-- :test-doc-blocks/skip -->
+```clojure
+(defn fetch-user [& {:keys [id name]}]
+  (-> (select :*)
+      (from :users)
+      (cond->
+        id    (where [:= :id id])
+        name  (where [:= :name name]))
+      sql/format))
+```
+
+You can call `fetch-user` with either `:id` or `:name` _or both_ and get back
+a query with the appropriate `WHERE` clause, since the helpers will merge the
+conditions into the query DSL.
+
+Column and table names may be aliased by using a vector pair of the original
+name and the desired alias:
+
+```clojure
+(-> (select :a [:b :bar] :c [:d :x])
+    (from [:foo :quux])
+    (where [:= :quux.a 1] [:< :bar 100])
+    sql/format)
+=> ["SELECT a, b AS bar, c, d AS x FROM foo AS quux WHERE (quux.a = ?) AND (bar < ?)" 1 100]
+```
+
+or conditionally:
+
+<!-- :test-doc-blocks/skip -->
+```clojure
+(-> (select :a [:b :bar])
+    (cond->
+      need-c (select :c)
+      x-val  (select [:d :x]))
+    (from [:foo :quux])
+    (where [:= :quux.a 1] [:< :bar 100])
+    (cond->
+      x-val  (where [:> :x x-val]))
+    sql/format)
+```
+
+In particular, note that `(select [:a :b])` means `SELECT a AS b` rather than
+`SELECT a, b` -- helpers like `select` are generally variadic and do not take
+a collection of column names.
+
+The examples in this README use a mixture of data structures and the helper
+functions interchangably. For any example using the helpers, you could evaluate
+it (without the call to `sql/format`) to see what the equivalent data structure
+would be.
+
+Documentation for all the helpers can be found in the
+[`honey.sql.helpers` API reference](https://cljdoc.org/d/com.github.seancorfield/honeysql/CURRENT/api/honey.sql.helpers).
+
+### Inserts
+
+Inserts are supported in two patterns.
+In the first pattern, you must explicitly specify the columns to insert,
+then provide a collection of rows, each a collection of column values:
+
+```clojure
+(-> (insert-into :properties)
+    (columns :name :surname :age)
+    (values
+     [["Jon" "Smith" 34]
+      ["Andrew" "Cooper" 12]
+      ["Jane" "Daniels" 56]])
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO properties (name, surname, age)
+VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)
+"
+"Jon" "Smith" 34 "Andrew" "Cooper" 12 "Jane" "Daniels" 56]
+;; or as pure data DSL:
+(-> {:insert-into [:properties]
+     :columns [:name :surname :age]
+     :values [["Jon" "Smith" 34]
+              ["Andrew" "Cooper" 12]
+              ["Jane" "Daniels" 56]]}
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO properties (name, surname, age)
+VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)
+"
+"Jon" "Smith" 34 "Andrew" "Cooper" 12 "Jane" "Daniels" 56]
+```
+
+If the rows are of unequal lengths, they will be padded with `NULL` values to make them consistent.
+
+Alternately, you can simply specify the values as maps:
+
+```clojure
+(-> (insert-into :properties)
+    (values [{:name "John" :surname "Smith" :age 34}
+             {:name "Andrew" :surname "Cooper" :age 12}
+             {:name "Jane" :surname "Daniels" :age 56}])
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO properties (name, surname, age)
+VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)
+"
+"John" "Smith" 34
+"Andrew" "Cooper"  12
+"Jane" "Daniels" 56]
+;; or as pure data DSL:
+(-> {:insert-into [:properties]
+     :values [{:name "John", :surname "Smith", :age 34}
+              {:name "Andrew", :surname "Cooper", :age 12}
+              {:name "Jane", :surname "Daniels", :age 56}]}
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO properties (name, surname, age)
+VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)
+"
+"John" "Smith" 34
+"Andrew" "Cooper"  12
+"Jane" "Daniels" 56]
+```
+
+The set of columns used in the insert will be the union of all column names from all
+the hash maps: columns that are missing from any rows will have `NULL` as their value
+unless you specify those columns in the `:values-default-columns` option, which takes
+a set of column names that should get the value `DEFAULT` instead of `NULL`:
+
+
+```clojure
+(-> (insert-into :properties)
+    (values [{:name "John" :surname "Smith" :age 34}
+             {:name "Andrew" :age 12}
+             {:name "Jane" :surname "Daniels"}])
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO properties (name, surname, age)
+VALUES (?, ?, ?), (?, NULL, ?), (?, ?, NULL)
+"
+"John" "Smith" 34
+"Andrew" 12
+"Jane" "Daniels"]
+(-> (insert-into :properties)
+    (values [{:name "John" :surname "Smith" :age 34}
+             {:name "Andrew" :age 12}
+             {:name "Jane" :surname "Daniels"}])
+    (sql/format {:pretty true :values-default-columns #{:age}}))
+=> ["
+INSERT INTO properties (name, surname, age)
+VALUES (?, ?, ?), (?, NULL, ?), (?, ?, DEFAULT)
+"
+"John" "Smith" 34
+"Andrew" 12
+"Jane" "Daniels"]
+```
+
+### Nested subqueries
+
+The column values do not have to be literals, they can be nested queries:
+
+```clojure
+(let [user-id 12345
+      role-name "user"]
+  (-> (insert-into :user_profile_to_role)
+      (values [{:user_profile_id user-id
+                :role_id         (-> (select :id)
+                                     (from :role)
+                                     (where [:= :name role-name]))}])
+      (sql/format {:pretty true})))
+
+=> ["
+INSERT INTO user_profile_to_role (user_profile_id, role_id)
+VALUES (?, (SELECT id FROM role WHERE name = ?))
+"
+12345
+"user"]
+;; or as pure data DSL:
+(let [user-id 12345
+      role-name "user"]
+  (-> {:insert-into [:user_profile_to_role]
+       :values [{:user_profile_id 12345,
+                 :role_id {:select [:id],
+                           :from [:role],
+                           :where [:= :name "user"]}}]}
+      (sql/format {:pretty true})))
+=> ["
+INSERT INTO user_profile_to_role (user_profile_id, role_id)
+VALUES (?, (SELECT id FROM role WHERE name = ?))
+"
+12345
+"user"]
+```
+
+```clojure
+(-> (select :*)
+    (from :foo)
+    (where [:in :foo.a (-> (select :a) (from :bar))])
+    (sql/format))
+=> ["SELECT * FROM foo WHERE foo.a IN (SELECT a FROM bar)"]
+;; or as pure data DSL:
+(-> {:select [:*],
+     :from [:foo],
+     :where [:in :foo.a {:select [:a], :from [:bar]}]}
+    (sql/format))
+=> ["SELECT * FROM foo WHERE foo.a IN (SELECT a FROM bar)"]
+```
+
+Because values can be nested queries -- and also because values can be function calls --
+whenever you are working with values that are, themselves, structured data, you will
+need to tell HoneySQL not to interpret that structured data as part of the DSL. This
+especially affects using JSON values with HoneySQL (e.g., targeting PostgreSQL). There
+are two possible approaches:
+
+1. Use named parameters instead of having the values directly in the DSL structure (see `:param` under **Miscellaneous** below), or
+2. Use `[:lift ..]` wrapped around any structured values which tells HoneySQL not to interpret the vector or hash map value as a DSL.
+
+### Composite types
+
+Composite types are supported:
+
+```clojure
+(-> (insert-into :comp_table)
+    (columns :name :comp_column)
+    (values
+     [["small" (composite 1 "inch")]
+      ["large" (composite 10 "feet")]])
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO comp_table (name, comp_column)
+VALUES (?, (?, ?)), (?, (?, ?))
+"
+"small" 1 "inch" "large" 10 "feet"]
+;; with numbered parameters:
+(-> (insert-into :comp_table)
+    (columns :name :comp_column)
+    (values
+     [["small" (composite 1 "inch")]
+      ["large" (composite 10 "feet")]])
+    (sql/format {:pretty true :numbered true}))
+=> ["
+INSERT INTO comp_table (name, comp_column)
+VALUES ($1, ($2, $3)), ($4, ($5, $6))
+"
+"small" 1 "inch" "large" 10 "feet"]
+;; or as pure data DSL:
+(-> {:insert-into [:comp_table],
+     :columns [:name :comp_column],
+     :values [["small" [:composite 1 "inch"]]
+              ["large" [:composite 10 "feet"]]]}
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO comp_table (name, comp_column)
+VALUES (?, (?, ?)), (?, (?, ?))
+"
+"small" 1 "inch" "large" 10 "feet"]
+```
+
+### Updates
+
+Updates are possible too:
+
+```clojure
+(-> (update :films)
+    (set {:kind "dramatic"
+           :watched [:+ :watched 1]})
+    (where [:= :kind "drama"])
+    (sql/format {:pretty true}))
+=> ["
+UPDATE films
+SET kind = ?, watched = watched + ?
+WHERE kind = ?
+"
+"dramatic"
+1
+"drama"]
+;; or as pure data DSL:
+(-> {:update :films,
+     :set {:kind "dramatic", :watched [:+ :watched 1]},
+     :where [:= :kind "drama"]}
+    (sql/format {:pretty true}))
+=> ["
+UPDATE films
+SET kind = ?, watched = watched + ?
+WHERE kind = ?
+"
+"dramatic"
+1
+"drama"]
+```
+
+If you are trying to build a compound update statement (with `from` or `join`),
+be aware that different databases have slightly different syntax in terms of
+where `SET` should appear. The default above is to put `SET` before `FROM` which
+is how PostgreSQL (and other ANSI-SQL dialects work). If you are using MySQL,
+you will need to select the `:mysql` dialect in order to put the `SET` after
+any `JOIN` clause.
+
+### Deletes
+
+Deletes look as you would expect:
+
+```clojure
+(-> (delete-from :films)
+    (where [:<> :kind "musical"])
+    (sql/format))
+=> ["DELETE FROM films WHERE kind <> ?" "musical"]
+;; or as pure data DSL:
+(-> {:delete-from [:films],
+     :where [:<> :kind "musical"]}
+    (sql/format))
+=> ["DELETE FROM films WHERE kind <> ?" "musical"]
+```
+
+If your database supports it, you can also delete from multiple tables:
+
+```clojure
+(-> (delete [:films :directors])
+    (from :films)
+    (join :directors [:= :films.director_id :directors.id])
+    (where [:<> :kind "musical"])
+    (sql/format {:pretty true}))
+=> ["
+DELETE films, directors
+FROM films
+INNER JOIN directors ON films.director_id = directors.id
+WHERE kind <> ?
+"
+"musical"]
+;; or pure data DSL:
+(-> {:delete [:films :directors],
+     :from [:films],
+     :join [:directors [:= :films.director_id :directors.id]],
+     :where [:<> :kind "musical"]}
+    (sql/format {:pretty true}))
+=> ["
+DELETE films, directors
+FROM films
+INNER JOIN directors ON films.director_id = directors.id
+WHERE kind <> ?
+"
+"musical"]
+```
+
+If you want to delete everything from a table, you can use `truncate`:
+
+```clojure
+(-> (truncate :films)
+    (sql/format))
+=> ["TRUNCATE TABLE films"]
+;; or as pure data DSL:
+(-> {:truncate :films}
+    (sql/format))
+=> ["TRUNCATE TABLE films"]
+```
+
+### Set operations
+
+Queries may be combined with a `:union`, `:union-all`, `:intersect` or `:except` keyword:
+
+```clojure
+(sql/format {:union [(-> (select :*) (from :foo))
+                     (-> (select :*) (from :bar))]})
+=> ["SELECT * FROM foo UNION SELECT * FROM bar"]
+```
+
+There are also helpers for each of those:
+
+```clojure
+(sql/format (union (-> (select :*) (from :foo))
+                   (-> (select :*) (from :bar))))
+=> ["SELECT * FROM foo UNION SELECT * FROM bar"]
+```
+
+> Note: different databases have different precedence rules for these set operations when used in combination -- you may need to use `:nest` to add `(` .. `)` in order to combine these operations in a single SQL statement, if the natural order produced by HoneySQL does not work "as expected" for your database.
+
+### Functions
+
+Function calls (and expressions with operators) can be specified as
+vectors where the first element is either a keyword or a symbol:
+
+```clojure
+(-> (select :*) (from :foo)
+    (where [:> :date_created [:date_add [:now] [:interval 24 :hours]]])
+    (sql/format))
+=> ["SELECT * FROM foo WHERE date_created > DATE_ADD(NOW(), INTERVAL ? HOURS)" 24]
+```
+
+> Note: The above example may be specific to MySQL but the general principle of vectors for function calls applies to all dialects.
+
+A shorthand syntax also exists for simple function calls:
+keywords that begin with `%` are interpreted as SQL function calls:
+
+```clojure
+(-> (select :%count.*) (from :foo) sql/format)
+=> ["SELECT COUNT(*) FROM foo"]
+```
+```clojure
+;; with an alias:
+(-> (select [:%count.* :total]) (from :foo) sql/format)
+=> ["SELECT COUNT(*) AS total FROM foo"]
+```
+```clojure
+(-> (select :%max.id) (from :foo) sql/format)
+=> ["SELECT MAX(id) FROM foo"]
+```
+
+Since regular function calls are indicated with vectors and so are aliased pairs,
+this shorthand can be more convenient due to the extra wrapping needed for the
+regular function calls in a select:
+
+```clojure
+(-> (select [[:count :*]]) (from :foo) sql/format)
+=> ["SELECT COUNT(*) FROM foo"]
+```
+```clojure
+(-> (select [[:count :*] :total]) (from :foo) sql/format)
+=> ["SELECT COUNT(*) AS total FROM foo"]
+```
+```clojure
+(-> (select [:%count.*]) (from :foo) sql/format)
+=> ["SELECT COUNT(*) FROM foo"]
+;; or even:
+(-> (select :%count.*) (from :foo) sql/format)
+=> ["SELECT COUNT(*) FROM foo"]
+```
+```clojure
+(-> (select [[:max :id]]) (from :foo) sql/format)
+=> ["SELECT MAX(id) FROM foo"]
+(-> (select [[:max :id] :highest]) (from :foo) sql/format)
+=> ["SELECT MAX(id) AS highest FROM foo"]
+;; the pure data DSL requires an extra level of brackets:
+(-> {:select [[[:max :id]]], :from [:foo]} sql/format)
+=> ["SELECT MAX(id) FROM foo"]
+(-> {:select [[[:max :id] :highest]], :from [:foo]} sql/format)
+=> ["SELECT MAX(id) AS highest FROM foo"]
+;; the shorthand makes this simpler:
+(-> {:select [[:%max.id]], :from [:foo]} sql/format)
+=> ["SELECT MAX(id) FROM foo"]
+(-> {:select [[:%max.id :highest]], :from [:foo]} sql/format)
+=> ["SELECT MAX(id) AS highest FROM foo"]
+;; or even (no alias):
+(-> {:select [:%max.id], :from [:foo]} sql/format)
+=> ["SELECT MAX(id) FROM foo"]
+;; or even (no alias, no other columns):
+(-> {:select :%max.id, :from :foo} sql/format)
+=> ["SELECT MAX(id) FROM foo"]
+```
+
+Custom columns using functions are built with the same vector format.
+Be sure to properly nest the vectors so that the first element in the selection
+is the custom function and the second is the column alias.
+```clojure
+(sql/format
+  {:select   [:job_name                                      ;; A bare field selection
+              [[:avg [:/ [:- :end_time :start_time] 1000.0]] ;; A custom function
+               :avg_exec_time_seconds                        ;; The column alias
+               ]]
+   :from     [:job_data]
+   :group-by :job_name})
+=> ["SELECT job_name, AVG((end_time - start_time) / ?) AS avg_exec_time_seconds FROM job_data GROUP BY job_name" 1000.0]
+```
+
+If a keyword begins with `'`, the function name is formatted as a SQL
+entity rather than being converted to uppercase and having hyphens `-`
+converted to spaces). That means that hyphens `-` will become underscores `_`
+unless you have quoting enabled:
+
+```clojure
+(-> (select :*) (from :foo)
+    (where [:'my-schema.SomeFunction :bar 0])
+    (sql/format))
+=> ["SELECT * FROM foo WHERE my_schema.SomeFunction(bar, ?)" 0]
+(-> (select :*) (from :foo)
+    (where [:'my-schema.SomeFunction :bar 0])
+    (sql/format :quoted true))
+=> ["SELECT * FROM \"foo\" WHERE \"my-schema\".\"SomeFunction\"(\"bar\", ?)" 0]
+(-> (select :*) (from :foo)
+    (where [:'my-schema.SomeFunction :bar 0])
+    (sql/format :dialect :mysql))
+=> ["SELECT * FROM `foo` WHERE `my-schema`.`SomeFunction`(`bar`, ?)" 0]
+```
+
+> Note: in non-function contexts, if a keyword begins with `'`, it is transcribed into the SQL exactly as-is, with no case or character conversion at all.
+
+### Bindable parameters
+
+Keywords that begin with `?` are interpreted as bindable parameters:
+
+```clojure
+(-> (select :id)
+    (from :foo)
+    (where [:= :a :?baz])
+    (sql/format {:params {:baz "BAZ"}}))
+=> ["SELECT id FROM foo WHERE a = ?" "BAZ"]
+;; or with numbered parameters:
+(-> (select :id)
+    (from :foo)
+    (where [:= :a :?baz])
+    (sql/format {:params {:baz "BAZ"} :numbered true}))
+=> ["SELECT id FROM foo WHERE a = $1" "BAZ"]
+;; or as pure data DSL:
+(-> {:select [:id], :from [:foo], :where [:= :a :?baz]}
+    (sql/format {:params {:baz "BAZ"}}))
+=> ["SELECT id FROM foo WHERE a = ?" "BAZ"]
+```
+
+### Miscellaneous
+
+Sometimes you want to provide SQL fragments directly or have certain values
+placed into the SQL string rather than turned into a parameter.
+
+The `:raw` syntax lets you embed SQL fragments directly into a HoneySQL expression.
+It accepts either a single string to embed or a vector of expressions that will be
+converted to strings and embedded as a single string.
+
+The `:inline` syntax attempts to turn a Clojure value into a SQL value and then
+embeds that string, e.g., `[:inline "foo"]` produces `'foo'` (a SQL string).
+
+The `:param` syntax identifies a named parameter whose value will be supplied
+via the `:params` argument to `format`.
+
+The `:lift` syntax will prevent interpretation of Clojure data structures as
+part of the DSL and instead turn such values into parameters (useful when you
+want to pass a vector or a hash map directly as a positional parameter value,
+for example when you have extended `next.jdbc`'s `SettableParameter` protocol
+to a data structure -- as is common when working with PostgreSQL's JSON/JSONB types).
+
+Finally, the `:nest` syntax will cause an extra set of parentheses to be
+wrapped around its argument, after formatting that argument as a SQL expression.
+
+These can be combined to allow more fine-grained control over SQL generation:
+
+```clojure
+(def call-qualify-map
+  (-> (select [[:foo :bar]] [[:raw "@var := foo.bar"]])
+      (from :foo)
+      (where [:= :a [:param :baz]] [:= :b [:inline 42]])))
+```
+```clojure
+call-qualify-map
+=> {:where [:and [:= :a [:param :baz]] [:= :b [:inline 42]]]
+    :from (:foo)
+    :select [[[:foo :bar]] [[:raw "@var := foo.bar"]]]}
+```
+```clojure
+(sql/format call-qualify-map {:params {:baz "BAZ"}})
+=> ["SELECT FOO(bar), @var := foo.bar FROM foo WHERE (a = ?) AND (b = 42)" "BAZ"]
+```
+
+```clojure
+(-> (select :*)
+    (from :foo)
+    (where [:< :expired_at [:raw ["now() - '" 5 " seconds'"]]])
+    (sql/format))
+=> ["SELECT * FROM foo WHERE expired_at < now() - '5 seconds'"]
+```
+
+```clojure
+(-> (select :*)
+    (from :foo)
+    (where [:< :expired_at [:raw ["now() - '" [:lift 5] " seconds'"]]])
+    (sql/format))
+=> ["SELECT * FROM foo WHERE expired_at < now() - '? seconds'" 5]
+```
+
+```clojure
+(-> (select :*)
+    (from :foo)
+    (where [:< :expired_at [:raw ["now() - '" [:param :t] " seconds'"]]])
+    (sql/format {:params {:t 5}}))
+=> ["SELECT * FROM foo WHERE expired_at < now() - '? seconds'" 5]
+```
+
+```clojure
+(-> (select :*)
+    (from :foo)
+    (where [:< :expired_at [:raw ["now() - " [:inline (str 5 " seconds")]]]])
+    (sql/format))
+=> ["SELECT * FROM foo WHERE expired_at < now() - '5 seconds'"]
+```
+
+#### PostGIS
+
+A common example in the wild is the PostGIS extension to PostgreSQL where you
+have a lot of function calls needed in code:
+
+```clojure
+(-> (insert-into :sample)
+    (values [{:location [:ST_SetSRID
+                         [:ST_MakePoint 0.291 32.621]
+                         [:cast 4325 :integer]]}])
+    (sql/format {:pretty true}))
+=> ["
+INSERT INTO sample (location)
+VALUES (ST_SETSRID(ST_MAKEPOINT(?, ?), CAST(? AS INTEGER)))
+"
+0.291 32.621 4325]
+```
+
+#### Entity Names
+
+To quote SQL entity names, pass the `:quoted true` option to `format` and they will
+be quoted according to the selected dialect. If you override the dialect in a
+`format` call, by passing the `:dialect` option, SQL entity names will be automatically
+quoted. You can override the dialect and turn off quoting by passing `:quoted false`.
+Valid `:dialect` options are `:ansi` (the default, use this for PostgreSQL),
+`:mysql`, `:oracle`, or `:sqlserver`. As of 2.5.1091, `:nrql` is also supported:
+
+```clojure
+(-> (select :foo.a)
+    (from :foo)
+    (where [:= :foo.a "baz"])
+    (sql/format {:dialect :mysql}))
+=> ["SELECT `foo`.`a` FROM `foo` WHERE `foo`.`a` = ?" "baz"]
+```
+```clojure
+(-> (select :foo.a)
+    (from :foo)
+    (where [:= :foo.a "baz"])
+    (sql/format {:dialect :nrql}))
+=> ["SELECT `foo.a` FROM foo WHERE `foo.a` = 'baz'"]
+```
+
+See [New Relic NRQL Support](nrsql.md) for more details of the NRQL dialect.
+
+#### Locking
+
+The ANSI/PostgreSQL/SQLServer dialects support locking selects via a `FOR` clause as follows:
+
+* `:for [<lock-strength> <table(s)> <qualifier>]` where `<lock-strength>` is required and may be one of:
+  * `:update`
+  * `:no-key-update`
+  * `:share`
+  * `:key-share`
+* Both `<table(s)>` and `<qualifier>` are optional but if present, `<table(s)>` must either be:
+  * a single table name (as a keyword) or
+  * a sequence of table names (as keywords)
+* `<qualifier>` can be `:nowait`, `:wait`, `:skip-locked` etc.
+
+If `<table(s)>` and `<qualifier>` are both omitted, you may also omit the `[`..`]` and just say `:for :update` etc.
+
+```clojure
+(-> (select :foo.a)
+    (from :foo)
+    (where [:= :foo.a "baz"])
+    (for :update)
+    (sql/format))
+=> ["SELECT foo.a FROM foo WHERE foo.a = ? FOR UPDATE" "baz"]
+```
+
+If the `:mysql` dialect is selected, an additional locking clause is available:
+`:lock :in-share-mode`.
+```clojure
+(sql/format {:select [:*] :from :foo
+             :where [:= :name [:inline "Jones"]]
+             :lock [:in-share-mode]}
+            {:dialect :mysql :quoted false})
+=> ["SELECT * FROM foo WHERE name = 'Jones' LOCK IN SHARE MODE"]
+```
+
+Dashes are allowed in quoted names:
+
+```clojure
+(sql/format
+  {:select [:f.foo-id :f.foo-name]
+   :from [[:foo-bar :f]]
+   :where [:= :f.foo-id 12345]}
+  {:quoted true})
+=> ["SELECT \"f\".\"foo-id\", \"f\".\"foo-name\" FROM \"foo-bar\" AS \"f\" WHERE \"f\".\"foo-id\" = ?" 12345]
+```
+
+### Big, complicated example
+
+Here's a big, complicated query. Note that HoneySQL makes no attempt to verify that your queries make any sense. It merely renders surface syntax.
+
+```clojure
+(def big-complicated-map
+  (-> (select-distinct :f.* :b.baz :c.quux [:b.bla "bla-bla"]
+                       [[:now]] [[:raw "@x := 10"]])
+      (from [:foo :f] [:baz :b])
+      (join :draq [:= :f.b :draq.x]
+            :eldr [:= :f.e :eldr.t])
+      (left-join [:clod :c] [:= :f.a :c.d])
+      (right-join :bock [:= :bock.z :c.e])
+      (where [:or
+               [:and [:= :f.a "bort"] [:not= :b.baz [:param :param1]]]
+               [:and [:< 1 2] [:< 2 3]]
+               [:in :f.e [1 [:param :param2] 3]]
+               [:between :f.e 10 20]])
+      (group-by :f.a :c.e)
+      (having [:< 0 :f.e])
+      (order-by [:b.baz :desc] :c.quux [:f.a :nulls-first])
+      (limit 50)
+      (offset 10)))
+```
+```clojure
+big-complicated-map
+=> {:select-distinct [:f.* :b.baz :c.quux [:b.bla "bla-bla"]
+                     [[:now]] [[:raw "@x := 10"]]]
+    :from [[:foo :f] [:baz :b]]
+    :join [:draq [:= :f.b :draq.x]
+           :eldr [:= :f.e :eldr.t]]
+    :left-join [[:clod :c] [:= :f.a :c.d]]
+    :right-join [:bock [:= :bock.z :c.e]]
+    :where [:or
+             [:and [:= :f.a "bort"] [:not= :b.baz [:param :param1]]]
+             [:and [:< 1 2] [:< 2 3]]
+             [:in :f.e [1 [:param :param2] 3]]
+             [:between :f.e 10 20]]
+    :group-by [:f.a :c.e]
+    :having [:< 0 :f.e]
+    :order-by [[:b.baz :desc] :c.quux [:f.a :nulls-first]]
+    :limit 50
+    :offset 10}
+```
+```clojure
+(sql/format big-complicated-map
+            {:params {:param1 "gabba" :param2 2}
+             :pretty true})
+=> ["
+SELECT DISTINCT f.*, b.baz, c.quux, b.bla AS \"bla-bla\", NOW(), @x := 10
+FROM foo AS f, baz AS b
+INNER JOIN draq ON f.b = draq.x INNER JOIN eldr ON f.e = eldr.t
+LEFT JOIN clod AS c ON f.a = c.d
+RIGHT JOIN bock ON bock.z = c.e
+WHERE ((f.a = ?) AND (b.baz <> ?)) OR ((? < ?) AND (? < ?)) OR (f.e IN (?, ?, ?)) OR f.e BETWEEN ? AND ?
+GROUP BY f.a, c.e
+HAVING ? < f.e
+ORDER BY b.baz DESC, c.quux ASC, f.a NULLS FIRST
+LIMIT ?
+OFFSET ?
+"
+"bort" "gabba" 1 2 2 3 1 2 3 10 20 0 50 10]
+;; with numbered parameters:
+(sql/format big-complicated-map
+            {:params {:param1 "gabba" :param2 2}
+             :pretty true :numbered true})
+=> ["
+SELECT DISTINCT f.*, b.baz, c.quux, b.bla AS \"bla-bla\", NOW(), @x := 10
+FROM foo AS f, baz AS b
+INNER JOIN draq ON f.b = draq.x INNER JOIN eldr ON f.e = eldr.t
+LEFT JOIN clod AS c ON f.a = c.d
+RIGHT JOIN bock ON bock.z = c.e
+WHERE ((f.a = $1) AND (b.baz <> $2)) OR (($3 < $4) AND ($5 < $6)) OR (f.e IN ($7, $8, $9)) OR f.e BETWEEN $10 AND $11
+GROUP BY f.a, c.e
+HAVING $12 < f.e
+ORDER BY b.baz DESC, c.quux ASC, f.a NULLS FIRST
+LIMIT $13
+OFFSET $14
+"
+"bort" "gabba" 1 2 2 3 1 2 3 10 20 0 50 10]
+```
+```clojure
+;; Printable and readable
+(require '[clojure.edn :as edn])
+
+(= big-complicated-map (edn/read-string (pr-str big-complicated-map)))
+=> true
+```
+
+## Extensibility
+
+Any keyword (or symbol) that appears as the first element of a vector will be treated as a generic function unless it is declared to be an operator or "special syntax". Any keyword (or symbol) that appears as a key in a hash map will be treated as a SQL clause -- and must either be built-in or must be registered as a new clause.
+
+If your database supports `<=>` as an operator, you can tell HoneySQL about it using the `register-op!` function (which should be called before the first call to `honey.sql/format`):
+
+```clojure
+(sql/register-op! :<=>)
+;; all operators are assumed to be variadic:
+(-> (select :a) (where [:<=> :a "foo"]) sql/format)
+=> ["SELECT a WHERE a <=> ?" "foo"]
+(-> (select :a) (where [:<=> "food" :a "fool"]) sql/format)
+=> ["SELECT a WHERE ? <=> a <=> ?" "food" "fool"]
+```
+
+Sometimes you want an operator to ignore `nil` clauses (`:and` and `:or` are declared that way):
+
+```clojure
+(sql/register-op! :<=> :ignore-nil true)
+```
+
+Or perhaps your database supports syntax like `a BETWIXT b AND c`, in which case you can use `register-fn!` to tell HoneySQL about it (again, called before the first call to `honey.sql/format`):
+
+```clojure
+;; the formatter will be passed your new operator (function) and a
+;; sequence of the arguments provided to it (so you can write any arity ops):
+(sql/register-fn! :betwixt
+                  (fn [op [a b c]]
+                    (let [[sql-a & params-a] (sql/format-expr a)
+                          [sql-b & params-b] (sql/format-expr b)
+                          [sql-c & params-c] (sql/format-expr c)]
+                      (-> [(str sql-a " " (sql/sql-kw op) " "
+                                sql-b " AND " sql-c)]
+                          (c/into params-a)
+                          (c/into params-b)
+                          (c/into params-c)))))
+;; example usage:
+(-> (select :a) (where [:betwixt :a 1 10]) sql/format)
+=> ["SELECT a WHERE a BETWIXT ? AND ?" 1 10]
+;; with numbered parameters:
+(-> (select :a) (where [:betwixt :a 1 10]) (sql/format {:numbered true}))
+=> ["SELECT a WHERE a BETWIXT $1 AND $2" 1 10]
+```
+
+> Note: the generation of positional placeholders (`?`) or numbered placeholders (`$1`, `$2`, etc) is handled automatically by `format-expr` so you get this behavior "for free" in your extensions, as long as you use the public API for `honey.sql`. You should avoid writing extensions that generate placeholders directly if you want them to work with numbered parameters.
+
+You can also register SQL clauses, specifying the keyword, the formatting function, and an existing clause that this new clause should be processed before:
+
+```clojure
+;; the formatter will be passed your new clause and the value associated
+;; with that clause in the DSL (which is often a sequence but does not
+;; need to be -- it can be whatever syntax you desire in the DSL):
+(sql/register-clause! :foobar
+                      (fn [clause x]
+                        (let [[sql & params]
+                              (if (ident? x)
+                                (sql/format-expr x)
+                                (sql/format-dsl x))]
+                          (c/into [(str (sql/sql-kw clause) " " sql)] params)))
+                      :from) ; SELECT ... FOOBAR ... FROM ...
+;; example usage:
+(sql/format {:select [:a :b] :foobar :baz})
+=> ["SELECT a, b FOOBAR baz"]
+(sql/format {:select [:a :b] :foobar {:where [:= :id 1]}})
+=> ["SELECT a, b FOOBAR WHERE id = ?" 1]
+```
+
+If you find yourself registering an operator, a function (syntax), or a new clause, consider submitting a [pull request to HoneySQL](https://github.com/seancorfield/honeysql/pulls) so others can use it, too. If it is dialect-specific, let me know in the pull request.
+
+<a name="1.x"/>
+## HoneySQL 1.x (legacy)
+
+[![Clojars](https://img.shields.io/badge/clojars-honeysql_1.0.461-lightblue.svg?](https://clojars.org/honeysql/honeysql) [![cljdoc badge](https://cljdoc.org/badge/honeysql/honeysql?1.0.461)](https://cljdoc.org/d/honeysql/honeysql/CURRENT)
+
+HoneySQL 1.x will continue to get critical security fixes but otherwise should be considered "legacy" at this point.
+
+
+## Postgres
+
+# PostgreSQL Support
+
+This section covers the PostgreSQL-specific
+features that HoneySQL supports out of the box
+for which you previously needed the
+[nilenso/honeysql-postgres](https://github.com/nilenso/honeysql-postgres)
+library.
+
+Everything that the nilenso library provided (in 0.4.112) is implemented
+directly in HoneySQL 2.x although a few things have a
+slightly different syntax.
+
+If you are using HoneySQL with the Node.js PostgreSQL driver, it
+only accepts numbered placeholders, not positional placeholders,
+so you will need to specify the `:numbered true` option that was
+added in 2.4.962. You may find it convenient to set this option
+globally, via `set-options!`.
+
+## Code Examples
+
+The code examples herein assume:
+```clojure
+(refer-clojure :exclude '[update set])
+(require '[honey.sql :as sql]
+         '[honey.sql.helpers :refer [select from where
+                                     update set
+                                     insert-into values
+                                     create-table with-columns create-view create-extension
+                                     add-column alter-table add-index
+                                     alter-column rename-column rename-table
+                                     drop-table drop-column drop-index drop-extension
+                                     upsert returning on-conflict on-constraint
+                                     do-update-set do-nothing]])
+```
+
+Clojure users can opt for the shorter `(require '[honey.sql :as sql] '[honey.sql.helpers :refer :all])` but this syntax is not available to ClojureScript users.
+
+## Working with Arrays
+
+HoneySQL supports `:array` as special syntax to produce `ARRAY[..]` expressions:
+
+```clojure
+user=> (sql/format {:select [[[:array [1 2 3]] :a]]})
+["SELECT ARRAY[?, ?, ?] AS a" 1 2 3]
+```
+
+PostgreSQL also has an "array constructor" for creating arrays from subquery results.
+
+```sql
+SELECT ARRAY(SELECT oid FROM pg_proc WHERE proname LIKE 'bytea%');
+```
+
+As of 2.5.1091, HoneySQL supports this syntax directly:
+
+```clojure
+user=> (sql/format {:select [[[:array {:select :oid :from :pg_proc :where [:like :proname [:inline "bytea%"]]}]]]})
+["SELECT ARRAY(SELECT oid FROM pg_proc WHERE proname LIKE 'bytea%')"]
+```
+
+Prior to 2.5.1091, you had to use HoneySQL's "as-is" function syntax to circumvent
+the special syntax:
+
+```clojure
+user=> (sql/format {:select [[[:'ARRAY {:select :oid :from :pg_proc :where [:like :proname [:inline "bytea%"]]}]]]})
+["SELECT ARRAY (SELECT oid FROM pg_proc WHERE proname LIKE 'bytea%')"]
+```
+
+## Operators with @, #, and ~
+
+A number of PostgreSQL operators contain `@`, `#`, or `~` which are not legal in a Clojure keyword or symbol (as literal syntax). The namespace `honey.sql.pg-ops` provides convenient symbolic names for these JSON and regex operators, substituting `at` for `@`, `hash` for `#`, and `tilde` for `~`.
+
+The regex operators also have more memorable aliases: `regex` for `~`, `iregex` for `~*`, `!regex` for `!~`, and `!iregex` for `!~*`.
+
+Requiring the namespace automatically registers these operators for use in expressions:
+
+```clojure
+user=> (require '[honey.sql.pg-ops :refer [regex]])
+nil
+user=> (sql/format {:select [[[regex :straw [:inline "needle"]] :match]] :from :haystack})
+["SELECT straw ~ 'needle' AS match FROM haystack"]
+```
+
+## JSON/JSONB
+
+If you are using JSON with PostgreSQL, you will probably try to pass Clojure
+data structures as values into your HoneySQL DSL -- but HoneySQL will see those
+vectors as function calls and hash maps as SQL statements, so you need to tell
+HoneySQL not to do that. There are two possible approaches:
+
+1. Use named parameters (e.g., `[:param :myval]`) instead of having the values directly in the DSL structure and then pass `{:params {:myval some-json}}` as part of the options in the call to `format`, or
+2. Use `[:lift ..]` wrapped around any structured values which tells HoneySQL not to interpret the vector or hash map value as a DSL: `[:lift some-json]`.
+
+## Upsert
+
+Upserting data is relatively easy in PostgreSQL
+because of the `ON CONFLICT`, `ON CONSTRAINT`,
+`DO NOTHING`, and `DO UPDATE SET` parts of the
+`INSERT` statement.
+
+This usage is supported identically to the nilenso library:
+
+```clojure
+user=> (-> (insert-into :distributors)
+           (values [{:did 5 :dname "Gizmo Transglobal"}
+                    {:did 6 :dname "Associated Computing, Inc"}])
+           (upsert (-> (on-conflict :did)
+                       (do-update-set :dname)))
+           (returning :*)
+           (sql/format {:pretty true}))
+["
+INSERT INTO distributors (did, dname)
+VALUES (?, ?), (?, ?)
+ON CONFLICT (did)
+DO UPDATE SET dname = EXCLUDED.dname
+RETURNING *
+"
+5 "Gizmo Transglobal"
+6 "Associated Computing, Inc"]
+```
+
+However, the nested `upsert` helper is no longer needed
+(and there is no corresponding `:upsert` clause in the DSL):
+
+```clojure
+user=> (-> (insert-into :distributors)
+           (values [{:did 5 :dname "Gizmo Transglobal"}
+                    {:did 6 :dname "Associated Computing, Inc"}])
+           (on-conflict :did)
+           (do-update-set :dname)
+           (returning :*)
+           (sql/format {:pretty true}))
+["
+INSERT INTO distributors (did, dname)
+VALUES (?, ?), (?, ?)
+ON CONFLICT (did)
+DO UPDATE SET dname = EXCLUDED.dname
+RETURNING *
+"
+5 "Gizmo Transglobal"
+6 "Associated Computing, Inc"]
+```
+
+Similarly, the `do-nothing` helper behaves just the same
+as in the nilenso library:
+
+```clojure
+user=> (-> (insert-into :distributors)
+           (values [{:did 7 :dname "Redline GmbH"}])
+           (upsert (-> (on-conflict :did)
+                       do-nothing))
+           (sql/format {:pretty true}))
+["
+INSERT INTO distributors (did, dname)
+VALUES (?, ?)
+ON CONFLICT (did)
+DO NOTHING
+"
+7 "Redline GmbH"]
+```
+
+As above, the nested `upsert` helper is no longer needed:
+
+```clojure
+user=> (-> (insert-into :distributors)
+           (values [{:did 7 :dname "Redline GmbH"}])
+           (on-conflict :did)
+           do-nothing
+           (sql/format {:pretty true}))
+["
+INSERT INTO distributors (did, dname)
+VALUES (?, ?)
+ON CONFLICT (did)
+DO NOTHING
+"
+7 "Redline GmbH"]
+```
+
+`ON CONSTRAINT` is handled slightly differently to the nilenso library,
+which provided a single `on-conflict-constraint` helper (and clause):
+
+```clojure
+user=> (-> (insert-into :distributors)
+           (values [{:did 9 :dname "Antwerp Design"}])
+           ;; can specify as a nested clause...
+           (on-conflict (on-constraint :distributors_pkey))
+           do-nothing
+           (sql/format {:pretty true}))
+["
+INSERT INTO distributors (did, dname)
+VALUES (?, ?)
+ON CONFLICT ON CONSTRAINT distributors_pkey
+DO NOTHING
+"
+9 "Antwerp Design"]
+user=> (-> (insert-into :distributors)
+           (values [{:did 9 :dname "Antwerp Design"}])
+           ;; ...or as two separate clauses
+           on-conflict
+           (on-constraint :distributors_pkey)
+           do-nothing
+           (sql/format {:pretty true}))
+["
+INSERT INTO distributors (did, dname)
+VALUES (?, ?)
+ON CONFLICT
+ON CONSTRAINT distributors_pkey
+DO NOTHING
+"
+9 "Antwerp Design"]
+```
+
+As above, the `upsert` helper has been omitted here.
+
+An upsert with where clauses is also possible, with a
+more compact syntax than the nilenso library used:
+
+```clojure
+user=> (-> (insert-into :user)
+           (values [{:phone "5555555" :name "John"}])
+           (on-conflict :phone (where [:<> :phone nil]))
+           (do-update-set :phone :name (where [:= :user.active false]))
+           (sql/format {:pretty true}))
+["
+INSERT INTO user (phone, name)
+VALUES (?, ?)
+ON CONFLICT (phone) WHERE phone IS NOT NULL
+DO UPDATE SET phone = EXCLUDED.phone, name = EXCLUDED.name WHERE user.active = FALSE
+"
+"5555555" "John"]
+;; using the DSL directly:
+user=> (sql/format
+        {:insert-into    :user
+          :values        [{:phone "5555555" :name "John"}]
+          :on-conflict   [:phone
+                          {:where [:<> :phone nil]}]
+          :do-update-set {:fields [:phone :name]
+                          :where  [:= :user.active false]}}
+        {:pretty true})
+["
+INSERT INTO user (phone, name)
+VALUES (?, ?)
+ON CONFLICT (phone) WHERE phone IS NOT NULL
+DO UPDATE SET phone = EXCLUDED.phone, name = EXCLUDED.name WHERE user.active = FALSE
+"
+"5555555" "John"]
+```
+
+By comparison, this is the DSL structure that nilenso would have required:
+
+<!-- :test-doc-blocks/skip -->
+```clojure
+  ;; NOT VALID FOR HONEYSQL!
+  {:insert-into :user
+   :values      [{:phone "5555555" :name "John"}]
+   ;; nested under :upsert
+   :upsert      {:on-conflict   [:phone]
+                 ;; but :where is at the same level as :on-conflict
+                 :where         [:<> :phone nil]
+                 ;; this is the same as in honeysql:
+                 :do-update-set {:fields [:phone :name]
+                                 :where  [:= :user.active false]}}}
+```
+
+All of the examples for `:do-update-set` so far provide one or
+more columns and generated `SET` clauses using `EXCLUDED` columns.
+You can also perform regular `SET` operations, where the right-hand
+side is a full SQL expression by specifying a hash map of column /
+expression pairs, like you would for a regular `:set` clause:
+
+```clojure
+user=> (-> (insert-into :table)
+           (values [{:id "id" :counter 1}])
+           (on-conflict :id)
+           (do-update-set {:counter [:+ :table.counter 1]})
+           (sql/format {:pretty true}))
+["
+INSERT INTO table (id, counter)
+VALUES (?, ?)
+ON CONFLICT (id)
+DO UPDATE SET counter = table.counter + ?
+" "id" 1 1]
+;; using the DSL directly:
+user=> (-> {:insert-into :table
+            :values [{:id "id" :counter 1}]
+            :on-conflict :id
+            :do-update-set {:counter [:+ :table.counter 1]}}
+           (sql/format {:pretty true}))
+["
+INSERT INTO table (id, counter)
+VALUES (?, ?)
+ON CONFLICT (id)
+DO UPDATE SET counter = table.counter + ?
+" "id" 1 1]
+```
+
+You can use `:EXCLUDED.column` in a hash map to produce the
+same effect as `:column` in a vector:
+
+```clojure
+user=> (-> (insert-into :table)
+           (values [{:id "id" :counter 1}])
+           (on-conflict :id)
+           (do-update-set {:name    :EXCLUDED.name
+                           :counter [:+ :table.counter 1]})
+           (sql/format {:pretty true}))
+["
+INSERT INTO table (id, counter)
+VALUES (?, ?)
+ON CONFLICT (id)
+DO UPDATE SET name = EXCLUDED.name, counter = table.counter + ?
+" "id" 1 1]
+```
+
+If you need to combine a `DO UPDATE SET` hash map expression
+with a `WHERE` clause, you need to explicitly use the `:fields` /
+`:where` format explained above. Here's how those two examples
+look with a `WHERE` clause added:
+
+```clojure
+user=> (-> (insert-into :table)
+           (values [{:id "id" :counter 1}])
+           (on-conflict :id)
+           (do-update-set {:fields {:counter [:+ :table.counter 1]}
+                           :where [:> :table.counter 1]})
+           (sql/format {:pretty true}))
+["
+INSERT INTO table (id, counter)
+VALUES (?, ?)
+ON CONFLICT (id)
+DO UPDATE SET counter = table.counter + ? WHERE table.counter > ?
+" "id" 1 1 1]
+;; using the DSL directly:
+user=> (-> {:insert-into :table
+            :values [{:id "id" :counter 1}]
+            :on-conflict :id
+            :do-update-set {:fields {:counter [:+ :table.counter 1]}
+                            :where [:> :table.counter 1]}}
+           (sql/format {:pretty true}))
+["
+INSERT INTO table (id, counter)
+VALUES (?, ?)
+ON CONFLICT (id)
+DO UPDATE SET counter = table.counter + ? WHERE table.counter > ?
+" "id" 1 1 1]
+```
+
+## INSERT INTO AS
+
+HoneySQL supports aliases directly in `:insert-into` so no special
+clause is needed for this any more:
+
+```clojure
+user=> (sql/format (-> (insert-into :table :alias)
+                       (values [[1 2 3] [4 5 6]])))
+["INSERT INTO table AS alias VALUES (?, ?, ?), (?, ?, ?)" 1 2 3 4 5 6]
+user=> (sql/format {:insert-into [:table :alias],
+                    :values [[1 2 3] [4 5 6]]})
+["INSERT INTO table AS alias VALUES (?, ?, ?), (?, ?, ?)" 1 2 3 4 5 6]
+```
+
+## Returning
+
+The `RETURNING` clause is supported identically to the nilenso library:
+
+```clojure
+;; via the DSL:
+user=> (sql/format {:delete-from :distributors
+                    :where [:> :did 10]
+                    :returning [:*]})
+["DELETE FROM distributors WHERE did > ? RETURNING *" 10]
+;; via the helpers:
+user=> (-> (update :distributors)
+           (set {:dname "Foo Bar Designs"})
+           (where [:= :did 2])
+           (returning :did :dname)
+           sql/format)
+["UPDATE distributors SET dname = ? WHERE did = ? RETURNING did, dname"
+ "Foo Bar Designs" 2]
+```
+
+## DDL Support
+
+The following DDL statements are all supported by HoneySQL
+(these are mostly not PostgreSQL-specific but they were not
+supported by HoneySQL 1.x):
+
+* `CREATE VIEW`
+* `CREATE TABLE`
+* `DROP TABLE`
+* `ALTER TABLE`
+
+These are mostly identical to what the nilenso library provides
+except that `sql/call` is never needed -- you can use the direct
+`[:func ..]` function call syntax instead:
+
+```clojure
+;; create view:
+user=> (-> (create-view :metro)
+           (select :*)
+           (from :cities)
+           (where [:= :metroflag "Y"])
+           sql/format)
+["CREATE VIEW metro AS SELECT * FROM cities WHERE metroflag = ?" "Y"]
+;; create table:
+user=> (-> (create-table :cities)
+           (with-columns [[:city [:varchar 80] [:primary-key]]
+                          [:location :point]])
+           sql/format)
+;; values are inlined:
+["CREATE TABLE cities (city VARCHAR(80) PRIMARY KEY, location POINT)"]
+;; default values for columns:
+user=> (-> (create-table :distributors)
+           (with-columns [[:did :integer [:primary-key]
+                                         ;; "serial" is inlined as 'serial':
+                                         [:default [:nextval "serial"]]]
+                          [:name [:varchar 40] [:not nil]]])
+           (sql/format {:pretty true}))
+;; newlines inserted for readability:
+["
+CREATE TABLE distributors
+(did INTEGER PRIMARY KEY DEFAULT NEXTVAL('serial'), name VARCHAR(40) NOT NULL)
+"]
+;; PostgreSQL CHECK constraint is supported:
+user=> (-> (create-table :products)
+           (with-columns [[:product_no :integer]
+                          [:name :text]
+                          [:price :numeric [:check [:> :price 0]]]
+                          [:discounted_price :numeric]
+                          [[:check [:and [:> :discounted_price 0] [:> :price :discounted_price]]]]])
+           (sql/format {:pretty true}))
+["
+CREATE TABLE products
+(product_no INTEGER, name TEXT, price NUMERIC CHECK(price > 0), discounted_price NUMERIC, CHECK((discounted_price > 0) AND (price > discounted_price)))
+"]
+;; conditional creation:
+user=> (-> (create-table :products :if-not-exists)
+           (with-columns [[:name :text]])
+           sql/format)
+["CREATE TABLE IF NOT EXISTS products (name TEXT)"]
+;; drop table:
+user=> (sql/format (drop-table :cities))
+["DROP TABLE cities"]
+;; drop multiple tables:
+user=> (sql/format (drop-table :cities :towns :vilages))
+["DROP TABLE cities, towns, vilages"]
+;; conditional drop:
+user=> (sql/format (drop-table :if-exists :cities :towns :vilages))
+["DROP TABLE IF EXISTS cities, towns, vilages"]
+;; alter table add column:
+user=> (-> (alter-table :fruit)
+           (add-column :skin [:varchar 16] nil)
+           sql/format)
+["ALTER TABLE fruit ADD COLUMN skin VARCHAR(16) NULL"]
+;; alter table drop column:
+user=> (-> (alter-table :fruit)
+           (drop-column :skin)
+           sql/format)
+["ALTER TABLE fruit DROP COLUMN skin"]
+;; alter table rename column:
+user=> (-> (alter-table :fruit)
+           (rename-column :cost :price)
+           sql/format)
+["ALTER TABLE fruit RENAME COLUMN cost TO price"]
+;; rename table:
+user=> (-> (alter-table :fruit)
+           (rename-table :vegetable)
+           sql/format)
+["ALTER TABLE fruit RENAME TO vegetable"]
+```
+
+The following does not work for PostgreSQL, but does work for several other databases:
+
+```clojure
+;; alter table alter column:
+user=> (-> (alter-table :fruit)
+           (alter-column :name [:varchar 64] [:not nil])
+           sql/format)
+["ALTER TABLE fruit ALTER COLUMN name VARCHAR(64) NOT NULL"]
+```
+
+For PostgreSQL, you need separate statements:
+
+```clojure
+user=> (-> (alter-table :fruit)
+           (alter-column :name :type [:varchar 64])
+           sql/format)
+["ALTER TABLE fruit ALTER COLUMN name TYPE VARCHAR(64)"]
+user=> (-> (alter-table :fruit)
+           (alter-column :name :set [:not nil])
+           sql/format)
+["ALTER TABLE fruit ALTER COLUMN name SET NOT NULL"]
+```
+
+The following PostgreSQL-specific DDL statements are supported
+(with the same syntax as the nilenso library but `sql/format`
+takes slightly different options):
+
+```clojure
+;; create extension:
+user=> (-> (create-extension :uuid-ossp)
+           (sql/format {:quoted true}))
+;; quoting is required for a name containing a hyphen:
+["CREATE EXTENSION \"uuid-ossp\""]
+;; conditional creation:
+user=> (-> (create-extension :uuid-ossp :if-not-exists)
+           (sql/format {:quoted true}))
+["CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""]
+;; drop extension:
+user=> (-> (drop-extension :uuid-ossp)
+           (sql/format {:quoted true}))
+["DROP EXTENSION \"uuid-ossp\""]
+;; drop multiple extensions:
+user=> (-> (drop-extension :uuid-ossp :postgis)
+           (sql/format {:quoted true}))
+["DROP EXTENSION \"uuid-ossp\", \"postgis\""]
+;; conditional drop:
+user=> (-> (drop-extension :if-exists :uuid-ossp :postgis)
+           (sql/format {:quoted true}))
+["DROP EXTENSION IF EXISTS \"uuid-ossp\", \"postgis\""]
+```
+
+In addition, HoneySQL supports these DDL statements that were
+not supported by the nilenso library:
+
+```clojure
+;; alter table add index:
+user=> (-> (alter-table :fruit)
+           (add-index :unique :fruit-name :name)
+           sql/format)
+["ALTER TABLE fruit ADD UNIQUE fruit_name(name)"]
+;; alter table drop index:
+user=> (-> (alter-table :fruit)
+           (drop-index :fruit-name)
+           sql/format)
+["ALTER TABLE fruit DROP INDEX fruit_name"]
+;; alter table with multiple clauses:
+user=> (sql/format (alter-table :fruit
+                                (add-column :skin [:varchar 16] nil)
+                                (add-index :unique :fruit-name :name)))
+["ALTER TABLE fruit ADD COLUMN skin VARCHAR(16) NULL, ADD UNIQUE fruit_name(name)"]
+```
+
+## Filter / Within Group
+
+`honeysql-postgres` added support for `FILTER` and `WITHIN GROUP`
+in its 0.4.112 release. Those features have been integrated into
+HoneySQL 2.x (as of 2.0.0-beta2), along with support for `ORDER BY`
+in expressions. `:filter`, `:within-group`, and `:order-by` are
+all available as "functions" in [Special Syntax](special-syntax.md),
+and there are helpers for `filter` and `within-group`.
+
+## Window / Partition Support
+
+HoneySQL supports `:window`, `:partition-by`, and `:over`
+directly now.
+See the Clause Reference for examples of [WINDOW, PARTITION BY, and OVER](clause-reference.md#window-partition-by-and-over).

@@ -1,0 +1,107 @@
+{;; Users (application users)
+ :users {:fields [[:id :uuid {:primary-key true}]
+                  [:email [:varchar 255]
+                   {:null false
+                    :unique true
+                    ;; CHECK (email LIKE '%@%.%') — simple format guard to avoid double-escaping issues
+                    :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"]
+                    :validation {:type :email
+                                 :constraints {:pattern "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                                               :max-length 255}
+                                 :messages {:invalid "Please enter a valid email address"
+                                            :required "Email is required"}
+                                 :ui {:input-type "email"
+                                      :placeholder "Enter email"}}}]
+                  [:full_name [:varchar 255]]
+                  [:password_hash :text {:null false}]
+                  [:role [:enum :user-role] {:null false :default "unassigned"}]
+                  [:status [:enum :user-status] {:null false :default "active"}]
+                  [:email_verified :boolean {:default false :null false}]
+                  [:last_login_at :timestamptz]
+                  [:avatar_url :text]
+                  [:auth_provider :text {:default "password"}]
+                  [:provider_user_id :text]
+                  [:created_at :timestamptz {:default "NOW()"}]
+                  [:updated_at :timestamptz {:default "NOW()"}]]
+         :types [[:user-role :enum {:choices ["admin" "member" "viewer" "unassigned"]}]
+                 [:user-status :enum {:choices ["active" "inactive" "suspended"]}]
+                 [:audit-actor-type :enum {:choices ["user" "admin"]}]
+                 [:login-principal-type :enum {:choices ["user" "admin"]}]]
+         :indexes [[:idx_users_email :btree {:fields [:email] :unique true}]
+                   [:idx_users_status :btree {:fields [:status]}]
+                   [:idx_users_email_verified :btree {:fields [:email_verified]}]
+                   [:idx_users_created_at :btree {:fields [:created_at]}]
+                   [:idx_users_auth_provider_provider_user_id_external
+                    :btree
+                    {:fields [:auth_provider :provider_user_id]
+                     :unique true
+                     :where [:<> :auth_provider "password"]}]]}
+
+ ;; Admin users (system administrators)
+ :admins {:fields [[:id :uuid {:primary-key true}]
+                   [:email [:varchar 255] {:null false
+                                           :unique true
+                                           ;; CHECK (email LIKE '%@%.%') — simple format guard to avoid double-escaping issues
+                                           :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"]}]
+                   [:full_name [:varchar 255]]
+                   [:password_hash :text {:null false}]
+                   [:role [:enum :admin-role] {:null false :default "admin"}]
+                   [:status [:enum :admin-status] {:null false :default "active"}]
+                   [:last_login_at :timestamptz]
+                   [:created_at :timestamptz {:default "NOW()"}]
+                   [:updated_at :timestamptz {:default "NOW()"}]]
+          :types [[:admin-role :enum {:choices ["admin" "support" "owner"]}]
+                  [:admin-status :enum {:choices ["active" "suspended"]}]]
+          :indexes [[:idx_admins_email :btree {:fields [:email] :unique true}]
+                    [:idx_admins_status :btree {:fields [:status]}]]}
+
+ ;; Email verification tokens (single-tenant)
+ :email_verification_tokens {:fields [[:id :uuid {:primary-key true}]
+                                      [:user_id :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
+                                      [:token [:varchar 255] {:null false :unique true}]
+                                      [:expires_at :timestamptz {:null false}]
+                                      [:attempts :integer {:default 0}]
+                                      [:last_attempted_at :timestamptz]
+                                      [:used_at :timestamptz]
+                                      [:created_at :timestamptz {:default "NOW()"}]]
+                             :indexes [[:idx_email_tokens_user :btree {:fields [:user_id]}]
+                                       [:idx_email_tokens_token :btree {:fields [:token] :unique true}]
+                                       [:idx_email_tokens_expires :btree {:fields [:expires_at]}]]}
+
+ ;; Audit logs for admin/user actions
+ :audit_logs {:fields [[:id :uuid {:primary-key true}]
+                       [:actor_type [:enum :audit-actor-type] {:null false}]
+                       [:actor_id :uuid {:null false}]
+                       [:action :text {:null false}]
+                       [:target_type :text]
+                       [:target_id :uuid]
+                       [:metadata :jsonb]
+                       [:ip :text]
+                       [:user_agent :text]
+                       [:created_at :timestamptz {:default "NOW()"}]]
+              :indexes [[:idx_audit_logs_created_at :btree {:fields [:created_at]}]
+                        [:idx_audit_logs_actor :btree {:fields [:actor_type :actor_id]}]]}
+
+ ;; Login events for authentication monitoring
+ :login_events {:fields [[:id :uuid {:primary-key true}]
+                         [:principal_type [:enum :login-principal-type] {:null false}]
+                         [:principal_id :uuid {:null false}]
+                         [:success :boolean {:null false}]
+                         [:reason :text]
+                         [:ip :text]
+                         [:user_agent :text]
+                         [:created_at :timestamptz {:default "NOW()"}]]
+                :indexes [[:idx_login_events_created_at :btree {:fields [:created_at]}]
+                          [:idx_login_events_principal :btree {:fields [:principal_type :principal_id]}]]}
+
+ ;; Password reset tokens for users and admins
+ :password_reset_tokens {:fields [[:id :uuid {:primary-key true}]
+                                  [:principal_type [:enum :login-principal-type] {:null false}]
+                                  [:principal_id :uuid {:null false}]
+                                  [:token [:varchar 255] {:null false :unique true}]
+                                  [:expires_at :timestamptz {:null false}]
+                                  [:used_at :timestamptz]
+                                  [:created_at :timestamptz {:default "NOW()"}]]
+                         :indexes [[:idx_password_reset_tokens_token :btree {:fields [:token] :unique true}]
+                                   [:idx_password_reset_tokens_principal :btree {:fields [:principal_type :principal_id]}]
+                                   [:idx_password_reset_tokens_expires :btree {:fields [:expires_at]}]]}}

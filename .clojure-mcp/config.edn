@@ -1,0 +1,5 @@
+{:allowed-directories ["." "src" "test" "resources" "dev" "docs" "/Users/enes/Projects/hosting"]
+ :write-file-guard false
+ :cljfmt true
+ :scratch-pad-load false
+ :disable-tools [:dispatch-agent :architect :code-critique :clojure_edit_agent :code_critique :bash]}

@@ -1,0 +1,82 @@
+ (ns app.admin.frontend.services.deletion-constraints-test
+   (:require
+     [app.admin.frontend.services.deletion-constraints :as svc]
+     [app.admin.frontend.test-setup :as setup]
+     [cljs.test :refer [deftest is testing]]
+     [re-frame.core :as rf]
+     [re-frame.db :as rf-db]))
+
+ ;; Ensure base fixtures
+(setup/setup-entity-subscriptions! :users false nil)
+
+(defn- snapshot [entity]
+  (get-in @rf-db/app-db [:deletion-constraints entity]))
+
+(deftest check-user-constraints-request-and-success
+  (testing "builds dry-run DELETE and persists result"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (rf/dispatch-sync [:deletion-constraints/check-user-constraints 123 nil nil])
+    (let [req (setup/last-http-request)]
+      (is (= :delete (:method req)))
+      (is (= "/admin/api/entities/users/123" (:uri req)))
+      (is (= {:dry-run true} (:params req))))
+    (setup/respond-success! {:data {:can-delete? false
+                                    :constraints [{:message "Active sessions"}]
+                                    :warnings []}})
+    (let [res (get-in @rf-db/app-db [:deletion-constraints :users :results 123])]
+      (is (= false (:can-delete? res)))
+      (is (= "Active sessions" (-> res :constraints first :message))))))
+
+(deftest check-user-constraints-400-maps-to-cannot-delete
+  (testing "400 failure stores constraint result with message"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (rf/dispatch-sync [:deletion-constraints/check-user-constraints 9 nil nil])
+    (setup/respond-failure! {:status 400 :response {:message "Blocked by policy"}})
+    (let [res (get-in @rf-db/app-db [:deletion-constraints :users :results 9])
+          snap @(rf/subscribe [:admin/deletion-constraints-state :users])
+          vm (svc/resolve-state snap 9 "Delete this user")]
+      (is (= false (:can-delete? res)))
+      (is (some? (re-find #"Blocked by policy" (or (:tooltip vm) "")))))))
+
+(deftest users-batch-persists-multiple
+  (testing "batch endpoint persists multiple results"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (rf/dispatch-sync [:deletion-constraints/check-users-constraints-batch [1 2] nil nil])
+    (let [req (setup/last-http-request)]
+      (is (= :post (:method req)))
+      (is (= "/admin/api/entities/users/deletion-constraints/batch" (:uri req)))
+      (is (= {:user_ids [1 2]} (:params req))))
+    (setup/respond-success! {:data {:results [{:user-id 1 :can-delete? true}
+                                              {:user-id 2 :can-delete? false
+                                               :constraints [{:message "Has invoices"}]}]}})
+    (let [s (snapshot :users)]
+      (is (= true (get-in s [:results 1 :can-delete?])))
+      (is (= false (get-in s [:results 2 :can-delete?]))))))
+
+(deftest clear-user-constraints-removes-state
+  (testing "clear event removes result/loading/error for user"
+    (setup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:deletion-constraints :users :results 77] {:can-delete? true})
+    (rf/dispatch-sync [:deletion-constraints/clear-user-constraints 77])
+    (is (nil? (get-in @rf-db/app-db [:deletion-constraints :users :results 77])))))
+
+(deftest tenants-constraints-request-and-success
+  (testing "tenant dry-run DELETE and persistence"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (rf/dispatch-sync [:deletion-constraints/check-tenant-constraints "t-1" nil nil])
+    (let [req (setup/last-http-request)]
+      (is (= :delete (:method req)))
+      (is (= "/admin/api/entities/tenants/t-1" (:uri req)))
+      (is (= {:dry-run true} (:params req))))
+    (setup/respond-success! {:data {:can-delete? true :warnings [{:message "Recently active"}]}})
+    (is (= true (get-in @rf-db/app-db [:deletion-constraints :tenants :results "t-1" :can-delete?])))))
+
+(deftest constraint-tooltip-derivation
+  (testing "tooltip shows allow label when can-delete true, else error prefix"
+    (is (= "Delete it" (svc/constraint-tooltip "Delete it" {:can-delete? true})))
+    (is (re-find #"Cannot delete:" (svc/constraint-tooltip "X" {:can-delete? false
+                                                                :constraints [{:message "Y"}]})))))

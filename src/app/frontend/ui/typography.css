@@ -1,0 +1,50 @@
+/* Base typography styles */
+@layer base {
+  body {
+    @apply text-base leading-relaxed;
+  }
+
+  h1 {
+    @apply text-4xl font-bold mb-4;
+  }
+
+  h2 {
+    @apply text-3xl font-bold mb-3;
+  }
+
+  h3 {
+    @apply text-2xl font-semibold mb-2;
+  }
+
+  h4 {
+    @apply text-xl font-semibold mb-2;
+  }
+
+  p {
+    @apply mb-4;
+  }
+
+  a {
+    @apply ds-text-primary hover:ds-text-primary-focus;
+  }
+
+  ul, ol {
+    @apply mb-4 ml-4;
+  }
+
+  li {
+    @apply mb-1;
+  }
+
+  blockquote {
+    @apply pl-4 border-l-4 border-neutral italic my-4;
+  }
+
+  code {
+    @apply bg-neutral-content px-1 rounded;
+  }
+
+  pre {
+    @apply bg-neutral-content p-4 rounded mb-4 overflow-x-auto;
+  }
+}

@@ -1,0 +1,6 @@
+({:action :alter-column,
+  :field-name :role,
+  :model-name :users,
+  :options
+  {:null false, :default "unassigned", :type [:enum :user-role]},
+  :changes {:default {:from "member", :to "unassigned"}}})

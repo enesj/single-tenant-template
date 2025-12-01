@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "chrome-mcp": {
+      "command": "npx",
+      "args": [
+        "node",
+        "/Users/enes/.nvm/versions/node/v22.17.0/lib/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js"
+      ]
+    },
+    "clojure-mcp": {
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "cd /Users/enes/Projects/clojure-mcp && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-shadow-dual"
+      ],
+      "env": {
+        "HOME": "/tmp"
+      }
+    },
+    "codex": {
+      "type": "stdio",
+      "command": "codex",
+      "args": [
+        "mcp-server"
+      ]
+    }
+  }
+}

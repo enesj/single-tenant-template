@@ -1,0 +1,74 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=512]
+        exclude: ^(node_modules|target|\.clj-kondo|\.git|-\|\.DS_Store)/
+      - id: check-merge-conflict
+  - repo: local
+    hooks:
+      - id: clj-kondo-lint
+        name: clj-kondo lint
+        entry: clj-kondo
+        language: system
+        files: \.(clj|cljs|cljc|edn)$
+        args: [ "--lint", "--cache", "false", "--parallel", "src", "test", "dev", "cli-tools" ]
+
+      - id: cljfmt-fix
+        name: cljfmt format fix
+        entry: bb cljfmt-fix
+        language: system
+        files: \.(clj|cljs|cljc)$
+        pass_filenames: false
+        stages: [ manual ]
+
+      - id: stage
+        name: stage changes
+        entry: bb stage
+        language: system
+        files: \..*$
+        pass_filenames: false
+        stages: [ manual ]
+
+      - id: cljfmt-check
+        name: cljfmt format check
+        entry: bb cljfmt-check
+        language: system
+        files: \.(clj|cljs|cljc)$
+        pass_filenames: false
+        stages: [ manual ]
+
+      - id: run-be-tests
+        name: run backend tests
+        entry: bb be-test --test
+        language: system
+        files: \.(clj|cljs|cljc)$
+        pass_filenames: false
+        stages: [ manual ]
+
+      - id: run-fe-tests
+        name: run frontend tests
+        entry: bb fe-test --test
+        language: system
+        files: \.(clj|cljs|cljc)$
+        pass_filenames: false
+        stages: [ manual ]
+
+      - id: dependency-check
+        name: dependency vulnerability scan
+        entry: bash -c "echo 'Dependency check skipped in pre-commit - run manually with bb nvd-check'"
+        language: system
+        files: deps\.edn$
+        pass_filenames: false
+        stages: [ manual ]
+
+      - id: report-large-files
+        name: report large files in repository
+        entry: bash -c "echo '=== Large Files Report ===' && find . -type f \( -path '*/node_modules/*' -o -path '*/target/*' -o -path '*/.clj-kondo/*' -o -path '*/.git/*' -o -path '*/-/*' -o -path '*/.lsp/*' -o -path '*/.shadow-cljs/*' -o -path '*/tmp/*' -o -path '*/resources/public/js/*' -o -path '*/.cpcache/*' -o -path '*/.idea/*' -o -name '*.DS_Store' \) -prune -o -type f -print | xargs du -h 2>/dev/null | sort -hr | head -20"
+        language: system
+        pass_filenames: false
+        stages: [ manual ]

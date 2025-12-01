@@ -1,0 +1,80 @@
+# Clojure specific
+target/
+out/
+*.class
+*.jar
+*.zip
+*.tar.gz
+*.tgz
+*.log
+
+# Leiningen
+.project.clj
+/.lein/
+.lein-deps/
+.lein-plugins/
+*.pom
+
+# Shadow-cljs
+.shadow-cljs/
+
+# ClojureScript
+node_modules
+
+# REPL files
+.repl/
+.history
+.nrepl-port
+
+# IDE specific
+*.ipr
+*.iws
+
+# Other
+.cpcache/
+/LICENSE
+/.clj-kondo/
+!.clj-kondo/config.edn
+/.lsp/
+/.portal/
+.DS_Store
+/resources/public/
+!resources/public/index.html
+resources/public/assets/css/*.css
+package-lock.json
+/scripts/dev-frontend-files.txt
+/scripts/frontend-files.txt
+/hosting.iml
+/.idea/
+/src/app/backend/airbnb/
+tmp/
+-/
+/projectstmp/
+/test-screenshots/
+
+# API Credentials - never commit these
+.env
+.api_credentials.sh
+/test-results/
+
+# RAG index files (too large for git)
+docs/rag/index.edn
+
+# Clojure MCP scratch pad
+.clojure-mcp/scratch_pad.edn
+
+# Project templates
+project-templates/
+
+# Secrets and credentials
+config/.secrets.edn
+config/secrets.edn
+config/*secrets*
+.codex/config.toml
+.gemini/settings.json
+.copilot/mcp-config.json
+.vscode/mcp.json
+*.key
+*.pem
+api-keys/
+secrets/

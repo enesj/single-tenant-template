@@ -1,0 +1,102 @@
+{:paths ["src" "dev" "test" "cli-tools"]
+ :remove-surrounding-whitespace? true
+ :remove-trailing-whitespace? true
+ :remove-consecutive-blank-lines? true
+ :insert-missing-whitespace? true
+ :split-keypairs-over-multiple-lines? false
+ :align-associative? true
+ :remove-multiple-non-indenting-spaces? false
+ :indentation? true
+ :indent-size 1
+ :indents {#re ".*" [[:inner 0]]}
+ :extra-indents {
+                 ns [[:block 1] [:inner 1]]
+                 def [[:inner 1]]
+                 ;;defn [[:inner 1] [:inner 2]]
+                 str [[:inner 1]]
+                 vec [[:inner 1]]
+                 or [[:inner 1]]
+                 and [ [:inner 1]]
+                 hash-map [[:inner 1]]
+                 merge-with [[:inner 1]]
+                 ;;cond-> [[:inner 0]]
+                 ;;cond->> [[:inner 0]]
+                 let [[:block 1]]
+                 letfn [[:block 1] [:inner 2]]
+                 when-let [[:block 1]]
+                 when-some [[:block 1]]
+                 ;;case [[:inner 1]]
+                 case-let [[:block 1]]
+                 js/setTimeout [[:inner 0]]
+                 js/setInterval [[:inner 0]]
+                 js/clearTimeout [[:inner 0]]
+                 js/clearInterval [[:inner 0]]
+                 js/console [[:inner 0]]
+                 js/alert [[:inner 0]]
+                 js/confirm [[:inner 0]]
+                 js/prompt [[:inner 0]]
+                 js/eval [[:inner 0]]
+                 ;;$ [[:inner 0]]
+                 ;;fn [[:block 1]]
+                 ;;map [[:block 1]]
+                 ;;filter [[:block 1]]
+                 ;;mapv [[:block 1]]
+                 ;;concat [[:block 1]]
+                 ;;;;merge [[:inner 0]]
+                 ;;;;assoc [[:block 1]]
+                 ;;dissoc [[:block 1]]
+                 ;;get-in [[:block 1]]
+                 assoc-in [[:block 1]]
+                 ;;update-in [[:block 1]]
+                 ;;do [[:inner 1]]
+                 ;;catch [ [:inner 1]]
+                 ;;finally [ [:inner 1]]
+                 ;;;;try [[:inner 0]]
+                 ;;try-let [[:block 1]]
+                 ;;next.jdbc/execute [ [[:block 1]]]
+                 ;;next.jdbc/execute-one [ [[:block 1]]]
+                 ;;next.jdbc/execute-one! [ [[:block 1]]]
+                 ;;next.jdbc/execute! [ [[:block 1]]]
+                 ;;next.jdbc/with-transaction [[:block 1]]
+                 ;;;;comment [[:inner 0]]
+                 ;;;;reagent.core/atom [[:inner 0]]
+                 ;;;;reagent.core/cursor [[:inner 0]]
+                 ;;;;re-frame.core/reg-sub-raw [[:inner 0]]
+                 ;;;;re-frame.core/reg-sub [[:inner 0]]
+                 ;;re-frame.core/reg-event-db [[:block 1]]
+                 re-frame.core/reg-event-fx [[:inner 1]]
+                 re-frame.core/reg-fx [[:block 1]]}}
+                 ;;;;re-frame.core/reg-cofx [[:block 0]]
+                 ;;
+                 ;;deftest [[:inner 1]]
+                 ;;use-fixtures [[:inner 1]]
+                 ;;use-state [[:inner 1]]
+                 ;;use-sub [[:inner 1]]
+                 ;;
+                 ;;
+                 ;;if [[:inner 1]]
+                 ;;when [[:inner 1]]
+                 ;;when-not [[:inner 1]]
+                 ;;
+                 ;;
+                 ;;defn- [[:inner 1]]
+                 ;;defmacro [ [:inner 1]]
+                 ;;defmethod [ [:inner 1]]
+                 ;;-> [[:inner 1]]
+                 ;;->> [[:inner 1]]
+                 ;;some? [[:block 0]]
+                 ;;some-> [[:inner 1]]
+                 ;;some->> [[:inner 1]]
+                 ;;as-> [[:inner 2] [:inner 1]]
+                 ;;;;cond [[:block 1]]
+                 ;;condp [[:inner 2] [:inner 1]]
+                 ;;
+                 ;;loop [[:block 1] [:inner 1]]
+                 ;;doseq [[:block 1] [:inner 1]]
+                 ;;for [[:block 1] [:inner 1]]
+                 ;;s/fdef [[:inner 1]]
+                 ;;s/def [[:inner 1]]
+                 ;;
+                 ;;defui [ [:inner 1]]}}
+                 ;;uix/use-effect []
+                 ;;use-subscribe []}}

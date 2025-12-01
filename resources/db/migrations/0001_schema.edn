@@ -1,0 +1,156 @@
+({:action :create-type,
+  :type-name :user-status,
+  :model-name :users,
+  :options {:choices ["active" "inactive" "suspended"], :type :enum}}
+ {:action :create-type,
+  :type-name :user-role,
+  :model-name :users,
+  :options {:choices ["admin" "member" "viewer"], :type :enum}}
+ {:action :create-table,
+  :model-name :users,
+  :fields
+  {:role {:null false, :default "member", :type [:enum :user-role]},
+   :updated-at {:default "NOW()", :type :timestamptz},
+   :email
+   {:null false,
+    :unique true,
+    :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"],
+    :type [:varchar 255]},
+   :avatar-url {:type :text},
+   :password-hash {:null false, :type :text},
+   :provider-user-id {:type :text},
+   :last-login-at {:type :timestamptz},
+   :status
+   {:null false, :default "active", :type [:enum :user-status]},
+   :id {:primary-key true, :type :uuid},
+   :full-name {:type [:varchar 255]},
+   :auth-provider {:default "password", :type :text},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :email_verification_tokens,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :user-id
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :token {:null false, :unique true, :type [:varchar 255]},
+   :expires-at {:null false, :type :timestamptz},
+   :attempts {:default 0, :type :integer},
+   :last-attempted-at {:type :timestamptz},
+   :used-at {:type :timestamptz},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-email-tokens-token,
+  :model-name :email_verification_tokens,
+  :options {:fields [:token], :unique true, :type :btree}}
+ {:action :create-type,
+  :type-name :admin-status,
+  :model-name :admins,
+  :options {:choices ["active" "suspended"], :type :enum}}
+ {:action :create-type,
+  :type-name :admin-role,
+  :model-name :admins,
+  :options {:choices ["admin" "support" "owner"], :type :enum}}
+ {:action :create-table,
+  :model-name :admins,
+  :fields
+  {:role {:null false, :default "admin", :type [:enum :admin-role]},
+   :updated-at {:default "NOW()", :type :timestamptz},
+   :email
+   {:null false,
+    :unique true,
+    :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"],
+    :type [:varchar 255]},
+   :password-hash {:null false, :type :text},
+   :last-login-at {:type :timestamptz},
+   :status
+   {:null false, :default "active", :type [:enum :admin-status]},
+   :id {:primary-key true, :type :uuid},
+   :full-name {:type [:varchar 255]},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-admins-email,
+  :model-name :admins,
+  :options {:fields [:email], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-users-auth-provider-provider-user-id-external,
+  :model-name :users,
+  :options
+  {:fields [:auth_provider :provider_user_id],
+   :unique true,
+   :where [:<> :auth_provider "password"],
+   :type :btree}}
+ {:action :create-type,
+  :type-name :audit-actor-type,
+  :model-name :users,
+  :options {:choices ["user" "admin"], :type :enum}}
+ {:action :create-table,
+  :model-name :audit_logs,
+  :fields
+  {:ip {:type :text},
+   :user-agent {:type :text},
+   :actor-type {:null false, :type [:enum :audit-actor-type]},
+   :actor-id {:null false, :type :uuid},
+   :target-id {:type :uuid},
+   :target-type {:type :text},
+   :id {:primary-key true, :type :uuid},
+   :action {:null false, :type :text},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :metadata {:type :jsonb}}}
+ {:action :create-index,
+  :index-name :idx-audit-logs-created-at,
+  :model-name :audit_logs,
+  :options {:fields [:created_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-users-email,
+  :model-name :users,
+  :options {:fields [:email], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admins-status,
+  :model-name :admins,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-type,
+  :type-name :login-principal-type,
+  :model-name :users,
+  :options {:choices ["user" "admin"], :type :enum}}
+ {:action :create-table,
+  :model-name :login_events,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :principal-type {:null false, :type [:enum :login-principal-type]},
+   :principal-id {:null false, :type :uuid},
+   :success {:null false, :type :boolean},
+   :reason {:type :text},
+   :ip {:type :text},
+   :user-agent {:type :text},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-login-events-principal,
+  :model-name :login_events,
+  :options {:fields [:principal_type :principal_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-email-tokens-user,
+  :model-name :email_verification_tokens,
+  :options {:fields [:user_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-audit-logs-actor,
+  :model-name :audit_logs,
+  :options {:fields [:actor_type :actor_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-login-events-created-at,
+  :model-name :login_events,
+  :options {:fields [:created_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-email-tokens-expires,
+  :model-name :email_verification_tokens,
+  :options {:fields [:expires_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-users-status,
+  :model-name :users,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-users-created-at,
+  :model-name :users,
+  :options {:fields [:created_at], :type :btree}})

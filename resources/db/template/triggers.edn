@@ -1,0 +1,13 @@
+{:users-updated-at-trigger
+ {:up "CREATE TRIGGER users_updated_at
+       BEFORE UPDATE ON users
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS users_updated_at ON users;"}
+
+ :admins-updated-at-trigger
+ {:up "CREATE TRIGGER admins_updated_at
+       BEFORE UPDATE ON admins
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS admins_updated_at ON admins;"}}

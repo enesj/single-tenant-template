@@ -1,0 +1,71 @@
+version: 1
+notes: |
+  Curated pointers for common AI-agent lookups in the single-tenant admin app.
+  Paths are relative to repo root.
+
+namespaces:
+  app.backend.routes:
+    - docs/backend/http-api.md
+    - docs/architecture/routing.md
+  app.backend.webserver:
+    - docs/architecture/backend-runtime.md
+  app.backend.security.middleware:
+    - docs/backend/security-middleware.md
+  app.backend.services:
+    - docs/backend/services.md
+  app.shared.field_metadata:
+    - docs/shared/field-metadata.md
+  app.shared.type_conversion:
+    - docs/shared/type-conversion.md
+  app.shared.pagination:
+    - docs/shared/pagination-utilities.md
+  app.shared.http:
+    - docs/shared/http-utilities.md
+  app.shared.patterns:
+    - docs/shared/pattern-utilities.md
+  app.shared.auth:
+    - docs/shared/auth-utilities.md
+  app.migrations.simple-repl:
+    - docs/migrations/migration-overview.md
+    - docs/migrations/complete-guide.md
+
+frontend:
+  app-structure:
+    - docs/frontend/app-shell.md
+    - docs/frontend/admin-panel-single-tenant.md
+  components:
+    - docs/frontend/component-library.md
+    - docs/frontend/template-component-integration.md
+    - docs/frontend/list-view-controls-configuration.md
+  http-usage:
+    - docs/frontend/http-standards.md
+  auth-flow:
+    - docs/frontend/home-page-authentication-flow.md
+
+migrations:
+  overview:
+    - docs/migrations/migration-overview.md
+    - docs/migrations/complete-guide.md
+  canonical-sources:
+    - resources/db/models.edn
+
+operations:
+  dev:
+    - docs/operations/dev-environment.md
+
+architecture:
+  overview:
+    - docs/index.md
+    - docs/architecture/overview.md
+  runtime:
+    - docs/architecture/backend-runtime.md
+  data-layer:
+    - docs/architecture/data-layer.md
+
+reference:
+  api:
+    - docs/reference/api-reference.md
+  db-schema:
+    - docs/reference/database-schema.md
+  glossary:
+    - docs/reference/glossary.md

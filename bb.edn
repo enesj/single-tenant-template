@@ -1,0 +1,602 @@
+{:paths ["scripts/bb" "src" "test"],
+ :deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
+        etaoin/etaoin {:mvn/version "1.0.40"}
+        org.clojure/data.json {:mvn/version "2.4.0"}
+        com.taoensso/timbre {:mvn/version "6.3.1"}
+        com.github.seancorfield/next.jdbc {:mvn/version "1.3.981"}
+        org.postgresql/postgresql {:mvn/version "42.7.4"}
+        aero/aero {:mvn/version "1.1.6"}}
+ :tasks
+ {;; iTerm2 session renaming helper
+  iterm-rename
+  {:doc "Rename terminal session. Usage: bb iterm-rename [session-name]",
+   :task (let [[name] *command-line-args*]
+           (if (empty? name)
+             (do (println "Usage: bb iterm-rename [session-name]")
+               (println "Example: bb iterm-rename \"Development Session\"")
+               (println "Supported terminals: iTerm2, Terminal.app, most modern terminal emulators"))
+             (do (when (and (not= "dumb" (System/getenv "TERM"))
+                           (not= "unknown" (System/getenv "TERM")))
+                   (printf "\033]0;%s\007" name)
+                   (flush))
+               (println (str "📝 Session renamed to: " name)))))},
+
+  ;; Helper function to set session name (used by other tasks)
+  set-session-name
+  {:doc "Internal helper to set session name with emoji support",
+   :task (fn [name]
+           (let [term (System/getenv "TERM")]
+             (when (and term (not= "dumb" term) (not= "unknown" term))
+               (printf "\033]0;%s\007" name)
+               (flush))))},
+
+  ;; Reset session name to default
+  reset-session
+  {:doc "Reset terminal session name to default",
+   :task (do
+           (let [term (System/getenv "TERM")]
+             (when (and term (not= "dumb" term) (not= "unknown" term))
+               (printf "\033]0;🏠 Hosting Development\007")
+               (flush)))
+           (println "📝 Session reset to default: Hosting Development"))},
+
+  
+  check-deps
+  {:doc "Check for available dependency upgrades without making any changes",
+   :task (shell "neil dep upgrade --dry-run")},
+
+  upgrade-deps
+  {:doc "Automatically upgrade all project dependencies to their latest versions",
+   :task (shell "neil dep upgrade")},
+
+  single-dep-upgrade
+  {:doc "Upgrade a specific dependency to its latest version. Usage: bb single-dep-upgrade [dep-name]",
+   :task
+   (let [[dep] *command-line-args*]
+     (shell "neil dep upgrade --lib" dep))},
+
+  find-lib
+  {:doc "Search for a Clojure library in public repositories. Usage: bb find-lib [search-term]",
+   :task (let [[query] *command-line-args*]
+           (shell "neil dep search " query))},
+
+  show-versions
+  {:doc "Display all available versions for a specific library. Usage: bb show-versions [lib-name]",
+   :task (let [[lib] *command-line-args*]
+           (shell "neil dep versions --lib " lib))},
+
+  add-lib-to-deps
+  {:doc "Add a library to your project's deps.edn file. Usage: bb add-lib-to-deps [lib-name]",
+   :task (let [[lib] *command-line-args*]
+           (shell "neil add dep :lib  " lib))},
+
+  rename-ns
+  {:doc "Rename a namespace across the entire project. Usage: bb rename-ns [old-ns] [new-ns]",
+   :task (let [[old-ns new-ns] *command-line-args*]
+           (shell "clojure-lsp" "rename" "--from" old-ns "--to" new-ns))},
+
+  list-alias-deps
+  {:doc "List dependencies for specific aliases. First arg is 'list' or 'tree' (default: tree). Usage: bb list-alias-deps [list|tree] [alias1] [alias2] ...",
+   :task (let [aliases *command-line-args*
+               type (first aliases)
+               type (or (#{"list" "tree"} type) "tree")
+               aliases (map keyword aliases)
+               aliases (str "[" (clojure.string/join ", " aliases) "]")]
+           (shell "clj" "-X:deps" type ":aliases " aliases))},
+
+  combine-files
+  {:doc "Combine project files into a single text file. The output file name is based on the included folders.
+        Usage: bb combine-files [folder1] [folder2] ...
+        If no folders are specified, all files will be combined.",
+   :task (let [args *command-line-args*]
+           (println "Combining files...")
+           (apply shell "bb" "scripts/bb/project-management/file_combiner.clj" args))},
+
+  commit
+  {:doc "Auto-commit all staged changes with a generated commit message. Use --test to run tests before commit.",
+   :task (let [args *command-line-args*
+               run-tests? (some #{"--test"} args)]
+           (when run-tests?
+             (println "🧪 Running tests before commit...")
+             (println "✅ All tests passed! Proceeding with commit..."))
+           (shell "bb" "stage")
+           (load-file "scripts/bb/project-management/auto_commit.clj"))},
+
+  cljfmt-check
+  {:doc "Check code formatting with cljfmt",
+   :task (shell "cljfmt" "check" "src" "test")},
+
+  cljfmt-fix
+  {:doc "Fix code formatting with cljfmt",
+   :task (do
+           (println "🔧 Fixing code formatting with cljfmt...")
+           (shell "cljfmt" "fix" "src" "test")
+           (println "✅ Code formatting fixed!"))},
+
+  lint
+  {:doc "Run clj-kondo lint across src, dev, test folders",
+   :task (do
+           (printf "\033]0;🔍 Linting Code\007")
+           (flush)
+           (shell "clj-kondo" "--parallel" "--cache" "false" "--lint" "src" "dev" "test"))},
+
+  nvd-check
+  {:doc "Check dependencies for known vulnerabilities (requires NVD API key for full functionality)",
+   :task (do (println "Note: For full functionality, obtain an NVD API key from https://nvd.nist.gov/developers/request-an-api-key")
+           (println "Create nvd-clojure.edn with: {:nvd {:nvd-api {:key \"your-api-key\"}}}")
+           (let [classpath (-> (shell {:out :string} "clj" "-Spath") :out clojure.string/trim)]
+             (shell "clj" "-Sdeps" "{:aliases {:nvd {:replace-deps {nvd-clojure/nvd-clojure {:mvn/version \"4.0.0\"}}}}}"
+               "-J-Dclojure.main.report=stderr" "-T:nvd" "nvd.task/check"
+               ":classpath" (str "\"" classpath "\""))))},
+
+  clean-cache
+  {:doc "Delete Shadow-CLJS caches and compiled output",
+   :task (do
+           (printf "\033]0;🧹 Cleaning Cache\007")
+           (flush)
+           (shell "bash" "./scripts/sh/build/clean-cljs-cache.sh"))},
+
+  run-app
+  {:doc "Start the application server (add --clean to clear caches first)",
+   :task (let [args *command-line-args*
+               clean? (some #{"--clean"} args)]
+             (printf "\033]0;🚀 Hosting App Server\007")
+             (flush)
+           (when clean? (shell "bash" "./scripts/sh/build/clean-cljs-cache.sh"))
+           (shell "./scripts/sh/development/run-app.sh"))},
+
+  kill-java
+  {:doc "Kill all Java processes",
+   :task (shell "./scripts/sh/development/kill-java.sh")},
+
+  fix-docstrings
+  {:doc "Automatically fix clj-kondo 'Misplaced docstring.' warnings",
+   :task (apply shell "bb" "scripts/bb/code_quality/fix_misplaced_docstrings.clj" *command-line-args*)},
+
+  fix-str-warnings
+  {:doc "Remove redundant (str ...) calls flagged by clj-kondo",
+   :task (shell "bb" "scripts/bb/code-quality/fix_str_warnings.clj")},
+
+  repair-lints
+  {:doc "Fix clj-kondo unused binding warnings and run clojure-lsp clean-ns on affected files",
+   :task (shell "./scripts/repair-lints.clj")},
+
+  be-test
+  {:doc "Run backend tests using Kaocha",
+   :task (do
+           (printf "\033]0;🧪 Backend Tests\007")
+           (flush)
+           (shell "clj -X:test"))},
+
+  fe-test-node
+  {:doc "Run frontend tests once using Shadow CLJS. Usage: bb fe-test [start] [lines]
+        If start is provided, skips that many lines before showing output. Defaults to 0.
+        If lines is provided, shows that many lines of output. Defaults to 50.",
+   :task (let [args *command-line-args*
+               start (if (empty? args) "0" (first args))
+               lines (if (or (empty? args) (= (count args) 1))
+                       "50"
+                       (second args))
+               start-int (try (Integer/parseInt start) (catch Exception _ 0))
+               lines-int (try (Integer/parseInt lines) (catch Exception _ 50))
+               timeout-ms 50000
+               command (str "source ~/.zshrc && npm run test:cljs")]
+           (printf "\033]0;🧪 Frontend Tests\007")
+           (flush)
+           (println (str "🧪 Running frontend tests"))
+           (when (not= start "0")
+             (println (str "   Starting from line " start)))
+           (println (str "   Showing " lines-int " lines of output"))
+           (let [pb (doto (ProcessBuilder. (into-array String ["zsh" "-c" command]))
+                      (.redirectErrorStream true))
+                 proc (.start pb)
+                 collected (java.util.ArrayList.)
+                 reader-fut (future
+                              (with-open [r (clojure.java.io/reader (.getInputStream proc))]
+                                (doseq [line (line-seq r)]
+                                  (.add collected line))))
+                 completed? (.waitFor proc timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)]
+             (when (not completed?)
+               (println (str "❌ Frontend tests timed out after " (/ timeout-ms 1000) " seconds"))
+               (.destroyForcibly proc)
+               (.waitFor proc 5 java.util.concurrent.TimeUnit/SECONDS))
+             (try (deref reader-fut) (catch Throwable _ nil))
+             (doseq [l (take lines-int (drop start-int (seq collected)))]
+               (println l))
+             (when (and completed? (not= 0 (.exitValue proc)))
+               (throw (ex-info "Frontend tests exited with non-zero code" {:exit-code (.exitValue proc)}))))
+           (println (str "✅ Test output processed (start: " start-int ", lines: " lines-int ")")))},
+
+  stage
+  {:doc "Stage all changes for git commit",
+   :task (shell "git" "add" ".")},
+
+  build-prod
+  {:doc "Build the hosting app for production deployment",
+   :task (do
+           (printf "\033]0;🏗️ Production Build\007")
+           (flush)
+           (shell "./scripts/sh/build/build-production.sh"))},
+
+  install-completions
+  {:doc "Install bb task autocompletion for your shell",
+   :task (shell "./scripts/sh/setup/install-completions.sh")},
+
+  create-new-app
+  {:doc "Create a new Clojure application based on the hosting app template.
+
+         Usage: bb create-new-app <project-name> [options]
+
+         Options:
+         --title \"App Title\"        Application title (default: auto-generated)
+         --db-name \"database\"       Database name (default: same as project name)
+         --package-name \"pkg\"       Package name (default: same as project name)
+         --target-dir \"/path\"       Target directory (default: ../project-name)
+         --config \"/path/file.edn\"  Read configuration from EDN file
+         --help                    Show detailed help
+
+         Configuration File Support:
+         Create new-app-config.edn to set default values:
+         {:defaults {:title \"My Company App\"
+                    :db-name-suffix \"-db\"
+                    :package-name-prefix \"company-\"
+                    :target-dir \"~/Projects\"}}
+
+         The script will automatically use new-app-config.edn if present and ask
+         if you want to use those settings or modify them interactively.
+
+         Examples:
+         bb create-new-app invoice-system
+         bb create-new-app my-app --title \"My Application\" --db-name \"myapp_db\"
+         bb create-new-app invoice-system --config ./custom-config.edn",
+   :task (let [args *command-line-args*]
+           (if (empty? args)
+             (shell "bb" "scripts/bb/project-management/create-new-app.clj" "--help")
+             (apply shell "bb" "scripts/bb/project-management/create-new-app.clj" args)))},
+
+  clear-folder
+  {:doc "Clear temporary project folders.\n\n       Options:\n         --tmp              Clear the tmp folder\n         --projectstmp      Clear the projectstmp folder\n         --test-screenshots Clear the test-screenshots folder\n         --all              Clear all above folders (default if no option given)\n\n       Usage:\n         bb clear-temp --tmp\n         bb clear-temp --all\n       ",
+   :task (let [args (set *command-line-args*)
+               dir-map {"--tmp" "tmp"
+                        "--projectstmp" "projectstmp"
+                        "--test-screenshots" "test-screenshots"}
+               dirs (if (or (empty? args) (args "--all"))
+                      (vals dir-map)
+                      (keep dir-map args))]
+           (doseq [d dirs]
+             (when (.exists (java.io.File. d))
+               (println (str "🧹 Clearing " d "..."))
+               (doseq [f (.listFiles (java.io.File. d))]
+                 (when (.isFile f) (.delete f)))
+               (doseq [sub (.listFiles (java.io.File. d))]
+                 (when (.isDirectory sub)
+                   (shell "bash" "-c" (str "rm -rf " (.getPath sub)))))))
+           (println "✅ Selected temporary folders cleared."))}
+
+  backup-db
+  {:doc "Create a backup of dev or test database. Usage: bb backup-db --dev or bb backup-db --test",
+   :task (let [args *command-line-args*
+               env (cond
+                     (some #{"--dev"} args) "dev"
+                     (some #{"--test"} args) "test"
+                     :else nil)]
+           (if env
+             (shell "clj" "-M" "scripts/bb/database/backup_db.clj" env)
+             (do (println "Usage: bb backup-db --dev or bb backup-db --test")
+               (println "  --dev   Backup development database")
+               (println "  --test  Backup test database"))))},
+
+  restore-db
+  {:doc "Restore a database from backup file. Usage: bb restore-db --dev backup_file.sql or bb restore-db --test backup_file.sql",
+   :task (let [args *command-line-args*
+               env (cond
+                     (some #{"--dev"} args) "dev"
+                     (some #{"--test"} args) "test"
+                     :else nil)
+               non-flag-args (filter (fn [arg] (not (.startsWith arg "--"))) args)
+               backup-file (last non-flag-args)]
+           (if (and env backup-file)
+             (shell "clj" "-M" "scripts/bb/database/restore_db.clj" env backup-file)
+             (do (println "Usage: bb restore-db --dev backup_file.sql or bb restore-db --test backup_file.sql")
+               (println "  --dev   Restore to development database")
+               (println "  --test  Restore to test database")
+               (println "Examples:")
+               (println "  bb restore-db --dev backups/backup_dev_2025-06-27_19-58-16.sql")
+               (println "  bb restore-db --test backups/backup_dev_2025-06-27_19-58-16.sql"))))},
+
+  clean-restore-db
+  {:doc "Clean restore: Drop target database completely, then restore from backup. Usage: bb clean-restore-db --dev backup_file.sql or bb clean-restore-db --test backup_file.sql",
+   :task (let [args *command-line-args*
+               env (cond
+                     (some #{"--dev"} args) "dev"
+                     (some #{"--test"} args) "test"
+                     :else nil)
+               non-flag-args (filter (fn [arg] (not (.startsWith arg "--"))) args)
+               backup-file (last non-flag-args)]
+           (if (and env backup-file)
+             (do
+               (println "🔄 Step 1/2: Cleaning database...")
+               (shell "clj" "-M" "scripts/bb/database/clean-db.clj" env)
+               (println "🔄 Step 2/2: Restoring from backup...")
+               (shell "clj" "-M" "scripts/bb/database/restore-db.clj" env backup-file))
+             (do (println "Usage: bb clean-restore-db --dev backup_file.sql or bb clean-restore-db --test backup_file.sql")
+               (println "  --dev   Clean restore to development database")
+               (println "  --test  Clean restore to test database")
+               (println "⚠️  WARNING: This completely drops the target database!")
+               (println "Examples:")
+               (println "  bb clean-restore-db --dev backups/backup_dev_2025-06-27_19-58-16.sql")
+               (println "  bb clean-restore-db --test backups/backup_dev_2025-06-27_19-58-16.sql"))))},
+
+  format-edn
+  {:doc "Format EDN files with pretty print. Usage: bb format-edn <file-path>",
+   :task (let [args *command-line-args*]
+           (if (empty? args)
+             (do (println "Usage: bb format-edn <file-path>")
+               (println "Example: bb format-edn some-file.edn"))
+             (apply shell "bb" "scripts/bb/code_quality/format_edn.clj" args)))},
+
+  md-to-pdf
+  {:doc "Convert Markdown files to PDF using pandoc.
+
+        Usage: bb md-to-pdf <input.md> [output.pdf]
+
+        Arguments:
+          input.md     Path to the markdown file to convert
+          output.pdf   Output PDF file path (optional, defaults to input name with .pdf extension)
+
+        Dependencies (install with brew):
+          - pandoc: brew install pandoc
+
+        Features:
+          - Professional styling with custom CSS
+          - Table of contents generation
+          - Proper font rendering
+          - Code syntax highlighting
+          - Automatic cleanup of temporary files
+
+        Examples:
+          bb md-to-pdf docs/linked-in/article.md
+          bb md-to-pdf readme.md output/readme.pdf",
+   :task (apply shell "bb" "scripts/bb/project-management/md-to-pdf.clj" *command-line-args*)},
+
+  clean-db
+  {:doc "Clean database by truncating all tables. Usage: bb clean-db --dev or bb clean-db --test",
+   :task (let [args *command-line-args*
+               env (cond
+                     (some #{"--dev"} args) "dev"
+                     (some #{"--test"} args) "test"
+                     :else nil)]
+           (if env
+             (shell "clj" "-M" "scripts/bb/database/clean-db.clj" env)
+             (do (println "Usage: bb clean-db --dev or bb clean-db --test")
+               (println "  --dev   Clean development database")
+               (println "  --test  Clean test database"))))},
+
+  seed-admin
+  {:doc "Seed or refresh the admin user (default env: dev). Usage: bb seed-admin [dev|test]",
+   :task (let [env (or (first *command-line-args*) "dev")]
+           (shell "clj" "-M" "scripts/bb/database/seed_admin.clj" env))},
+
+  clear-rate-limits
+  {:doc "Clear all rate limiting data (for development and testing).
+
+        This task clears the in-memory rate limiting storage, allowing you to make
+        requests without being blocked by rate limits. Useful during development
+        when testing login attempts, API calls, or admin operations.
+
+        Features:
+        • Shows current rate limit statistics before clearing
+        • Clears all rate limiting data via the running application
+        • Displays confirmation and updated statistics
+        • Provides helpful error messages if the app isn't running
+
+        Requirements:
+        • The hosting application must be running (bb run-app)
+        • Rate limiting middleware must be loaded
+
+        Usage: bb clear-rate-limits
+
+        Example scenarios:
+        • After multiple failed login attempts
+        • When testing admin login functionality
+        • During development of rate-limited endpoints
+        • Before running integration tests",
+   :task (shell "bb" "scripts/bb/development/clear_rate_limits.clj")},
+
+  rm-profile
+  {:doc "Remove Chrome debug profiles to clean up temporary browser data.
+
+        This task removes temporary Chrome profiles used for debugging and development:
+        • /tmp/chrome-debug-profile - Temporary Chrome profile for debugging sessions
+        • ~/.cache/chrome-devtools-mcp/chrome-profile - Cached Chrome profile for devtools MCP
+
+        Features:
+        • Silently removes profile directories (suppresses 'No such file or directory' errors)
+        • Cleans up both temporary and cached Chrome profiles
+        • Useful when Chrome debugging sessions become corrupted or need a fresh start
+
+        Usage: bb rm-profile
+
+        Example scenarios:
+        • When Chrome debugging sessions become unresponsive
+        • Before starting fresh debugging sessions
+        • When disk space needs to be freed up from temporary profiles
+        • After browser cache issues affect debugging",
+   :task (shell "rm -rf /tmp/chrome-debug-profile 2>/dev/null || true && rm -rf ~/.cache/chrome-devtools-mcp/chrome-profile 2>/dev/null || true")},
+
+  fix-lint
+  {:doc "Fix lint warnings automatically using clojure-lsp clean-ns and custom unused binding fixes. Use --interactive for interactive mode.",
+   :task (apply shell "bb" "scripts/bb/code_quality/fix_lint_warnings.clj" *command-line-args*)},
+
+  tasks-pretty
+  {:doc "Display available bb tasks in a nicely formatted, colored list.
+
+        A more readable alternative to 'bb tasks' with:
+        • 🎨 Colored task names and descriptions
+        • 📋 Better formatting and alignment
+        • 💡 Usage hints
+
+        Usage: bb tasks-pretty",
+   :task (shell "bb" "scripts/bb/development/pretty_tasks.clj")},
+
+  longest-files
+  {:doc "Analyze and display the 10 longest Clojure files in the project.
+
+        Recursively scans all .clj, .cljs, and .cljc files in the project,
+        excluding common build and cache directories.
+
+        Output includes:
+        • Line count for each file
+        • File size in KB
+        • Full file path
+        • Total project statistics
+
+        Usage: bb analyze-longest-files",
+   :task (shell "bb" "scripts/bb/project-management/analyze_longest_files.clj")},
+
+  set-model
+  {:doc "Switch between AI models for Claude CLI
+
+        Usage: bb set-model [options]
+
+        Options:
+          --model MODEL           Model to use (default: glm-4.5)
+          --base-url URL          Base URL for API (default: https://api.z.ai/api/anthropic)
+          --token TOKEN           Auth token (default: z.ai token)
+          --small-model MODEL     Small/fast model (default: same as --model)
+          --help                  Show this help
+
+        Examples:
+          bb set-model
+          bb set-model --model claude-3-5-sonnet-20241022
+          bb set-model --model glm-4.5 --base-url https://api.z.ai/api/anthropic",
+   :task (let [args *command-line-args*
+               help? (some #{"--help"} args)
+               parse-arg (fn [flag args]
+                           (when-let [idx (some (fn [i] (when (= flag (nth args i)) i)) (range (count args)))]
+                             (when (< (inc idx) (count args))
+                               (nth args (inc idx)))))
+;; Find the first argument that doesn't start with -- as the prompt
+               prompt (first (filter (fn [arg] (not (.startsWith arg "--"))) args))
+               model (or (parse-arg "--model" args) "glm-4.6")
+               model-small (or (parse-arg "--model" args) "lm-4.5-air")
+               base-url (or (parse-arg "--base-url" args) "https://api.z.ai/api/anthropic")
+               token (or (parse-arg "--token" args) "6189b03087e74486bff8234fcab6d678.JOWIHK3u9TANnRhO")
+               small-model (or (parse-arg "--small-model" args) model)]
+           (cond
+             help?
+             (do (println "Usage: bb set-model [options] [prompt]")
+               (println "")
+               (println "Options:")
+               (println "  --model MODEL           Model to use (default: glm-4.6)")
+               (println "  --base-url URL          Base URL for API (default: https://api.z.ai/api/anthropic)")
+               (println "  --token TOKEN           Auth token (default: z.ai token)")
+               (println "  --small-model MODEL     Small/fast model (default: same as --model)")
+               (println "  --help                  Show this help")
+               (println "")
+               (println "Arguments:")
+               (println "  prompt                  Optional prompt to execute after switching models")
+               (println "")
+               (println "Examples:")
+               (println "  bb set-model")
+               (println "  bb set-model --model claude-3-5-sonnet-20241022")
+               (println "  bb set-model --model glm-4.5 --base-url https://api.z.ai/api/anthropic")
+               (println "  bb set-model \"fix the login bug\"")
+               (println "  bb set-model --model claude-3-5-sonnet-20241022 \"analyze the codebase\""))
+
+             :else
+             (do (printf "\033]0;🤖 AI Model: %s\007" model)
+               (flush)
+               (println (str "🔧 Switching to " model " model..."))
+               (shell "bash" "-c" (str "export ANTHROPIC_BASE_URL=" base-url
+                                    " && export ANTHROPIC_DEFAULT_OPUS_MODEL=" model
+                                    " && export ANTHROPIC_DEFAULT_SONNET_MODEL=" model
+                                    " && export ANTHROPIC_DEFAULT_HAIKU_MODEL=" model-small
+                                    " && export ANTHROPIC_AUTH_TOKEN=" token
+                                    " && echo 'Environment variables exported successfully'"
+                                    (if prompt
+                                      (str " && claude -p '" prompt "'")
+                                      " && exec claude"))))))}
+
+  find-snake-case
+  {:doc "Find snake_case keywords in Clojure files and analyze their usage patterns.
+
+        This task analyzes Clojure files to identify snake_case keywords that
+        may need conversion to kebab-case for better Clojure naming conventions.
+
+        Usage: bb find-snake-case [file-type] [options]
+
+        Arguments:
+          file-type        File type to analyze: 'clj' or 'cljs' (default: cljs)
+
+        Options:
+          --list           Show only the unique list of snake_case keywords found
+          --limit=N        Show only the top N files (default: show all files)
+
+        Output Modes:
+        • Default: Detailed analysis with files sorted by keyword count (colorized)
+        • --list: Clean list of unique snake_case keywords for easy copying
+
+        Features:
+        • 🎨 Colorized terminal output for better readability
+        • 📊 Recursively scans all specified files in src/ directory
+        • 🔍 Identifies keywords using snake_case naming (e.g., :user_id, :created_at)
+        • 📈 Sorts files by number of snake_case keywords (descending)
+        • 📋 Shows detailed breakdown of keywords per file
+        • 📊 Provides summary statistics with color coding
+        • 🎯 Configurable output limiting for large codebases
+
+        Examples:
+          bb find-snake-case                    # Analyze .cljs files (default)
+          bb find-snake-case clj                # Analyze .clj files
+          bb find-snake-case cljs --list        # Just the keyword list for .cljs
+          bb find-snake-case clj --limit=10     # Show top 10 .clj files only
+          bb find-snake-case cljs --limit=5 --list  # Top 5 .cljs files + keyword list
+
+        Use Cases:
+        • Code cleanup and naming convention enforcement
+        • Identifying files that need refactoring priority
+        • Planning migration from snake_case to kebab-case
+        • Code quality auditing with manageable output",
+   :task (apply shell "bb" "scripts/bb/code_quality/find_snake_case_keywords.clj" *command-line-args*)}
+
+  run-karma
+  {:doc "Extract browser test failures as structured JSON data
+
+        This script runs the test runner with JSON-only output to extract
+        failed tests with detailed information including test names, expected/actual
+        values, file locations, and assertion types.
+
+        Usage: bb run-karma
+
+        Output:
+        • Creates test-failures.json with structured failure data
+        • Shows summary statistics (total tests, failures, errors, success rate)
+        • Groups failures by type and file for analysis
+        • Provides quick jq commands for further analysis
+
+        Features:
+        📊 JSON-only test runner output
+        🔍 Structured JSON output with complete failure details
+        📋 Summary statistics and categorization
+        🎯 File-level analysis with line numbers
+        🔧 Powerful jq query examples for further investigation
+
+        Examples:
+          bb extract-test-failures                    # Extract all failures
+
+        Quick Analysis Commands:
+          cat test-failures.json | jq '.failures[]'  # View all failures
+          cat test-failures.json | jq '.summary'      # View summary only
+          cat test-failures.json | jq '.failures[] | select(.file == \"admin_page_wrapper_test.cljs\")'  # Filter by file
+
+        Use Cases:
+        • CI/CD pipeline failure reporting
+        • Development debugging and analysis
+        • Test quality tracking over time
+        • Automated test health monitoring
+
+        Requirements:
+        • Chrome/Chromium available for test execution
+        • jq installed for JSON processing",
+   :task (shell {"JSON_ONLY" "1"} "/Users/enes/Projects/hosting/scripts/sh/tests/run-karma.sh")}}}

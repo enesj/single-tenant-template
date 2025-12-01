@@ -1,0 +1,9 @@
+({:action :alter-type,
+  :type-name :user-role,
+  :model-name :users,
+  :options
+  {:choices ["admin" "member" "viewer" "unassigned"], :type :enum},
+  :changes
+  {:choices
+   {:from ["admin" "member" "viewer"],
+    :to ["admin" "member" "viewer" "unassigned"]}}})

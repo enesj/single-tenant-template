@@ -1,0 +1,12 @@
+#kaocha/v1
+ {:watch           {:ignore         []
+                    :follow-failed? false}
+  :plugins         [:kaocha.plugin/capture-output
+                    :kaocha.plugin/hooks]
+  :tests           [{:id                        :app.backend
+                     :kaocha.hooks/before-suite [app.backend.fixtures/start-test-system]
+                     :kaocha.hooks/after-suite  [app.backend.fixtures/reset-test-system!]
+                     :source-paths              ["src" "test" "vendor"]
+                     :test-paths                ["test"]
+                     :ns-patterns               ["-test$"]}]
+  :capture-output? false}

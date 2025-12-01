@@ -1,0 +1,8 @@
+[{:action :add-column,
+  :field-name :email-verified,
+  :model-name :users,
+  :options {:default false, :null false, :type :boolean}}
+ {:action :create-index,
+  :index-name :idx-users-email-verified,
+  :model-name :users,
+  :options {:fields [:email_verified], :type :btree}}])

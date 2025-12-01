@@ -1,0 +1,16 @@
+BROWSER RELOAD REQUIRED
+
+The fix for the "Unknown comparison operator: raw" error has been applied to:
+  src/app/shared/validation/constraints.cljc
+
+The code now filters out :raw check constraints which are SQL-specific and 
+cannot be validated client-side.
+
+To apply the fix:
+1. Wait for Shadow CLJS to recompile (watch for "Build completed" in logs)
+2. Hard refresh the browser (Cmd+Shift+R on Mac, Ctrl+Shift+F5 on Windows)
+3. If still seeing the error, clear browser cache and reload
+
+The fix ensures that email validation with regex patterns like:
+  [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"]
+will be skipped during frontend validation and only enforced at the database level.

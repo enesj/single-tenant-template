@@ -1,0 +1,62 @@
+{:audit-logs
+ {:entity-key :audit-logs
+  :page-title "Audit Logs"
+  :page-description "Complete system audit trail and security monitoring"
+  :adapter-init-fn app.admin.frontend.adapters.audit/init-audit-adapter!
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-highlights? true
+                     :show-batch-edit? false
+                     :show-add-button? false
+                     :show-pagination? true
+                     :per-page 20}
+  :features {:read-only? true
+             :exportable? true
+             :batch-operations? true
+             :deletion-constraints? true
+             :security-wrapper? false}
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
+               :custom-actions app.admin.frontend.components.audit-actions/admin-audit-actions
+               :modals [app.admin.frontend.components.audit-details-modal/audit-details-modal]
+               :custom-header app.admin.frontend.components.audit-export-controls/export-controls}
+  :custom-content {:active-filters-display true
+                   :export-controls true}}
+
+ :login-events
+ {:entity-key :login-events
+  :page-title "Login Events"
+  :page-description "Global view of admin and user login attempts"
+  :adapter-init-fn app.admin.frontend.adapters.login-events/init-login-events-adapter!
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? false
+                     :per-page 20}
+  :features {:read-only? true
+             :exportable? false
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}}
+
+ :users
+ {:entity-key :users
+  :page-title "User Management"
+  :page-description "Manage users in the single-tenant template"
+  :adapter-init-fn app.admin.frontend.adapters.users/init-users-adapter!
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :per-page 5}
+  :features {:batch-operations? true
+             :activity-tracking? true
+             :deletion-constraints? true
+             :security-wrapper? true}
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
+               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}}}
