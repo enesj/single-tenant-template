@@ -1,4 +1,24 @@
 (ns app.template.frontend.subs.ui
+  "UI state subscriptions for the template frontend.
+   
+   DISPLAY SETTINGS ARCHITECTURE:
+   ==============================
+   
+   The `::entity-display-settings` subscription is the SINGLE AUTHORITATIVE SOURCE
+   for display settings. It handles all merging logic with the following precedence:
+   
+   1. Hardcoded settings from [:admin :settings :view-options] (API-updated)
+   2. Hardcoded settings from [:admin :config :view-options] (app init)
+   3. User preferences from [:ui :entity-configs entity-name]
+   4. Default values from [:ui :defaults]
+   5. Global defaults from [:ui]
+   6. Fallback default values
+   
+   RECOMMENDED USAGE:
+   - Components should use `app.template.frontend.hooks.display-settings/use-display-settings`
+     which wraps this subscription with a cleaner API
+   - The hook provides convenience functions like `use-show-select?`, `use-action-visibility`
+   - Direct subscription is still supported for backward compatibility"
   (:require
     [re-frame.core :as rf]
     [app.admin.frontend.config.loader :as config-loader]))

@@ -1,125 +1,44 @@
 (ns app.template.frontend.components.list.rows
+  "Row rendering components for list views.
+   
+   This module uses reactive cell components from the cells module for selection
+   and actions. Components are re-exported for backward compatibility."
   (:require
     [app.shared.keywords :as kw]
     [app.template.frontend.events.config :as config-events]
     [app.frontend.utils.id :as id-utils]
-    [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.common :refer [checkbox]]
-    [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.form :refer [form]]
-    [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list.fields :refer [get-field-display-value]]
-    [app.template.frontend.events.form :as form-events]
+    ;; Import reactive cell components from the cells module
+    [app.template.frontend.components.list.cells :as cells]
     [app.template.frontend.events.list.crud :as crud-events]
-    [app.template.frontend.subs.ui :as ui-subs]
+    [app.template.frontend.events.form :as form-events]
     [re-frame.core :as rf]
-    [uix.core :as uix :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+    [uix.core :as uix :refer [$ defui]]))
 
-(defui select-checkbox
-  "Checkbox for selecting a row."
-  [{:keys [entity-name item selected-ids on-select-change]}]
-  (let [;; Use the generic ID extraction utility
-        item-id (id-utils/extract-entity-id item)
-        is-selected (contains? selected-ids item-id)]
-    ($ :div {:class "flex justify-center items-center py-2"}
-      ($ checkbox
-        {:id (str "select-" (kw/ensure-name entity-name) "-" item-id)
-         :checked is-selected
-         :on-change #(on-select-change item-id (.. % -target -checked))}))))
+;; =============================================================================
+;; Re-exports from cells module for backward compatibility
+;; =============================================================================
 
-(defui select-all-checkbox
-  "Three-state checkbox for selecting all rows."
-  [{:keys [entity-name all-items selected-ids on-select-all]}]
-  (let [total-count (count all-items)
-        selected-count (count selected-ids)
-        indeterminate? (and (> selected-count 0) (< selected-count total-count))
-        checked? (and (> total-count 0) (= selected-count total-count))]
+;; Re-export select-checkbox for existing code that imports from rows
+(def select-checkbox cells/select-checkbox)
 
-    ($ :div {:class "flex justify-center items-center"}
-      ($ checkbox
-        {:id (str "select-all-" (kw/ensure-name entity-name))
-         :indeterminate? indeterminate?
-         ;;:ref checkbox-ref
-         :checked checked?
-         :on-change #(on-select-all (.. % -target -checked))}))))
+;; Re-export select-all-checkbox for existing code that imports from rows
+(def select-all-checkbox cells/select-all-checkbox)
 
-(defui reactive-selection-cell
-  "A reactive cell that subscribes to show-select? and conditionally renders the checkbox.
-   This ensures the selection checkbox visibility responds immediately to toggling in the settings panel."
-  [{:keys [entity-name item selected-ids on-select-change]}]
-  (let [;; Subscribe directly to entity display settings for reactivity
-        entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
-        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-key])
-        show-select? (:show-select? entity-settings)
-        _ (js/console.log "reactive-selection-cell render:"
-            (clj->js {:entity-key entity-key
-                      :show-select? show-select?
-                      :has-item? (some? item)}))]
-    (if show-select?
-      ($ select-checkbox {:entity-name entity-name
-                          :item item
-                          :selected-ids selected-ids
-                          :on-select-change on-select-change})
-      ;; Hidden placeholder to maintain table structure
-      ($ :div {:style {:width "0px" :padding "0px" :margin "0px"}
-               :class "hidden-cell"}))))
+;; Re-export reactive-selection-cell for existing code that imports from rows
+(def reactive-selection-cell cells/reactive-selection-cell)
 
-(defui action-buttons
-  "Action buttons for editing and deleting an item."
-  [{:keys [entity-name item show-edit? show-delete? custom-actions]}]
-  (let [edit-icon-el ($ edit-icon)
-        delete-icon-el ($ delete-icon)
-        entity-name-lower (kw/lower-name entity-name)
-        ;; Handle both namespaced and unnamespaced ID keys
-        item-id (id-utils/extract-entity-id item)
+;; Re-export action-buttons for existing code that imports from rows
+(def action-buttons cells/action-buttons)
 
-        ;; Define a separate function to handle delete confirmation
-        handle-delete-confirm (fn []
-
-                                (rf/dispatch [::crud-events/delete-entity entity-name item-id]))
-
-        ;; Create a function that returns the confirm-dialog handler
-        ;; This prevents the dialog from showing on component mount
-        handle-delete-click (fn [e]
-                              (.stopPropagation e)
-                              (confirm-dialog/show-confirm
-                                {:message "Do you want to delete this record?"
-                                 :title "Confirm Delete"
-                                 :on-confirm handle-delete-confirm
-                                 :on-cancel nil}))
-
-        ;; Enhanced edit click handler
-        handle-edit-click (fn [e]
-
-                            (rf/dispatch [::crud-events/clear-error (kw/ensure-keyword entity-name)])
-                            (rf/dispatch [::form-events/clear-form-errors (kw/ensure-keyword entity-name)])
-                            (rf/dispatch [::config-events/set-editing item-id]))]
-
-    ;; Render default buttons AND custom actions together for action composition
-    ($ :div {:class "flex items-center gap-2"}
-      ;; Default edit/delete buttons (when enabled)
-      (when show-edit?
-        ($ button
-          {:id (str "btn-edit-" entity-name-lower "-" item-id)
-           :btn-type :primary
-           :shape "circle"
-           :on-click handle-edit-click}
-          edit-icon-el))
-      (when show-delete?
-        ($ button
-          {:id (str "btn-delete-" entity-name-lower "-" item-id)
-           :btn-type :danger
-           :shape "circle"
-           :on-click handle-delete-click}
-          delete-icon-el))
-      ;; Custom actions (when provided) - rendered alongside default buttons
-      (when custom-actions
-        (custom-actions item)))))
+;; =============================================================================
+;; Row Content Generation
+;; =============================================================================
 
 (defn- row-content
   "Generates the content for a table row."
-  [{:keys [entity-spec item show-timestamps? actions select-checkbox show-select? visible-columns entity-name custom-actions selected-ids on-select-change]}]
+  [{:keys [entity-spec item show-timestamps? actions visible-columns entity-name selected-ids on-select-change]}]
 
   (let [;; Safely get field values from entity-spec - FIXED: Check :fields key first
         entity-fields (cond
@@ -165,11 +84,9 @@
         ;; Add timestamp values if requested, but only if they're visible
         timestamps (when show-timestamps?
                      (let [created-key :created-at
-                           created-legacy-key :created-at
                            updated-key :updated-at
-                           updated-legacy-key :updated-at
-                           legacy-map {created-key created-legacy-key
-                                       updated-key updated-legacy-key}
+                           legacy-map {created-key :created-at
+                                       updated-key :updated-at}
                            sentinel ::not-found
                            resolve-setting (fn [settings key]
                                              (let [legacy (get legacy-map key)
@@ -215,10 +132,9 @@
         filtered-timestamps (filterv some? timestamps)]
 
     ;; Return all cell values in the same order as headers: select checkbox (if enabled), base fields, timestamps, actions
-    ;; The key fix here is to add appropriate placeholders when columns are hidden to maintain structure
     ;; Use the reactive-selection-cell component which subscribes to show-select? directly
     ;; This ensures the checkbox visibility updates immediately when the user toggles the setting
-    (vec (concat [(fn [] ($ reactive-selection-cell
+    (vec (concat [(fn [] ($ cells/reactive-selection-cell
                            {:entity-name entity-name
                             :item item
                             :selected-ids selected-ids
@@ -227,11 +143,14 @@
            filtered-timestamps
            [(fn [] actions)]))))
 
+;; =============================================================================
+;; Row Rendering
+;; =============================================================================
+
 (defn render-row
   "Renders a single row in the list, either as a form or as a table row."
-  [{:keys [entity-spec editing set-editing! entity-name recently-updated-ids recently-created-ids selected-ids on-select-change visible-columns form-entity-spec] :as props} {:keys [item]}]
-  (let [;; Debug logging to check what specs we're getting
-        props-map (js->clj props :keywordize-keys true)
+  [{:keys [entity-spec editing set-editing! entity-name recently-updated-ids recently-created-ids selected-ids on-select-change visible-columns] :as props} {:keys [item]}]
+  (let [props-map (js->clj props :keywordize-keys true)
         ;; Use the explicit entity-spec (vector-config) for table rows.
         ;; Do not fall back to form-entity-spec to avoid label drift.
         effective-entity-spec entity-spec
@@ -254,9 +173,7 @@
                                    (rf/dispatch [::form-events/clear-form-errors (keyword (:entity-name props))])
                                    ;; Clear the editing state to hide the inline edit form
                                    (set-editing! nil))
-                     :item item-clj})                       ; Use ClojureScript data here too
-        ;; Get the item ID and ensure it's the right type (integer or string)
-        ;; Get the item ID and ensure it's the right type (integer or string)
+                     :item item-clj})
         ;; Use the generic ID extraction utility
         item-id (id-utils/extract-entity-id item-clj)
         item-id-int (if (string? item-id) (js/parseInt item-id) item-id)
@@ -294,9 +211,6 @@
                        (= item-id editing)))
 
         ;; Ensure recently-updated-ids and recently-created-ids are sets, not nil
-        ;; Debug logging removed
-
-        ;; Ensure recently-updated-ids and recently-created-ids are sets, not nil
         updated-ids (or recently-updated-ids #{})
         created-ids (or recently-created-ids #{})
 
@@ -322,20 +236,12 @@
                             ;; which can optionally include custom actions.
                             :actions (if-let [override (:actions-override props)]
                                        (override item-clj)
-                                       ($ action-buttons
-                                         (assoc props-map
-                                           :item item-clj   ; Use ClojureScript data for actions
-                                           :entity-name (:entity-name props)
-                                           :recently-updated-ids recently-updated-ids
-                                           :recently-created-ids recently-created-ids
-                                           :show-edit? (:show-edit? props)
-                                           :show-delete? (:show-delete? props)
-                                           :custom-actions (:custom-actions props))))
-                            :select-checkbox ($ select-checkbox {:entity-name entity-name
-                                                                 :item item-clj ; Use ClojureScript data for checkbox
-                                                                 :selected-ids (or selected-ids #{})
-                                                                 :on-select-change on-select-change})
-                            :show-select? (:show-select? props)
+                                       ($ cells/action-buttons
+                                         {:item item-clj
+                                          :entity-name (:entity-name props)
+                                          :show-edit? (:show-edit? props)
+                                          :show-delete? (:show-delete? props)
+                                          :custom-actions (:custom-actions props)}))
                             :show-timestamps? (:show-timestamps? props)
                             :visible-columns visible-columns
                             :entity-name entity-name

@@ -5,11 +5,11 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon
                                                     filter-icon]]
-    [app.template.frontend.components.list.rows :refer [select-all-checkbox]]
+    ;; Use cells module for reactive selection components
+    [app.template.frontend.components.list.cells :as cells]
     [app.template.frontend.events.list.batch :as batch-events]
     [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
-    [app.template.frontend.subs.ui :as ui-subs]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui] :as uix]
@@ -136,26 +136,10 @@
            :on-click handle-three-dots-click
            :children ($ :span {:class "text-lg font-bold"} "⋯")})))))
 
-(defui reactive-select-all-header
-  "A reactive header cell that subscribes to show-select? and conditionally renders the select-all checkbox.
-   This ensures the select-all checkbox visibility responds immediately to toggling in the settings panel."
-  [{:keys [entity-name all-items selected-ids on-select-all]}]
-  (let [;; Subscribe directly to entity display settings for reactivity
-        entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
-        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-key])
-        show-select? (:show-select? entity-settings)]
-    (if show-select?
-      ($ :div {:class "flex justify-center items-center py-2"}
-        ($ select-all-checkbox
-          {:entity-name entity-name
-           :all-items all-items
-           :selected-ids selected-ids
-           :on-select-all on-select-all}))
-      ;; Hidden placeholder to maintain table structure
-      ($ :div {:style {:width "0px" :padding "0px" :margin "0px"}
-               :class "hidden-cell"}))))
+;; Re-export reactive-select-all-header from cells module for backward compatibility
+(def reactive-select-all-header cells/reactive-select-all-header)
 
-(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-select? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
+(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
   (let [;; Start with base headers from entity spec fields
         entity-fields (cond
                         (and (map? entity-spec) (contains? entity-spec :fields))
@@ -352,11 +336,10 @@
            filtered-timestamp-headers
            action-header))))
 
-(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-select? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
+(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
   (make-table-headers- {:entity-spec entity-spec
                         :entity-name entity-name
                         :show-timestamps? show-timestamps?
-                        :show-select? show-select?
                         :show-filtering? show-filtering?
                         :show-batch-edit? show-batch-edit?
                         :sort-field sort-field
