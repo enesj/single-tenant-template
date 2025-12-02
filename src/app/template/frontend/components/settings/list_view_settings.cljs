@@ -139,54 +139,30 @@
         curr-show-pagination? (:show-pagination? entity-settings)
 
         ;; Helper component for toggle buttons
+        ;; Hardcoded settings are now completely hidden from the UI
         toggle-button (fn [{:keys [label is-active? control-visible? event-key field-keys show-filter-icon? hardcoded-key]}]
-                        ;; Special handling for timestamps control visibility
-                        (let [;; For timestamps, if hardcoded settings exist and show-timestamps? is false, hide the control entirely
-                              ;; Otherwise show it and let user toggle
-                              should-show (if (nil? control-visible?) true control-visible?)
-
-                              ;; Check if this control is hardcoded at page level (true or false)
-                              hardcoded-value (when (and hardcoded-display-settings hardcoded-key)
-                                                (get hardcoded-display-settings hardcoded-key))
-                              ;; Controls are locked when explicitly set to any value (true or false)
+                        (let [should-show (if (nil? control-visible?) true control-visible?)
+                              ;; Check if this control is hardcoded at page level
                               is-hardcoded? (and hardcoded-display-settings
                                               hardcoded-key
                                               (contains? hardcoded-display-settings hardcoded-key))
-                              ;; Generate a consistent ID based on the label for test automation
                               toggle-id (str "toggle-" (-> label str/lower-case (str/replace #"\s+" "-")))]
-                          (when should-show
-                            ($ :div {:id toggle-id          ;; Add explicit ID for test automation
-                                     :class (str "flex justify-between items-center p-1 rounded-md "
-                                              (if is-hardcoded?
-                                                "cursor-not-allowed"
-                                                "cursor-pointer")
-                                              (when (and is-hardcoded? (false? hardcoded-value))
-                                                " opacity-50"))
-                                     :title (when is-hardcoded?
-                                              (if (false? hardcoded-value)
-                                                "This setting is disabled at page level and cannot be enabled"
-                                                "This setting is enabled at page level and cannot be disabled"))
-                                     :on-click (when-not is-hardcoded?
-                                                 #(rf/dispatch [event-key entity-kw]))}
+                          ;; Hide the control entirely if it's hardcoded
+                          (when (and should-show (not is-hardcoded?))
+                            ($ :div {:id toggle-id
+                                     :class "flex justify-between items-center p-1 rounded-md cursor-pointer"
+                                     :on-click #(rf/dispatch [event-key entity-kw])}
                               ($ :span {:class (str "text-sm "
-                                                 (if is-active? "font-bold" "font-light")
-                                                 (when (and is-hardcoded? (false? hardcoded-value))
-                                                   " text-gray-500"))}
+                                                 (if is-active? "font-bold" "font-light"))}
                                 label)
                               (when (and show-filter-icon? is-active?)
                                 ($ :div {:class "flex items-center gap-1"}
-                                  (let [on-cilck (fn [e]
+                                  (let [on-click (fn [e]
                                                    (.stopPropagation e)
-                                                   (when-not is-hardcoded?
-                                                     (doseq [field-key field-keys]
-                                                       (toggle-field-filtering! entity-kw field-key))))]
+                                                   (doseq [field-key field-keys]
+                                                     (toggle-field-filtering! entity-kw field-key)))]
                                     ($ filter-icon {:active? (if (= label "Timestamps") show-timestamp-filter-icon? curr-show-filtering?)
-                                                    :on-click on-cilck
-                                                    :disabled? is-hardcoded?
-                                                    :title (when is-hardcoded?
-                                                             (if (false? hardcoded-value)
-                                                               "Filtering disabled by page configuration"
-                                                               "Filtering locked by page configuration"))}))))))))]
+                                                    :on-click on-click}))))))))]
     ($ :div {:id "panel"
              :class "flex flex-col gap-4"}
 

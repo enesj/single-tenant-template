@@ -17,12 +17,21 @@
         "HOME": "/tmp"
       }
     },
-    "codex": {
+    "mcp-vector-search": {
       "type": "stdio",
-      "command": "codex",
+      "command": "/bin/sh",
       "args": [
-        "mcp-server"
+        "-c",
+        "cd /Users/enes/Projects/single-tenant-template && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-vector-search"
       ]
     }
+  },
+  "codex": {
+    "type": "stdio",
+    "command": "codex",
+    "args": [
+      "mcp-server"
+    ]
   }
 }
+
