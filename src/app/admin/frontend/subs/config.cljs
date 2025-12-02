@@ -1,6 +1,7 @@
 (ns app.admin.frontend.subs.config
   "Simplified subscriptions for vector-based column configuration"
   (:require
+    [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.system.entity-registry :as entity-registry]
     [clojure.string :as str]
     [re-frame.core :as rf]))
@@ -204,3 +205,20 @@
     (rf/subscribe [::sortable-columns entity-keyword]))
   (fn [sortable-columns _]
     sortable-columns))
+
+;; =============================================================================
+;; View Options / Hardcoded Display Settings
+;; =============================================================================
+
+(rf/reg-sub
+  :admin/all-view-options
+  (fn [_ _]
+    ;; View options are stored in config-cache atom, not re-frame db
+    (config-loader/get-all-view-options)))
+
+(rf/reg-sub
+  :admin/view-options
+  (fn [[_ entity-keyword]]
+    (rf/subscribe [:admin/all-view-options]))
+  (fn [all-view-options [_ entity-keyword]]
+    (get all-view-options entity-keyword)))

@@ -117,8 +117,12 @@
   ::toggle-select
   common-interceptors
   (fn [db [entity-type]]
+    (log/info "toggle-select event fired" {:entity-type entity-type})
     (if-let [entity-key (->entity-key entity-type)]
-      (toggle-entity-flag db entity-key [:show-select?] false)
+      (let [result (toggle-entity-flag db entity-key [:show-select?] false)]
+        (log/info "toggle-select result" {:entity-key entity-key
+                                          :new-value (get-in result [:ui :entity-configs entity-key :show-select?])})
+        result)
       (update-in db [:ui :show-select?] not))))
 
 (rf/reg-event-db
@@ -133,8 +137,12 @@
   ::toggle-edit
   common-interceptors
   (fn [db [entity-type]]
+    (log/info "toggle-edit event fired" {:entity-type entity-type})
     (if-let [entity-key (->entity-key entity-type)]
-      (toggle-entity-flag db entity-key [:show-edit?] true)
+      (let [result (toggle-entity-flag db entity-key [:show-edit?] true)]
+        (log/info "toggle-edit result" {:entity-key entity-key
+                                        :new-value (get-in result [:ui :entity-configs entity-key :show-edit?])})
+        result)
       (update-in db [:ui :show-edit?] not))))
 
 (rf/reg-event-db

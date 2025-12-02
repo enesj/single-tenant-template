@@ -3,7 +3,9 @@
   (:require
     [app.shared.keywords :as kw]
     [app.admin.frontend.components.enhanced-action-buttons :as enhanced-actions]
-    [uix.core :refer [$]]))
+    [app.template.frontend.subs.ui :as ui-subs]
+    [uix.core :refer [$ defui]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 (defn- entity-prop-key
   [entity-key]
@@ -19,9 +21,25 @@
     (fn [entity-item]
       ($ custom-component {prop-key entity-item}))))
 
+(defui reactive-enhanced-actions
+  "Enhanced action buttons that reactively subscribe to display settings.
+   This wrapper ensures Edit/Delete visibility responds to user toggling in the settings panel."
+  [{:keys [entity-key entity-item actions-component constraints-enabled? custom-render]}]
+  (let [;; Subscribe to entity display settings - this makes the component reactive
+        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-key])
+        show-edit? (:show-edit? entity-settings)
+        show-delete? (:show-delete? entity-settings)]
+    ($ actions-component {:entity-name entity-key
+                          :item entity-item
+                          :show-edit? show-edit?
+                          :show-delete? show-delete?
+                          :constraints-enabled? constraints-enabled?
+                          :custom-actions custom-render})))
+
 (defn create-actions-renderer
-  "Return a function that renders row actions based on entity configuration"
-  [entity-config display-settings]
+  "Return a function that renders row actions based on entity configuration.
+   For enhanced-action-buttons, uses a reactive wrapper that subscribes to display settings."
+  [entity-config _display-settings]
   (let [{:keys [entity-key components features]} entity-config
         {:keys [actions custom-actions]} components
         custom-render (when (fn? custom-actions)
@@ -29,16 +47,14 @@
     (cond
       (and (fn? actions)
         (= actions enhanced-actions/enhanced-action-buttons))
-      (let [show-edit (get display-settings :show-edit? true)
-            show-delete (get display-settings :show-delete? true)
-            constraints-enabled? (true? (:deletion-constraints? features))]
+      (let [constraints-enabled? (true? (:deletion-constraints? features))]
+        ;; Use a reactive wrapper component that subscribes to display settings
         (fn [entity-item]
-          ($ actions {:entity-name entity-key
-                      :item entity-item
-                      :show-edit? show-edit
-                      :show-delete? show-delete
-                      :constraints-enabled? constraints-enabled?
-                      :custom-actions custom-render})))
+          ($ reactive-enhanced-actions {:entity-key entity-key
+                                        :entity-item entity-item
+                                        :actions-component actions
+                                        :constraints-enabled? constraints-enabled?
+                                        :custom-render custom-render})))
 
       (fn? actions)
       (let [prop-key (entity-prop-key entity-key)]

@@ -156,7 +156,7 @@
           last-started (:last-started-at bootstrap 0)
           inflight? (:in-flight? bootstrap)
           now-ts (now)
-          within-window? (< (- now-ts last-started-at) bootstrap-throttle-ms)]
+          within-window? (< (- now-ts last-started) bootstrap-throttle-ms)]
       (if (and inflight? within-window?)
         {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
         {:db (-> db

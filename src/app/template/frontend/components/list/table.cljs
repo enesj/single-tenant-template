@@ -9,6 +9,7 @@
     [app.template.frontend.events.list.batch :as batch-events]
     [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
+    [app.template.frontend.subs.ui :as ui-subs]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui] :as uix]
@@ -135,6 +136,25 @@
            :on-click handle-three-dots-click
            :children ($ :span {:class "text-lg font-bold"} "⋯")})))))
 
+(defui reactive-select-all-header
+  "A reactive header cell that subscribes to show-select? and conditionally renders the select-all checkbox.
+   This ensures the select-all checkbox visibility responds immediately to toggling in the settings panel."
+  [{:keys [entity-name all-items selected-ids on-select-all]}]
+  (let [;; Subscribe directly to entity display settings for reactivity
+        entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
+        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-key])
+        show-select? (:show-select? entity-settings)]
+    (if show-select?
+      ($ :div {:class "flex justify-center items-center py-2"}
+        ($ select-all-checkbox
+          {:entity-name entity-name
+           :all-items all-items
+           :selected-ids selected-ids
+           :on-select-all on-select-all}))
+      ;; Hidden placeholder to maintain table structure
+      ($ :div {:style {:width "0px" :padding "0px" :margin "0px"}
+               :class "hidden-cell"}))))
+
 (defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-select? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
   (let [;; Start with base headers from entity spec fields
         entity-fields (cond
@@ -157,16 +177,14 @@
                                            (#{:created-at :updated-at} field-id)))
                                  entity-fields)
 
-        ;; Selection header with custom component for the select-all checkbox
+        ;; Selection header using reactive component that subscribes to show-select?
+        ;; This ensures the header updates immediately when the user toggles the Selection setting
         select-header [(fn []
-                         ($ :div
-                           {:key "header-select"
-                            :class "flex justify-center items-center py-2"}
-                           ($ select-all-checkbox
-                             {:entity-name entity-name
-                              :all-items all-items
-                              :selected-ids selected-ids
-                              :on-select-all on-select-all})))]
+                         ($ reactive-select-all-header
+                           {:entity-name entity-name
+                            :all-items all-items
+                            :selected-ids selected-ids
+                            :on-select-all on-select-all}))]
 
         ;; Create base headers from entity fields using vector-config only (no legacy :admin metadata)
         ;; Pre-compute filterable and sortable sets from vector-config (if available)
@@ -326,12 +344,10 @@
                               :show-batch-edit? show-batch-edit?})))]]
 
     ;; Combine all headers in the correct order: select, base fields, timestamps, actions
+    ;; Always include the select header - the reactive-select-all-header component
+    ;; handles visibility internally by subscribing to show-select?
     (vec (concat
-           ;; Always include exactly one placeholder for select header position,
-           ;; but only show content when show-select? is true
-           (if show-select?
-             select-header
-             [nil])                                         ;; Empty placeholder to maintain column structure
+           select-header
            filtered-base-headers
            filtered-timestamp-headers
            action-header))))

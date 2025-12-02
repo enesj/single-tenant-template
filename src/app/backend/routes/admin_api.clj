@@ -8,6 +8,7 @@
     [app.backend.routes.admin.audit :as admin-audit]
     [app.backend.routes.admin.login-events :as admin-login-events]
     [app.backend.routes.admin.password :as admin-password]
+    [app.backend.routes.admin.settings :as admin-settings]
     [app.backend.routes.admin.user-operations :as admin-user-ops]
     [app.backend.routes.admin.users :as admin-users]
     [app.backend.routes.admin.utils :as admin-utils]
@@ -43,6 +44,9 @@
 
       ;; Login events
       ["/login-events" (admin-login-events/routes db)]
+
+      ;; Settings (view-options.edn management)
+      (admin-settings/routes db)
 
       ;; Protected password routes
       ["/auth" (admin-password/protected-routes db email-service base-url)]

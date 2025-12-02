@@ -30,7 +30,7 @@
 
 (defui list-view
   "Renders a list of items with pagination, add form, and error handling."
-  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page page-display-settings]
+  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page]
     :as props}]
   (let [items (use-subscribe [::entity-subs/paginated-entities entity-name])
         loading? (use-subscribe [::entity-subs/loading? entity-name])
@@ -42,10 +42,11 @@
         show-add-form? (use-subscribe [::ui-subs/show-add-form])
         recently-updated-ids (use-subscribe [::ui-subs/recently-updated-entities entity-name])
         recently-created-ids (use-subscribe [::ui-subs/recently-created-entities entity-name])
-        ;; IMPORTANT: Keep original page props separate from merged settings
-        page-props-display-settings (if (contains? props :page-display-settings)
-                                      page-display-settings
-                                      display-settings)  ; Original page-level props only
+        ;; Subscribe to hardcoded view-options for hiding settings panel controls
+        ;; IMPORTANT: Only view-options.edn settings should hide controls, not entities.edn settings
+        hardcoded-view-options (use-subscribe [::ui-subs/hardcoded-view-options entity-name])
+        ;; For settings panel: ONLY use hardcoded view-options to determine which controls to hide
+        effective-hardcoded-settings hardcoded-view-options
         merged-display-settings (let [subscribed-settings (use-subscribe [::ui-subs/entity-display-settings entity-name])
                                       merged (merge subscribed-settings display-settings)]
                                   merged)
@@ -267,8 +268,8 @@
                        :render-row render-row-fn
                          ;; IMPORTANT: Pass the merged display settings for behavior
                        :display-settings merged-display-settings
-                         ;; IMPORTANT: Pass original page props for settings panel control visibility
-                       :page-display-settings page-props-display-settings
+                         ;; IMPORTANT: Pass hardcoded settings (page props + view-options) for settings panel control visibility
+                       :page-display-settings effective-hardcoded-settings
                          ;; Pass rows per page props to table for settings panel
                        :per-page per-page
                        :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])

@@ -11,8 +11,10 @@
     [app.template.frontend.components.list.fields :refer [get-field-display-value]]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
+    [app.template.frontend.subs.ui :as ui-subs]
     [re-frame.core :as rf]
-    [uix.core :as uix :refer [$ defui]]))
+    [uix.core :as uix :refer [$ defui]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 (defui select-checkbox
   "Checkbox for selecting a row."
@@ -41,6 +43,27 @@
          ;;:ref checkbox-ref
          :checked checked?
          :on-change #(on-select-all (.. % -target -checked))}))))
+
+(defui reactive-selection-cell
+  "A reactive cell that subscribes to show-select? and conditionally renders the checkbox.
+   This ensures the selection checkbox visibility responds immediately to toggling in the settings panel."
+  [{:keys [entity-name item selected-ids on-select-change]}]
+  (let [;; Subscribe directly to entity display settings for reactivity
+        entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
+        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-key])
+        show-select? (:show-select? entity-settings)
+        _ (js/console.log "reactive-selection-cell render:"
+            (clj->js {:entity-key entity-key
+                      :show-select? show-select?
+                      :has-item? (some? item)}))]
+    (if show-select?
+      ($ select-checkbox {:entity-name entity-name
+                          :item item
+                          :selected-ids selected-ids
+                          :on-select-change on-select-change})
+      ;; Hidden placeholder to maintain table structure
+      ($ :div {:style {:width "0px" :padding "0px" :margin "0px"}
+               :class "hidden-cell"}))))
 
 (defui action-buttons
   "Action buttons for editing and deleting an item."
@@ -96,7 +119,7 @@
 
 (defn- row-content
   "Generates the content for a table row."
-  [{:keys [entity-spec item show-timestamps? actions select-checkbox show-select? visible-columns entity-name custom-actions]}]
+  [{:keys [entity-spec item show-timestamps? actions select-checkbox show-select? visible-columns entity-name custom-actions selected-ids on-select-change]}]
 
   (let [;; Safely get field values from entity-spec - FIXED: Check :fields key first
         entity-fields (cond
@@ -193,10 +216,13 @@
 
     ;; Return all cell values in the same order as headers: select checkbox (if enabled), base fields, timestamps, actions
     ;; The key fix here is to add appropriate placeholders when columns are hidden to maintain structure
-    ;; Create an empty cell for the selection column when it's hidden to maintain proper column structure
-    (vec (concat (if (and show-select? select-checkbox)
-                   [(fn [] select-checkbox)]
-                   [(fn [] ($ :div {:style {:width "0px" :padding "0px" :margin "0px"} :className "hidden-cell"}))])
+    ;; Use the reactive-selection-cell component which subscribes to show-select? directly
+    ;; This ensures the checkbox visibility updates immediately when the user toggles the setting
+    (vec (concat [(fn [] ($ reactive-selection-cell
+                           {:entity-name entity-name
+                            :item item
+                            :selected-ids selected-ids
+                            :on-select-change on-select-change}))]
            filtered-field-values
            filtered-timestamps
            [(fn [] actions)]))))
@@ -312,6 +338,9 @@
                             :show-select? (:show-select? props)
                             :show-timestamps? (:show-timestamps? props)
                             :visible-columns visible-columns
-                            :entity-name entity-name})
+                            :entity-name entity-name
+                            ;; Pass selected-ids and on-select-change for reactive-selection-cell
+                            :selected-ids (or selected-ids #{})
+                            :on-select-change on-select-change})
        :recently-updated? recently-updated?
        :recently-created? recently-created?})))

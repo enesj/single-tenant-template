@@ -113,24 +113,27 @@
            global-settings? current-entity-name compact? entity-spec hardcoded-display-settings
            per-page on-per-page-change rows-per-page-options]}]
 
-  (let [display-settings (use-subscribe [::ui-subs/entity-display-settings entity-name])
+  (let [;; Normalize entity name to keyword consistently
+        entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+
+        ;; Subscribe to entity-specific display settings - SINGLE subscription
+        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-kw])
+
         ;; Always call hooks unconditionally
         entity-type-sub (use-subscribe [::core-subs/entity-type])
         ;; Then use their results conditionally
         curr-entity-name (or current-entity-name entity-type-sub)
-        controls (:controls display-settings)
+
+        controls (:controls entity-settings)
         {:keys [show-timestamps-control? show-edit-control?
                 show-delete-control? show-highlights-control?
                 show-select-control?]} (or controls {})
-        entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
 
-        ;; Subscribe to entity-specific display settings directly from Re-frame
-        entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-kw])
         current-map (use-subscribe [::settings-events/filterable-fields entity-kw])
 
-        ;; Current setting values - properly reflecting latest values from Re-frame DB
+        ;; Current setting values - directly from entity-settings subscription
         curr-show-timestamps? (:show-timestamps? entity-settings)
-        show-timestamp-filter-icon? (and (:created-at current-map) (:show-timestamps? entity-settings))
+        show-timestamp-filter-icon? (and (:created-at current-map) curr-show-timestamps?)
         curr-show-edit? (:show-edit? entity-settings)
         curr-show-delete? (:show-delete? entity-settings)
         curr-show-highlights? (:show-highlights? entity-settings)

@@ -1,0 +1,160 @@
+(ns app.backend.routes.admin.settings
+  "Admin settings API - read/write view-options.edn"
+  (:require
+    [app.backend.routes.admin.utils :as utils]
+    [clojure.edn :as edn]
+    [clojure.java.io :as io]
+    [clojure.pprint :as pprint]
+    [taoensso.timbre :as log]))
+
+(def ^:private view-options-path "resources/public/admin/ui-config/view-options.edn")
+
+(defn- read-view-options
+  "Read view-options.edn file and parse it"
+  []
+  (try
+    (let [file (io/file view-options-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read view-options.edn")
+      (throw (ex-info "Failed to read settings file" {:status 500})))))
+
+(defn- write-view-options!
+  "Write view-options map to EDN file with pretty printing"
+  [view-options]
+  (try
+    (let [file (io/file view-options-path)]
+      ;; Ensure parent directory exists
+      (io/make-parents file)
+      ;; Write with pretty printing for readability
+      (spit file (with-out-str (pprint/pprint view-options))))
+    (catch Exception e
+      (log/error e "Failed to write view-options.edn")
+      (throw (ex-info "Failed to write settings file" {:status 500})))))
+
+(defn get-view-options-handler
+  "GET handler - return all view options"
+  [_db]
+  (utils/with-error-handling
+    (fn [_request]
+      (let [view-options (read-view-options)]
+        (utils/json-response {:view-options view-options})))
+    "Failed to read view options"))
+
+(defn update-view-options-handler
+  "PUT handler - update all view options"
+  [_db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            new-view-options (:view-options body)
+            admin-id (utils/get-admin-id request)
+            context (utils/extract-request-context request)]
+        (if new-view-options
+          (do
+            ;; Log the action
+            (utils/log-admin-action-with-context
+              "update-view-options"
+              admin-id
+              "settings"
+              nil
+              {:changes new-view-options}
+              (:ip-address context)
+              (:user-agent context))
+            ;; Write to file
+            (write-view-options! new-view-options)
+            (utils/success-response {:message "View options updated successfully"
+                                     :view-options new-view-options}))
+          (utils/error-response "Missing view-options in request body" :status 400))))
+    "Failed to update view options"))
+
+(defn update-entity-setting-handler
+  "PATCH handler - update a single entity's setting"
+  [_db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            _ (log/info "PATCH request body:" body)
+            ;; Support both dash and underscore versions for flexibility
+            entity-name (keyword (or (:entity-name body) (:entity_name body)))
+            setting-key (keyword (or (:setting-key body) (:setting_key body)))
+            setting-value (if (contains? body :setting-value)
+                            (:setting-value body)
+                            (if (contains? body :setting_value)
+                              (:setting_value body)
+                              ::not-found))
+            admin-id (utils/get-admin-id request)
+            context (utils/extract-request-context request)
+            _ (log/info "Parsed values:" {:entity-name entity-name
+                                          :setting-key setting-key
+                                          :setting-value setting-value})]
+        (if (and entity-name setting-key (not= setting-value ::not-found))
+          (let [current-options (read-view-options)
+                updated-options (assoc-in current-options [entity-name setting-key] setting-value)]
+            ;; Log the action
+            (utils/log-admin-action-with-context
+              "update-entity-setting"
+              admin-id
+              "settings"
+              nil
+              {:entity entity-name
+               :setting setting-key
+               :old-value (get-in current-options [entity-name setting-key])
+               :new-value setting-value}
+              (:ip-address context)
+              (:user-agent context))
+            ;; Write to file
+            (write-view-options! updated-options)
+            (utils/success-response {:message "Setting updated successfully"
+                                     :entity entity-name
+                                     :setting setting-key
+                                     :value setting-value}))
+          (utils/error-response "Missing required fields: entity-name, setting-key, setting-value" :status 400))))
+    "Failed to update entity setting"))
+
+(defn remove-entity-setting-handler
+  "DELETE handler - remove a setting from an entity (makes it user-configurable)"
+  [_db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            ;; Support both dash and underscore versions for flexibility
+            entity-name (keyword (or (:entity-name body) (:entity_name body)))
+            setting-key (keyword (or (:setting-key body) (:setting_key body)))
+            admin-id (utils/get-admin-id request)
+            context (utils/extract-request-context request)]
+        (if (and entity-name setting-key)
+          (let [current-options (read-view-options)
+                entity-settings (get current-options entity-name {})
+                updated-entity-settings (dissoc entity-settings setting-key)
+                updated-options (assoc current-options entity-name updated-entity-settings)]
+            ;; Log the action
+            (utils/log-admin-action-with-context
+              "remove-entity-setting"
+              admin-id
+              "settings"
+              nil
+              {:entity entity-name
+               :setting setting-key
+               :old-value (get-in current-options [entity-name setting-key])}
+              (:ip-address context)
+              (:user-agent context))
+            ;; Write to file
+            (write-view-options! updated-options)
+            (utils/success-response {:message "Setting removed successfully"
+                                     :entity entity-name
+                                     :setting setting-key}))
+          (utils/error-response "Missing required fields: entity-name, setting-key" :status 400))))
+    "Failed to remove entity setting"))
+
+;; Route definitions
+(defn routes
+  "Settings route definitions"
+  [db]
+  ["/settings"
+   ["" {:get (get-view-options-handler db)
+        :put (update-view-options-handler db)}]
+   ["/entity" {:patch (update-entity-setting-handler db)
+               :delete (remove-entity-setting-handler db)}]])

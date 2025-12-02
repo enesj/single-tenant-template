@@ -162,6 +162,12 @@
   ([config-type entity-key config]
    (register-preloaded-config! config-type {entity-key config})))
 
+(defn get-all-view-options
+  "Get all view options from config cache.
+   Returns a map of entity-keyword -> view-options."
+  []
+  (get @config-cache :view-options {}))
+
 (defn init-config-loader!
   "Initialize the configuration loader"
   []

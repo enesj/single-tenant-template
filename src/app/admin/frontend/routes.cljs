@@ -5,6 +5,7 @@
     [app.admin.frontend.pages.users :as users]
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.login-events :as login-events]
+    [app.admin.frontend.pages.settings :as settings]
     [re-frame.core :as rf]))
 
 (defn guarded-start
@@ -61,4 +62,10 @@
      {:name :admin-login-events
       :view login-events/admin-login-events-page
       :controllers [{:start (fn [params]
-                              ((:start (guarded-start [[:admin/load-login-events]])) params))}]}]]])
+                              ((:start (guarded-start [[:admin/load-login-events]])) params))}]}]
+
+    ;; Settings Overview (Hardcoded display settings)
+    ["/settings"
+     {:name :admin-settings
+      :view settings/admin-settings-page
+      :controllers [(guarded-start nil)]}]]])

@@ -4,6 +4,7 @@
     [app.template.frontend.components.icons :refer [settings-icon]]
     [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
     [app.template.frontend.events.list.settings :as settings-events]
+    [app.template.frontend.subs.ui :as ui-subs]
     [taoensso.timbre :as log]
     [uix.core :as uix :refer [$ defui]]
     [uix.dom]
@@ -257,9 +258,9 @@
         ;; Use entity name for list-view-settings if available
         effective-entity-name (when entity-name (keyword entity-name))
 
-        ;; FIXED: Use page-display-settings (page props only) for settings panel control visibility
-        ;; This ensures user preferences don't affect which controls are shown/hidden
-        hardcoded-settings (or page-display-settings {})]
+        ;; Get hardcoded settings from view-options.edn via subscription
+        ;; These are settings that are locked by admins and can't be changed by users
+        hardcoded-settings (use-subscribe [::ui-subs/hardcoded-view-options effective-entity-name])]
     ($ :div {:id (when entity-name (str "table-" (kw/ensure-name entity-name)))}
       ($ :div {:class "overflow-x-auto max-w-full"
                :style {:max-width (str table-width "px")
@@ -296,10 +297,8 @@
                                                  :current-entity-name effective-entity-name
                                                  :entity-spec entity-spec
                                                  :compact? true
-                                                 ;; FIXED: Pass only page props to control visibility
-                                                 ;; - :show-timestamps? false in page props → hides control entirely
-                                                 ;; - :show-timestamps? true/missing in page props → shows control (user can toggle)
-                                                 ;; - Other settings when false in page props → lock the control (can't be enabled)
+                                                 ;; Pass hardcoded settings from view-options.edn
+                                                 ;; These controls will be hidden in the settings panel
                                                  :hardcoded-display-settings hardcoded-settings
                                                  ;; Pass rows per page props so it's always available
                                                  :per-page per-page

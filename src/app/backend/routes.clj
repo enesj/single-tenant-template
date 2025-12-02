@@ -178,7 +178,8 @@
          ["/dashboard" {:get {:handler admin-render-page}}]
          ["/users" {:get {:handler admin-render-page}}]
          ["/audit" {:get {:handler admin-render-page}}]
-         ["/login-events" {:get {:handler admin-render-page}}]]
+         ["/login-events" {:get {:handler admin-render-page}}]
+         ["/settings" {:get {:handler admin-render-page}}]]
 
         ;; Additional frontend routes
         frontend-routes
