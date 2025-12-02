@@ -9,6 +9,7 @@
     [app.backend.routes.admin.login-events :as admin-login-events]
     [app.backend.routes.admin.password :as admin-password]
     [app.backend.routes.admin.settings :as admin-settings]
+    [app.backend.routes.admin.user-bulk :as admin-user-bulk]
     [app.backend.routes.admin.user-operations :as admin-user-ops]
     [app.backend.routes.admin.users :as admin-users]
     [app.backend.routes.admin.utils :as admin-utils]
@@ -54,4 +55,5 @@
       ;; User operations
       ["/users"
        (admin-users/routes db)
-       (admin-user-ops/routes db service-container)]]]))
+       (admin-user-ops/routes db service-container)
+       ["/actions" (admin-user-bulk/routes db)]]]]))

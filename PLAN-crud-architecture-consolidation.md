@@ -234,6 +234,59 @@ This is a larger refactor and may not be immediately necessary if Phases 1-2 are
 
 ---
 
+## Bug Fixes Applied (Session 2 - Dec 2, 2025)
+
+### Bug 1: Row highlighting not working after update
+
+**Root cause**: The adapter's `on-success` handler for update operations had the wrong function signature. It only accepted 4 arguments but the bridge system passes 5 for update operations.
+
+**Fix location**: `src/app/admin/frontend/adapters/users.cljs`
+
+**Handler signatures for on-success**:
+- `delete`: `(fn [cofx entity-type id default-effect])` - 4 args
+- `create`: `(fn [cofx entity-type response default-effect])` - 4 args  
+- `update`: `(fn [cofx entity-type id response default-effect])` - 5 args ⚠️
+
+The update handler was incorrectly receiving `response` in the `default-effect` position, causing the actual `default-effect` (containing db with recently-updated tracking) to be lost.
+
+**Fix**: Updated all on-success handlers with correct signatures:
+```clojure
+:delete {:on-success (fn [_cofx _entity-type _id default-effect] ...)}
+:create {:on-success (fn [_cofx _entity-type _response default-effect] ...)}
+:update {:on-success (fn [_cofx _entity-type _id _response default-effect] ...)}
+```
+
+### Bug 2: Update button always disabled in edit form
+
+**Root cause**: The `cancel-form` and `clear-form` events were not resetting `:submitting?` to `false`. If a form was submitted and then cancelled/closed before the response, `submitting?` stayed `true`, causing the Update button to remain disabled on subsequent form opens.
+
+**Fix location**: `src/app/template/frontend/events/form.cljs`
+
+**Fix**: Added `:submitting? false` to both `cancel-form` and `clear-form` event handlers:
+```clojure
+(update-in [:forms entity-type] merge
+  {:values {}
+   :errors nil
+   :server-errors nil
+   :submitted? false
+   :submitting? false  ;; <-- Added
+   :success false})
+```
+
+---
+
+## Testing Checklist (For Next Session)
+
+After the bug fixes, verify:
+
+- [ ] **Row highlighting after update**: Edit a user → make change → click Update → row should highlight green
+- [ ] **Row highlighting after create**: Add a user → row should highlight blue  
+- [ ] **Update button enables**: Open edit form → make change → Update button should become enabled
+- [ ] **Cancel clears state**: Open edit form → Cancel → re-open form → button state should be fresh
+- [ ] **Bulk edit highlighting**: Select multiple users → bulk edit → all affected rows highlight
+
+---
+
 ## Notes
 
 - The temporary fix in `success_handlers.cljs` (adding `recently-updated` tracking) is sufficient for now

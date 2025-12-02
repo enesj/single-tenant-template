@@ -85,7 +85,7 @@
            :http-xhrio (if in-admin?
                          ;; Use admin HTTP request helper for proper authentication
                          (admin-utils/create-user-http-request
-                           :put "/admin/api/user-actions/batch"
+                           :put "/admin/api/users/actions/batch"
                            :params request-params
                            :on-success [::batch-update-success entity-name]
                            :on-failure [::batch-update-failure entity-name])
