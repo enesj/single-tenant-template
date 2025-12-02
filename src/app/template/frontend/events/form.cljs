@@ -121,6 +121,7 @@
   ::update-success
   common-interceptors
   (fn [{:keys [db]} [entity-type response]]
+    (js/console.log "[FORM] ::update-success called! entity-type:" (pr-str entity-type) "response:" (pr-str response))
     (let [;; Extract ID using the same logic as normalization to handle namespaced IDs
           entity-id (or (:id response)
                         ;; Find any keyword with local name "id" (e.g., :transaction-types/id, :users/id)
@@ -128,8 +129,10 @@
                         (filter (fn [[k _]] (and (keyword? k) (= (name k) "id"))))
                         first
                         second))
+          _ (js/console.log "[FORM] extracted entity-id:" (pr-str entity-id))
           current-updated-ids (get-in db [:ui :recently-updated entity-type])
           new-updated-ids (conj (or current-updated-ids #{}) entity-id)]
+      (js/console.log "[FORM] recently-updated will be:" (pr-str new-updated-ids))
       (log/debug "📤 FORM UPDATE-SUCCESS - entity-type:" entity-type
         "extracted entity-id:" entity-id
         "response keys:" (keys response))

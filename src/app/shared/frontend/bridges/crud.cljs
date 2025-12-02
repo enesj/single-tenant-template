@@ -47,8 +47,23 @@
 ;; ============================================================================
 
 (defn default-crud-success [{:keys [db]} entity-type]
-  ; Default success handler for all CRUD operations.
+  ; Default success handler for delete/create CRUD operations.
   (let [db* (clear-loading db entity-type)]
+    (if (keyword? entity-type)
+      {:db db*
+       :dispatch [:app.template.frontend.events.list.crud/fetch-entities entity-type]}
+      {:db db*})))
+
+(defn default-update-success [{:keys [db]} entity-type id _response]
+  ; Default success handler for update operations - tracks recently-updated for highlights.
+  (js/console.log "[BRIDGE] default-update-success called! entity-type:" (pr-str entity-type) "id:" (pr-str id))
+  (let [current-updated-ids (get-in db [:ui :recently-updated entity-type])
+        new-updated-ids (conj (or current-updated-ids #{}) id)
+        db* (-> db
+              (clear-loading entity-type)
+              (assoc-in [:ui :recently-updated entity-type] new-updated-ids))]
+    (js/console.log "[BRIDGE] recently-updated will be:" (pr-str new-updated-ids))
+    (log/debug "Update success for" entity-type "id:" id "recently-updated:" new-updated-ids)
     (if (keyword? entity-type)
       {:db db*
        :dispatch [:app.template.frontend.events.list.crud/fetch-entities entity-type]}
@@ -260,9 +275,12 @@
 
   Returns effects map, potentially modified by applicable bridges."
   [operation handler-type default-effect-fn cofx entity-type args]
+  (js/console.log "[BRIDGE] run-bridge-operation called! operation:" (pr-str operation) "handler-type:" (pr-str handler-type) "entity-type:" (pr-str entity-type))
   (let [default-effect (apply default-effect-fn cofx entity-type args)
+        _ (js/console.log "[BRIDGE] default-effect:" (pr-str default-effect))
         bridges (get-bridges-for-entity entity-type)
         applicable-bridges (filter (fn [bridge] (should-bridge? bridge (:db cofx))) bridges)]
+    (js/console.log "[BRIDGE] applicable bridges count:" (count applicable-bridges))
 
     (loop [bridges applicable-bridges
            current-effect default-effect]
@@ -281,6 +299,7 @@
   This should be called once during application initialization to set up
   the bridge-based event handling for template CRUD operations."
   []
+  (js/console.log "[BRIDGE] register-template-crud-events! called - registering bridge event handlers")
   (rf/reg-event-fx
     :app.template.frontend.events.list.crud/delete-entity
     (fn [cofx [_ entity-type id]]
@@ -309,7 +328,7 @@
   (rf/reg-event-fx
     :app.template.frontend.events.list.crud/update-success
     (fn [cofx [_ entity-type id response]]
-      (run-bridge-operation :update :on-success default-crud-success cofx entity-type [id response])))
+      (run-bridge-operation :update :on-success default-update-success cofx entity-type [id response])))
 
   (rf/reg-event-fx
     :app.template.frontend.events.list.crud/delete-failure

@@ -113,6 +113,14 @@
           "Failed to delete item")))))
 
 ;;; -------------------------
+;;; Entity Update
+;;; -------------------------
+
+;; NOTE: ::update-success and ::update-failure are registered by the bridge system
+;; in app.shared.frontend.bridges.crud/register-template-crud-events!
+;; The bridge system handles recently-updated tracking and allows adapter overrides.
+
+;;; -------------------------
 ;;; Entity Creation
 ;;; -------------------------
 
