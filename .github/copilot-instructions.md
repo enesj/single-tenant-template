@@ -2,6 +2,11 @@
 
 - Treat this file and `AGENTS.md` as your primary instructions for this repo.
 
+### Documentation-First Approach
+
+- **At the beginning of any new task**, use MCP Vector Search to read relevant documentation before writing code.
+- Search for concepts, patterns, or domain terms related to the task (e.g., "authentication", "migrations", "validation", "entity store").
+- This ensures you follow established patterns and avoid reinventing solutions that already exist in the codebase.
 
 ### Coding & Migrations
 
