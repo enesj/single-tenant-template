@@ -4,6 +4,7 @@
     [app.admin.frontend.events.users.utils :as utils]
     [app.admin.frontend.utils.http :as admin-http]
     [app.frontend.utils.state :as state-utils]
+    [app.shared.frontend.crud.success :as crud-success]
     [re-frame.core :as rf]))
 
 ;; ============================================================================
@@ -26,14 +27,10 @@
   :admin/bulk-update-user-status-success
   (fn [{:keys [db]} [_ user-ids new-status _response]]
     (utils/log-user-operation "Bulk user status update successful" (count user-ids) "users")
-    (let [;; Add all updated user IDs to recently-updated set for highlighting
-          current-updated (get-in db [:ui :recently-updated :users])
-          updated-set (reduce conj (or current-updated #{}) user-ids)
-          db' (-> db
+    (let [db' (-> db
                 (state-utils/clear-loading-state :admin/bulk-updating-users)
                 (utils/sync-bulk-admin-and-entity-stores user-ids #(assoc % :users/status new-status))
-                (assoc-in [:ui :recently-updated :users] updated-set))]
-
+                (crud-success/handle-bulk-update-success :users user-ids))]
       (utils/show-user-success-message
         db'
         (str "Updated " (count user-ids) " users to " new-status)))))
@@ -66,13 +63,10 @@
   :admin/bulk-update-user-role-success
   (fn [{:keys [db]} [_ user-ids new-role _response]]
     (utils/log-user-operation "Bulk user role update successful" (count user-ids) "users")
-    (let [;; Add all updated user IDs to recently-updated set for highlighting
-          current-updated (get-in db [:ui :recently-updated :users])
-          updated-set (reduce conj (or current-updated #{}) user-ids)
-          db' (-> db
+    (let [db' (-> db
                 (state-utils/clear-loading-state :admin/bulk-updating-users)
                 (utils/sync-bulk-admin-and-entity-stores user-ids #(assoc % :users/role new-role))
-                (assoc-in [:ui :recently-updated :users] updated-set))]
+                (crud-success/handle-bulk-update-success :users user-ids))]
       (utils/show-user-success-message
         db'
         (str "Updated " (count user-ids) " users to role " new-role)))))

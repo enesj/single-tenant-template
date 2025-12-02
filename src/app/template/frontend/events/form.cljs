@@ -1,5 +1,6 @@
 (ns app.template.frontend.events.form
   (:require
+    [app.shared.frontend.crud.success :as crud-success]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
@@ -74,29 +75,13 @@
   ::create-success
   common-interceptors
   (fn [{:keys [db]} [entity-type response]]
-    (let [;; Extract ID using the same logic as normalization to handle namespaced IDs
-          entity-id (or (:id response)
-                        ;; Find any keyword with local name "id" (e.g., :transaction-types/id, :users/id)
-                      (->> response
-                        (filter (fn [[k _]] (and (keyword? k) (= (name k) "id"))))
-                        first
-                        second))
-          new-db (-> db
-                   (update-in [:forms entity-type] merge
-                     {:submitting? false
-                      :success true
-                      :submitted? true
-                      :errors nil
-                      :server-errors nil})
-                   ;; Add the entity ID to the set of recently created IDs for this entity type
-                   (update-in [:ui :recently-created entity-type]
-                     (fn [ids] (conj (or ids #{}) entity-id))))]
+    (let [entity-id (crud-success/extract-entity-id response)
+          new-db (crud-success/handle-create-success db entity-type response)]
       (log/debug "📤 FORM CREATE-SUCCESS - entity-type:" entity-type
         "extracted entity-id:" entity-id
         "response keys:" (keys response))
       {:db new-db
        :fx (when (and entity-type (keyword? entity-type))
-             (println "📤 FORM CREATE-SUCCESS: Dispatching fetch-entities for:" entity-type "type:" (type entity-type) "stack:" (.-stack (js/Error.)))
              [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
 (rf/reg-event-fx
@@ -121,31 +106,13 @@
   ::update-success
   common-interceptors
   (fn [{:keys [db]} [entity-type response]]
-    (js/console.log "[FORM] ::update-success called! entity-type:" (pr-str entity-type) "response:" (pr-str response))
-    (let [;; Extract ID using the same logic as normalization to handle namespaced IDs
-          entity-id (or (:id response)
-                        ;; Find any keyword with local name "id" (e.g., :transaction-types/id, :users/id)
-                      (->> response
-                        (filter (fn [[k _]] (and (keyword? k) (= (name k) "id"))))
-                        first
-                        second))
-          _ (js/console.log "[FORM] extracted entity-id:" (pr-str entity-id))
-          current-updated-ids (get-in db [:ui :recently-updated entity-type])
-          new-updated-ids (conj (or current-updated-ids #{}) entity-id)]
-      (js/console.log "[FORM] recently-updated will be:" (pr-str new-updated-ids))
+    (let [entity-id (crud-success/extract-entity-id response)
+          new-db (crud-success/handle-update-success db entity-type response)]
       (log/debug "📤 FORM UPDATE-SUCCESS - entity-type:" entity-type
         "extracted entity-id:" entity-id
         "response keys:" (keys response))
-      {:db (-> db
-             (update-in [:forms entity-type] merge
-               {:submitting? false
-                :success true
-                :submitted? true
-                :errors nil
-                :server-errors nil})
-             (assoc-in [:ui :recently-updated entity-type] new-updated-ids))
+      {:db new-db
        :fx (when (and entity-type (keyword? entity-type))
-             ;;(println "📤 FORM UPDATE-SUCCESS: Dispatching fetch-entities for:" entity-type "type:" (type entity-type) "stack:" (.-stack (js/Error.)))
              [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
 (rf/reg-event-fx
@@ -176,20 +143,7 @@
   :app.template.frontend.events.form/default-create-success
   common-interceptors
   (fn [{:keys [db]} [entity-type response]]
-    (let [entity-id (or (:id response)
-                      (->> response
-                        (filter (fn [[k _]] (and (keyword? k) (= (name k) "id"))))
-                        first
-                        second))
-          new-db (-> db
-                   (update-in [:forms entity-type] merge
-                     {:submitting? false
-                      :success true
-                      :submitted? true
-                      :errors nil
-                      :server-errors nil})
-                   (update-in [:ui :recently-created entity-type]
-                     (fn [ids] (conj (or ids #{}) entity-id))))]
+    (let [new-db (crud-success/handle-create-success db entity-type response)]
       {:db new-db
        :fx (when (and entity-type (keyword? entity-type))
              [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
@@ -198,22 +152,8 @@
   :app.template.frontend.events.form/default-update-success
   common-interceptors
   (fn [{:keys [db]} [entity-type provided-id response]]
-    (let [entity-id (or (:id response)
-                      (->> response
-                        (filter (fn [[k _]] (and (keyword? k) (= (name k) "id"))))
-                        first
-                        second)
-                      provided-id)
-          current-updated-ids (get-in db [:ui :recently-updated entity-type])
-          new-updated-ids (conj (or current-updated-ids #{}) entity-id)]
-      {:db (-> db
-             (update-in [:forms entity-type] merge
-               {:submitting? false
-                :success true
-                :submitted? true
-                :errors nil
-                :server-errors nil})
-             (assoc-in [:ui :recently-updated entity-type] new-updated-ids))
+    (let [new-db (crud-success/handle-update-success db entity-type provided-id response)]
+      {:db new-db
        :fx (when (and entity-type (keyword? entity-type))
              [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
@@ -309,6 +249,7 @@
                 :errors nil
                 :server-errors nil
                 :submitted? false
+                :submitting? false
                 :success false}))})))
 
 (rf/reg-event-db
@@ -320,4 +261,5 @@
        :errors nil
        :server-errors nil
        :submitted? false
+       :submitting? false
        :success false})))

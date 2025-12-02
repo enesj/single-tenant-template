@@ -1,41 +1,32 @@
 (ns app.admin.frontend.events.users.template.success-handlers
+  "DEPRECATED: Admin form success handlers.
+   
+   These handlers are no longer used since admin form submissions now
+   route through the bridge CRUD system (see form_interceptors.cljs).
+   The bridge system handles success tracking via the shared crud/success module.
+   
+   This namespace is kept for reference but may be removed in a future cleanup."
   (:require
     [app.frontend.utils.state :as state-utils]
+    [app.shared.frontend.crud.success :as crud-success]
     [re-frame.core :as rf]))
 
 ;; =============================================================================
-;; Helper Functions
-;; =============================================================================
-
-(defn- extract-entity-id
-  "Extract entity ID from response, handling both simple :id and namespaced keys."
-  [response]
-  (or (:id response)
-    ;; Find any keyword with local name "id" (e.g., :users/id)
-    (->> response
-      (filter (fn [[k _]] (and (keyword? k) (= (name k) "id"))))
-      first
-      second)))
-
-;; =============================================================================
-;; Success Handlers (Admin)
+;; DEPRECATED Success Handlers (Admin)
+;; These events are no longer dispatched - see form_interceptors.cljs for new flow
 ;; =============================================================================
 
 (rf/reg-event-fx
   :app.admin.frontend.forms/admin-create-success
   (fn [{:keys [db]} [_ entity-type response]]
-    (let [entity-id (extract-entity-id response)
-          current-created-ids (get-in db [:ui :recently-created entity-type])
-          new-created-ids (conj (or current-created-ids #{}) entity-id)
+    (let [entity-id (crud-success/extract-entity-id response)
           db' (-> (state-utils/handle-entity-api-success
                     db
                     entity-type
                     response
                     {:admin-key :admin/created-entity
                      :loading-key :admin/form-submitting?})
-                ;; Track recently created entity for highlighting
-                (assoc-in [:ui :recently-created entity-type] new-created-ids))]
-      (js/console.log "[ADMIN] admin-create-success: entity-id:" (pr-str entity-id) "recently-created:" (pr-str new-created-ids))
+                (crud-success/track-recently-created entity-type entity-id))]
       {:db db'
        :dispatch-n (list
                      [:admin/hide-form-modal]
@@ -45,18 +36,14 @@
 (rf/reg-event-fx
   :app.admin.frontend.forms/admin-update-success
   (fn [{:keys [db]} [_ entity-type response]]
-    (let [entity-id (extract-entity-id response)
-          current-updated-ids (get-in db [:ui :recently-updated entity-type])
-          new-updated-ids (conj (or current-updated-ids #{}) entity-id)
+    (let [entity-id (crud-success/extract-entity-id response)
           db' (-> (state-utils/handle-entity-api-success
                     db
                     entity-type
                     response
                     {:admin-key :admin/updated-entity
                      :loading-key :admin/form-submitting?})
-                ;; Track recently updated entity for highlighting
-                (assoc-in [:ui :recently-updated entity-type] new-updated-ids))]
-      (js/console.log "[ADMIN] admin-update-success: entity-id:" (pr-str entity-id) "recently-updated:" (pr-str new-updated-ids))
+                (crud-success/track-recently-updated entity-type entity-id))]
       {:db db'
        :dispatch-n (list
                      [:admin/hide-form-modal]

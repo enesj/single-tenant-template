@@ -22,48 +22,62 @@
    :normalize-fn user->template-entity
    :log-prefix "👤 Syncing user data to template system:"})
 
+;; Users have a dedicated /admin/api/users endpoint, not /admin/api/entities/users
+(defn- users-request
+  "Create HTTP request config for admin users API.
+   Users have dedicated routes at /admin/api/users, not /admin/api/entities/users."
+  [{:keys [method id params on-success on-failure]}]
+  (let [base-uri "/admin/api/users"
+        uri (if id (str base-uri "/" id) base-uri)]
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :users
    :context-pred (fn [_] true)
    :operations
+   ;; Handler signatures for on-success:
+   ;; - delete: (fn [cofx entity-type id default-effect]) - 4 args
+   ;; - create: (fn [cofx entity-type response default-effect]) - 4 args
+   ;; - update: (fn [cofx entity-type id response default-effect]) - 5 args
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
-                            :http-xhrio (admin-http/entity-request
+                            :http-xhrio (users-request
                                           {:method :delete
-                                           :entity-type entity-type
                                            :id id
                                            :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
                                            :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
                           {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
+             :on-success (fn [_cofx _entity-type _id default-effect]
                            (assoc default-effect :dispatch [:admin/load-users]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
-                            :http-xhrio (admin-http/entity-request
+                            :http-xhrio (users-request
                                           {:method :post
-                                           :entity-type entity-type
                                            :params form-data
                                            :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
                                            :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
                           {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
+             :on-success (fn [_cofx _entity-type _response default-effect]
                            (assoc default-effect :dispatch [:admin/load-users]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
-                            :http-xhrio (admin-http/entity-request
+                            :http-xhrio (users-request
                                           {:method :put
-                                           :entity-type entity-type
                                            :id id
                                            :params form-data
                                            :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
                                            :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
                           {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
+             ;; Note: update on-success receives 5 args: cofx, entity-type, id, response, default-effect
+             :on-success (fn [_cofx _entity-type _id _response default-effect]
                            (assoc default-effect :dispatch [:admin/load-users]))}}})
-
 
 (rf/reg-event-fx
   ::initialize-users-adapter-with-config
