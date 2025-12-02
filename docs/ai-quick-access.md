@@ -37,13 +37,6 @@ All docs should start with:
 - `:tags` – domain tags (e.g., `:backend`, `:frontend`, `:migrations`, `:shared`, `:operations`)
 - `:kind` – `:guide`, `:reference`, `:runbook`, `:overview`
 
-## Using the CLI RAG helper
-```bash
-bb cli-tools/rag.clj query -q "login events" -t backend -k 5
-bb cli-tools/rag.clj query -q "pagination" -t shared -k 5 -m 0.05
-```
-Tips: use tag filters first; adjust `-m` to trim noise.
-
 ## Best practices
 - Keep paths stable and metadata updated when scope changes.
 - Prefer file-level references over deep anchors.

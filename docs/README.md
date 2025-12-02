@@ -43,7 +43,7 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 
 ```bash
 bb run-app          # start backend + shadow-cljs watch + nREPL
-open http://localhost:8080/admin/users
+open http://localhost:8085/admin/users
 bb be-test          # backend tests
 bb fe-test          # frontend tests
 ```

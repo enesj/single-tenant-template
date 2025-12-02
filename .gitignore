@@ -57,9 +57,6 @@ tmp/
 .api_credentials.sh
 /test-results/
 
-# RAG index files (too large for git)
-docs/rag/index.edn
-
 # Clojure MCP scratch pad
 .clojure-mcp/scratch_pad.edn
 

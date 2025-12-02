@@ -1,0 +1,209 @@
+{:description "Single-tenant SaaS template documentation with hybrid indexing (chunks + file discovery)"
+ :watch? true
+ :sources [
+  ;; ==========================================================================
+  ;; CHUNKED INDEX (index-type: "chunks") - For precise semantic search
+  ;; ==========================================================================
+
+  ;; Architecture & system design - Overview and routing patterns
+    {:path "/Users/enes/Projects/single-tenant-template/docs/architecture/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "architecture"
+     :kind "system-design"
+     :index-type "chunks"}
+
+  ;; Backend - API, services, security, middleware
+    {:path "/Users/enes/Projects/single-tenant-template/docs/backend/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "backend"
+     :kind "api-reference"
+     :index-type "chunks"}
+
+  ;; Frontend - Components, routing, state management
+    {:path "/Users/enes/Projects/single-tenant-template/docs/frontend/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "frontend"
+     :kind "ui-reference"
+     :index-type "chunks"}
+
+  ;; Shared utilities - Cross-platform helpers and schemas
+    {:path "/Users/enes/Projects/single-tenant-template/docs/shared/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "shared"
+     :kind "utilities"
+     :index-type "chunks"}
+
+  ;; Database migrations and models workflow
+    {:path "/Users/enes/Projects/single-tenant-template/docs/migrations/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "migrations"
+     :kind "workflow"
+     :index-type "chunks"}
+
+  ;; Library documentation - Third-party tools and vendored libs
+    {:path "/Users/enes/Projects/single-tenant-template/docs/libs/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "libraries"
+     :kind "reference"
+     :index-type "chunks"}
+
+  ;; Reference documentation - API specs, database schema, glossary
+    {:path "/Users/enes/Projects/single-tenant-template/docs/reference/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "reference"
+     :kind "api-reference"
+     :index-type "chunks"}
+
+  ;; Operations and development workflow - Dev environment, commands, runbooks
+    {:path "/Users/enes/Projects/single-tenant-template/docs/operations/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "operations"
+     :kind "runbook"
+     :index-type "chunks"}
+
+  ;; Validation documentation - Validation patterns and implementation
+    {:path "/Users/enes/Projects/single-tenant-template/docs/validation/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "validation"
+     :kind "guide"
+     :index-type "chunks"}
+
+  ;; Top-level index and quick-access guides
+    {:path "/Users/enes/Projects/single-tenant-template/docs/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "index"
+     :kind "guide"
+     :index-type "chunks"}
+
+  ;; Claude AI Skills - All skills in the .claude/skills folder
+    {:path "/Users/enes/Projects/single-tenant-template/.claude/skills/**/*.md"
+     :ingest :chunked
+     :chunk-size 512
+     :chunk-overlap 128
+     :section "skills"
+     :kind "debugging"
+     :index-type "chunks"}
+
+  ;; ==========================================================================
+  ;; FILE DISCOVERY INDEX (index-type: "files") - Returns file paths for easy identification
+  ;; ==========================================================================
+
+  ;; Architecture files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/architecture/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "architecture"
+     :kind "system-design"
+     :index-type "files"}
+
+  ;; Backend files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/backend/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "backend"
+     :kind "api-reference"
+     :index-type "files"}
+
+  ;; Frontend files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/frontend/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "frontend"
+     :kind "ui-reference"
+     :index-type "files"}
+
+  ;; Shared utilities files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/shared/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "shared"
+     :kind "utilities"
+     :index-type "files"}
+
+  ;; Migrations files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/migrations/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "migrations"
+     :kind "workflow"
+     :index-type "files"}
+
+  ;; Library files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/libs/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "libraries"
+     :kind "reference"
+     :index-type "files"}
+
+  ;; Reference files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/reference/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "reference"
+     :kind "api-reference"
+     :index-type "files"}
+
+  ;; Operations files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/operations/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "operations"
+     :kind "runbook"
+     :index-type "files"}
+
+  ;; Validation files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/validation/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "validation"
+     :kind "guide"
+     :index-type "files"}
+
+  ;; Top-level index files
+    {:path "/Users/enes/Projects/single-tenant-template/docs/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "index"
+     :kind "guide"
+     :index-type "files"}
+
+  ;; Skills files
+    {:path "/Users/enes/Projects/single-tenant-template/.claude/skills/**/*.md"
+     :ingest :single-segment
+     :embedding :whole-document
+     :content-strategy :file-path
+     :section "skills"
+     :kind "debugging"
+     :index-type "files"}]
+    }

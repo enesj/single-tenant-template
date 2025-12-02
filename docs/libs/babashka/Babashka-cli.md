@@ -126,7 +126,7 @@ For better CLI documentation, use the spec format:
   {:port {:ref "<port>"
           :desc "Port to listen on"
           :coerce :long
-          :default 8080
+          :default 8085
           :alias :p}})
 ```
 

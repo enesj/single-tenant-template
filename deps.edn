@@ -118,7 +118,16 @@
   ;; Build configuration
   :build
   {:deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}}
-   :ns-default build}}}
+   :ns-default build}
+
+  :mcp-vector-search
+  {:replace-paths []
+   :replace-deps {org.hugoduncan/mcp-vector-search
+                  {:git/url "https://github.com/hugoduncan/mcp-vector-search"
+                   :git/sha "9be2830df98843c6a7844ca98a73e67ea5232c58"}
+                  org.clojure/clojure {:mvn/version "1.12.3"}}
+   :jvm-opts ["--enable-native-access=ALL-UNNAMED"]
+   :exec-fn mcp-vector-search.main/start}}}
 
 ;;:portal
 ;;{:extra-deps {djblue/portal {:mvn/version "0.58.1"}}}}}

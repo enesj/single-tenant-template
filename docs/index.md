@@ -16,7 +16,7 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 
 Common tasks:
 - Start stack: `bb run-app` (serves app + admin UI)
-- Admin UI: `http://localhost:8080/admin/users` (admin auth simplified for template)
+- Admin UI: `http://localhost:8085/admin/users` (admin auth simplified for template)
 - Tests: `bb be-test`, `bb fe-test`
 
 ## Documentation by Role
@@ -70,7 +70,7 @@ Browser → app.template.frontend.core → admin/template routes → services/DI
 
 - Babashka tasks: see `docs/operations/README.md` (`bb run-app`, `bb be-test`, `bb fe-test`, `bb backup-db`, `bb restore-db`).
 - Shadow-CLJS: `npm run watch` / `npm run build`.
-- Ports: defaults to 8080 for app/admin (adjust per your config).
+- Ports: defaults to 8085 for app/admin (adjust per your config).
 
 ## Linking & Metadata
 

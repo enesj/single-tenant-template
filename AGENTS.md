@@ -1,8 +1,8 @@
 # Repository Guidelines
 
 ## Overview & Architecture
-- Multi-tenant property hosting SaaS built with Clojure/ClojureScript and PostgreSQL (RLS for tenant isolation).
-- Core domains: Financial, Hosting, Integration, Admin, Template (shared SaaS infra). Keep domain boundaries clean and avoid cross-contamination.
+- Single-tenant SaaS template built with Clojure/ClojureScript and PostgreSQL.
+- Core structure: Admin (admin panel), Backend (core services), Frontend (UI utilities), Template (shared SaaS infrastructure), Shared (cross-platform utilities).
 
 ## Project Structure (Quick Map)
 ```
@@ -13,137 +13,67 @@ config/         # base + secrets (local only)
 cli-tools/      # dev utilities, test scripts
 scripts/        # build/dev/testing helpers (sh, bb)
 vendor/         # vendored libs (automigrate, ring, etc.)
-```
-
-## Project Structure Quick Map (Detailed)
-```
-src/app/
-├── admin/
-│   └── frontend/                # Admin panel UI
-│       ├── adapters/
-│       ├── components/
-│       ├── config/
-│       ├── events/ (users/)
-│       ├── handlers/
-│       ├── pages/
-│       ├── renderers/
-│       ├── security/
-│       ├── services/
-│       ├── shared/ (examples/, hooks/)
-│       ├── specs/
-│       ├── subs/
-│       ├── system/
-│       └── utils/
-├── backend/                     # Core backend services
-│   ├── middleware/
-│   ├── routes/ (admin/)
-│   ├── security/
-│   └── services/ (admin/)
-├── frontend/                    # Core frontend UI and utils
-│   ├── dev/
-│   ├── preload/
-│   ├── ui/
-│   └── utils/
-├── migrations/                  # Database migration helpers
-├── shared/                      # Cross-platform utilities
-│   ├── adapters/
-│   ├── crud/
-│   ├── events/
-│   ├── frontend/ (bridges/, components/, utils/)
-│   ├── http/
-│   ├── response/
-│   ├── schemas/ (domain/, template/)
-│   └── validation/
-└── template/                    # Multi-tenant SaaS infrastructure
-    ├── backend/ (auth/, crud/, db/, email/, invitation/, metadata/, middleware/, routes/, subscription/, tenant/, user/, validation/)
-    ├── di/
-    ├── frontend/ (api/, components/, db/, events/, pages/, state/, subs/, utils/)
-    └── shared/ (schemas/, utils/, validation/)
-
 Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 ```
+
 
 ## Development & Commands
 - App start: App is ALWAYS RUNNING during development; no need to restart manually because the system automatically restarts after FE/BE changes.
 - Admin UI is served by default at `http://localhost:8085` (not 3000); use that port in local testing and curl checks.
-## Debugging
-- See `.claude/skills` for debugging skills/docs specific to this app.
-- For debugging/testing always use clojure-mcp eval tools; for browser interactions, use chrome-mcp tools.
+## Debugging & Development Tools
 
-## Coding Style & Patterns
-- Naming: DB tables/columns use `snake_case`; code uses kebab-case (`:user-settings`). Namespaces dotted (e.g., `app.domain.frontend.events`).
+This project includes specialized AI skills for debugging and development, indexed in **MCP Vector Search** for easy discovery.
 
-- Architecture: protocols-first services; propagate tenant context for every operation; enforce security middleware; keep domains isolated.
-- Reuse-first: for functionality, use shared logic/utilities (`src/app/shared/**`, `src/app/template/shared/**`) before adding new code to FE or BE.
-- Frontend composition: for UI, start with template components (`src/app/template/frontend/**`); reuse other components defined in current of folders containing current folder; , and create new components only if nothing existing fits.
-- UI: use DaisyUI component classes prefixed with `ds-` (e.g., `ds-btn`, `ds-card`) when creating new components or modifying shared components. Tailwind utilities remain unprefixed (`flex`, `text-sm`).
+### Available Skills
 
-## Migrations Workflow
-- Edit canonical EDN under `resources/db/{template,shared,domain}`. Avoid manual edits to `resources/db/migrations/*`.
-- REPL-first flow via `src/app/migrations/simple_repl.clj`: `(require '[app.migrations.simple-repl :as mig])`, then `(mig/make-all-migrations!)`, `(mig/migrate!)`, `(mig/status)`; pass a profile like `(mig/migrate! :test)` when needed. See `docs/migrations/complete-guide.md` for full details.
-- DB: dev on `:55432`, test on `:55433`. Use `bb backup-db` / `bb restore-db` for safety.
+| Skill | Purpose | When to Use |
+|-------|---------|------------|
+| **app-db-inspect** | Inspect re-frame app-db state safely | Frontend state, auth issues, data loading, UI problems |
+| **reframe-events-analysis** | Analyze re-frame event history and performance | Event debugging, performance optimization, subscriptions |
+| **system-logs** | Monitor and analyze server/shadow-cljs logs | Build output, compilation errors, runtime issues |
 
-### Policies
-- Canonical files: `resources/db/{template,shared,domain}/*/policies.edn` only. The generator ignores extra files like `missing_policies.edn` or `rls_enablement.edn`.
-- RLS enablement: add a dedicated entry (e.g., `enable_rls_on_tenant_tables`) with raw SQL `:up`/`:down` blocks inside a canonical `policies.edn`. The extended generator emits a `.pol` migration to run `ALTER TABLE ... ENABLE/DISABLE ROW LEVEL SECURITY`.
-- Naming: use `tenant_isolation_<table>` for tenant filters and `admin_bypass_<table>` for admin access. Avoid alternate synonyms when equivalent policies exist.
-- Don’t hand-edit `resources/db/migrations/*`. If you need to re-generate policies, update the EDN and run the generator.
+**Search in MCP Vector Search** using `{ "query": "...", "metadata": { "section": "skills" } }` or search by skill name directly.
 
-### REPL Helpers (use the clojure-mcp eval tool to run)
-```clojure
-(require '[app.migrations.simple-repl :as mig])
-(mig/make-all-migrations!)     ;; merge models → schema → extended
-(mig/migrate!) (mig/status)    ;; apply and inspect
-(mig/regenerate-extended-migrations-clean!)    ;; prune to base and re-gen extended
-(mig/check-duplicate-migrations)               ;; report duplicate numbers
-```
+See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implementation guides.
 
-## Common Issues & Fixes
-- PostgreSQL JSON serialization: convert PG-specific objects (PGobject, arrays, timestamps) before returning API responses.
-  - Pattern: apply a DB serialization helper (e.g., `convert-pg-objects`) to query results before `response/ok`.
-- Namespaced keys: JOINs often return `:table/col`; normalize to simple keys where callers expect them (e.g., `:id` via `(or (:id x) (:admins/id x))`).
-- Re-frame orchestration: ensure `app.domain.frontend.events.core` is loaded so event namespaces register.
-- Entity store sync: after updates, refresh both the feature store and UI read locations to avoid empty tables until refresh.
-- HoneySQL clause keywords: verify correct keyword shapes (`:id` vs `:users/id`) to prevent silent query issues.
+## Agent Debugging & Testing Workflow
 
-## Frontend UI Conventions
-- Effective `:entity-spec`: When a page’s table uses customized or computed fields, pass the effective spec to `list-view` via `:entity-spec`. The table forwards it to the column settings so toggles operate on the exact rendered fields (e.g., includes `:tenant_name` instead of raw `:tenant_id`).
-- Fallback behavior: If `:entity-spec` is omitted, settings fall back to the template spec; computed/admin-only fields might be missing from toggles.
-- Example:
-  ```clojure
-  ($ list-view
-     {:entity-name :users
-      :entity-spec users-entity-spec
-      :title "Users"})
-  ```
-- Recommendation: Admin pages should pass the spec produced by the admin spec generator to ensure toggles match admin-visible columns.
+- Prefer evaluation tools over speculation:
+	- For Clojure/ClojureScript, use nREPL / MCP eval tools (or `clj-nrepl-eval`) to run code and verify behavior instead of guessing.
+- Use skills when relevant:
+	- Frontend state/auth/UI issues → **app-db-inspect**.
+	- Frontend event flow or performance issues → **reframe-events-analysis**.
+	- Backend errors, build failures, or compile problems → **system-logs**.
+- Be documentation-first when stuck:
+	- Use MCP Vector Search to consult docs (architecture, backend, frontend, migrations, validation, etc.) before inventing new patterns.
+- Add or improve logging when debugging:
+	- Prefer adding structured logs around the failing path instead of large refactors; keep them if they provide long‑term value.
+- After backend changes, ensure the system is running cleanly:
+	- Use the `system-logs` skill to restart the system via `clj-nrepl-eval` and re-attach to logs; verify there are no startup or runtime errors.
+- After frontend or shared FE/BE build changes, verify compilation:
+	- Ensure shadow-cljs compiles successfully for relevant builds (e.g. `app`, `admin`); use `system-logs` to inspect compile output and fix all errors/warnings that break builds.
+- Always confirm the fix:
+	- Re-run the failing path (tests, HTTP call, or UI flow) and confirm behavior end‑to‑end before considering the task done.
 
-## Security & Configuration
-- Secrets: never commit; keep in `config/.secrets.edn` and environment vars for CI/CD.
-- Security checks (manual):
-  - `curl -I https://localhost:8085/admin` (headers)
-  - `curl -k http://localhost:8085/admin` (HTTPS redirect)
-  - `curl -H "X-Forwarded-For: 192.168.1.100" http://localhost:8085/api/test` (rate limiting)
-- Optional services: see `docker-compose.yml`; document port/env changes.
+### Planning & Phased Execution for Bigger Tasks
 
-## Testing Guidelines
-- Frameworks: Kaocha (Clojure), Shadow CLJS + cljs-test-runner (ClojureScript).
-- Location/naming: under `test/` mirroring `src/`; suffix with `_test`.
-- Commands: `bb be-test`, `bb fe-test`, watch with `npm run test:cljs:watch` while iterating.
+- For any bigger task, start with a concrete multi-phase plan before coding.
+- Implement strictly phase-by-phase:
+	- For each phase, implement only that phase, then test it using Clojure/ClojureScript eval tools (MCP eval, `clj-nrepl-eval`, etc.) before moving on.
+- If testing for a phase fails:
+	- First, try to diagnose and fix the issue.
+	- If you cannot resolve it, record the problem in the Clojure MCP scratch pad (phase, what was attempted, what failed, current hypothesis), then continue to the next phase using the same rules.
+- Planning and progress tracking:
+	- If the task is really big, persist the plan to a markdown file in the repo root (e.g. `PLAN-<short-name>.md`) and update it as phases move from planned → in-progress → done/blocked.
+	- If the task is not that big, skip the markdown file and instead use the Clojure MCP scratch pad to store the plan, track progress, and list open issues.
 
-## Commit & Pull Request Guidelines
-- Commits: small, atomic; imperative subject with scope (e.g., `frontend: fix date filter`).
-- Before PR: `bb cljfmt-check`, `bb cljfmt-fix` (if needed), `bb lint`, `bb be-test`, `bb fe-test`.
-- PRs: clear description, linked issues, UI screenshots (if relevant), and notes for any DB/migration impact.
+## Documentation & AI Search
 
-## Documentation Map
-- Primary entry point for doc discovery: `docs/ai-quick-access.md` (metadata expectations, lookup recipes, and RAG CLI usage).
-- Architecture: `docs/architecture/*` (routing: `docs/architecture/routing.md`)
-- Backend/Frontend: `docs/backend/*`, `docs/frontend/*` (template UI: `docs/frontend/template-component-integration.md`)
-- Auth/Security: `docs/authentication/*`, `docs/backend/security-middleware.md`, `docs/authentication/architecture-overview.md`
-- Migrations: `docs/migrations/*` (overview: `docs/migrations/migration-overview.md`, quick start: `docs/migrations/quick-start.md`)
-- Debugging: `docs/debugging/console-monitoring-setup.md`, `docs/debugging/debug-with-eval.md`, `docs/debugging/debug-with-eval-optimized.md`
-- Shared utilities & libs: `docs/shared/*`, `docs/libs/*`
+All project documentation is indexed and searchable via **MCP Vector Search**. See `.mcp-vector-search/SEARCH-GUIDE.md` for comprehensive details on search patterns, filtering, and workflows.
+
+**Quick reference**: Filter by `:section` (backend, frontend, architecture, etc.) and `:kind` (api-reference, guide, runbook, ui-reference).
+
+**Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
 
 # Clojure REPL Evaluation
 

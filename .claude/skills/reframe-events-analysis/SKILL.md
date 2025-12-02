@@ -5,200 +5,49 @@ tags: ["events history","clojurescript", "re-frame", "debugging", "performance",
 
 # reframe-events-analysis
 
-**Intelligent analysis of re-frame event patterns, performance, and debugging using browser development tools and custom event interceptors.**
+Practical tracing of re-frame events using the built-in dev tracer and REPL helpers.
 
-## Skill Purpose
+## Fast Path
+- Stack is already running (auto-reloads). Find the nREPL port (usually 8777) with `clj-nrepl-eval --discover-ports` if unsure.
+- Attach CLJS REPL via nREPL:
+  - `clj-nrepl-eval -p 8777 "(require '[shadow.cljs.devtools.api :as shadow]) (shadow/repl :app)"`
+  - Add `--with-sudo` if macOS blocks `ps` (seen in tests).
+- Run trace helpers in the same session:
+  - `(require '[app.frontend.dev.repl-tracing :as repl-trace])`
+  - `repl-trace/recent`, `repl-trace/events`, `repl-trace/subscriptions`, `repl-trace/slow 100`, `repl-trace/search :initialize`, `repl-trace/stats`, `repl-trace/clear`
+- Exit REPL: `:cljs/quit` (watcher keeps running).
 
-This skill helps analyze re-frame application event history to:
-- Debug event sequences leading to issues
-- Analyze subscription patterns and lifecycle
-- Track user interaction flows
-- Identify slow or problematic events
-- Monitor re-frame app-db state changes
-- Trace event-handler performance bottlenecks
+## What This Captures
+- Auto-starting trace callback (preloaded) that records re-frame traces into an in-memory ring buffer (default 5000 entries) and slims large `:app-db` data.
+- Traces include `:op-type` (event, sub/create, render, etc.), `:tags` (event vector, subscription query), `:duration`, and timestamps.
 
 ## When to Use
+- User asks “what events fired?” / “why did state change?” / “why is UI slow?”
+- Need to spot slow handlers (>16ms noticeable, >50–100ms concerning).
+- Debug duplicate/looping dispatches or subscription churn.
 
-Use this skill when:
-- User asks about re-frame event history or patterns
-- Debugging re-frame application issues
-- Performance optimization of event handlers
-- Analyzing event flow and sequences
-- Investigating subscription behavior
-- User mentions keywords: "events", "event history", "re-frame tracing", "debug events"
-- Need to understand why app-db state changed
-- Looking for performance bottlenecks in UI interactions
-
-## Analysis Workflow
-
-### 1. Understand User Intent
-
-Analyze the user's request for keywords:
-- **Performance**: "slow", "performance", "speed", "bottleneck", "laggy" → Focus on duration analysis
-- **Debugging**: "debug", "error", "failure", "issue", "broken" → Look for problematic patterns
-- **Subscriptions**: "subscription", "sub", "query", "reaction" → Analyze subscription lifecycle
-- **Flow**: "flow", "sequence", "pattern", "chain", "what happened" → Track event sequences
-- **Recent**: "recent", "latest", "last", "just" → Focus on most recent activity
-- **State**: "state", "app-db", "why did", "how did" → Focus on state changes
-
-### 2. Check Available Tracing Systems
-
-This project uses re-frame with custom event interceptors. Look for:
-- Custom tracing namespace (likely `app.admin.frontend.events` or similar)
-- Built-in re-frame tracing (`re-frame.trace`)
-- Browser DevTools Performance tab
-- Manual console.log instrumentation
-
-**Common tracing approaches:**
-1. **Custom Event Interceptor**: Add to project for comprehensive tracing
-2. **re-frame.trace**: Built-in tracing functionality
-3. **Browser DevTools**: Performance timeline and console
-4. **Manual Instrumentation**: Strategic console.log in event handlers
-
-### 3. Execute Tracing Commands
-
-Use **clojure-mcp clojurescript-eval** tool with comprehensive error handling:
-
+## Common Queries (copy/paste)
 ```clojure
-;; Try to require built-in re-frame tracing first
-(try
-  (require '[re-frame.trace :as trace])
-  (println "✓ Using re-frame.trace")
-  (catch js/Error e
-    (println "⚠ re-frame.trace not available:" (.-message e))
-    false))
-
-;; If no built-in tracing, use manual event inspection
-(try
-  ;; Get current re-frame events system info
-  (require '[re-frame.core :as rf])
-
-  ;; Get app-db current state for context
-  (def current-app-db @re-frame.db/app-db)
-  (println "✓ Current app-db keys:" (keys current-app-db))
-
-  ;; Check for existing event handlers
-  (def event-handlers rf.handlers/app-id)
-  (println "✓ Event handlers available:" (some? event-handlers))
-
-  (catch js/Error e
-    (println "❌ Error accessing re-frame:" (.-message e))))
+(repl-trace/recent 40)                 ; latest activity
+(repl-trace/slow 75 40)               ; slow traces (>=75ms), last 40
+(repl-trace/by-operation :render 30)  ; renders
+(repl-trace/search "user")           ; traces whose event vector includes "user"
+(->> (repl-trace/events)              ; top frequent events
+     (map :event)
+     frequencies
+     (sort-by val >)
+     (take 10))
 ```
 
-**Manual Event Tracing Examples:**
-```clojure
-;; Create a simple event tracer if none exists
-(defn trace-event-dispatch [event-vect]
-  (let [start (js/performance.now)]
-    (println "🔄 EVENT:" event-vect "at" start)
-    ;; Measure execution time
-    (fn [db]
-      (let [result (rf/dispatch event-vect)
-            duration (- (js/performance.now) start)]
-        (when (> duration 16) ; Log slow events
-          (println "⚠ SLOW EVENT:" event-vect "took" duration "ms"))
-        result))))
+## Troubleshooting
+- No traces? ensure dev build uses `:closure-defines {re-frame.trace.trace-enabled? true}` (already set) and preloads include `app.frontend.dev.tracing` (already in `shadow-cljs.edn`).
+- Buffer too big? adjust `max-items` in `src/app/frontend/dev/tracing.cljs` or run `repl-trace/clear`.
+- CLJS REPL errors/“connection refused”? make sure `bb run-app` is running; then attach with `clj-nrepl-eval -p 8777 "(require '[shadow.cljs.devtools.api :as shadow]) (shadow/repl :app)"` (add `--with-sudo` if ps is blocked). If shadow reports “already running on 9630”, stop it with `(require '[shadow.cljs.devtools.server :as server]) (server/stop!)` and retry.
 
-;; Trace specific event patterns
-(defn trace-recent-events [event-pattern]
-  (println "🔍 Looking for events matching:" event-pattern)
-  ;; This would be implemented with custom interceptors
-  )
-```
-
-### 4. Analyze Results
-
-Based on traced event data structure (typically):
-```clojure
-{:event [:event/name arg1 arg2]     ; Event vector
- :op-type :event                      ; Operation type (:event, :sub, :fx, etc.)
- :start 153421.5                     ; Start timestamp (ms from performance.now())
- :duration-ms 0.5                    ; Duration in milliseconds
- :app-db-before {...}                 ; App-db state before event
- :app-db-after {...}                  ; App-db state after event
- :trace-id "uuid"}                    ; Unique trace identifier
-```
-
-Provide analysis for:
-
-**Performance Issues:**
-- Events with duration > 100ms are concerning
-- Events > 16ms might cause frame drops (60fps target)
-- Identify patterns of repeatedly slow events
-- Check for cascading slow events
-
-**Debugging Insights:**
-- Find events preceding errors or failures
-- Identify unusual event sequences
-- Spot missing or unexpected events
-- Check for rapid-fire duplicate events (potential infinite loops)
-
-**Subscription Patterns:**
-- Check subscription creation frequency
-- Identify expensive subscription computations
-- Track subscription lifecycle issues
-- Find orphaned or leaked subscriptions
-
-**Event Flow:**
-- Map causal relationships between events
-- Identify event chains and dependencies
-- Track user interaction sequences
-- Spot circular dependencies or loops
-
-### 5. Provide Actionable Recommendations
-
-Give specific, actionable advice:
-- **Performance**: Suggest optimization strategies (memoization, debouncing, batch processing)
-- **Debugging**: Point to likely problem areas and next debugging steps
-- **Architecture**: Recommend event handler refactoring if needed
-- **Best Practices**: Suggest re-frame patterns to avoid identified issues
-
-## Common Analysis Patterns
-
-### Performance Bottleneck Detection
-```clojure
-;; Find events taking > 100ms (using custom interceptor)
-(defn find-slow-events [threshold-ms]
-  (filter #(> (:duration-ms %) threshold-ms) traced-events))
-
-;; Analyze duration distribution
-(defn analyze-event-durations [events]
-  (->> events
-       (map :duration-ms)
-       (group-by #(cond (> % 100) :critical
-                        (> % 50) :warning
-                        (> % 16) :notice
-                        :else :ok))))
-
-;; Get slowest events
-(defn get-slowest-events [n]
-  (take-last n (sort-by :duration-ms traced-events)))
-```
-
-### Event Flow Analysis
-```clojure
-;; Track events in chronological order
-(defn chronological-events [events]
-  (->> events
-       (sort-by :start)
-       (map #(select-keys % [:event :duration-ms :trace-id]))))
-
-;; Find event chains (events within 100ms of each other)
-(defn find-event-chains [events window-ms]
-  (->> events
-       (sort-by :start)
-       (partition-by #(quot (:start %) window-ms))
-       (filter #(> (count %) 2)) ; At least 2 events in window
-       (map #(sort-by :start %))))
-
-;; Detect rapid-fire events (potential infinite loops)
-(defn detect-rapid-events [events min-interval-ms]
-  (->> events
-       (sort-by :start)
-       (partition 2 1)
-       (filter (fn [[a b]]
-                  (< (- (:start b) (:start a)) min-interval-ms)))))
-```
+## File Map
+- `src/app/frontend/dev/tracing.cljs` — trace capture and buffer
+- `src/app/frontend/dev/repl_tracing.cljs` — REPL helpers (`repl-trace/*`)
+- `src/app/frontend/dev/README_TRACING.md` — fuller guide
 
 ### Subscription Debugging
 ```clojure

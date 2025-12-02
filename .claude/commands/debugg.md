@@ -510,7 +510,6 @@ Session Status: COMPLETE - No further progress possible with available tools
 ### Complementary Debugging
 - **Events History**: Use `reframe-events-analysis` skill for detailed re-frame event tracing
 - **State Inspection**: Use `app-db-inspect` skill for comprehensive app-db analysis
-- **Documentation**: Use `docs-navigator` skill for finding relevant code examples
 - **System Logs**: Use `system-logs` skill for monitoring compilation and runtime issues
 
 ### Enhanced Analysis Workflow
