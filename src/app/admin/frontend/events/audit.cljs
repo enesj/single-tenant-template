@@ -1,11 +1,21 @@
 (ns app.admin.frontend.events.audit
-  "Enhanced admin audit logs events with comprehensive audit management"
+  "Enhanced admin audit logs events with comprehensive audit management.
+   
+   This namespace handles:
+   - HTTP loading of audit logs
+   - Filtering, pagination, sorting
+   - Batch operations (delete, export)
+   - Modal management
+   
+   Data normalization and template sync are in app.admin.frontend.adapters.audit"
   (:require
     [ajax.core :as ajax]
-    [app.admin.frontend.adapters.audit]
+    [app.admin.frontend.adapters.audit :as audit-adapter]
+    [app.admin.frontend.adapters.core :as adapters.core]
+    [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.list.ui-state :as ui-events]
-    [clojure.string :as str] ;; Delegate core loading to the adapter to keep template store in sync
+    [clojure.string :as str]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -50,14 +60,48 @@
         "admin current pagination:" admin-pagination)
       (log/info "AUDIT LOAD → final pagination to send:" final-pagination)
 
+      (if (adapters.core/admin-token db)
+        {:db (-> db
+               (assoc-in [:admin :audit :loading?] true)
+               (assoc-in [:admin :audit :error] nil)
+               (assoc-in [:admin :audit :filters] final-filters)
+               (assoc-in [:admin :audit :pagination] final-pagination)
+               (assoc-in [:admin :audit :sort] final-sort)
+               (assoc-in (conj (paths/entity-metadata :audit-logs) :loading?) true))
+         :http-xhrio (admin-http/admin-get
+                       {:uri "/admin/api/audit"
+                        :params params-to-send
+                        :on-success [::audit-logs-loaded]
+                        :on-failure [::audit-logs-load-failed]})}
+        {:db (-> db
+               (assoc-in [:admin :audit :loading?] false)
+               (assoc-in [:admin :audit :error] "Authentication required")
+               (assoc-in (conj (paths/entity-metadata :audit-logs) :loading?) false)
+               (assoc-in (conj (paths/entity-metadata :audit-logs) :error) "Authentication required"))}))))
+
+;; HTTP success handler - syncs data to template store
+(rf/reg-event-fx
+  ::audit-logs-loaded
+  (fn [{:keys [db]} [_ response]]
+    (let [raw-logs (get response :logs [])
+          metadata-path (paths/entity-metadata :audit-logs)]
       {:db (-> db
-             (assoc-in [:admin :audit :loading?] true)
-             (assoc-in [:admin :audit :error] nil)
-             (assoc-in [:admin :audit :filters] final-filters)
-             (assoc-in [:admin :audit :pagination] final-pagination)
-             (assoc-in [:admin :audit :sort] final-sort))
-       ;; Delegate actual fetching + template sync to the adapter
-       :dispatch [:app.admin.frontend.adapters.audit/load-audit-logs-direct params-to-send]})))
+             (assoc-in (conj metadata-path :loading?) false)
+             (assoc-in (conj metadata-path :error) nil))
+       :dispatch-n [[::audit-adapter/sync-audit-logs-to-template raw-logs]
+                    [:admin/audit-logs-loaded]]})))
+
+;; HTTP failure handler
+(rf/reg-event-fx
+  ::audit-logs-load-failed
+  (fn [{:keys [db]} [_ error]]
+    (let [error-msg "Failed to load audit logs"
+          path (paths/entity-metadata :audit-logs)]
+      (log/error "Audit logs load failed:" error)
+      {:db (-> db
+             (assoc-in (conj path :loading?) false)
+             (assoc-in (conj path :error) error-msg))
+       :dispatch [:admin/audit-logs-load-failed error]})))
 
 (rf/reg-event-db
   :admin/audit-logs-loaded

@@ -13,8 +13,8 @@ This is the current admin API surface for the single-tenant app. All routes live
 All paths are relative to `/admin/api`.
 
 ### Auth (public)
-- `POST /admin/api/auth/login` – exchange credentials for admin token (namespace `app.backend.routes.admin.auth`).
-- `POST /admin/api/auth/logout` – invalidate token.
+- `POST /admin/api/login` – exchange credentials for admin token (namespace `app.backend.routes.admin.auth`).
+- `POST /admin/api/logout` – invalidate token.
 
 ### Dashboard (protected)
 - `GET /admin/api/dashboard` – summary payload for the admin shell (namespace `app.backend.routes.admin.dashboard`).

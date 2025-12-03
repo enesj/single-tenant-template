@@ -56,3 +56,16 @@ Optional public landing (`:app` build) can link to `/admin/login`; it no longer 
 - Add idle-timeout/refresh handling for tokens.
 - Surface clearer error toasts on auth failures.
 - Optional public landing CTA that points directly to `/admin/login`.
+
+---
+
+## User Authentication (App Build)
+
+For end-user authentication (non-admin), see the `/api/v1/auth/*` endpoints in the [API Reference](../reference/api-reference.md#user-authentication-apiv1auth-public). The user auth flow includes:
+
+- **Registration**: `/register` page → `POST /api/v1/auth/register` → email verification required
+- **Login**: `/login` page → `POST /api/v1/auth/login` or OAuth via `/login/google`
+- **Password Reset**: `/forgot-password` → email with reset link → `/reset-password?token=...`
+- **Session**: Ring session cookie (not localStorage tokens like admin)
+
+User frontend events are in `app.template.frontend.events.auth`.

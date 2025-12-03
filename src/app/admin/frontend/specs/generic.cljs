@@ -12,6 +12,7 @@
   (:require
     [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.utils.vector-config :as vector-config]
+    [app.shared.field-specs :as field-specs]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -186,3 +187,96 @@
   :entity-specs/users
   (fn [db _]
     (create-admin-entity-specs-override-from-db db :users)))
+
+;; =============================================================================
+;; Admin Form Entity Specs - form-fields.edn based configuration
+;; =============================================================================
+
+(defn- field-type->input-type
+  "Map form-fields.edn :type to field spec format"
+  [field-type]
+  (case field-type
+    :email "email"
+    :password "password"
+    :text "text"
+    :textarea "textarea"
+    :select "select"
+    :number "number"
+    :checkbox "checkbox"
+    "text"))
+
+(defn- normalize-select-options
+  "Convert options to the format expected by select component: [{:value :label}]"
+  [options]
+  (when (seq options)
+    (mapv (fn [opt]
+            (if (map? opt)
+              opt  ; Already in correct format
+              {:value (name opt)
+               :label (-> (name opt)
+                        (str/replace "-" " ")
+                        (str/replace "_" " ")
+                        str/capitalize)}))
+      options)))
+
+(defn- build-field-spec-from-config
+  "Build a field spec from form-fields.edn field configuration"
+  [field-key field-config editing?]
+  (let [base {:id field-key
+              :label (or (:label field-config)
+                       (-> (name field-key)
+                         (str/replace "-" " ")
+                         (str/replace "_" " ")
+                         str/capitalize))
+              :type (or (:type field-config) :text)
+              :input-type (field-type->input-type (or (:type field-config) :text))}
+        with-options (if (:options field-config)
+                       (assoc base :options (normalize-select-options (:options field-config)))
+                       base)
+        with-placeholder (if (:placeholder field-config)
+                           (assoc with-options :placeholder (:placeholder field-config))
+                           with-options)
+        with-validation (cond-> with-placeholder
+                          (:min-length field-config) (assoc :min-length (:min-length field-config))
+                          (:max-length field-config) (assoc :max-length (:max-length field-config))
+                          (:validation field-config) (assoc :validation (:validation field-config)))]
+    with-validation))
+
+(defn- generate-admin-form-entity-spec-from-db
+  "Generate admin form entity spec from form-fields.edn configuration"
+  [db entity-keyword editing?]
+  (let [form-config (get-in db [:admin :config :form-fields entity-keyword])]
+    (when form-config
+      (let [{:keys [create-fields edit-fields required-fields field-config]} form-config
+            fields-to-show (if editing? edit-fields create-fields)
+            required-set (set required-fields)]
+        (when (seq fields-to-show)
+          (mapv (fn [field-key]
+                  (let [config (get field-config field-key {})
+                        spec (build-field-spec-from-config field-key config editing?)]
+                    (if (contains? required-set field-key)
+                      (assoc spec :required true)
+                      spec)))
+            fields-to-show))))))
+
+;; Admin form entity specs subscription - uses form-fields.edn when available
+(rf/reg-sub
+  :admin/form-entity-specs-by-name
+  (fn [db [_ entity-name editing?]]
+    (or (generate-admin-form-entity-spec-from-db db entity-name editing?)
+      ;; Fallback to standard form entity specs from models-data
+      (when-let [md (:models-data db)]
+        (get (field-specs/form-entity-specs md) entity-name)))))
+
+;; Override the template :form-entity-specs/by-name subscription for admin module
+;; This subscription is used by the form component to get field specs
+;; It checks form-fields.edn configuration first, then falls back to models-data
+(rf/reg-sub
+  :form-entity-specs/by-name
+  (fn [db [_ entity-name]]
+    ;; Check if we have admin form config first (from form-fields.edn)
+    ;; For create forms, editing? is nil/false
+    (or (generate-admin-form-entity-spec-from-db db entity-name false)
+      ;; Fallback to standard form entity specs from models-data
+      (when-let [md (:models-data db)]
+        (get (field-specs/form-entity-specs md) entity-name)))))

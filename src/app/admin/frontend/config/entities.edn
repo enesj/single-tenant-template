@@ -59,4 +59,24 @@
              :deletion-constraints? true
              :security-wrapper? true}
   :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
-               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}}}
+               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}}
+
+ :admins
+ {:entity-key :admins
+  :page-title "Admin Management"
+  :page-description "Manage admin accounts and roles (owners only)"
+  :adapter-init-fn app.admin.frontend.adapters.admins/init-admins-adapter!
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :per-page 10}
+  :features {:batch-operations? false
+             :activity-tracking? false
+             :deletion-constraints? true
+             :security-wrapper? false
+             :owner-only? true}
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
+               :custom-actions app.admin.frontend.components.admin-actions/admin-admin-actions}}}

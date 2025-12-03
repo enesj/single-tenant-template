@@ -84,15 +84,32 @@
 
 (rf/reg-event-fx
   :admin/auth-valid
-  (fn [{:keys [db]} [_ on-auth-success]]
-    (let [current-route (:admin/current-route db)
-          role (some-> db :admin/current-user :role keyword)]
+  (fn [{:keys [db]} [_ first-arg second-arg]]
+    ;; Handle two calling patterns:
+    ;; 1. [:admin/auth-valid response] - from :admin/check-auth (line 81)
+    ;; 2. [:admin/auth-valid on-auth-success response] - from :admin/check-auth-protected (line 183)
+    ;;
+    ;; When on-auth-success is passed, the response is the second arg.
+    ;; When only response is passed, second-arg is nil.
+    (let [;; Determine which arg is the response and which is the callback
+          [on-auth-success response] (if (map? first-arg)
+                                       ;; Pattern 1: first-arg is the response
+                                       [nil first-arg]
+                                       ;; Pattern 2: first-arg is callback, second-arg is response
+                                       [first-arg second-arg])
+          ;; Extract admin info from dashboard response if present
+          current-admin (when (map? response)
+                          (:current-admin response))
+          ;; Get role from new admin data or existing db
+          admin-data (or current-admin (:admin/current-user db))
+          role (some-> admin-data :role keyword)
+          current-route (:admin/current-route db)]
       {:db (-> db
              (assoc :admin/authenticated? true)
+             (cond-> current-admin (assoc :admin/current-user current-admin))
              (cond-> role (assoc :admin/current-user-role role))
              (dissoc :admin/auth-checking?))
        ;; Execute the success callback(s) if provided, plus any route-specific actions
-       ;; Accept either a single event vector or a collection of event vectors
        :dispatch-n (let [extras (cond
                                   (and (sequential? on-auth-success)
                                     (sequential? (first on-auth-success))) on-auth-success

@@ -34,8 +34,13 @@
                            "Delete this record")
         ;; Route user deletions through the dedicated admin endpoint to ensure
         ;; admin authentication and audit logging are applied correctly.
-        handle-delete-confirm #(if (= entity-name-kw :users)
+        ;; Route admin deletions through the admin-specific endpoint.
+        handle-delete-confirm #(cond
+                                 (= entity-name-kw :users)
                                  (rf/dispatch [:admin/delete-user item-id])
+                                 (= entity-name-kw :admins)
+                                 (rf/dispatch [:admin/delete-admin item-id])
+                                 :else
                                  (rf/dispatch [::crud-events/delete-entity entity-name-kw item-id]))
         handle-delete-click (fn [e]
                               (.stopPropagation e)

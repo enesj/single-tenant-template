@@ -3,12 +3,16 @@
     [app.admin.frontend.adapters.users :as users-adapter]
     [app.admin.frontend.adapters.audit :as audit-adapter]
     [app.admin.frontend.adapters.login-events :as login-events-adapter]
+    [app.admin.frontend.adapters.admins :as admins-adapter]
+    [app.admin.frontend.events.admins] ; Required for side effects (event registration)
+    [app.admin.frontend.subs.admins] ; Required for side effects (subscription registration)
     [app.admin.frontend.components.enhanced-action-buttons :as enhanced-actions]
     [app.admin.frontend.components.user-actions :as user-actions]
     [app.admin.frontend.components.user-activity-modal :as user-activity-modal]
     [app.admin.frontend.components.user-details-modal :as user-details-modal]
     [app.admin.frontend.components.audit-actions :as audit-actions]
-    [app.admin.frontend.components.audit-details-modal :as audit-details-modal]))
+    [app.admin.frontend.components.audit-details-modal :as audit-details-modal]
+    [app.admin.frontend.components.admin-actions :as admin-actions]))
 
 (def entity-registry
   "Registry mapping entity keywords to adapter init functions and UI components (single-tenant)."
@@ -27,7 +31,12 @@
 
    :login-events
    {:init-fn login-events-adapter/init-login-events-adapter!
-    :actions enhanced-actions/enhanced-action-buttons}})
+    :actions enhanced-actions/enhanced-action-buttons}
+
+   :admins
+   {:init-fn admins-adapter/init-admins-adapter!
+    :actions enhanced-actions/enhanced-action-buttons
+    :custom-actions admin-actions/admin-admin-actions}})
 
 (defonce registered-entities (atom {}))
 

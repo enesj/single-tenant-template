@@ -288,17 +288,50 @@ When multiple bridges are registered:
 
 ### Detection
 
-Admin context is detected by checking the URL path:
+Admin context is detected automatically by the template HTTP layer (`template/frontend/api/http.cljs`):
 
 ```clojure
-(str/includes? (.-pathname js/window.location) "/admin")
+(defn- admin-context?
+  "Best-effort detection that we are inside the admin bundle."
+  []
+  (boolean (or (get-admin-token)                                    ; Token in app-db or localStorage
+               (str/includes? pathname "/admin")                     ; /admin in URL path
+               (str/includes? (str/lower-case hostname) "admin"))))  ; admin subdomain
 ```
+
+This detection is used by all CRUD operations (`create-entity`, `update-entity`, `delete-entity`) to automatically route to the correct endpoint.
+
+### Automatic Admin Routing
+
+The template HTTP helpers now automatically handle admin context:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Template HTTP Layer (http.cljs)                              │
+│                                                              │
+│ admin-context? = true                                        │
+│ ├── create-entity → POST /admin/api/{entity}                │
+│ ├── update-entity → PUT /admin/api/{entity}/{id}            │
+│ ├── delete-entity → DELETE /admin/api/{entity}/{id}         │
+│ └── + x-admin-token header automatically attached            │
+│                                                              │
+│ admin-context? = false                                       │
+│ ├── create-entity → POST /api/v1/entities/{entity}          │
+│ ├── update-entity → PUT /api/v1/entities/{entity}/{id}      │
+│ └── delete-entity → DELETE /api/v1/entities/{entity}/{id}   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+This means:
+- **Batch operations** (like bulk delete) work correctly in admin context without special handling
+- **Bridge customizations** can focus on success/failure behavior rather than endpoint routing
+- The `x-admin-token` header is always attached when a token is available
 
 ### Admin-Specific Behavior
 
-1. **Different HTTP endpoints**: Admin uses `/admin/api/users` instead of `/api/entities/users`
-2. **Authentication**: Requires admin token
-3. **Custom refresh**: Dispatches `[:admin/load-users]` instead of generic fetch
+1. **Automatic endpoint routing**: Template HTTP helpers detect admin context and use `/admin/api/*` endpoints
+2. **Authentication**: `x-admin-token` header automatically attached when token is present
+3. **Custom refresh**: Adapters dispatch `[:admin/load-users]` instead of generic fetch
 4. **Same highlighting**: Uses shared `crud/success` module
 
 ---
@@ -405,8 +438,19 @@ Use the bridge `on-success` handler:
 **Symptoms**: 404 errors or wrong data returned
 
 **Check**: 
-- Is the bridge registered with correct `:context-pred`?
-- Is the form interceptor detecting admin context correctly?
+- Is admin token present? (Check localStorage and app-db)
+- Is the URL path or hostname containing "admin"?
+- The `admin-context?` function in `template/frontend/api/http.cljs` determines routing
+
+**Debug**:
+```clojure
+;; Check if admin context is detected
+(let [token (or (:admin/token @re-frame.db/app-db)
+                (.getItem js/localStorage "admin-token"))
+      pathname (.-pathname js/window.location)]
+  (js/console.log "Admin token:" token)
+  (js/console.log "Pathname:" pathname))
+```
 
 ### Debug Logging
 
@@ -440,10 +484,83 @@ To trace which code path is being used:
 |------|---------|
 | `shared/frontend/crud/success.cljs` | Shared success handling, ID extraction, highlighting |
 | `shared/frontend/bridges/crud.cljs` | Bridge system for context-aware CRUD |
+| `template/frontend/api/http.cljs` | **HTTP helpers with automatic admin context routing** |
 | `template/frontend/events/form.cljs` | Template form submission events |
 | `template/frontend/events/list/crud.cljs` | Template list CRUD events |
 | `admin/frontend/events/users/template/form_interceptors.cljs` | Admin form routing |
 | `admin/frontend/adapters/users.cljs` | Admin users adapter with bridge registration |
+| `admin/frontend/adapters/audit.cljs` | Audit logs adapter (normalization, sync, UI init) |
+| `admin/frontend/adapters/login_events.cljs` | Login events adapter (normalization, sync, UI init) |
+| `admin/frontend/events/audit.cljs` | Audit HTTP events (load, filter, delete, export) |
+| `admin/frontend/events/login_events.cljs` | Login events HTTP events (load) |
+| `admin/frontend/utils/audit.cljs` | Audit UI formatting helpers |
+
+---
+
+## Adapter Architecture
+
+### What Belongs in Adapters
+
+Adapters are data transformation and integration layers. They should contain:
+
+```
+✅ Data normalization functions
+✅ Entity spec subscription registration  
+✅ Template sync event registration
+✅ Bridge registration for CRUD customization
+✅ UI state initialization
+```
+
+### What Does NOT Belong in Adapters
+
+HTTP logic and event handlers should be in events namespaces:
+
+```
+❌ HTTP request events
+❌ Success/failure handlers
+❌ UI formatting utilities (put in utils/)
+❌ Business logic beyond data transformation
+```
+
+### Example: Clean Adapter Structure
+
+```clojure
+(ns app.admin.frontend.adapters.my-entity
+  "Adapter for my-entity to work with the template system.
+   
+   Responsibilities:
+   - Data normalization
+   - Template system sync
+   - Bridge registration
+   - UI state initialization
+   
+   HTTP events are in app.admin.frontend.events.my-entity"
+  (:require
+    [app.admin.frontend.adapters.core :as adapters.core]
+    [app.template.frontend.db.paths :as paths]
+    [re-frame.core :as rf]))
+
+;; Data normalization
+(defn my-entity->template-entity [entity]
+  (-> entity
+    (update :id #(when % (str %)))))
+
+;; Template integration
+(adapters.core/register-entity-spec-sub! {:entity-key :my-entity})
+(adapters.core/register-sync-event!
+  {:event-id ::sync-to-template
+   :entity-key :my-entity
+   :normalize-fn my-entity->template-entity})
+
+;; Bridge registration (optional - for CRUD customization)
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :my-entity
+   :operations {...}})
+
+;; UI state initialization
+(rf/reg-event-fx ::initialize-ui-state ...)
+(defn init-adapter! [] (rf/dispatch [::initialize-ui-state]))
+```
 
 ---
 

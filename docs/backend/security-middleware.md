@@ -12,6 +12,17 @@ Applied in `app.backend.middleware.security` (see `wrap-security`):
 
 Admin auth (`app.backend.middleware.admin/wrap-admin-authentication`) is applied separately inside the admin route tree; keep it in place for any `/admin/api/**` additions.
 
+## Admin Session Management
+- **Token generation**: UUID-based session tokens created on successful login.
+- **Session storage**: In-memory atom (`session-store`) – sessions do not persist across server restarts.
+- **Session expiry**: 8 hours from creation.
+- **Token sources** (checked in order):
+  1. `x-admin-token` HTTP header
+  2. `:admin-token` in Ring session
+  3. `admin-token` cookie
+- **Activity tracking**: `update-session-activity!` refreshes `last-activity` timestamp on each authenticated request.
+- **Invalidation**: `invalidate-session!` removes a single session; `invalidate-all-admin-sessions!` clears all sessions for an admin.
+
 ## Usage
 Wrap your Ring handler (already wired in `app.backend.routes/create-app`):
 ```clojure

@@ -1,31 +1,20 @@
 (ns app.admin.frontend.adapters.login-events
-  "Adapter for login events to work with the template system"
+  "Adapter for login events to work with the template system.
+   
+   This adapter is responsible for:
+   - Data normalization (login-event->template-entity)
+   - Template system sync (register-sync-event!)
+   - UI state initialization
+   
+   HTTP events are in app.admin.frontend.events.login-events"
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
-    [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
-    [day8.re-frame.http-fx]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+    [re-frame.core :as rf]))
 
-;; Direct load event used by admin events namespace
-
-(rf/reg-event-fx
-  ::load-login-events-direct
-  (fn [{:keys [db]} [_ {:as params}]]
-    (let [metadata-path (paths/entity-metadata :login-events)]
-      (if (adapters.core/admin-token db)
-        {:db (assoc-in db (conj metadata-path :loading?) true)
-         :http-xhrio (admin-http/admin-get
-                       {:uri "/admin/api/login-events"
-                        :params params
-                        :on-success [::login-events-loaded]
-                        :on-failure [::login-events-load-failed]})}
-        {:db (-> db
-               (assoc-in (conj metadata-path :loading?) false)
-               (assoc-in (conj metadata-path :error) "Authentication required"))}))))
-
-;; Transform login event rows into template entities
+;; =============================================================================
+;; Data Normalization
+;; =============================================================================
 
 (defn login-event->template-entity
   "Normalize login event data for the template entity store.
@@ -35,7 +24,9 @@
     (update :id #(when % (str %)))
     (update :principal-id #(when % (str %)))))
 
-;; Register entity spec subscription and sync event for :login-events
+;; =============================================================================
+;; Template System Integration
+;; =============================================================================
 
 (adapters.core/register-entity-spec-sub!
   {:entity-key :login-events})
@@ -46,27 +37,9 @@
    :normalize-fn login-event->template-entity
    :log-prefix "[login-events] Syncing login events to template system:"})
 
-(rf/reg-event-fx
-  ::login-events-loaded
-  (fn [{:keys [db]} [_ response]]
-    (let [events (get response :events [])
-          metadata-path (paths/entity-metadata :login-events)]
-      {:db (-> db
-             (assoc-in (conj metadata-path :loading?) false)
-             (assoc-in (conj metadata-path :error) nil))
-       :dispatch-n [[::sync-login-events-to-template events]
-                    [:admin/login-events-loaded]]})))
-
-(rf/reg-event-fx
-  ::login-events-load-failed
-  (fn [{:keys [db]} [_ error]]
-    (let [error-msg "Failed to load login events"
-          path (paths/entity-metadata :login-events)]
-      (log/error "Login events load failed:" error)
-      {:db (-> db
-             (assoc-in (conj path :loading?) false)
-             (assoc-in (conj path :error) error-msg))
-       :dispatch [:admin/login-events-load-failed error]})))
+;; =============================================================================
+;; UI State Initialization
+;; =============================================================================
 
 (rf/reg-event-fx
   ::initialize-login-events-ui-state

@@ -2,6 +2,7 @@
   "Refactored admin API routes - now composed from focused namespaces"
   (:require
     [app.backend.middleware.admin :as admin-middleware] ;; Focused admin route namespaces
+    [app.backend.routes.admin.admins :as admin-admins]
     [app.backend.routes.admin.auth :as admin-auth]
     [app.backend.routes.admin.dashboard :as admin-dashboard]
     [app.backend.routes.admin.entities :as admin-entities]
@@ -51,6 +52,9 @@
 
       ;; Protected password routes
       ["/auth" (admin-password/protected-routes db email-service base-url)]
+
+      ;; Admin management (owner operations)
+      (admin-admins/routes db)
 
       ;; User operations
       ["/users"

@@ -103,71 +103,62 @@
      :on-success on-success
      :on-failure on-failure}))
 
-(defn create-entity
-  "Create a new entity"
-  [{:keys [entity-name data on-success on-failure]}]
-  (let [db (try @rf-db/app-db (catch :default _ nil))
-        admin-token (or (:admin/token db)
-                      (try (when (exists? js/localStorage)
-                             (.getItem js/localStorage "admin-token"))
-                        (catch :default _ nil)))
+(defn- get-admin-token []
+  (or (try (:admin/token @rf-db/app-db) (catch :default _ nil))
+      (try (when (exists? js/localStorage)
+             (.getItem js/localStorage "admin-token"))
+        (catch :default _ nil))))
+
+(defn- admin-context?
+  "Best-effort detection that we are inside the admin bundle.  We rely on
+  either an admin token being present or the location containing \"admin\"
+  in the pathname/hostname."
+  []
+  (let [token (get-admin-token)
         pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))
         hostname (when (exists? js/window)
-                   (some-> js/window .-location .-hostname))
+                   (some-> js/window .-location .-hostname))]
+    (boolean (or token
+                 (and pathname (str/includes? pathname "/admin"))
+                 (and hostname (str/includes? (str/lower-case hostname) "admin"))))))
+
+(defn create-entity
+  "Create a new entity"
+  [{:keys [entity-name data on-success on-failure]}]
+  (let [admin-token (get-admin-token)
         admin-uri (str "/admin/api/" entity-name)
-        uri (if (and admin-token (or (and pathname (str/includes? pathname "/admin"))
-                                   (and hostname (str/includes? (str/lower-case hostname) "admin"))))
-              admin-uri
-              (api/entity-endpoint entity-name))]
+        uri (if (admin-context?) admin-uri (api/entity-endpoint entity-name))
+        headers (when admin-token {"x-admin-token" admin-token})]
     (post-request
-      {:uri uri
-       :params data
-       :on-success on-success
-       :on-failure on-failure})))
+      (cond-> {:uri uri
+               :params data
+               :on-success on-success
+               :on-failure on-failure}
+        headers (assoc :headers headers)))))
 
 (defn update-entity
   "Update an existing entity"
   [{:keys [entity-name id data on-success on-failure]}]
-  (let [db (try @rf-db/app-db (catch :default _ nil))
-        admin-token (or (:admin/token db)
-                      (try (when (exists? js/localStorage)
-                             (.getItem js/localStorage "admin-token"))
-                        (catch :default _ nil)))
-        pathname (when (exists? js/window)
-                   (some-> js/window .-location .-pathname))
-        hostname (when (exists? js/window)
-                   (some-> js/window .-location .-hostname))
+  (let [admin-token (get-admin-token)
         admin-uri (str "/admin/api/" entity-name "/" id)
-        uri (if (and admin-token (or (and pathname (str/includes? pathname "/admin"))
-                                   (and hostname (str/includes? (str/lower-case hostname) "admin"))))
-              admin-uri
-              (api/entity-endpoint entity-name id))]
+        uri (if (admin-context?) admin-uri (api/entity-endpoint entity-name id))
+        headers (when admin-token {"x-admin-token" admin-token})]
     (put-request
-      {:uri uri
-       :params data
-       :on-success on-success
-       :on-failure on-failure})))
+      (cond-> {:uri uri
+               :params data
+               :on-success on-success
+               :on-failure on-failure}
+        headers (assoc :headers headers)))))
 
 (defn delete-entity
   "Delete an entity"
   [{:keys [entity-name id on-success on-failure]}]
-  (let [db (try @rf-db/app-db (catch :default _ nil))
-        admin-token (or (:admin/token db)
-                      (try (when (exists? js/localStorage)
-                             (.getItem js/localStorage "admin-token"))
-                        (catch :default _ nil)))
-        pathname (when (exists? js/window)
-                   (some-> js/window .-location .-pathname))
-        hostname (when (exists? js/window)
-                   (some-> js/window .-location .-hostname))
-        in-admin-context? (and admin-token
-                            (or (and pathname (str/includes? pathname "/admin"))
-                              (and hostname (str/includes? (str/lower-case hostname) "admin"))))
-        uri (if in-admin-context?
+  (let [admin-token (get-admin-token)
+        uri (if (admin-context?)
               (str "/admin/api/" entity-name "/" id)
               (api/entity-endpoint entity-name id))
-        headers (when in-admin-context?
+        headers (when admin-token
                   {"x-admin-token" admin-token})]
     (delete-request
       (cond-> {:uri uri

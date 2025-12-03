@@ -1,33 +1,18 @@
 (ns app.admin.frontend.adapters.audit
-  "Adapter for audit logs to work with the template system"
+  "Adapter for audit logs to work with the template system.
+   
+   This adapter is responsible for:
+   - Data normalization (audit-log->template-entity)
+   - Template system sync (register-sync-event!)
+   - Bridge registration for CRUD operations
+   - UI state initialization
+   
+   HTTP events are in app.admin.frontend.events.audit"
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
-    [app.admin.frontend.utils.http :as admin-http]
-
     [app.template.frontend.db.paths :as paths]
-    [clojure.string :as str]
-    [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
-
-;; The audit table now uses the unified vector config system like Users  tables
-
-(rf/reg-event-fx
-  ::load-audit-logs-direct
-  (fn [{:keys [db]} [_ {:as params}]]
-    (let [metadata-path (paths/entity-metadata :audit-logs)]
-      (if (adapters.core/admin-token db)
-        {:db (assoc-in db (conj metadata-path :loading?) true)
-         :http-xhrio (admin-http/admin-get
-                       {:uri "/admin/api/audit"
-                        :params params
-                        :on-success [::audit-logs-loaded]
-                        :on-failure [::audit-logs-load-failed]})}
-        {:db (-> db
-               (assoc-in (conj metadata-path :loading?) false)
-               (assoc-in (conj metadata-path :error) "Authentication required"))}))))
-
-;; Admin load event is defined in events/audit.cljs and delegates here.
 
 ;; Transform namespaced keys to simple keys for template system
 (defn audit-log->template-entity
@@ -67,29 +52,6 @@
                           (assoc :dispatch [:admin/delete-audit-log id])))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect :dispatch [:admin/load-audit-logs]))}}})
-
-(rf/reg-event-fx
-  ::audit-logs-loaded
-  (fn [{:keys [db]} [_ response]]
-    (let [raw-logs (get response :logs [])
-          metadata-path (paths/entity-metadata :audit-logs)]
-      {:db (-> db
-             (assoc-in (conj metadata-path :loading?) false)
-             (assoc-in (conj metadata-path :error) nil))
-       :dispatch-n [[::sync-audit-logs-to-template raw-logs]
-                    [:admin/audit-logs-loaded]]})))
-
-;; Handle failed audit logs loading
-(rf/reg-event-fx
-  ::audit-logs-load-failed
-  (fn [{:keys [db]} [_ error]]
-    (let [error-msg "Failed to load audit logs"
-          path (paths/entity-metadata :audit-logs)]
-      (log/error "Audit logs load failed:" error)
-      {:db (-> db
-             (assoc-in (conj path :loading?) false)
-             (assoc-in (conj path :error) error-msg))
-       :dispatch [:admin/audit-logs-load-failed error]})))
 
 (rf/reg-event-fx
   ::initialize-audit-ui-state
@@ -148,31 +110,3 @@
   "Initialize the audit logs adapter for template system integration"
   []
   (rf/dispatch [::initialize-audit-ui-state]))
-
-(defn format-timestamp
-  [timestamp]
-  (when timestamp
-    (let [date (js/Date. timestamp)]
-      (.toLocaleString date))))
-
-(defn format-changes
-  [changes]
-  (when (seq changes)
-    (clojure.string/join ", "
-      (for [[k v] changes]
-        (str (name k) ": " v)))))
-
-(defn get-action-badge-class
-  [action]
-  (case (keyword action)
-    :create "bg-green-100 text-green-800"
-    :update "bg-yellow-100 text-yellow-800"
-    :delete "bg-red-100 text-red-800"
-    "bg-gray-100 text-gray-800"))
-
-(defn get-entity-icon
-  [entity-type]
-  (case (keyword entity-type)
-    :user [:icon {:name "user" :class "w-4 h-4 text-gray-500"}]
-    :subscription [:icon {:name "credit-card" :class "w-4 h-4 text-gray-500"}]
-    [:icon {:name "question-mark-circle" :class "w-4 h-4 text-gray-500"}]))

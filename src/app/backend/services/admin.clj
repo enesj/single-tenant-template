@@ -9,11 +9,13 @@
    - dashboard: Dashboard statistics and metrics
    - users: User management and operations
    - users.bulk: Bulk user operations and export
+   - admins: Admin management (owner-only operations)
    - monitoring.transactions: Transaction monitoring
    - monitoring.integrations: Integration monitoring
 
    All functions maintain the same signature for backward compatibility."
   (:require
+    [app.backend.services.admin.admins :as admins]
     [app.backend.services.admin.audit :as audit]
     [app.backend.services.admin.auth :as auth]
     [app.backend.services.admin.dashboard :as dashboard]
@@ -173,3 +175,31 @@
 
 (defn get-webhook-status [db filters]
   (monitoring-integrations/get-webhook-status db filters))
+
+;; ============================================================================
+;; Admin Management (admins namespace)
+;; ============================================================================
+
+(defn list-all-admins [db filters]
+  (admins/list-all-admins db filters))
+
+(defn get-admin-count [db filters]
+  (admins/get-admin-count db filters))
+
+(defn get-admin-details [db admin-id]
+  (admins/get-admin-details db admin-id))
+
+(defn create-admin-with-audit! [db admin-data current-admin-id ip-address user-agent]
+  (admins/create-admin! db admin-data current-admin-id ip-address user-agent))
+
+(defn update-admin! [db admin-id updates current-admin-id ip-address user-agent]
+  (admins/update-admin! db admin-id updates current-admin-id ip-address user-agent))
+
+(defn update-admin-role! [db admin-id new-role current-admin-id ip-address user-agent]
+  (admins/update-admin-role! db admin-id new-role current-admin-id ip-address user-agent))
+
+(defn update-admin-status! [db admin-id new-status current-admin-id ip-address user-agent]
+  (admins/update-admin-status! db admin-id new-status current-admin-id ip-address user-agent))
+
+(defn delete-admin! [db admin-id current-admin-id ip-address user-agent]
+  (admins/delete-admin! db admin-id current-admin-id ip-address user-agent))

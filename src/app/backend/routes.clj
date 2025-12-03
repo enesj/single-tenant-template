@@ -161,10 +161,10 @@
          ;; API routes with versioning
          ["/api"
           ;; Version 1 API routes - now using service container
-          ["/v1" (api/create-versioned-api-routes db md service-container "v1")]]
+          ["/v1" (api/create-versioned-api-routes db md service-container "v1")]]]
 
          ;; No webhooks in single-tenant template
-         ]
+
 
         ;; CRITICAL: Completely separate admin routes from all other routes
         ;; Admin API routes - Define as standalone routes, not nested under /admin
@@ -177,6 +177,7 @@
          ["/login" {:get {:handler admin-render-page}}]
          ["/dashboard" {:get {:handler admin-render-page}}]
          ["/users" {:get {:handler admin-render-page}}]
+         ["/admins" {:get {:handler admin-render-page}}]
          ["/audit" {:get {:handler admin-render-page}}]
          ["/login-events" {:get {:handler admin-render-page}}]
          ["/settings" {:get {:handler admin-render-page}}]]

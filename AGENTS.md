@@ -39,7 +39,8 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 ## Agent Debugging & Testing Workflow
 
 - Prefer evaluation tools over speculation:
-	- For Clojure/ClojureScript, use nREPL / MCP eval tools (or `clj-nrepl-eval`) to run code and verify behavior instead of guessing.
+	- **Clojure (backend)**: Use `clj-nrepl-eval` to run code and verify behavior.
+	- **ClojureScript (frontend)**: Use the `mcp_clojure-mcp_clojurescript_eval` MCP tool (NOT `clj-nrepl-eval` - it only works with Clojure).
 - Use skills when relevant:
 	- Frontend state/auth/UI issues → **app-db-inspect**.
 	- Frontend event flow or performance issues → **reframe-events-analysis**.
@@ -59,7 +60,9 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 
 - For any bigger task, start with a concrete multi-phase plan before coding.
 - Implement strictly phase-by-phase:
-	- For each phase, implement only that phase, then test it using Clojure/ClojureScript eval tools (MCP eval, `clj-nrepl-eval`, etc.) before moving on.
+	- For each phase, implement only that phase, then test it before moving on.
+	- **Backend code**: Use `clj-nrepl-eval` for Clojure evaluation.
+	- **Frontend code**: Use `mcp_clojure-mcp_clojurescript_eval` for ClojureScript evaluation.
 - If testing for a phase fails:
 	- First, try to diagnose and fix the issue.
 	- If you cannot resolve it, record the problem in the Clojure MCP scratch pad (phase, what was attempted, what failed, current hypothesis), then continue to the next phase using the same rules.
@@ -75,15 +78,17 @@ All project documentation is indexed and searchable via **MCP Vector Search**. S
 
 **Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
 
-# Clojure REPL Evaluation
+# Clojure REPL Evaluation (Backend Only)
 
-The command `clj-nrepl-eval` is installed on your path for evaluating Clojure code via nREPL.
+The command `clj-nrepl-eval` is installed on your path for evaluating **Clojure code only** (backend `.clj` files).
+
+⚠️ **IMPORTANT**: `clj-nrepl-eval` does NOT work with ClojureScript. For frontend `.cljs` evaluation, use the `mcp_clojure-mcp_clojurescript_eval` MCP tool instead.
 
 **Discover nREPL servers:**
 
 `clj-nrepl-eval --discover-ports`
 
-**Evaluate code:**
+**Evaluate Clojure code:**
 
 `clj-nrepl-eval -p <port> "<clojure-code>"`
 
@@ -93,6 +98,25 @@ With timeout (milliseconds)
 
 The REPL session persists between evaluations - namespaces and state are maintained.
 Always use `:reload` when requiring namespaces to pick up changes.
+
+# ClojureScript REPL Evaluation (Frontend Only)
+
+For ClojureScript (frontend `.cljs` files), use the MCP tool:
+
+**Tool**: `mcp_clojure-mcp_clojurescript_eval`
+
+This tool connects to the shadow-cljs runtime in the browser and evaluates ClojureScript code.
+
+**Example**: Inspect re-frame app-db state:
+```clojure
+@re-frame.db/app-db
+```
+
+**Example**: Get recent re-frame events:
+```clojure
+(require '[app.frontend.dev.repl-tracing :as repl-trace])
+(repl-trace/recent 20)
+```
 
 # Clojure Parenthesis Repair
 

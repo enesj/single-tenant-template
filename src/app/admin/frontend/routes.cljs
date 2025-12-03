@@ -1,11 +1,14 @@
 (ns app.admin.frontend.routes
   (:require
+    [app.admin.frontend.pages.admins :as admins]
     [app.admin.frontend.pages.dashboard :as dashboard]
+    [app.admin.frontend.pages.forgot-password :as forgot-password]
     [app.admin.frontend.pages.login :as login]
+    [app.admin.frontend.pages.login-events :as login-events]
+    [app.admin.frontend.pages.reset-password :as reset-password]
+    [app.admin.frontend.pages.settings :as settings]
     [app.admin.frontend.pages.users :as users]
     [app.admin.frontend.pages.audit :as audit]
-    [app.admin.frontend.pages.login-events :as login-events]
-    [app.admin.frontend.pages.settings :as settings]
     [re-frame.core :as rf]))
 
 (defn guarded-start
@@ -31,6 +34,20 @@
      {:name :admin-login
       :view login/admin-login-page
       :controllers [{:start (fn [_] (rf/dispatch [:admin/init-login]))}]}]
+
+    ;; Forgot Password (public)
+    ["/forgot-password"
+     {:name :admin-forgot-password
+      :view forgot-password/admin-forgot-password-page
+      :controllers [{:start (fn [_] (rf/dispatch [:admin/init-forgot-password]))}]}]
+
+    ;; Reset Password (public, with token)
+    ["/reset-password"
+     {:name :admin-reset-password
+      :view reset-password/admin-reset-password-page
+      :controllers [{:start (fn [params]
+                              (when-let [token (get-in params [:query :token])]
+                                (rf/dispatch [:admin/verify-reset-token token])))}]}]
 
     ;; Dashboard (default)
     [""
@@ -63,6 +80,13 @@
       :view login-events/admin-login-events-page
       :controllers [{:start (fn [params]
                               ((:start (guarded-start [[:admin/load-login-events]])) params))}]}]
+
+    ;; Admin Management (owner only)
+    ["/admins"
+     {:name :admin-admins
+      :view admins/admin-admins-page
+      :controllers [{:start (fn [params]
+                              ((:start (guarded-start [[:admin/load-admins]])) params))}]}]
 
     ;; Settings Overview (Hardcoded display settings)
     ["/settings"
