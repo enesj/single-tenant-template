@@ -152,10 +152,28 @@
 (defn delete-entity
   "Delete an entity"
   [{:keys [entity-name id on-success on-failure]}]
-  (delete-request
-    {:uri (api/entity-endpoint entity-name id)
-     :on-success on-success
-     :on-failure on-failure}))
+  (let [db (try @rf-db/app-db (catch :default _ nil))
+        admin-token (or (:admin/token db)
+                      (try (when (exists? js/localStorage)
+                             (.getItem js/localStorage "admin-token"))
+                        (catch :default _ nil)))
+        pathname (when (exists? js/window)
+                   (some-> js/window .-location .-pathname))
+        hostname (when (exists? js/window)
+                   (some-> js/window .-location .-hostname))
+        in-admin-context? (and admin-token
+                            (or (and pathname (str/includes? pathname "/admin"))
+                              (and hostname (str/includes? (str/lower-case hostname) "admin"))))
+        uri (if in-admin-context?
+              (str "/admin/api/" entity-name "/" id)
+              (api/entity-endpoint entity-name id))
+        headers (when in-admin-context?
+                  {"x-admin-token" admin-token})]
+    (delete-request
+      (cond-> {:uri uri
+               :on-success on-success
+               :on-failure on-failure}
+        headers (assoc :headers headers)))))
 
 (defn batch-update-entities
   "Batch update multiple entities"

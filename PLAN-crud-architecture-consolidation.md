@@ -226,6 +226,12 @@ This is a larger refactor and may not be immediately necessary if Phases 1-2 are
 
 - [x] **Phase 3**: Document Event Flow ✅ COMPLETED
   - [x] Create `docs/frontend/crud-event-flow.md`
+  - [x] Document all CRUD event paths (create, update, delete)
+  - [x] Document bridge system architecture
+  - [x] Document admin context handling
+  - [x] Document success handling and highlighting
+  - [x] Add debugging guide with common issues
+  - [x] Update docs/frontend/README.md to include new doc
   - [ ] Add debug logging option (deferred - current logs are adequate)
 
 - [ ] **Phase 4**: Reduce Adapter Complexity (Optional)

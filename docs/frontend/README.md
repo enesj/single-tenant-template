@@ -10,6 +10,7 @@ Single-tenant frontend focused on the admin console (users, audit logs, login ev
 - `admin-panel-single-tenant.md` — admin routing/bootstrapping basics
 - `app-shell.md` — build targets, entrypoints, state shape, routing
 - `component-library.md` — reusable components (UIx + DaisyUI)
+- `crud-event-flow.md` — **CRUD event flow architecture and debugging guide**
 - `home-page-authentication-flow.md` — admin auth flow/guards
 - `http-standards.md` — HTTP helpers and request patterns
 - `integration-domain.md` — marked unused in single-tenant
