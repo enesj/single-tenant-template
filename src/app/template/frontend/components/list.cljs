@@ -47,8 +47,9 @@
         hardcoded-view-options (use-subscribe [::ui-subs/hardcoded-view-options entity-name])
         ;; For settings panel: ONLY use hardcoded view-options to determine which controls to hide
         effective-hardcoded-settings hardcoded-view-options
+        ;; Use page-level display settings as defaults, but let user state override them
         merged-display-settings (let [subscribed-settings (use-subscribe [::ui-subs/entity-display-settings entity-name])
-                                      merged (merge subscribed-settings display-settings)]
+                                      merged (merge display-settings subscribed-settings)]
                                   merged)
         ;; Subscribe to user's filterable field settings from settings panel
         filterable-fields-subscription (use-subscribe [::ui-subs/filterable-fields entity-name])

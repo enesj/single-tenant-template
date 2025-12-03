@@ -1,45 +1,39 @@
 # Next Session Prompt (2025-12-03)
-PROMPT: "admin users table sort reverts after click" (sorting on /admin/users briefly applies then reverts)
+PROMPT: "admin audit pagination toggle locked"
 
 ## Context Snapshot
-- Single-tenant Clojure/ClojureScript template; admin UI at http://localhost:8085 (admin build in shadow-cljs). 
-- Admin routes via `app.admin.frontend.routes` guarded start; `/admin/users` uses generic list components + admin adapters.
-- Lists/tables share template list system (`app.template.frontend.components.list/table`) with sort state in list UI state events/subs.
-- Users data fetched from `/admin/api/users` (backend route `app.backend.routes.admin.users`, composed in `app.backend.routes.admin-api`).
-- State sync: admin users events sync into template entity store via `app.admin.frontend.adapters.users/sync-users-to-template`.
-- Dev workflow: stack auto-reloads; primary commands `bb run-app` (backend+shadow), `npm run watch:admin` for admin build if needed; tests via `bb fe-test`, `bb be-test`.
+- Single-tenant SaaS template (Clojure/ClojureScript, Postgres); admin UI served at http://localhost:8085 (shadow-cljs :admin build, auto-reloads via `bb run-app`).
+- Admin pages use generic entity system; audit logs page `/admin/audit` renders `generic-admin-entity-page :audit-logs` with list components from template layer.
+- List/table controls come from template settings panel (`list_view_settings.cljs`) with toggles wired to `app.template.frontend.events.list.ui-state` and display settings merged from hardcoded page config + user prefs.
+- Pagination rendering in `app.template.frontend.components.list` only hides when merged `:show-pagination?` is false; otherwise shows pagination component when `total-pages > 1`.
+- Audit entity config (`src/app/admin/frontend/config/entities.edn`) hardcodes `:show-pagination? true` in `:display-settings`, likely locking the toggle (per list-view controls guide: hardcoded true makes control non-interactive and feature always on).
+- Audit adapter initializes UI state with pagination defaults (`initialize-audit-ui-state` sets per-page/current-page paths) and fetch config if missing.
 
 ## Task Focus
-Investigate why clicking column headers on `/admin/users` applies sort momentarily then reverts (table refresh resets sort). Goal: keep selected sort stable across refreshes and re-fetches.
+Investigate why clicking the Pagination toggle in the settings panel on `/admin/audit` does nothing and pagination stays visible; allow the user to hide pagination or make the control clearly locked if intentionally forced on.
 
-## Code Map (start here)
-- `src/app/admin/frontend/pages/users.cljs` — renders admin users page via generic list entity wrapper.
-- `src/app/admin/frontend/events/users/core.cljs` — admin load/fetch users, sync to template store, delete; dispatches to adapters.
-- `src/app/admin/frontend/adapters/users.cljs` — bridges admin HTTP to template list CRUD (normalize fields, sort/pagination params).
-- `src/app/template/frontend/events/list/ui_state.cljs` — list UI state for sort/pagination/toggles; event `::set-sort-field` controls sort direction.
-- `src/app/template/frontend/components/list.cljs` & `table.cljs` — table UI uses `::list-subs/sort-config` to send sort field/direction to events.
-- `src/app/template/frontend/events/list/crud.cljs` — list fetch/refresh wiring that may reset params.
-- Backend: `src/app/backend/routes/admin/users.clj` & `src/app/backend/routes/admin_api.clj` — server-side support for sort params.
+## Code Map
+- `src/app/admin/frontend/config/entities.edn` — audit-logs display settings hardcode `:show-pagination? true` (and `:per-page 20`).
+- `src/app/admin/frontend/pages/audit.cljs` — mounts `generic-admin-entity-page :audit-logs`.
+- `src/app/admin/frontend/adapters/audit.cljs` — `init-audit-adapter!` and `::initialize-audit-ui-state` seed list UI state (sort, pagination paths, per-page/current-page).
+- `src/app/template/frontend/components/settings/list_view_settings.cljs` — settings panel; Pagination toggle dispatches `::ui-events/toggle-pagination` but respects hardcoded flags.
+- `src/app/template/frontend/events/list/ui_state.cljs` — `::toggle-pagination` flips `[:ui :entity-configs <entity> :show-pagination?]` unless hardcoded prevents it.
+- `src/app/template/frontend/components/list.cljs` — renders pagination only if merged display settings `:show-pagination?` true and `total-pages > 1`.
+- (optional) `src/app/template/frontend/hooks/display_settings.cljs` & `subs/ui.cljs` — how hardcoded page props merge with user prefs.
 
 ## Commands to Run
-- Start stack: `bb run-app` (serves admin at 8085; auto-restarts).
-- Frontend watch (if separate): `npm run watch:admin` (shadow-cljs :admin build on port 8085 assets).
-- Optional tests: `bb fe-test` (CLJS), `bb be-test` (Clojure).
-- CLJS tracing if needed: attach to shadow nREPL (`clj-nrepl-eval --discover-ports` → `(shadow/repl :admin)`), then use tracing helpers.
+- Start stack: `bb run-app` (backend + shadow-cljs; admin at 8085). If needed, separate watch: `npm run watch:admin`.
+- Tests (if changed CLJS/UI logic): `bb fe-test`. Backend unaffected unless API touched.
 
-## Gotchas / Notes
-- Port is 8085 (not 3000). Auth simplified single-tenant; ensure admin token/cookie present.
-- Sort state stored per entity in list UI state; route controllers may dispatch `:admin/load-users` on navigation which can override sort params if defaults used.
-- Admin adapters expect sort params names (e.g., `:sort-by`, `:sort-order`); confirm column headers send consistent fields.
-- List components merge user prefs with page-level config (see `list_view_settings` docs). Hardcoded settings can lock controls.
-- Monitoring/logs: use `./scripts/sh/monitoring/read_output.sh` (system-logs skill) to see backend/shadow output if issues.
+## Gotchas
+- Admin auth simplified but still required; ensure you’re logged in on port 8085.
+- Hardcoded display settings (`:show-pagination? true`) make the toggle appear enabled but non-interactive per docs; decide whether to remove/relax or to surface the locked state/tooltip.
+- Pagination component already hides when `:show-pagination?` is false AND `total-pages > 1`; verify total-pages derivation when data small.
 
-## Checklist for Next Session
-1) Reproduce: run `bb run-app`, open `http://localhost:8085/admin/users`, click column headers; watch network tab to see request params when sort toggles then resets.
-2) Inspect UI state: use app-db-inspect skill to read `[:entities :users :list]`, `[:ui :lists :users :sort]` before/after clicks; confirm if sort field/direction persists.
-3) Trace events: use reframe-events-analysis skill (`repl-trace/recent` or search for `:app.template.frontend.events.list.ui-state/set-sort-field` and follow dispatch flow to any refresh/guard events).
-4) Check list fetch pipeline: in `app.template.frontend.events.list.crud` and admin adapters ensure sort params are passed through and not overwritten on refresh or when `:admin/load-users` runs after sync.
-5) Review `app.admin.frontend.pages.users`/controllers for automatic reloads after sort; ensure table header click dispatch includes current pagination/filter and avoids triggering a full default reload.
-6) Verify backend honors sort params (users routes); confirm response order matches request and no post-processing resort in adapters.
-7) Implement fix (persist sort state or prevent immediate reload with default params), test again; add regression note/test if feasible.
-8) Keep logs clean; rerun flow after fix and ensure sort sticks across page reload or pagination.
+## Checklist for Next Agent
+1) Reproduce on `/admin/audit`: open settings panel, click Pagination toggle; observe no state change/UI feedback.
+2) Inspect display settings state via app-db (app-db-inspect skill): `[:ui :entity-configs :audit-logs :show-pagination?]` and hardcoded merge paths; confirm value never flips.
+3) Review `entities.edn` hardcoded `:show-pagination? true`; decide whether to drop/parameterize so toggle is user-controlled, or make toggle visibly locked with tooltip consistent with doc matrix.
+4) If unlocking: remove hardcoded key or set nil, ensure initial default still true; verify `toggle-pagination` updates merged settings and pagination hides when false (total-pages>1 condition).
+5) If keeping locked: adjust settings UI to show disabled state for hardcoded true on audit page (match list-view controls guide), or add copy explaining pagination is always on.
+6) Retest UI after change: toggle interaction, table rerender, pagination visibility; run `bb fe-test` if logic changed.
