@@ -35,8 +35,11 @@
         {:keys [page-title page-description adapter-init-fn features components] :as config} (or entity-config {})
         {:keys [modals custom-header]} components
         entity-ids (->> entity-data (map id-utils/extract-entity-id) (filter some?) vec)
-        selection-change-handler (generic-handlers/create-generic-selection-handler actual-entity-key)
-        additional-effects (when entity-config (generic-handlers/create-generic-additional-effects config))
+        selection-change-handler (use-memo #(generic-handlers/create-generic-selection-handler actual-entity-key)
+                                  [actual-entity-key])
+        additional-effects (use-memo #(when entity-config
+                                        (generic-handlers/create-generic-additional-effects config))
+                               [entity-config config])
         render-main-content (when entity-config (content-renderer/create-main-content-renderer config))
         header-render (use-memo #(build-header-renderer custom-header) [custom-header])
         ;; Always call the hook, but pass conditional parameters to handle logic inside
