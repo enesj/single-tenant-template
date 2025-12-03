@@ -236,17 +236,20 @@
   :admin/bulk-delete-audit-logs
   (fn [{:keys [db]} [_ audit-ids]]
     (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))]
-      (log/info "Bulk deleting audit logs:" (count audit-ids) "entries")
+                  (.getItem js/localStorage "admin-token"))
+          ;; Convert IDs to strings for JSON serialization
+          ids-as-strings (mapv str audit-ids)]
+      (log/info "Bulk deleting audit logs:" (count ids-as-strings) "entries")
 
       (if token
         {:db (assoc-in db [:admin :audit :bulk-deleting?] true)
          :http-xhrio {:method          :delete
                       :uri             "/admin/api/audit/bulk"
-                      :params          {:ids audit-ids}
-                      :headers         (when token {"x-admin-token" token})
+                      :body            (js/JSON.stringify (clj->js {:ids ids-as-strings}))
+                      :headers         (cond-> {"Content-Type" "application/json"}
+                                         token (assoc "x-admin-token" token))
                       :response-format (ajax/json-response-format {:keywords? true})
-                      :on-success      [:admin/bulk-audit-logs-deleted (count audit-ids)]
+                      :on-success      [:admin/bulk-audit-logs-deleted (count ids-as-strings)]
                       :on-failure      [:admin/bulk-audit-logs-delete-failed]}}
         {:db (assoc-in db [:admin :audit :error] "Authentication required")}))))
 
@@ -258,6 +261,8 @@
            (assoc-in [:admin :audit :bulk-deleting?] false)
            (assoc-in [:admin :success-message] (str count " audit logs deleted successfully")))
      :dispatch-n [[:admin/hide-batch-audit-actions]
+                  ;; Clear selection after successful batch delete
+                  [:app.template.frontend.events.list.selection/select-all :audit-logs [] false]
                   [:admin/load-audit-logs]]}))
 
 (rf/reg-event-db

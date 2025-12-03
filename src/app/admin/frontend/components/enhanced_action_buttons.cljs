@@ -32,15 +32,18 @@
         delete-tooltip (or (when local-admin-protection?
                              "Cannot delete active admin user")
                            "Delete this record")
-        ;; Route user deletions through the dedicated admin endpoint to ensure
+        ;; Route deletions through the appropriate admin endpoint to ensure
         ;; admin authentication and audit logging are applied correctly.
-        ;; Route admin deletions through the admin-specific endpoint.
-        handle-delete-confirm #(cond
-                                 (= entity-name-kw :users)
-                                 (rf/dispatch [:admin/delete-user item-id])
-                                 (= entity-name-kw :admins)
-                                 (rf/dispatch [:admin/delete-admin item-id])
-                                 :else
+        ;; - :users -> :admin/delete-user
+        ;; - :admins -> :admin/delete-admin
+        ;; - :audit-logs -> :admin/delete-audit-log (uses /admin/api/audit/:id)
+        ;; - :login-events -> :admin/delete-login-event (uses /admin/api/login-events/:id)
+        ;; - others -> generic template delete
+        handle-delete-confirm #(case entity-name-kw
+                                 :users (rf/dispatch [:admin/delete-user item-id])
+                                 :admins (rf/dispatch [:admin/delete-admin item-id])
+                                 :audit-logs (rf/dispatch [:admin/delete-audit-log item-id])
+                                 :login-events (rf/dispatch [:admin/delete-login-event item-id])
                                  (rf/dispatch [::crud-events/delete-entity entity-name-kw item-id]))
         handle-delete-click (fn [e]
                               (.stopPropagation e)

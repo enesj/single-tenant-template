@@ -5,6 +5,7 @@
    - Data normalization (login-event->template-entity)
    - Template system sync (register-sync-event!)
    - UI state initialization
+   - Deletion handling
    
    HTTP events are in app.admin.frontend.events.login-events"
   (:require
@@ -36,6 +37,26 @@
    :entity-key :login-events
    :normalize-fn login-event->template-entity
    :log-prefix "[login-events] Syncing login events to template system:"})
+
+;; =============================================================================
+;; Deletion Handling
+;; =============================================================================
+
+(rf/reg-event-fx
+  ::login-event-deleted
+  (fn [{:keys [db]} [_ event-id]]
+    (let [entity-path (paths/entity-data :login-events)
+          ids-path (paths/entity-ids :login-events)
+          selected-path (paths/entity-selected-ids :login-events)
+          event-id-str (str event-id)
+          ;; Remove from entity data map
+          new-db (-> db
+                   (update-in entity-path dissoc event-id-str)
+                   ;; Remove from IDs list
+                   (update-in ids-path #(filterv (fn [id] (not= (str id) event-id-str)) (or % [])))
+                   ;; Remove from selected IDs
+                   (update-in selected-path disj event-id-str))]
+      {:db new-db})))
 
 ;; =============================================================================
 ;; UI State Initialization

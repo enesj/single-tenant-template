@@ -52,15 +52,22 @@
 
 (defui action-header-buttons
   "Action buttons for the table header"
-  [{:keys [entity-name selected-ids show-batch-edit?]}]
+  [{:keys [entity-name selected-ids show-batch-edit? show-batch-delete?]}]
   (let [has-selection? (seq selected-ids)
         selection-count (count selected-ids)
         has-multiple-selection? (and has-selection? (>= selection-count 2))
         show-batch-edit? (if (nil? show-batch-edit?) true show-batch-edit?)
+        ;; show-batch-delete? defaults to true if not specified, independent of show-batch-edit?
+        show-batch-delete? (if (nil? show-batch-delete?) true show-batch-delete?)
 
         ;; Define a separate function to handle batch delete confirmation
+        ;; Route entity-specific batch deletes through their admin endpoints
         handle-batch-delete-confirm (fn []
-                                      (rf/dispatch [::selection-events/delete-selected entity-name selected-ids]))
+                                      (case entity-name
+                                        :audit-logs (rf/dispatch [:admin/bulk-delete-audit-logs (vec selected-ids)])
+                                        :login-events (rf/dispatch [:admin/bulk-delete-login-events (vec selected-ids)])
+                                        ;; Default to generic template batch delete
+                                        (rf/dispatch [::selection-events/delete-selected entity-name selected-ids])))
 
         ;; Create a function that will only show the dialog when clicked
         handle-batch-delete-click (fn [e]
@@ -105,8 +112,8 @@
                         (rf/dispatch [::batch-events/show-batch-edit-inline entity-name selected-ids]))
            :children ($ edit-icon)}))
 
-      ;; Delete button - respect batch edit visibility toggle as well
-      (when show-batch-edit?
+      ;; Delete button - now controlled independently by show-batch-delete?
+      (when show-batch-delete?
         ($ button
           {:btn-type :danger
            :shape "circle"
@@ -139,7 +146,7 @@
 ;; Re-export reactive-select-all-header from cells module for backward compatibility
 (def reactive-select-all-header cells/reactive-select-all-header)
 
-(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
+(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
   (let [;; Start with base headers from entity spec fields
         entity-fields (cond
                         (and (map? entity-spec) (contains? entity-spec :fields))
@@ -325,7 +332,8 @@
                            ($ action-header-buttons
                              {:entity-name entity-name
                               :selected-ids selected-ids
-                              :show-batch-edit? show-batch-edit?})))]]
+                              :show-batch-edit? show-batch-edit?
+                              :show-batch-delete? show-batch-delete?})))]]
 
     ;; Combine all headers in the correct order: select, base fields, timestamps, actions
     ;; Always include the select header - the reactive-select-all-header component
@@ -336,12 +344,13 @@
            filtered-timestamp-headers
            action-header))))
 
-(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
+(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
   (make-table-headers- {:entity-spec entity-spec
                         :entity-name entity-name
                         :show-timestamps? show-timestamps?
                         :show-filtering? show-filtering?
                         :show-batch-edit? show-batch-edit?
+                        :show-batch-delete? show-batch-delete?
                         :sort-field sort-field
                         :sort-direction sort-direction
                         :all-items all-items

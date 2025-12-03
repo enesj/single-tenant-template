@@ -4,11 +4,12 @@
   :page-description "Complete system audit trail and security monitoring"
   :adapter-init-fn app.admin.frontend.adapters.audit/init-audit-adapter!
   :display-settings {:show-select? true
-                     :show-edit? true
+                     :show-edit? false
                      :show-delete? true
                      :show-filtering? true
                      :show-highlights? true
-                     :show-batch-edit? true
+                     :show-batch-edit? false
+                     :show-batch-delete? true
                      :show-add-button? false
                      :show-pagination? true
                      :per-page 20}
@@ -29,11 +30,13 @@
   :page-title "Login Events"
   :page-description "Global view of admin and user login attempts"
   :adapter-init-fn app.admin.frontend.adapters.login-events/init-login-events-adapter!
- :display-settings {:show-select? true
+  :display-settings {:show-select? true
                      :show-edit? false
                      :show-delete? true
                      :show-filtering? true
                      :show-pagination? true
+                     :show-batch-edit? false
+                     :show-batch-delete? true
                      :show-add-button? false
                      :per-page 20}
   :features {:read-only? false

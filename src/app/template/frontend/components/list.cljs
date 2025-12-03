@@ -177,6 +177,7 @@
                                               :show-timestamps? (:show-timestamps? merged-display-settings)
                                               :show-filtering? (:show-filtering? merged-display-settings)
                                               :show-batch-edit? (:show-batch-edit? merged-display-settings)
+                                              :show-batch-delete? (:show-batch-delete? merged-display-settings)
                                               :filterable-fields filterable-fields
                                               :user-filterable-settings user-filterable-settings
                                               :visible-columns visible-columns
