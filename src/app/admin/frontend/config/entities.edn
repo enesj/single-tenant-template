@@ -8,11 +8,11 @@
                      :show-delete? true
                      :show-filtering? true
                      :show-highlights? true
-                     :show-batch-edit? false
+                     :show-batch-edit? true
                      :show-add-button? false
                      :show-pagination? true
                      :per-page 20}
-  :features {:read-only? true
+  :features {:read-only? false
              :exportable? true
              :batch-operations? true
              :deletion-constraints? true
@@ -29,16 +29,16 @@
   :page-title "Login Events"
   :page-description "Global view of admin and user login attempts"
   :adapter-init-fn app.admin.frontend.adapters.login-events/init-login-events-adapter!
-  :display-settings {:show-select? true
+ :display-settings {:show-select? true
                      :show-edit? false
-                     :show-delete? false
+                     :show-delete? true
                      :show-filtering? true
                      :show-pagination? true
                      :show-add-button? false
                      :per-page 20}
-  :features {:read-only? true
+  :features {:read-only? false
              :exportable? false
-             :batch-operations? false
+             :batch-operations? true
              :deletion-constraints? false
              :security-wrapper? false}
   :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}}
