@@ -44,11 +44,28 @@
 (defn- create-test-user!
   "Create a test user within the current transaction"
   [db admin-id & [{:keys [email full_name role status] :as opts}]]
-  (let [user-data {:email (or email (str "user-" (UUID/randomUUID) "@test.com"))
-                   :full_name (or full_name "Test User")
-                   :role (or role "member")
-                   :status (or status "active")}]
-    (user-service/create-user! db user-data admin-id "127.0.0.1" "test-agent")))
+  (let [user-id (UUID/randomUUID)
+        now (java-time.api/instant)
+        user-email (or email (str "user-" (UUID/randomUUID) "@test.com"))]
+    ;; Insert user directly with all required fields
+    ;; Note: PostgreSQL enum types use snake_case (user_role, user_status)
+    (jdbc/execute! db
+      (hsql/format {:insert-into :users
+                    :values [{:id user-id
+                              :email user-email
+                              :full_name (or full_name "Test User")
+                              :password_hash "test-hash-not-real"
+                              :role [:cast (or role "member") :user_role]
+                              :status [:cast (or status "active") :user_status]
+                              :email_verified false
+                              :auth_provider "email"
+                              :created_at now
+                              :updated_at now}]}))
+    ;; Return the created user
+    (jdbc/execute-one! db
+      (hsql/format {:select [:*]
+                    :from [:users]
+                    :where [:= :id user-id]}))))
 
 (defn- count-table
   "Count rows in a table"
@@ -74,7 +91,8 @@
                      ["SELECT table_name FROM information_schema.tables 
                        WHERE table_schema = 'public' 
                        AND table_type = 'BASE TABLE'"])
-            table-names (set (map :table_name tables))]
+            ;; Handle both namespaced and non-namespaced keys from JDBC
+            table-names (set (map #(or (:table_name %) (:tables/table_name %)) tables))]
         (is (contains? table-names "users"))
         (is (contains? table-names "admins"))
         (is (contains? table-names "audit_logs"))

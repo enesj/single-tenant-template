@@ -233,9 +233,9 @@
   (str "test-" (java.util.UUID/randomUUID) "@example.com"))
 
 (defn random-uuid
-  "Generate a random UUID string."
+  "Generate a random UUID."
   []
-  (str (java.util.UUID/randomUUID)))
+  (java.util.UUID/randomUUID))
 
 (defn test-admin-data
   "Generate test admin data for creation tests."
@@ -257,3 +257,47 @@
       :password "TestPassword123!"
       :name "Test User"}
      overrides)))
+
+;; ============================================================================
+;; Fixtures for Unit Tests
+;; ============================================================================
+
+(defn with-clean-test-state
+  "Fixture that ensures clean state for each test.
+   Does not require database connection - for unit tests with mocks."
+  [f]
+  (f))
+
+;; ============================================================================
+;; Mock Helpers for Unit Tests  
+;; ============================================================================
+
+(defn mock-db
+  "Create a mock database placeholder.
+   Used in unit tests where handlers are tested with with-redefs."
+  []
+  :mock-db)
+
+(defn mock-admin-request
+  "Create a mock Ring request with admin context.
+   
+   Usage:
+   (mock-admin-request :get \"/admin/api/users\" mock-admin {:params {:search \"test\"}})"
+  [method uri admin & [{:keys [params path-params body]}]]
+  (cond-> {:request-method method
+           :uri uri
+           :admin admin
+           :headers {"content-type" "application/json"
+                     "x-admin-token" "test-token"}
+           :params (or params {})}
+    path-params (assoc :path-params path-params)
+    body (assoc :body body)))
+
+(defn parse-response-body
+  "Parse JSON response body to Clojure map."
+  [response]
+  (when-let [body (:body response)]
+    (cond
+      (string? body) (json/parse-string body true)
+      (map? body) body
+      :else (json/parse-string (slurp body) true))))

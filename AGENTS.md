@@ -85,10 +85,16 @@ All project documentation is indexed and searchable via **MCP Vector Search**. S
 
 | Document | Description |
 |----------|-------------|
+| `docs/testing/README.md` | Testing documentation overview |
+| `docs/testing/be/overview.md` | Backend testing architecture and infrastructure |
+| `docs/testing/be/development-guide.md` | How to write, run, and debug BE tests |
+| `docs/testing/be/test-patterns.md` | Common backend testing patterns |
+| `docs/testing/be/fixtures-reference.md` | Test fixture utilities |
 | `docs/testing/fe/overview.md` | Frontend testing architecture and implementation |
 | `docs/testing/fe/development-guide.md` | How to write, run, and debug FE tests |
 
 **Test commands**:
+- `bb be-test` — Backend tests (Kaocha, 121 tests)
 - `npm run test:cljs` — Node.js tests (fast, primary)
 - `npm run test:cljs:karma` — Browser tests (Karma/Chrome)
 - `npm run test:cljs:watch` — Watch mode for development

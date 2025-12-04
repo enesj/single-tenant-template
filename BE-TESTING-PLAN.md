@@ -1,6 +1,6 @@
 # Backend Testing Implementation Plan
 
-> **Status**: Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ | Phase 4 ✅ | 55 tests, 239 assertions  
+> **Status**: Phase 1-15 ✅ Complete | 121 tests, 498 assertions  
 > **Last Updated**: 2025-12-04  
 > **Prerequisite**: Test database running on port 55433
 
@@ -223,12 +223,109 @@ Tests created ✅:
 - `/api/v1/metrics` endpoint
 - Login/auth endpoint tests
 
-### Phase 5: DB Integration (Optional)
+### Phase 5: DB Integration ✅
 
 Requires:
 1. Test DB running: `docker-compose up -d postgres-test`
 2. Migrations applied: `clj -X:migrations-test`
 3. Use `fixtures/with-transaction-rollback` for isolation
+
+### Phase 6: Admin Management Tests ✅
+
+`test/app/backend/routes/admin/admins_test.clj`:
+- List admins with pagination and filters
+- Get admin details by ID
+- Create new admins
+- Update admin info
+- Delete admins
+- Role and status management
+
+### Phase 7: Login Events Tests ✅
+
+`test/app/backend/routes/admin/login_events_test.clj`:
+- Handler creation validation
+- List login events with filtering
+- Filter by principal type (user/admin)
+- Filter by success status
+- Pagination support
+- Service function existence tests
+
+### Phase 8: Password Reset Tests ✅
+
+`test/app/backend/routes/admin/password_test.clj`:
+- Forgot password handler (request password reset)
+- Verify token handler
+- Reset password handler
+- Change password handler (for logged-in users)
+- Token validation tests
+- Error handling for invalid tokens
+
+### Phase 9: Template CRUD Service Tests ✅
+
+`test/app/template/backend/crud/service_test.clj`:
+- Protocol existence verification (CrudService, MetadataService, ValidationService, TypeCastingService)
+- Mock implementation tests for each protocol
+- Protocol function verification
+- Protocol satisfaction tests
+
+### Phase 10: Settings Tests ✅
+
+`test/app/backend/routes/admin/settings_test.clj`:
+- Settings handler creation
+- Get settings (current view-options)
+- Update settings (full replacement)
+- Patch settings (partial update)
+- Delete settings
+- Mock file I/O for settings storage
+
+### Phase 11: User Bulk Operations Tests ✅
+
+`test/app/backend/routes/admin/user_bulk_test.clj`:
+- Bulk status update (multiple users)
+- Bulk role update
+- Batch update (multiple operations)
+- Export users to CSV
+- Empty items error handling
+
+### Phase 12: User Operations Tests ✅
+
+`test/app/backend/routes/admin/user_operations_test.clj`:
+- Role update for single user
+- Force verify email
+- Reset password (admin-initiated)
+- Get user activity history
+- User impersonation
+- User search with criteria
+- Routes structure verification
+
+### Phase 13: Transaction Monitoring Tests ✅
+
+`test/app/backend/routes/admin/transactions_test.clj`:
+- List transactions with pagination
+- Get transaction by ID
+- Transaction trends statistics
+- Suspicious transaction detection
+- Filter by date range and amount
+
+### Phase 14: Entity CRUD Tests ✅
+
+`test/app/backend/routes/admin/entities_test.clj`:
+- Delete entity with dry-run
+- Delete entity with force
+- Delete entity with constraint violations
+- Create entity
+- Validation error handling
+- Entity not found handling
+
+### Phase 15: Integration Monitoring Tests ✅
+
+`test/app/backend/routes/admin/integrations_test.clj`:
+- List integrations
+- Get integration by ID
+- Integration status overview
+- Integration performance metrics
+- Webhook status monitoring
+- Routes structure verification
 
 ---
 
@@ -237,17 +334,30 @@ Requires:
 ```
 test/
 ├── app/
-│   └── backend/
-│       ├── fixtures.clj           [Phase 1] ✅
-│       ├── test_helpers.clj       [Phase 1] ✅
-│       ├── routes_smoke_test.clj  [EXISTING] ✅
-│       └── routes/
-│           ├── admin/
-│           │   ├── auth_test.clj      [Phase 2] ✅
-│           │   ├── dashboard_test.clj [Phase 3] ✅
-│           │   ├── users_test.clj     [Phase 3] ✅
-│           │   └── audit_test.clj     [Phase 3] ✅
-│           └── api_test.clj           [Phase 4] ✅
+│   ├── backend/
+│   │   ├── fixtures.clj           [Phase 1] ✅
+│   │   ├── test_helpers.clj       [Phase 1] ✅
+│   │   ├── routes_smoke_test.clj  [EXISTING] ✅
+│   │   └── routes/
+│   │       ├── admin/
+│   │       │   ├── auth_test.clj        [Phase 2] ✅
+│   │       │   ├── dashboard_test.clj   [Phase 3] ✅
+│   │       │   ├── users_test.clj       [Phase 3] ✅
+│   │       │   ├── audit_test.clj       [Phase 3] ✅
+│   │       │   ├── admins_test.clj      [Phase 6] ✅
+│   │       │   ├── login_events_test.clj [Phase 7] ✅
+│   │       │   ├── password_test.clj    [Phase 8] ✅
+│   │       │   ├── settings_test.clj    [Phase 10] ✅
+│   │       │   ├── user_bulk_test.clj   [Phase 11] ✅
+│   │       │   ├── user_operations_test.clj [Phase 12] ✅
+│   │       │   ├── transactions_test.clj [Phase 13] ✅
+│   │       │   ├── entities_test.clj    [Phase 14] ✅
+│   │       │   └── integrations_test.clj [Phase 15] ✅
+│   │       └── api_test.clj           [Phase 4] ✅
+│   └── template/
+│       └── backend/
+│           └── crud/
+│               └── service_test.clj   [Phase 9] ✅
 ```
 
 ---
