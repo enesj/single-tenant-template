@@ -39,11 +39,13 @@
 (defn start-test-system
   "Kaocha before-suite hook: Start full test system using dev infrastructure.
    
+   Kaocha hooks receive [suite test-plan] and must return suite.
+   
    Reuses `with-test-system` which provides:
    - :test profile config (port 8086, db 55433)
    - Full DI container with all services
    - Running webserver for integration tests"
-  []
+  [suite _test-plan]
   (log/info "🧪 Starting test system (reusing dev infrastructure)...")
   (let [;; Wrap state publishing like dev/system/core.clj does
         publish-state (fn [system-state]
@@ -75,11 +77,15 @@
         (log/info "✅ Test system ready" 
                   {:database (some? (get-test-db))
                    :service-container (some? (get-test-service-container))
-                   :config (some? (get-test-config))})))))
+                   :config (some? (get-test-config))}))))
+  ;; Return suite unchanged
+  suite)
 
 (defn reset-test-system!
-  "Kaocha after-suite hook: Shutdown test system cleanly"
-  []
+  "Kaocha after-suite hook: Shutdown test system cleanly.
+   
+   Kaocha hooks receive [suite test-plan] and must return suite."
+  [suite _test-plan]
   (log/info "🧹 Stopping test system...")
   (when-let [instance @test-instance]
     (future-cancel instance)
@@ -90,7 +96,9 @@
         nil)))
   (reset! test-instance nil)
   (reset! state/state nil)
-  (log/info "✅ Test system stopped"))
+  (log/info "✅ Test system stopped")
+  ;; Return suite unchanged
+  suite)
 
 ;; ============================================================================
 ;; Dynamic Vars for Test Access

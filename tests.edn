@@ -4,8 +4,8 @@
   :plugins         [:kaocha.plugin/capture-output
                     :kaocha.plugin/hooks]
   :tests           [{:id                        :app.backend
-                     :kaocha.hooks/before-suite [app.backend.fixtures/start-test-system]
-                     :kaocha.hooks/after-suite  [app.backend.fixtures/reset-test-system!]
+                     :kaocha.hooks/before [app.backend.fixtures/start-test-system]
+                     :kaocha.hooks/after  [app.backend.fixtures/reset-test-system!]
                      :source-paths              ["src" "test" "vendor"]
                      :test-paths                ["test"]
                      :ns-patterns               ["-test$"]}]
