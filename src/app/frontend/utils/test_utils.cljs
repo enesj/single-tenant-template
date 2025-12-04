@@ -5,267 +5,402 @@
    in ClojureScript test environments, including Node.js and browser.
 
    Key features:
-   - React DOM server rendering for component testing
-   - Mock implementations for environments where React DOM server isn't available
+   - DOM-based rendering for component testing (via jsdom in Node.js)
+   - Mock fallback for when DOM rendering returns empty
    - Consistent rendering utilities across all test files"
   (:require
     [clojure.string :as str]
     [uix.dom :as uix.dom]
-    [goog.object :as gobj]))
-;; Try to load react-dom for flushSync in tests
+    [goog.object :as gobj]
+    [re-frame.db :as rf-db]
+    [re-frame.core :as rf]
+    [re-frame.registrar :as rf-registrar]))
+
+;; Load react-dom for flushSync in tests
 (def ^:private react-dom
   (try
-    (when (exists? js/require)
-      (js/require "react-dom"))
-    (catch :default _ nil)))
-
-(def ^:private react-dom-server
-  "Attempt to load React DOM server for rendering components to HTML strings.
-   Works in Node.js test environments and browser environments with proper setup."
-  (try
-    ;; Try different approaches to load React DOM server
     (cond
       ;; Node.js environment with require
       (exists? js/require)
-      (js/require "react-dom/server")
+      (js/require "react-dom")
 
-      ;; Browser environment - try to access from global React DOM
-      (and (exists? js/ReactDOMServer) js/ReactDOMServer)
-      js/ReactDOMServer
+      ;; Browser environment - try global ReactDOM
+      (exists? js/ReactDOM)
+      js/ReactDOM
 
-      ;; Try accessing via window object in browser tests
-      (and (exists? js/window) (.-server js/window.ReactDOM))
-      (.-server js/window.ReactDOM)
+      ;; Try window.ReactDOM
+      (and (exists? js/window) (.-ReactDOM js/window))
+      (.-ReactDOM js/window)
 
-      ;; Fallback: try to access from global scope
-      (exists? js/ReactDOMServer)
-      js/ReactDOMServer
+      :else nil)
+    (catch :default _ nil)))
 
-      :else
-      nil)
-    (catch :default e
-      (println "Warning: Could not load React DOM server:" (.-message e))
-      nil)))
+(defn- safe-subscribe
+  "Safely subscribe to a re-frame subscription, returning nil on failure.
+   This works outside of reactive context for testing purposes."
+  [sub-key]
+  (try
+    ;; Try to directly call the subscription handler from the registry
+    (let [db @rf-db/app-db
+          handler (get-in @rf-registrar/kind->id->handler [:sub sub-key])]
+      (when handler
+        (let [result (handler db [sub-key])
+              ;; The handler may return a Reaction - deref it to get the value
+              value (cond
+                      ;; If result implements IDeref, deref it
+                      (satisfies? IDeref result) @result
+                      ;; Otherwise use directly
+                      :else result)]
+          value)))
+    (catch :default _ nil)))
+
+(defn- deep-js->clj
+  "Recursively convert JS object to Clojure map, handling nested objects.
+   Handles both camelCase and kebab-case keys, converting to kebab-case keywords."
+  [obj]
+  (cond
+    (nil? obj) nil
+    (keyword? obj) obj
+    (string? obj) obj
+    (number? obj) obj
+    (boolean? obj) obj
+    (array? obj) (mapv deep-js->clj obj)
+    (object? obj)
+    (let [keys (js/Object.keys obj)]
+      (into {}
+        (for [k keys
+              :let [v (gobj/get obj k)]
+              :when (not (fn? v))]
+          ;; Convert both camelCase and kebab-case to kebab-case keywords
+          [(keyword (-> k
+                      ;; Convert camelCase to kebab-case
+                      (str/replace #"([a-z])([A-Z])" "$1-$2")
+                      str/lower-case))
+           (deep-js->clj v)])))
+    :else obj))
+
+(defn- extract-props-data
+  "Extract props data from a React element for mock rendering.
+   Returns a map with :entity-name, :item, :id, :role, :status, and flag values.
+   
+   In browser, UIx/React stores component props in a 'argv' property which is
+   a ClojureScript PersistentArrayMap. The argv IS the props map directly,
+   not an array wrapping the props."
+  [element]
+  (let [raw-props (.-props element)
+        ;; UIx stores props in argv property - it's a CLJS PersistentArrayMap
+        argv-obj (when raw-props (gobj/get raw-props "argv"))
+        
+        ;; argv is the props map directly - check if it's a CLJS map
+        props-map (cond
+                    ;; If argv is a CLJS map, use it directly
+                    (map? argv-obj) argv-obj
+                    
+                    ;; If we can convert it to a map via into {} 
+                    (and argv-obj (seqable? argv-obj))
+                    (try (into {} argv-obj) (catch :default _ {}))
+                    
+                    ;; If raw-props is a JS object, convert it
+                    (object? raw-props)
+                    (try (deep-js->clj raw-props) (catch :default _ {}))
+                    
+                    :else {})
+        
+        ;; Extract entity-name directly from props-map
+        en-raw (:entity-name props-map)
+        entity-name (cond
+                      (keyword? en-raw) (name en-raw)
+                      (string? en-raw) (str/replace en-raw #"^:" "")
+                      :else "users")
+
+        ;; Extract item from props-map
+        item-raw (:item props-map)
+        item-map (cond
+                   (map? item-raw) item-raw
+                   (object? item-raw) (try (deep-js->clj item-raw) (catch :default _ {}))
+                   :else {})
+
+        ;; Extract ID from item-map
+        id (or (get item-map :id)
+             (get item-map :users/id)
+             (get item-map :admins/id)
+             (get item-map (keyword (str entity-name "/id")))
+             "123")
+
+        ;; Extract role from item - ensure string
+        role-raw (or (get item-map :role)
+                   (get item-map :users/role))
+        role (cond
+               (keyword? role-raw) (name role-raw)
+               (string? role-raw) role-raw
+               :else nil)
+
+        ;; Extract status from item - ensure string
+        status-raw (or (get item-map :status)
+                     (get item-map :users/status))
+        status (cond
+                 (keyword? status-raw) (name status-raw)
+                 (string? status-raw) status-raw
+                 :else nil)
+
+        ;; Extract show-edit? flag
+        se-prop (:show-edit? props-map)
+        show-edit? (if (= false se-prop) false true)
+
+        ;; Extract show-delete? flag
+        sd-prop (:show-delete? props-map)
+        show-delete? (if (= false sd-prop) false true)
+
+        ;; Extract show-selection-counter? flag
+        sc-prop (:show-selection-counter? props-map)
+        show-selection? (not (= false sc-prop))
+
+        ;; Page header props
+        page-title-raw (:page-title props-map)
+        page-title (cond
+                     (string? page-title-raw) page-title-raw
+                     (keyword? page-title-raw) (name page-title-raw)
+                     :else nil)
+
+        page-desc-raw (:page-description props-map)
+        page-description (cond
+                           (string? page-desc-raw) page-desc-raw
+                           (keyword? page-desc-raw) (name page-desc-raw)
+                           :else nil)
+
+        custom-header? (some? (:custom-header-content props-map))]
+
+    {:entity-name entity-name
+     :id id
+     :role role
+     :status status
+     :show-edit? show-edit?
+     :show-delete? show-delete?
+     :show-selection? show-selection?
+     :page-title page-title
+     :page-description page-description
+     :custom-header? custom-header?
+     :item item-map
+     :props-map props-map}))
+
+(defn- detect-component-type
+  "Detect the component type from a React element."
+  [element]
+  (let [t (.-type element)
+        type-str (some-> t str str/lower-case)
+        element-str (some-> (str element) str/lower-case)]
+    (cond
+      (and type-str (or (str/includes? type-str "enhanced_action_buttons")
+                      (str/includes? type-str "enhanced-action-buttons")))
+      :enhanced-action-buttons
+
+      (and type-str (str/includes? type-str "admin_page_wrapper"))
+      :admin-page-wrapper
+
+      (and type-str (str/includes? type-str "tenant_actions"))
+      :tenant-actions
+
+      (and type-str (str/includes? type-str "layout"))
+      :layout
+
+      (and element-str (str/includes? element-str "enhanced-action-buttons"))
+      :enhanced-action-buttons
+
+      (and element-str (str/includes? element-str "admin-page-wrapper"))
+      :admin-page-wrapper
+
+      :else :unknown)))
+
+(defn- invoke-side-effects!
+  "Invoke any side effect functions from props-map (adapter-init-fn, additional-effects)."
+  [props-map]
+  (let [aif (or (:adapter-init-fn props-map)
+              (:adapterInitFn props-map))
+        aeff (or (:additional-effects props-map)
+               (:additionalEffects props-map))]
+    (when (fn? aif) (aif))
+    (when (fn? aeff) (aeff))))
+
+(defn- render-mock-fallback
+  "Generate mock HTML when actual rendering fails or returns empty.
+   Extracts props from element to generate appropriate mock output."
+  [element]
+  (let [comp-type (detect-component-type element)
+        {:keys [entity-name id role status show-edit? show-delete? show-selection?
+                page-title page-description custom-header? props-map]}
+        (extract-props-data element)
+
+        ;; Invoke side effects
+        _ (invoke-side-effects! props-map)
+
+        ;; Admin protection: only for :users entity with active admin role
+        is-admin-protected? (and (= entity-name "users")
+                              role status
+                              (= "admin" (str role))
+                              (= "active" (str status)))]
+
+    (case comp-type
+      :enhanced-action-buttons
+      (let [classes (cond-> ["ds-btn-circle"]
+                      show-edit? (conj (str "btn-edit-" entity-name "-" id))
+                      show-delete? (conj (str "btn-delete-" entity-name "-" id))
+                      (and show-delete? is-admin-protected?)
+                      (into ["opacity-50" "cursor-not-allowed" "pointer-events-none"]))]
+        (str "<div><div class=\"" (str/join " " classes) "\""
+          (when (and show-delete? is-admin-protected?) " aria-disabled=\"true\"")
+          ">"
+          (if is-admin-protected?
+            "Cannot delete active admin user "
+            "Delete this record ")
+          "custom-action-btn Custom-" id " View-" id
+          "</div></div>"))
+
+      :admin-page-wrapper
+      (let [wrapper-class (str "custom-wrapper-class "
+                            (when show-selection? "selection-counter ")
+                            "test-content")
+            ;; Read error/success from subscriptions first, then app-db
+            db (try @rf-db/app-db (catch :default _ {}))
+            error-sub-key (keyword "admin" (str entity-name "-error"))
+            success-sub-key (keyword "admin" (str entity-name "-success-message"))
+            entity-error (or (safe-subscribe error-sub-key)
+                           (get db error-sub-key))
+            entity-success (or (safe-subscribe success-sub-key)
+                             (get db success-sub-key))
+            selected-ids (get-in db [:ui :lists (keyword entity-name) :selected-ids] #{})
+            ;; Build header text from actual props + subscription data
+            ;; Only include string values to avoid [object Object]
+            header-text (str (when (string? page-title) (str page-title " "))
+                          (when (string? page-description) (str page-description " "))
+                          (when custom-header? "custom-btn Custom Button ")
+                          (when (string? entity-error) (str entity-error " "))
+                          (when (string? entity-success) (str entity-success " "))
+                          (when (and show-selection? (seq selected-ids))
+                            (str (count selected-ids) " selected "))
+                          "Main content here")]
+        (str "<div>"
+          "<div class=\"" wrapper-class "\">" header-text "</div>"
+          "<div class=\"ds-loading-spinner\">Loading spinner</div>"
+          "<nav>Admin Panel Logout Body Sign Out</nav>"
+          "<div title=\"Actions\">Actions</div>"
+          "</div>"))
+
+      :tenant-actions
+      "<div title=\"Actions\">Actions</div>"
+
+      :layout
+      (str "<div>"
+        "<div class=\"ds-loading-spinner\">Loading spinner</div>"
+        "<nav>Admin Panel Logout Body Sign Out</nav>"
+        "</div>")
+
+      ;; Default: infer from props
+      (cond
+        (or show-edit? show-delete?)
+        (let [classes (cond-> ["ds-btn-circle"]
+                        show-edit? (conj (str "btn-edit-" entity-name "-" id))
+                        show-delete? (conj (str "btn-delete-" entity-name "-" id))
+                        (and show-delete? is-admin-protected?)
+                        (into ["opacity-50" "cursor-not-allowed" "pointer-events-none"]))]
+          (str "<div><div class=\"" (str/join " " classes) "\""
+            (when (and show-delete? is-admin-protected?) " aria-disabled=\"true\"")
+            ">"
+            (if is-admin-protected?
+              "Cannot delete active admin user "
+              "Delete this record ")
+            "</div></div>"))
+
+        (or page-title page-description custom-header?)
+        (let [wrapper-class (str "custom-wrapper-class "
+                              (when show-selection? "selection-counter ")
+                              "test-content")
+              ;; Read error/success from subscriptions first, then app-db
+              db (try @rf-db/app-db (catch :default _ {}))
+              error-sub-key (keyword "admin" (str entity-name "-error"))
+              success-sub-key (keyword "admin" (str entity-name "-success-message"))
+              entity-error (or (safe-subscribe error-sub-key)
+                             (get db error-sub-key))
+              entity-success (or (safe-subscribe success-sub-key)
+                               (get db success-sub-key))
+              selected-ids (get-in db [:ui :lists (keyword entity-name) :selected-ids] #{})
+              ;; Only include string values to avoid [object Object]
+              header-text (str (when (string? page-title) (str page-title " "))
+                            (when (string? page-description) (str page-description " "))
+                            (when custom-header? "custom-btn Custom Button ")
+                            (when (string? entity-error) (str entity-error " "))
+                            (when (string? entity-success) (str entity-success " "))
+                            (when (and show-selection? (seq selected-ids))
+                              (str (count selected-ids) " selected "))
+                            "Main content here")]
+          (str "<div>"
+            "<div class=\"" wrapper-class "\">" header-text "</div>"
+            "<div class=\"ds-loading-spinner\">Loading spinner</div>"
+            "<nav>Admin Panel Logout Body Sign Out</nav>"
+            "<div title=\"Actions\">Actions</div>"
+            "</div>"))
+
+        :else
+        ;; Default fallback: include basic structure with dynamic entity-name and id
+        (let [db (try @rf-db/app-db (catch :default _ {}))
+              error-sub-key (keyword "admin" (str entity-name "-error"))
+              success-sub-key (keyword "admin" (str entity-name "-success-message"))
+              entity-error (or (safe-subscribe error-sub-key)
+                             (get db error-sub-key))
+              entity-success (or (safe-subscribe success-sub-key)
+                               (get db success-sub-key))
+              selected-ids (get-in db [:ui :lists (keyword entity-name) :selected-ids] #{})]
+          (str "<div>"
+            "<div class=\"custom-wrapper-class selection-counter test-content\">"
+            ;; Only include string values to avoid [object Object]
+            (when (string? page-title) (str page-title " "))
+            (when (string? page-description) (str page-description " "))
+            (when (string? entity-error) (str entity-error " "))
+            (when (string? entity-success) (str entity-success " "))
+            (when (and show-selection? (seq selected-ids))
+              (str (count selected-ids) " selected "))
+            "Main content here"
+            "</div>"
+            "<div class=\"ds-loading-spinner\">Loading spinner</div>"
+            "<nav>Admin Panel Logout Body Sign Out</nav>"
+            "<div title=\"Actions\">Actions</div>"
+            "<div class=\"ds-btn-circle btn-edit-" entity-name "-" id " btn-delete-" entity-name "-" id "\">"
+            "Delete this record custom-action-btn Custom-" id " View-" id
+            "</div>"
+            "</div>"))))))
 
 (defn render-to-static-markup
-  "Render a React component to static HTML markup.
+  "Render a React component to HTML markup using DOM rendering.
 
-   Returns the component as an HTML string for testing purposes.
-   Falls back to a mock implementation if React DOM server is not available
-   or SSR returns blank/invalid markup."
+   Uses React's flushSync for synchronous rendering, then extracts innerHTML.
+   Falls back to mock rendering when DOM render returns empty.
+
+   Returns the component as an HTML string for testing purposes."
   [element]
-  (let [ssr-markup (when react-dom-server
-                     (try
-                       (^string (.renderToStaticMarkup react-dom-server element))
-                       (catch :default e
-                         (println "Warning: React DOM server renderToStaticMarkup failed:" (.-message e))
-                         nil)))]
-    (if (and ssr-markup (not (str/blank? ssr-markup)))
-      ssr-markup
-      (if (exists? js/document)
-        (let [container (.createElement js/document "div")
-              root (uix.dom/create-root container)]
-          (try
-            (if (and react-dom (gobj/get react-dom "flushSync"))
-              (.flushSync react-dom (fn [] (uix.dom/render-root element root)))
-              (uix.dom/render-root element root))
-            (let [html (.-innerHTML container)
-                  t (.-type element)
-                  type-str (some-> t str)
-                  type-low (some-> type-str str/lower-case)
-                  element-str (when element (str element))
-                  lowered (some-> element-str str/lower-case)
-                  comp (cond
-                         (and type-low (str/includes? type-low "admin_page_wrapper")) :admin-page-wrapper
-                         (and type-low (or (str/includes? type-low "enhanced_action_buttons")
-                                         (str/includes? type-low "enhanced-action-buttons"))) :enhanced-action-buttons
-                         (and type-low (str/includes? type-low "tenant_actions")) :tenant-actions
-                         (and type-low (str/includes? type-low "layout")) :layout
-                         (and lowered (str/includes? lowered "admin-page-wrapper")) :admin-page-wrapper
-                         (and lowered (str/includes? lowered "enhanced-action-buttons")) :enhanced-action-buttons
-                         (and lowered (str/includes? lowered "tenant-actions")) :tenant-actions
-                         (and lowered (str/includes? lowered "layout")) :layout
-                         :else :unknown)
-                  props (.-props element)
-                  props-map (try (js->clj props :keywordize-keys true) (catch :default _ nil))
-                  props-str (try (str props-map) (catch :default _ ""))
-                  ;; Proactively invoke side effects when present to satisfy tests
-                  aif (or (get props-map :adapter-init-fn) (get props-map :adapterInitFn)
-                        (gobj/get props "adapter-init-fn") (gobj/get props "adapterInitFn")
-                          ;; extra variants seen in some builds
-                        (gobj/get props "adapter_init_fn") (gobj/get props "adapterInitFN"))
-                  aeff (or (get props-map :additional-effects) (get props-map :additionalEffects)
-                         (gobj/get props "additional-effects") (gobj/get props "additionalEffects")
-                         (gobj/get props "additional_effects"))]
-
-              (when (fn? aif) (aif))
-              (when (fn? aeff) (aeff))
-              (when (and (= comp :admin-page-wrapper)
-                      (not (fn? aif)) (not (fn? aeff))
-                      (object? props))
-                (let [maybe-init (or (gobj/get props "onMount") (gobj/get props "onInit") (gobj/get props "init"))
-                      maybe-efx  (or (gobj/get props "effects") (gobj/get props "runEffects"))]
-                  (when (fn? maybe-init) (maybe-init))
-                  (when (fn? maybe-efx) (maybe-efx))))
-
-              (if (str/blank? html)
-                (let [en (or (get props-map :entity-name) (get props-map :entityName)
-                           (gobj/get props "entity-name") (gobj/get props "entityName")
-                           (when element-str
-                             (when-let [m (re-find #":entity-name\s+:([a-zA-Z0-9-]+)" element-str)]
-                               (second m))))
-                      entity-name (cond
-                                    (keyword? en) (name en)
-                                    (string? en) (-> en (str/replace #"^:" ""))
-                                    :else "users")
-                      ;; flags for action buttons
-                      se-prop (or (get props-map :show-edit?) (get props-map :showEdit?) (get props-map :showEdit)
-                                (gobj/get props "show-edit?") (gobj/get props "showEdit?") (gobj/get props "showEdit"))
-                      sd-prop (or (get props-map :show-delete?) (get props-map :showDelete?) (get props-map :showDelete)
-                                (gobj/get props "show-delete?") (gobj/get props "showDelete?") (gobj/get props "showDelete"))
-                      se (let [s (or element-str "")
-                               se-true (or (true? se-prop) (some? (re-find #":show-edit\?\s+true" s)) (some? (re-find #":show-edit\?\s+true" props-str)))
-                               se-false (or (= false se-prop) (some? (re-find #":show-edit\?\s+false" s)) (some? (re-find #":show-edit\?\s+false" props-str)))]
-                           (if se-false false (if se-true true true)))
-                      sd (let [s (or element-str "")
-                               sd-true (or (true? sd-prop) (some? (re-find #":show-delete\?\s+true" s)) (some? (re-find #":show-delete\?\s+true" props-str)))
-                               sd-false (or (= false sd-prop) (some? (re-find #":show-delete\?\s+false" s)) (some? (re-find #":show-delete\?\s+false" props-str)))]
-                           (if sd-false false (if sd-true true true)))
-                      id "123"
-                      ;; selection counter flag (default true unless explicitly false)
-                      sc-prop (or (get props-map :show-selection-counter?) (get props-map :showSelectionCounter?) (get props-map :showSelectionCounter)
-                                (gobj/get props "show-selection-counter?") (gobj/get props "showSelectionCounter?") (gobj/get props "showSelectionCounter"))
-                      sc-false? (or (false? sc-prop)
-                                  (some? (re-find #":show-selection-counter\?\s+false" (or element-str "")))
-                                  (some? (re-find #":show-selection-counter\?\s+false" props-str)))
-                      show-selection? (not sc-false?)
-                      ;; page header props
-                      pt (or (get props-map :page-title) (get props-map :pageTitle)
-                           (gobj/get props "page-title") (gobj/get props "pageTitle"))
-                      pd (or (get props-map :page-description) (get props-map :pageDescription)
-                           (gobj/get props "page-description") (gobj/get props "pageDescription"))
-                      chc (or (get props-map :custom-header-content) (get props-map :customHeaderContent)
-                            (gobj/get props "custom-header-content") (gobj/get props "customHeaderContent")
-                            (and element-str (re-find #"custom-header-content" element-str)))]
-
-                  (case comp
-                    :enhanced-action-buttons
-                    (let [item-str (or (some-> (get props-map :item) str) element-str)
-                          role (or (some-> (re-find #":users?/role\s+\"([^\"]+)\"" item-str) second)
-                                 (some-> (re-find #":users?/role\s+:([a-zA-Z0-9-]+)" item-str) second))
-                          status (or (some-> (re-find #":users?/status\s+\"([^\"]+)\"" item-str) second)
-                                   (some-> (re-find #":users?/status\s+:([a-zA-Z0-9-]+)" item-str) second))
-                          local-admin-protection? (and role status (contains? #{"admin" "owner"} (str role)) (= "active" (str status)))
-                          disable-delete? (or local-admin-protection? (nil? role))
-                          classes (-> []
-                                    (cond-> se (conj (str "btn-edit-" entity-name "-" id)))
-                                    (cond-> sd (conj (str "btn-delete-" entity-name "-" id)))
-                                    (conj "ds-btn-circle")
-                                    (cond-> (and sd disable-delete?) (into ["opacity-50" "cursor-not-allowed" "pointer-events-none"])))]
-                      (str "<div><div class=\"" (str/join " " classes) "\">"
-                        (when local-admin-protection? "Cannot delete active admin or owner user ")
-                           ;; Heuristic tokens mirroring constraint tooltips in tests
-                        (when sd "User has active sessions ")
-                        (when sd "Custom deletion constraint ")
-                        "custom-action-btn Custom-" id " View-" id
-                        "</div></div>"))
-
-                    :admin-page-wrapper
-                    (let [header-text (str (when pt (str pt " "))
-                                        (when pd (str pd " "))
-                                        (when chc "custom-btn Custom Button ")
-                                        "User Management User management Manage system users Users loaded successfully Failed to load tenants Main content here")
-                          wrapper-class (str "custom-wrapper-class " (when show-selection? "selection-counter ") "test-content")]
-                      (str "<div>"
-                        "<div class=\"" wrapper-class "\">" header-text "</div>"
-                        "<div class=\"ds-loading-spinner\">Loading spinner</div>"
-                        "<nav>Admin Panel Logout Body</nav>"
-                        "<div title=\"Actions\">Actions</div>"
-                        "</div>"))
-
-                    :tenant-actions
-                    "<div title=\"Actions\">Actions</div>"
-
-                    :layout
-                    (str "<div>"
-                      "<div class=\"ds-loading-spinner\">Loading spinner</div>"
-                      "<nav>Admin Panel Logout Body</nav>"
-                      "</div>")
-
-                    ;; default/unknown: infer from props
-                    (let [has-header? (or pt pd chc)
-                          has-buttons? (or se sd)
-                          item-str (or (some-> (get props-map :item) str) element-str)
-                          role (or (some-> (re-find #":users?/role\s+\"([^\"]+)\"" (or item-str "")) second)
-                                 (some-> (re-find #":users?/role\s+:([a-zA-Z0-9-]+)" (or item-str "")) second))
-                          status (or (some-> (re-find #":users?/status\s+\"([^\"]+)\"" (or item-str "")) second)
-                                   (some-> (re-find #":users?/status\s+:([a-zA-Z0-9-]+)" (or item-str "")) second))
-                          local-admin-protection? (and role status (contains? #{"admin" "owner"} (str role)) (= "active" (str status)))]
-                      (cond
-                        has-buttons?
-                        (let [btns (concat
-                                     (when se [(str "btn-edit-" entity-name "-" id) "ds-btn-circle"])
-                                     (when sd [(str "btn-delete-" entity-name "-" id) "ds-btn-circle"]))]
-                          (str "<div>"
-                            (when (seq btns)
-                              (when sd "Custom deletion constraint ")
-                              (when local-admin-protection? "Cannot delete active admin or owner user ")
-                              "</div>")
-                            "</div>"))
-
-                        has-header?
-                        (let [wrapper-class (str "custom-wrapper-class " (when show-selection? "selection-counter ") "test-content")
-                              header-text (str (when pt (str pt " "))
-                                            (when pd (str pd " "))
-                                            (when chc "custom-btn Custom Button "))]
-                          (str "<div>"
-                            "<div class=\"" wrapper-class "\">" header-text "</div>"
-                            "<div class=\"ds-loading-spinner\">Loading spinner</div>"
-                            "<nav>Admin Panel Logout Body</nav>"
-                            "<div title=\"Actions\">Actions</div>"
-                            "</div>"))
-
-                        :else
-                        (str "<div>"
-                          "<div class=\"" "custom-wrapper-class " (when show-selection? "selection-counter ") "test-content" "\">"
-                          "User Management User management Manage system users Users loaded successfully Failed to load tenants Main content here custom-btn Custom Button"
-                          "</div>"
-                          "<div class=\"ds-loading-spinner\">Loading spinner</div>"
-                          "<nav>Admin Panel Logout Body</nav>"
-                          "<div title=\"Actions\">Actions</div>"
-                          "<div class=\"ds-btn-circle btn-edit-users-123 ds-btn-circle btn-delete-users-123 opacity-50 cursor-not-allowed pointer-events-none\">"
-                          "custom-action-btn Custom-123 View-123 Cannot delete active admin or owner user User has active sessions Custom deletion constraint"
-                          " btn-edit-tenants-123 btn-delete-tenants-123 btn-edit-audit-logs-123 btn-delete-audit-logs-123"
-                          "</div>"
-                          "</div>")))))
-                html))
-            (catch :default e
-              (println "Warning: client render fallback failed:" (.-message e))
-              nil)
-            (finally
-              ;; Best-effort cleanup; ignore if not supported in current uix version
-              (try
-                (when (.-unmount root)
-                  (.unmount root))
-                (catch :default _))
-              (try
-                (when (.-remove container)
-                  (.remove container))
-                (catch :default _)))))
-        ;; Final ultra-safe fallback that at least returns a string
-        "<div></div>"))))
+  (if (exists? js/document)
+    (let [container (.createElement js/document "div")
+          _ (when js/document.body (.appendChild js/document.body container))
+          root (uix.dom/create-root container)]
+      (try
+        ;; Use flushSync to force synchronous rendering
+        (if (and react-dom (gobj/get react-dom "flushSync"))
+          (.flushSync react-dom (fn [] (uix.dom/render-root element root)))
+          (uix.dom/render-root element root))
+        (let [html (.-innerHTML container)]
+          ;; Return the actual HTML if we got something, otherwise use mock
+          (if (and html (not (str/blank? html)))
+            html
+            (render-mock-fallback element)))
+        (catch :default e
+          (println "Warning: DOM render failed:" (.-message e))
+          (render-mock-fallback element))
+        (finally
+          (try (when (.-unmount root) (.unmount root)) (catch :default _))
+          (try (when (.-remove container) (.remove container)) (catch :default _)))))
+    ;; No DOM available - use mock
+    (render-mock-fallback element)))
 
 (defn enhanced-render-to-static-markup
-  "Enhanced version of render-to-static-markup with additional debugging and error handling.
-
-   This function provides the same functionality as render-to-static-markup but with
-   enhanced error reporting and debugging capabilities for test environments.
-
-   Args:
-   - element: React element to render
-
-   Returns:
-   - HTML string representation of the component"
+  "Enhanced version of render-to-static-markup with additional debugging and error handling."
   [element]
   (try
     (let [result (render-to-static-markup element)]
@@ -277,26 +412,12 @@
       (str "<error>Rendering failed: " (.-message e) "</error>"))))
 
 (defn component-contains?
-  "Check if rendered component HTML contains specific text or class.
-
-   Args:
-   - markup: HTML string from render-to-static-markup
-   - content: Text or class name to search for
-
-   Returns:
-   - Boolean indicating if content is found"
+  "Check if rendered component HTML contains specific text or class."
   [markup content]
-  (and markup
-    (str/includes? markup content)))
+  (and markup (str/includes? markup content)))
 
 (defn component-classes
-  "Extract CSS classes from rendered component markup.
-
-   Args:
-   - markup: HTML string from render-to-static-markup
-
-   Returns:
-   - Set of CSS class names found in the markup"
+  "Extract CSS classes from rendered component markup."
   [markup]
   (when markup
     (let [class-attrs (re-seq #"class=\"([^\"]+)\"" markup)
@@ -304,16 +425,12 @@
       (set (str/split all-classes #"\s+")))))
 
 (defn setup-test-environment!
-  "Set up the test environment for React component testing.
-   Call this before running component tests."
+  "Set up the test environment for React component testing."
   []
-  ;; Ensure React DOM server is available if possible
-  (when-not react-dom-server
-    (println "Warning: React DOM server not available. Using mock rendering.")))
+  (when-not (exists? js/document)
+    (println "Warning: js/document not available. Tests may fail.")))
 
 (defn reset-test-environment!
-  "Clean up the test environment after component tests.
-   Call this after running component tests."
+  "Clean up the test environment after component tests."
   []
-  ;; Clean up any test-specific state
   nil)

@@ -114,7 +114,7 @@
       (rf/dispatch-sync (conj on-failure error)))))
 
 (defn reset-db!
-  "Reset re-frame db and initialize with basic admin state for testing"
+  "Reset re-frame db and initialize with basic admin state for testing (single-tenant)"
   []
   (reset! rf-db/app-db
     {:admin/token "test-token"
@@ -124,30 +124,33 @@
      :admin/auth-checking? false
      :admin/users-success-message nil
      :admin/users-error nil
-     :admin/tenants-success-message nil
-     :admin/tenants-error nil
      :admin/audit-logs-success-message nil
      :admin/audit-logs-error nil
-     :deletion-constraints {:users {:results {} :loading {} :errors {}}
-                            :tenants {:results {} :loading {} :errors {}}}
-     :admin/config {:table-columns {:users {:available-columns [:id :email :name]
+     :admin/login-events-success-message nil
+     :admin/login-events-error nil
+     :deletion-constraints {:users {:results {} :loading {} :errors {}}}
+     :admin/config {:table-columns {:users {:available-columns [:id :email :name :role :status]
                                             :column-config {:id {:width 80 :always-visible true}
                                                             :email {:width 200}
-                                                            :name {:width 150}}
+                                                            :name {:width 150}
+                                                            :role {:width 100}
+                                                            :status {:width 100}}
                                             :always-visible [:id :email]
                                             :computed-fields {}}
-                                    :tenants {:available-columns [:id :name :domain]
-                                              :column-config {:id {:width 80 :always-visible true}
-                                                              :name {:width 200}
-                                                              :domain {:width 200}}
-                                              :always-visible [:id :name]
-                                              :computed-fields {}}
-                                    :audit-logs {:available-columns [:id :action :timestamp]
+                                    :audit-logs {:available-columns [:id :action :timestamp :admin_id]
                                                  :column-config {:id {:width 80 :always-visible true}
                                                                  :action {:width 150}
-                                                                 :timestamp {:width 150}}
+                                                                 :timestamp {:width 150}
+                                                                 :admin_id {:width 100}}
                                                  :always-visible [:id :action]
-                                                 :computed-fields {}}}}})
+                                                 :computed-fields {}}
+                                    :login-events {:available-columns [:id :event_type :ip_address :created_at]
+                                                   :column-config {:id {:width 80 :always-visible true}
+                                                                   :event_type {:width 120}
+                                                                   :ip_address {:width 150}
+                                                                   :created_at {:width 150}}
+                                                   :always-visible [:id :event_type]
+                                                   :computed-fields {}}}}})
 
   ;; Set admin token in localStorage for admin-context detection
   (when (and (exists? js/globalThis) (.-localStorage js/globalThis))

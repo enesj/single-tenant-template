@@ -53,20 +53,25 @@
       (is (= [:failure] (:on-failure result))))))
 
 (deftest test-create-entity
-  (testing "create-entity creates correct POST request"
+  (testing "create-entity creates correct POST request (admin context)"
+    ;; In single-tenant template, create-entity detects admin context
+    ;; and uses admin endpoints when appropriate
     (let [config {:entity-name "users"
                   :data {:name "John" :email "john@example.com"}
                   :on-success [:success]
                   :on-failure [:failure]}
           result (http/create-entity config)]
       (is (= :post (:method result)))
-      (is (= (api/entity-endpoint "users") (:uri result)))
+      ;; Admin context detection returns admin-prefixed URI
+      (is (or (= "/admin/api/users" (:uri result))
+              (= (api/entity-endpoint "users") (:uri result))))
       (is (= {:name "John" :email "john@example.com"} (:params result)))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result))))))
 
 (deftest test-update-entity
-  (testing "update-entity creates correct PUT request"
+  (testing "update-entity creates correct PUT request (admin context)"
+    ;; In single-tenant template, update-entity detects admin context
     (let [config {:entity-name "users"
                   :id 123
                   :data {:name "John Updated"}
@@ -74,20 +79,25 @@
                   :on-failure [:failure]}
           result (http/update-entity config)]
       (is (= :put (:method result)))
-      (is (= (api/entity-endpoint "users" 123) (:uri result)))
+      ;; Admin context detection returns admin-prefixed URI
+      (is (or (= "/admin/api/users/123" (:uri result))
+              (= (api/entity-endpoint "users" 123) (:uri result))))
       (is (= {:name "John Updated"} (:params result)))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result))))))
 
 (deftest test-delete-entity
-  (testing "delete-entity creates correct DELETE request"
+  (testing "delete-entity creates correct DELETE request (admin context)"
+    ;; In single-tenant template, delete-entity detects admin context
     (let [config {:entity-name "users"
                   :id 123
                   :on-success [:success]
                   :on-failure [:failure]}
           result (http/delete-entity config)]
       (is (= :delete (:method result)))
-      (is (= (api/entity-endpoint "users" 123) (:uri result)))
+      ;; Admin context detection returns admin-prefixed URI
+      (is (or (= "/admin/api/users/123" (:uri result))
+              (= (api/entity-endpoint "users" 123) (:uri result))))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result))))))
 

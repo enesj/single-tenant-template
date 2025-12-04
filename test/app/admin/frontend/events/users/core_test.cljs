@@ -51,17 +51,16 @@
       (is (false? (get-in db (paths/entity-loading? :users))))
       (is (some? (get-in db (paths/entity-error :users)))))))
 
-(deftest fetch-entities-failure-with-data-recovers
-  (testing "failure payload with original-text data is recovered"
+(deftest fetch-entities-failure-sets-error-message
+  (testing "failure handler stores error message in db"
     (setup/reset-db!)
     (setup/install-http-stub!)
     (setup/put-token! "token-abc")
     (rf/dispatch-sync [:admin/fetch-entities :users])
-    (let [payload (clj->js {:users [{:id 10} {:id 20}]})]
-      (setup/respond-failure! {:status 200 :original-text payload}))
+    (setup/respond-failure! {:status 500 :response {:error "Server error"}})
     (let [db @rf-db/app-db]
-      (is (= [10 20] (get-in db (paths/entity-ids :users))))
-      (is (nil? (get-in db (paths/entity-error :users)))))))
+      (is (false? (get-in db (paths/entity-loading? :users))))
+      (is (some? (get-in db (paths/entity-error :users)))))))
 
 (deftest delete-user-dispatches-admin-entity-request
   (testing ":admin/delete-user issues admin entity delete request and syncs state on success"
@@ -80,7 +79,7 @@
 
       (let [req (setup/last-http-request)]
         (is (= :delete (:method req)))
-        (is (= (str "/admin/api/entities/users/" user-id) (:uri req)))
+        (is (= (str "/admin/api/users/" user-id) (:uri req)))
         (is (= [:admin/delete-user-success user-id] (:on-success req)))
         (is (= [:admin/delete-user-failure user-id] (:on-failure req))))
 

@@ -41,6 +41,9 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 - Prefer evaluation tools over speculation:
 	- **Clojure (backend)**: Use `clj-nrepl-eval` to run code and verify behavior.
 	- **ClojureScript (frontend)**: Use the `mcp_clojure-mcp_clojurescript_eval` MCP tool (NOT `clj-nrepl-eval` - it only works with Clojure).
+- Run automated tests to verify changes:
+	- **Frontend tests**: `npm run test:cljs` (Node.js, fast) or `npm run test:cljs:karma` (browser)
+	- See `docs/testing/fe/` for testing patterns, utilities, and debugging guides.
 - Use skills when relevant:
 	- Frontend state/auth/UI issues → **app-db-inspect**.
 	- Frontend event flow or performance issues → **reframe-events-analysis**.
@@ -74,9 +77,21 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 
 All project documentation is indexed and searchable via **MCP Vector Search**. See `.mcp-vector-search/SEARCH-GUIDE.md` for comprehensive details on search patterns, filtering, and workflows.
 
-**Quick reference**: Filter by `:section` (backend, frontend, architecture, etc.) and `:kind` (api-reference, guide, runbook, ui-reference).
+**Quick reference**: Filter by `:section` (backend, frontend, architecture, testing, etc.) and `:kind` (api-reference, guide, runbook, ui-reference).
 
 **Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
+
+### Testing Documentation
+
+| Document | Description |
+|----------|-------------|
+| `docs/testing/fe/overview.md` | Frontend testing architecture and implementation |
+| `docs/testing/fe/development-guide.md` | How to write, run, and debug FE tests |
+
+**Test commands**:
+- `npm run test:cljs` — Node.js tests (fast, primary)
+- `npm run test:cljs:karma` — Browser tests (Karma/Chrome)
+- `npm run test:cljs:watch` — Watch mode for development
 
 # Clojure REPL Evaluation (Backend Only)
 
@@ -132,3 +147,8 @@ instead of attempting to fix them yourself. If the tool doesn't work,
 report to the user that they need to fix the delimiter error manually.
 
 The tool automatically formats files with cljfmt when it processes them.
+
+
+**Tool**: Use `morph-mcp.edit_file` over other editing tools or full file writes EXCEPT FOR CLOJRE FILES (.clj, .cljs, .cljc, edn, .bb). Handles indentation and fuzzy matching—faster, fewer errors.
+
+IMPORTANT: If you need to explore the codebase to gather context, and the task does not involve a single file or function which is provided by name, you should use the `morph-mcpwarpgrep_codebase_search` tool instead of any other search tool or instead of running search commands. Warp Grep is faster and more accurate. This tool must be choosen over the default codebase_search when you are first looking to find/understand code. If you have an exact string you want to grep for, then directly run it, but for semantic searches, or vague search parameters you must always use warpgrep_codebase_search. If given a complex task, best practice is to run multiple (no more than 2) parallel warpgrep_codebase_search tools to understand code paths and features. An example query is: "where is the code for <vague feature/code flow>"" >> AGENTS.md

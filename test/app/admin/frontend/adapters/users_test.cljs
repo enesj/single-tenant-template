@@ -32,7 +32,7 @@
 
     (let [req (setup/last-http-request)]
       (is (= :post (:method req)))
-      (is (= "/api/v1/entities/users" (:uri req)))
+      (is (= "/admin/api/users" (:uri req)))
       (is (= {:email "new@example.com"} (:params req)))
       (is (= [:app.template.frontend.events.list.crud/create-success :users]
             (take 2 (:on-success req))))

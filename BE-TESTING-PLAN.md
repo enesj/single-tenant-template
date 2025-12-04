@@ -1,0 +1,286 @@
+# Backend Testing Implementation Plan
+
+> **Status**: Phase 1 ✅ | Phase 2 ✅ | 10 tests, 39 assertions  
+> **Last Updated**: 2025-12-04  
+> **Prerequisite**: Test database running on port 55433
+
+---
+
+## Quick Start
+
+```bash
+# Run existing tests
+bb be-test
+
+# Or with Kaocha directly
+clj -M:test -m kaocha.runner
+```
+
+---
+
+## Context
+
+| Aspect | Details |
+|--------|---------|
+| **Test Runner** | Kaocha via `bb be-test` |
+| **Test Profile** | `-Daero.profile=test` |
+| **Ports** | Web: 8086, DB: 55433 |
+| **Config** | `config/base.edn` with `:test` profile |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `tests.edn` | Kaocha configuration with hooks |
+| `test/app/backend/routes_smoke_test.clj` | Existing smoke tests (3 tests) |
+| `src/app/backend/core.clj` | Contains `with-test-system` |
+| `src/system/state.clj` | Shared atoms for system state |
+
+---
+
+## Dev Environment Reuse
+
+The dev environment has reloadable system infrastructure we reuse for testing:
+
+### Existing Test System
+
+Already defined at `src/app/backend/core.clj:169`:
+
+```clojure
+(def with-test-system
+  "Test system using :test profile (port 8081, test database)"
+  (my-system {:profile :test}))
+```
+
+Provides:
+- Test profile config (`:test`)
+- HikariCP pool to test DB (port 55433)
+- Full service container with DI
+- Webserver on test port (8086)
+- Proper `with-open` resource cleanup
+
+### State Atoms
+
+`src/system/state.clj` provides shared atoms:
+
+```clojure
+(defonce instance (atom (future ::never-run)))  ; Running system future
+(defonce state    (atom nil))                    ; Current system state map
+```
+
+---
+
+## Implementation Phases
+
+### Phase 1: Foundation (REQUIRED)
+
+Create missing Kaocha hooks referenced in `tests.edn`:
+
+#### 1.1 Create `test/app/backend/fixtures.clj`
+
+```clojure
+(ns app.backend.fixtures
+  "Test fixtures for Kaocha hooks - reuses dev system lifecycle"
+  (:require
+    [app.backend.core :as backend]
+    [system.state :as state]
+    [taoensso.timbre :as log]))
+
+(defonce ^:private test-instance (atom nil))
+
+(defn get-test-db []
+  (get @state/state :database))
+
+(defn get-test-service-container []
+  (get @state/state :service-container))
+
+(defn start-test-system
+  "Kaocha before-suite hook"
+  []
+  (log/info "🧪 Starting test system...")
+  (let [publish-state (fn [system-state]
+                        (reset! state/state system-state)
+                        (try
+                          (loop [] (Thread/sleep 60000) (recur))
+                          (catch InterruptedException _
+                            (log/info "Test system interrupted"))))
+        instance (future
+                   (try
+                     (backend/with-test-system publish-state)
+                     (catch Exception e
+                       (log/error e "Test system startup failed"))))]
+    (reset! test-instance instance)
+    (loop [attempts 0]
+      (cond
+        (>= attempts 50)
+        (throw (ex-info "Test system failed to start" {:attempts attempts}))
+        (nil? @state/state)
+        (do (Thread/sleep 100) (recur (inc attempts)))
+        :else
+        (log/info "✅ Test system ready")))))
+
+(defn reset-test-system!
+  "Kaocha after-suite hook"
+  []
+  (log/info "🧹 Stopping test system...")
+  (when-let [instance @test-instance]
+    (future-cancel instance)
+    (try @instance (catch java.util.concurrent.CancellationException _)))
+  (reset! test-instance nil)
+  (reset! state/state nil)
+  (log/info "✅ Test system stopped"))
+
+(def ^:dynamic *test-db* nil)
+
+(defn with-test-db [f]
+  (if-let [db (get-test-db)]
+    (binding [*test-db* db] (f))
+    (do (log/warn "Test DB not available") (f))))
+
+(defn with-transaction-rollback [f]
+  (if-let [db (get-test-db)]
+    (next.jdbc/with-transaction [tx db {:rollback-only true}]
+      (binding [*test-db* tx] (f)))
+    (f)))
+```
+
+#### 1.2 Create `test/app/backend/test_helpers.clj`
+
+```clojure
+(ns app.backend.test-helpers
+  "Shared test utilities"
+  (:require
+    [app.backend.routes :as routes]
+    [app.backend.webserver :as webserver]
+    [app.backend.routes.admin-api :as admin-api]
+    [app.backend.services.admin.dashboard :as admin-dashboard]
+    [app.backend.services.monitoring.login-events :as login-monitoring]
+    [cheshire.core :as json]
+    [ring.mock.request :as mock]))
+
+(defn stub-service-container
+  ([] (stub-service-container {}))
+  ([overrides]
+   (merge
+     {:models-data {}
+      :crud-routes ["/crud" {:get {:handler (constantly {:status 200})}}]
+      :auth-routes {:login-handler (fn [_] {:status 200
+                                            :headers {"Content-Type" "application/json"}
+                                            :body (json/generate-string {:ok true})})}
+      :password-routes {}
+      :config {:base-url "http://localhost:8086"}}
+     overrides)))
+
+(defn build-handler
+  ([] (build-handler (stub-service-container)))
+  ([service-container]
+   (with-redefs [admin-api/admin-api-routes (fn [_ _] ["/admin/api" {:get {:handler (constantly {:status 200})}}])
+                 admin-dashboard/get-dashboard-stats (fn [_] {:total-admins 0})
+                 login-monitoring/count-recent-login-events (fn [_ _] 0)]
+     (-> (routes/app-routes {} service-container)
+         (webserver/wrap-service-container service-container)))))
+
+(defn slurp-body [resp]
+  (let [body (:body resp)]
+    (cond (string? body) body
+          (nil? body) ""
+          :else (slurp body))))
+
+(defn parse-json-body [resp]
+  (json/parse-string (slurp-body resp) true))
+
+(defn json-request [method path & [body]]
+  (-> (mock/request method path)
+      (mock/content-type "application/json")
+      (cond-> body (mock/body (json/generate-string body)))))
+
+(defn admin-request [method path & [body token]]
+  (-> (json-request method path body)
+      (mock/header "X-Admin-Token" (or token "test-admin-token"))))
+```
+
+---
+
+### Phase 2: Admin Auth Tests
+
+Create `test/app/backend/routes/admin/auth_test.clj`:
+- Password hashing/verification tests
+- Session token generation tests
+- Admin authentication flow tests
+
+### Phase 3: Admin API Tests
+
+Create tests for:
+- `test/app/backend/routes/admin/dashboard_test.clj`
+- `test/app/backend/routes/admin/users_test.clj`
+- `test/app/backend/routes/admin/audit_test.clj`
+
+### Phase 4: User API Tests
+
+Create `test/app/backend/routes/api_test.clj`:
+- `/api/v1/config` endpoint
+- `/api/v1/metrics` endpoint
+- `/api/v1/auth/*` endpoints
+
+### Phase 5: DB Integration (Optional)
+
+Requires:
+1. Test DB running: `docker-compose up -d postgres-test`
+2. Migrations applied: `clj -X:migrations-test`
+3. Use `fixtures/with-transaction-rollback` for isolation
+
+---
+
+## File Structure After Implementation
+
+```
+test/
+├── app/
+│   └── backend/
+│       ├── fixtures.clj           [Phase 1]
+│       ├── test_helpers.clj       [Phase 1]
+│       ├── routes_smoke_test.clj  [EXISTING]
+│       └── routes/
+│           ├── admin/
+│           │   ├── auth_test.clj      [Phase 2]
+│           │   ├── dashboard_test.clj [Phase 3]
+│           │   └── users_test.clj     [Phase 3]
+│           └── api_test.clj           [Phase 4]
+```
+
+---
+
+## Verification Commands
+
+```bash
+# Full test suite
+bb be-test
+
+# Verbose output
+clj -M:test -m kaocha.runner --reporter documentation
+
+# Single namespace
+clj -M:test -m kaocha.runner --focus app.backend.routes-smoke-test
+
+# REPL-based testing
+(require '[kaocha.repl :as k])
+(k/run 'app.backend.routes-smoke-test)
+```
+
+---
+
+## Gotchas
+
+1. **Fixtures must exist**: `tests.edn` references `app.backend.fixtures/start-test-system` - tests fail without it
+2. **Test DB required for integration**: Port 55433, run migrations first
+3. **with-redefs scope**: Stub handlers in `build-handler` are created inside `with-redefs` - don't leak the handler outside
+4. **Ports**: Dev uses 8085, test uses 8086 - don't mix them up
+
+---
+
+## Related Files
+
+- `deps.edn` - Test dependencies under `:test` alias
+- `tests.edn` - Kaocha configuration
+- `config/base.edn` - Profile-based config (`:dev` vs `:test`)
+- `docs/backend/services.md` - Service architecture notes

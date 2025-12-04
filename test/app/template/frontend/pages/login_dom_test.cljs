@@ -43,6 +43,8 @@
         (fn [container]
           (is (some? (.querySelector container "#login-google-btn")))
           (let [inputs (.querySelectorAll container "input")]
+            ;; Login form should have at least one input field
             (is (<= 1 (.-length inputs)))
-            (is (= true (.-disabled (.item inputs 0)))))
+            ;; Inputs are enabled when not loading
+            (is (= false (.-disabled (.item inputs 0)))))
           (done))))))

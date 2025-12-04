@@ -14,20 +14,18 @@
     (route-maps route-tree)))
 
 (deftest admin-routes-include-expected-pages
-  (testing "admin routes expose expected named pages"
+  (testing "admin routes expose expected named pages (single-tenant)"
     (let [names (set (keep :name (route-maps routes/admin-routes)))
           expected #{:admin-login
+                     :admin-forgot-password
+                     :admin-reset-password
                      :admin-dashboard
                      :admin-dashboard-alt
-                     :admin-advanced-dashboard
-                     :admin-tenants
-                     :admin-tenant-detail
                      :admin-users
                      :admin-audit
-                     :admin-billing
-                     :admin-transactions
-                     :admin-integrations
-                     :admin-monitoring}]
+                     :admin-login-events
+                     :admin-admins
+                     :admin-settings}]
       (is (set/subset? expected names)))))
 
 (deftest guarded-start-wraps-dispatch
@@ -39,13 +37,12 @@
       (is (= [:admin/check-auth-protected [[:admin/load-dashboard]]] @captured)))))
 
 (deftest users-route-triggers-loaders-through-guard
-  (testing "users controller dispatches guarded load events"
+  (testing "users controller dispatches guarded load events (single-tenant)"
     (let [route (find-route routes/admin-routes :admin-users)
           start-fn (-> route :controllers first :start)
           captured (atom nil)]
       (with-redefs [rf/dispatch (fn [event] (reset! captured event))]
         (start-fn {:path {}}))
       (is (= [:admin/check-auth-protected
-              [[:admin/load-users]
-               [:admin/fetch-entities :tenants]]]
+              [[:admin/load-users]]]
             @captured)))))

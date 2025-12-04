@@ -63,18 +63,6 @@
     (rf/dispatch-sync [:deletion-constraints/clear-user-constraints 77])
     (is (nil? (get-in @rf-db/app-db [:deletion-constraints :users :results 77])))))
 
-(deftest tenants-constraints-request-and-success
-  (testing "tenant dry-run DELETE and persistence"
-    (setup/reset-db!)
-    (setup/install-http-stub!)
-    (rf/dispatch-sync [:deletion-constraints/check-tenant-constraints "t-1" nil nil])
-    (let [req (setup/last-http-request)]
-      (is (= :delete (:method req)))
-      (is (= "/admin/api/entities/tenants/t-1" (:uri req)))
-      (is (= {:dry-run true} (:params req))))
-    (setup/respond-success! {:data {:can-delete? true :warnings [{:message "Recently active"}]}})
-    (is (= true (get-in @rf-db/app-db [:deletion-constraints :tenants :results "t-1" :can-delete?])))))
-
 (deftest constraint-tooltip-derivation
   (testing "tooltip shows allow label when can-delete true, else error prefix"
     (is (= "Delete it" (svc/constraint-tooltip "Delete it" {:can-delete? true})))

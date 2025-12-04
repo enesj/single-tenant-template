@@ -34,7 +34,7 @@
                           :current-route {:name :admin-dashboard}})
     (let [markup (test-utils/render-to-static-markup ($ admin-layout {:children ($ :div {} "Body")}))]
       (is (str/includes? markup "Admin Panel"))
-      (is (str/includes? markup "Logout"))
+      (is (str/includes? markup "Sign Out"))
       (is (str/includes? markup "Body")))))
 
 ;; Active link highlight checks are skipped in Karma due to SSR fallback markup

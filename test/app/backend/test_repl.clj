@@ -1,20 +1,48 @@
 (ns app.backend.test-repl
-  "Entry point for interactive Kaocha test runs used by the :test alias."
+  "Test REPL utilities for interactive test development.
+   
+   This namespace is loaded by the :test alias to provide
+   convenient REPL-based test running."
   (:require
-    [kaocha.repl :as repl]
-    [kaocha.watch :as watch]))
+    [app.backend.fixtures :as fixtures]
+    [kaocha.repl :as k]))
 
-(defn config
-  "Return the current Kaocha configuration."
+(defn run-all
+  "Run all backend tests"
   []
-  (repl/config))
+  (k/run :app.backend))
 
-(defn run
-  "Run Kaocha with optional selectors or config overrides."
-  [& args]
-  (apply repl/run args))
-
-(defn watch
-  "Start Kaocha in watch mode using the active configuration."
+(defn run-smoke
+  "Run smoke tests only"
   []
-  (watch/run (repl/config)))
+  (k/run 'app.backend.routes-smoke-test))
+
+(defn run-ns
+  "Run tests in a specific namespace"
+  [ns-sym]
+  (k/run ns-sym))
+
+(defn status
+  "Check test system status"
+  []
+  (fixtures/test-system-status))
+
+(defn start-system!
+  "Manually start the test system"
+  []
+  (fixtures/start-test-system))
+
+(defn stop-system!
+  "Manually stop the test system"
+  []
+  (fixtures/reset-test-system!))
+
+(println "")
+(println "🧪 Backend Test REPL loaded")
+(println "   (run-all)        - Run all tests")
+(println "   (run-smoke)      - Run smoke tests")
+(println "   (run-ns 'ns)     - Run specific namespace")
+(println "   (status)         - Check test system status")
+(println "   (start-system!)  - Start test system manually")
+(println "   (stop-system!)   - Stop test system manually")
+(println "")
