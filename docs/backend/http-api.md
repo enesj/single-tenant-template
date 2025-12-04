@@ -19,6 +19,12 @@ All paths are relative to `/admin/api`.
 ### Dashboard (protected)
 - `GET /admin/api/dashboard` – summary payload for the admin shell (namespace `app.backend.routes.admin.dashboard`).
 
+### Settings (protected, `app.backend.routes.admin.settings`)
+- `GET /admin/api/settings` – return `{:view-options {...}}` from `resources/public/admin/ui-config/view-options.edn`.
+- `PUT /admin/api/settings` – replace the entire `view-options` map.
+- `PATCH /admin/api/settings/entity` – upsert a single entity setting (`entity-name`, `setting-key`, `setting-value`).
+- `DELETE /admin/api/settings/entity` – remove a hardcoded setting so it becomes user-configurable again.
+
 ### Users (protected)
 - `GET /admin/api/users` – list users (supports pagination/filtering via query params in `admin-utils/extract-pagination-params`).
 - `POST /admin/api/users` – create user.
@@ -36,9 +42,13 @@ All paths are relative to `/admin/api`.
 
 ### Audit Logs (protected, `app.backend.routes.admin.audit`)
 - `GET /admin/api/audit` – list audit events with filters: `principal-id`, `principal-type` (`admin|user`), `action`, `from`/`to` (ISO timestamps), `limit`, `offset`. Returns normalized keys ready for admin UI tables/export.
+- `DELETE /admin/api/audit/:id` – delete a single audit log (admin action; RLS bypassed within txn).
+- `DELETE /admin/api/audit/bulk` – delete multiple audit logs; body `{:ids [<uuid> ...]}`.
 
 ### Login Events (protected, `app.backend.routes.admin.login-events`)
 - `GET /admin/api/login-events` – list login events for admins and users. Filters: `principal-type` (`admin|user`), `success?` (`true|false`), `limit` (default 100), `offset` (default 0). Response fields include `principal-id`, `principal-name/email` when available, `ip-address`, `user-agent`, `created-at`, and `reason`.
+- `DELETE /admin/api/login-events/:id` – delete a login event (admin action; RLS bypassed within txn).
+- `DELETE /admin/api/login-events/bulk` – delete multiple login events; body `{:ids [<uuid> ...]}`.
 
 ### Dev Helpers (no auth; for local debugging only)
 - `GET /admin/api/dev-get-rate-limits` – inspect rate-limit state.

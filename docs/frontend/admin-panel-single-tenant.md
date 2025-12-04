@@ -13,6 +13,7 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/users` → user management + per-user activity modal (guarded)
   - `/admin/audit` → global audit logs (guarded)
   - `/admin/login-events` → global login events (guarded)
+  - `/admin/settings` → hardcoded list-view settings (read/write `view-options.edn`)
 - **Guard**: `guarded-start` dispatches controller events only after admin auth is confirmed. Unauthed users are redirected to `/admin/login`.
 
 ## Data Flow (Users + Activity)
@@ -28,6 +29,13 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 - **Audit Logs**: `/admin/audit` lists all audit events; uses template list components with server pagination and export.  
 - **Login Events**: `/admin/login-events` lists admin/user logins; normalized rows include principal name/email, IP, user-agent, success/failure.  
 - **Per-user modal**: mirrors the same data filtered by user.
+- **Delete/Bulk delete**: both audit logs and login events support per-row delete and bulk delete actions (admin-only).
+
+## Settings Page
+
+- Page: `/admin/settings` (`app.admin.frontend.pages.settings`)  
+- Data source: `resources/public/admin/ui-config/view-options.edn` read/write via backend settings routes.  
+- Use it to lock list controls per-entity (show/hide edit/delete/select/timestamps/pagination/filtering); hardcoded controls are hidden in the UI while remaining effective.
 
 ## Extension Points
 

@@ -4,7 +4,7 @@
 
 ## Overview
 
-The list view controls system provides comprehensive configuration for table display settings, column visibility, and user interactions. It supports both **page-level hardcoded settings** and **user preferences** with clear visual feedback.
+The list view controls system configures table display settings, column visibility, and user interactions. It merges **page-level hardcoded settings** with **user preferences**, but hardcoded settings are now **hidden from the UI** (controls do not render when locked).
 
 ## Architecture
 
@@ -18,7 +18,12 @@ User Preferences ────────┘
 
 1. **Page Level**: Hardcoded constraints set by developers
 2. **User Preferences**: Runtime settings stored in Re-frame DB
-3. **Merged Settings**: Combination used for actual display behavior
+3. **Merged Settings**: Combination used for actual display behavior (controls are hidden when hardcoded)
+
+### Reactive pipeline
+- `app.template.frontend.hooks.display-settings` merges hardcoded + user settings.
+- `app.template.frontend.components.list.cells` renders cells using the merged settings (single source of truth).
+- Hardcoded values can come from page props or `resources/public/admin/ui-config/view-options.edn`.
 
 ## Field-Level Configuration (models.edn)
 
@@ -70,7 +75,7 @@ Fields are configured in `resources/db/template/models.edn` (and `resources/db/s
 
 ### **Hardcoded Display Settings**
 
-Pages can enforce specific settings via props:
+Pages can enforce specific settings via props (controls are omitted entirely when locked):
 
 ```clojure
 ;; In page component (e.g., admin/users.cljs)
@@ -85,16 +90,14 @@ Pages can enforce specific settings via props:
 ### **Control Behavior Matrix**
 
 | Hardcoded Value | Visual Appearance | User Interaction | Feature State |
-|----------------|------------------|------------------|---------------|
-| `false` | ❌ Grayed out | ❌ Not clickable | ❌ Disabled |
-| `true` | ✅ Enabled styling | ❌ Not clickable | ✅ Enabled |
-| Not set | ✅ Interactive | ✅ User can toggle | ↕️ User controlled |
+|----------------|-------------------|------------------|---------------|
+| `false` | Control **not shown** | ❌ Hidden | ❌ Disabled |
+| `true` | Control **not shown** | ❌ Hidden | ✅ Forced on |
+| Not set | Control rendered | ✅ User can toggle | ↕️ User controlled |
 
 ### **Tooltip Messages**
 
-- **Hardcoded `false`**: "This setting is disabled at page level and cannot be enabled"
-- **Hardcoded `true`**: "This setting is enabled at page level and cannot be disabled"
-- **User controlled**: No tooltip (normal interaction)
+Hardcoded controls are hidden, so tooltips only apply to user-controlled toggles.
 
 ## Available Controls
 
@@ -122,7 +125,7 @@ Pages can enforce specific settings via props:
 Timestamps and other controls with filtering show filter icons when:
 - Control is active (`is-active? = true`)
 - Field has filtering enabled (`:filterable? true`)
-- User interaction follows control lock state
+- Control is not hardcoded (hardcoded controls are hidden)
 
 ## Implementation Files
 
@@ -132,6 +135,7 @@ Timestamps and other controls with filtering show filter icons when:
 src/app/template/frontend/components/
 ├── settings/
 │   └── list_view_settings.cljs     # Main settings panel
+├── list/cells.cljs                 # Cell rendering (merged settings)
 ├── list.cljs                       # List wrapper component
 ├── table.cljs                      # Table component
 └── pagination.cljs                 # Pagination component
@@ -142,6 +146,7 @@ src/app/template/frontend/components/
 ```
 src/app/template/frontend/
 ├── events/list/ui-state.cljs       # Control toggle events
+├── hooks/display_settings.cljs     # Merge hardcoded + user settings
 └── subs/ui.cljs                    # Display settings subscriptions
 ```
 
@@ -198,6 +203,9 @@ resources/db/
 1. **Use display-order**: Set explicit order for important columns
 2. **Hide sensitive data**: Set `:visible-in-table? false` for internal IDs
 3. **Limit filtering**: Disable filtering for complex data types
+
+## Admin Settings page
+- Hardcoded view settings live in `resources/public/admin/ui-config/view-options.edn` and can be edited via the admin UI at `/admin/settings` (see `app.admin.frontend.pages.settings`).
 4. **Consider performance**: Hide expensive computed fields by default
 
 ### **Page Configuration**
