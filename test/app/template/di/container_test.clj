@@ -1,5 +1,6 @@
 (ns app.template.di.container-test
   (:require
+    [app.shared.model-naming :as model-naming]
     [app.template.backend.crud.protocols :as crud-protocols]
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.backend.email.service :as email-service]
@@ -12,7 +13,8 @@
 ;; Test Configuration and Setup
 ;; ============================================================================
 
-(def test-models-data
+;; Raw models in DB (snake_case) format - mimics what's in models.edn
+(def raw-test-models
   {:properties
    {:fields [[:id :uuid {:null false :primary-key true}]
              [:tenant_id :uuid {:null false}]
@@ -31,6 +33,10 @@
              [:created_at :timestamptz {:null false}]
              [:updated_at :timestamptz {:null false}]]
     :constraints {:unique [[:tenant_id :email]]}}})
+
+;; Converted models with :app/entity and field aliases - what services expect
+(def test-models-data
+  (model-naming/convert-models raw-test-models))
 
 (def test-config
   {:google-client-id "test-client-id"
