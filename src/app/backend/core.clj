@@ -88,10 +88,16 @@
   (let [db-config       (:database config)
         hikari-defaults (:hikari-cp config)
 
-        ;; Get database name from config, with profile-appropriate fallback
-        db-name         (or (:dbname db-config) "bookkeeping")
+        ;; Build JDBC URL strictly from provided config (or environment)
+        db-name         (or (:dbname db-config)
+                            (throw (ex-info "Database name missing in config" {:database db-config})))
         jdbc-url        (or (:jdbc-url db-config)
-                          (str "jdbc:postgresql://localhost:5432/" db-name "?user=user&password=password"))
+                           (when (every? db-config [:host :port :dbname :user])
+                             (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
+                               (:host db-config) (:port db-config) db-name (:user db-config)
+                               (if-let [pwd (:password db-config)] (str "&password=" pwd) "")))
+                           (throw (ex-info "Provide :jdbc-url or host/port/dbname/user in :database config"
+                                    {:database db-config})))
 
         ;; Validate that we're not using the system username as database name
         _               (when (re-find #"database.*enes" (str jdbc-url))
@@ -103,12 +109,11 @@
                           {:pool-name     "db-pool"
                            :adapter       "postgresql"
                            :jdbc-url      jdbc-url
-                         ;; Use database name from config instead of hardcoded value
                            :database-name db-name
-                           :server-name   (or (:host db-config) "localhost")
-                           :port-number   (or (:port db-config) 5432)
-                           :username      (or (:user db-config) "user")
-                           :password      (or (:password db-config) "password")})]
+                            :server-name   (:host db-config)
+                            :port-number   (:port db-config)
+                            :username      (:user db-config)
+                            :password      (:password db-config)})]
     (cp/make-datasource hikari-config)))
 
 (defn new-scheduler

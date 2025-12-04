@@ -1,6 +1,7 @@
 (ns app.template.di.config
   "Dependency injection configuration for template infrastructure services"
   (:require
+    [aero.core :as aero]
     [app.shared.model-naming :as model-naming]
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.crud.service :as crud-service]
@@ -394,13 +395,9 @@
 
 ;; Helper functions for examples (simulate external dependencies)
   (defn load-config []
-    {:app-name "Test App"
-     :email {:type :console}
-     :database {:host "localhost"
-                :port 5432
-                :dbname "test_db"
-                :user "test_user"
-                :password "test_pass"}})
+    ;; Reuse the project's Aero config (dev profile by default)
+    (let [file (io/file "config/base.edn")]
+      (aero/read-config file {:profile :dev})))
 
   (defn load-metadata []
    ;; Load real metadata from the models.edn file

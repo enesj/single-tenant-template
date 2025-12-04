@@ -39,16 +39,16 @@
                 (io/resource "config/base.edn") (aero/read-config (io/resource "config/base.edn") {:profile profile})
                 (io/resource "base.edn") (aero/read-config (io/resource "base.edn") {:profile profile})
                 :else nil)
-         env (System/getenv "DATABASE_URL")]
-     (or (get-in cfg [:database :jdbc-url])
-       (when cfg
-         (format "jdbc:postgresql://%s:%s/%s?user=%s&password=%s"
-           (get-in cfg [:database :host] "localhost")
-           (get-in cfg [:database :port] 5432)
-           (get-in cfg [:database :dbname])
-           (get-in cfg [:database :user])
-           (get-in cfg [:database :password])))
-       env))))
+         env-url (System/getenv "DATABASE_URL")
+         db-cfg  (:database cfg)]
+     (or env-url
+         (:jdbc-url db-cfg)
+         (when (and db-cfg (every? db-cfg [:host :port :dbname :user]))
+           (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
+             (:host db-cfg) (:port db-cfg) (:dbname db-cfg) (:user db-cfg)
+             (if-let [pwd (:password db-cfg)] (str "&password=" pwd) "")))
+         (throw (ex-info "DATABASE_URL or database config (jdbc-url/host/port/dbname/user) is required"
+                  {:config db-cfg}))))))
 
 (def ^:private resources-dir "resources")
 (def ^:private migrations-dir "db/migrations")
