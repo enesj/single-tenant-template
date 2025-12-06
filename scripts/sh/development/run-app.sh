@@ -44,5 +44,9 @@ printf "\033]0;🚀 Single-Tenant Template Server\007"
 # Check if app is already running before starting
 check_app_running
 
+# Ensure local dependencies are up
+echo "Bringing up Docker services..."
+docker compose up -d
+
 # Run the app with monitoring
 ./scripts/sh/monitoring/monitor_terminal.sh "clojure -M:dev:migrations-dev"
