@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:13
     environment:
-      POSTGRES_DB: single_tenant
+      POSTGRES_DB: single_tenant_pos
       POSTGRES_USER: app_user
       POSTGRES_PASSWORD: password
     ports:
@@ -14,7 +14,7 @@ services:
   db-test:
     image: postgres:13
     environment:
-      POSTGRES_DB: single_tenant_test
+      POSTGRES_DB: single_tenant_pos_test
       POSTGRES_USER: app_user
       POSTGRES_PASSWORD: password
     ports:

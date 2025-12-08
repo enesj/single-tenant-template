@@ -76,6 +76,47 @@
                             :d "M3 17a4 4 0 014-4h10a4 4 0 010 8H7a4 4 0 01-4-4zm7-9a3 3 0 116 0 3 3 0 01-6 0z"}))
                 "Login Events")
 
+              ;; Expenses Domain
+              ($ :a {:href "/admin/expenses"
+                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                              (if (= route-name :admin-expenses)
+                                "bg-primary text-primary-content"
+                                "text-base-content hover:bg-base-300"))}
+                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                            :d "M3 7h18M3 12h18M3 17h18"}))
+                "Expenses")
+
+              ($ :a {:href "/admin/receipts"
+                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                              (if (= route-name :admin-receipts)
+                                "bg-primary text-primary-content"
+                                "text-base-content hover:bg-base-300"))}
+                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                            :d "M9 17V5a2 2 0 012-2h4l2 2h4v12a2 2 0 01-2 2H7a2 2 0 01-2-2v-5"}))
+                "Receipts")
+
+              ($ :a {:href "/admin/suppliers"
+                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                              (if (= route-name :admin-suppliers)
+                                "bg-primary text-primary-content"
+                                "text-base-content hover:bg-base-300"))}
+                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                            :d "M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4"}))
+                "Suppliers")
+
+              ($ :a {:href "/admin/payers"
+                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                              (if (= route-name :admin-payers)
+                                "bg-primary text-primary-content"
+                                "text-base-content hover:bg-base-300"))}
+                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                            :d "M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 0V4m0 10v4m4-4h4m-8 0H4"}))
+                "Payers")
+
               ;; Divider
               ($ :div {:class "border-t border-base-300 my-2"})
 

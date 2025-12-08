@@ -12,6 +12,8 @@ The app stores:
 - Articles / line items (for **price comparisons** across suppliers)
 - Reports (weekly/monthly, breakdowns by payer/supplier/category/article)
 
+**Implementation status (2025-12-08):** Backend services, schema, and admin API routes under `/admin/api/expenses` are implemented and tested (integration suite passing); frontend pages/routes and ADE integration are pending.
+
 ---
 
 ## 2) Core Definitions (to avoid ambiguity)

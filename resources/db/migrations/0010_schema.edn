@@ -1,0 +1,221 @@
+({:action :create-type,
+  :type-name :receipt-status,
+  :model-name :receipts,
+  :options
+  {:choices
+   ["uploaded"
+    "parsing"
+    "parsed"
+    "extracting"
+    "extracted"
+    "review_required"
+    "approved"
+    "posted"
+    "failed"],
+   :type :enum}}
+ {:action :create-type,
+  :type-name :currency,
+  :model-name :expenses,
+  :options {:choices ["BAM" "EUR" "USD"], :type :enum}}
+ {:action :create-table,
+  :model-name :receipts,
+  :fields
+  {:original-filename {:type [:varchar 255]},
+   :raw-extract-json {:type :jsonb},
+   :updated-at {:default "NOW()", :type :timestamptz},
+   :payment-hints {:type :jsonb},
+   :total-amount-guess {:type [:decimal 12 2]},
+   :purchased-at-guess {:type :timestamptz},
+   :file-size {:type :integer},
+   :currency-guess {:type [:enum :currency]},
+   :expense-id {:type :uuid},
+   :status
+   {:null false, :default "uploaded", :type [:enum :receipt-status]},
+   :file-hash {:null false, :type [:varchar 64]},
+   :id {:primary-key true, :type :uuid},
+   :content-type {:type [:varchar 100]},
+   :error-details {:type :jsonb},
+   :storage-key {:null false, :type :text},
+   :error-message {:type :text},
+   :raw-parse-json {:type :jsonb},
+   :supplier-guess {:type [:varchar 255]},
+   :retry-count {:default 0, :type :integer},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :parsed-markdown {:type :text}}}
+ {:action :create-type,
+  :type-name :payer-type,
+  :model-name :payers,
+  :options {:choices ["cash" "card" "account" "person"], :type :enum}}
+ {:action :create-table,
+  :model-name :suppliers,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :display-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :address {:type :text},
+   :tax-id {:type [:varchar 50]},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :payers,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :type {:null false, :type [:enum :payer-type]},
+   :label {:null false, :type [:varchar 255]},
+   :last4 {:type [:varchar 4]},
+   :is-default {:default false, :type :boolean},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :expenses,
+  :fields
+  {:purchased-at {:null false, :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz},
+   :is-posted {:default true, :null false, :type :boolean},
+   :deleted-at {:type :timestamptz},
+   :currency {:null false, :default "BAM", :type [:enum :currency]},
+   :supplier-id {:foreign-key :suppliers/id, :null false, :type :uuid},
+   :payer-id {:foreign-key :payers/id, :null false, :type :uuid},
+   :id {:primary-key true, :type :uuid},
+   :notes {:type :text},
+   :total-amount {:null false, :type [:decimal 12 2]},
+   :receipt-id
+   {:foreign-key :receipts/id, :on-delete :set-null, :type :uuid},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :articles,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :canonical-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :barcode {:type [:varchar 50]},
+   :category {:type [:varchar 100]},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :expense_items,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :expense-id
+   {:foreign-key :expenses/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :raw-label {:null false, :type :text},
+   :article-id
+   {:foreign-key :articles/id, :on-delete :set-null, :type :uuid},
+   :qty {:type [:decimal 10 3]},
+   :unit-price {:type [:decimal 12 2]},
+   :line-total {:null false, :type [:decimal 12 2]},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :price_observations,
+  :fields
+  {:observed-at {:null false, :type :timestamptz},
+   :expense-item-id
+   {:foreign-key :expense_items/id, :on-delete :set-null, :type :uuid},
+   :line-total {:null false, :type [:decimal 12 2]},
+   :article-id
+   {:foreign-key :articles/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :unit-price {:type [:decimal 12 2]},
+   :currency {:default "BAM", :type [:enum :currency]},
+   :supplier-id
+   {:foreign-key :suppliers/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :id {:primary-key true, :type :uuid},
+   :qty {:type [:decimal 10 3]},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-price-obs-supplier,
+  :model-name :price_observations,
+  :options {:fields [:supplier_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-file-hash,
+  :model-name :receipts,
+  :options {:fields [:file_hash], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-articles-category,
+  :model-name :articles,
+  :options {:fields [:category], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-articles-normalized-key,
+  :model-name :articles,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-created-at,
+  :model-name :receipts,
+  :options {:fields [:created_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expense-items-article,
+  :model-name :expense_items,
+  :options {:fields [:article_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-status,
+  :model-name :receipts,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-table,
+  :model-name :article_aliases,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :supplier-id
+   {:foreign-key :suppliers/id, :on-delete :cascade, :type :uuid},
+   :raw-label-normalized {:null false, :type [:varchar 255]},
+   :article-id
+   {:foreign-key :articles/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :confidence {:default 100, :type :integer},
+   :created-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-article-aliases-article,
+  :model-name :article_aliases,
+  :options {:fields [:article_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-article-aliases-supplier-label,
+  :model-name :article_aliases,
+  :options
+  {:fields [:supplier_id :raw_label_normalized],
+   :unique true,
+   :type :btree}}
+ {:action :create-index,
+  :index-name :idx-price-obs-observed-at,
+  :model-name :price_observations,
+  :options {:fields [:observed_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-payers-type,
+  :model-name :payers,
+  :options {:fields [:type], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-price-obs-article,
+  :model-name :price_observations,
+  :options {:fields [:article_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-supplier,
+  :model-name :expenses,
+  :options {:fields [:supplier_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-is-posted,
+  :model-name :expenses,
+  :options {:fields [:is_posted], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expense-items-expense,
+  :model-name :expense_items,
+  :options {:fields [:expense_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-suppliers-normalized-key,
+  :model-name :suppliers,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-payer,
+  :model-name :expenses,
+  :options {:fields [:payer_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-purchased-at,
+  :model-name :expenses,
+  :options {:fields [:purchased_at], :type :btree}})

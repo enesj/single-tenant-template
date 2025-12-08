@@ -13,7 +13,7 @@ Quick guide for configuring and running the template locally. Defaults match `co
 
 ## Runtime Defaults (from `config/base.edn`)
 - Web server: **localhost:8085** (dev) / **8086** (test)  
-- DB names: `single_tenant` (dev) / `single_tenant_test` (test)  
+- DB names: `single_tenant_pos` (dev) / `single_tenant_pos_test` (test)  
 - HikariCP: max pool 20, idle 5, leak detection 60s  
 - Metrics: Prometheus on **9190** (enabled)  
 - Email: `:type :gmail-smtp` by default; Postmark keys are optional  

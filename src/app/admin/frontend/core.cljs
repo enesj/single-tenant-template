@@ -22,6 +22,7 @@
     [app.admin.frontend.subs.audit]
     [app.admin.frontend.subs.login-events]
     [app.admin.frontend.subs.users]
+    [app.domain.expenses.frontend.core :as expenses-domain]
     [app.template.frontend.events.core]
     [app.template.frontend.events.form]
     [app.template.frontend.events.list.batch]
@@ -42,4 +43,6 @@
   ;; Load config and models-data if not already loaded
   (rf/dispatch [:app.template.frontend.events.config/fetch-config])
   ;; Load admin UI configurations
-  (rf/dispatch [:admin/load-ui-configs]))
+  (rf/dispatch [:admin/load-ui-configs])
+  ;; Ensure expenses domain front-end namespaces are loaded
+  (expenses-domain/init!))

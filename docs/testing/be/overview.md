@@ -39,7 +39,7 @@ Tests run with `-Daero.profile=test`, which provides:
 |---------|-------|---------|
 | Web port | 8086 | Avoid conflicts with dev (8085) |
 | DB port | 55433 | Separate test database |
-| DB name | `single_tenant_test` | Isolated test data |
+| DB name | `single_tenant_pos_test` | Isolated test data |
 
 ### Test Database
 

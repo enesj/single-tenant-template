@@ -240,7 +240,7 @@ The test profile (`:test`) configures:
 |---------|-------|
 | `:port` | 8086 |
 | `:database/port` | 55433 |
-| `:database/name` | `single_tenant_test` |
+| `:database/name` | `single_tenant_pos_test` |
 
 ### Kaocha Configuration
 

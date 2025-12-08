@@ -14,6 +14,7 @@
     [app.backend.routes.admin.user-operations :as admin-user-ops]
     [app.backend.routes.admin.users :as admin-users]
     [app.backend.routes.admin.utils :as admin-utils]
+    [app.domain.expenses.routes.core :as expenses-routes]
     [taoensso.timbre :as log]))
 
 
@@ -52,6 +53,9 @@
 
       ;; Protected password routes
       ["/auth" (admin-password/protected-routes db email-service base-url)]
+
+      ;; Home Expenses domain
+      (expenses-routes/routes db)
 
       ;; Admin management (owner operations)
       (admin-admins/routes db)

@@ -1,0 +1,202 @@
+{;; ============================================================================
+ ;; Home Expenses Tracker — Domain Database Schema
+ ;; ============================================================================
+ ;; This file defines all tables for the expense tracking domain.
+ ;; ============================================================================
+
+ ;; ----------------------------------------------------------------------------
+ ;; Suppliers (stores, shops, vendors)
+ ;; ----------------------------------------------------------------------------
+ 
+ :suppliers {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:display_name [:varchar 255] {:null false}]
+   [:normalized_key [:varchar 255] {:null false}]
+   [:address :text]
+   [:tax_id [:varchar 50]]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]
+  ]
+  :indexes [
+   [:idx_suppliers_normalized_key :btree {:fields [:normalized_key] :unique true}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Payers (payment methods: cash, cards, accounts, people)
+ ;; ----------------------------------------------------------------------------
+ 
+ :payers {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:type [:enum :payer-type] {:null false}]
+   [:label [:varchar 255] {:null false}]
+   [:last4 [:varchar 4]]  ;; For cards
+   [:is_default :boolean {:default false}]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]
+  ]
+  :types [
+   [:payer-type :enum {:choices ["cash" "card" "account" "person"]}]
+  ]
+  :indexes [
+   [:idx_payers_type :btree {:fields [:type]}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Receipts (uploaded images, ADE processing status)
+ ;; ----------------------------------------------------------------------------
+ 
+ :receipts {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:storage_key :text {:null false}]  ;; S3/local path
+   [:file_hash [:varchar 64] {:null false}]  ;; SHA-256 for dedupe
+   [:original_filename [:varchar 255]]
+   [:content_type [:varchar 100]]
+   [:file_size :integer]
+   [:status [:enum :receipt-status] {:null false :default "uploaded"}]
+   [:raw_parse_json :jsonb]
+   [:raw_extract_json :jsonb]
+   [:parsed_markdown :text]
+   [:supplier_guess [:varchar 255]]
+   [:total_amount_guess [:decimal 12 2]]
+   [:currency_guess [:enum :currency]]
+   [:purchased_at_guess :timestamptz]
+   [:payment_hints :jsonb]  ;; {method: "card", card_last4: "1234"}
+   [:error_message :text]
+   [:error_details :jsonb]
+   [:retry_count :integer {:default 0}]
+   [:expense_id :uuid]  ;; Reference to expense (FK to be added in later migration)
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]
+  ]
+  :types [
+   [:receipt-status :enum {:choices ["uploaded" "parsing" "parsed" 
+                                     "extracting" "extracted" "review_required" 
+                                     "approved" "posted" "failed"]}]
+  ]
+  :indexes [
+   [:idx_receipts_file_hash :btree {:fields [:file_hash] :unique true}]
+   [:idx_receipts_status :btree {:fields [:status]}]
+   [:idx_receipts_created_at :btree {:fields [:created_at]}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Expenses (posted transactions with totals)
+ ;; ----------------------------------------------------------------------------
+ 
+ :expenses {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:receipt_id :uuid {:foreign-key :receipts/id :on-delete :set-null}]
+   [:supplier_id :uuid {:foreign-key :suppliers/id :null false}]
+   [:payer_id :uuid {:foreign-key :payers/id :null false}]
+   [:purchased_at :timestamptz {:null false}]
+   [:total_amount [:decimal 12 2] {:null false}]
+   [:currency [:enum :currency] {:null false :default "BAM"}]
+   [:notes :text]
+   [:is_posted :boolean {:default true :null false}]  ;; Draft vs Posted
+   [:deleted_at :timestamptz]  ;; Soft delete
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]
+  ]
+  :types [
+   [:currency :enum {:choices ["BAM" "EUR" "USD"]}]
+  ]
+  :indexes [
+   [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
+   [:idx_expenses_payer :btree {:fields [:payer_id]}]
+   [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]
+   [:idx_expenses_is_posted :btree {:fields [:is_posted]}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Expense Items (line items on receipts)
+ ;; ----------------------------------------------------------------------------
+ 
+ :expense_items {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}]
+   [:raw_label :text {:null false}]
+   [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
+   [:qty [:decimal 10 3]]
+   [:unit_price [:decimal 12 2]]
+   [:line_total [:decimal 12 2] {:null false}]
+   [:created_at :timestamptz {:default "NOW()"}]
+  ]
+  :indexes [
+   [:idx_expense_items_expense :btree {:fields [:expense_id]}]
+   [:idx_expense_items_article :btree {:fields [:article_id]}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Articles (canonical products/items)
+ ;; ----------------------------------------------------------------------------
+ 
+ :articles {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:canonical_name [:varchar 255] {:null false}]
+   [:normalized_key [:varchar 255] {:null false}]
+   [:barcode [:varchar 50]]
+   [:category [:varchar 100]]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]
+  ]
+  :indexes [
+   [:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]
+   [:idx_articles_category :btree {:fields [:category]}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Article Aliases (mapping raw labels → canonical articles)
+ ;; ----------------------------------------------------------------------------
+ 
+ :article_aliases {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}]
+   [:raw_label_normalized [:varchar 255] {:null false}]
+   [:article_id :uuid {:foreign-key :articles/id :null false :on-delete :cascade}]
+   [:confidence :integer {:default 100}]  ;; 0-100, 100 = user confirmed
+   [:created_at :timestamptz {:default "NOW()"}]
+  ]
+  :indexes [
+   [:idx_article_aliases_supplier_label :btree 
+    {:fields [:supplier_id :raw_label_normalized] :unique true}]
+   [:idx_article_aliases_article :btree {:fields [:article_id]}]
+  ]
+ }
+
+ ;; ----------------------------------------------------------------------------
+ ;; Price Observations (track prices over time)
+ ;; ----------------------------------------------------------------------------
+ 
+ :price_observations {
+  :fields [
+   [:id :uuid {:primary-key true}]
+   [:article_id :uuid {:foreign-key :articles/id :null false :on-delete :cascade}]
+   [:supplier_id :uuid {:foreign-key :suppliers/id :null false :on-delete :cascade}]
+   [:expense_item_id :uuid {:foreign-key :expense_items/id :on-delete :set-null}]
+   [:observed_at :timestamptz {:null false}]
+   [:unit_price [:decimal 12 2]]
+   [:line_total [:decimal 12 2] {:null false}]
+   [:qty [:decimal 10 3]]
+   [:currency [:enum :currency] {:default "BAM"}]
+   [:created_at :timestamptz {:default "NOW()"}]
+  ]
+  :indexes [
+   [:idx_price_obs_article :btree {:fields [:article_id]}]
+   [:idx_price_obs_supplier :btree {:fields [:supplier_id]}]
+   [:idx_price_obs_observed_at :btree {:fields [:observed_at]}]
+  ]
+ }
+}

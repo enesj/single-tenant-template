@@ -25,6 +25,7 @@ Fast pointers for AI agents (and humans) to the current single-tenant docs. Use 
 - HTTP/API: `docs/backend/http-api.md`, `docs/frontend/http-standards.md`
 - DB/migrations: `resources/db/models.edn`, `docs/migrations/*`
 - Monitoring: audit/login events in `docs/backend/http-api.md` and `docs/reference/api-reference.md`
+- Home Expenses domain: endpoints in `docs/backend/http-api.md` (`/admin/api/expenses/**`), implementation plan `app-specs/home-expenses-tracker-plan.md`
 
 ## Metadata for RAG
 All docs should start with:

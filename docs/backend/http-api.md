@@ -50,6 +50,62 @@ All paths are relative to `/admin/api`.
 - `DELETE /admin/api/login-events/:id` – delete a login event (admin action; RLS bypassed within txn).
 - `DELETE /admin/api/login-events/bulk` – delete multiple login events; body `{:ids [<uuid> ...]}`.
 
+### Home Expenses (protected, mounted at `/admin/api/expenses`, `app.domain.expenses.routes.*`)
+**Suppliers**
+- `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by).
+- `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
+- `GET /admin/api/expenses/suppliers/count` – total (optional `search`).
+- `GET /admin/api/expenses/suppliers/search?q=...` – autocomplete.
+- `GET /admin/api/expenses/suppliers/:id` – fetch.
+- `PUT /admin/api/expenses/suppliers/:id` – update.
+- `DELETE /admin/api/expenses/suppliers/:id` – delete (fails if referenced).
+
+**Payers**
+- `GET /admin/api/expenses/payers` – list (optional `type`).
+- `POST /admin/api/expenses/payers` – create; requires `type`, `label`.
+- `GET /admin/api/expenses/payers/count` – total (optional `type`).
+- `GET /admin/api/expenses/payers/suggest` – suggest from `method`/`card_last4`.
+- `GET /admin/api/expenses/payers/default/:type` – fetch default for type.
+- `POST /admin/api/expenses/payers/:id/default` – set default for payer’s type.
+- `GET /admin/api/expenses/payers/:id` – fetch; `PUT` update; `DELETE` remove.
+
+**Receipts**
+- `GET /admin/api/expenses/receipts` – list; filters `status`, `limit/offset`, `order-dir`.
+- `GET /admin/api/expenses/receipts/pending` – pending for processing.
+- `POST /admin/api/expenses/receipts` – upload; requires `storage_key` and `file_hash` or `bytes`.
+- `GET /admin/api/expenses/receipts/:id` – fetch one.
+- `POST /admin/api/expenses/receipts/:id/status` – set status.
+- `POST /admin/api/expenses/receipts/:id/retry` – reset to uploaded + bump retry.
+- `POST /admin/api/expenses/receipts/:id/fail` – mark failed with message/details.
+- `POST /admin/api/expenses/receipts/:id/extraction` – store extraction payloads/guesses.
+- `POST /admin/api/expenses/receipts/:id/approve` – approve + create expense + mark posted.
+
+**Expenses**
+- `GET /admin/api/expenses/entries` – list; filters `from/to`, `supplier-id`, `payer-id`, `is-posted?`, pagination.
+- `POST /admin/api/expenses/entries` – create expense with `items`.
+- `GET /admin/api/expenses/entries/:id` – fetch with items.
+- `PUT /admin/api/expenses/entries/:id` – update expense fields.
+- `DELETE /admin/api/expenses/entries/:id` – soft delete.
+
+**Articles / Price history**
+- `GET /admin/api/expenses/articles` – list/search.
+- `POST /admin/api/expenses/articles` – create; requires `canonical_name`.
+- `GET /admin/api/expenses/articles/unmapped-items` – expense items missing article mapping.
+- `POST /admin/api/expenses/articles/items/:item-id/map` – attach article to item (optional alias create).
+- `GET /admin/api/expenses/articles/:id` – fetch article.
+- `POST /admin/api/expenses/articles/:id/aliases` – add/replace alias for supplier/raw label.
+- `GET /admin/api/expenses/articles/:id/price-history` – price observations (optional `supplier_id`, `limit`).
+- `GET /admin/api/expenses/articles/:id/latest-prices` – latest price per supplier.
+- `GET /admin/api/expenses/articles/:id/compare` – price observations for comparisons (optional `from`, `limit`).
+
+**Reports**
+- `GET /admin/api/expenses/reports/summary` – totals for range.
+- `GET /admin/api/expenses/reports/payers` – breakdown by payer.
+- `GET /admin/api/expenses/reports/suppliers` – breakdown by supplier.
+- `GET /admin/api/expenses/reports/weekly` – weekly totals.
+- `GET /admin/api/expenses/reports/monthly` – monthly totals.
+- `GET /admin/api/expenses/reports/top-suppliers` – top suppliers (optional `limit`).
+
 ### Dev Helpers (no auth; for local debugging only)
 - `GET /admin/api/dev-get-rate-limits` – inspect rate-limit state.
 - `POST /admin/api/dev-clear-rate-limits` – reset rate limits.

@@ -6,6 +6,8 @@
 
 This repository is the **single-tenant template** extracted from the Hosting multi-tenant app. It keeps the shared/template/admin infrastructure (Clojure/ClojureScript, PostgreSQL, Shadow-CLJS, Babashka tooling) but ships **without Hosting/Financial/Integration business domains or tenant-aware RLS**. Hosting-specific docs remain as reference when you want examples of full domains.
 
+**New (2025-12-08):** Home Expenses Tracker domain is included and exposed under `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles, reports). See `docs/backend/http-api.md` and the implementation plan in `app-specs/home-expenses-tracker-plan.md`.
+
 ## Quick Start
 
 1. **Dev setup** → `docs/operations/README.md#initial-setup`

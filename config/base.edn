@@ -10,11 +10,11 @@
             ;; Profile-specific settings
              :port     #profile {:dev  55432
                                  :test 55433}
-             :dbname   #profile {:dev  "single_tenant"
-                                 :test "single_tenant_test"}
+             :dbname   #profile {:dev  "single_tenant_pos"
+                                 :test "single_tenant_pos_test"}
              :jdbc-url #profile
-                        {:dev  #join ["jdbc:postgresql://localhost:55432/single_tenant?user=app_user&password=" #ref [:secrets :db :dev-password]]
-                         :test #join ["jdbc:postgresql://localhost:55433/single_tenant_test?user=app_user&password=" #ref [:secrets :db :test-password]]}}
+                        {:dev  #join ["jdbc:postgresql://localhost:55432/single_tenant_pos?user=app_user&password=" #ref [:secrets :db :dev-password]]
+                         :test #join ["jdbc:postgresql://localhost:55433/single_tenant_pos_test?user=app_user&password=" #ref [:secrets :db :test-password]]}}
 
  ;; HikariCP Connection Pool Configuration
  :hikari-cp {:maximum-pool-size        20

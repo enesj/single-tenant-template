@@ -11,6 +11,15 @@ This app runs a single-tenant admin backend. Multi-tenant domain services (hosti
 - **Admin service façade** (`app.backend.services.admin`) – higher-level helpers for advanced operations (e.g., `get-user-activity`, role updates) used by `admin.user-operations` routes.
 - **Shared helpers** – response coercion, pagination, and logging in `app.backend.routes.admin.utils`.
 
+## Domain: Home Expenses Tracker (new)
+- **Suppliers** (`app.domain.expenses.services.suppliers`) — CRUD, normalization/dedupe by `normalized_key`, search/count helpers.
+- **Payers** (`app.domain.expenses.services.payers`) — CRUD, default-per-type management, suggestions from payment hints.
+- **Receipts** (`app.domain.expenses.services.receipts`) — upload with file-hash dedupe, status transitions, approve → post expense, extraction storage.
+- **Expenses** (`app.domain.expenses.services.expenses`) — create/update with line items, soft delete, listing filters; records price observations.
+- **Articles/Aliases/Price history** (`app.domain.expenses.services.articles`, `price-history`) — canonical articles, alias mapping, price observation queries.
+- **Reports** (`app.domain.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
+- **Routes** mounted under `/admin/api/expenses` via `app.domain.expenses.routes.core` (see `docs/backend/http-api.md` for endpoint map).
+
 ## How Routes Bind to Services
 - `app.backend.routes.admin.users` → basic user CRUD.
 - `app.backend.routes.admin.user-operations` → role update, force verify email, reset password, impersonation, activity aggregation, advanced search.

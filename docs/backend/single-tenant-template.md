@@ -12,6 +12,7 @@ This document explains what the **single-tenant template** includes, how it diff
 - **Frontend entrypoint**: `app.template.frontend.core`
   - Boots template routes and components, calls `app.admin.frontend.core/init-admin!`, mounts `current-page`.
   - Admin routes: `/admin/login`, `/admin`, `/admin/users`, `/admin/audit`, `/admin/login-events`.
+- **Domain sample (new)**: Home Expenses Tracker backend domain under `src/app/domain/expenses` with services/routes mounted at `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles/price-history, reports). Frontend pages are pending.
 - **Admin UI**: `src/app/admin/frontend/*` with list/form patterns and templates.
 - **Template/shared libs**: `src/app/template/*`, `src/app/shared/*` (components, validation, schemas, HTTP, CRUD helpers).
 - **Database models**: `resources/db/models.edn` (single-tenant; includes audit/login event tables).
