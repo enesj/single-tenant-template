@@ -1,41 +1,87 @@
 (ns app.domain.expenses.frontend.events.suppliers
   (:require
     [ajax.core :as ajax]
+    [app.admin.frontend.adapters.expenses :as expenses-adapter]
     [app.admin.frontend.utils.http :as admin-http]
+    [app.template.frontend.db.paths :as paths]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]))
 
+(def ^:private entity-key :suppliers)
 (def ^:private base-path [:admin :expenses :suppliers])
+(def ^:private default-per-page 50)
 
-(defn- assoc-path
-  [db k v]
-  (assoc-in db (conj base-path k) v))
+(defn- resolve-pagination
+  [db {:keys [limit offset page per-page]}]
+  (let [existing-per-page (or (get-in db (paths/list-per-page entity-key))
+                            (get-in db (conj (paths/list-ui-state entity-key) :per-page))
+                            (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page))
+                            default-per-page)
+        existing-page (or (get-in db (paths/list-current-page entity-key))
+                        (get-in db (conj (paths/list-ui-state entity-key) :current-page))
+                        (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page))
+                        1)
+        per-page (or limit per-page existing-per-page default-per-page)
+        page (or page (when offset (inc (quot offset (max per-page 1)))) existing-page 1)
+        offset (or offset (* (max 0 (dec page)) per-page))]
+    {:limit per-page
+     :offset offset
+     :page page
+     :per-page per-page}))
+
+(defn- begin-load
+  [db params]
+  (let [{:keys [limit offset page per-page]} (resolve-pagination db params)]
+    (-> db
+      (assoc-in (paths/entity-loading? entity-key) true)
+      (assoc-in (paths/entity-error entity-key) nil)
+      (assoc-in [:admin :suppliers :loading?] true)
+      (assoc-in [:admin :suppliers :error] nil)
+      (assoc-in (paths/list-per-page entity-key) per-page)
+      (assoc-in (paths/list-current-page entity-key) page)
+      (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page})
+      (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page})
+      (assoc-in (conj base-path :loading?) true)
+      (assoc-in (conj base-path :error) nil))))
+
+(defn- finish-load
+  [db error?]
+  (let [error-val (when error? (admin-http/extract-error-message error?))]
+    (-> db
+      (assoc-in (paths/entity-loading? entity-key) false)
+      (assoc-in (paths/entity-error entity-key) error-val)
+      (assoc-in [:admin :suppliers :loading?] false)
+      (assoc-in [:admin :suppliers :error] error-val)
+      (assoc-in (conj base-path :loading?) false)
+      (assoc-in (conj base-path :error) error-val))))
 
 (rf/reg-event-fx
   ::load
-  (fn [{:keys [db]} [_ {:keys [search limit offset] :or {limit 100 offset 0}}]]
-    {:db (-> db
-           (assoc-path :loading? true)
-           (assoc-path :error nil))
-     :http-xhrio (admin-http/admin-get
-                   {:uri "/admin/api/expenses/suppliers"
-                    :params (cond-> {:limit limit :offset offset}
-                              search (assoc :search search))
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::loaded]
-                    :on-failure [::load-failed]})}))
+  (fn [{:keys [db]} [_ {:keys [search] :as params}]]
+    (let [{:keys [limit offset] :as pagination} (resolve-pagination db params)]
+      {:db (begin-load db pagination)
+       :http-xhrio (admin-http/admin-get
+                     {:uri "/admin/api/expenses/suppliers"
+                      :params (cond-> {:limit limit :offset offset}
+                                search (assoc :search search))
+                      :response-format (ajax/json-response-format {:keywords? true})
+                      :on-success [::loaded pagination]
+                      :on-failure [::load-failed]})})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::loaded
-  (fn [db [_ {:keys [suppliers]}]]
-    (-> db
-      (assoc-path :loading? false)
-      (assoc-path :error nil)
-      (assoc-path :items (vec (or suppliers []))))))
+  (fn [{:keys [db]} [_ {:keys [limit offset]} {:keys [suppliers]}]]
+    (let [db* (-> db
+                (finish-load nil)
+                (assoc-in (conj base-path :items) (vec (or suppliers []))))
+        per-page (or limit default-per-page)
+        page (inc (quot (or offset 0) (max per-page 1)))]
+      {:db (-> db*
+       (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page})
+       (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page}))
+       :dispatch-n [[::expenses-adapter/sync-suppliers suppliers]]})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::load-failed
-  (fn [db [_ error]]
-    (-> db
-      (assoc-path :loading? false)
-      (assoc-path :error (admin-http/extract-error-message error)))))
+  (fn [{:keys [db]} [_ error]]
+    {:db (finish-load db error)}))

@@ -18,20 +18,20 @@
   [name]
   (when name
     (-> name
-        str/trim
-        str/lower-case
-        (str/replace #"[^a-z0-9\s-]" "")
-        (str/replace #"\s+" "-"))))
+      str/trim
+      str/lower-case
+      (str/replace #"[^a-z0-9\s-]" "")
+      (str/replace #"\s+" "-"))))
 
 (defn normalize-alias-label
   "Normalize raw line-item labels for alias lookup."
   [label]
   (when label
     (-> label
-        str/trim
-        str/lower-case
-        (str/replace #"[^a-z0-9\s-]" "")
-        (str/replace #"\s+" "-"))))
+      str/trim
+      str/lower-case
+      (str/replace #"[^a-z0-9\s-]" "")
+      (str/replace #"\s+" "-"))))
 
 ;; ============================================================================
 ;; CRUD
@@ -74,6 +74,33 @@
                                       [:ilike :normalized_key (str "%" search "%")]
                                       [:ilike :barcode (str "%" search "%")]]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn update-article!
+  "Update a canonical article. Recomputes normalized_key when canonical_name is provided."
+  [db id {:keys [canonical_name barcode category] :as data}]
+  (let [update-map (cond-> {}
+                     canonical_name (assoc :canonical_name canonical_name
+                                      :normalized_key (normalize-article-key canonical_name))
+                     (contains? data :barcode) (assoc :barcode barcode)
+                     (contains? data :category) (assoc :category category)
+                     true (assoc :updated_at [:now]))]
+    (when (seq update-map)
+      (jdbc/execute-one!
+        db
+        (sql/format {:update :articles
+                     :set update-map
+                     :where [:= :id id]
+                     :returning [:*]})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
+
+(defn delete-article!
+  "Delete article by id. Returns true when a row was removed."
+  [db id]
+  (pos?
+    (jdbc/execute-one!
+      db
+      (sql/format {:delete-from :articles
+                   :where [:= :id id]}))))
 
 ;; ============================================================================
 ;; Aliases

@@ -27,6 +27,7 @@
    - :show-filtering?   - Show filter controls
    - :show-pagination?  - Show pagination controls
    - :show-batch-edit?  - Show batch edit functionality
+   - :show-batch-delete? - Show batch delete functionality
    - :show-add-button?  - Show add new item button
    - :controls          - Map of control visibility settings
    

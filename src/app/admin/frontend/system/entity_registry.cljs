@@ -4,6 +4,7 @@
     [app.admin.frontend.adapters.audit :as audit-adapter]
     [app.admin.frontend.adapters.login-events :as login-events-adapter]
     [app.admin.frontend.adapters.admins :as admins-adapter]
+    [app.admin.frontend.adapters.expenses :as expenses-adapter]
     [app.admin.frontend.events.admins] ; Required for side effects (event registration)
     [app.admin.frontend.subs.admins] ; Required for side effects (subscription registration)
     [app.admin.frontend.components.enhanced-action-buttons :as enhanced-actions]
@@ -36,7 +37,32 @@
    :admins
    {:init-fn admins-adapter/init-admins-adapter!
     :actions enhanced-actions/enhanced-action-buttons
-    :custom-actions admin-actions/admin-admin-actions}})
+    :custom-actions admin-actions/admin-admin-actions}
+
+   ;; Expenses domain admin entities
+   :receipts
+   {:init-fn expenses-adapter/init-receipts-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}
+
+   :suppliers
+   {:init-fn expenses-adapter/init-suppliers-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}
+
+   :payers
+   {:init-fn expenses-adapter/init-payers-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}
+
+   :articles
+   {:init-fn expenses-adapter/init-articles-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}
+
+   :article-aliases
+   {:init-fn expenses-adapter/init-article-aliases-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}
+
+   :price-observations
+   {:init-fn expenses-adapter/init-price-observations-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}})
 
 (defonce registered-entities (atom {}))
 

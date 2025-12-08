@@ -1,6 +1,7 @@
 (ns app.admin.frontend.core
   "Core namespace for admin frontend - single-tenant setup"
   (:require
+    [app.admin.frontend.adapters.expenses]
     [app.admin.frontend.adapters.users]
     [app.admin.frontend.config.preload]
     [app.admin.frontend.events.config]
@@ -22,6 +23,7 @@
     [app.admin.frontend.subs.audit]
     [app.admin.frontend.subs.login-events]
     [app.admin.frontend.subs.users]
+    [app.admin.frontend.subs.expenses]
     [app.domain.expenses.frontend.core :as expenses-domain]
     [app.template.frontend.events.core]
     [app.template.frontend.events.form]

@@ -8,8 +8,8 @@
 
 (defn- to-app [data]
   (-> data
-      db-adapter/convert-pg-objects
-      db-adapter/convert-db-keys->app-keys))
+    db-adapter/convert-pg-objects
+    db-adapter/convert-db-keys->app-keys))
 
 (defn list-articles-handler [db]
   (utils/with-error-handling
@@ -42,6 +42,26 @@
           (utils/error-response "Article not found" :status 404))
         (utils/error-response "Invalid id" :status 400)))
     "Failed to fetch article"))
+
+(defn update-article-handler [db]
+  (utils/with-error-handling
+    (fn [request]
+      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+        (if-let [article (articles/update-article! db id (:body request))]
+          (utils/success-response {:article (to-app article)})
+          (utils/error-response "Article not found" :status 404))
+        (utils/error-response "Invalid id" :status 400)))
+    "Failed to update article"))
+
+(defn delete-article-handler [db]
+  (utils/with-error-handling
+    (fn [request]
+      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+        (if (articles/delete-article! db id)
+          (utils/success-response {:deleted true})
+          (utils/error-response "Article not found" :status 404))
+        (utils/error-response "Invalid id" :status 400)))
+    "Failed to delete article"))
 
 (defn create-alias-handler [db]
   (utils/with-error-handling
@@ -126,7 +146,9 @@
         :post (create-article-handler db)}]
    ["/unmapped-items" {:get (list-unmapped-items-handler db)}]
    ["/items/:item-id/map" {:post (map-item-handler db)}]
-   ["/:id" {:get (get-article-handler db)}]
+   ["/:id" {:get (get-article-handler db)
+            :put (update-article-handler db)
+            :delete (delete-article-handler db)}]
    ["/:id/aliases" {:post (create-alias-handler db)}]
    ["/:id/price-history" {:get (price-history-handler db)}]
    ["/:id/latest-prices" {:get (latest-prices-handler db)}]

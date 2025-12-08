@@ -180,7 +180,10 @@
          ["/admins" {:get {:handler admin-render-page}}]
          ["/audit" {:get {:handler admin-render-page}}]
          ["/login-events" {:get {:handler admin-render-page}}]
-         ["/settings" {:get {:handler admin-render-page}}]]
+         ["/receipts" {:get {:handler admin-render-page}}]
+         ["/settings" {:get {:handler admin-render-page}}]
+         ;; catch-all for any other admin SPA paths (e.g., /admin/expenses, /admin/suppliers)
+         ["/*path" {:get {:handler admin-render-page}}]]
 
         ;; Additional frontend routes
         frontend-routes

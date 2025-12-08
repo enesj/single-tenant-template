@@ -1,6 +1,7 @@
 (ns app.template.frontend.events.list.crud
   "CRUD operations for list entities - fetching, deletion, and error handling"
   (:require
+    [app.shared.frontend.bridges.crud :as crud-bridges]
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
@@ -13,6 +14,8 @@
 ;;; -------------------------
 ;;; Entity Fetching
 ;;; -------------------------
+
+(crud-bridges/register-template-crud-events!)
 
 (rf/reg-event-fx
   ::fetch-entities
@@ -74,43 +77,36 @@
 (rf/reg-event-fx
   ::delete-entity
   common-interceptors
-  (fn [{:keys [db]} [entity-type id]]
+  (fn [cofx [entity-type id]]
     ;; Guard against malformed dispatches like
     ;; [:app.template.frontend.events.list.crud/delete-entity nil nil]
     ;; which would otherwise throw when calling `name` on nil.
+    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
     (if (and entity-type id)
-      {:db (assoc-in db (paths/entity-loading? entity-type) true)
-       :http-xhrio (http/delete-entity
-                     {:entity-name (name entity-type)
-                      :id id
-                      :on-success [::delete-success entity-type id]
-                      :on-failure [::delete-failure entity-type]})}
+      (crud-bridges/run-bridge-operation
+        :delete :request crud-bridges/default-delete-request cofx entity-type [id])
       (do
         (when js/console
           (js/console.warn
             "delete-entity called without entity-type or id"
             (clj->js {:entity-type entity-type :id id})))
-        {:db db}))))
+        {:db (:db cofx)}))))
 
 (rf/reg-event-fx
   ::delete-success
   common-interceptors
-  (fn [{:keys [db]} [entity-type _id]]
-    (let [base-fx {:db (assoc-in db (paths/entity-loading? entity-type) false)}]
-      (if (and entity-type (keyword? entity-type))
-        (assoc base-fx :dispatch [::fetch-entities entity-type])
-        base-fx))))
+  (fn [cofx [entity-type id]]
+    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    (crud-bridges/run-bridge-operation
+      :delete :on-success crud-bridges/default-crud-success cofx entity-type [id])))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::delete-failure
   common-interceptors
-  (fn [db [entity-type response]]
-    (-> db
-      (assoc-in (paths/entity-loading? entity-type) false)
-      (assoc-in (paths/entity-error entity-type)
-        (or (:error response)
-          (get-in response [:response :error])
-          "Failed to delete item")))))
+  (fn [cofx [entity-type error]]
+    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    (crud-bridges/run-bridge-operation
+      :delete :on-failure crud-bridges/default-delete-failure cofx entity-type [error])))
 
 ;;; -------------------------
 ;;; Entity Update
@@ -127,33 +123,26 @@
 (rf/reg-event-fx
   ::create-entity
   common-interceptors
-  (fn [{:keys [db]} [entity-type form-data]]
-    {:db (assoc-in db (paths/entity-loading? entity-type) true)
-     :http-xhrio (http/create-entity
-                   {:entity-name (name entity-type)
-                    :data form-data
-                    :on-success [::create-success entity-type]
-                    :on-failure [::create-failure entity-type]})}))
+  (fn [cofx [entity-type form-data]]
+    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    (crud-bridges/run-bridge-operation
+      :create :request crud-bridges/default-create-request cofx entity-type [form-data])))
 
 (rf/reg-event-fx
   ::create-success
   common-interceptors
-  (fn [{:keys [db]} [entity-type _response]]
-    (let [base-fx {:db (assoc-in db (paths/entity-loading? entity-type) false)}]
-      (if (and entity-type (keyword? entity-type))
-        (assoc base-fx :dispatch [::fetch-entities entity-type])
-        base-fx))))
+  (fn [cofx [entity-type response]]
+    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    (crud-bridges/run-bridge-operation
+      :create :on-success crud-bridges/default-crud-success cofx entity-type [response])))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::create-failure
   common-interceptors
-  (fn [db [entity-type response]]
-    (-> db
-      (assoc-in (paths/entity-loading? entity-type) false)
-      (assoc-in (paths/entity-error entity-type)
-        (or (:error response)
-          (get-in response [:response :error])
-          "Failed to create item")))))
+  (fn [cofx [entity-type error]]
+    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    (crud-bridges/run-bridge-operation
+      :create :on-failure crud-bridges/default-create-failure cofx entity-type [error])))
 
 ;;; -------------------------
 ;;; Error Handling

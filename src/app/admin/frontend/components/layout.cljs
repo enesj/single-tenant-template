@@ -20,105 +20,165 @@
             ($ :div {:class "flex items-center flex-shrink-0 px-4"}
               ($ :h1 {:class "text-xl font-bold text-base-content"} "Admin Panel"))
             ($ :nav {:class "mt-5 flex-1 px-2 space-y-1"}
-              ;; Dashboard
-              ($ :a {:href "/admin/dashboard"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-dashboard)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"}))
-                "Dashboard")
+              ;; System Administration Section
+              ($ :div {:class "mb-4"}
+                ($ :h3 {:class "px-3 text-xs font-semibold text-base-content/60 uppercase tracking-wider"}
+                  "System Administration")
 
-              ;; Users
-              ($ :a {:href "/admin/users"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-users)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"}))
-                "Users")
-
-              ;; Admin Management (owner only)
-              (when is-owner?
-                ($ :a {:href "/admin/admins"
+                ;; Dashboard
+                ($ :a {:href "/admin/dashboard"
                        :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                                (if (= route-name :admin-admins)
+                                (if (= route-name :admin-dashboard)
                                   "bg-primary text-primary-content"
                                   "text-base-content hover:bg-base-300"))}
                   ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
                     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                              :d "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"}))
-                  "Admins"))
+                              :d "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"}))
+                  "Dashboard")
 
-              ;; Audit Logs
-              ($ :a {:href "/admin/audit"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-audit)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M9 17v-6a2 2 0 012-2h8M9 17h10M9 17H5a2 2 0 01-2-2V7a2 2 0 012-2h8m6 0v10a2 2 0 01-2 2h-2m-4-12h6"}))
-                "Audit Logs")
+                ;; Users
+                ($ :a {:href "/admin/users"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-users)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"}))
+                  "Users")
 
-              ;; Login Events
-              ($ :a {:href "/admin/login-events"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-login-events)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M3 17a4 4 0 014-4h10a4 4 0 010 8H7a4 4 0 01-4-4zm7-9a3 3 0 116 0 3 3 0 01-6 0z"}))
-                "Login Events")
+                ;; Admin Management (owner only)
+                (when is-owner?
+                  ($ :a {:href "/admin/admins"
+                         :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                  (if (= route-name :admin-admins)
+                                    "bg-primary text-primary-content"
+                                    "text-base-content hover:bg-base-300"))}
+                    ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                      ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                                :d "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"}))
+                    "Admins"))
 
-              ;; Expenses Domain
-              ($ :a {:href "/admin/expenses"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-expenses)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M3 7h18M3 12h18M3 17h18"}))
-                "Expenses")
+                ;; Audit Logs
+                ($ :a {:href "/admin/audit"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-audit)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M9 17v-6a2 2 0 012-2h8M9 17h10M9 17H5a2 2 0 01-2-2V7a2 2 0 012-2h8m6 0v10a2 2 0 01-2 2h-2m-4-12h6"}))
+                  "Audit Logs")
 
-              ($ :a {:href "/admin/receipts"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-receipts)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M9 17V5a2 2 0 012-2h4l2 2h4v12a2 2 0 01-2 2H7a2 2 0 01-2-2v-5"}))
-                "Receipts")
-
-              ($ :a {:href "/admin/suppliers"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-suppliers)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4"}))
-                "Suppliers")
-
-              ($ :a {:href "/admin/payers"
-                     :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
-                              (if (= route-name :admin-payers)
-                                "bg-primary text-primary-content"
-                                "text-base-content hover:bg-base-300"))}
-                ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                            :d "M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 0V4m0 10v4m4-4h4m-8 0H4"}))
-                "Payers")
+                ;; Login Events
+                ($ :a {:href "/admin/login-events"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-login-events)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M3 17a4 4 0 014-4h10a4 4 0 010 8H7a4 4 0 01-4-4zm7-9a3 3 0 116 0 3 3 0 01-6 0z"}))
+                  "Login Events"))
 
               ;; Divider
-              ($ :div {:class "border-t border-base-300 my-2"})
+              ($ :div {:class "border-t border-base-300 my-4"})
+
+              ;; Domain Management Section
+              ($ :div {:class "mb-4"}
+                ($ :h3 {:class "px-3 text-xs font-semibold text-base-content/60 uppercase tracking-wider"}
+                  "Expenses Domain")
+
+                ;; Expenses
+                ($ :a {:href "/admin/expenses"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-expenses)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M3 7h18M3 12h18M3 17h18"}))
+                  "Expenses")
+
+                ;; New Expense
+                ($ :a {:href "/admin/expenses/new"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-expense-new)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M12 4v16m8-8H4"}))
+                  "New Expense")
+
+                ;; Receipts
+                ($ :a {:href "/admin/receipts"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-receipts)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M9 17V5a2 2 0 012-2h4l2 2h4v12a2 2 0 01-2 2H7a2 2 0 01-2-2v-5"}))
+                  "Receipts")
+
+                ;; Suppliers
+                ($ :a {:href "/admin/suppliers"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-suppliers)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4"}))
+                  "Suppliers")
+
+                ;; Payers
+                ($ :a {:href "/admin/payers"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-payers)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M12 8c-1.657 0-3 1.343-3 3s1.343 3 3 3 3-1.343 3-3-1.343-3-3-3zm0 0V4m0 10v4m4-4h4m-8 0H4"}))
+                  "Payers")
+
+                ;; Articles
+                ($ :a {:href "/admin/articles"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-articles)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M4 7h16M4 11h16M4 15h16M4 19h16"}))
+                  "Articles")
+
+                ;; Article Aliases
+                ($ :a {:href "/admin/article-aliases"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-article-aliases)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M10 13l-2 2a3 3 0 104.243 4.243l2-2M14 11l2-2a3 3 0 00-4.243-4.243l-2 2"}))
+                  "Article Aliases")
+
+                ;; Price Observations
+                ($ :a {:href "/admin/price-observations"
+                       :class (str "group flex items-center px-2 py-2 text-sm font-medium rounded-md "
+                                (if (= route-name :admin-price-observations)
+                                  "bg-primary text-primary-content"
+                                  "text-base-content hover:bg-base-300"))}
+                  ($ :svg {:class "mr-3 h-6 w-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                              :d "M4 17l4-4 4 4 6-6 2 2M4 7h16"}))
+                  "Price Observations"))
+
+              ;; Divider
+              ($ :div {:class "border-t border-base-300 my-4"})
 
               ;; Settings Overview
               ($ :a {:href "/admin/settings"

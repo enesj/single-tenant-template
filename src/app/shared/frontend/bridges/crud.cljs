@@ -277,9 +277,18 @@
 
   Returns effects map, potentially modified by applicable bridges."
   [operation handler-type default-effect-fn cofx entity-type args]
+  (log/info "🔍 run-bridge-operation:" {:operation operation
+                                        :handler-type handler-type
+                                        :entity-type entity-type
+                                        :entity-type-type (type entity-type)
+                                        :args-count (count args)
+                                        :registry-keys (keys @bridge-registry)})
   (let [default-effect (apply default-effect-fn cofx entity-type args)
         bridges (get-bridges-for-entity entity-type)
+        _ (log/info "🌉 bridges found:" {:bridges-count (count bridges)
+                                         :bridge-ids (mapv :bridge-id bridges)})
         applicable-bridges (filter (fn [bridge] (should-bridge? bridge (:db cofx))) bridges)]
+    (log/info "✅ applicable bridges:" {:count (count applicable-bridges)})
     (loop [bridges applicable-bridges
            current-effect default-effect]
       (if-let [bridge (first bridges)]
@@ -291,58 +300,66 @@
 ;; Template Event Registration
 ;; ============================================================================
 
+(defonce ^:private handlers-registered?
+  (atom false))
+
 (defn register-template-crud-events!
   "Register the main CRUD event handlers that use the bridge system.
 
   This should be called once during application initialization to set up
-  the bridge-based event handling for template CRUD operations."
+  the bridge-based event handling for template CRUD operations. Subsequent
+  calls are ignored to prevent handler overwrite churn."
   []
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/delete-entity
-    (fn [cofx [_ entity-type id]]
-      (run-bridge-operation :delete :request default-delete-request cofx entity-type [id])))
+  (if @handlers-registered?
+    (log/debug "Template CRUD bridge events already registered; skipping")
+    (do
+      (reset! handlers-registered? true)
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/delete-entity
+        (fn [cofx [_ entity-type id]]
+          (run-bridge-operation :delete :request default-delete-request cofx entity-type [id])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/create-entity
-    (fn [cofx [_ entity-type form-data]]
-      (run-bridge-operation :create :request default-create-request cofx entity-type [form-data])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/create-entity
+        (fn [cofx [_ entity-type form-data]]
+          (run-bridge-operation :create :request default-create-request cofx entity-type [form-data])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/update-entity
-    (fn [cofx [_ entity-type id form-data]]
-      (run-bridge-operation :update :request default-update-request cofx entity-type [id form-data])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/update-entity
+        (fn [cofx [_ entity-type id form-data]]
+          (run-bridge-operation :update :request default-update-request cofx entity-type [id form-data])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/delete-success
-    (fn [cofx [_ entity-type id]]
-      (run-bridge-operation :delete :on-success default-crud-success cofx entity-type [id])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/delete-success
+        (fn [cofx [_ entity-type id]]
+          (run-bridge-operation :delete :on-success default-crud-success cofx entity-type [id])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/create-success
-    (fn [cofx [_ entity-type response]]
-      (run-bridge-operation :create :on-success default-crud-success cofx entity-type [response])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/create-success
+        (fn [cofx [_ entity-type response]]
+          (run-bridge-operation :create :on-success default-crud-success cofx entity-type [response])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/update-success
-    (fn [cofx [_ entity-type id response]]
-      (run-bridge-operation :update :on-success default-update-success cofx entity-type [id response])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/update-success
+        (fn [cofx [_ entity-type id response]]
+          (run-bridge-operation :update :on-success default-update-success cofx entity-type [id response])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/delete-failure
-    (fn [cofx [_ entity-type error]]
-      (run-bridge-operation :delete :on-failure default-delete-failure cofx entity-type [error])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/delete-failure
+        (fn [cofx [_ entity-type error]]
+          (run-bridge-operation :delete :on-failure default-delete-failure cofx entity-type [error])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/create-failure
-    (fn [cofx [_ entity-type error]]
-      (run-bridge-operation :create :on-failure default-create-failure cofx entity-type [error])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/create-failure
+        (fn [cofx [_ entity-type error]]
+          (run-bridge-operation :create :on-failure default-create-failure cofx entity-type [error])))
 
-  (rf/reg-event-fx
-    :app.template.frontend.events.list.crud/update-failure
-    (fn [cofx [_ entity-type error]]
-      (run-bridge-operation :update :on-failure default-update-failure cofx entity-type [error])))
+      (rf/reg-event-fx
+        :app.template.frontend.events.list.crud/update-failure
+        (fn [cofx [_ entity-type error]]
+          (run-bridge-operation :update :on-failure default-update-failure cofx entity-type [error])))
 
-  (log/info "Template CRUD bridge events registered successfully"))
+      (log/info "Template CRUD bridge events registered successfully"))))
 
 ;; ============================================================================
 ;; Utilities and Helpers

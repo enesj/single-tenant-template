@@ -46,15 +46,17 @@
                            (remove (fn [[_ v]] (nil? v))
                              (or propagated-settings {})))
         base (-> defaults
-               (merge clean-propagated)
-               (merge config-overrides))
+               (merge config-overrides)
+               ;; Let propagated settings (hardcoded or user preferences) override config defaults
+               (merge clean-propagated))
         ;; Map feature flags to display toggles where it affects visibility.
         ;; This ensures high-level feature switches also hide related UI.
         {:keys [features]} entity-config
         overlay (cond-> {}
                   (false? (:batch-operations? features))
                   (merge {:show-select? false
-                          :show-batch-edit? false})
+                          :show-batch-edit? false
+                          :show-batch-delete? false})
                   (:read-only? features)
                   (merge {:show-add-button? false
                           :show-delete? false

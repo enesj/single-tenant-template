@@ -187,6 +187,8 @@
    :show-highlights? true
    :show-pagination? true
    :show-add-button? true
+   :show-batch-edit? false
+   :show-batch-delete? false
    :per-page 25
    :page-size 25})
 

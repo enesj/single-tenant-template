@@ -1,4 +1,4 @@
-(ns app.domain.expenses.frontend.events.receipts
+(ns app.domain.expenses.frontend.events.price-observations
   (:require
     [ajax.core :as ajax]
     [app.admin.frontend.adapters.expenses :as expenses-adapter]
@@ -7,9 +7,9 @@
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]))
 
-(def ^:private entity-key :receipts)
-(def ^:private base-path [:admin :expenses :receipts])
-(def ^:private default-per-page 25)
+(def ^:private entity-key :price-observations)
+(def ^:private base-path [:admin :expenses :price-observations])
+(def ^:private default-per-page 50)
 
 (defn- resolve-pagination
   [db {:keys [limit offset page per-page]}]
@@ -35,8 +35,8 @@
     (-> db
       (assoc-in (paths/entity-loading? entity-key) true)
       (assoc-in (paths/entity-error entity-key) nil)
-      (assoc-in [:admin :receipts :loading?] true)
-      (assoc-in [:admin :receipts :error] nil)
+      (assoc-in [:admin :price-observations :loading?] true)
+      (assoc-in [:admin :price-observations :error] nil)
       (assoc-in (paths/list-per-page entity-key) per-page)
       (assoc-in (paths/list-current-page entity-key) page)
       (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page})
@@ -50,58 +50,40 @@
     (-> db
       (assoc-in (paths/entity-loading? entity-key) false)
       (assoc-in (paths/entity-error entity-key) error-val)
-      (assoc-in [:admin :receipts :loading?] false)
-      (assoc-in [:admin :receipts :error] error-val)
+      (assoc-in [:admin :price-observations :loading?] false)
+      (assoc-in [:admin :price-observations :error] error-val)
       (assoc-in (conj base-path :loading?) false)
       (assoc-in (conj base-path :error) error-val))))
 
 (rf/reg-event-fx
-  ::load-list
-  (fn [{:keys [db]} [_ {:keys [status] :as params}]]
-    (let [{:keys [limit offset] :as pagination} (resolve-pagination db params)]
+  ::load
+  (fn [{:keys [db]} [_ {:keys [article-id supplier-id] :as params}]]
+    (let [{:keys [limit offset] :as pagination} (resolve-pagination db params)
+          query-params (cond-> {:limit limit :offset offset}
+                         article-id (assoc :article_id article-id)
+                         supplier-id (assoc :supplier_id supplier-id))]
       {:db (begin-load db pagination)
        :http-xhrio (admin-http/admin-get
-                     {:uri "/admin/api/expenses/receipts"
-                      :params (cond-> {:limit limit :offset offset}
-                                status (assoc :status status))
+                     {:uri "/admin/api/expenses/price-observations"
+                      :params query-params
                       :response-format (ajax/json-response-format {:keywords? true})
-                      :on-success [::list-loaded pagination]
+                      :on-success [::loaded pagination]
                       :on-failure [::load-failed]})})))
 
 (rf/reg-event-fx
-  ::list-loaded
-  (fn [{:keys [db]} [_ {:keys [limit offset]} {:keys [receipts]}]]
+  ::loaded
+  (fn [{:keys [db]} [_ {:keys [limit offset]} {:keys [price-observations]}]]
     (let [db* (-> db
                 (finish-load nil)
-                (assoc-in (conj base-path :items) (vec (or receipts []))))
-        per-page (or limit default-per-page)
-        page (inc (quot (or offset 0) (max per-page 1)))]
+                (assoc-in (conj base-path :items) (vec (or price-observations []))))
+          per-page (or limit default-per-page)
+          page (inc (quot (or offset 0) (max per-page 1)))]
       {:db (-> db*
-       (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page})
-       (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page}))
-       :dispatch-n [[::expenses-adapter/sync-receipts receipts]]})))
+             (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page})
+             (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page}))
+       :dispatch-n [[::expenses-adapter/sync-price-observations price-observations]]})))
 
 (rf/reg-event-fx
   ::load-failed
   (fn [{:keys [db]} [_ error]]
     {:db (finish-load db error)}))
-
-(rf/reg-event-fx
-  ::load-detail
-  (fn [{:keys [db]} [_ receipt-id]]
-    {:db (-> db
-           (assoc-in (conj base-path :detail-loading?) true)
-           (assoc-in (conj base-path :error) nil))
-     :http-xhrio (admin-http/admin-get
-                   {:uri (str "/admin/api/expenses/receipts/" receipt-id)
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::detail-loaded receipt-id]
-                    :on-failure [::load-failed]})}))
-
-(rf/reg-event-db
-  ::detail-loaded
-  (fn [db [_ receipt-id {:keys [receipt]}]]
-    (-> db
-      (assoc-in (conj base-path :detail-loading?) false)
-      (assoc-in (conj base-path :error) nil)
-      (assoc-in (conj base-path :by-id receipt-id) receipt))))

@@ -4,7 +4,7 @@
   :page-description "Complete system audit trail and security monitoring"
   :adapter-init-fn app.admin.frontend.adapters.audit/init-audit-adapter!
   :display-settings {:show-select? true
-                     :show-edit? false
+                     :show-edit? true
                      :show-delete? true
                      :show-filtering? true
                      :show-highlights? true
@@ -13,7 +13,7 @@
                      :show-add-button? false
                      :show-pagination? true
                      :per-page 20}
-  :features {:read-only? false
+  :features {:read-only? true
              :exportable? true
              :batch-operations? true
              :deletion-constraints? true
@@ -32,11 +32,9 @@
   :adapter-init-fn app.admin.frontend.adapters.login-events/init-login-events-adapter!
   :display-settings {:show-select? true
                      :show-edit? false
-                     :show-delete? true
+                     :show-delete? false
                      :show-filtering? true
                      :show-pagination? true
-                     :show-batch-edit? false
-                     :show-batch-delete? true
                      :show-add-button? false
                      :per-page 20}
   :features {:read-only? false
@@ -48,26 +46,30 @@
 
  :users
  {:entity-key :users
-  :page-title "User Management"
-  :page-description "Manage users in the single-tenant template"
+  :page-title "Advanced User Management"
+  :page-description "Manage users for this single-tenant app"
   :adapter-init-fn app.admin.frontend.adapters.users/init-users-adapter!
   :display-settings {:show-select? true
                      :show-edit? true
+                     :show-delete? true
                      :show-filtering? true
                      :show-pagination? true
-                     :show-add-button? true
-                     :per-page 5}
+                     :show-add-button? false
+                     :per-page 25}
   :features {:batch-operations? true
              :activity-tracking? true
              :deletion-constraints? true
              :security-wrapper? true}
   :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
-               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}}
+               :modals [app.admin.frontend.components.user-details-modal/user-details-modal
+                        app.admin.frontend.components.user-activity-modal/user-activity-modal]
+               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}
+  :custom-content {:deletion-constraint-checks true}}
 
  :admins
  {:entity-key :admins
   :page-title "Admin Management"
-  :page-description "Manage admin accounts and roles (owners only)"
+  :page-description "Manage system administrators (owner-only access)"
   :adapter-init-fn app.admin.frontend.adapters.admins/init-admins-adapter!
   :display-settings {:show-select? true
                      :show-edit? true
@@ -75,11 +77,151 @@
                      :show-filtering? true
                      :show-pagination? true
                      :show-add-button? true
-                     :per-page 10}
+                     :per-page 20}
   :features {:batch-operations? false
              :activity-tracking? false
-             :deletion-constraints? true
-             :security-wrapper? false
-             :owner-only? true}
+             :deletion-constraints? false
+             :security-wrapper? true}
   :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
-               :custom-actions app.admin.frontend.components.admin-actions/admin-admin-actions}}}
+               :custom-actions app.admin.frontend.components.admin-actions/admin-admin-actions}}
+
+ ;; Expenses domain
+ :expenses
+ {:entity-key :expenses
+  :page-title "Expenses"
+  :page-description "Expense history and posting status"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-expenses-adapter!
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 25}
+  :features {:read-only? false
+             :exportable? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :receipts
+ {:entity-key :receipts
+  :page-title "Receipts"
+  :page-description "Receipt inbox and parsing statuses"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-receipts-adapter!
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 25}
+  :features {:read-only? false
+             :exportable? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :suppliers
+ {:entity-key :suppliers
+  :page-title "Suppliers"
+  :page-description "Manage expense suppliers"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-suppliers-adapter!
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 50}
+  :features {:read-only? false
+             :exportable? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :payers
+ {:entity-key :payers
+  :page-title "Payers"
+  :page-description "Payment sources and defaults"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-payers-adapter!
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 50}
+  :features {:read-only? false
+             :exportable? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :articles
+ {:entity-key :articles
+  :page-title "Articles"
+  :page-description "Canonical expense items"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-articles-adapter!
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :per-page 50}
+  :features {:read-only? false
+             :exportable? false
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :article-aliases
+ {:entity-key :article-aliases
+  :page-title "Article Aliases"
+  :page-description "Supplier-specific aliases mapped to articles"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-article-aliases-adapter!
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :per-page 50}
+  :features {:read-only? false
+             :exportable? false
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :price-observations
+ {:entity-key :price-observations
+  :page-title "Price Observations"
+  :page-description "Observed prices across suppliers"
+  :adapter-init-fn app.admin.frontend.adapters.expenses/init-price-observations-adapter!
+  :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons}
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? false
+                     :per-page 50}
+  :features {:read-only? true
+             :exportable? false
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}}}

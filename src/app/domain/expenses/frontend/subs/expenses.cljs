@@ -2,6 +2,7 @@
   (:require [re-frame.core :as rf]))
 
 (def ^:private base-path [:admin :expenses :entries])
+(def ^:private form-path [:admin :expenses :form])
 
 (rf/reg-sub
   :expenses/entries
@@ -27,3 +28,18 @@
   :expenses/entry-detail-loading?
   (fn [db _]
     (true? (get-in db (conj base-path :detail-loading?)))))
+
+(rf/reg-sub
+  :expenses/form-loading?
+  (fn [db _]
+    (true? (get-in db (conj form-path :loading?)))))
+
+(rf/reg-sub
+  :expenses/form-error
+  (fn [db _]
+    (get-in db (conj form-path :error))))
+
+(rf/reg-sub
+  :expenses/form-last-created
+  (fn [db _]
+    (get-in db (conj form-path :last-created))))

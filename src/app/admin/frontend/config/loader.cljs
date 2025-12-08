@@ -92,6 +92,10 @@
   "Get table configuration for an entity"
   [entity-keyword]
   (let [config (get-in @config-cache [:table-columns entity-keyword])]
+    (when-not config
+      (log/warn "No table-columns config found for entity:"
+                entity-keyword
+                "available entities:" (keys (get @config-cache :table-columns))))
     config))
 
 (defn get-view-options
@@ -99,7 +103,9 @@
   [entity-keyword]
   (let [view-options (get-in @config-cache [:view-options entity-keyword])]
     (when-not view-options
-      (log/warn "No view options found for entity:" entity-keyword))
+      (log/warn "No view options found for entity:"
+                entity-keyword
+                "available entities:" (keys (get @config-cache :view-options))))
     view-options))
 
 (defn get-form-config
@@ -107,7 +113,9 @@
   [entity-keyword]
   (let [form-config (get-in @config-cache [:form-fields entity-keyword])]
     (when-not form-config
-      (log/warn "No form config found for entity:" entity-keyword))
+      (log/warn "No form config found for entity:"
+                entity-keyword
+                "available entities:" (keys (get @config-cache :form-fields))))
     form-config))
 
 (defn get-default-visible-columns
