@@ -3,6 +3,7 @@
   (:require
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.interceptors.persistence :as persistence]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -96,18 +97,29 @@
 ;;; -------------------------
 
 (defn- toggle-entity-flag
+  "Toggle an entity-specific display flag.
+   Reads from new path first, falls back to legacy, writes to new path only."
   [db entity-key path default-value]
-  (let [entity-value (get-in db (into [:ui :entity-configs entity-key] path))
-        effective (if (some? entity-value)
-                    entity-value
-                    (or (get-in db (into [:ui :defaults] path))
-                      (get-in db (into [:ui] path))
-                      default-value))]
-    (assoc-in db (into [:ui :entity-configs entity-key] path) (not effective))))
+  (let [;; New path: [:ui :entity-prefs <entity> :display <setting>]
+        new-path (into [:ui :entity-prefs entity-key :display] path)
+        ;; Legacy path: [:ui :entity-configs <entity> <setting>]
+        legacy-path (into [:ui :entity-configs entity-key] path)
+        ;; Read from new path first
+        new-value (get-in db new-path)
+        legacy-value (get-in db legacy-path)
+        ;; Effective current value (new > legacy > defaults > global > default)
+        effective (cond
+                    (some? new-value) new-value
+                    (some? legacy-value) legacy-value
+                    :else (or (get-in db (into [:ui :defaults] path))
+                            (get-in db (into [:ui] path))
+                            default-value))]
+    ;; Write toggled value to new path only
+    (assoc-in db new-path (not effective))))
 
 (rf/reg-event-db
   ::toggle-highlights
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (if-let [entity-key (->entity-key entity-type)]
       (toggle-entity-flag db entity-key [:show-highlights?] true)
@@ -115,7 +127,7 @@
 
 (rf/reg-event-db
   ::toggle-select
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (log/info "toggle-select event fired" {:entity-type entity-type})
     (if-let [entity-key (->entity-key entity-type)]
@@ -127,7 +139,7 @@
 
 (rf/reg-event-db
   ::toggle-timestamps
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (if-let [entity-key (->entity-key entity-type)]
       (toggle-entity-flag db entity-key [:show-timestamps?] false)
@@ -135,7 +147,7 @@
 
 (rf/reg-event-db
   ::toggle-edit
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (log/info "toggle-edit event fired" {:entity-type entity-type})
     (if-let [entity-key (->entity-key entity-type)]
@@ -147,7 +159,7 @@
 
 (rf/reg-event-db
   ::toggle-delete
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (if-let [entity-key (->entity-key entity-type)]
       (toggle-entity-flag db entity-key [:show-delete?] true)
@@ -155,7 +167,7 @@
 
 (rf/reg-event-db
   ::toggle-pagination
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (if-let [entity-key (->entity-key entity-type)]
       (toggle-entity-flag db entity-key [:show-pagination?] true)

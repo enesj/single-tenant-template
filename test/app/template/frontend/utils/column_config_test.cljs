@@ -23,15 +23,13 @@
           (column-config/get-visible-columns false :items {:name true})))))
 
 (deftest toggle-events-test
-  (testing "toggle-column-event switches between admin and template events"
+  (testing "toggle-column-event returns admin toggle event"
     (is (= [:admin/toggle-column-visibility :items :name]
-          (column-config/toggle-column-event true :items :name)))
-    (is (= [:app.template.frontend.events.list.settings/toggle-column-visibility :items :name]
-          (column-config/toggle-column-event false :items :name))))
+          (column-config/toggle-column-event :items :name))))
 
-  (testing "toggle-filter-event always targets template settings"
+  (testing "toggle-filter-event returns template settings event"
     (is (= [:app.template.frontend.events.list.settings/toggle-field-filtering :items :status]
-          (column-config/toggle-filter-event true :items :status))))
+          (column-config/toggle-filter-event :items :status))))
 
   (testing "update-table-width-event returns template event"
     (is (= [:app.template.frontend.events.list.settings/update-table-width :items 900]

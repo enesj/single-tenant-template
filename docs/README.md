@@ -46,6 +46,11 @@ bb run-app          # start backend + shadow-cljs watch + nREPL
 open http://localhost:8085/admin/users
 bb be-test          # backend tests
 bb fe-test          # frontend tests
+
+# 🚨 ALWAYS save test output before analysis:
+bb be-test 2>&1 | tee /tmp/be-test.txt
+npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
+# Then analyze saved files - NEVER re-run tests!
 ```
 
 ## Metadata & RAG

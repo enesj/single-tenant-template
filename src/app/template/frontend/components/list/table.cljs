@@ -258,17 +258,17 @@
                                                     (let [value (resolve-setting visible-columns key)]
                                                       (if (nil? value) true value)))
                                   field-filterable? (fn [key]
-                                                      (let [user-setting (resolve-setting (or filterable-fields {}) key)]
+                                                      (let [user-setting (resolve-setting (or user-filterable-settings {}) key)]
                                                         (if (not= user-setting ::not-found)
                                                           ;; User has explicitly set filterable setting - use it
                                                           user-setting
                                                           ;; No user setting, check vector config for filterable columns
-                                                          (let [filterable-columns (use-subscribe [:app.template.frontend.subs.ui/filterable-fields entity-name])]
-                                                            (if (seq filterable-columns)
-                                                              ;; Use vector config filterable columns
-                                                              (contains? (set filterable-columns) key)
-                                                              ;; No vector config, default to true
-                                                              true)))))
+                                                          ;; Use the already-computed filterable-set (from line ~185)
+                                                          ;; instead of calling use-subscribe inside a function
+                                                          (cond
+                                                            (map? filterable-set) (boolean (get filterable-set key true))
+                                                            (set? filterable-set) (contains? filterable-set key)
+                                                            :else true))))
                                   filter-active? (fn [key]
                                                    (let [legacy (get legacy-map key)]
                                                      (or (contains? active-filters key)

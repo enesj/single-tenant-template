@@ -13,7 +13,9 @@
     [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(defn- toggle-column! [_vector-mode? entity-kw field-id]
+(defn- toggle-column!
+  "Toggle column visibility for the given entity and field."
+  [entity-kw field-id]
   (rf/dispatch [:admin/toggle-column-visibility entity-kw field-id]))
 
 (defn- toggle-field-filtering! [entity-kw field-id]
@@ -91,7 +93,7 @@
                                    "This column is not configurable")
                           :on-click (fn [e]
                                       (when is-column-configurable?
-                                        (toggle-column! true entity-kw field-id)))}
+                                        (toggle-column! entity-kw field-id)))}
                 field-label)
 
               ;; Filter icon overlay - show if column is visible and filterable
@@ -125,25 +127,20 @@
         curr-entity-name (or current-entity-name entity-type-sub)
 
         controls (:controls entity-settings)
-        {:keys [show-timestamps-control? show-edit-control?
+        {:keys [show-edit-control?
                 show-delete-control? show-highlights-control?
                 show-select-control?]} (or controls {})
 
-        current-map (use-subscribe [::settings-events/filterable-fields entity-kw])
-
         ;; Current setting values - directly from entity-settings subscription
-        curr-show-timestamps? (:show-timestamps? entity-settings)
-        show-timestamp-filter-icon? (and (:created-at current-map) curr-show-timestamps?)
         curr-show-edit? (:show-edit? entity-settings)
         curr-show-delete? (:show-delete? entity-settings)
         curr-show-highlights? (:show-highlights? entity-settings)
         curr-show-select? (:show-select? entity-settings)
-        curr-show-filtering? (:show-filtering? entity-settings)
         curr-show-pagination? (:show-pagination? entity-settings)
 
         ;; Helper component for toggle buttons
         ;; Hardcoded settings are now completely hidden from the UI
-        toggle-button (fn [{:keys [label is-active? control-visible? event-key field-keys show-filter-icon? hardcoded-key]}]
+        toggle-button (fn [{:keys [label is-active? control-visible? event-key hardcoded-key]}]
                         (let [should-show (if (nil? control-visible?) true control-visible?)
                               ;; Check if this control is hardcoded at page level
                               is-hardcoded? (and hardcoded-display-settings
@@ -157,15 +154,7 @@
                                      :on-click #(rf/dispatch [event-key entity-kw])}
                               ($ :span {:class (str "text-sm "
                                                  (if is-active? "font-bold" "font-light"))}
-                                label)
-                              (when (and show-filter-icon? is-active?)
-                                ($ :div {:class "flex items-center gap-1"}
-                                  (let [on-click (fn [e]
-                                                   (.stopPropagation e)
-                                                   (doseq [field-key field-keys]
-                                                     (toggle-field-filtering! entity-kw field-key)))]
-                                    ($ filter-icon {:active? (if (= label "Timestamps") show-timestamp-filter-icon? curr-show-filtering?)
-                                                    :on-click on-click}))))))))]
+                                label)))))]
     ($ :div {:id "panel"
              :class "flex flex-col gap-4"}
 
@@ -208,15 +197,6 @@
                         :control-visible? show-select-control?
                         :event-key ::ui-events/toggle-select
                         :hardcoded-key :show-select?})
-
-        ;; Timestamps control
-        (toggle-button {:label "Timestamps"
-                        :is-active? curr-show-timestamps?
-                        :control-visible? show-timestamps-control?
-                        :event-key ::ui-events/toggle-timestamps
-                        :show-filter-icon? true
-                        :field-keys [:created-at :updated-at]
-                        :hardcoded-key :show-timestamps?})
 
         ;; Pagination control
         (toggle-button {:label "Pagination"

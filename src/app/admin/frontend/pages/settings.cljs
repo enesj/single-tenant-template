@@ -383,7 +383,7 @@
                 (if saving?
                   ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
                   (if editing?
-                    "Cancel Editing"
+                    "Stop Editing"
                     "Edit Settings"))))
 
             ;; Tab Content

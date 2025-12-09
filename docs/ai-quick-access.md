@@ -9,6 +9,14 @@ Fast pointers for AI agents (and humans) to the current single-tenant docs. Use 
 - By task keyword: `rg -n "\brun-app\b|\bbe-test\b|\bfe-test\b|\blint\b|\bcljfmt\b" docs/operations`
 - Migrations/workflow: `rg -n "migrate|models.edn|mig/" docs/migrations`
 
+## 🚨 Critical Testing Workflow
+ALWAYS save test output before analysis - never re-run tests:
+```bash
+bb be-test 2>&1 | tee /tmp/be-test.txt
+npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
+# Then grep saved files repeatedly
+```
+
 ## Canonical entry points
 - `docs/index.md` – doc IA
 - `docs/architecture/overview.md` – system overview

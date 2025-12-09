@@ -45,8 +45,6 @@
         ;; Subscribe to hardcoded view-options for hiding settings panel controls
         ;; IMPORTANT: Only view-options.edn settings should hide controls, not entities.edn settings
         hardcoded-view-options (use-subscribe [::ui-subs/hardcoded-view-options entity-name])
-        ;; For settings panel: ONLY use hardcoded view-options to determine which controls to hide
-        effective-hardcoded-settings hardcoded-view-options
         ;; Use page-level display settings as defaults, but let user state override them
         merged-display-settings (let [subscribed-settings (use-subscribe [::ui-subs/entity-display-settings entity-name])
                                       merged (merge display-settings subscribed-settings)]
@@ -270,7 +268,7 @@
                          ;; IMPORTANT: Pass the merged display settings for behavior
                        :display-settings merged-display-settings
                          ;; IMPORTANT: Pass hardcoded settings (page props + view-options) for settings panel control visibility
-                       :page-display-settings effective-hardcoded-settings
+                       :page-display-settings hardcoded-view-options
                          ;; Pass rows per page props to table for settings panel
                        :per-page per-page
                        :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])

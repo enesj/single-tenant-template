@@ -44,6 +44,16 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 - Run automated tests to verify changes:
 	- **Frontend tests**: `npm run test:cljs` (Node.js, fast) or `npm run test:cljs:karma` (browser)
 	- See `docs/testing/fe/` for testing patterns, utilities, and debugging guides.
+	- **🚨 CRITICAL: ALWAYS save full test output FIRST - never run tests multiple times:**
+		```bash
+		# ✅ GOOD - run once, analyze many times
+		npm run test:cljs 2>&1 | tee /tmp/test-output.txt
+		grep "FAIL" /tmp/test-output.txt
+
+		# ❌ BAD - runs tests multiple times (wasteful)
+		npm run test:cljs | grep FAIL
+		npm run test:cljs | grep ERROR
+		```
 - Use skills when relevant:
 	- Frontend state/auth/UI issues → **app-db-inspect**.
 	- Frontend event flow or performance issues → **reframe-events-analysis**.
@@ -99,11 +109,40 @@ All project documentation is indexed and searchable via **MCP Vector Search**. S
 - `npm run test:cljs:karma` — Browser tests (Karma/Chrome)
 - `npm run test:cljs:watch` — Watch mode for development
 
-# Clojure REPL Evaluation (Backend Only)
+**🚨 IMPORTANT: Always save test output before analysis:**
+```bash
+# Frontend - save and analyze
+npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
+# Backend - save and analyze
+bb be-test 2>&1 | tee /tmp/be-test.txt
+# Then grep/search the saved files - NEVER re-run tests!
+```
+
+# Clojure REPL Evaluation 
 
 The command `clj-nrepl-eval` is installed on your path for evaluating **Clojure code only** (backend `.clj` files).
 
-⚠️ **IMPORTANT**: `clj-nrepl-eval` does NOT work with ClojureScript. For frontend `.cljs` evaluation, use the `mcp_clojure-mcp_clojurescript_eval` MCP tool instead.
+⚠️ **IMPORTANT**: `clj-nrepl-eval` works with both Clojure and ClojureScript. To switch to ClojureScript mode:
+
+1. **Connect to a running nREPL server** (typically port 8777 for shadow-cljs):
+   ```bash
+   clj-nrepl-eval --discover-ports  # Find available ports
+   clj-nrepl-eval -p 8777  # Connect to shadow-cljs nREPL
+   ```
+
+2. **Switch to ClojureScript REPL mode**:
+   ```clojure
+   (require '[shadow.cljs.devtools.api :as shadow])
+   (shadow/repl :app)  ; or :admin for admin frontend
+   ```
+
+3. **You're now in ClojureScript mode** - evaluate `.cljs` code directly:
+   ```clojure
+   @re-frame.db/app-db  ; Inspect app-db
+   (js/alert "Hello")   ; Call JavaScript interop
+   ```
+
+4. **To return to Clojure mode**: Type `:cljs/exit` in the REPL
 
 **Discover nREPL servers:**
 
@@ -119,25 +158,6 @@ With timeout (milliseconds)
 
 The REPL session persists between evaluations - namespaces and state are maintained.
 Always use `:reload` when requiring namespaces to pick up changes.
-
-# ClojureScript REPL Evaluation (Frontend Only)
-
-For ClojureScript (frontend `.cljs` files), use the MCP tool:
-
-**Tool**: `mcp_clojure-mcp_clojurescript_eval`
-
-This tool connects to the shadow-cljs runtime in the browser and evaluates ClojureScript code.
-
-**Example**: Inspect re-frame app-db state:
-```clojure
-@re-frame.db/app-db
-```
-
-**Example**: Get recent re-frame events:
-```clojure
-(require '[app.frontend.dev.repl-tracing :as repl-trace])
-(repl-trace/recent 20)
-```
 
 # Clojure Parenthesis Repair
 

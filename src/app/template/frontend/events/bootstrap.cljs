@@ -6,6 +6,7 @@
     [ajax.core :as ajax]
     [app.template.frontend.events.auth :as auth-events]
     [app.template.frontend.events.config :as config-events]
+    [app.template.frontend.interceptors.persistence :as persistence]
     [app.template.frontend.db.db :as db :refer [common-interceptors]]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -75,7 +76,8 @@
                        (assoc-in [:ui :controls :show-highlights-control?] true)
                        (assoc-in [:ui :controls :show-select-control?] false))]
       {:db initial-db
-       :fx [[:dispatch [::auth-events/fetch-auth-status]]
+       :fx [[:dispatch [::persistence/load-stored-prefs]]
+            [:dispatch [::auth-events/fetch-auth-status]]
             [:dispatch [::config-events/fetch-config]]]})))
 
 ;; ========================================================================

@@ -149,28 +149,28 @@
       (is (false? (get-in db [:ui :show-edit?]))
         "Should toggle global show-edit from default true to false"))
 
-    ;; Test entity-specific toggle
+    ;; Test entity-specific toggle - now writes to new path [:ui :entity-prefs <entity> :display]
     (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
     (let [db @rf-db/app-db]
-      (is (false? (get-in db [:ui :entity-configs :items :show-edit?]))
+      (is (false? (get-in db [:ui :entity-prefs :items :display :show-edit?]))
         "Should create entity-specific override for items"))
 
     ;; Toggle entity-specific setting again
     (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
     (let [db @rf-db/app-db]
-      (is (true? (get-in db [:ui :entity-configs :items :show-edit?]))
+      (is (true? (get-in db [:ui :entity-prefs :items :display :show-edit?]))
         "Should toggle entity-specific setting back to true"))
 
     ;; Test toggle for different entity
     (rf/dispatch-sync [::ui-state-events/toggle-timestamps :transactions])
     (let [db @rf-db/app-db]
-      (is (true? (get-in db [:ui :entity-configs :transactions :show-timestamps?]))
+      (is (true? (get-in db [:ui :entity-prefs :transactions :display :show-timestamps?]))
         "Should create entity-specific override for transactions"))
 
     ;; Test toggle highlights
     (rf/dispatch-sync [::ui-state-events/toggle-highlights :items])
     (let [db @rf-db/app-db]
-      (is (false? (get-in db [:ui :entity-configs :items :show-highlights?]))
+      (is (false? (get-in db [:ui :entity-prefs :items :display :show-highlights?]))
         "Should create entity-specific highlights override for items"))))
 
 (deftest settings-precedence-test
@@ -320,14 +320,15 @@
       (is (false? (get-in db [:ui :entity-configs :items :show-edit?]))
         "Entity setting should override global"))
 
-    ;; Toggle entity setting multiple times
+    ;; Toggle entity setting multiple times (reads legacy, writes to new path)
     (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
     (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
     (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
 
     (let [db @rf-db/app-db]
-      ;; After 3 toggles (starting from false): false -> true -> false -> true
-      (is (true? (get-in db [:ui :entity-configs :items :show-edit?]))
+      ;; After 3 toggles starting from legacy false: false -> true -> false -> true
+      ;; Note: Now stored in new path [:ui :entity-prefs :items :display :show-edit?]
+      (is (true? (get-in db [:ui :entity-prefs :items :display :show-edit?]))
         "Entity setting should be true after 3 toggles")
       ;; Global should remain unchanged
       (is (true? (get-in db [:ui :show-edit?]))

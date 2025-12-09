@@ -44,6 +44,30 @@ npm run test:cljs:karma
 npm run test:cljs:watch
 ```
 
+## 🚨 CRITICAL: Always Save Test Output First
+
+**NEVER run tests multiple times with different grep commands!**
+
+### Correct Workflow:
+```bash
+# ✅ GOOD - Save once, analyze many times
+bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt
+npm run test:cljs 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
+
+# Then analyze the saved files:
+grep "FAIL" /tmp/backend-test-*.txt
+grep "ERROR" /tmp/frontend-test-*.txt
+tail -50 /tmp/frontend-test-*.txt
+```
+
+### Wrong Workflow:
+```bash
+# ❌ BAD - Wasteful re-runs
+bb be-test | grep FAIL
+bb be-test | grep ERROR
+npm run test:cljs | grep FAIL
+```
+
 ## Test Organization
 
 ```

@@ -31,6 +31,21 @@ This project includes specialized AI skills that activate automatically:
 
 Use these skills when debugging by describing your issue naturally in Chat.
 
+## 🚨 Critical Testing Workflow
+
+**ALWAYS save test output FIRST - never run tests multiple times:**
+
+```bash
+# ✅ GOOD - run once, analyze many times
+bb be-test 2>&1 | tee /tmp/be-test.txt
+npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
+# Then grep the saved files repeatedly
+
+# ❌ BAD - wasteful re-runs
+bb be-test | grep FAIL
+bb be-test | grep ERROR
+```
+
 ## Documentation & AI Search
 
 All project documentation is indexed and searchable via **MCP Vector Search**. See `.mcp-vector-search/SEARCH-GUIDE.md` for comprehensive details on search patterns, filtering, and workflows.

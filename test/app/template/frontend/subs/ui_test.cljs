@@ -1,7 +1,6 @@
 (ns app.template.frontend.subs.ui-test
   "Tests for UI subscriptions"
   (:require
-    [app.admin.frontend.config.loader :as config-loader]
     [app.template.frontend.subs.ui :as ui-subs]
     [cljs.test :refer [deftest is testing]]
     [re-frame.core :as rf]
@@ -47,10 +46,8 @@
           @(rf/subscribe [::ui-subs/visible-columns :items])))))
 
 (deftest filterable-fields-vector-config-test
-  (testing "filterable-fields delegates to config loader"
-    (reset-db! {})
-    (with-redefs [config-loader/get-table-config (fn [entity]
-                                                   (when (= entity :items)
-                                                     {:filterable-columns [:name :status]}))]
-      (is (= [:name :status]
-            @(rf/subscribe [::ui-subs/filterable-fields :items]))))))
+  (testing "filterable-fields reads from app-db config"
+    ;; Set up app-db with table-columns config
+    (reset-db! {:admin {:config {:table-columns {:items {:filterable-columns [:name :status]}}}}})
+    (is (= [:name :status]
+          @(rf/subscribe [::ui-subs/filterable-fields :items])))))

@@ -140,6 +140,11 @@ bb be-test              # Run backend tests
 bb fe-test-node         # Run frontend tests
 bb commit --test        # Run tests then commit changes
 
+# 🚨 IMPORTANT: Always save test output before analysis:
+bb be-test 2>&1 | tee /tmp/be-test.txt && grep "FAIL" /tmp/be-test.txt
+npm run test:cljs 2>&1 | tee /tmp/fe-test.txt && grep "FAIL" /tmp/fe-test.txt
+# NEVER re-run tests just to grep differently!
+
 # Code quality
 bb lint                 # Run clj-kondo linting
 bb cljfmt-check         # Check code formatting

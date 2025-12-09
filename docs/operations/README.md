@@ -25,6 +25,14 @@ Quick guide for configuring and running the template locally. Defaults match `co
 - Frontend tests (node): `npm run test:cljs`
 - Database helpers: `bb backup-db`, `bb restore-db` (see `scripts/bb/database/README.md`)
 
+### 🚨 Testing - Always Save Output First
+```bash
+# Save once, analyze many times - NEVER re-run tests!
+bb be-test 2>&1 | tee /tmp/ops-be-test.txt
+npm run test:cljs 2>&1 | tee /tmp/ops-fe-test.txt
+# Then: grep "FAIL" /tmp/ops-*-test.txt
+```
+
 ## Config Tips
 - Override profiles via `:dev`/`:test` in `config/base.edn`; never commit real secrets.
 - Admin UI hardcoded view settings live in `resources/public/admin/ui-config/view-options.edn`.

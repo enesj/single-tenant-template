@@ -50,15 +50,13 @@
       adjusted)))
 
 (defn toggle-column-event
-  "Dispatch vector for toggling a column's visibility based on context."
-  [vector-mode? entity-kw field-id]
-  (if vector-mode?
-    [:admin/toggle-column-visibility entity-kw field-id]
-    [::settings-events/toggle-column-visibility entity-kw field-id]))
+  "Dispatch vector for toggling a column's visibility."
+  [entity-kw field-id]
+  [:admin/toggle-column-visibility entity-kw field-id])
 
 (defn toggle-filter-event
   "Dispatch vector for toggling a column's filterable state."
-  [_vector-mode? entity-kw field-id]
+  [entity-kw field-id]
   [::settings-events/toggle-field-filtering entity-kw field-id])
 
 (defn update-table-width-event
