@@ -13,11 +13,11 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/vendor" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/app-specs" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/-" />
       <excludeFolder url="file://$MODULE_DIR$/.history" />
       <excludeFolder url="file://$MODULE_DIR$/node_modules" />
       <excludeFolder url="file://$MODULE_DIR$/resources/public" />
+      <excludeFolder url="file://$MODULE_DIR$/.shadow-cljs" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

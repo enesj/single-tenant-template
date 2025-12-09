@@ -91,7 +91,7 @@
        :show-edit? (get-display-setting db entity-name :show-edit? true)
        :show-delete? (get-display-setting db entity-name :show-delete? true)
        :show-highlights? (get-display-setting db entity-name :show-highlights? true)
-       :show-select? (get-display-setting db entity-name :show-select? false)
+       :show-select? (get-display-setting db entity-name :show-select? true)
        :show-filtering? (get-display-setting db entity-name :show-filtering? true)
        :show-pagination? (get-display-setting db entity-name :show-pagination? true)
        :show-add-button? (get-display-setting db entity-name :show-add-button? true)

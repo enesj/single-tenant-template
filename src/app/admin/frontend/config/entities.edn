@@ -51,10 +51,10 @@
   :adapter-init-fn app.admin.frontend.adapters.users/init-users-adapter!
   :display-settings {:show-select? true
                      :show-edit? true
-                     :show-delete? true
+                     :show-delete? false
                      :show-filtering? true
                      :show-pagination? true
-                     :show-add-button? false
+                     :show-add-button? true
                      :per-page 25}
   :features {:batch-operations? true
              :activity-tracking? true

@@ -359,18 +359,6 @@
                               :d "M3 7h18M3 12h18M3 17h18"}))
                   "Domain Management")
 
-                ;; Action Buttons Tab
-                ($ :a {:class (str "ds-tab ds-tab-lg ds-tab-lg:gap-2 "
-                                (when (= active-tab "actions") "ds-tab-active"))
-                       :href "#"
-                       :on-click (fn [e]
-                                  (.preventDefault e)
-                                  (set-active-tab! "actions"))}
-                  ($ :svg {:class "w-5 h-5" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                              :d "M12 4v16m8-8H4"}))
-                  "Action Buttons")
-
                 ;; Other Settings Tab (only show if there are other entities)
                 (when (get grouped-entities :other)
                   ($ :a {:class (str "ds-tab ds-tab-lg ds-tab-lg:gap-2 "
@@ -453,65 +441,6 @@
                         "No Domain Settings")
                       ($ :p {:class "text-base-content/50"}
                         "Business domain settings will appear here when domains are configured."))))
-
-                ;; Action Buttons Tab Content
-                (= active-tab "actions")
-                ($ :div {:class "space-y-8"}
-                  ($ :div {:class "ds-alert ds-alert-info"}
-                    ($ :div
-                      ($ :h3 {:class "font-semibold text-base-content"} "Add & Batch Action Controls")
-                      ($ :p {:class "text-sm text-base-content/70"}
-                        "Toggle the visibility of Add, Batch Edit, and Batch Delete buttons for each entity page.")))
-
-                  ;; System domains
-                  (when-let [entities (get grouped-entities :user-management)]
-                    ($ domain-section {:domain-key :user-management
-                                       :domain-config (get domain-groups :user-management)
-                                       :entities entities
-                                       :editing? editing?
-                                       :on-change handle-change
-                                       :setting-keys action-setting-keys}))
-
-                  (when-let [entities (get grouped-entities :security-audit)]
-                    ($ domain-section {:domain-key :security-audit
-                                       :domain-config (get domain-groups :security-audit)
-                                       :entities entities
-                                       :editing? editing?
-                                       :on-change handle-change
-                                       :setting-keys action-setting-keys}))
-
-                  ;; Domain entities
-                  (when-let [entities (get grouped-entities :expenses)]
-                    ($ domain-section {:domain-key :expenses
-                                       :domain-config (get domain-groups :expenses)
-                                       :entities entities
-                                       :editing? editing?
-                                       :on-change handle-change
-                                       :setting-keys action-setting-keys}))
-
-                  ;; Ungrouped entities
-                  (when-let [entities (get grouped-entities :other)]
-                    ($ :div {:class "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}
-                      (for [[entity-name settings] entities]
-                        ($ entity-settings-card {:key entity-name
-                                                 :entity-name entity-name
-                                                 :settings settings
-                                                 :editing? editing?
-                                                 :on-change handle-change
-                                                 :setting-keys action-setting-keys}))))
-
-                  (when (and (empty? (get grouped-entities :user-management))
-                             (empty? (get grouped-entities :security-audit))
-                             (empty? (get grouped-entities :expenses))
-                             (empty? (get grouped-entities :other)))
-                    ($ :div {:class "text-center py-12"}
-                      ($ :svg {:class "w-16 h-16 mx-auto text-base-content/30 mb-4" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                        ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                                  :d "M12 4v16m8-8H4"}))
-                      ($ :h3 {:class "text-lg font-medium text-base-content/70 mb-2"}
-                        "No Action Button Settings")
-                      ($ :p {:class "text-base-content/50"}
-                        "Define entities in configs to enable action button controls here."))))
 
                 ;; Other Settings Tab Content
                 (= active-tab "other")
