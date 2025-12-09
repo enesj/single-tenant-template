@@ -3,6 +3,7 @@
    form-fields.edn, and table-columns.edn with editing capabilities"
   (:require
     [app.admin.frontend.components.layout :as layout]
+    [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.events.settings :as settings-events]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -452,21 +453,20 @@
   "Content for the view options tab"
   [{:keys [all-view-options editing? on-change active-domain-tab set-domain-tab!]}]
   (let [sorted-entities (sort-by first all-view-options)
-        grouped-entities (group-entities-by-domain sorted-entities)
-        tab-link (fn [label tab-key]
-                   ($ :a {:class (str "ds-tab " (when (= active-domain-tab tab-key) "ds-tab-active"))
-                          :href "#"
-                          :on-click (fn [e]
-                                      (.preventDefault e)
-                                      (set-domain-tab! tab-key))}
-                     label))]
+        grouped-entities (group-entities-by-domain sorted-entities)]
     ($ :div
       ;; Domain tabs
       ($ :div {:class "ds-tabs ds-tabs-bordered mb-6"}
-        (tab-link "🏠 System" "system")
-        (tab-link "💼 Domain" "domain")
+        (tabs/tab-link {:label "🏠 System"
+                        :active? (= active-domain-tab "system")
+                        :on-select #(set-domain-tab! "system")})
+        (tabs/tab-link {:label "💼 Domain"
+                        :active? (= active-domain-tab "domain")
+                        :on-select #(set-domain-tab! "domain")})
         (when (get grouped-entities :other)
-          (tab-link "📦 Other" "other")))
+          (tabs/tab-link {:label "📦 Other"
+                          :active? (= active-domain-tab "other")
+                          :on-select #(set-domain-tab! "other")})))
 
       ;; Tab content
       (cond
@@ -587,13 +587,10 @@
 
         ;; Local state
         [domain-tab set-domain-tab!] (use-state "system")
-        main-tab (fn [label key]
-                   ($ :a {:class (str "ds-tab " (when (= config-tab key) "ds-tab-active"))
-                          :href "#"
-                          :on-click (fn [e]
-                                      (.preventDefault e)
-                                      (rf/dispatch [::settings-events/set-config-tab key]))}
-                     label))
+        render-main-tab (fn [label key]
+                          (tabs/tab-link {:label label
+                                          :active? (= config-tab key)
+                                          :on-select #(rf/dispatch [::settings-events/set-config-tab key])}))
 
         handle-toggle-edit (fn [e]
                              (when e (.preventDefault e))
@@ -659,9 +656,9 @@
         ($ :div {:class "flex items-center justify-between mb-6"}
           ;; Main config tabs
           ($ :div {:class "ds-tabs ds-tabs-boxed"}
-            (main-tab "📋 View Options" "view-options")
-            (main-tab "📝 Form Fields" "form-fields")
-            (main-tab "📊 Table Columns" "table-columns"))
+            (render-main-tab "📋 View Options" "view-options")
+            (render-main-tab "📝 Form Fields" "form-fields")
+            (render-main-tab "📊 Table Columns" "table-columns"))
 
           ;; Edit toggle button
           ($ :button {:type "button"

@@ -2,8 +2,9 @@
   (:require
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.button :refer [button]]
+    [app.admin.frontend.components.tabs :as tabs]
     [re-frame.core :refer [dispatch]]
-    [uix.core :refer [$ defui]]
+    [uix.core :refer [$ defui use-state use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui activity-summary
@@ -81,7 +82,14 @@
   (let [activity (use-subscribe [:admin/current-user-activity])
         loading? (use-subscribe [:admin/loading-user-activity])
         user-id (use-subscribe [:admin/current-user-activity-id])
-        error (use-subscribe [:admin/user-activity-error])]
+        error (use-subscribe [:admin/user-activity-error])
+        [active-tab set-active-tab!] (use-state :audit)]
+
+    (use-effect
+      (fn []
+        (set-active-tab! :audit)
+        js/undefined)
+      [activity])
 
     ($ modal-wrapper
       {:visible? (or loading? activity error)
@@ -108,45 +116,54 @@
 
           ;; Tabs for different views
           ($ :div {:class "ds-tabs ds-tabs-boxed mb-4"}
-            ($ :a {:class "ds-tab ds-tab-active"} "Audit Logs")
-            ($ :a {:class "ds-tab"} "Login History"))
+            (tabs/tab-link {:label "Audit Logs"
+                            :active? (= active-tab :audit)
+                            :on-select #(set-active-tab! :audit)})
+            (tabs/tab-link {:label "Login History"
+                            :active? (= active-tab :login)
+                            :on-select #(set-active-tab! :login)}))
 
-          ;; Audit logs table
-          ($ :div {:class "overflow-x-auto mb-6"}
-            ($ :h3 {:class "text-lg font-semibold mb-2"} "Recent Admin Actions")
-            (if (seq (:audit-logs activity))
-              ($ :table {:class "ds-table ds-table-zebra ds-table-compact"}
-                ($ :thead
-                  ($ :tr
-                    ($ :th "Action & Time")
-                    ($ :th "Admin")
-                    ($ :th "Changes")
-                    ($ :th "IP Address")))
-                ($ :tbody
-                  (map-indexed
-                    (fn [idx entry]
-                      ($ audit-log-entry {:key idx :entry entry}))
-                    (:audit-logs activity))))
-              ($ :div {:class "text-center py-4 text-gray-500"}
-                "No audit log entries found")))
+          (case active-tab
+            :audit
+            ;; Audit logs table
+            ($ :div {:class "overflow-x-auto mb-6"}
+              ($ :h3 {:class "text-lg font-semibold mb-2"} "Recent Admin Actions")
+              (if (seq (:audit-logs activity))
+                ($ :table {:class "ds-table ds-table-zebra ds-table-compact"}
+                  ($ :thead
+                    ($ :tr
+                      ($ :th "Action & Time")
+                      ($ :th "Admin")
+                      ($ :th "Changes")
+                      ($ :th "IP Address")))
+                  ($ :tbody
+                    (map-indexed
+                      (fn [idx entry]
+                        ($ audit-log-entry {:key idx :entry entry}))
+                      (:audit-logs activity))))
+                ($ :div {:class "text-center py-4 text-gray-500"}
+                  "No audit log entries found")))
 
-          ;; Login history table
-          ($ :div {:class "overflow-x-auto"}
-            ($ :h3 {:class "text-lg font-semibold mb-2"} "Recent Logins")
-            (if (seq (:login-history activity))
-              ($ :table {:class "ds-table ds-table-zebra ds-table-compact"}
-                ($ :thead
-                  ($ :tr
-                    ($ :th "Login Time")
-                    ($ :th "IP Address")
-                    ($ :th "User Agent")))
-                ($ :tbody
-                  (map-indexed
-                    (fn [idx entry]
-                      ($ login-history-entry {:key idx :entry entry}))
-                    (:login-history activity))))
-              ($ :div {:class "text-center py-4 text-gray-500"}
-                "No login history found")))))
+            :login
+            ;; Login history table
+            ($ :div {:class "overflow-x-auto"}
+              ($ :h3 {:class "text-lg font-semibold mb-2"} "Recent Logins")
+              (if (seq (:login-history activity))
+                ($ :table {:class "ds-table ds-table-zebra ds-table-compact"}
+                  ($ :thead
+                    ($ :tr
+                      ($ :th "Login Time")
+                      ($ :th "IP Address")
+                      ($ :th "User Agent")))
+                  ($ :tbody
+                    (map-indexed
+                      (fn [idx entry]
+                        ($ login-history-entry {:key idx :entry entry}))
+                      (:login-history activity))))
+                ($ :div {:class "text-center py-4 text-gray-500"}
+                  "No login history found")))
+
+            nil)))
 
       ;; Footer actions
       ($ :div {:class "ds-modal-action"}

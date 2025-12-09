@@ -16,7 +16,7 @@
     (utils/log-user-operation "Loading user activity for" user-id)
     {:db (state-utils/create-loading-state db :admin/loading-user-activity :admin/user-activity-error)
      :http-xhrio (admin-http/admin-get
-                   {:uri (str "/admin/api/user-management/activity/" user-id)
+                   {:uri (str "/admin/api/users/activity/" user-id)
                     :on-success [:admin/view-user-activity-success user-id]
                     :on-failure [:admin/view-user-activity-failure]})}))
 
