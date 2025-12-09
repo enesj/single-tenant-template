@@ -8,6 +8,8 @@
     [taoensso.timbre :as log]))
 
 (def ^:private view-options-path "resources/public/admin/ui-config/view-options.edn")
+(def ^:private form-fields-path "resources/public/admin/ui-config/form-fields.edn")
+(def ^:private table-columns-path "resources/public/admin/ui-config/table-columns.edn")
 
 (defn- read-view-options
   "Read view-options.edn file and parse it"
@@ -33,6 +35,60 @@
     (catch Exception e
       (log/error e "Failed to write view-options.edn")
       (throw (ex-info "Failed to write settings file" {:status 500})))))
+
+;; =============================================================================
+;; Form Fields Config Read/Write
+;; =============================================================================
+
+(defn- read-form-fields
+  "Read form-fields.edn file and parse it"
+  []
+  (try
+    (let [file (io/file form-fields-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read form-fields.edn")
+      (throw (ex-info "Failed to read form fields file" {:status 500})))))
+
+(defn- write-form-fields!
+  "Write form-fields map to EDN file with pretty printing"
+  [form-fields]
+  (try
+    (let [file (io/file form-fields-path)]
+      (io/make-parents file)
+      (spit file (with-out-str (pprint/pprint form-fields))))
+    (catch Exception e
+      (log/error e "Failed to write form-fields.edn")
+      (throw (ex-info "Failed to write form fields file" {:status 500})))))
+
+;; =============================================================================
+;; Table Columns Config Read/Write
+;; =============================================================================
+
+(defn- read-table-columns
+  "Read table-columns.edn file and parse it"
+  []
+  (try
+    (let [file (io/file table-columns-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read table-columns.edn")
+      (throw (ex-info "Failed to read table columns file" {:status 500})))))
+
+(defn- write-table-columns!
+  "Write table-columns map to EDN file with pretty printing"
+  [table-columns]
+  (try
+    (let [file (io/file table-columns-path)]
+      (io/make-parents file)
+      (spit file (with-out-str (pprint/pprint table-columns))))
+    (catch Exception e
+      (log/error e "Failed to write table-columns.edn")
+      (throw (ex-info "Failed to write table columns file" {:status 500})))))
 
 (defn get-view-options-handler
   "GET handler - return all view options"
@@ -149,12 +205,108 @@
           (utils/error-response "Missing required fields: entity-name, setting-key" :status 400))))
     "Failed to remove entity setting"))
 
+;; =============================================================================
+;; Form Fields Handlers
+;; =============================================================================
+
+(defn get-form-fields-handler
+  "GET handler - return all form fields config"
+  [_db]
+  (utils/with-error-handling
+    (fn [_request]
+      (let [form-fields (read-form-fields)]
+        (utils/json-response {:form-fields form-fields})))
+    "Failed to read form fields"))
+
+(defn update-form-fields-entity-handler
+  "PATCH handler - update a single entity's form fields config"
+  [_db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            entity-name (keyword (or (:entity-name body) (:entity_name body)))
+            ;; Accept full entity config or individual field updates
+            entity-config (or (:entity-config body) (:entity_config body))
+            admin-id (utils/get-admin-id request)
+            context (utils/extract-request-context request)]
+        (if (and entity-name entity-config)
+          (let [current-config (read-form-fields)
+                ;; Merge with existing config or replace entirely
+                updated-config (assoc current-config entity-name entity-config)]
+            (utils/log-admin-action-with-context
+              "update-form-fields"
+              admin-id
+              "settings"
+              nil
+              {:entity entity-name
+               :old-config (get current-config entity-name)
+               :new-config entity-config}
+              (:ip-address context)
+              (:user-agent context))
+            (write-form-fields! updated-config)
+            (utils/success-response {:message "Form fields updated successfully"
+                                     :entity entity-name
+                                     :config entity-config}))
+          (utils/error-response "Missing required fields: entity-name, entity-config" :status 400))))
+    "Failed to update form fields"))
+
+;; =============================================================================
+;; Table Columns Handlers
+;; =============================================================================
+
+(defn get-table-columns-handler
+  "GET handler - return all table columns config"
+  [_db]
+  (utils/with-error-handling
+    (fn [_request]
+      (let [table-columns (read-table-columns)]
+        (utils/json-response {:table-columns table-columns})))
+    "Failed to read table columns"))
+
+(defn update-table-columns-entity-handler
+  "PATCH handler - update a single entity's table columns config"
+  [_db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            entity-name (keyword (or (:entity-name body) (:entity_name body)))
+            ;; Accept full entity config
+            entity-config (or (:entity-config body) (:entity_config body))
+            admin-id (utils/get-admin-id request)
+            context (utils/extract-request-context request)]
+        (if (and entity-name entity-config)
+          (let [current-config (read-table-columns)
+                updated-config (assoc current-config entity-name entity-config)]
+            (utils/log-admin-action-with-context
+              "update-table-columns"
+              admin-id
+              "settings"
+              nil
+              {:entity entity-name
+               :old-config (get current-config entity-name)
+               :new-config entity-config}
+              (:ip-address context)
+              (:user-agent context))
+            (write-table-columns! updated-config)
+            (utils/success-response {:message "Table columns updated successfully"
+                                     :entity entity-name
+                                     :config entity-config}))
+          (utils/error-response "Missing required fields: entity-name, entity-config" :status 400))))
+    "Failed to update table columns"))
+
 ;; Route definitions
 (defn routes
   "Settings route definitions"
   [db]
   ["/settings"
+   ;; View options (existing)
    ["" {:get (get-view-options-handler db)
         :put (update-view-options-handler db)}]
    ["/entity" {:patch (update-entity-setting-handler db)
-               :delete (remove-entity-setting-handler db)}]])
+               :delete (remove-entity-setting-handler db)}]
+   ;; Form fields config
+   ["/form-fields" {:get (get-form-fields-handler db)}]
+   ["/form-fields/entity" {:patch (update-form-fields-entity-handler db)}]
+   ;; Table columns config
+   ["/table-columns" {:get (get-table-columns-handler db)}]
+   ["/table-columns/entity" {:patch (update-table-columns-entity-handler db)}]])

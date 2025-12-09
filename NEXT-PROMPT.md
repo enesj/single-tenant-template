@@ -1,54 +1,51 @@
-NEXT SESSION PROMPT — Simplify list view display settings (2025-12-09)
+# Next Session Prompt (2025-12-09)
+PROMPT: Expand admin settings UI to edit view-options add/batch controls plus form-fields & table-columns configs.
 
-Context snapshot
-- Single-tenant template (no RLS); admin console at http://localhost:8085/admin uses shared template components (re-frame + UIx).
-- Display settings merge chain lives in `app.template.frontend.subs.ui/::entity-display-settings` (hardcoded admin config → defaults → user prefs) and is exposed via `app.template.frontend.hooks.display-settings`.
-- Admin settings page `/admin/settings` reads/writes `resources/public/admin/ui-config/view-options.edn` via backend settings routes; config cached by `app.admin.frontend.config.loader` and preloaded in `app.admin.frontend.config.preload`.
-- List-view settings panel UI is in `app.template.frontend.components.settings.list-view-settings`; it toggles controls/filters and column visibility, mixing vector-based admin config with template boolean maps.
-- Shared list display defaults/helpers are in `app.template.frontend.utils.shared` and list settings events in `app.template.frontend.events.list.settings`; column config helpers in `app.template.frontend.utils.column_config` handle vector vs map modes.
-- Admin view options and table columns are preloaded from EDN and stored in the `config-cache` atom; subs like `:admin/view-options` read directly from that cache (bypassing app-db).
-- Skills available: `app-db-inspect` (inspect app-db), `reframe-events-analysis` (trace events), `system-logs` (monitor backend/shadow logs) — prefer these over ad-hoc tooling.
+## Context Snapshot
+- Single-tenant SaaS template; admin served at http://localhost:8085/admin (no tenant/RLS). Hot reload via `bb run-app`.
+- Admin settings page `/admin/settings` lives in `src/app/admin/frontend/pages/settings.cljs`; loads/patches view-options via `src/app/admin/frontend/events/settings.cljs` using `/admin/api/settings` (GET/PATCH/DELETE per docs/backend/http-api.md).
+- UI config loader `src/app/admin/frontend/config/loader.cljs` caches EDN from `resources/public/admin/ui-config/{view-options,form-fields,table-columns}.edn`; provides `register-preloaded-config!` and getters used by template list/form components.
+- View options currently expose display toggles (`show-edit?`, `show-delete?`, `show-select?`, `show-filtering?`, `show-pagination?`, etc.) and action keys already defined in code (`show-add-button?`, `show-batch-edit?`, `show-batch-delete?`) but not surfaced in UI or EDN.
+- Form definitions and table column configs are static EDN; table columns use inverted config (available, default-hidden, unfilterable, unsortable, column-config, computed-fields) transformed by loader.
+- Skills available: app-db-inspect, reframe-events-analysis, system-logs (see .claude/skills). Use them instead of manual guessing.
+- Missing doc noted: `docs/frontend/feature-guides/admin.md` not found (path in index is stale).
 
-Task focus
-- Refactor the list-view display settings system to make configuration simpler and clearer while preserving per-entity controls (toggles, pagination, filters, widths, add/batch/inline buttons) and user-configurable vs hardcoded behaviors.
+## Task Focus
+Add editing controls on `/admin/settings` so admins can toggle add/batch actions in view-options.edn. Add new tab(s) to edit selected fields from form-fields.edn and table-columns.edn (choose sensible controls: e.g., required/create/edit field lists, default-hidden/always-visible columns, widths/formatters). Ensure changes persist via backend APIs and refresh config caches.
 
-Code map (quick purpose)
-- `resources/public/admin/ui-config/view-options.edn` — current per-entity hardcoded view options (pagination, filtering, export/bulk, visibility defaults).
-- `src/app/admin/frontend/config/preload.cljs` — inlines EDN configs into the bundle and registers them in the config cache.
-- `src/app/admin/frontend/config/loader.cljs` — config cache + getters for view options/table columns/form fields; exposes `get-all-view-options` used by subs and settings page.
-- `src/app/admin/frontend/config/entities.edn` (and template variant) — entity registry/specs referenced by list pages.
-- `src/app/admin/frontend/events/settings.cljs` — admin page events to load/update/remove view options via `/admin/api/settings` and sync cache.
-- `src/app/admin/frontend/subs/config.cljs` — subs for view options (`:admin/view-options`, `:admin/all-view-options`) hitting the config cache.
-- `src/app/template/frontend/subs/ui.cljs` — authoritative merge for display settings (hardcoded + defaults + user prefs) and control visibility flags.
-- `src/app/template/frontend/hooks/display_settings.cljs` — hook wrapper exposing merged settings to components.
-- `src/app/template/frontend/components/settings/list_view_settings.cljs` — UI for table settings panel (toggle buttons, filter icons, table width, rows per page, column visibility).
-- `src/app/template/frontend/events/list/settings.cljs` — shared events/subs for filterable fields, visible columns, table width stored under `[:ui :entity-configs ...]`.
-- `src/app/template/frontend/utils/column_config.cljs` — helpers to reconcile vector-based admin config with template boolean maps and dispatch the right toggle events.
-- `src/app/template/frontend/utils/shared.cljs` — default list display settings and hooks returning entity spec + display settings.
+## Code Map
+- src/app/admin/frontend/pages/settings.cljs: UI tabs/cards, current display/action badges, edit toggle.
+- src/app/admin/frontend/events/settings.cljs: load/update/remove view-option settings via /admin/api/settings; optimistic updates and cache sync.
+- src/app/admin/frontend/config/loader.cljs: fetches EDN configs, transforms table-columns, exposes getters and register-preloaded-config! used for hot cache updates.
+- resources/public/admin/ui-config/view-options.edn: current list toggles per entity (no add/batch keys yet).
+- resources/public/admin/ui-config/form-fields.edn: create/edit/required fields and field-config per entity.
+- resources/public/admin/ui-config/table-columns.edn: available/default-hidden/unfilterable/unsortable/always-visible, column-config, computed-fields per entity.
+- Backend settings routes (`app.backend.routes.admin.settings`, see docs/backend/http-api.md) currently only cover view-options; likely need new endpoints or extensions to handle form-fields/table-columns.
+- Template components consuming configs: `src/app/template/frontend/components/list.cljs` (display/action toggles, table columns), `src/app/template/frontend/components/form.cljs` & related form helpers.
 
-Commands to run
-- Stack is already started with auto-reload (serves admin on 8085).
-- Admin build/watch: `npm run watch:admin` (or `npm run watch` for public build if needed).
-- CLJS tests: `npm run test:cljs` or `bb fe-test-node` (primary fast suite).
-- REPL tracing/debugging: `clj-nrepl-eval --discover-ports` then attach; use skills `app-db-inspect` and `reframe-events-analysis` via CLJS eval.
+## Commands to Run
+- Dev stack: `bb run-app` (serves admin + shadow watch on 8085).
+- Frontend tests: `npm run test:cljs 2>&1 | tee /tmp/fe-test.txt` (save output once, then grep).
+- Backend tests (if you touch API): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
 
-Gotchas & assumptions
-- Hardcoded view options hide corresponding controls in the panel but still enforce visibility; merging precedence in `subs.ui` matters when simplifying.
-- Vector-based config (table-columns + view-options) is cached outside app-db; user prefs live under `[:ui :entity-configs ...]` — refactor must unify/clarify these sources.
-- Always-visible columns and inverted configs are normalized in `config.preload`/`column_config`; avoid breaking these transforms.
-- Single-tenant defaults (no tenant switch, simplified auth); port 8085 is expected by scripts/tests.
-- `docs/frontend/feature-guides/admin.md` referenced in index is missing in repo (note for doc fixes).
+## Gotchas
+- Port is 8085, not 3000. Admin auth middleware protects /admin/api; use admin token/cookie when manual testing.
+- Config loader expects `/admin/ui-config/*.edn` paths; keep formats consistent (table-columns uses inverted keys → loader normalizes to default-visible/filterable/sortable).
+- After PATCH/DELETE, also update loader cache (`register-preloaded-config!`) so UI reflects changes without full reload.
+- Edit mode cycles true → false → nil; nil removes hardcoded setting (user-configurable). Preserve optimistic updates + rollback on failure.
+- Adding form/table editors will require either expanding existing /admin/api/settings endpoints or creating new ones; ensure backend writes back to respective EDN files and stays single-tenant.
+- UI should stay within admin design system (DaisyUI/UIX) and tabs already in settings page; add new tab(s) instead of overcrowding existing ones.
 
-Checklist for next agent
-1) Reconfirm current flow: how view-options EDN → config loader cache → subs/ui merge → hooks → list-view components; trace toggles (column/filter/pagination) through events and state paths.
-2) Decide target simplification: single source for display settings, clearer precedence between hardcoded + user overrides, and minimal duplication between vector-mode and map-mode paths.
-3) Decide if we should keep the config files in public/admin/ui-config or move all to src/app/admin/frontend/config.
-4) Design refactor plan (write it to a new markdown plan in repo root; keep progress updated there) including data model, API surface, and UI/UX changes for the settings panel.
-5) Update settings panel + hooks/subs/events to match new model; ensure admin settings page still persists hardcoded overrides (or migrate as needed).
-6) Align entity preload/loader so EDN configs map cleanly to the new structure; keep backwards compatibility or write migration for existing EDN keys.
-7) Verify list pages (users, audit, login-events, expenses domain lists) still respect toggles and defaults; cover pagination/highlights/filtering/select/edit/delete/add/batch behaviors.
-8) Run CLJS tests and manual smoke on `/admin/settings`, `/admin/users`, `/admin/audit`, `/admin/login-events`; watch logs via `system-logs` skill if issues arise.
+## Checklist for Next Agent
+1) Re-read docs/index.md and docs/frontend/admin-panel-single-tenant.md; review skills in .claude/skills (app-db-inspect, reframe-events-analysis, system-logs).
+2) Confirm backend support: inspect `app.backend.routes.admin.settings` (and related services) to see how view-options are persisted; design/implement parallel endpoints for form-fields/table-columns or extend payload shape.
+3) Extend frontend state/events: add load/update/remove handlers for new config types, reuse optimistic pattern, sync cache via config-loader.
+4) Update `/admin/settings` UI: add controls for add/batch toggles (view-options) and new tab(s) for form-fields & table-columns (pick editable fields like required/create/edit lists, default-hidden/always-visible, widths). Keep edit mode guidance/tooltips.
+5) Wire data flow: on tab mount, fetch configs; on save/delete, call backend and refresh config-loader + app-db; show loading/saving/error states.
+6) Validate end-to-end: run `bb run-app`, exercise new UI, confirm persisted EDN updates, then run `npm run test:cljs` (and `bb be-test` if backend touched), reviewing saved output files.
+7) Document changes briefly in code comments if behavior non-obvious; keep EDN formatting stable.
+8) Prepare a comprehensive implementation plan markdown in repo root before coding (per user request) and track progress there; after plan is created, start implementation without waiting for further approval.
 
-Notes
-- Missing doc: `docs/frontend/feature-guides/admin.md` not present; add/update if needed.
-- After reading this file, create a comprehensive implementation plan markdown in the repo root (e.g., `PLAN-list-view-refactor.md`) to track progress, then start the implementation immediately without asking for approval.
+## Notes
+- If docs are missing (feature-guides/admin), mention in PR/plan and proceed using existing pages as reference.
+- Prefer MCP tools (vector search, skills, clojurescript_eval/clj-nrepl-eval) over ad-hoc shell where possible.

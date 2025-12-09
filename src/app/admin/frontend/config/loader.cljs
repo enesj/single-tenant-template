@@ -94,8 +94,8 @@
   (let [config (get-in @config-cache [:table-columns entity-keyword])]
     (when-not config
       (log/warn "No table-columns config found for entity:"
-                entity-keyword
-                "available entities:" (keys (get @config-cache :table-columns))))
+        entity-keyword
+        "available entities:" (keys (get @config-cache :table-columns))))
     config))
 
 (defn get-view-options
@@ -104,8 +104,8 @@
   (let [view-options (get-in @config-cache [:view-options entity-keyword])]
     (when-not view-options
       (log/warn "No view options found for entity:"
-                entity-keyword
-                "available entities:" (keys (get @config-cache :view-options))))
+        entity-keyword
+        "available entities:" (keys (get @config-cache :view-options))))
     view-options))
 
 (defn get-form-config
@@ -114,8 +114,8 @@
   (let [form-config (get-in @config-cache [:form-fields entity-keyword])]
     (when-not form-config
       (log/warn "No form config found for entity:"
-                entity-keyword
-                "available entities:" (keys (get @config-cache :form-fields))))
+        entity-keyword
+        "available entities:" (keys (get @config-cache :form-fields))))
     form-config))
 
 (defn get-default-visible-columns
@@ -175,6 +175,18 @@
    Returns a map of entity-keyword -> view-options."
   []
   (get @config-cache :view-options {}))
+
+(defn get-all-form-fields
+  "Get all form fields from config cache.
+   Returns a map of entity-keyword -> form-fields config."
+  []
+  (get @config-cache :form-fields {}))
+
+(defn get-all-table-columns
+  "Get all table columns from config cache.
+   Returns a map of entity-keyword -> table-columns config."
+  []
+  (get @config-cache :table-columns {}))
 
 (defn init-config-loader!
   "Initialize the configuration loader"

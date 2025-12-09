@@ -1,5 +1,6 @@
 (ns app.admin.frontend.pages.settings
-  "Admin page displaying all hardcoded list view settings from view-options.edn"
+  "Admin page displaying all hardcoded list view settings from view-options.edn,
+   form-fields.edn, and table-columns.edn with editing capabilities"
   (:require
     [app.admin.frontend.components.layout :as layout]
     [app.admin.frontend.events.settings :as settings-events]
@@ -86,7 +87,7 @@
                      is-true? false
                      is-false? nil  ; nil means remove
                      :else true)
-        handle-click (fn [e]
+        handle-click (fn [_e]
                        (log/info "Setting badge clicked" {:entity entity-name
                                                           :setting setting-key
                                                           :editing? editing?
@@ -213,13 +214,17 @@
 
 (defui domain-section
   "Render a domain section with its entities"
-  [{:keys [domain-key domain-config entities editing? on-change setting-keys]}]
+  [{:keys [_domain-key domain-config entities editing? on-change setting-keys show-actions?]}]
   (let [domain-color (get domain-config :color "neutral")
         color-classes (case domain-color
                         "primary" "from-primary/10 to-primary/5 border-primary/20"
                         "secondary" "from-secondary/10 to-secondary/5 border-secondary/20"
                         "accent" "from-accent/10 to-accent/5 border-accent/20"
-                        "from-neutral/10 to-neutral/5 border-neutral/20")]
+                        "from-neutral/10 to-neutral/5 border-neutral/20")
+        ;; Combine display and action keys if showing actions
+        combined-setting-keys (if show-actions?
+                                all-setting-keys
+                                (or setting-keys display-setting-keys))]
     ($ :div {:class "mb-8 last:mb-0"}
       ;; Domain header
       ($ :div {:class (str "flex items-center gap-3 mb-4 p-4 rounded-lg bg-gradient-to-r "
@@ -239,48 +244,385 @@
                                    :settings settings
                                    :editing? editing?
                                    :on-change on-change
-                                   :setting-keys setting-keys}))))))
+                                   :setting-keys combined-setting-keys}))))))
+
+;; =============================================================================
+;; Form Fields Editor Components
+;; =============================================================================
+
+(defui field-list-editor
+  "Editable list of fields for create/edit/required"
+  [{:keys [label fields available-fields on-change editing?]}]
+  (let [[local-fields set-local-fields!] (use-state (set fields))]
+    (use-effect
+      (fn []
+        (set-local-fields! (set fields))
+        js/undefined)
+      [fields])
+    ($ :div {:class "mb-4"}
+      ($ :label {:class "text-sm font-medium mb-2 block"} label)
+      ($ :div {:class "flex flex-wrap gap-2"}
+        (for [field available-fields]
+          (let [is-selected? (contains? local-fields field)]
+            ($ :button {:key (name field)
+                        :type "button"
+                        :class (str "ds-badge ds-badge-lg cursor-pointer transition-all "
+                                 (if is-selected?
+                                   "ds-badge-primary"
+                                   "ds-badge-outline ds-badge-ghost")
+                                 (when-not editing? " opacity-60 cursor-not-allowed"))
+                        :disabled (not editing?)
+                        :on-click (fn [_]
+                                    (when editing?
+                                      (let [new-fields (if is-selected?
+                                                         (disj local-fields field)
+                                                         (conj local-fields field))]
+                                        (set-local-fields! new-fields)
+                                        (when on-change
+                                          (on-change (vec new-fields))))))}
+              (name field))))))))
+
+(defui form-fields-entity-editor
+  "Editor for a single entity's form fields configuration"
+  [{:keys [entity-name config editing? on-save]}]
+  (let [create-fields (or (:create-fields config) [])
+        edit-fields (or (:edit-fields config) [])
+        ;; Collect all known fields from config
+        all-fields (vec (distinct (concat create-fields edit-fields (keys (:field-config config)))))
+        [local-config set-local-config!] (use-state config)
+        has-changes? (not= local-config config)]
+
+    (use-effect
+      (fn []
+        (set-local-config! config)
+        js/undefined)
+      [config])
+
+    ($ :div {:class "ds-card bg-base-100 shadow-md"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-4"}
+          ($ :h3 {:class "ds-card-title text-lg"}
+            (-> entity-name name str/capitalize))
+          (when (and editing? has-changes?)
+            ($ :button {:type "button"
+                        :class "ds-btn ds-btn-primary ds-btn-sm"
+                        :on-click (fn [_]
+                                    (when on-save
+                                      (on-save entity-name local-config)))}
+              "Save Changes")))
+
+        ($ field-list-editor
+          {:label "Create Fields"
+           :fields (:create-fields local-config)
+           :available-fields all-fields
+           :editing? editing?
+           :on-change (fn [new-fields]
+                        (set-local-config! (assoc local-config :create-fields new-fields)))})
+
+        ($ field-list-editor
+          {:label "Edit Fields"
+           :fields (:edit-fields local-config)
+           :available-fields all-fields
+           :editing? editing?
+           :on-change (fn [new-fields]
+                        (set-local-config! (assoc local-config :edit-fields new-fields)))})
+
+        ($ field-list-editor
+          {:label "Required Fields"
+           :fields (:required-fields local-config)
+           :available-fields (distinct (concat (:create-fields local-config) (:edit-fields local-config)))
+           :editing? editing?
+           :on-change (fn [new-fields]
+                        (set-local-config! (assoc local-config :required-fields new-fields)))})))))
+
+;; =============================================================================
+;; Table Columns Editor Components
+;; =============================================================================
+
+(defui column-list-editor
+  "Editable list of columns"
+  [{:keys [label columns available-columns on-change editing? help-text]}]
+  (let [[local-columns set-local-columns!] (use-state (set columns))]
+    (use-effect
+      (fn []
+        (set-local-columns! (set columns))
+        js/undefined)
+      [columns])
+    ($ :div {:class "mb-4"}
+      ($ :label {:class "text-sm font-medium mb-1 block"} label)
+      (when help-text
+        ($ :p {:class "text-xs text-base-content/60 mb-2"} help-text))
+      ($ :div {:class "flex flex-wrap gap-2"}
+        (for [col available-columns]
+          (let [is-selected? (contains? local-columns col)]
+            ($ :button {:key (name col)
+                        :type "button"
+                        :class (str "ds-badge ds-badge-lg cursor-pointer transition-all "
+                                 (if is-selected?
+                                   "ds-badge-secondary"
+                                   "ds-badge-outline ds-badge-ghost")
+                                 (when-not editing? " opacity-60 cursor-not-allowed"))
+                        :disabled (not editing?)
+                        :on-click (fn [_]
+                                    (when editing?
+                                      (let [new-cols (if is-selected?
+                                                       (disj local-columns col)
+                                                       (conj local-columns col))]
+                                        (set-local-columns! new-cols)
+                                        (when on-change
+                                          (on-change (vec new-cols))))))}
+              (name col))))))))
+
+(defui table-columns-entity-editor
+  "Editor for a single entity's table columns configuration"
+  [{:keys [entity-name config editing? on-save]}]
+  (let [available-columns (or (:available-columns config) [])
+        [local-config set-local-config!] (use-state config)
+        has-changes? (not= local-config config)]
+
+    (use-effect
+      (fn []
+        (set-local-config! config)
+        js/undefined)
+      [config])
+
+    ($ :div {:class "ds-card bg-base-100 shadow-md"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-4"}
+          ($ :h3 {:class "ds-card-title text-lg"}
+            (-> entity-name name str/capitalize))
+          (when (and editing? has-changes?)
+            ($ :button {:type "button"
+                        :class "ds-btn ds-btn-primary ds-btn-sm"
+                        :on-click (fn [_]
+                                    (when on-save
+                                      (on-save entity-name local-config)))}
+              "Save Changes")))
+
+        ;; Available columns (read-only reference)
+        ($ :div {:class "mb-4"}
+          ($ :label {:class "text-sm font-medium mb-2 block"} "Available Columns")
+          ($ :div {:class "flex flex-wrap gap-1"}
+            (for [col available-columns]
+              ($ :span {:key (name col)
+                        :class "ds-badge ds-badge-sm ds-badge-outline"}
+                (name col)))))
+
+        ($ column-list-editor
+          {:label "Default Hidden"
+           :columns (:default-hidden-columns local-config)
+           :available-columns available-columns
+           :editing? editing?
+           :help-text "Columns hidden by default (users can show them)"
+           :on-change (fn [new-cols]
+                        (set-local-config! (assoc local-config :default-hidden-columns new-cols)))})
+
+        ($ column-list-editor
+          {:label "Always Visible"
+           :columns (:always-visible local-config)
+           :available-columns available-columns
+           :editing? editing?
+           :help-text "Columns that cannot be hidden"
+           :on-change (fn [new-cols]
+                        (set-local-config! (assoc local-config :always-visible new-cols)))})
+
+        ($ column-list-editor
+          {:label "Unfilterable"
+           :columns (:unfilterable-columns local-config)
+           :available-columns available-columns
+           :editing? editing?
+           :help-text "Columns that cannot be filtered"
+           :on-change (fn [new-cols]
+                        (set-local-config! (assoc local-config :unfilterable-columns new-cols)))})
+
+        ($ column-list-editor
+          {:label "Unsortable"
+           :columns (:unsortable-columns local-config)
+           :available-columns available-columns
+           :editing? editing?
+           :help-text "Columns that cannot be sorted"
+           :on-change (fn [new-cols]
+                        (set-local-config! (assoc local-config :unsortable-columns new-cols)))})))))
+
+;; =============================================================================
+;; Main Content Tabs
+;; =============================================================================
+
+(defui view-options-tab-content
+  "Content for the view options tab"
+  [{:keys [all-view-options editing? on-change active-domain-tab set-domain-tab!]}]
+  (let [sorted-entities (sort-by first all-view-options)
+        grouped-entities (group-entities-by-domain sorted-entities)
+        tab-link (fn [label tab-key]
+                   ($ :a {:class (str "ds-tab " (when (= active-domain-tab tab-key) "ds-tab-active"))
+                          :href "#"
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (set-domain-tab! tab-key))}
+                     label))]
+    ($ :div
+      ;; Domain tabs
+      ($ :div {:class "ds-tabs ds-tabs-bordered mb-6"}
+        (tab-link "🏠 System" "system")
+        (tab-link "💼 Domain" "domain")
+        (when (get grouped-entities :other)
+          (tab-link "📦 Other" "other")))
+
+      ;; Tab content
+      (cond
+        (= active-domain-tab "system")
+        ($ :div {:class "space-y-8"}
+          (when-let [entities (get grouped-entities :user-management)]
+            ($ domain-section {:domain-key :user-management
+                               :domain-config (get domain-groups :user-management)
+                               :entities entities
+                               :editing? editing?
+                               :on-change on-change
+                               :show-actions? true}))
+          (when-let [entities (get grouped-entities :security-audit)]
+            ($ domain-section {:domain-key :security-audit
+                               :domain-config (get domain-groups :security-audit)
+                               :entities entities
+                               :editing? editing?
+                               :on-change on-change
+                               :show-actions? true})))
+
+        (= active-domain-tab "domain")
+        ($ :div {:class "space-y-8"}
+          (when-let [entities (get grouped-entities :expenses)]
+            ($ domain-section {:domain-key :expenses
+                               :domain-config (get domain-groups :expenses)
+                               :entities entities
+                               :editing? editing?
+                               :on-change on-change
+                               :show-actions? true})))
+
+        (= active-domain-tab "other")
+        (when-let [entities (get grouped-entities :other)]
+          ($ :div {:class "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}
+            (for [[entity-name settings] entities]
+              ($ entity-settings-card {:key entity-name
+                                       :entity-name entity-name
+                                       :settings settings
+                                       :editing? editing?
+                                       :on-change on-change
+                                       :setting-keys all-setting-keys}))))))))
+
+(defui form-fields-tab-content
+  "Content for the form fields tab"
+  [{:keys [form-fields editing? on-save loading?]}]
+  (let [sorted-entities (sort-by first form-fields)]
+    ($ :div
+      (when loading?
+        ($ :div {:class "flex items-center justify-center py-8"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg"})))
+
+      (when-not loading?
+        ($ :div
+          ($ :div {:class "ds-alert ds-alert-info mb-6"}
+            ($ :p {:class "text-sm"}
+              "Configure which fields appear in create and edit forms for each entity. "
+              "Required fields must be filled before submission."))
+
+          ($ :div {:class "grid grid-cols-1 lg:grid-cols-2 gap-4"}
+            (for [[entity-name config] sorted-entities]
+              ($ form-fields-entity-editor {:key entity-name
+                                            :entity-name entity-name
+                                            :config config
+                                            :editing? editing?
+                                            :on-save on-save}))))))))
+
+(defui table-columns-tab-content
+  "Content for the table columns tab"
+  [{:keys [table-columns editing? on-save loading?]}]
+  (let [sorted-entities (sort-by first table-columns)]
+    ($ :div
+      (when loading?
+        ($ :div {:class "flex items-center justify-center py-8"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg"})))
+
+      (when-not loading?
+        ($ :div
+          ($ :div {:class "ds-alert ds-alert-info mb-6"}
+            ($ :p {:class "text-sm"}
+              "Configure table column visibility and behavior. Hidden columns can still be shown by users. "
+              "Always visible columns cannot be hidden. Unfilterable/unsortable columns have those features disabled."))
+
+          ($ :div {:class "grid grid-cols-1 lg:grid-cols-2 gap-4"}
+            (for [[entity-name config] sorted-entities]
+              ($ table-columns-entity-editor {:key entity-name
+                                              :entity-name entity-name
+                                              :config config
+                                              :editing? editing?
+                                              :on-save on-save}))))))))
+
+;; =============================================================================
+;; Main Admin Settings Content
+;; =============================================================================
 
 (defui admin-settings-content
   "Main content for the settings overview page"
   []
-  (let [;; Use editable view options from settings events (updates optimistically)
-        ;; Falls back to config-loader cache if not yet loaded from backend
+  (let [;; View options state
         editable-view-options (use-subscribe [::settings-events/editable-view-options])
         config-view-options (use-subscribe [:admin/all-view-options])
         all-view-options (if (seq editable-view-options)
                            editable-view-options
                            config-view-options)
+
+        ;; Form fields state
+        form-fields (use-subscribe [::settings-events/form-fields])
+        form-fields-loading? (use-subscribe [::settings-events/form-fields-loading?])
+
+        ;; Table columns state
+        table-columns (use-subscribe [::settings-events/table-columns])
+        table-columns-loading? (use-subscribe [::settings-events/table-columns-loading?])
+
+        ;; Common state
         loading? (use-subscribe [::settings-events/loading?])
         saving? (use-subscribe [::settings-events/saving?])
         error (use-subscribe [::settings-events/error])
         editing? (use-subscribe [::settings-events/editing?])
-        sorted-entities (sort-by first all-view-options)
-        grouped-entities (group-entities-by-domain sorted-entities)
-        [active-tab set-active-tab!] (use-state "system")
+        config-tab (use-subscribe [::settings-events/config-tab])
+
+        ;; Local state
+        [domain-tab set-domain-tab!] (use-state "system")
+        main-tab (fn [label key]
+                   ($ :a {:class (str "ds-tab " (when (= config-tab key) "ds-tab-active"))
+                          :href "#"
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (rf/dispatch [::settings-events/set-config-tab key]))}
+                     label))
 
         handle-toggle-edit (fn [e]
-                             (when e
-                               (.preventDefault e))
-                             (log/info "Edit button clicked, dispatching toggle-editing")
+                             (when e (.preventDefault e))
                              (rf/dispatch [::settings-events/toggle-editing]))
 
-        handle-change (fn [entity-name setting-key new-value]
-                        (log/info "handle-change called" {:entity entity-name
-                                                          :setting setting-key
-                                                          :new-value new-value})
-                        (if (nil? new-value)
-                          (rf/dispatch [::settings-events/remove-entity-setting
-                                        (name entity-name)
-                                        (name setting-key)])
-                          (rf/dispatch [::settings-events/update-entity-setting
-                                        (name entity-name)
-                                        (name setting-key)
-                                        new-value])))]
-    ;; Load view options from backend on mount
+        handle-view-option-change (fn [entity-name setting-key new-value]
+                                    (if (nil? new-value)
+                                      (rf/dispatch [::settings-events/remove-entity-setting
+                                                    (name entity-name)
+                                                    (name setting-key)])
+                                      (rf/dispatch [::settings-events/update-entity-setting
+                                                    (name entity-name)
+                                                    (name setting-key)
+                                                    new-value])))
+
+        handle-form-fields-save (fn [entity-name config]
+                                  (rf/dispatch [::settings-events/update-form-fields-entity
+                                                entity-name config]))
+
+        handle-table-columns-save (fn [entity-name config]
+                                    (rf/dispatch [::settings-events/update-table-columns-entity
+                                                  entity-name config]))]
+
+    ;; Load data on mount
     (use-effect
       (fn []
         (rf/dispatch [::settings-events/load-view-options])
+        (rf/dispatch [::settings-events/load-form-fields])
+        (rf/dispatch [::settings-events/load-table-columns])
         js/undefined)
       [])
 
@@ -295,8 +637,8 @@
               ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                         :d "M15 12a3 3 0 11-6 0 3 3 0 016 0z"})))
           ($ :div
-            ($ :h1 {:class "text-2xl font-bold text-base-content"} "List View Settings Overview")
-            ($ :p {:class "text-base-content/70"} "View and manage hardcoded display and action settings for all entity pages"))))
+            ($ :h1 {:class "text-2xl font-bold text-base-content"} "Admin UI Configuration")
+            ($ :p {:class "text-base-content/70"} "Manage view options, form fields, and table columns for all entity pages"))))
 
       ;; Error alert
       (when error
@@ -313,8 +655,26 @@
 
       ;; Main content
       ($ :div {:class "px-4 sm:px-6 lg:px-8"}
-        ;; Legend
-        ($ settings-legend)
+        ;; Edit mode toggle and main tabs
+        ($ :div {:class "flex items-center justify-between mb-6"}
+          ;; Main config tabs
+          ($ :div {:class "ds-tabs ds-tabs-boxed"}
+            (main-tab "📋 View Options" "view-options")
+            (main-tab "📝 Form Fields" "form-fields")
+            (main-tab "📊 Table Columns" "table-columns"))
+
+          ;; Edit toggle button
+          ($ :button {:type "button"
+                      :class (str "ds-btn ds-btn-sm "
+                               (if editing? "ds-btn-warning" "ds-btn-primary")
+                               (when (or loading? saving?) " ds-btn-disabled"))
+                      :on-click handle-toggle-edit
+                      :disabled (or loading? saving?)}
+            (if saving?
+              ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
+              (if editing?
+                "Stop Editing"
+                "Edit Settings"))))
 
         ;; Edit mode instructions
         (when editing?
@@ -322,140 +682,35 @@
             ($ :div
               ($ :h4 {:class "font-bold"} "Edit Mode Active")
               ($ :p {:class "text-sm"}
-                "Click on any setting to cycle through: Enabled → Disabled → Remove. "
-                "Changes are saved immediately to view-options.edn."))))
+                (case config-tab
+                  "view-options" "Click on any setting to cycle through: Enabled → Disabled → Remove. Changes are saved immediately."
+                  "form-fields" "Click fields to toggle them in each list. Click 'Save Changes' to persist."
+                  "table-columns" "Click columns to toggle them in each list. Click 'Save Changes' to persist."
+                  "Changes are saved immediately.")))))
 
-        ;; Summary statistics
-        ($ settings-summary {:all-view-options all-view-options})
+        ;; Main tab content rendering
+        (cond
+          (= config-tab "view-options")
+          ($ view-options-tab-content
+            {:all-view-options all-view-options
+             :editing? editing?
+             :on-change handle-view-option-change
+             :active-domain-tab domain-tab
+             :set-domain-tab! set-domain-tab!})
 
-        ;; Tab navigation
-        (if (seq sorted-entities)
-          ($ :div
-            ;; Tabs header with Edit button
-            ($ :div {:class "flex items-center justify-between mb-4"}
-              ;; Tabs will go here
-              ($ :div {:class "ds-tabs ds-tabs-bordered flex-1"}
-                ;; System Administration Tab
-                ($ :a {:class (str "ds-tab ds-tab-lg ds-tab-lg:gap-2 "
-                                (when (= active-tab "system") "ds-tab-active"))
-                       :href "#"
-                       :on-click (fn [e]
-                                  (.preventDefault e)
-                                  (set-active-tab! "system"))}
-                  ($ :svg {:class "w-5 h-5" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                              :d "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"}))
-                  "System Administration")
+          (= config-tab "form-fields")
+          ($ form-fields-tab-content
+            {:form-fields form-fields
+             :editing? editing?
+             :on-save handle-form-fields-save
+             :loading? form-fields-loading?})
 
-                ;; Domain Management Tab
-                ($ :a {:class (str "ds-tab ds-tab-lg ds-tab-lg:gap-2 "
-                                (when (= active-tab "domain") "ds-tab-active"))
-                       :href "#"
-                       :on-click (fn [e]
-                                  (.preventDefault e)
-                                  (set-active-tab! "domain"))}
-                  ($ :svg {:class "w-5 h-5" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                              :d "M3 7h18M3 12h18M3 17h18"}))
-                  "Domain Management")
-
-                ;; Other Settings Tab (only show if there are other entities)
-                (when (get grouped-entities :other)
-                  ($ :a {:class (str "ds-tab ds-tab-lg ds-tab-lg:gap-2 "
-                                  (when (= active-tab "other") "ds-tab-active"))
-                         :href "#"
-                         :on-click (fn [e]
-                                    (.preventDefault e)
-                                    (set-active-tab! "other"))}
-                    ($ :svg {:class "w-5 h-5" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                      ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                                :d "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"}))
-                    "Other Settings")))
-
-              ;; Edit toggle button - now in tabs header
-              ($ :button {:type "button"
-                          :class (str "ds-btn ds-btn-sm "
-                                   (if editing? "ds-btn-warning" "ds-btn-primary")
-                                   (when (or loading? saving?) " ds-btn-disabled")
-                                   "ml-4")
-                          :on-click handle-toggle-edit
-                          :disabled (or loading? saving?)}
-                (if saving?
-                  ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
-                  (if editing?
-                    "Stop Editing"
-                    "Edit Settings"))))
-
-            ;; Tab Content
-            ($ :div {:class "mt-6"}
-              (cond
-                ;; System Administration Tab Content
-                (= active-tab "system")
-                ($ :div {:class "space-y-8"}
-                  ;; User Management Domain
-                  (when-let [entities (get grouped-entities :user-management)]
-                    ($ domain-section {:domain-key :user-management
-                                       :domain-config (get domain-groups :user-management)
-                                       :entities entities
-                                       :editing? editing?
-                                       :on-change handle-change}))
-
-                  ;; Security & Audit Domain
-                  (when-let [entities (get grouped-entities :security-audit)]
-                    ($ domain-section {:domain-key :security-audit
-                                       :domain-config (get domain-groups :security-audit)
-                                       :entities entities
-                                       :editing? editing?
-                                       :on-change handle-change}))
-
-                  ;; Empty state for system tab
-                  (when (and (empty? (get grouped-entities :user-management))
-                          (empty? (get grouped-entities :security-audit)))
-                    ($ :div {:class "text-center py-12"}
-                      ($ :svg {:class "w-16 h-16 mx-auto text-base-content/30 mb-4" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                        ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                                  :d "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"}))
-                      ($ :h3 {:class "text-lg font-medium text-base-content/70 mb-2"}
-                        "No System Settings")
-                      ($ :p {:class "text-base-content/50"}
-                        "System administration settings will appear here when available."))))
-
-                ;; Domain Management Tab Content
-                (= active-tab "domain")
-                ($ :div {:class "space-y-8"}
-                  ;; Expenses Domain
-                  (when-let [entities (get grouped-entities :expenses)]
-                    ($ domain-section {:domain-key :expenses
-                                       :domain-config (get domain-groups :expenses)
-                                       :entities entities
-                                       :editing? editing?
-                                       :on-change handle-change}))
-
-                  ;; Empty state for domain tab
-                  (when (empty? (get grouped-entities :expenses))
-                    ($ :div {:class "text-center py-12"}
-                      ($ :svg {:class "w-16 h-16 mx-auto text-base-content/30 mb-4" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                        ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                                  :d "M3 7h18M3 12h18M3 17h18"}))
-                      ($ :h3 {:class "text-lg font-medium text-base-content/70 mb-2"}
-                        "No Domain Settings")
-                      ($ :p {:class "text-base-content/50"}
-                        "Business domain settings will appear here when domains are configured."))))
-
-                ;; Other Settings Tab Content
-                (= active-tab "other")
-                ($ :div
-                  (when-let [entities (get grouped-entities :other)]
-                    ($ :div {:class "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}
-                      (for [[entity-name settings] entities]
-                        ($ entity-settings-card {:key entity-name
-                                                 :entity-name entity-name
-                                                 :settings settings
-                                                 :editing? editing?
-                                                 :on-change handle-change}))))))))
-
-          ($ :div {:class "ds-alert ds-alert-warning"}
-            ($ :span "No view options found. Make sure view-options.edn is properly loaded.")))))))
+          (= config-tab "table-columns")
+          ($ table-columns-tab-content
+            {:table-columns table-columns
+             :editing? editing?
+             :on-save handle-table-columns-save
+             :loading? table-columns-loading?}))))))
 
 (defui admin-settings-page
   "Admin settings overview page"

@@ -1,5 +1,5 @@
 (ns app.admin.frontend.events.settings
-  "Events for managing view-options.edn settings via backend API"
+  "Events for managing view-options, form-fields, and table-columns configs via backend API"
   (:require
     [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.utils.http :as admin-http]
@@ -7,7 +7,7 @@
     [taoensso.timbre :as log]))
 
 ;; =============================================================================
-;; Load Settings from Backend
+;; Load View Options from Backend
 ;; =============================================================================
 
 (rf/reg-event-fx
@@ -38,7 +38,7 @@
       (assoc-in [:admin :settings :error] "Failed to load settings"))))
 
 ;; =============================================================================
-;; Update Single Setting
+;; Update Single View Option Setting
 ;; =============================================================================
 
 (rf/reg-event-fx
@@ -124,6 +124,146 @@
      :fx [[:dispatch [::load-view-options]]]}))
 
 ;; =============================================================================
+;; Load Form Fields Config
+;; =============================================================================
+
+(rf/reg-event-fx
+  ::load-form-fields
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db [:admin :settings :form-fields-loading?] true)
+     :http-xhrio (admin-http/admin-get
+                   {:uri "/admin/api/settings/form-fields"
+                    :on-success [::load-form-fields-success]
+                    :on-failure [::load-form-fields-failure]})}))
+
+(rf/reg-event-fx
+  ::load-form-fields-success
+  (fn [{:keys [db]} [_ response]]
+    (let [form-fields (:form-fields response)]
+      (log/info "Loaded form fields from backend" {:count (count form-fields)})
+      {:db (-> db
+             (assoc-in [:admin :settings :form-fields-loading?] false)
+             (assoc-in [:admin :settings :form-fields] form-fields)
+             (assoc-in [:admin :settings :error] nil))})))
+
+(rf/reg-event-db
+  ::load-form-fields-failure
+  (fn [db [_ error]]
+    (log/error "Failed to load form fields" error)
+    (-> db
+      (assoc-in [:admin :settings :form-fields-loading?] false)
+      (assoc-in [:admin :settings :error] "Failed to load form fields"))))
+
+;; =============================================================================
+;; Update Form Fields Entity Config
+;; =============================================================================
+
+(rf/reg-event-fx
+  ::update-form-fields-entity
+  (fn [{:keys [db]} [_ entity-name entity-config]]
+    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))]
+      {:db (-> db
+             (assoc-in [:admin :settings :saving?] true)
+             ;; Optimistically update
+             (assoc-in [:admin :settings :form-fields entity-kw] entity-config))
+       :http-xhrio (admin-http/admin-patch
+                     {:uri "/admin/api/settings/form-fields/entity"
+                      :params {:entity-name (name entity-kw)
+                               :entity-config entity-config}
+                      :on-success [::update-form-fields-success entity-kw entity-config]
+                      :on-failure [::update-form-fields-failure entity-kw]})})))
+
+(rf/reg-event-fx
+  ::update-form-fields-success
+  (fn [{:keys [db]} [_ entity-kw entity-config _response]]
+    (log/info "Form fields updated successfully" {:entity entity-kw})
+    ;; Update config-loader cache
+    (config-loader/register-preloaded-config! :form-fields entity-kw entity-config)
+    {:db (-> db
+           (assoc-in [:admin :settings :saving?] false)
+           (assoc-in [:admin :settings :last-saved] (js/Date.now))
+           (assoc-in [:admin :settings :error] nil))}))
+
+(rf/reg-event-fx
+  ::update-form-fields-failure
+  (fn [{:keys [db]} [_ entity-kw error]]
+    (log/error "Failed to update form fields" {:entity entity-kw :error error})
+    {:db (-> db
+           (assoc-in [:admin :settings :saving?] false)
+           (assoc-in [:admin :settings :error] "Failed to save form fields"))
+     :fx [[:dispatch [::load-form-fields]]]}))
+
+;; =============================================================================
+;; Load Table Columns Config
+;; =============================================================================
+
+(rf/reg-event-fx
+  ::load-table-columns
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db [:admin :settings :table-columns-loading?] true)
+     :http-xhrio (admin-http/admin-get
+                   {:uri "/admin/api/settings/table-columns"
+                    :on-success [::load-table-columns-success]
+                    :on-failure [::load-table-columns-failure]})}))
+
+(rf/reg-event-fx
+  ::load-table-columns-success
+  (fn [{:keys [db]} [_ response]]
+    (let [table-columns (:table-columns response)]
+      (log/info "Loaded table columns from backend" {:count (count table-columns)})
+      {:db (-> db
+             (assoc-in [:admin :settings :table-columns-loading?] false)
+             (assoc-in [:admin :settings :table-columns] table-columns)
+             (assoc-in [:admin :settings :error] nil))})))
+
+(rf/reg-event-db
+  ::load-table-columns-failure
+  (fn [db [_ error]]
+    (log/error "Failed to load table columns" error)
+    (-> db
+      (assoc-in [:admin :settings :table-columns-loading?] false)
+      (assoc-in [:admin :settings :error] "Failed to load table columns"))))
+
+;; =============================================================================
+;; Update Table Columns Entity Config
+;; =============================================================================
+
+(rf/reg-event-fx
+  ::update-table-columns-entity
+  (fn [{:keys [db]} [_ entity-name entity-config]]
+    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))]
+      {:db (-> db
+             (assoc-in [:admin :settings :saving?] true)
+             ;; Optimistically update
+             (assoc-in [:admin :settings :table-columns entity-kw] entity-config))
+       :http-xhrio (admin-http/admin-patch
+                     {:uri "/admin/api/settings/table-columns/entity"
+                      :params {:entity-name (name entity-kw)
+                               :entity-config entity-config}
+                      :on-success [::update-table-columns-success entity-kw entity-config]
+                      :on-failure [::update-table-columns-failure entity-kw]})})))
+
+(rf/reg-event-fx
+  ::update-table-columns-success
+  (fn [{:keys [db]} [_ entity-kw entity-config _response]]
+    (log/info "Table columns updated successfully" {:entity entity-kw})
+    ;; Update config-loader cache
+    (config-loader/register-preloaded-config! :table-columns entity-kw entity-config)
+    {:db (-> db
+           (assoc-in [:admin :settings :saving?] false)
+           (assoc-in [:admin :settings :last-saved] (js/Date.now))
+           (assoc-in [:admin :settings :error] nil))}))
+
+(rf/reg-event-fx
+  ::update-table-columns-failure
+  (fn [{:keys [db]} [_ entity-kw error]]
+    (log/error "Failed to update table columns" {:entity entity-kw :error error})
+    {:db (-> db
+           (assoc-in [:admin :settings :saving?] false)
+           (assoc-in [:admin :settings :error] "Failed to save table columns"))
+     :fx [[:dispatch [::load-table-columns]]]}))
+
+;; =============================================================================
 ;; Toggle Editing Mode
 ;; =============================================================================
 
@@ -134,6 +274,15 @@
           new-val (not current)]
       (log/info "Toggle editing" {:current current :new-val new-val})
       (assoc-in db [:admin :settings :editing?] new-val))))
+
+;; =============================================================================
+;; Active Config Tab
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-config-tab
+  (fn [db [_ tab]]
+    (assoc-in db [:admin :settings :config-tab] tab)))
 
 ;; =============================================================================
 ;; Subscriptions
@@ -163,3 +312,28 @@
   ::editable-view-options
   (fn [db _]
     (get-in db [:admin :settings :view-options] {})))
+
+(rf/reg-sub
+  ::form-fields
+  (fn [db _]
+    (get-in db [:admin :settings :form-fields] {})))
+
+(rf/reg-sub
+  ::form-fields-loading?
+  (fn [db _]
+    (get-in db [:admin :settings :form-fields-loading?] false)))
+
+(rf/reg-sub
+  ::table-columns
+  (fn [db _]
+    (get-in db [:admin :settings :table-columns] {})))
+
+(rf/reg-sub
+  ::table-columns-loading?
+  (fn [db _]
+    (get-in db [:admin :settings :table-columns-loading?] false)))
+
+(rf/reg-sub
+  ::config-tab
+  (fn [db _]
+    (get-in db [:admin :settings :config-tab] "view-options")))
