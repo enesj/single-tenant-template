@@ -62,13 +62,94 @@ Successfully created and migrated all 8 expense tracker domain tables to the dat
 
 ---
 
-## 🚧 Phase 3: Frontend Pages & Components (IN PROGRESS)
+## ✅ Phase 3A: Admin Expense Tracking UI (COMPLETED)
 
-Key UI improvements shipped:
-- Enriched the backend expense services so `list-expenses` and `get-expense-with-items` now return supplier/payer display names, types, and metadata that the UI can render directly.
-- Rebuilt the `/admin/expenses` list page with formatted supplier/payer cells, currency styling, status badges, and “View” links that navigate to the expense detail page.
-- Added the `/admin/expenses/:id` route with a guarded controller that waits for the `:id` param before loading expense metadata, line items, and breadcrumbs in the new detail page.
-Next up: roll out creation/edit forms, receipts upload + ADE extraction flows, and start wiring analytics/reporting components.
+### What shipped
+- **Backend enrichment**: Enhanced `list-expenses` and `get-expense-with-items` services to return supplier/payer display names, types, and metadata for direct UI consumption.
+- **Admin expense list**: Rebuilt `/admin/expenses` with formatted supplier/payer cells, currency styling, status badges, and "View" links for expense details.
+- **Admin expense detail**: Added `/admin/expenses/:id` route with guarded controller that loads expense metadata, line items, and breadcrumbs when `:id` param is available.
+- **Admin data management**: Full CRUD capabilities for suppliers, payers, expenses, and receipt management through admin interface.
+
+---
+
+## 🚧 Phase 3B: User Experience & Dashboard (IN PROGRESS)
+
+### Current State: Role-Based Access Control
+- **Unassigned users**: See onboarding/waiting page indicating they need role assignment from admin
+- **Assigned users**: Will see personalized expense tracking dashboard once implemented
+
+### User Experience Components to Implement
+
+#### 1. User Onboarding & Role Assignment Flow
+- **Waiting room page**: For users without assigned roles
+  - Clear messaging about pending admin approval
+  - Contact information or request feature for role assignment
+  - Periodic check for role status updates
+- **Role notification**: Alert system when user receives role assignment
+
+#### 2. User Dashboard & Core Flows
+- **Personal expense dashboard** at `/expenses` or `/dashboard`
+  - Recent expenses summary with quick filters
+  - Monthly spending overview and trends
+  - Quick receipt upload action
+  - Pending receipts awaiting approval
+  - Personal analytics and spending insights
+
+#### 3. User-Facing Expense Management
+- **Simplified expense creation**:
+  - Mobile-optimized receipt photo upload
+  - Quick expense entry with common suppliers/payers
+  - Smart categorization based on history
+- **Expense tracking views**:
+  - Personal expense history with filters
+  - Receipt status tracking (uploaded → approved → posted)
+  - Monthly budget tracking and alerts
+- **Receipt management**:
+  - Direct mobile camera integration
+  - Batch receipt upload
+  - Receipt status notifications
+
+#### 4. User Analytics & Reporting
+- **Personal spending insights**:
+  - Category-wise spending breakdowns
+  - Monthly/yearly spending trends
+  - Top merchants and spending patterns
+  - Budget vs actual comparisons
+- **Export capabilities**:
+  - PDF/CSV export for personal records
+  - Tax-ready expense summaries
+  - Custom date range reports
+
+#### 5. Mobile-First Design
+- **Responsive layouts** optimized for mobile devices
+- **Touch-friendly interfaces** for receipt upload
+- **Progressive Web App (PWA)** features for native-like experience
+- **Offline support** for expense entry and receipt capture
+
+#### 6. User Settings & Preferences
+- **Personal profile management**
+- **Notification preferences** (receipt status, budget alerts)
+- **Default payment methods and suppliers**
+- **Currency and display preferences**
+- **Data privacy and export settings**
+
+### Technical Implementation Plan
+1. **User routes and controllers** at `/expenses/*` and `/dashboard/*`
+2. **User-specific API endpoints** with proper authentication/authorization
+3. **Mobile-optimized UI components** using DaisyUI responsive classes
+4. **Service layer extensions** for user-specific data filtering and aggregation
+5. **Background processing** for receipt uploads and notifications
+
+---
+
+## ⏸️ Phase 3C: Advanced User Features (PLANNED)
+
+### Future Enhancements
+- **Receipt AI suggestions**: Automatic categorization and tagging
+- **Recurring expenses**: Automatic bill tracking and reminders
+- **Collaborative expenses**: Shared expense tracking for families/teams
+- **Bank integration**: Automatic expense import from banking APIs
+- **Advanced analytics**: Predictive spending insights and recommendations
 
 ---
 
@@ -78,9 +159,16 @@ Will integrate LandingAI ADE for receipt extraction after basic CRUD is working.
 
 ---
 
-## ⏸️ Phase 5: Reports & Analytics (NOT STARTED)
+## 🚧 Phase 5: Reports & Analytics (IN PROGRESS)
 
-Will add reporting after core expense tracking workflow is functional.
+### Admin Analytics (Completed)
+- Basic admin reporting infrastructure exists in the backend services
+- Admin can view expense summaries and basic analytics through admin interface
+
+### User Analytics (Pending - Part of Phase 3B)
+- Personal spending insights and reports will be implemented as part of user dashboard
+- Tax-ready export capabilities and custom date range reports
+- Budget tracking and spending trend analysis for individual users
 
 ---
 

@@ -2,6 +2,7 @@
   "Simplified events for vector-based column configuration"
   (:require
    [app.admin.frontend.config.loader :as config-loader]
+   [clojure.string :as str]
    [re-frame.core :as rf]))
 
 (def ^:private bootstrap-throttle-ms 300)
@@ -150,25 +151,28 @@
 (rf/reg-event-fx
   :admin/load-ui-configs
   (fn [{:keys [db]} _]
-    (let [preloaded-configs (config-loader/load-all-configs)
+    (let [admin-path? (str/starts-with? (or (.-pathname js/window.location) "") "/admin")
+          preloaded-configs (config-loader/load-all-configs)
           bootstrap (get-in db [:admin :config :bootstrap])
           last-started (:last-started-at bootstrap 0)
           inflight? (:in-flight? bootstrap)
           now-ts (now)
           within-window? (< (- now-ts last-started) bootstrap-throttle-ms)]
-      (if (and inflight? within-window?)
-        {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
-        {:db (-> db
-               (assoc-in [:admin :config] preloaded-configs)
-               (assoc :admin/config-loaded? true)
-               (assoc-in [:admin :config :bootstrap]
-                 (-> bootstrap
-                   (assoc :in-flight? true)
-                   (assoc :last-started-at now-ts)
-                   (assoc :last-requested-at now-ts)
-                   (dissoc :last-error))))
-         :fx [[:dispatch [::async-load-configs]]
-              [:dispatch [::load-entity-configs]]]}))))
+      (if-not admin-path?
+        {:db db}
+        (if (and inflight? within-window?)
+          {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
+          {:db (-> db
+                 (assoc-in [:admin :config] preloaded-configs)
+                 (assoc :admin/config-loaded? true)
+                 (assoc-in [:admin :config :bootstrap]
+                   (-> bootstrap
+                     (assoc :in-flight? true)
+                     (assoc :last-started-at now-ts)
+                     (assoc :last-requested-at now-ts)
+                     (dissoc :last-error))))
+           :fx [[:dispatch [::async-load-configs]]
+                [:dispatch [::load-entity-configs]]]})))))
 
 (rf/reg-event-fx
   ::load-entity-configs

@@ -173,3 +173,21 @@
   :change-password/message
   (fn [db _]
     (get-in db [:change-password :message])))
+
+;; ========================================================================
+;; Role-Based Access Subscriptions
+;; ========================================================================
+
+(rf/reg-sub
+  :user/has-expenses-access?
+  :<- [:user-role]
+  (fn [role _]
+    ;; Users with member role or higher have expense tracking access
+    ;; unassigned and viewer roles do not have access
+    (contains? #{"member" "admin" "owner"} role)))
+
+(rf/reg-sub
+  :user/is-unassigned?
+  :<- [:user-role]
+  (fn [role _]
+    (= role "unassigned")))

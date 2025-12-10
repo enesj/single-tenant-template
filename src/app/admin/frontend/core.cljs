@@ -38,16 +38,21 @@
     [re-frame.core :as rf]))
 
 
+(defonce ^:private admin-initialized? (atom false))
+
 (defn init-admin!
-  "Initialize admin module - ensures all events and subscriptions are registered and theme is applied"
+  "Initialize admin module - ensures all events and subscriptions are registered and theme is applied.
+
+  Safe to call multiple times; runs only once per page load."
   []
-  ;; Initialize authentication persistence first (before any auth checks)
-  (rf/dispatch [:admin/init-auth-persistence])
-  ;; Initialize the theme when admin module loads
-  (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
-  ;; Load config and models-data if not already loaded
-  (rf/dispatch [:app.template.frontend.events.config/fetch-config])
-  ;; Load admin UI configurations
-  (rf/dispatch [:admin/load-ui-configs])
-  ;; Ensure expenses domain front-end namespaces are loaded
-  (expenses-domain/init!))
+  (when (compare-and-set! admin-initialized? false true)
+    ;; Initialize authentication persistence first (before any auth checks)
+    (rf/dispatch [:admin/init-auth-persistence])
+    ;; Initialize the theme when admin module loads
+    (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
+    ;; Load config and models-data if not already loaded
+    (rf/dispatch [:app.template.frontend.events.config/fetch-config])
+    ;; Load admin UI configurations (hits /admin/api/*)
+    (rf/dispatch [:admin/load-ui-configs])
+    ;; Ensure expenses domain front-end namespaces are loaded
+    (expenses-domain/init!)))

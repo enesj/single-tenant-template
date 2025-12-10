@@ -1,5 +1,6 @@
 (ns app.backend.routes.api
   (:require
+   [app.backend.handlers.user-expenses :as user-expenses-handlers]
    [app.backend.middleware.user :as user-middleware]
    [app.backend.routes.entities :as entities]
    [app.backend.services.admin.dashboard :as admin-dashboard]
@@ -207,6 +208,20 @@
                                                (let [email-service (get service-container :email-service)]
                                                  (when-let [handler-fn (requiring-resolve 'app.template.backend.routes.email-verification/resend-verification-handler)]
                                                    ((handler-fn db email-service) req))))}}]]
+
+   ;; User expense routes - requires authenticated user
+   ["/expenses"
+    {:middleware [#(user-middleware/wrap-user-authentication %)]}
+    ;; Dashboard/summary endpoints
+    ["/summary" {:get {:handler (user-expenses-handlers/expense-summary-handler db)}}]
+    ["/by-month" {:get {:handler (user-expenses-handlers/spending-by-month-handler db)}}]
+    ["/by-supplier" {:get {:handler (user-expenses-handlers/spending-by-supplier-handler db)}}]
+    ;; CRUD endpoints
+    ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}
+         :post {:handler (user-expenses-handlers/create-expense-handler db)}}]
+    ["/:id" {:get {:handler (user-expenses-handlers/get-expense-handler db)}
+             :put {:handler (user-expenses-handlers/update-expense-handler db)}
+             :delete {:handler (user-expenses-handlers/delete-expense-handler db)}}]]
 
    ;; Generic entity CRUD routes - but we need to handle users specially
    ;; Transform ["/:entity" config & subroutes] to ["/entities/:entity" config & suboutes]

@@ -8,6 +8,8 @@
     [app.template.frontend.pages.about :refer [about-page]]
     [app.template.frontend.pages.entities :refer [entities-page]]
     [app.template.frontend.pages.home :refer [home-page]]
+    [app.template.frontend.pages.waiting-room :refer [waiting-room-page]]
+    [app.template.frontend.pages.expenses-dashboard :refer [expenses-dashboard-page]]
     [app.template.frontend.routes :as routes]
     [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.confirm-dialog :refer [confirm-dialog]]
@@ -220,15 +222,24 @@
           :reset-password ($ reset-password-page)
           :change-password ($ change-password-page)
           :subscription ($ :div {:class "ds-container p-4"} ($ subscription-page))
+          ;; User expense tracking pages
+          :waiting-room ($ waiting-room-page)
+          :expenses-dashboard ($ expenses-dashboard-page)
+          :expenses-list ($ :div {:class "ds-container p-4"} "Expenses List - Coming Soon")
+          :expense-upload ($ :div {:class "ds-container p-4"} "Receipt Upload - Coming Soon")
+          :expense-new ($ :div {:class "ds-container p-4"} "Add Expense - Coming Soon")
+          :expense-detail ($ :div {:class "ds-container p-4"} "Expense Detail - Coming Soon")
+          :expense-reports ($ :div {:class "ds-container p-4"} "Expense Reports - Coming Soon")
+          :expense-settings ($ :div {:class "ds-container p-4"} "Expense Settings - Coming Soon")
           ;; If no matching route, default to home page instead of showing 'not found'
           ($ :div {:class "ds-container p-4"} ($ home-page))))
 
       ;; Add the confirm dialog component to the layout
       ($ confirm-dialog))))
 
-    #_{:clj-kondo/ignore [:inline-def :uninitialized-var]}
-    (defonce root
-      (uix.dom/create-root (js/document.getElementById "app")))
+#_{:clj-kondo/ignore [:inline-def :uninitialized-var]}
+(defonce root
+  (uix.dom/create-root (js/document.getElementById "app")))
 
 #_{:clj-kondo/ignore [:inline-def]}
 (defn mount-ui
@@ -249,7 +260,11 @@
   (setup-logging!)
   (suppress-re-frame-noise!)
   (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
-  (admin-core/init-admin!)  ;; Initialize admin module
+  ;; Fetch shared app config/models for all users (does not require admin)
+  (rf/dispatch [:app.template.frontend.events.config/fetch-config])
+  ;; Only initialize admin module when we're on an admin route; on-demand in router for later navigations
+  (when (str/starts-with? (.-pathname js/window.location) "/admin")
+    (admin-core/init-admin!))
   (routes/init-routes!)
   (mount-ui))
 

@@ -104,4 +104,17 @@
                                   [:created_at :timestamptz {:default "NOW()"}]]
                          :indexes [[:idx_password_reset_tokens_token :btree {:fields [:token] :unique true}]
                                    [:idx_password_reset_tokens_principal :btree {:fields [:principal_type :principal_id]}]
-                                   [:idx_password_reset_tokens_expires :btree {:fields [:expires_at]}]]}}
+                                   [:idx_password_reset_tokens_expires :btree {:fields [:expires_at]}]]}
+
+ ;; Admin sessions for admin authentication
+ :admin_sessions {:fields [[:id :uuid {:primary-key true}]
+                           [:admin_id :uuid {:foreign-key :admins/id :null false :on-delete :cascade}]
+                           [:token [:varchar 255] {:null false :unique true}]
+                           [:created_at :timestamptz {:null false :default "NOW()"}]
+                           [:last_activity :timestamptz {:null false}]
+                           [:expires_at :timestamptz {:null false}]
+                           [:ip_address :text]
+                           [:user_agent :text]]
+                  :indexes [[:idx_admin_sessions_token :btree {:fields [:token] :unique true}]
+                            [:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}]
+                            [:idx_admin_sessions_expires :btree {:fields [:expires_at]}]]}}

@@ -1,0 +1,16 @@
+({:action :add-column,
+  :field-name :user-id,
+  :model-name :expenses,
+  :options {:foreign-key :users/id, :on-delete :set-null, :type :uuid}}
+ {:action :add-column,
+  :field-name :user-id,
+  :model-name :receipts,
+  :options {:foreign-key :users/id, :on-delete :set-null, :type :uuid}}
+ {:action :create-index,
+  :index-name :idx-receipts-user,
+  :model-name :receipts,
+  :options {:fields [:user_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-user,
+  :model-name :expenses,
+  :options {:fields [:user_id], :type :btree}})

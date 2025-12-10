@@ -191,7 +191,17 @@
          ["/about/" {:get {:handler render-page}}]
          ["/subscription" {:get {:handler render-page}}]
          ["/entities" {:get {:handler render-page}}]
-         ["/entities/" {:get {:handler render-page}}]]
+         ["/entities/" {:get {:handler render-page}}]
+         ;; User expense tracking frontend routes
+         ["/waiting-room" {:get {:handler render-page}}]
+         ["/dashboard" {:get {:handler render-page}}]
+         ["/expenses" {:get {:handler render-page}}]
+         ["/expenses/list" {:get {:handler render-page}}]
+         ["/expenses/upload" {:get {:handler render-page}}]
+         ["/expenses/new" {:get {:handler render-page}}]
+         ["/expenses/reports" {:get {:handler render-page}}]
+         ["/expenses/settings" {:get {:handler render-page}}]
+         ["/expenses/:expense-id" {:get {:handler render-page}}]]
 
 ;; Combine all routes with proper precedence: API routes FIRST, then frontend
         all-routes (concat static-routes

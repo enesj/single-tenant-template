@@ -8,13 +8,14 @@
    ensuring all event handlers are properly registered through
    namespace requires."
   (:require ;; Template event namespaces (loaded for side effects)
- ;; These requires are essential for Re-frame event registration
+           ;; These requires are essential for Re-frame event registration
     [app.template.frontend.events.auth]
     [app.template.frontend.events.bootstrap]
     [app.template.frontend.events.config]
     [app.template.frontend.events.messages]
     [app.template.frontend.events.onboarding] ;; Routing remains separate as already modular
-    [app.template.frontend.events.routing]))
+    [app.template.frontend.events.routing]
+    [app.template.frontend.events.user-expenses]))
 
 ;; ========================================================================
 ;; Orchestration Layer

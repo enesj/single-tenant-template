@@ -52,6 +52,7 @@
  :receipts {
   :fields [
    [:id :uuid {:primary-key true}]
+   [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]  ;; User who uploaded this receipt
    [:storage_key :text {:null false}]  ;; S3/local path
    [:file_hash [:varchar 64] {:null false}]  ;; SHA-256 for dedupe
    [:original_filename [:varchar 255]]
@@ -79,6 +80,7 @@
                                      "approved" "posted" "failed"]}]
   ]
   :indexes [
+   [:idx_receipts_user :btree {:fields [:user_id]}]
    [:idx_receipts_file_hash :btree {:fields [:file_hash] :unique true}]
    [:idx_receipts_status :btree {:fields [:status]}]
    [:idx_receipts_created_at :btree {:fields [:created_at]}]
@@ -92,6 +94,7 @@
  :expenses {
   :fields [
    [:id :uuid {:primary-key true}]
+   [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]  ;; User who owns this expense
    [:receipt_id :uuid {:foreign-key :receipts/id :on-delete :set-null}]
    [:supplier_id :uuid {:foreign-key :suppliers/id :null false}]
    [:payer_id :uuid {:foreign-key :payers/id :null false}]
@@ -108,6 +111,7 @@
    [:currency :enum {:choices ["BAM" "EUR" "USD"]}]
   ]
   :indexes [
+   [:idx_expenses_user :btree {:fields [:user_id]}]
    [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
    [:idx_expenses_payer :btree {:fields [:payer_id]}]
    [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]

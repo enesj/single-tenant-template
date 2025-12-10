@@ -1,6 +1,7 @@
 (ns app.template.frontend.routes
   (:require
     [app.admin.frontend.routes :as admin-routes]
+    [app.admin.frontend.core :as admin-core]
     [app.template.frontend.events.bootstrap :as bootstrap-events] ;; Import admin routes
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -303,6 +304,75 @@
      :view :entity-detail
      :controllers (make-redirect-controller "invitations" :add)}]])
 
+;; ========================================================================
+;; User Expense Routes (Role-Gated)
+;; ========================================================================
+
+(defn- generate-user-expense-routes
+  "Generate user-facing expense tracking routes.
+   These routes are role-gated - users without proper role see waiting room."
+  []
+  [;; Waiting room for unassigned users
+   ["/waiting-room"
+    {:name :waiting-room
+     :view :waiting-room
+     :controllers (make-simple-controller :page/init-waiting-room)}]
+
+   ;; User expense dashboard (main entry point)
+   ["/expenses"
+    {:name :expenses-dashboard
+     :view :expenses-dashboard
+     :controllers (make-simple-controller :page/init-expenses-dashboard)}]
+
+   ;; Alias for dashboard
+   ["/dashboard"
+    {:name :user-dashboard
+     :view :expenses-dashboard
+     :controllers (make-simple-controller :page/init-expenses-dashboard)}]
+
+   ;; Explicit nested dashboard path to avoid catching by /expenses/:expense-id
+   ["/expenses/dashboard"
+    {:name :expenses-dashboard-alias
+     :view :expenses-dashboard
+     :controllers (make-simple-controller :page/init-expenses-dashboard)}]
+
+   ;; Expense list with history
+   ["/expenses/list"
+    {:name :expenses-list
+     :view :expenses-list
+     :controllers (make-simple-controller :page/init-expenses-list)}]
+
+   ;; Upload receipt
+   ["/expenses/upload"
+    {:name :expenses-upload
+     :view :expenses-upload
+     :controllers (make-simple-controller :page/init-expenses-upload)}]
+
+   ;; New expense (manual entry)
+   ["/expenses/new"
+    {:name :expenses-new
+     :view :expenses-new
+     :controllers (make-simple-controller :page/init-expenses-new)}]
+
+   ;; Expense detail
+   ["/expenses/:expense-id"
+    {:name :expenses-detail
+     :view :expenses-detail
+     :parameters {:path {:expense-id string?}}
+     :controllers (make-simple-controller :page/init-expenses-detail)}]
+
+   ;; Reports
+   ["/expenses/reports"
+    {:name :expenses-reports
+     :view :expenses-reports
+     :controllers (make-simple-controller :page/init-expenses-reports)}]
+
+   ;; User settings
+   ["/expenses/settings"
+    {:name :expenses-settings
+     :view :expenses-settings
+     :controllers (make-simple-controller :page/init-expenses-settings)}]])
+
 ;; Define routes using the helper functions
 ;; Define routes using the helper functions
 (def routes
@@ -399,6 +469,8 @@
          :controllers (make-simple-controller :page/init-entities)}]]
          ;; Add dynamically generated app routes (aliases to entities)
       (generate-app-routes)
+         ;; Add user expense tracking routes
+      (generate-user-expense-routes)
          ;; Add dynamically generated entity routes
       (generate-entity-routes)
       ;; Add admin routes
@@ -444,6 +516,9 @@
           route-name-str (when route-name (name route-name))]
 
       (when route-name-str
+        ;; Lazily initialize admin module when navigating to admin routes
+        (when (str/starts-with? route-name-str "admin-")
+          (admin-core/init-admin!))
         (case route-name
           ;; Handle home page
           :home (rf/dispatch [:page/init-home])

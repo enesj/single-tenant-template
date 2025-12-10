@@ -37,13 +37,14 @@
           user (get response :user)
           tenant (get response :tenant)
           permissions (get response :permissions)
-          current-page (get-in db [:ui :current-page])]
+          current-page (get-in db [:ui :current-page])
+          user-role (:role user)]
 
       ;; Log authentication details
       (when user
         (if legacy-session?
           (log/debug "Legacy user session:" (:name user))
-          (log/debug "Multi-tenant user session:" (:full-name user) "tenant:" (:name tenant))))
+          (log/debug "Multi-tenant user session:" (:full-name user) "tenant:" (:name tenant) "role:" user-role)))
 
       (let [updated-db (-> db
                          ;; Clear loading state
@@ -68,12 +69,20 @@
                          (assoc-in [:session :permissions] permissions)
 
                          ;; Clear any previous errors
-                         (update :session dissoc :error))]
+                         (update :session dissoc :error))
+            ;; Determine redirect based on role
+            redirect-path (cond
+                            ;; Unassigned users go to waiting room
+                            (= user-role "unassigned") "/waiting-room"
+                            ;; Members and above go to expense dashboard
+                            (contains? #{"member" "admin" "owner"} user-role) "/dashboard"
+                            ;; Viewers or other roles go to entities
+                            :else "/entities")]
 
-        ;; If user is authenticated and on login page, redirect them
+        ;; If user is authenticated and on login page, redirect them based on role
         (if (and authenticated? (= current-page :login))
           {:db updated-db
-           :redirect "/entities"}
+           :redirect redirect-path}
           {:db updated-db})))))
 
 ;; Handle failure to fetch auth status

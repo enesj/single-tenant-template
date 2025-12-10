@@ -29,7 +29,7 @@
   (jdbc/with-transaction [tx db]
     (let [expense-id (UUID/randomUUID)
           expense-row (-> expense-data
-                        (select-keys [:receipt_id :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
+                        (select-keys [:user_id :receipt_id :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
                         (assoc :id expense-id)
                         (update :currency #(when % [:cast % :currency]))
                         (update :is_posted #(if (nil? %) true (boolean %))))

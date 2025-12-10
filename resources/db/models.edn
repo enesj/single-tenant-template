@@ -48,20 +48,6 @@
   :indexes
   [[:idx_admins_email :btree {:fields [:email], :unique true}]
    [:idx_admins_status :btree {:fields [:status]}]]},
- :admin_sessions
- {:fields
-  [[:id :uuid {:primary-key true}]
-   [:admin_id :uuid {:foreign-key :admins/id, :null false, :on-delete :cascade}]
-   [:token [:varchar 255] {:null false, :unique true}]
-   [:created_at :timestamptz {:null false, :default "NOW()"}]
-   [:last_activity :timestamptz {:null false}]
-   [:expires_at :timestamptz {:null false}]
-   [:ip_address :text]
-   [:user_agent :text]],
-  :indexes
-  [[:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}]
-   [:idx_admin_sessions_token :btree {:fields [:token], :unique true}]
-   [:idx_admin_sessions_expires :btree {:fields [:expires_at]}]]},
  :articles
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -79,6 +65,7 @@
  :expenses
  {:fields
   [[:id :uuid {:primary-key true}]
+   [:user_id :uuid {:foreign-key :users/id, :on-delete :set-null}]
    [:receipt_id
     :uuid
     {:foreign-key :receipts/id, :on-delete :set-null}]
@@ -94,7 +81,8 @@
    [:updated_at :timestamptz {:default "NOW()"}]],
   :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]],
   :indexes
-  [[:idx_expenses_supplier :btree {:fields [:supplier_id]}]
+  [[:idx_expenses_user :btree {:fields [:user_id]}]
+   [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
    [:idx_expenses_payer :btree {:fields [:payer_id]}]
    [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]
    [:idx_expenses_is_posted :btree {:fields [:is_posted]}]]},
@@ -201,6 +189,7 @@
  :receipts
  {:fields
   [[:id :uuid {:primary-key true}]
+   [:user_id :uuid {:foreign-key :users/id, :on-delete :set-null}]
    [:storage_key :text {:null false}]
    [:file_hash [:varchar 64] {:null false}]
    [:original_filename [:varchar 255]]
@@ -235,7 +224,8 @@
       "posted"
       "failed"]}]],
   :indexes
-  [[:idx_receipts_file_hash
+  [[:idx_receipts_user :btree {:fields [:user_id]}]
+   [:idx_receipts_file_hash
     :btree
     {:fields [:file_hash], :unique true}]
    [:idx_receipts_status :btree {:fields [:status]}]

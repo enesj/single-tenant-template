@@ -86,6 +86,65 @@
              (assoc-in (paths/current-page) :entity-detail)
              (assoc-in [:ui :show-add-form] true))})))
 
+;; User expense tracking page events
+(rf/reg-event-fx
+  :page/init-waiting-room
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :waiting-room)}))
+
+(rf/reg-event-fx
+  :page/init-expenses-dashboard
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expenses-dashboard)
+     :dispatch [:user-expenses/init-dashboard]}))
+
+(rf/reg-event-fx
+  :page/init-expenses-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expenses-list)
+     :dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]}))
+
+(rf/reg-event-fx
+  :page/init-expense-upload
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expense-upload)}))
+
+(rf/reg-event-fx
+  :page/init-expense-new
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expense-new)}))
+
+(rf/reg-event-fx
+  :page/init-expense-detail
+  common-interceptors
+  (fn [{:keys [db]} [_ expense-id]]
+    {:db (-> db
+           (assoc-in (paths/current-page) :expense-detail)
+           (assoc-in [:ui :current-expense-id] expense-id))
+     ;; TODO: Dispatch fetch event for specific expense
+     }))
+
+(rf/reg-event-fx
+  :page/init-expense-reports
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expense-reports)
+     ;; TODO: Dispatch fetch events for expense reports
+     }))
+
+(rf/reg-event-fx
+  :page/init-expense-settings
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expense-settings)
+     ;; TODO: Dispatch fetch events for user expense settings
+     }))
+
 (rf/reg-event-db
   :navigated
   common-interceptors
