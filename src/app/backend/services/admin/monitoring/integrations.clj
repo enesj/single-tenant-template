@@ -74,7 +74,7 @@
 
 (defn get-integration-performance
   "Get integration performance metrics and response times"
-  [db {:keys [period hours] :or {period :hour hours 24}}]
+  [db {:keys [hours] :or {hours 24}}]
   (try
     (let [hours-ago (time/minus (time/instant) (time/hours hours))
 

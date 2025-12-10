@@ -1,7 +1,8 @@
 (ns app.admin.frontend.utils.audit
   "UI formatting utilities for audit logs.
    
-   These helpers are used by audit components for display formatting.")
+   These helpers are used by audit components for display formatting."
+  (:require [clojure.string]))
 
 (defn format-timestamp
   "Format a timestamp for display."

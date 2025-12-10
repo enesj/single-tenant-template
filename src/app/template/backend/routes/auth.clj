@@ -49,7 +49,7 @@
   [auth-service]
   (fn [req]
     (route-utils/with-error-handling "user-register"
-      (let [{:keys [db]} (get-service-container req)
+      (let [{:keys [_db]} (get-service-container req)
             ;; Support both camelCase and kebab-case from frontend
             {:keys [email full-name fullName password]} (:body-params req)
             ;; Canonicalize names

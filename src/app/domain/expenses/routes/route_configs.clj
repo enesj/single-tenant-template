@@ -1,10 +1,7 @@
 (ns app.domain.expenses.routes.route-configs
   "Configuration maps for expenses domain route generation."
   (:require
-    [app.backend.routes.admin.utils :as utils]
-    [app.shared.adapters.database :as db-adapter]
-    [app.domain.expenses.routes.routes-factory :as factory]
-    [app.domain.expenses.services.expenses :as expenses]))
+   [app.backend.routes.admin.utils :as utils]))
 
 ;; =============================================================================
 ;; Entity Route Configurations

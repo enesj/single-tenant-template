@@ -108,9 +108,9 @@
     (let [db (h/mock-db)
           handler (settings/update-view-options-handler db)
           request (h/mock-admin-request :put "/admin/api/settings/view-options" mock-admin
-                    {:body {}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                    {:body {}})
+          response (handler request)]
+      (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Update Entity Setting Tests
@@ -150,9 +150,9 @@
     (let [db (h/mock-db)
           handler (settings/update-entity-setting-handler db)
           request (h/mock-admin-request :patch "/admin/api/settings/entity" mock-admin
-                    {:body {:entity-name "users"}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                    {:body {:entity-name "users"}})
+          response (handler request)]
+      (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Remove Entity Setting Tests
@@ -178,6 +178,6 @@
     (let [db (h/mock-db)
           handler (settings/remove-entity-setting-handler db)
           request (h/mock-admin-request :delete "/admin/api/settings/entity" mock-admin
-                    {:body {:entity-name "users"}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                    {:body {:entity-name "users"}})
+          response (handler request)]
+      (is (= 400 (:status response))))))

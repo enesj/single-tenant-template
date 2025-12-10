@@ -146,6 +146,21 @@
                :offset offset}]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
+(defn count-expenses
+  "Count total expenses with optional filters."
+  [db {:keys [from to supplier-id payer-id is-posted?]}]
+  (let [base-where (cond-> [:and [:is :deleted_at nil]]
+                     from (conj [:>= :purchased_at from])
+                     to (conj [:<= :purchased_at to])
+                     supplier-id (conj [:= :supplier_id supplier-id])
+                     payer-id (conj [:= :payer_id payer-id])
+                     (some? is-posted?) (conj [:= :is_posted (boolean is-posted?)]))
+        query {:select [[[:count :*] :total]]
+               :from [:expenses]
+               :where base-where}]
+    (:total (jdbc/execute-one! db (sql/format query)
+              {:builder-fn rs/as-unqualified-lower-maps}))))
+
 (defn create-from-receipt!
   "Create an expense tied to a receipt. Delegates to create-expense! then returns expense."
   [db receipt-id expense-data items]

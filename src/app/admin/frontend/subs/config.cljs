@@ -108,7 +108,7 @@
 
 (rf/reg-sub
   :admin/entity-config
-  (fn [[_ entity-keyword]]
+  (fn [[_ _entity-keyword]]
     (rf/subscribe [:admin/all-entity-configs]))
   (fn [all-configs [_ entity-keyword]]
     (get all-configs entity-keyword)))
@@ -218,7 +218,7 @@
 
 (rf/reg-sub
   :admin/view-options
-  (fn [[_ entity-keyword]]
+  (fn [[_ _entity-keyword]]
     (rf/subscribe [:admin/all-view-options]))
   (fn [all-view-options [_ entity-keyword]]
     (get all-view-options entity-keyword)))

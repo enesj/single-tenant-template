@@ -1,11 +1,10 @@
 (ns app.template.frontend.components.batch-edit.field-props
   (:require
-    [app.shared.validation.core :as validation-core]
-    [app.shared.validation.fork :as validation-fork]
-    [app.template.frontend.components.form.fields.input :refer [input-width]]
-    [app.template.frontend.events.form :as form-events]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+   [app.shared.validation.core :as validation-core]
+   [app.shared.validation.fork :as validation-fork]
+   [app.template.frontend.components.form.fields.input :refer [input-width]]
+   [app.template.frontend.events.form :as form-events]
+   [re-frame.core :as rf]))
 
 (defn create-change-handler
   "Creates a change handler for batch edit fields with validation"
@@ -47,7 +46,7 @@
 
 (defn build-field-props
   "Builds the props map for a batch edit field"
-  [{:keys [field-spec entity-name values errors form-id validators set-values set-form-values set-dirty-fields error]}]
+  [{:keys [field-spec entity-name values _errors _form-id validators set-values set-form-values set-dirty-fields error]}]
   (if (nil? field-spec)
     {} ; Return empty props to prevent crash
 

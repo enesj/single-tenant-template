@@ -69,10 +69,10 @@
                          (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
                          ;; Execute the bulk delete using ANY for array matching
                          (next-jdbc/execute-one! tx
-                           [(str "DELETE FROM login_events WHERE id = ANY(?::uuid[])")
+                           ["DELETE FROM login_events WHERE id = ANY(?::uuid[])"
                             (into-array String (map str parsed-ids))]))
                 deleted-count (:next.jdbc/update-count result)]
-            (log/info "Successfully bulk deleted" deleted-count "login events by admin" (:email admin))
+            (log/info "Successfully bulk deleted" deleted-count "login events by admin" (str (:email admin)))
             (utils/log-admin-action "bulk_delete_login_events" (:id admin)
               "login_events" nil {:count deleted-count :ids (map str parsed-ids)})
             (utils/success-response {:message (str deleted-count " login events deleted successfully")

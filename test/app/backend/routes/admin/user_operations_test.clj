@@ -12,6 +12,7 @@
     [app.backend.routes.admin.user-operations :as user-ops]
     [app.backend.services.admin :as admin-service]
     [app.backend.test-helpers :as h]
+    [app.shared.field-metadata :as field-meta]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================================
@@ -84,7 +85,7 @@
           request (h/mock-admin-request :put (str "/admin/api/users/role/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}
                      :body {:role "premium"}})]
-      (with-redefs [app.shared.field-metadata/get-enum-choices
+      (with-redefs [field-meta/get-enum-choices
                     (constantly ["user" "premium" "admin"])
                     admin-service/update-user-role!
                     (fn [_db user-id role _admin-id _ip _ua]
@@ -100,7 +101,7 @@
           request (h/mock-admin-request :put (str "/admin/api/users/role/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}
                      :body {:role "invalid-role"}})]
-      (with-redefs [app.shared.field-metadata/get-enum-choices
+      (with-redefs [field-meta/get-enum-choices
                     (constantly ["user" "premium" "admin"])]
         (let [response (handler request)]
           (is (= 400 (:status response)))))))
@@ -111,7 +112,7 @@
           request (h/mock-admin-request :put (str "/admin/api/users/role/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}
                      :body {}})]
-      (with-redefs [app.shared.field-metadata/get-enum-choices
+      (with-redefs [field-meta/get-enum-choices
                     (constantly ["user" "premium" "admin"])]
         (let [response (handler request)]
           (is (= 400 (:status response))))))))

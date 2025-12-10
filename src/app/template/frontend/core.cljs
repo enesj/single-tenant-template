@@ -14,7 +14,7 @@
     [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
     [app.template.frontend.components.change-password :refer [change-password-page]]
     [app.template.frontend.pages.login :refer [login-page]]
-    [app.template.frontend.pages.register :refer [registration-page registration-success-page]]
+    [app.template.frontend.pages.register :refer [registration-page]]
     [app.template.frontend.pages.verify-email-success :refer [verify-email-success-page]]
     [app.template.frontend.pages.email-verification :refer [email-verified-page]]
     [app.template.frontend.pages.logout :refer [logout-page]]
@@ -226,9 +226,11 @@
       ;; Add the confirm dialog component to the layout
       ($ confirm-dialog))))
 
-(defonce root
-  (uix.dom/create-root (js/document.getElementById "app")))
+    #_{:clj-kondo/ignore [:inline-def :uninitialized-var]}
+    (defonce root
+      (uix.dom/create-root (js/document.getElementById "app")))
 
+#_{:clj-kondo/ignore [:inline-def]}
 (defn mount-ui
   []
   (uix.dom/render-root ($ current-page) root))

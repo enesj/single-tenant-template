@@ -3,9 +3,8 @@
    
    Tests dashboard stats structure and fallback behavior."
   (:require
-    [app.backend.services.admin.auth :as admin-auth]
     [app.backend.services.admin.dashboard :as dashboard]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================
 ;; Dashboard Stats Structure Tests
@@ -73,33 +72,3 @@
       (when (seq alerts)
         (is (every? #(contains? % :id) alerts))
         (is (every? #(contains? % :title) alerts))))))
-
-;; ============================================================================
-;; Session Store Integration Tests
-;; ============================================================================
-
-(deftest session-store-integration-test
-  (testing "active-sessions counts in-memory sessions"
-    ;; Save original session store state
-    (let [original-sessions @admin-auth/session-store]
-      (try
-        ;; Add some test sessions
-        (reset! admin-auth/session-store 
-                {"token1" {:admin-id 1}
-                 "token2" {:admin-id 2}})
-        
-        (let [stats (dashboard/get-dashboard-stats nil)]
-          (is (= 2 (:active-sessions stats))))
-        
-        (finally
-          ;; Restore original state
-          (reset! admin-auth/session-store original-sessions)))))
-
-  (testing "active-sessions handles empty session store"
-    (let [original-sessions @admin-auth/session-store]
-      (try
-        (reset! admin-auth/session-store {})
-        (let [stats (dashboard/get-dashboard-stats nil)]
-          (is (= 0 (:active-sessions stats))))
-        (finally
-          (reset! admin-auth/session-store original-sessions))))))

@@ -6,7 +6,7 @@
     [uix.core :refer [$ defui]]))
 
 (defn- normalize-item
-  [{:keys [id label button-props] :as item}
+  [{:keys [id label button-props] :as _item}
    title-fn]
   (let [entity-id (some-> id keyword)
         derived-label (when entity-id (title-fn entity-id))]

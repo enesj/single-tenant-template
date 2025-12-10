@@ -1,13 +1,12 @@
 (ns app.template.frontend.components.pagination
   (:require
-    [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.common :refer [input]]
-    [app.template.frontend.components.icons :refer [chevron-left-icon
-                                                    chevron-right-icon]]
-    [app.template.frontend.events.list.settings :as settings-events]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui] :as uix]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.template.frontend.components.button :refer [button]]
+   [app.template.frontend.components.common :refer [input]]
+   [app.template.frontend.components.icons :refer [chevron-left-icon
+                                                   chevron-right-icon]]
+   [app.template.frontend.events.list.settings :as settings-events]
+   [uix.core :refer [$ defui] :as uix]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (defui pagination [{:keys [current-page total-pages on-page-change entity-name]}]
   (let [[go-to-page set-go-to-page!] (uix/use-state (str current-page))

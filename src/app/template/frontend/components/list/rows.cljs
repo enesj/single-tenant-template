@@ -4,17 +4,15 @@
    This module uses reactive cell components from the cells module for selection
    and actions. Components are re-exported for backward compatibility."
   (:require
-    [app.shared.keywords :as kw]
-    [app.template.frontend.events.config :as config-events]
-    [app.frontend.utils.id :as id-utils]
-    [app.template.frontend.components.form :refer [form]]
-    [app.template.frontend.components.list.fields :refer [get-field-display-value]]
-    ;; Import reactive cell components from the cells module
-    [app.template.frontend.components.list.cells :as cells]
-    [app.template.frontend.events.list.crud :as crud-events]
-    [app.template.frontend.events.form :as form-events]
-    [re-frame.core :as rf]
-    [uix.core :as uix :refer [$ defui]]))
+   [app.frontend.utils.id :as id-utils]
+   [app.shared.keywords :as kw]
+   [app.template.frontend.components.form :refer [form]]
+   [app.template.frontend.components.list.cells :as cells]
+   [app.template.frontend.components.list.fields :refer [get-field-display-value]] ;; Import reactive cell components from the cells module
+   [app.template.frontend.events.form :as form-events]
+   [app.template.frontend.events.list.crud :as crud-events]
+   [re-frame.core :as rf]
+   [uix.core :as uix :refer [$]]))
 
 ;; =============================================================================
 ;; Re-exports from cells module for backward compatibility

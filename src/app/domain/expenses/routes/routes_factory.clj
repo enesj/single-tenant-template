@@ -6,7 +6,8 @@
    behavior through configuration."
   (:require
     [app.backend.routes.admin.utils :as utils]
-    [app.shared.adapters.database :as db-adapter]))
+    [app.shared.adapters.database :as db-adapter]
+    [clojure.string :as str]))
 
 ;; =============================================================================
 ;; Data Transformation Utilities
@@ -38,7 +39,7 @@
 
 (defn build-list-handler
   "Builds a generic list handler for an entity."
-  [{:keys [service entity-key entity-plural default-limit default-order-by
+  [{:keys [service _entity-key entity-plural default-limit default-order-by
            custom-query-params transform-response]}]
   (fn [db]
     (utils/with-error-handling
@@ -76,7 +77,7 @@
 
 (defn build-create-handler
   "Builds a generic create handler for an entity."
-  [{:keys [service entity-key entity-plural required-fields custom-validation
+  [{:keys [service entity-key _entity-plural required-fields custom-validation
            transform-request transform-response]}]
   (fn [db]
     (utils/with-error-handling
@@ -120,7 +121,7 @@
 
 (defn build-update-handler
   "Builds a generic update handler for an entity."
-  [{:keys [service entity-key entity-plural transform-request transform-response]}]
+  [{:keys [service entity-key _entity-plural transform-request transform-response]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
@@ -141,7 +142,7 @@
 
 (defn build-delete-handler
   "Builds a generic delete handler for an entity."
-  [{:keys [service entity-key entity-plural custom-delete-fn delete-response-type]}]
+  [{:keys [service entity-key _entity-plural custom-delete-fn delete-response-type]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
@@ -185,7 +186,7 @@
 (defn build-custom-handler
   "Builds a custom handler with specified logic."
   [{:keys [handler-fn error-message]}]
-  (fn [db]
+  (fn [_db]
     (utils/with-error-handling
       handler-fn
       (or error-message "Failed to process request"))))

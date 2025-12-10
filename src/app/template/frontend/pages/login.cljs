@@ -1,10 +1,8 @@
 (ns app.template.frontend.pages.login
   (:require
-    [app.template.frontend.components.auth :refer [auth-form-header
-                                                    auth-error-alert
-                                                    auth-form-field
-                                                    auth-submit-button
-                                                    auth-form-footer]]
+    [app.template.frontend.components.auth :refer [auth-error-alert
+                            auth-form-field
+                            auth-submit-button]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [google-icon]]
     [app.template.frontend.events.auth :as auth-events]

@@ -3,15 +3,11 @@
    
    Tests metrics, config, and health endpoints."
   (:require
-    [app.backend.routes :as routes]
-    [app.backend.routes.admin-api :as admin-api]
-    [app.backend.services.admin.dashboard :as admin-dashboard]
-    [app.backend.services.monitoring.login-events :as login-monitoring]
-    [app.backend.test-helpers :as h]
-    [app.backend.webserver :as webserver]
-    [cheshire.core :as json]
-    [clojure.test :refer [deftest is testing]]
-    [ring.mock.request :as mock]))
+   [app.backend.services.monitoring.login-events :as login-monitoring]
+   [app.backend.test-helpers :as h]
+    [clojure.string :as str]
+   [clojure.test :refer [deftest is testing]]
+   [ring.mock.request :as mock]))
 
 ;; ============================================================================
 ;; Metrics Endpoint Tests
@@ -70,10 +66,10 @@
     (let [handler (h/build-handler)
           resp (handler (mock/request :get "/"))
           body (h/slurp-body resp)]
-      (is (or (clojure.string/includes? body "<!DOCTYPE")
-              (clojure.string/includes? body "<html")
-              (clojure.string/includes? body "<")
-              (clojure.string/includes? body "Test route works"))))))
+          (is (or (str/includes? body "<!DOCTYPE")
+            (str/includes? body "<html")
+            (str/includes? body "<")
+            (str/includes? body "Test route works"))))))
 
 ;; ============================================================================
 ;; Auth Endpoint Tests  

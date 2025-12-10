@@ -1,14 +1,13 @@
 (ns app.template.frontend.components.form.validation
   "Form validation utilities"
   (:require
-    [app.shared.validation.builder :as validation-builder]
-    [app.shared.validation.core :as validation-core]
-    [app.shared.validation.fork :as validation-fork]
-    [app.template.frontend.events.form :as form-events]
-    [clojure.edn :as edn]
-    [clojure.string :as str]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+   [app.shared.validation.builder :as validation-builder]
+   [app.shared.validation.core :as validation-core]
+   [app.shared.validation.fork :as validation-fork]
+   [app.template.frontend.events.form :as form-events]
+   [clojure.edn :as edn]
+   [clojure.string :as str]
+   [re-frame.core :as rf]))
 
 (defn- parse-field-value
   "Parses field value based on input type"

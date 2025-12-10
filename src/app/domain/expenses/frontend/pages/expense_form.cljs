@@ -5,6 +5,7 @@
     [app.domain.expenses.frontend.events.expenses :as expenses-events]
     [app.domain.expenses.frontend.events.payers :as payers-events]
     [app.domain.expenses.frontend.events.suppliers :as suppliers-events]
+    [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
@@ -44,15 +45,23 @@
   (when (some? n)
     (.toFixed n 2)))
 
+(defn- safe-parse-number
+  "Parse either a string or number, returning nil for invalid inputs."
+  [value]
+  (cond
+    (number? value) value
+    (string? value) (type-conv/parse-number value)
+    :else nil))
+
 (defn- recalc-line-total-if-possible
   "When qty and unit price are both present and line-total is blank, auto-calc it."
   [item]
-  (let [qty-num (parse-number (:qty item))
-        unit-num (parse-number (:unit_price item))
-        line-str (:line_total item)
-        should-auto? (and qty-num unit-num (str/blank? (str line-str)))]
-    (if should-auto?
-      (assoc item :line_total (format-decimal (* qty-num unit-num)))
+  (let [qty-num (safe-parse-number (:qty item))
+        unit-num (safe-parse-number (:unit_price item))
+        line-str (:line_total item)]
+    (if (and (number? qty-num) (number? unit-num) (str/blank? (str line-str)))
+      (let [product (* qty-num unit-num)]
+        (assoc item :line_total (format-decimal product)))
       item)))
 
 (defn- update-line-item
@@ -72,20 +81,13 @@
       remaining
       [(new-line-item)])))
 
-(defn- parse-number
-  [value]
-  (when (and (some? value)
-          (not (str/blank? (str value))))
-    (let [n (js/parseFloat value)]
-      (when-not (js/isNaN n) n))))
-
 (defn- prepare-line-items
   [items]
   (keep (fn [{:keys [raw_label article_id qty unit_price line_total]}]
-          (let [parsed-total (parse-number line_total)]
+      (let [parsed-total (safe-parse-number line_total)]
             (when (and (not (str/blank? raw_label)) parsed-total)
-              (let [qty-num (parse-number qty)
-                    unit-num (parse-number unit_price)
+      (let [qty-num (safe-parse-number qty)
+        unit-num (safe-parse-number unit_price)
                     base {:raw_label raw_label
                           :line_total parsed-total}
                     base (cond-> base
@@ -102,7 +104,7 @@
 (defn- line-items-total
   [items]
   (->> items
-    (map (fn [{:keys [line_total]}] (parse-number line_total)))
+    (map (fn [{:keys [line_total]}] (safe-parse-number line_total)))
     (remove nil?)
     (reduce + 0)))
 
@@ -114,12 +116,12 @@
 (def ^:private amount-tolerance 0.01)
 
 (defn- handle-submit!
-  [{:keys [supplier-id payer-id purchased-at total-amount currency notes line-items prepared-items computed-total set-validation-error!]}]
-  (let [parsed-total (parse-number total-amount)
-        effective-total (or parsed-total (when (pos? computed-total) computed-total))
-        has-items? (seq prepared-items)
-        diff (when (and effective-total (pos? computed-total))
-               (js/Math.abs (- effective-total computed-total)))]
+  [{:keys [supplier-id payer-id purchased-at total-amount currency notes _line-items prepared-items computed-total set-validation-error!]}]
+    (let [parsed-total (safe-parse-number total-amount)
+      effective-total (or parsed-total (when (pos? computed-total) computed-total))
+      has-items? (seq prepared-items)
+      diff (when (and (number? effective-total) (pos? computed-total))
+         (js/Math.abs (- effective-total computed-total)))]
     (cond
       (or (str/blank? supplier-id)
         (str/blank? payer-id)
@@ -175,11 +177,12 @@
         (when (and (seq payers) (not payer-id))
           (set-payer-id! (:id (first payers)))))
       [payer-id supplier-id suppliers payers])
-    (let [prepared-items (prepare-line-items line-items)
+        (let [prepared-items (prepare-line-items line-items)
           computed-total (line-items-total prepared-items)
-          parsed-total (parse-number total-amount)
-          total-mismatch? (and parsed-total (pos? computed-total)
-                            (> (js/Math.abs (- parsed-total computed-total)) amount-tolerance))
+          parsed-total (safe-parse-number total-amount)
+          total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
+               (js/Math.abs (- parsed-total computed-total)))
+          total-mismatch? (and total-diff (> total-diff amount-tolerance))
           handle-line-change (fn [item-id key]
                                (fn [e]
                                  (set-line-items!

@@ -1,15 +1,14 @@
 (ns app.template.frontend.pages.entities
   (:require
-    [app.template.frontend.events.bootstrap :as bootstrap-events]
-    [app.template.frontend.subs.core :as subs]
-    [app.template.frontend.components.button :refer [nav-button]]
-    [app.template.frontend.components.list :refer [list-view]]
-    [app.template.frontend.events.list.crud :as crud-events]
-    [clojure.string :as str]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui] :as uix]
-    [uix.re-frame :refer [use-subscribe] :as urf]))
+   [app.template.frontend.components.button :refer [nav-button]]
+   [app.template.frontend.components.list :refer [list-view]]
+   [app.template.frontend.events.bootstrap :as bootstrap-events]
+   [app.template.frontend.events.list.crud :as crud-events]
+   [app.template.frontend.subs.core :as subs]
+   [clojure.string :as str]
+   [re-frame.core :as rf]
+   [uix.core :refer [$ defui] :as uix]
+   [uix.re-frame :refer [use-subscribe] :as urf]))
 
 (defui entities-page [props]
   (let [entity-type (use-subscribe [::subs/entity-type])

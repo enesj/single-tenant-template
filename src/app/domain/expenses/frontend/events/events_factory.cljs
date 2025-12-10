@@ -20,10 +20,10 @@
   [{:keys [entity-key base-path api-endpoint] :as config}]
   (when-not (and entity-key base-path api-endpoint)
     (throw (ex-info "Invalid entity configuration"
-             {:missing-keys (cond-> [])
-              (not entity-key) (conj :entity-key)
-              (not base-path) (conj :base-path)
-              (not api-endpoint) (conj :api-endpoint)
+             {:missing-keys (cond-> []
+                              (not entity-key) (conj :entity-key)
+                              (not base-path) (conj :base-path)
+                              (not api-endpoint) (conj :api-endpoint))
               :config config})))
   config)
 
@@ -61,7 +61,7 @@
    - :default-per-page (default: 25)
    - :param-keys (map of parameter names to extract from params)
      Default: {:limit :limit, :offset :offset, :page :page, :per-page :per-page}"
-  [entity-key db {:keys [limit offset page per-page] :as params} {:keys [default-per-page param-keys]}]
+  [entity-key db {:keys [_limit _offset _page _per-page] :as params} {:keys [default-per-page param-keys]}]
   (let [{:keys [limit-key offset-key page-key per-page-key]} (or param-keys
                                                                {:limit-key :limit
                                                                 :offset-key :offset
@@ -134,8 +134,8 @@
         (let [db* (-> db
                     (finish-load entity-key base-path nil)
                     (assoc-in (conj base-path :items) (vec (or (get response (keyword (name entity-key))) []))))
-              {:keys [page per-page]} pagination
-              per-page (or per-page (:default-per-page pag-opts) 25)]
+              {:keys [_page per-page]} pagination
+              _per-page (or per-page (:default-per-page pag-opts) 25)]
           {:db (-> db*
                  (update-pagination-state entity-key pagination))
            :dispatch-n [[:admin/refresh-entity-list entity-key response]]})))
@@ -158,8 +158,8 @@
       (keyword event-ns "load-detail")
       (fn [{:keys [db]} [_ entity-id]]
         {:db (-> db
-             (assoc-in (conj base-path :detail-loading?) true)
-             (assoc-in (conj base-path :error) nil))
+               (assoc-in (conj base-path :detail-loading?) true)
+               (assoc-in (conj base-path :error) nil))
          :http-xhrio (admin-http/admin-get
                        {:uri (str api-endpoint "/" entity-id)
                         :response-format (ajax/json-response-format {:keywords? true})
@@ -178,7 +178,7 @@
 
 (defn generate-form-events
   "Generates create-entry, create-success, and create-failed events for entities with forms."
-  [{:keys [entity-key base-path api-endpoint form-path] :as config}]
+  [{:keys [entity-key _base-path api-endpoint form-path] :as config}]
   (validate-entity-config config)
 
   (let [event-ns (str "app.domain.expenses.frontend.events." (name entity-key))

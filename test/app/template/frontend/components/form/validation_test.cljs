@@ -57,7 +57,7 @@
     (let [parsed-values (atom [])
           field {:id "test-field"
                  :input-type "number"}
-          form-props {:set-handle-change (fn [{:keys [value path]}]
+          form-props {:set-handle-change (fn [{:keys [value _path]}]
                                            (swap! parsed-values conj value))
                       :entity-name :test-entity
                       :state (atom {:initial-values {:test-field nil}})

@@ -38,7 +38,7 @@
 
 (defui trend-display
   "Renders a trend with arrow icon and color coding"
-  [{:keys [value trend icon class]}]
+  [{:keys [value _trend icon class]}]
   ($ :div {:class "flex items-center gap-1"}
     ($ :span {:class "text-lg"} icon)
     ($ :span {:class (str "text-sm font-medium " class)}
@@ -59,7 +59,7 @@
 
 (defui currency-display
   "Renders currency values with proper formatting using template utility"
-  [{:keys [value currency]}]
+  [{:keys [value _currency]}]
   ($ :span {:class "font-mono text-sm"}
     (formatting/format-currency value)))
 

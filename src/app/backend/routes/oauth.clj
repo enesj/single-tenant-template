@@ -1,6 +1,5 @@
 (ns app.backend.routes.oauth
   (:require
-    [app.template.backend.auth.service :as auth-service]
     [clj-http.client :as http]
     [clojure.string :as str]
     [ring.util.response :as response]
@@ -63,52 +62,6 @@
       nil)))
 
 ;; OAuth token exchange functions
-(defn- exchange-code-for-token
-  "Exchange OAuth authorization code for access token"
-  [oauth-configs provider code redirect-uri]
-  (let [config (get oauth-configs provider)
-        token-request {:client_id (:client-id config)
-                       :client_secret (:client-secret config)
-                       :code code
-                       :redirect_uri redirect-uri
-                       :grant_type "authorization_code"}]
-    (log/info "Token exchange request for provider:" provider)
-    (log/info "Client ID:" (:client-id config))
-    (log/info "Client Secret (first 8 chars):" (when (:client-secret config)
-                                                 (subs (:client-secret config) 0 (min 8 (count (:client-secret config))))))
-    (log/info "Redirect URI:" redirect-uri)
-    (log/info "Token endpoint:" (:access-token-uri config))
-    (log/info "Authorization code (first 20 chars):" (when code (subs code 0 (min 20 (count code)))))
-    (try
-      (let [response (http/post (:access-token-uri config)
-                       {:form-params token-request
-                        :accept :json
-                        :as :json
-                        :throw-exceptions false})] ; Don't throw exceptions so we can see the error response
-        (log/info "Token exchange response status:" (:status response))
-        (log/info "Token exchange response headers:" (:headers response))
-        (if (= 200 (:status response))
-          (do
-            (log/info "Token exchange successful")
-            (log/info "Response body keys:" (keys (:body response)))
-            (:body response))
-          (do
-            (log/error "Token exchange failed with status:" (:status response))
-            (log/error "Response body:" (:body response))
-            (log/error "Full response:" response)
-            nil)))
-      (catch Exception e
-        (log/error "Failed to exchange OAuth code for token:" (.getMessage e))
-        (log/error "Exception details:" (str e))
-        nil))))
-
-(defn- fetch-user-info
-  "Fetch user info using access token for the given provider"
-  [provider access-token]
-  (case provider
-    :google (fetch-google-user-info access-token)
-    :github nil  ; TODO: Implement GitHub user info fetch
-    nil))
 
 ;; Enhanced OAuth callback handler with CSRF protection and manual token exchange
 (defn oauth-callback-handler

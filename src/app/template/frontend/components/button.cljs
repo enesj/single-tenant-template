@@ -1,14 +1,13 @@
 (ns app.template.frontend.components.button
   (:require
-    [app.template.frontend.events.bootstrap :as bootstrap-events]
-    [app.template.frontend.events.config :as config-events]
-    [app.template.frontend.subs.list :as list-subs]
-    [clojure.string :as str]
-    [re-frame.core :as rf]
-    [reitit.frontend.easy :as rtfe]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.template.frontend.events.bootstrap :as bootstrap-events]
+   [app.template.frontend.events.config :as config-events]
+   [app.template.frontend.subs.list :as list-subs]
+   [clojure.string :as str]
+   [re-frame.core :as rf]
+   [reitit.frontend.easy :as rtfe]
+   [uix.core :refer [$ defui]]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (def button-props
   {:btn-type {:type :keyword
@@ -131,7 +130,7 @@
 (defui nav-button
   {:prop-types nav-button-props}
   [{:keys [entity-type target-page]
-    :as props}]
+    :as _props}]
   ($ button
     {:btn-type (if (= entity-type target-page) :primary :outline)
      :id (str "nav-btn-" (name target-page))

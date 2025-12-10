@@ -9,12 +9,11 @@
    - Mock fallback for when DOM rendering returns empty
    - Consistent rendering utilities across all test files"
   (:require
-    [clojure.string :as str]
-    [uix.dom :as uix.dom]
-    [goog.object :as gobj]
-    [re-frame.db :as rf-db]
-    [re-frame.core :as rf]
-    [re-frame.registrar :as rf-registrar]))
+   [clojure.string :as str]
+   [goog.object :as gobj]
+   [re-frame.db :as rf-db]
+   [re-frame.registrar :as rf-registrar]
+   [uix.dom :as uix.dom]))
 
 ;; Load react-dom for flushSync in tests
 (def ^:private react-dom
@@ -368,6 +367,7 @@
             "</div>"
             "</div>"))))))
 
+#_{:clj-kondo/ignore [:inline-def :uninitialized-var]}
 (defn render-to-static-markup
   "Render a React component to HTML markup using DOM rendering.
 

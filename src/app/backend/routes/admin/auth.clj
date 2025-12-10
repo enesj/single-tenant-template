@@ -1,10 +1,9 @@
 (ns app.backend.routes.admin.auth
   "Admin authentication handlers"
   (:require
-    [app.backend.routes.admin.utils :as utils]
-    [app.backend.services.admin :as admin-service]
-    [app.backend.services.monitoring.login-events :as login-monitoring]
-    [taoensso.timbre :as log]))
+   [app.backend.routes.admin.utils :as utils]
+   [app.backend.services.admin :as admin-service]
+   [app.backend.services.monitoring.login-events :as login-monitoring]))
 
 (defn login-handler
   "Handle admin login"

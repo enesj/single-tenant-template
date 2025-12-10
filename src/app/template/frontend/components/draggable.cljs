@@ -1,7 +1,6 @@
 (ns app.template.frontend.components.draggable
   (:require
-    [taoensso.timbre :as log]
-    [uix.core :refer [use-effect use-ref use-state use-callback]]))
+   [uix.core :refer [use-callback use-effect use-ref use-state]]))
 
 (defn use-draggable
   "Pointer-driven draggable behavior for modal-like components.

@@ -1,12 +1,11 @@
 (ns app.template.frontend.components.form.fields.select
   "Select field components"
   (:require
-    [app.template.frontend.components.common :as common]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]))
+   [app.template.frontend.components.common :as common]
+   [uix.core :refer [$ defui]]))
 
 (defui select-input
-  [{:keys [id label error required inline class options] :as all-props}]
+  [{:keys [id label error required inline class _options] :as all-props}]
   (let [base-class "ds-select ds-select-primary"
         label-class "ds-label"
         error-class "text-error"

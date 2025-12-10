@@ -11,8 +11,7 @@
     [app.shared.adapters.database :as db-adapter]
     [honey.sql :as hsql]
     [java-time.api :as time]
-    [next.jdbc :as jdbc]
-    [taoensso.timbre :as log]))
+    [next.jdbc :as jdbc]))
 
 ;; ============================================================================
 ;; Transaction Overview
@@ -83,7 +82,7 @@
 
 (defn get-transaction-trends
   "Get transaction trends and analytics over time"
-  [db {:keys [period months] :or {period :month months 12}}]
+  [db {:keys [months] :or {months 12}}]
   (monitoring-shared/with-monitoring-error-handling
     "get transaction trends"
     (fn [results]

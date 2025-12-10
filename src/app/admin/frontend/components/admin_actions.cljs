@@ -116,7 +116,7 @@
 
         ;; Determine which actions should be disabled
         can-change-role? (and is-current-owner? (not is-self?) (not is-last-owner?))
-        can-change-status? (and is-current-owner? (not is-self?) (not is-last-owner?))
+        _can-change-status? (and is-current-owner? (not is-self?) (not is-last-owner?))
         can-delete? (and is-current-owner? (not is-self?) (not is-last-owner?))
 
         ;; Define action groups for the dropdown

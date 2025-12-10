@@ -93,7 +93,7 @@
   "Edit button for a single row."
   [{:keys [entity-name item-id]}]
   (let [entity-name-lower (kw/lower-name entity-name)
-        handle-edit-click (fn [e]
+        handle-edit-click (fn [_e]
                             (rf/dispatch [::crud-events/clear-error (kw/ensure-keyword entity-name)])
                             (rf/dispatch [::form-events/clear-form-errors (kw/ensure-keyword entity-name)])
                             (rf/dispatch [::config-events/set-editing item-id]))]

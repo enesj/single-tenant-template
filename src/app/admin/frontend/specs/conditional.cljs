@@ -1,8 +1,7 @@
 (ns app.admin.frontend.specs.conditional
   "Advanced field customizations with conditional visibility and dynamic behavior"
   (:require
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+   [re-frame.core :as rf]))
 
 ;; ========================================================================
 ;; Conditional Visibility Engine

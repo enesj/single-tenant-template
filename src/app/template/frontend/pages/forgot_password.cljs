@@ -25,7 +25,7 @@
               (empty? email-val)
               (assoc :email "Email is required")
 
-              (and (not (empty? email-val))
+              (and (seq email-val)
                 (not (re-matches #".+@.+\..+" email-val)))
               (assoc :email "Please enter a valid email address")))
           [])

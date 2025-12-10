@@ -3,7 +3,7 @@
     ["react-dom/client" :as rdom]
     [app.template.frontend.components.auth-guard :as auth-guard]
     [app.template.frontend.components.button :as button]
-    [cljs.test :refer-macros [async deftest is testing]]
+    [cljs.test :refer-macros [async deftest is]]
     [re-frame.core :as rf]
     [uix.core :refer [$]]))
 

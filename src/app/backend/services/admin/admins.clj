@@ -151,7 +151,7 @@
 (defn create-admin!
   "Create a new admin with full audit logging.
    Wraps auth/create-admin! with additional validation and audit."
-  [db {:keys [email password full_name role] :as admin-data} 
+  [db {:keys [email password full_name role] :as _admin-data} 
    current-admin-id ip-address user-agent]
   (log/info "Creating new admin" {:email email :role role :by-admin current-admin-id})
   

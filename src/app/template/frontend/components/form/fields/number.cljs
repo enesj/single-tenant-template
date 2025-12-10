@@ -1,13 +1,12 @@
 (ns app.template.frontend.components.form.fields.number
   "Number input field component for integers and decimals"
   (:require
-    [app.template.frontend.components.common :as common]
-    [app.template.frontend.components.form.validation :as validation]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]))
+   [app.template.frontend.components.common :as common]
+   [app.template.frontend.components.form.validation :as validation]
+   [uix.core :refer [$ defui]]))
 
 (defui number-input
-  [{:keys [id label input-type error required class inline on-change value fork-errors step] :as all-props}]
+  [{:keys [id label input-type error required class inline _on-change _value fork-errors step] :as all-props}]
 
   (let [base-class "ds-input ds-input-primary"
         label-class "ds-label"

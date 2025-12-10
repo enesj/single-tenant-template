@@ -191,7 +191,7 @@
 (defui form
   "Renders a form with fields based on entity specification"
   {:prop-types form-props}
-  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing!] :as props}]
+  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing!] :as _props}]
   (let [form-success? (urf/use-subscribe [::form-subs/form-success entity-name])
         submitted? (urf/use-subscribe [::form-subs/submitted? entity-name])
         form-errors (urf/use-subscribe [::form-subs/form-errors entity-name])]

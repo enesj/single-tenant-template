@@ -1,12 +1,11 @@
 (ns app.template.frontend.components.messages
   (:require
-    [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.icons :refer [delete-icon]]
-    [app.template.frontend.events.form :as form-events]
-    [app.template.frontend.events.list.crud :as crud-events]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]))
+   [app.template.frontend.components.button :refer [button]]
+   [app.template.frontend.components.icons :refer [delete-icon]]
+   [app.template.frontend.events.form :as form-events]
+   [app.template.frontend.events.list.crud :as crud-events]
+   [re-frame.core :as rf]
+   [uix.core :refer [$ defui]]))
 
 (defui format-error
   {:prop-types {:error {:type [:string :map]}}}

@@ -37,6 +37,7 @@
     [app.template.frontend.subs.ui]
     [re-frame.core :as rf]))
 
+
 (defn init-admin!
   "Initialize admin module - ensures all events and subscriptions are registered and theme is applied"
   []

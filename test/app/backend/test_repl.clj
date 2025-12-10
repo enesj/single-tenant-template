@@ -30,12 +30,12 @@
 (defn start-system!
   "Manually start the test system"
   []
-  (fixtures/start-test-system))
+  (fixtures/start-test-system nil nil))
 
 (defn stop-system!
   "Manually stop the test system"
   []
-  (fixtures/reset-test-system!))
+  (fixtures/reset-test-system! nil nil))
 
 (println "")
 (println "🧪 Backend Test REPL loaded")

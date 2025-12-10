@@ -1,15 +1,14 @@
 (ns app.template.frontend.events.list.selection-fetch-test
   "Tests for list selection fetch workflows"
   (:require
-    [app.template.frontend.api.http :as http-api]
-    [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.list.selection :as selection-events]
-    [app.template.frontend.helpers-test :as helpers]
-    [cljs.test :refer [deftest is testing]]
-    [day8.re-frame.http-fx :as http-fx]
-    [re-frame.core :as rf]
-    [re-frame.db :as rf-db]
-    [taoensso.timbre :as log]))
+   [app.template.frontend.api.http :as http-api]
+   [app.template.frontend.db.paths :as paths]
+   [app.template.frontend.events.list.selection :as selection-events]
+   [app.template.frontend.helpers-test :as helpers]
+   [cljs.test :refer [deftest is testing]]
+   [day8.re-frame.http-fx :as http-fx]
+   [re-frame.core :as rf]
+   [re-frame.db :as rf-db]))
 
 (defonce selection-test-events-registered
   (do

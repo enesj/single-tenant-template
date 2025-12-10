@@ -7,13 +7,12 @@
    - Security-related user operations
    - Audit logging for security actions"
   (:require
-    [app.backend.services.admin.audit :as audit]
-    [app.shared.type-conversion :as tc]
-    [honey.sql :as hsql]
-    [java-time.api :as time]
-    [next.jdbc :as jdbc]
-    [next.jdbc.sql :as sql]
-    [taoensso.timbre :as log]))
+   [app.backend.services.admin.audit :as audit]
+   [app.shared.type-conversion :as tc]
+   [honey.sql :as hsql]
+   [java-time.api :as time]
+   [next.jdbc :as jdbc]
+   [next.jdbc.sql :as sql]))
 
 ;; ============================================================================
 ;; Email Verification Management

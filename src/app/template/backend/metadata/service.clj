@@ -330,7 +330,7 @@
         {:valid? (nil? missing)
          :missing-fields (vec missing)})))
 
-  (validate-foreign-keys [this _tenant-id _entity-key _data]
+  (validate-foreign-keys [_this _tenant-id _entity-key _data]
     ;; This would require database access to validate foreign key references
     ;; For now, return valid - can be enhanced later
     {:valid? true :invalid-references []}))

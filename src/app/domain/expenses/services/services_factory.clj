@@ -13,7 +13,7 @@
 
 (defn build-base-query
   "Build a base query with joins for an entity."
-  [{:keys [table-name primary-key joins select-fields]}]
+  [{:keys [table-name _primary-key joins select-fields]}]
   (let [base-select (or select-fields [:*])]
     (cond-> {:select base-select
              :from [(keyword table-name)]}
@@ -28,15 +28,17 @@
 
 (defn build-query-with-filters
   "Build complete query with filters, ordering, and pagination."
-  [{:keys [table-name primary-key joins select-fields allowed-order-by default-order-by]
-    :or {default-order-by primary-key}}
-   {:keys [limit offset order-by order-dir search]
-    :or {limit 50 offset 0 order-by default-order-by order-dir :asc}}]
-  (let [base-query (build-base-query {:table-name table-name
+  [{:keys [table-name primary-key joins select-fields allowed-order-by]
+    :as config}
+   {:keys [limit offset order-by order-dir]
+    :or {limit 50 offset 0 order-dir :asc}}]
+  (let [default-order-by (get config :default-order-by primary-key)
+        order-by-col (or order-by default-order-by)
+        base-query (build-base-query {:table-name table-name
                                       :primary-key primary-key
                                       :joins joins
                                       :select-fields select-fields})
-        order-column (get allowed-order-by order-by default-order-by)
+        order-column (get allowed-order-by order-by-col default-order-by)
         order-direction (if (= :asc order-dir) :asc :desc)
 
         query (cond-> base-query
@@ -52,7 +54,7 @@
   (if search-term
     (let [search-conditions (mapv (fn [field]
                                     [:ilike field (str "%" search-term "%")])
-                                  search-fields)]
+                              search-fields)]
       (assoc query :where (into [:and] search-conditions)))
     query))
 
@@ -67,12 +69,13 @@
 
 (defn build-list-function
   "Build a generic list function for an entity."
-  [{:keys [table-name primary-key joins select-fields allowed-order-by default-order-by search-fields]
-    :or {default-order-by primary-key}}]
+  [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields]
+    :as config}]
   (fn list-entity
     [db {:keys [limit offset order-by order-dir search]
-         :or {limit 50 offset 0 order-by default-order-by order-dir :asc}}]
-    (let [base-query (build-query-with-filters
+         :or {limit 50 offset 0 order-dir :asc}}]
+    (let [default-order-by (get config :default-order-by primary-key)
+          base-query (build-query-with-filters
                        {:table-name table-name
                         :primary-key primary-key
                         :joins joins
@@ -85,11 +88,11 @@
                         :order-dir order-dir})
 
           final-query (if (and search search-fields)
-                       (apply-search-filter base-query search-fields search)
-                       base-query)]
+                        (apply-search-filter base-query search-fields search)
+                        base-query)]
 
       (jdbc/execute! db (sql/format final-query)
-                     {:builder-fn rs/as-unqualified-lower-maps}))))
+        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn build-get-function
   "Build a generic get-by-id function for an entity."
@@ -100,10 +103,10 @@
                                        :primary-key primary-key
                                        :joins joins
                                        :select-fields select-fields})
-                    (apply-id-filter table-name id))]
+                  (apply-id-filter table-name id))]
 
       (jdbc/execute-one! db (sql/format query)
-                         {:builder-fn rs/as-unqualified-lower-maps}))))
+        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn build-create-function
   "Build a generic create function for an entity."
@@ -115,7 +118,7 @@
     (doseq [field required-fields]
       (when-not (get data field)
         (throw (ex-info (str (name field) " is required")
-                        {:entity table-name :missing-field field}))))
+                 {:entity table-name :missing-field field}))))
 
     ;; Apply field transformers
     (let [transformed-data (reduce-kv
@@ -128,7 +131,7 @@
 
           ;; Add generated ID if not present
           final-data (assoc transformed-data
-                            :id (or (:id transformed-data) (UUID/randomUUID)))
+                       :id (or (:id transformed-data) (UUID/randomUUID)))
 
           ;; Apply before-insert hook
           processed-data (if before-insert
@@ -136,10 +139,10 @@
                            final-data)]
 
       (jdbc/execute-one! db
-                        (sql/format {:insert-into (keyword table-name)
-                                     :values [processed-data]
-                                     :returning [:*]})
-                        {:builder-fn rs/as-unqualified-lower-maps}))))
+        (sql/format {:insert-into (keyword table-name)
+                     :values [processed-data]
+                     :returning [:*]})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn build-update-function
   "Build a generic update function for an entity."
@@ -163,11 +166,11 @@
 
       (when (seq processed-updates)
         (jdbc/execute-one! db
-                          (sql/format {:update (keyword table-name)
-                                       :set processed-updates
-                                       :where [:= :id id]
-                                       :returning [:*]})
-                          {:builder-fn rs/as-unqualified-lower-maps})))))
+          (sql/format {:update (keyword table-name)
+                       :set processed-updates
+                       :where [:= :id id]
+                       :returning [:*]})
+          {:builder-fn rs/as-unqualified-lower-maps})))))
 
 (defn build-delete-function
   "Build a generic delete function for an entity."
@@ -175,9 +178,9 @@
   (fn delete-entity!
     [db id]
     (pos? (::jdbc/update-count
-            (jdbc/execute-one! db
-                              (sql/format {:delete-from (keyword table-name)
-                                           :where [:= :id id]}))))))
+           (jdbc/execute-one! db
+             (sql/format {:delete-from (keyword table-name)
+                          :where [:= :id id]}))))))
 
 (defn build-count-function
   "Build a generic count function for an entity."
@@ -187,24 +190,24 @@
     (let [base-query {:select [[[:count :*] :total]]
                       :from [(keyword table-name)]}
           final-query (if (and search search-fields)
-                       (apply-search-filter base-query search-fields search)
-                       base-query)]
-
-      (let [result (jdbc/execute-one! db (sql/format final-query)
-                                     {:builder-fn rs/as-unqualified-lower-maps})]
-        (:total result)))))
+                        (apply-search-filter base-query search-fields search)
+                        base-query)]
+      (:total
+        (jdbc/execute-one! db
+          (sql/format final-query)
+          {:builder-fn rs/as-unqualified-lower-maps})))))
 
 (defn build-search-function
   "Build a generic search function for autocomplete."
-  [{:keys [table-name search-fields order-by-field limit default-limit]
-    :or {limit 10 order-by-field :display_name default-limit 10}}]
+  [{:keys [table-name search-fields order-by-field default-limit]
+    :or {order-by-field :display_name default-limit 10}}]
   (fn search-entity
     [db query {:keys [limit] :or {limit default-limit}}]
     (when (and query (>= (count query) 2))
       (let [search-pattern (str "%" query "%")
             search-conditions (mapv (fn [field]
                                       [:ilike field search-pattern])
-                                    search-fields)
+                                search-fields)
 
             query {:select [:*]
                    :from [(keyword table-name)]
@@ -213,7 +216,7 @@
                    :limit limit}]
 
         (jdbc/execute! db (sql/format query)
-                       {:builder-fn rs/as-unqualified-lower-maps})))))
+          {:builder-fn rs/as-unqualified-lower-maps})))))
 
 ;; ============================================================================
 ;; Service Builder

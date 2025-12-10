@@ -40,7 +40,7 @@
     :or {format json-request-format
          response-format json-response-format
          timeout 8000}
-    :as config}]
+    :as _config}]
   (cond-> {:method method
            :uri uri
            :format format
@@ -60,27 +60,27 @@
 
 (defn get-request
   "Create a GET request configuration"
-  [{:keys [uri on-success on-failure] :as opts}]
+  [{:keys [_uri _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :get)))
 
 (defn post-request
   "Create a POST request configuration"
-  [{:keys [uri params on-success on-failure] :as opts}]
+  [{:keys [_uri params _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :post :params params)))
 
 (defn put-request
   "Create a PUT request configuration"
-  [{:keys [uri params on-success on-failure] :as opts}]
+  [{:keys [_uri params _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :put :params params)))
 
 (defn delete-request
   "Create a DELETE request configuration"
-  [{:keys [uri on-success on-failure] :as opts}]
+  [{:keys [_uri _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :delete)))
 
 (defn patch-request
   "Create a PATCH request configuration"
-  [{:keys [uri params on-success on-failure] :as opts}]
+  [{:keys [_uri params _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :patch :params params)))
 
 ;;; -------------------------

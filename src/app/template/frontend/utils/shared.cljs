@@ -8,14 +8,13 @@
    - Common configuration helpers"
 
   (:require
-    [app.template.frontend.subs.entity :as entity-subs]
-    [app.template.frontend.subs.list :as list-subs]
-    [app.template.frontend.subs.ui :as ui-subs]
-    [app.shared.keywords :as kw]
-    [taoensso.timbre :as log]
-    [re-frame.core :refer [dispatch]]
-    [uix.core :refer [use-effect]]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.shared.keywords :as kw]
+   [app.template.frontend.subs.entity :as entity-subs]
+   [app.template.frontend.subs.list :as list-subs]
+   [app.template.frontend.subs.ui :as ui-subs]
+   [re-frame.core :refer [dispatch]]
+   [uix.core :refer [use-effect]]
+   [uix.re-frame :refer [use-subscribe]]))
 
 ;; Entity Management Utilities
 

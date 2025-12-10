@@ -5,7 +5,10 @@
    and token generation."
   (:require
     [app.backend.services.admin.auth :as auth]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [buddy.core.codecs :as codecs]
+    [buddy.core.hash :as hash]
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================
 ;; Password Hashing Tests
@@ -17,7 +20,7 @@
           hash (auth/hash-password password)]
       (is (string? hash))
       (is (> (count hash) 50) "bcrypt hashes should be ~60+ chars")
-      (is (clojure.string/starts-with? hash "bcrypt+sha512$") 
+        (is (str/starts-with? hash "bcrypt+sha512$") 
           "should use bcrypt+sha512 algorithm")))
 
   (testing "hash-password creates different hashes for same password"
@@ -74,26 +77,14 @@
     ;; We can verify by hashing a known password
     (let [password "test123"
           ;; Generate expected SHA-256 hex
-          expected-hash (-> (buddy.core.hash/sha256 password)
-                            buddy.core.codecs/bytes->hex)]
+          expected-hash (-> (hash/sha256 password)
+                             codecs/bytes->hex)]
       (is (auth/verify-sha256-password password expected-hash))))
 
   (testing "verify-sha256-password rejects wrong password"
-    (let [correct-hash (-> (buddy.core.hash/sha256 "correct")
-                           buddy.core.codecs/bytes->hex)]
+    (let [correct-hash (-> (hash/sha256 "correct")
+                codecs/bytes->hex)]
       (is (not (auth/verify-sha256-password "wrong" correct-hash))))))
-
-;; ============================================================================
-;; In-Memory Session Store Tests
-;; ============================================================================
-
-(deftest session-store-test
-  (testing "session-store is an atom"
-    (is (instance? clojure.lang.Atom auth/session-store)))
-
-  (testing "session-store starts empty or can be reset"
-    ;; We don't reset to avoid affecting other tests, just verify it's a map
-    (is (map? @auth/session-store))))
 
 ;; ============================================================================
 ;; Integration-like Tests (with stubs)

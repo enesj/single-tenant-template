@@ -1,11 +1,10 @@
 (ns app.template.frontend.components.form.fields.input
   "Input field components"
   (:require
-    [app.template.frontend.components.common :as common]
-    [app.template.frontend.components.form.fields.date-picker :refer [date-picker]]
-    [app.template.frontend.components.form.validation :as validation]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]))
+   [app.template.frontend.components.common :as common]
+   [app.template.frontend.components.form.fields.date-picker :refer [date-picker]]
+   [app.template.frontend.components.form.validation :as validation]
+   [uix.core :refer [$ defui]]))
 
 (def input-width
   {:text "w-1/2"

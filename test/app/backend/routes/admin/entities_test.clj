@@ -105,9 +105,9 @@
     (let [db (h/mock-db)
           handler (entities/delete-entity-handler db mock-crud-service)
           request (h/mock-admin-request :delete "/admin/api/entities/unknown/123" mock-admin
-                    {:path-params {:entity "unknown" :id "123"}})]
-      (let [response (handler request)]
-        (is (= 501 (:status response))))))
+                    {:path-params {:entity "unknown" :id "123"}})
+          response (handler request)]
+      (is (= 501 (:status response)))))
   
   (testing "delete-entity handles constraint violations"
     (let [db (h/mock-db)

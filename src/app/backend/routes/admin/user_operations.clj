@@ -1,11 +1,10 @@
 (ns app.backend.routes.admin.user-operations
   "Admin advanced user operations handlers"
   (:require
-    [app.backend.routes.admin.utils :as utils]
-    [app.backend.services.admin :as admin-service]
-    [app.shared.field-metadata :as field-meta]
-    [clojure.string :as str]
-    [taoensso.timbre :as log]))
+   [app.backend.routes.admin.utils :as utils]
+   [app.backend.services.admin :as admin-service]
+   [app.shared.field-metadata :as field-meta]
+   [clojure.string :as str]))
 
 (defn update-user-role-handler
   "Update user role"

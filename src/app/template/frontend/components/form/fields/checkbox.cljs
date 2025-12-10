@@ -1,10 +1,9 @@
 (ns app.template.frontend.components.form.fields.checkbox
   "Checkbox input field component for boolean values"
   (:require
-    [app.template.frontend.components.common :as common]
-    [app.template.frontend.components.form.validation :as validation]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]))
+   [app.template.frontend.components.common :as common]
+   [app.template.frontend.components.form.validation :as validation]
+   [uix.core :refer [$ defui]]))
 
 (defui checkbox-input
   [{:keys [id label error required class inline on-change value fork-errors] :as all-props}]

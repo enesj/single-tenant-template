@@ -5,19 +5,18 @@
    code duplication while maintaining flexibility for entity-specific features."
 
   (:require
-    [app.admin.frontend.adapters.users :as users-adapter]
-    [app.admin.frontend.components.enhanced-action-buttons :refer [enhanced-action-buttons]]
-    [app.admin.frontend.components.user-actions :refer [admin-user-actions]]
-    [app.admin.frontend.security.wrapper :as security]
-    [app.admin.frontend.services.deletion-constraints :as deletion-constraints]
-    [app.admin.frontend.components.admin-page-wrapper :refer [admin-page-wrapper]]
-    [app.frontend.utils.id :as id-utils]
-    [app.template.frontend.components.list :refer [list-view]]
-    [app.template.frontend.subs.entity :as entity-subs]
-    [re-frame.core :refer [dispatch]]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.admin.frontend.adapters.users :as users-adapter]
+   [app.admin.frontend.components.admin-page-wrapper :refer [admin-page-wrapper]]
+   [app.admin.frontend.components.enhanced-action-buttons :refer [enhanced-action-buttons]]
+   [app.admin.frontend.components.user-actions :refer [admin-user-actions]]
+   [app.admin.frontend.security.wrapper :as security]
+   [app.admin.frontend.services.deletion-constraints :as deletion-constraints]
+   [app.frontend.utils.id :as id-utils]
+   [app.template.frontend.components.list :refer [list-view]]
+   [app.template.frontend.subs.entity :as entity-subs]
+   [re-frame.core :refer [dispatch]]
+   [uix.core :refer [$ defui]]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (defui admin-users-page-example
   "Enhanced admin users management page using shared components.

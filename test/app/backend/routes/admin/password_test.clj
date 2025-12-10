@@ -59,18 +59,18 @@
   (testing "forgot-password fails without email"
     (let [db (h/mock-db)
           handler (password/forgot-password-handler db mock-email-service "http://localhost:8085")
-          request {:body {}}]
-      (let [response (handler request)
-            body (json/parse-string (:body response) true)]
+              request {:body {}}
+              response (handler request)
+              body (json/parse-string (:body response) true)]
         (is (= 400 (:status response)))
-        (is (= "Email is required" (:error body))))))
+        (is (= "Email is required" (:error body)))))
   
   (testing "forgot-password fails with empty email"
     (let [db (h/mock-db)
           handler (password/forgot-password-handler db mock-email-service "http://localhost:8085")
-          request {:body {:email ""}}]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                              request {:body {:email ""}}
+                              response (handler request)]
+                  (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Verify Reset Token Tests
@@ -105,11 +105,11 @@
   (testing "verify-token fails without token"
     (let [db (h/mock-db)
           handler (password/verify-reset-token-handler db)
-          request {:query-params {}}]
-      (let [response (handler request)
-            body (json/parse-string (:body response) true)]
+              request {:query-params {}}
+              response (handler request)
+              body (json/parse-string (:body response) true)]
         (is (= 400 (:status response)))
-        (is (= "Token is required" (:error body)))))))
+        (is (= "Token is required" (:error body))))))
 
 ;; ============================================================================
 ;; Reset Password Tests
@@ -130,22 +130,22 @@
           (is (:success body))))))
   
   (testing "reset-password fails without token"
-    (let [db (h/mock-db)
-          handler (password/reset-password-handler db nil "http://localhost:8085")
-          request {:body {:password "newpassword123"}}]
-      (let [response (handler request)
-            body (json/parse-string (:body response) true)]
+      (let [db (h/mock-db)
+              handler (password/reset-password-handler db nil "http://localhost:8085")
+              request {:body {:password "newpassword123"}}
+              response (handler request)
+              body (json/parse-string (:body response) true)]
         (is (= 400 (:status response)))
-        (is (= "Reset token is required" (:error body))))))
+        (is (= "Reset token is required" (:error body)))))
   
   (testing "reset-password fails without password"
-    (let [db (h/mock-db)
-          handler (password/reset-password-handler db nil "http://localhost:8085")
-          request {:body {:token test-token}}]
-      (let [response (handler request)
-            body (json/parse-string (:body response) true)]
+      (let [db (h/mock-db)
+              handler (password/reset-password-handler db nil "http://localhost:8085")
+              request {:body {:token test-token}}
+              response (handler request)
+              body (json/parse-string (:body response) true)]
         (is (= 400 (:status response)))
-        (is (= "New password is required" (:error body))))))
+        (is (= "New password is required" (:error body)))))
   
   (testing "reset-password fails with invalid token"
     (let [db (h/mock-db)

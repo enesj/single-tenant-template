@@ -75,7 +75,7 @@
 
 (defn create-admin!
   "Creates a new admin user with hashed password"
-  [db {:keys [email password full_name role] :as admin-data}]
+  [db {:keys [email password full_name role] :as _admin-data}]
   (let [admin-id (UUID/randomUUID)
         now (time/instant)]
     (jdbc/execute! db (hsql/format

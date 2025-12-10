@@ -40,7 +40,7 @@
 
 (defui settings-panel
   "Global settings panel with theme selector and list view settings"
-  [{:keys [global-settings?]}]
+  [{:keys [_global-settings?]}]
   (let [[expanded?, set-expanded] (use-state false)
         [panel-position, set-panel-position] (use-state nil)
 

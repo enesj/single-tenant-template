@@ -23,7 +23,7 @@
 
 (defui column-visibility-settings
   "Controls for column visibility"
-  [{:keys [entity-name current-entity-name global-settings?]}]
+  [{:keys [entity-name current-entity-name _global-settings?]}]
   (let [entity-type (or current-entity-name entity-name)
         entity-kw (if (keyword? entity-type) entity-type (keyword entity-type))
         ;; Use modern admin entity spec subscription
@@ -91,7 +91,7 @@
                           :disabled (not is-column-configurable?)
                           :title (when (not is-column-configurable?)
                                    "This column is not configurable")
-                          :on-click (fn [e]
+                          :on-click (fn [_e]
                                       (when is-column-configurable?
                                         (toggle-column! entity-kw field-id)))}
                 field-label)
@@ -111,7 +111,7 @@
 
 (defui list-view-settings-panel
   "Controls for table display options"
-  [{:keys [entity-name show-timestamps? show-edit? show-delete? show-highlights? show-select? show-filtering?
+  [{:keys [entity-name _show-timestamps? _show-edit? _show-delete? _show-highlights? _show-select? _show-filtering?
            global-settings? current-entity-name compact? entity-spec hardcoded-display-settings
            per-page on-per-page-change rows-per-page-options]}]
 

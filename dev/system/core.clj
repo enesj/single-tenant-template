@@ -27,7 +27,7 @@
   (let [instance-future @instance]
     (future-cancel instance-future)
     (try @instance-future
-         (catch java.util.concurrent.CancellationException e (log/info "system stopped")))))
+         (catch java.util.concurrent.CancellationException _e (log/info "system stopped")))))
 
 (defn- code-file? [filename]
   (and filename (re-matches #"[^.].*\.(clj|cljc)$" filename)))

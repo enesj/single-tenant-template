@@ -18,26 +18,26 @@
   (let [[password set-password!] (use-state "")
         [confirm-password set-confirm-password!] (use-state "")
         [form-errors set-form-errors!] (use-state {})
-        
+
         ;; Get token from URL
         token (-> js/window .-location .-search
-                  (js/URLSearchParams.)
-                  (.get "token"))
-        
+                (js/URLSearchParams.)
+                (.get "token"))
+
         loading? (use-subscribe [:admin/password-reset-loading?])
         error (use-subscribe [:admin/password-reset-error])
         success? (use-subscribe [:admin/password-reset-success?])
         token-valid? (use-subscribe [:admin/password-reset-token-verified?])
-        
+
         validate-form
         (fn []
           (cond-> {}
             (< (count password) 10)
             (assoc :password "Password must be at least 10 characters")
-            
+
             (not= password confirm-password)
             (assoc :confirm-password "Passwords do not match")))
-        
+
         handle-submit
         (fn [e]
           (.preventDefault e)
@@ -47,15 +47,15 @@
                 (set-form-errors! {})
                 (rf/dispatch [:admin/reset-password-with-token token password]))
               (set-form-errors! errors))))]
-    
+
     ;; Verify token on mount
     (use-effect
       (fn []
-        (when (and token (not (empty? token)))
+        (when (and token (seq token))
           (rf/dispatch [:admin/verify-reset-token token]))
         js/undefined)
       [token])
-    
+
     ($ auth-form-container
       (cond
         ;; No token provided
@@ -67,13 +67,13 @@
             "No password reset token was provided. Please use the link from your email.")
           ($ :a {:href "/admin/forgot-password" :class "ds-btn ds-btn-primary"}
             "Request New Link"))
-        
+
         ;; Checking token (loading state)
         (and loading? (not token-valid?) (not error))
         ($ :div {:class "text-center p-8"}
           ($ :div {:class "ds-loading ds-loading-spinner ds-loading-lg"})
           ($ :p {:class "mt-4 text-base-content/70"} "Verifying reset link..."))
-        
+
         ;; Token invalid
         (and (not loading?) error (not token-valid?))
         ($ :div {:class "text-center p-4"}
@@ -88,7 +88,7 @@
             "Please request a new password reset link.")
           ($ :a {:href "/admin/forgot-password" :class "ds-btn ds-btn-primary"}
             "Request New Link"))
-        
+
         ;; Password reset success
         success?
         ($ :div {:class "text-center p-4"}
@@ -100,20 +100,20 @@
           ($ :p {:class "text-base-content/70 mb-6"}
             "Your admin password has been updated. You can now sign in with your new password.")
           ($ :a {:href "/admin/login" :class "ds-btn ds-btn-primary"} "Sign In to Admin Panel"))
-        
+
         ;; Reset form (token valid)
         :else
         ($ :<>
-          ($ auth-form-header 
+          ($ auth-form-header
             {:title "Reset Admin Password"
              :subtitle "Enter your new password"
              :icon-path "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"})
-          
+
           ($ auth-error-alert {:error error})
-          
+
           ($ :form {:id "admin-reset-password-form"
                     :on-submit handle-submit}
-            
+
             ($ auth-form-field {:label "New Password"
                                 :type "password"
                                 :placeholder "Enter new password (min. 10 characters)"
@@ -121,10 +121,10 @@
                                 :field-id "admin-reset-password"
                                 :required true
                                 :on-change #(set-password! (.. % -target -value))})
-            
+
             (when (:password form-errors)
               ($ :p {:class "text-error text-sm mb-4"} (:password form-errors)))
-            
+
             ($ auth-form-field {:label "Confirm Password"
                                 :type "password"
                                 :placeholder "Confirm new password"
@@ -132,10 +132,10 @@
                                 :field-id "admin-reset-confirm-password"
                                 :required true
                                 :on-change #(set-confirm-password! (.. % -target -value))})
-            
+
             (when (:confirm-password form-errors)
               ($ :p {:class "text-error text-sm mb-4"} (:confirm-password form-errors)))
-            
+
             ($ auth-submit-button {:loading? loading?
                                    :text "Reset Password"
                                    :loading-text "Resetting..."

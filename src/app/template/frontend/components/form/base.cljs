@@ -1,11 +1,10 @@
 (ns app.template.frontend.components.form.base
   "Core form component providing form initialization and state management"
   (:require
-    [app.shared.validation.fork :as validation-fork]
-    [fork.re-frame :as fork]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.shared.validation.fork :as validation-fork]
+   [fork.re-frame :as fork]
+   [uix.core :refer [$ defui]]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (defui initialize-form
   "Initializes form with default values and validation"

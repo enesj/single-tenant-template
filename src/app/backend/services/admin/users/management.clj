@@ -1,14 +1,13 @@
 (ns app.backend.services.admin.users.management
   "User management CRUD operations (single-tenant)."
   (:require
-    [app.backend.services.admin.users.validation :as validation]
-    [app.shared.type-conversion :as tc]
-    [honey.sql :as hsql]
-    [java-time.api :as time]
-    [next.jdbc :as jdbc]
-    [taoensso.timbre :as log])
+   [app.backend.services.admin.users.validation :as validation]
+   [app.shared.type-conversion :as tc]
+   [honey.sql :as hsql]
+   [java-time.api :as time]
+   [next.jdbc :as jdbc])
   (:import
-    [java.util UUID]))
+   [java.util UUID]))
 
 (defn update-user!
   "Update user information as admin with proper casting and validation (single-tenant)."

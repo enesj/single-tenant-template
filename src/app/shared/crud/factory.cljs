@@ -1,7 +1,6 @@
 (ns app.shared.crud.factory
   (:require
-    [app.shared.http.core :as http]
-    [re-frame.core :as rf]))
+   [app.shared.http.core :as http]))
 
 (defn create-crud-handler
   "Returns a re-frame event handler fn for creating an entity."

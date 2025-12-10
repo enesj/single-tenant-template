@@ -49,7 +49,7 @@
     ;; Verify token on mount
     (use-effect
       (fn []
-        (when (and token (not (empty? token)))
+        (when (and token (seq token))
           (rf/dispatch [::auth-events/verify-reset-token token]))
         js/undefined)
       [token])
@@ -59,7 +59,7 @@
         ($ auth-form-container
           (cond
             ;; No token provided
-            (or (nil? token) (empty? token))
+              (or (nil? token) (not (seq token)))
             ($ :div {:class "text-center p-4"}
               ($ :div {:class "text-error text-6xl mb-4"} "⚠")
               ($ :h2 {:class "text-2xl font-bold mb-4"} "Missing Reset Token")

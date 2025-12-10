@@ -17,7 +17,7 @@
    :observed_at (timestamp, defaults to now), :qty, :unit_price,
    :line_total, :currency.
    Returns inserted row (as unqualified lower-case keys)."
-  [db {:keys [article_id supplier_id expense_item_id observed_at qty unit_price line_total currency] :as obs}]
+  [db {:keys [article_id supplier_id expense_item_id observed_at qty unit_price line_total currency] :as _obs}]
   (when (and article_id supplier_id line_total)
     (let [row {:id (UUID/randomUUID)
                :article_id article_id

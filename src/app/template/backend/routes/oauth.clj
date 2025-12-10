@@ -1,14 +1,12 @@
 (ns app.template.backend.routes.oauth
   (:require
-    [app.backend.services.monitoring.login-events :as login-monitoring]
-    [app.template.backend.auth.service :as auth-service]
-    [app.template.backend.routes.utils :as route-utils]
-    [cheshire.core :as json]
-    [clj-http.client :as http]
-    [clojure.string :as str]
-    [clojure.walk :as walk]
-    [ring.util.response :as response]
-    [taoensso.timbre :as log]))
+   [app.template.backend.auth.service :as auth-service]
+   [app.template.backend.routes.utils :as route-utils]
+   [clj-http.client :as http]
+   [clojure.string :as str]
+   [clojure.walk :as walk]
+   [ring.util.response :as response]
+   [taoensso.timbre :as log]))
 
 (defn- sanitize-for-serialization
   "Helper function to sanitize objects for JSON/EDN serialization.

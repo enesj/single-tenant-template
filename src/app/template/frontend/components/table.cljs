@@ -1,14 +1,13 @@
 (ns app.template.frontend.components.table
   (:require
-    [app.shared.keywords :as kw]
-    [app.template.frontend.components.icons :refer [settings-icon]]
-    [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
-    [app.template.frontend.events.list.settings :as settings-events]
-    [app.template.frontend.subs.ui :as ui-subs]
-    [taoensso.timbre :as log]
-    [uix.core :as uix :refer [$ defui]]
-    [uix.dom]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.shared.keywords :as kw]
+   [app.template.frontend.components.icons :refer [settings-icon]]
+   [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
+   [app.template.frontend.events.list.settings :as settings-events]
+   [app.template.frontend.subs.ui :as ui-subs]
+   [uix.core :as uix :refer [$ defui]]
+   [uix.dom]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (defn get-array-length [cells]
   (cond
@@ -142,7 +141,7 @@
                 :resizable-columns {:type :array}
                 :fixed-width-columns {:type :array}
                 :sticky-columns {:type :array}}}
-  [{:keys [cells class num-columns is-header? entity-name row-index column-widths on-column-resize resizable-columns fixed-width-columns sticky-columns] :as props}]
+  [{:keys [cells class num-columns is-header? entity-name row-index column-widths on-column-resize resizable-columns fixed-width-columns sticky-columns] :as _props}]
   (let [cell-count (get-array-length cells)
         colspan (when (= cell-count 1) num-columns)
         cells-seq (ensure-seq cells)]
@@ -196,7 +195,7 @@
 
 (defui table
   {:prop-types table-props}
-  [{:keys [headers rows row-key render-row editing entity-name entity-spec display-settings page-display-settings
+  [{:keys [headers rows row-key render-row editing entity-name entity-spec _display-settings _page-display-settings
            per-page on-per-page-change rows-per-page-options] :as props}]
   (let [header-cells (ensure-seq headers)
         header-count (count header-cells)

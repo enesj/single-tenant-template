@@ -36,12 +36,13 @@
   [{:keys [json-str class max-height]
     :or {class "text-sm font-mono leading-relaxed"
          max-height "max-h-80"}}]
-  (let [formatted-json (try
+  (let [container-class (str class (when max-height (str " " max-height)))
+        formatted-json (try
                          (let [parsed (js/JSON.parse json-str)]
                            (js/JSON.stringify parsed nil 2))
                          (catch js/Error _
                            json-str))]
-    ($ :div {:class class}
+    ($ :div {:class container-class}
       (map-indexed
         (fn [idx line]
           ($ :div {:key (str "line-" idx) :class "hover:bg-base-200/50 -mx-2 px-2 py-0.5 rounded transition-colors"}

@@ -14,7 +14,7 @@
 (defn- safe-read-edn
   "Safely read EDN string, returns nil on error."
   [s]
-  (when (and s (string? s) (not (empty? s)))
+  (when (and s (string? s) (seq s))
     (try
       (reader/read-string s)
       (catch :default e

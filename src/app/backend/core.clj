@@ -23,7 +23,6 @@
   (set-parameter [^Instant v ^PreparedStatement ps ^long i]
     (.setTimestamp ps i (Timestamp/from v))))
 
-
 (next.jdbc.date-time/read-as-instant)
 
 ;; ============================================================================

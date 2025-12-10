@@ -1,7 +1,5 @@
 (ns app.shared.field-types
   (:require
-    #?(:clj [taoensso.timbre :as log]
-       :cljs [taoensso.timbre :as log])
     [clojure.string :as str]))
 
 (def base-input-types

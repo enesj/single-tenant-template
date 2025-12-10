@@ -50,7 +50,7 @@
                                                       {:valid? (and (not= value :invalid) (some? value))})]
       (let [spec [{:id "name" :required true}
                   {:id "email" :required true}]
-            values {:name :invalid :email nil}]
+            _values {:name :invalid :email nil}]
         ;; Mark email dirty to ensure it's now considered
         (swap! rf-db/app-db assoc-in (paths/form-dirty-fields :items) #{:name :email})
         (rf/clear-subscription-cache!)

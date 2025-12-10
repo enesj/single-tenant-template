@@ -1,9 +1,8 @@
 (ns app.template.frontend.components.modal
   (:require
-    [app.template.frontend.components.draggable :refer [use-draggable]]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui use-effect use-state]]
-    [goog.object :as gobj]))
+   [app.template.frontend.components.draggable :refer [use-draggable]]
+   [goog.object :as gobj]
+   [uix.core :refer [$ defui use-effect use-state]]))
 
 (def modal-props
   {:id {:type :string :required true}
@@ -36,7 +35,7 @@
          width "400px"
          z-index 50
          backdrop-opacity 20}
-    :as props}]
+    :as _props}]
   (let [;; Generate backdrop ID that matches UI test expectations
         ;; Extract base ID without "-modal" suffix if present
         base-id (if (.endsWith id "-modal")
@@ -105,10 +104,11 @@
     (when is-open
       ($ :div
         ;; Backdrop overlay - clicking this closes the modal
-        ($ :div {:class "fixed inset-0 bg-black/20"
-                 :id backdrop-id
-                 :style {:z-index (dec z-index)}
-                 :on-click handle-close})
+      ($ :div {:class "fixed inset-0"
+         :id backdrop-id
+         :style {:z-index (dec z-index)
+           :background-color (str "rgba(0,0,0," (/ backdrop-opacity 100) ")")}
+         :on-click handle-close})
 
         ;; Modal container
         ($ :div {:class (str "fixed bg-white rounded-lg overflow-hidden shadow-xl "

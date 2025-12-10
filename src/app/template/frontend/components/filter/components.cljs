@@ -184,7 +184,7 @@
 
 (defui dropdown-controls
   "Select all / clear all controls for dropdown"
-  [{:keys [on-select-all on-clear-all]}]
+  [{:keys [on-select-all _on-clear-all]}]
   ($ :div {:class "px-3 py-2 border-b border-gray-100 flex justify-between"}
     ($ :button {:class "text-xs text-blue-600 hover:text-blue-800"
                 :on-click #(on-select-all true)}

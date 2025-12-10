@@ -15,7 +15,7 @@
 
 (defn render-text-filter
   "Render text filter component"
-  [{:keys [filter-type filter-text set-filter-text] :as props}]
+  [{:keys [filter-type _filter-text _set-filter-text] :as props}]
   (when (= filter-type :text)
     ($ text-field-filter
       (select-keys props [:field-id :field-label :filter-text :set-filter-text :matching-count :entity-type]))))
@@ -45,7 +45,7 @@
 
 (defn render-select-filter
   "Render select filter component"
-  [{:keys [filter-type filter-selected-options set-filter-selected-options] :as props}]
+  [{:keys [filter-type filter-selected-options _set-filter-selected-options] :as props}]
   (when (= filter-type :select)
     ($ select-field-filter
       (-> props
@@ -71,7 +71,7 @@
 
 (defn render-filter-header
   "Render filter header with title and close button"
-  [{:keys [field-label on-close] :as props}]
+  [{:keys [field-label _on-close] :as props}]
   ($ :div
     {:class "flex justify-between items-center mb-2"}
     ($ :h3
@@ -99,7 +99,7 @@
 
 (defn render-filter-form-layout
   "Render the complete filter form layout"
-  [{:keys [field-label on-close] :as props}]
+  [{:keys [_field-label _on-close] :as props}]
   ($ :div
     {:class "bg-base-100 border border-base-300 rounded-lg p-3 mb-3 shadow-sm"}
 

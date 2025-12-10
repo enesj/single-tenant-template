@@ -1,9 +1,8 @@
 (ns app.admin.frontend.events.config
   "Simplified events for vector-based column configuration"
   (:require
-    [app.admin.frontend.config.loader :as config-loader]
-    [app.admin.frontend.system.entity-registry :as entity-registry]
-    [re-frame.core :as rf]))
+   [app.admin.frontend.config.loader :as config-loader]
+   [re-frame.core :as rf]))
 
 (def ^:private bootstrap-throttle-ms 300)
 

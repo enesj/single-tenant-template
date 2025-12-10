@@ -1,21 +1,18 @@
 (ns app.template.frontend.pages.verify-email-success
   "Email verification success page component"
   (:require
-    [app.template.frontend.components.auth :refer [auth-form-container
-                                                   auth-form-header
-                                                   auth-submit-button
-                                                   auth-form-footer]]
-    [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.icons :refer [google-icon]]
-    [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.template.frontend.components.auth :refer [auth-form-container
+                                                  auth-form-footer
+                                                  auth-form-header]]
+   [app.template.frontend.components.button :refer [button]]
+   [uix.core :refer [$ defui]]
+   [uix.re-frame :refer [use-subscribe]]))
 
 
 (defui verify-email-success-page
   []
   (let [auth-status (use-subscribe [:auth-status])
-        loading? (get-in auth-status [:loading?] false)
+        _loading? (get-in auth-status [:loading?] false)
         verification-message (get-in auth-status [:session :verification-message] "Email verification successful!")]
 
     ($ auth-form-container

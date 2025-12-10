@@ -19,7 +19,7 @@
    - :value-class - Optional custom class for the value display
    - :loading? - Optional loading state to show spinner
    - :accent-color - Optional accent color for the stat value (e.g., 'text-primary', 'text-accent')"
-  [{:keys [title value subtitle color icon value-class loading? accent-color]
+  [{:keys [title value subtitle color icon _value-class loading? accent-color]
     :or {accent-color "text-primary"}}]
   ($ :div {:class "ds-card bg-base-100 shadow-xl hover:shadow-2xl transition-all duration-300 border border-base-300/50 hover:scale-[1.02] group"}
     ($ :div {:class "ds-card-body p-6"}

@@ -147,7 +147,7 @@
 (rf/reg-event-fx
   :navigate/to-dashboard
   common-interceptors
-  (fn [{:keys [db]} _]
+  (fn [{:keys [_db]} _]
     {:redirect "/entities"}))
 
 ;; ========================================================================

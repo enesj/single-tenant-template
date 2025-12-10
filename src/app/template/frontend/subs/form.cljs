@@ -1,10 +1,9 @@
 (ns app.template.frontend.subs.form
   (:require
-    [app.shared.validation.builder :as validation-builder]
-    [app.shared.validation.core :as validation-core]
-    [app.template.frontend.db.paths :as paths]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+   [app.shared.validation.builder :as validation-builder]
+   [app.shared.validation.core :as validation-core]
+   [app.template.frontend.db.paths :as paths]
+   [re-frame.core :as rf]))
 
 (rf/reg-sub
   ::form-errors
@@ -59,7 +58,7 @@
                                                    (validation-core/validation-result validation-spec value)
                                                    (catch :default _
                                                      {:valid? (if (string? value)
-                                                                (not (empty? value))
+                                                                (seq value)
                                                                 (some? value))}))]
                                       (:valid? result)))
                                fields-to-check)]

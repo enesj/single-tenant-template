@@ -75,8 +75,8 @@
                        ;; LocalDateTime (older code paths) – assume default zone
                        (instance? java.time.LocalDateTime expires-at)
                        (-> ^java.time.LocalDateTime expires-at
-                           (.atZone (time/zone-id))
-                           (.toInstant))
+                         (.atZone (time/zone-id))
+                         (.toInstant))
 
                        ;; java.util.Date
                        (instance? java.util.Date expires-at)
@@ -170,7 +170,7 @@
   "Check if a user needs email verification"
   [user]
   (and user
-       (not (:email_verified user))))
+    (not (:email_verified user))))
 
 (defn mark-user-verification-pending!
   "Mark user's verification status as pending after sending email"
@@ -188,10 +188,9 @@
   (let [result (first (db-protocols/execute! db
                         "SELECT email_verified FROM users WHERE id = ?"
                         [user-id]))]
-    (let [email-verified (:email_verified result)]
-      {:email-verified email-verified
-       ;; Derive a human/status string even though we only persist a boolean.
-       :verification-status (if email-verified "verified" "unverified")})))
+    {:email-verified (:email_verified result)
+     ;; Derive a human/status string even though we only persist a boolean.
+     :verification-status (if (:email_verified result) "verified" "unverified")}))
 
 (defprotocol EmailService
   "Protocol for sending verification-related emails in the single-tenant app."

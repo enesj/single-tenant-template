@@ -9,11 +9,10 @@
    - Deleting admins
    - Role and status management"
   (:require
-    [app.backend.routes.admin.admins :as admins]
-    [app.backend.services.admin :as admin-service]
-    [app.backend.services.admin.admins :as admin-admins-service]
-    [app.backend.test-helpers :as h]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+   [app.backend.routes.admin.admins :as admins]
+   [app.backend.services.admin :as admin-service]
+   [app.backend.test-helpers :as h]
+   [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================================
 ;; Test Fixtures
@@ -143,17 +142,17 @@
     (let [db (h/mock-db)
           handler (admins/create-admin-handler db)
           request (h/mock-admin-request :post "/admin/api/admins" mock-admin
-                    {:body {:password "secure123"}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response))))))
+                    {:body {:password "secure123"}})
+          response (handler request)]
+      (is (= 400 (:status response)))))
   
   (testing "create-admin fails without password"
     (let [db (h/mock-db)
           handler (admins/create-admin-handler db)
           request (h/mock-admin-request :post "/admin/api/admins" mock-admin
-                    {:body {:email "new@example.com"}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                    {:body {:email "new@example.com"}})
+          response (handler request)]
+      (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Update Admin Tests
@@ -221,18 +220,18 @@
           handler (admins/update-admin-role-handler db)
           request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id "/role") mock-admin
                     {:path-params {:id (str test-admin-id)}
-                     :body {:role "invalid"}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response))))))
+                     :body {:role "invalid"}})
+          response (handler request)]
+      (is (= 400 (:status response)))))
   
   (testing "update-admin-role fails without role"
     (let [db (h/mock-db)
           handler (admins/update-admin-role-handler db)
           request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id "/role") mock-admin
                     {:path-params {:id (str test-admin-id)}
-                     :body {}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                     :body {}})
+          response (handler request)]
+      (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Update Admin Status Tests
@@ -257,6 +256,6 @@
           handler (admins/update-admin-status-handler db)
           request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id "/status") mock-admin
                     {:path-params {:id (str test-admin-id)}
-                     :body {:status "invalid"}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                     :body {:status "invalid"}})
+          response (handler request)]
+      (is (= 400 (:status response))))))

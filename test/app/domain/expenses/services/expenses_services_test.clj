@@ -9,8 +9,7 @@
     [app.domain.expenses.services.suppliers :as suppliers]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as hsql]
-    [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
+    [next.jdbc :as jdbc])
   (:import
     (java.util UUID)))
 
@@ -19,8 +18,8 @@
 
 (defn- count-table [db table]
   (:count (jdbc/execute-one! db
-           (hsql/format {:select [[[:count :*] :count]]
-                         :from [table]}))))
+            (hsql/format {:select [[[:count :*] :count]]
+                          :from [table]}))))
 
 (defn- now [] (java.time.Instant/now))
 
@@ -40,7 +39,7 @@
           _ (payers/set-default-payer! db (:id p2))
           p1* (payers/get-payer db (:id p1))
           p2* (payers/get-payer db (:id p2))
-          default (payers/get-default-payer db "cash")]
+          default (payers/get-default-payer db)]
       (is (false? (:is_default p1*)))
       (is (true? (:is_default p2*)))
       (is (= (:id p2) (:id default))))))
@@ -74,14 +73,14 @@
           article (articles/create-article! db {:canonical_name article-name})
           before (count-table db :price_observations)
           expense (expenses/create-expense! db
-                     {:supplier_id (:id supplier)
-                      :payer_id (:id payer)
-                      :purchased_at (now)
-                      :total_amount (bigdec "5.50")
-                      :currency "BAM"}
-                     [{:raw_label "TP"
-                       :article_id (:id article)
-                       :line_total (bigdec "5.50")}])
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "5.50")
+                     :currency "BAM"}
+                    [{:raw_label "TP"
+                      :article_id (:id article)
+                      :line_total (bigdec "5.50")}])
           after (count-table db :price_observations)]
       (is (:id expense))
       (is (= 1 (count (:items expense))))

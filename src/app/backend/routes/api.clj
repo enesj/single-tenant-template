@@ -1,21 +1,20 @@
 (ns app.backend.routes.api
   (:require
-    [app.backend.middleware.database-context :as db-context]
-    [app.backend.middleware.user :as user-middleware]
-    [app.backend.routes.entities :as entities]
-    [app.backend.services.admin.dashboard :as admin-dashboard]
-    [app.backend.services.monitoring.login-events :as login-monitoring]
-    [app.shared.http :as http]
-    [cheshire.core :as json]
-    [java-time.api :as time]
-    [malli.transform :as mt]
-    [muuntaja.core :as m]
-    [reitit.coercion.malli :as malli-coercion]
-    [reitit.ring.coercion :as coercion]
-    [reitit.ring.middleware.muuntaja :as muuntaja]
-    [reitit.ring.middleware.parameters :as parameters]
-    [ring.util.response :as response]
-    [taoensso.timbre :as log]))
+   [app.backend.middleware.user :as user-middleware]
+   [app.backend.routes.entities :as entities]
+   [app.backend.services.admin.dashboard :as admin-dashboard]
+   [app.backend.services.monitoring.login-events :as login-monitoring]
+   [app.shared.http :as http]
+   [cheshire.core :as json]
+   [java-time.api :as time]
+   [malli.transform :as mt]
+   [muuntaja.core :as m]
+   [reitit.coercion.malli :as malli-coercion]
+   [reitit.ring.coercion :as coercion]
+   [reitit.ring.middleware.muuntaja :as muuntaja]
+   [reitit.ring.middleware.parameters :as parameters]
+   [ring.util.response :as response]
+   [taoensso.timbre :as log]))
 
 (def custom-string-transformer
   (mt/transformer

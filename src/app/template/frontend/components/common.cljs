@@ -1,11 +1,10 @@
 (ns app.template.frontend.components.common
   (:require
-    [app.template.frontend.events.list.crud :as crud-events]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui] :as uix]
-    [uix.hooks.alpha :as hooks]
-    [uix.re-frame :as urf]))
+   [app.template.frontend.events.list.crud :as crud-events]
+   [re-frame.core :as rf]
+   [uix.core :refer [$ defui] :as uix]
+   [uix.hooks.alpha :as hooks]
+   [uix.re-frame :as urf]))
 
 (def label-props
   {:text {:type :string :required true}

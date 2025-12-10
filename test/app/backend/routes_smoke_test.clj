@@ -1,13 +1,14 @@
 (ns app.backend.routes-smoke-test
   (:require
-    [app.backend.routes :as routes]
-    [app.backend.routes.admin-api :as admin-api]
-    [app.backend.webserver :as webserver]
-    [app.backend.services.admin.dashboard :as admin-dashboard]
-    [app.backend.services.monitoring.login-events :as login-monitoring]
-    [cheshire.core :as json]
-    [clojure.test :refer [deftest is testing]]
-    [ring.mock.request :as mock]))
+   [app.backend.routes :as routes]
+   [app.backend.routes.admin-api :as admin-api]
+   [app.backend.services.admin.dashboard :as admin-dashboard]
+   [app.backend.services.monitoring.login-events :as login-monitoring]
+   [app.backend.webserver :as webserver]
+   [cheshire.core :as json]
+    [clojure.string :as str]
+   [clojure.test :refer [deftest is]]
+   [ring.mock.request :as mock]))
 
 (defn- stub-service-container []
   {:models-data {}
@@ -47,7 +48,7 @@
     (let [handler (build-handler (stub-service-container))
           resp (handler (mock/request :get "/"))]
       (is (= 200 (:status resp)))
-      (is (clojure.string/includes? (get-in resp [:headers "Content-Type"]) "text/html"))
+      (is (str/includes? (get-in resp [:headers "Content-Type"]) "text/html"))
       (is (re-find #"Test route works|<" (slurp-body resp))))))
 
 (deftest metrics-endpoint-returns-json

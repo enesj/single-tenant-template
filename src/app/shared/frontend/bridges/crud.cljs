@@ -122,13 +122,13 @@
 ;; correct operation keyword. run-bridge-operation does not pass the
 ;; operation into default-effect-fn, so the event registrations below
 ;; use these wrappers.
-(defn- default-delete-failure [cofx entity-type error]
+(defn default-delete-failure [cofx entity-type error]
   (default-crud-failure cofx entity-type :delete error))
 
-(defn- default-create-failure [cofx entity-type error]
+(defn default-create-failure [cofx entity-type error]
   (default-crud-failure cofx entity-type :create error))
 
-(defn- default-update-failure [cofx entity-type error]
+(defn default-update-failure [cofx entity-type error]
   (default-crud-failure cofx entity-type :update error))
 
 ;; ============================================================================

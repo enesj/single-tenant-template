@@ -1,8 +1,10 @@
 (ns user
+  {:clj-kondo/ignore [:unused-namespace :unused-refer]}
   (:require
    [clojure.string :as str]
    [clojure.tools.namespace.repl :refer [disable-reload! disable-unload!]]
    [core :as core]
+   [snitch.core :refer [defn* defmethod* *fn *let]]
    [taoensso.timbre :as log])
   (:import
    (java.time ZoneId)
@@ -28,10 +30,6 @@
                                level-color (-> level name str/upper-case) reset-color
                                " \033[90m[" (or ?ns-str ?file "?") ":" ?line "]\033[0m - "
                                (force msg_))))}}})
-
-;; The snitch.core namespace is required for development utilities but not directly referenced
-^{:clj-kondo/ignore [:unused-namespace]}
-(require '[snitch.core :refer [defn* defmethod* *fn *let]])
 
 (disable-unload!)
 (disable-reload!)

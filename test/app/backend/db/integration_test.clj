@@ -7,18 +7,17 @@
    
    Tests use transaction rollback for isolation - no data persists."
   (:require
-    [app.backend.fixtures :as fixtures]
-    [app.backend.services.admin :as admin-service]
-    [app.backend.services.admin.auth :as admin-auth]
-    [app.backend.services.admin.audit :as audit-service]
-    [app.backend.services.admin.users :as user-service]
-    [app.shared.adapters.database :as db-adapter]
-    [clojure.test :refer [deftest is testing use-fixtures]]
-    [honey.sql :as hsql]
-    [next.jdbc :as jdbc]
-    [taoensso.timbre :as log])
+   [app.backend.fixtures :as fixtures]
+   [app.backend.services.admin.audit :as audit-service]
+   [app.backend.services.admin.auth :as admin-auth]
+   [app.backend.services.admin.users :as user-service]
+    [clojure.set :as set]
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [honey.sql :as hsql]
+    [java-time.api :as jt]
+    [next.jdbc :as jdbc])
   (:import
-    [java.util UUID]))
+   [java.util UUID]))
 
 ;; ============================================================================
 ;; Test Fixtures - Transaction Rollback for Isolation
@@ -32,7 +31,7 @@
 
 (defn- create-test-admin!
   "Create a test admin within the current transaction"
-  [db & [{:keys [email full_name role] :as opts}]]
+  [db & [{:keys [email full_name role] :as _opts}]]
   (let [admin-data {:email (or email (str "admin-" (UUID/randomUUID) "@test.com"))
                     :password "test-password-123"
                     :full_name (or full_name "Test Admin")
@@ -43,9 +42,9 @@
 
 (defn- create-test-user!
   "Create a test user within the current transaction"
-  [db admin-id & [{:keys [email full_name role status] :as opts}]]
+  [db _admin-id & [{:keys [email full_name role status] :as _opts}]]
   (let [user-id (UUID/randomUUID)
-        now (java-time.api/instant)
+      now (jt/instant)
         user-email (or email (str "user-" (UUID/randomUUID) "@test.com"))]
     ;; Insert user directly with all required fields
     ;; Note: PostgreSQL enum types use snake_case (user_role, user_status)
@@ -66,13 +65,6 @@
       (hsql/format {:select [:*]
                     :from [:users]
                     :where [:= :id user-id]}))))
-
-(defn- count-table
-  "Count rows in a table"
-  [db table]
-  (:count (jdbc/execute-one! db
-            (hsql/format {:select [[[:count :*] :count]]
-                          :from [table]}))))
 
 ;; ============================================================================
 ;; Database Connection Tests
@@ -287,4 +279,4 @@
         ;; Pages should have different users
         (let [page1-ids (set (map #(or (:id %) (:users/id %)) page1))
               page2-ids (set (map #(or (:id %) (:users/id %)) page2))]
-          (is (empty? (clojure.set/intersection page1-ids page2-ids))))))))
+          (is (empty? (set/intersection page1-ids page2-ids))))))))

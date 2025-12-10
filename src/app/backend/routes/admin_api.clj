@@ -1,21 +1,20 @@
 (ns app.backend.routes.admin-api
   "Refactored admin API routes - now composed from focused namespaces"
   (:require
-    [app.backend.middleware.admin :as admin-middleware] ;; Focused admin route namespaces
-    [app.backend.routes.admin.admins :as admin-admins]
-    [app.backend.routes.admin.auth :as admin-auth]
-    [app.backend.routes.admin.dashboard :as admin-dashboard]
-    [app.backend.routes.admin.entities :as admin-entities]
-    [app.backend.routes.admin.audit :as admin-audit]
-    [app.backend.routes.admin.login-events :as admin-login-events]
-    [app.backend.routes.admin.password :as admin-password]
-    [app.backend.routes.admin.settings :as admin-settings]
-    [app.backend.routes.admin.user-bulk :as admin-user-bulk]
-    [app.backend.routes.admin.user-operations :as admin-user-ops]
-    [app.backend.routes.admin.users :as admin-users]
-    [app.backend.routes.admin.utils :as admin-utils]
-    [app.domain.expenses.routes.core :as expenses-routes]
-    [taoensso.timbre :as log]))
+   [app.backend.middleware.admin :as admin-middleware] ;; Focused admin route namespaces
+   [app.backend.routes.admin.admins :as admin-admins]
+   [app.backend.routes.admin.audit :as admin-audit]
+   [app.backend.routes.admin.auth :as admin-auth]
+   [app.backend.routes.admin.dashboard :as admin-dashboard]
+   [app.backend.routes.admin.entities :as admin-entities]
+   [app.backend.routes.admin.login-events :as admin-login-events]
+   [app.backend.routes.admin.password :as admin-password]
+   [app.backend.routes.admin.settings :as admin-settings]
+   [app.backend.routes.admin.user-bulk :as admin-user-bulk]
+   [app.backend.routes.admin.user-operations :as admin-user-ops]
+   [app.backend.routes.admin.users :as admin-users]
+   [app.backend.routes.admin.utils :as admin-utils]
+   [app.domain.expenses.routes.core :as expenses-routes]))
 
 
 (defn admin-api-routes

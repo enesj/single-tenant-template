@@ -1,8 +1,7 @@
 (ns app.template.frontend.components.list.fields
   (:require
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+   [uix.core :refer [$ defui]]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (defui select-field-value [{:keys [field value]}]
   (let [raw-options (:options field)
@@ -29,7 +28,7 @@
 
 (defui truncated-text-value
   "Component that renders text with truncation and hover tooltip for full content."
-  [{:keys [text max-length field-type field-id]}]
+  [{:keys [text max-length field-type _field-id]}]
   (let [text-str (str (if (keyword? text) (name text) (or text "")))
         needs-truncation? (> (count text-str) max-length)
         display-text (truncate-text text-str max-length)

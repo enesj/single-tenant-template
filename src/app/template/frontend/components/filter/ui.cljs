@@ -10,7 +10,7 @@
 
 ;; UI Component for text field filtering
 (defui text-field-filter
-  [{:keys [_field-id _field-label filter-text set-filter-text matching-count entity-type]}]
+  [{:keys [_field-id _field-label filter-text set-filter-text matching-count _entity-type]}]
   ($ :div
     ;; Field input section
     ($ :div {:class "p-4"}
@@ -67,7 +67,7 @@
            :matching-count matching-count})))))
 
 (defui filter-actions
-  [{:keys [entity-type field-id filter-text set-filter-text field-type on-close] :as props}]
+  [{:keys [entity-type field-id _filter-text set-filter-text _field-type on-close] :as props}]
   (let [;; Extract the date filter handlers if they exist
         set-filter-from (get props :set-filter-from)
         set-filter-to (get props :set-filter-to)

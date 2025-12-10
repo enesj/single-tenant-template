@@ -82,9 +82,9 @@
     (let [db (h/mock-db)
           handler (user-bulk/bulk-update-user-status-handler db)
           request (h/mock-admin-request :put "/admin/api/users/bulk-status" mock-admin
-                    {:body {:user_ids [(str test-user-id-1)]}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                    {:body {:user_ids [(str test-user-id-1)]}})
+          response (handler request)]
+      (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Bulk Update Role Tests
@@ -111,9 +111,9 @@
     (let [db (h/mock-db)
           handler (user-bulk/bulk-update-user-role-handler db)
           request (h/mock-admin-request :put "/admin/api/users/bulk-role" mock-admin
-                    {:body {:user_ids [(str test-user-id-1)]}})]
-      (let [response (handler request)]
-        (is (= 400 (:status response)))))))
+                    {:body {:user_ids [(str test-user-id-1)]}})
+          response (handler request)]
+      (is (= 400 (:status response))))))
 
 ;; ============================================================================
 ;; Batch Update Tests
@@ -141,10 +141,10 @@
     (let [db (h/mock-db)
           handler (user-bulk/batch-update-users-handler db)
           request (h/mock-admin-request :put "/admin/api/users/batch" mock-admin
-                    {:body {:items []}})]
-      (let [response (handler request)]
-        ;; error-response without explicit status defaults to 500
-        (is (contains? #{400 500} (:status response)))))))
+                    {:body {:items []}})
+          response (handler request)]
+      ;; error-response without explicit status defaults to 500
+      (is (contains? #{400 500} (:status response))))))
 
 ;; ============================================================================
 ;; Export Users Tests

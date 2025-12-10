@@ -29,7 +29,7 @@
 
 (rf/reg-event-fx
   :subscription/fetch-status
-  (fn [{:keys [db]} _]
+  (fn [{:keys [_db]} _]
     {:dispatch [:subscription/set-loading true]
      :http-xhrio (http/api-request
                    {:method :get
@@ -80,7 +80,7 @@
 
 (rf/reg-event-fx
   :subscription/create
-  (fn [{:keys [db]} [_ subscription-request]]
+  (fn [{:keys [_db]} [_ subscription-request]]
     {:dispatch [:subscription/set-loading true]
      :http-xhrio (http/api-request
                    {:method :post
@@ -110,7 +110,7 @@
 
 (rf/reg-event-fx
   :subscription/update
-  (fn [{:keys [db]} [_ update-request]]
+  (fn [{:keys [_db]} [_ update-request]]
     {:dispatch [:subscription/set-loading true]
      :http-xhrio (http/api-request
                    {:method :put
@@ -140,7 +140,7 @@
 
 (rf/reg-event-fx
   :subscription/cancel
-  (fn [{:keys [db]} [_ immediate?]]
+  (fn [{:keys [_db]} [_ immediate?]]
     {:dispatch [:subscription/set-loading true]
      :http-xhrio (http/api-request
                    {:method :delete

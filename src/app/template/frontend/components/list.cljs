@@ -1,36 +1,35 @@
 (ns app.template.frontend.components.list
   (:require
-    [app.shared.keywords :as kw]
-    [app.template.frontend.events.config :as config-events]
-    [app.frontend.utils.id :as id-utils]
-    [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
-    [app.template.frontend.components.filter :refer [filter-form]]
-    [app.template.frontend.components.filter.ui :refer [compact-active-filters]]
-    [app.template.frontend.components.list.rows :refer [render-row]]
-    [app.template.frontend.components.list.table :refer [make-table-headers]]
-    [app.template.frontend.components.list.ui :refer [add-item-section
-                                                      header-section]]
-    [app.template.frontend.components.messages :refer [error-alert]]
-    [app.template.frontend.components.pagination :refer [pagination]]
-    [app.template.frontend.components.table :refer [table]]
-    [app.template.frontend.events.list.batch :as batch-events]
-    [app.template.frontend.events.list.filters :as filter-events]
-    [app.template.frontend.events.list.selection :as selection-events]
-    [app.template.frontend.events.list.settings :as settings-events]
-    [app.template.frontend.events.list.ui-state :as ui-events]
-    [app.template.frontend.subs.entity :as entity-subs]
-    [app.template.frontend.subs.list :as list-subs]
-    [app.template.frontend.subs.ui :as ui-subs]
-    [app.template.frontend.utils.column-config :as column-config]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]
-    [uix.core :as uix :refer [$ defui use-effect use-state]]
-    [uix.dom]
-    [uix.re-frame :refer [use-subscribe]]))
+   [app.frontend.utils.id :as id-utils]
+   [app.shared.keywords :as kw]
+   [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
+   [app.template.frontend.components.filter :refer [filter-form]]
+   [app.template.frontend.components.filter.ui :refer [compact-active-filters]]
+   [app.template.frontend.components.list.rows :refer [render-row]]
+   [app.template.frontend.components.list.table :refer [make-table-headers]]
+   [app.template.frontend.components.list.ui :refer [add-item-section
+                                                     header-section]]
+   [app.template.frontend.components.messages :refer [error-alert]]
+   [app.template.frontend.components.pagination :refer [pagination]]
+   [app.template.frontend.components.table :refer [table]]
+   [app.template.frontend.events.config :as config-events]
+   [app.template.frontend.events.list.batch :as batch-events]
+   [app.template.frontend.events.list.filters :as filter-events]
+   [app.template.frontend.events.list.selection :as selection-events]
+   [app.template.frontend.events.list.settings :as settings-events]
+   [app.template.frontend.events.list.ui-state :as ui-events]
+   [app.template.frontend.subs.entity :as entity-subs]
+   [app.template.frontend.subs.list :as list-subs]
+   [app.template.frontend.subs.ui :as ui-subs]
+   [app.template.frontend.utils.column-config :as column-config]
+   [re-frame.core :as rf]
+   [uix.core :as uix :refer [$ defui use-effect use-state]]
+   [uix.dom]
+   [uix.re-frame :refer [use-subscribe]]))
 
 (defui list-view
   "Renders a list of items with pagination, add form, and error handling."
-  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page]
+  [{:keys [entity-name entity-spec title display-settings filterable-columns _per-page]
     :as props}]
   (let [items (use-subscribe [::entity-subs/paginated-entities entity-name])
         loading? (use-subscribe [::entity-subs/loading? entity-name])

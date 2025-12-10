@@ -2,8 +2,7 @@
   "Generic database and configuration utilities for all domains.
 
   This namespace provides universal utilities for database state management
-  and configuration loading patterns."
-  (:require [taoensso.timbre :as log]))
+  and configuration loading patterns.")
 
 (defn assoc-paths
   "Utility to assoc multiple `[path value]` pairs in a db map."

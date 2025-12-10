@@ -102,6 +102,37 @@
       (sql/format {:delete-from :articles
                    :where [:= :id id]}))))
 
+(defn count-articles
+  "Count total articles, optionally with search filter."
+  [db & [search]]
+  (let [base-query {:select [[[:count :*] :total]]
+                    :from [:articles]}
+        final-query (if search
+                      (assoc base-query :where [:or
+                                                [:ilike :canonical_name (str "%" search "%")]
+                                                [:ilike :normalized_key (str "%" search "%")]
+                                                [:ilike :barcode (str "%" search "%")]])
+                      base-query)]
+    (:total (jdbc/execute-one! db (sql/format final-query)
+              {:builder-fn rs/as-unqualified-lower-maps}))))
+
+(defn search-articles
+  "Search articles for autocomplete."
+  [db query {:keys [limit] :or {limit 10}}]
+  (when (and query (>= (count query) 2))
+    (let [search-pattern (str "%" query "%")]
+      (jdbc/execute!
+        db
+        (sql/format {:select [:*]
+                     :from [:articles]
+                     :where [:or
+                             [:ilike :canonical_name search-pattern]
+                             [:ilike :normalized_key search-pattern]
+                             [:ilike :barcode search-pattern]]
+                     :order-by [[:canonical_name :asc]]
+                     :limit limit})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
+
 ;; ============================================================================
 ;; Aliases
 ;; ============================================================================

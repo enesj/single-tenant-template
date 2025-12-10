@@ -221,7 +221,7 @@
 
 (defn- build-field-spec-from-config
   "Build a field spec from form-fields.edn field configuration"
-  [field-key field-config editing?]
+  [field-key field-config _editing?]
   (let [base {:id field-key
               :label (or (:label field-config)
                        (-> (name field-key)

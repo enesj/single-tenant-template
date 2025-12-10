@@ -3,7 +3,7 @@
   (:require
     [app.template.frontend.components.button :refer [button]]
     [clojure.string :as str]
-    [uix.core :refer [$ defui]]))
+    [uix.core :refer [$ defui use-effect]]))
 
 ;; ============================================================================
 ;; Notification Banner Component
@@ -84,6 +84,12 @@
                       :warning "ds-alert-warning"
                       :error "ds-alert-error"
                       "ds-alert-info")]
+    (use-effect
+      (fn []
+        (when (and on-dismiss (pos? duration))
+          (let [timer (js/setTimeout on-dismiss duration)]
+            #(js/clearTimeout timer))))
+      [on-dismiss duration])
     ($ :div {:class (str "ds-toast " position)}
       ($ :div {:class (str "ds-alert " alert-class)}
         ($ :span message)

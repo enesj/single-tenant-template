@@ -5,9 +5,8 @@
    They handle request/response conversion and delegate to the CRUD service
    for business logic."
   (:require
-    [app.template.backend.crud.protocols :as crud-protocols]
-    [app.template.backend.routes.utils :as route-utils]
-    [taoensso.timbre :as log]))
+   [app.template.backend.crud.protocols :as crud-protocols]
+   [app.template.backend.routes.utils :as route-utils]))
 
 (defn get-items-handler
   "Create a handler for GET /api/{entity} - retrieve multiple items."

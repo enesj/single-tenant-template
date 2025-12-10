@@ -1,9 +1,27 @@
 (ns app.domain.expenses.services.service-configs
   "Service configuration maps for expenses domain entities."
   (:require
+    [clojure.string :as str]
     [app.domain.expenses.services.services-factory :as factory]
     [app.domain.expenses.services.articles :as articles]
-    [app.domain.expenses.services.price-history :as price-history]))
+    [app.domain.expenses.services.price-history :as price-history])
+  (:import
+    [java.util UUID]))
+
+;; ============================================================================
+;; Shared Normalization Functions
+;; ============================================================================
+
+(defn normalize-supplier-key
+  "Normalize supplier name to lowercase, replace spaces with hyphens, remove special chars.
+   Used for deduplication and fuzzy matching."
+  [name]
+  (when name
+    (-> name
+      str/trim
+      str/lower-case
+      (str/replace #"[^a-z0-9\s-]" "")
+      (str/replace #"\s+" "-"))))
 
 ;; ============================================================================
 ;; Simple Entity Configs
@@ -62,39 +80,46 @@
                       :updated-at :updated_at}
    :default-order-by :display_name
    :search-fields [:display_name :normalized_key]
-   :field-transformers {:normalized_key (fn [name]
-                                          (when name
-                                            (-> name
-                                                clojure.string/trim
-                                                clojure.string/lower-case
-                                                (clojure.string/replace #"[^a-z0-9\s-]" "")
-                                                (clojure.string/replace #"\s+" "-"))))}
+   :field-transformers {:normalized_key normalize-supplier-key}
    :before-insert (fn [data]
                     (let [display-name (:display_name data)]
                       (assoc data
-                             :normalized_key ((:field-transformers supplier-config) :normalized-key display-name)
-                             :id (java.util.UUID/randomUUID))))
-   :before-update (fn [id updates]
+                        :normalized_key (normalize-supplier-key display-name)
+                        :id (UUID/randomUUID))))
+   :before-update (fn [_id updates]
                     (if (:display_name updates)
-                      (assoc updates :normalized_key
-                                   ((:field-transformers supplier-config) :normalized-key (:display_name updates))
-                                   :updated_at [:now])
-                      updates))
+                      (assoc updates
+                        :normalized_key (normalize-supplier-key (:display_name updates))
+                        :updated_at [:now])
+                      (assoc updates :updated_at [:now])))
    :has-search? true
    :has-count? true})
 
 (def payer-config
   {:table-name "payers"
    :primary-key :id
-   :required-fields [:display_name]
-   :allowed-order-by {:display-name :display_name
-                      :payer-type :payer_type
+   :required-fields [:type :label]
+   :allowed-order-by {:label :label
+                      :payer-type :type
                       :created-at :created_at
                       :updated-at :updated_at}
-   :default-order-by :display_name
-   :search-fields [:display_name :payer_type]
+   :default-order-by :label
+   :search-fields [:label :type]
    :before-insert (fn [data]
-                    (assoc data :id (java.util.UUID/randomUUID)))
+                    (when-not (get data :type)
+                      (throw (ex-info "type is required" {:data data})))
+                    (when-not (#{"cash" "card" "account" "person"} (:type data))
+                      (throw (ex-info "Invalid payer type"
+                               {:type (:type data)
+                                :valid #{"cash" "card" "account" "person"}})))
+                    (-> data
+                      (assoc :id (UUID/randomUUID))
+                      (update :type #(vector :cast % :payer_type))
+                      (update :is_default #(boolean %))))
+   :before-update (fn [_id updates]
+                    (cond-> updates
+                      (:type updates) (update :type #(vector :cast % :payer_type))
+                      true (assoc :updated_at [:now])))
    :has-search? true
    :has-count? true})
 
@@ -103,67 +128,93 @@
    :primary-key :id
    :required-fields [:canonical_name]
    :allowed-order-by {:canonical-name :canonical_name
+                      :normalized-key :normalized_key
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :canonical_name
-   :search-fields [:canonical_name :description]
-   :field-transformers {:canonical_name articles/normalize-article-key}
+   :search-fields [:canonical_name :normalized_key :barcode]
+   :field-transformers {:normalized_key articles/normalize-article-key}
    :before-insert (fn [data]
-                    (assoc data :id (java.util.UUID/randomUUID)))
+                    (let [canonical-name (:canonical_name data)]
+                      (-> data
+                        (assoc :id (UUID/randomUUID))
+                        (assoc :normalized_key (articles/normalize-article-key canonical-name)))))
+   :before-update (fn [_id updates]
+                    (cond-> updates
+                      (:canonical_name updates)
+                      (assoc :normalized_key (articles/normalize-article-key (:canonical_name updates)))
+                      true (assoc :updated_at [:now])))
    :has-search? true
    :has-count? true})
 
 (def expense-config
   {:table-name "expenses"
    :primary-key :id
-   :required-fields [:supplier_id :payer_id :expense_date]
-   :allowed-order-by {:expense-date :expense_date
+   :required-fields [:supplier_id :payer_id :purchased_at :total_amount]
+   :allowed-order-by {:expense-date :purchased_at
+                      :purchased-at :purchased_at
                       :created-at :created_at
                       :updated-at :updated_at
                       :total-amount :total_amount}
-   :default-order-by :expense_date
-   :search-fields [:s/display_name :p/display_name]
-   :joins [[:suppliers :s] [:= :s/id :supplier_id]
-           [:payers :p] [:= :p/id :payer_id]]
+   :default-order-by :purchased_at
+   :search-fields [:s/display_name :p/label]
+   :joins [[:suppliers :s] [:= :s/id :e/supplier_id]
+           [:payers :p] [:= :p/id :e/payer_id]]
    :select-fields [[:e.*]
                    [:s/display_name :supplier_display_name]
-                   [:p/display_name :payer_display_name]]
+                   [:s/normalized_key :supplier_normalized_key]
+                   [:p/label :payer_label]
+                   [:p/type :payer_type]]
    :before-insert (fn [data]
-                    (assoc data :id (java.util.UUID/randomUUID)))
+                    (-> data
+                      (assoc :id (UUID/randomUUID))
+                      (update :currency #(when % [:cast % :currency]))
+                      (update :is_posted #(if (nil? %) true (boolean %)))))
+   :before-update (fn [_id updates]
+                    (-> updates
+                      (update :currency #(when % [:cast % :currency]))
+                      (assoc :updated_at [:now])))
    :has-count? true})
 
 (def receipt-config
   {:table-name "receipts"
    :primary-key :id
-   :required-fields [:supplier_id :receipt_date :total_amount]
-   :allowed-order-by {:receipt-date :receipt_date
-                      :created-at :created_at
-                      :total-amount :total_amount}
-   :default-order-by :receipt_date
-   :search-fields [:s/display_name :receipt_number]
-   :joins [[:suppliers :s] [:= :s/id :supplier_id]]
-   :select-fields [[:r.*]
-                   [:s/display_name :supplier_display_name]]
+   :required-fields [:storage_key]
+   :allowed-order-by {:created-at :created_at
+                      :updated-at :updated_at
+                      :status :status}
+   :default-order-by :created_at
+   :search-fields [:original_filename :storage_key]
    :before-insert (fn [data]
-                    (assoc data :id (java.util.UUID/randomUUID)))
-   :has-count? true})
+                    (-> data
+                      (assoc :id (UUID/randomUUID))
+                      (assoc :status "uploaded")
+                      (update :status #(vector :cast % :receipt_status))))
+   :has-count? true
+   ;; Note: receipts have many custom operations (upload, status transitions, etc)
+   ;; that are kept in receipts.clj - this config is for basic CRUD only
+   :custom-service? true})
 
 (def price-history-config
-  {:table-name "price_history"
+  {:table-name "price_observations"
    :primary-key :id
-   :required-fields [:article_id :supplier_id :price_date :unit_price]
-   :allowed-order-by {:price-date :price_date
+   :required-fields [:article_id :supplier_id :observed_at :line_total]
+   :allowed-order-by {:observed-at :observed_at
                       :created-at :created_at
-                      :unit-price :unit_price}
-   :default-order-by :price_date
+                      :unit-price :unit_price
+                      :line-total :line_total}
+   :default-order-by :observed_at
    :search-fields [:a/canonical_name :s/display_name]
-   :joins [[:articles :a] [:= :a/id :article_id]
-           [:suppliers :s] [:= :s/id :supplier_id]]
-   :select-fields [[:ph.*]
+   :joins [[:articles :a] [:= :a/id :po/article_id]
+           [:suppliers :s] [:= :s/id :po/supplier_id]]
+   :select-fields [[:po.*]
                    [:a/canonical_name :article_canonical_name]
                    [:s/display_name :supplier_display_name]]
    :before-insert (fn [data]
-                    (assoc data :id (java.util.UUID/randomUUID)))
+                    (-> data
+                      (assoc :id (UUID/randomUUID))
+                      (update :currency #(when % [:cast % :currency]))
+                      (update :observed_at #(or % [:now]))))
    :has-count? true})
 
 (def report-config
@@ -176,7 +227,7 @@
    :search-fields [:report_type]
    :before-insert (fn [data]
                     (assoc data :id (java.util.UUID/randomUUID)
-                           :created_at [:now]))
+                      :created_at [:now]))
    :has-count? true})
 
 ;; ============================================================================

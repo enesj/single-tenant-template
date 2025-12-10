@@ -20,7 +20,7 @@
 (defui filter-form
   "Inline filter form component that accepts props instead of using modal state"
   {:prop-types filter-form-props}
-  [{:keys [entity-type field-spec initial-value on-close on-apply on-field-switch] :as props}]
+  [{:keys [entity-type field-spec initial-value on-close on-apply _on-field-switch] :as _props}]
   (let [;; Subscribe to required data
         all-entities (use-subscribe [::entity-subs/entities entity-type])
         items (use-subscribe [::entity-subs/entities entity-type])

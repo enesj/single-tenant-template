@@ -1,17 +1,16 @@
 (ns app.template.frontend.events.list.batch
   "Batch operations for list views - bulk updates and inline editing"
   (:require
-    [app.admin.frontend.events.users.utils :as admin-utils]
-    [app.frontend.utils.id :as id-utils]
-    [app.template.frontend.api :as api]
-    [app.template.frontend.api.http :as http]
-    [app.template.frontend.db.db :refer [common-interceptors]]
-    [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.form :as form-events]
-    [clojure.string]
-    [day8.re-frame.http-fx]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+   [app.admin.frontend.events.users.utils :as admin-utils]
+   [app.frontend.utils.id :as id-utils]
+   [app.template.frontend.api :as api]
+   [app.template.frontend.api.http :as http]
+   [app.template.frontend.db.db :refer [common-interceptors]]
+   [app.template.frontend.db.paths :as paths]
+   [app.template.frontend.events.form :as form-events]
+   [clojure.string]
+   [day8.re-frame.http-fx]
+   [re-frame.core :as rf]))
 
 ;;; -------------------------
 ;;; Batch Operations

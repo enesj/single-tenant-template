@@ -1,11 +1,10 @@
 (ns app.template.backend.db.users
   "Template user database operations - extracted from domain-specific code"
   (:require
-    [app.shared.field-casting :as field-casting]
-    [app.template.backend.db.protocols :as db-protocols]
-    [honey.sql :as sql]
-    [next.jdbc :as jdbc]
-    [taoensso.timbre :as log]))
+   [app.shared.field-casting :as field-casting]
+   [app.template.backend.db.protocols :as db-protocols]
+   [honey.sql :as sql]
+   [next.jdbc :as jdbc]))
 
 ;; User lookup functions using database adapter
 

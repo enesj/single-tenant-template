@@ -34,7 +34,7 @@
       (utils/handle-uuid-request request :id
         (fn [audit-id request]
           (let [admin (:admin request)]
-            (log/info "Admin" (:email admin) "attempting to delete audit log" audit-id)
+            (log/info "Admin" (str (:email admin)) "attempting to delete audit log" audit-id)
 
             ;; Execute delete with admin context - set RLS bypass
             (let [result (next-jdbc/with-transaction [tx db]
@@ -71,7 +71,7 @@
                          (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
                          ;; Execute the bulk delete using ANY for array matching
                          (next-jdbc/execute-one! tx
-                           [(str "DELETE FROM audit_logs WHERE id = ANY(?::uuid[])")
+                           ["DELETE FROM audit_logs WHERE id = ANY(?::uuid[])"
                             (into-array String (map str parsed-ids))]))
                 deleted-count (:next.jdbc/update-count result)]
             (log/info "Successfully bulk deleted" deleted-count "audit logs by admin" (:email admin))

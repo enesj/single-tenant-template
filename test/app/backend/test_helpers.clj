@@ -6,6 +6,7 @@
    - Handler builders with mocked dependencies
    - Request/response helpers for Ring mock testing
    - JSON parsing utilities"
+  (:refer-clojure :exclude [random-uuid])
   (:require
     [app.backend.routes :as routes]
     [app.backend.routes.admin-api :as admin-api]
@@ -13,6 +14,7 @@
     [app.backend.services.monitoring.login-events :as login-monitoring]
     [app.backend.webserver :as webserver]
     [cheshire.core :as json]
+    [clojure.string :as str]
     [ring.mock.request :as mock]))
 
 ;; ============================================================================
@@ -215,13 +217,13 @@
   "Check if response has JSON content type."
   [resp]
   (some-> (get-in resp [:headers "Content-Type"])
-    (clojure.string/includes? "application/json")))
+    (str/includes? "application/json")))
 
 (defn html-content-type?
   "Check if response has HTML content type."
   [resp]
   (some-> (get-in resp [:headers "Content-Type"])
-    (clojure.string/includes? "text/html")))
+    (str/includes? "text/html")))
 
 ;; ============================================================================
 ;; Test Data Generators

@@ -1,12 +1,11 @@
 (ns core
   (:require
-    [app.backend.core :as backend]
-    [nrepl.server :as nrepl]
-    [shadow.cljs.devtools.api :as shadow.api]
-    [shadow.cljs.devtools.server :as shadow.server]
-    [system.core :refer [restart-system start-system stop-system]]
-    [system.watchers :as watchers]
-    [taoensso.timbre :as log]))
+   [app.backend.core :as backend]
+   [nrepl.server :as nrepl]
+   [shadow.cljs.devtools.api :as shadow.api]
+   [shadow.cljs.devtools.server :as shadow.server]
+   [system.core :refer [restart-system start-system]]
+   [system.watchers :as watchers]))
 
 (defn suppress-stderr []
   (let [err (java.io.PrintStream. "/dev/null")]

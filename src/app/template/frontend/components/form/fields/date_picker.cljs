@@ -1,12 +1,11 @@
 (ns app.template.frontend.components.form.fields.date-picker
   "Date picker component using React Day Picker"
   (:require
-    ["react-day-picker" :refer [DayPicker]]
-    [app.shared.date :as date-utils]
-    [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.common :as common]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$ defui]]))
+   ["react-day-picker" :refer [DayPicker]]
+   [app.shared.date :as date-utils]
+   [app.template.frontend.components.button :refer [button]]
+   [app.template.frontend.components.common :as common]
+   [uix.core :refer [$ defui]]))
 
 ;; parse-date-string function moved to utils.date namespace
 
@@ -49,22 +48,22 @@
                                 (let [^js date-value date-value]
                                   (if (and (.-from date-value) (.-to date-value))
                                     (let [from-str (try (.toLocaleDateString (.-from date-value))
-                                                     (catch :default e "?"))
+                                                     (catch :default _e "?"))
                                           to-str (try (.toLocaleDateString (.-to date-value))
-                                                   (catch :default e "?"))]
+                                                   (catch :default _e "?"))]
                                       (str from-str " - " to-str))
 
                                     ;; Range mode with only from date
                                     (when (.-from date-value)
                                       (try (.toLocaleDateString (.-from date-value))
-                                        (catch :default e "Invalid date")))))
+                                        (catch :default _e "Invalid date")))))
 
                                 ;; This condition is now handled in the first range mode case above
 
                                 ;; Single date mode
                                 date-value
                                 (try (.toLocaleDateString date-value)
-                                  (catch :default e "Invalid date"))
+                                  (catch :default _e "Invalid date"))
 
                                 :else
                                 (if is-range-mode? "Select date range" "Select a date")))]
