@@ -35,5 +35,5 @@ npm run test:cljs 2>&1 | tee /tmp/ops-fe-test.txt
 
 ## Config Tips
 - Override profiles via `:dev`/`:test` in `config/base.edn`; never commit real secrets.
-- Admin UI hardcoded view settings live in `resources/public/admin/ui-config/view-options.edn`.
+- Admin UI hardcoded view settings live in `src/app/admin/frontend/config/view-options.edn`.
 - Keep `config/base.edn` in sync with docs; update this file if ports/envs change.

@@ -198,7 +198,7 @@
       ($ :h4 {:class "font-bold mb-2"} "About Hardcoded Settings")
       ($ :p {:class "text-sm mb-2"}
         "Hardcoded settings are defined in "
-        ($ :code {:class "bg-base-300 px-1 rounded"} "resources/public/admin/ui-config/view-options.edn")
+        ($ :code {:class "bg-base-300 px-1 rounded"} "src/app/admin/frontend/config/view-options.edn")
         " and control which list view toggles and action buttons are locked for each entity page.")
       ($ :p {:class "text-sm mb-2"}
         "Domain groupings and classifications are configured in the application code within this settings page.")

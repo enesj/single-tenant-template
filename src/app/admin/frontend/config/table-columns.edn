@@ -1,0 +1,293 @@
+{:users
+ {:available-columns
+  [:id
+   :email
+   :full-name
+   :status
+   :role
+   :last-login-at
+   :email-verified-at
+   :created-at
+   :updated-at],
+  :default-hidden-columns
+  [:last-login-at :updated-at],
+
+  :unfilterable-columns
+  [:id
+   :email-verified-at],
+
+  :unsortable-columns
+  [:id
+   :role
+   :last-login-at
+   :email-verified-at
+   :updated-at],
+  :always-visible [:id :email],
+
+  :computed-fields {},
+  :column-config
+  {:role {:width "100px", :formatter :role-badge},
+   :updated-at {:width "140px", :formatter :date},
+   :email {:width "200px", :formatter :email-link},
+   :email-verified-at {:width "180px", :formatter :date},
+   :last-login-at {:width "160px", :formatter :date},
+   :status {:width "100px", :formatter :status-badge},
+   :full-name {:width "180px"},
+   :created-at {:width "140px", :formatter :date}}},
+
+ :admins
+ {:available-columns
+  [:id
+   :email
+   :full-name
+   :role
+   :status
+   :last-login-at
+   :created-at
+   :updated-at],
+  :default-hidden-columns
+  [],
+
+  :unfilterable-columns
+  [:id
+   :created-at
+   :updated-at
+   :last-login-at],
+
+  :unsortable-columns
+  [:id
+   :last-login-at
+   :updated-at],
+  :always-visible [:email],
+
+  :computed-fields {},
+  :column-config
+  {:role {:width "100px", :formatter :admin-role-badge},
+   :updated-at {:width "140px", :formatter :date},
+   :email {:width "220px", :formatter :email-link},
+   :last-login-at {:width "160px", :formatter :date},
+   :status {:width "100px", :formatter :status-badge},
+   :full-name {:width "180px"},
+   :created-at {:width "140px", :formatter :date}}},
+
+ :audit-logs
+ {:available-columns
+  [:action
+   :entity-type
+   :entity-id
+   :entity-name
+   :admin-email
+   :admin-name
+   :ip-address
+   :user-agent
+   :changes],
+  :default-hidden-columns [:entity-id :user-agent],
+  :unfilterable-columns
+  [:entity-id :entity-name :admin-name :changes :user-agent],
+  :unsortable-columns
+  [:entity-id
+   :entity-name
+   :admin-email
+   :admin-name
+   :ip-address
+   :user-agent
+   :changes],
+  :always-visible [:action],
+  :computed-fields
+  {:entity-name
+   {:type :join,
+    :compute-fn :join-entity-name,
+    :dependencies [:entity-type :entity-id]},
+   :admin-email
+   {:type :join,
+    :compute-fn :join-admin-email,
+    :dependencies [:admin-id]},
+   :admin-name
+   {:type :join,
+    :compute-fn :join-admin-name,
+    :dependencies [:admin-id]}},
+  :column-config
+  {:entity-type {:width "120px"},
+   :user-agent {:width "200px"},
+   :admin-email {:width "180px"},
+   :entity-id {:width "140px"},
+   :entity-name {:width "200px", :computed-field true},
+   :changes {:width "220px", :formatter :collapsible-json},
+   :action {:width "120px", :formatter :audit-action-badge},
+   :admin-name {:width "140px"},
+   :ip-address {:width "140px"}}},
+
+ :login-events
+ {:available-columns
+  [:created-at
+   :principal-type
+   :principal-email
+   :principal-name
+   :success
+   :reason
+   :ip-address
+   :user-agent],
+  :default-hidden-columns [:user-agent],
+  :unfilterable-columns
+  [:principal-name :user-agent],
+  :unsortable-columns
+  [:principal-name :user-agent :reason],
+  :always-visible [:created-at :principal-type :principal-email :success],
+  :computed-fields {},
+  :column-config
+  {:created-at {:width "180px", :formatter :date},
+   :principal-type {:width "110px"},
+   :principal-email {:width "220px"},
+   :principal-name {:width "180px"},
+   :success {:width "100px"},
+   :reason {:width "200px"},
+   :ip-address {:width "140px"},
+   :user-agent {:width "260px"}}},
+
+ :expenses
+ {:available-columns
+  [:supplier-display-name
+   :supplier-normalized-key
+   :payer-label
+   :payer-type
+   :total-amount
+   :currency
+   :purchased-at
+   :status
+   :id],
+  :default-hidden-columns [:id]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:supplier-display-name :total-amount :purchased-at :status]
+  :computed-fields {}
+  :column-config
+  {:supplier-display-name {:width "200px"}
+   :supplier-normalized-key {:width "160px"}
+   :payer-label {:width "180px"}
+   :payer-type {:width "140px"}
+   :total-amount {:width "120px"}
+   :currency {:width "90px"}
+   :purchased-at {:width "160px", :formatter :date}
+   :status {:width "120px"}}},
+
+ :receipts
+ {:available-columns
+  [:original-filename
+   :status
+   :supplier-guess
+   :created-at
+   :id],
+  :default-hidden-columns [:id]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:original-filename :status :created-at]
+  :computed-fields {}
+  :column-config
+  {:original-filename {:width "220px"}
+   :status {:width "140px"}
+   :supplier-guess {:width "200px"}
+   :created-at {:width "170px", :formatter :date}}},
+
+ :suppliers
+ {:available-columns
+  [:display-name
+   :normalized-key
+   :address
+   :tax-id
+   :created-at
+   :id],
+  :default-hidden-columns [:id]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:display-name]
+  :computed-fields {}
+  :column-config
+  {:display-name {:width "200px"}
+   :normalized-key {:width "180px"}
+   :address {:width "250px"}
+   :tax-id {:width "120px"}
+   :created-at {:width "170px", :formatter :date}}},
+
+ :payers
+ {:available-columns
+  [:label
+   :type
+   :is-default
+   :id],
+  :default-hidden-columns [:id]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:label]
+  :computed-fields {}
+  :column-config
+  {:label {:width "200px"}
+   :type {:width "140px"}
+   :is-default {:width "110px"}}}
+
+ :articles
+ {:available-columns
+  [:canonical-name
+   :barcode
+   :category
+   :normalized-key
+   :created-at
+   :updated-at
+   :id],
+  :default-hidden-columns [:id :normalized-key :updated-at]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:canonical-name]
+  :computed-fields {}
+  :column-config
+  {:canonical-name {:width "220px"}
+   :barcode {:width "150px"}
+   :category {:width "160px"}
+   :normalized-key {:width "200px"}
+   :created-at {:width "170px", :formatter :date}
+   :updated-at {:width "170px", :formatter :date}}}
+
+ :article-aliases
+ {:available-columns
+  [:supplier-display-name
+   :article-canonical-name
+   :raw-label-normalized
+   :confidence
+   :created-at
+   :id],
+  :default-hidden-columns [:id]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:supplier-display-name :raw-label-normalized]
+  :computed-fields {}
+  :column-config
+  {:supplier-display-name {:width "200px"}
+   :article-canonical-name {:width "200px"}
+   :raw-label-normalized {:width "240px"}
+   :confidence {:width "120px"}
+   :created-at {:width "170px", :formatter :date}}}
+
+ :price-observations
+ {:available-columns
+  [:article-canonical-name
+   :supplier-display-name
+   :observed-at
+   :unit-price
+   :line-total
+   :qty
+   :currency
+   :expense-item-id
+   :id],
+  :default-hidden-columns [:id :expense-item-id]
+  :unfilterable-columns [:id]
+  :unsortable-columns [:id]
+  :always-visible [:article-canonical-name :supplier-display-name :observed-at :line-total]
+  :computed-fields {}
+  :column-config
+  {:article-canonical-name {:width "220px"}
+   :supplier-display-name {:width "200px"}
+   :observed-at {:width "180px", :formatter :date}
+   :unit-price {:width "140px"}
+   :line-total {:width "140px"}
+   :qty {:width "120px"}
+   :currency {:width "90px"}
+   :expense-item-id {:width "200px"}}}}

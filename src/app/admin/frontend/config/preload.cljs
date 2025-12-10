@@ -41,7 +41,7 @@
       entity-config)))
 
 (defonce ^:private preloaded-table-columns
-  (let [resource-content (resource/inline "public/admin/ui-config/table-columns.edn")]
+  (let [resource-content (resource/inline "app/admin/frontend/config/table-columns.edn")]
     (when resource-content
       (let [parsed (reader/read-string resource-content)
             ;; Transform each entity config
@@ -51,13 +51,13 @@
         transformed))))
 
 (defonce ^:private preloaded-view-options
-  (let [resource-content (resource/inline "public/admin/ui-config/view-options.edn")]
+  (let [resource-content (resource/inline "app/admin/frontend/config/view-options.edn")]
     (when resource-content
       (let [parsed (reader/read-string resource-content)]
         parsed))))
 
 (defonce ^:private preloaded-form-fields
-  (let [resource-content (resource/inline "public/admin/ui-config/form-fields.edn")]
+  (let [resource-content (resource/inline "app/admin/frontend/config/form-fields.edn")]
     (when resource-content
       (let [parsed (reader/read-string resource-content)]
         parsed))))

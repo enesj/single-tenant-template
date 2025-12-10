@@ -95,6 +95,8 @@ npm run build:admin
   (rf/dispatch [:admin/load-ui-configs]))
 ```
 
+Admin UI configuration lives under `src/app/admin/frontend/config/*.edn` (table-columns, view-options, form-fields). These are inlined at build time via `preload.cljs` and refreshed at runtime through the authenticated settings API (`/admin/api/settings*`), so there is no longer a public `/admin/ui-config` asset path.
+
 ### Public Shell (`app.template.frontend.core`)
 
 The public build remains for lightweight landing/demo needs but carries no tenant switching. Routing and pages can be trimmed if unused; keep `init`/`after-load` wiring aligned with `shadow-cljs.edn`.

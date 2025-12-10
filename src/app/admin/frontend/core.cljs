@@ -40,6 +40,8 @@
 (defn init-admin!
   "Initialize admin module - ensures all events and subscriptions are registered and theme is applied"
   []
+  ;; Initialize authentication persistence first (before any auth checks)
+  (rf/dispatch [:admin/init-auth-persistence])
   ;; Initialize the theme when admin module loads
   (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
   ;; Load config and models-data if not already loaded

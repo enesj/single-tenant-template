@@ -32,6 +32,7 @@ app.admin.frontend.*
 | Audit Logging | View admin actions | Admin | `/admin/audit` |
 | Login Events | View admin/user login attempts | Admin | `/admin/login-events` |
 | System Monitoring | Basic health/status | Admin | `/admin/dashboard` |
+| Admin Settings | Configure UI behavior and entity settings | Admin | `/admin/settings` |
 
 ## Activity & Login Monitoring
 
@@ -58,6 +59,29 @@ Admin operations require the admin role:
 
 - Quick metrics for total users, recent activity, and system health.
 - Shortcuts to Users, Audit Logs, and Login Events.
+
+## Admin Settings
+
+The admin settings page (`/admin/settings`) provides comprehensive UI configuration management with three main sections:
+
+### View Options
+Configure display toggles and action buttons for entity list views:
+- **Display Settings**: Control edit/delete buttons, highlights, selection, timestamps, pagination
+- **Action Settings**: Configure add button, batch edit, and batch delete visibility
+
+### Form Fields
+Manage form field configurations per entity:
+- **Create Fields**: Define which fields appear in creation forms
+- **Edit Fields**: Configure fields for edit forms
+- **Required Fields**: Set mandatory fields for form validation
+- **Field Configuration**: Set field types, validation rules, and placeholder text
+
+### Table Columns
+Configure table column behavior:
+- **Default Hidden Columns**: Set columns that are hidden by default
+- **Always Visible Columns**: Force certain columns to always show
+- **Unfilterable/Unsortable Columns**: Disable filtering or sorting for specific columns
+- **Column Widths**: Configure column display widths
 
 ## User Management (Quick Reference)
 

@@ -160,5 +160,5 @@ Run manual tests to verify all scenarios from testing guide:
 - `src/app/template/frontend/events/list/ui_state.cljs` - Added persistence to toggles
 - `src/app/template/frontend/events/list/settings.cljs` - Added persistence to settings
 - `src/app/template/frontend/components/settings/list_view_settings.cljs` - Fixed timestamp filter logic
-- `resources/public/admin/ui-config/view-options.edn` - Added show-select for users
-- `resources/public/admin/ui-config/table-columns.edn` - Added :id to always-visible
+- `src/app/admin/frontend/config/view-options.edn` - Added show-select for users
+- `src/app/admin/frontend/config/table-columns.edn` - Added :id to always-visible

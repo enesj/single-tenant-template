@@ -1,9 +1,11 @@
 (ns app.admin.frontend.events.auth
   (:require
+    [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.utils.http :as admin-http]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
-    [reitit.frontend.easy :as rtfe]))
+    [reitit.frontend.easy :as rtfe]
+    [taoensso.timbre :as log]))
 
 (rf/reg-event-db
   :admin/clear-success-message
@@ -34,6 +36,11 @@
   (fn [{:keys [db]} [_ response]]
     (let [admin-data (:admin response)
           role (some-> admin-data :role keyword)]
+      ;; Persist auth state to survive hot-reloads
+      (auth-persist/store-auth-state!
+        {:token (:token response)
+         :user admin-data
+         :authenticated? true})
       {:db (-> db
              (assoc :admin/current-user admin-data
                :admin/token (:token response)
@@ -55,6 +62,8 @@
 (rf/reg-event-fx
   :admin/logout
   (fn [{:keys [db]} _]
+    ;; Clear persisted auth state
+    (auth-persist/clear-auth-state!)
     {:db (dissoc db :admin/current-user :admin/token :admin/authenticated? :admin/current-user-role)
      :http-xhrio (admin-http/auth-request
                    {:uri "/admin/api/logout"
@@ -72,6 +81,7 @@
   :admin/check-auth
   (fn [{:keys [db]} _]
     (let [token (or (:admin/token db)
+                  (auth-persist/get-persisted-token)
                   (.getItem js/localStorage "admin-token"))]
       (if token
         {:db (-> db
@@ -134,6 +144,8 @@
 (rf/reg-event-fx
   :admin/auth-invalid
   (fn [{:keys [db]} _]
+    ;; Clear persisted auth state
+    (auth-persist/clear-auth-state!)
     {:db (-> db
            (dissoc :admin/authenticated? :admin/token :admin/current-user :admin/current-user-role :admin/auth-checking?))
      :admin/clear-token nil
@@ -161,6 +173,7 @@
   :admin/check-auth-protected
   (fn [{:keys [db]} [_ on-auth-success]]
     (let [token (or (:admin/token db)
+                  (auth-persist/get-persisted-token)
                   (.getItem js/localStorage "admin-token"))
           already-authenticated? (:admin/authenticated? db)
           auth-checking? (:admin/auth-checking? db)]
@@ -235,5 +248,36 @@
   (fn [_ _]
     (rtfe/push-state :admin-login)
     {}))
+
+;; Authentication state restoration on app initialization
+(rf/reg-event-fx
+  :admin/init-auth-persistence
+  (fn [{:keys [db]} _]
+    (let [auth-state (auth-persist/init-auth-persistence!
+                     (fn [restored-state]
+                       (rf/dispatch [:admin/restore-auth-state restored-state])))]
+      (if (:valid? auth-state)
+        ;; Has valid persisted state, wait for async restoration
+        {:db (assoc db :admin/auth-checking? true)}
+        ;; No valid persisted state, proceed normally
+        {}))))
+
+(rf/reg-event-fx
+  :admin/restore-auth-state
+  (fn [{:keys [db]} [_ auth-state]]
+    (let [{:keys [token user authenticated?]} auth-state]
+      (log/info "Restoring authentication state"
+               {:token-present (boolean token)
+                :user-present (boolean user)
+                :authenticated? authenticated?})
+      {:db (-> db
+             (cond-> token (assoc :admin/token token))
+             (cond-> user (assoc :admin/current-user user))
+             (cond-> (and user (:role user))
+               (assoc :admin/current-user-role (keyword (:role user))))
+             ;; Force fresh validation instead of trusting persisted state blindly
+             (dissoc :admin/authenticated? :admin/auth-checking?))
+       ;; Always re-validate the token with the backend to avoid stale sessions
+       :dispatch (when token [:admin/check-auth])})))
 
 ;; Theme management events

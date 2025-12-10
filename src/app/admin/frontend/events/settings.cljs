@@ -6,6 +6,11 @@
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
+(defn- unauthorized?
+  "Return true when an XHR error represents a 401/unauthorized response."
+  [error]
+  (= 401 (or (:status error) (get-in error [:response :status]))))
+
 ;; =============================================================================
 ;; Load View Options from Backend
 ;; =============================================================================
@@ -29,13 +34,14 @@
              (assoc-in [:admin :settings :view-options] view-options)
              (assoc-in [:admin :settings :error] nil))})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::load-view-options-failure
-  (fn [db [_ error]]
+  (fn [{:keys [db]} [_ error]]
     (log/error "Failed to load view options" error)
-    (-> db
-      (assoc-in [:admin :settings :loading?] false)
-      (assoc-in [:admin :settings :error] "Failed to load settings"))))
+    (cond-> {:db (-> db
+                   (assoc-in [:admin :settings :loading?] false)
+                   (assoc-in [:admin :settings :error] "Failed to load settings"))}
+      (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
 ;; Update Single View Option Setting
@@ -76,10 +82,11 @@
   (fn [{:keys [db]} [_ entity-kw setting-kw error]]
     (log/error "Failed to update setting" {:entity entity-kw :setting setting-kw :error error})
     ;; Revert the optimistic update by reloading from backend
-    {:db (-> db
-           (assoc-in [:admin :settings :saving?] false)
-           (assoc-in [:admin :settings :error] "Failed to save setting"))
-     :fx [[:dispatch [::load-view-options]]]}))
+    (cond-> {:db (-> db
+                   (assoc-in [:admin :settings :saving?] false)
+                   (assoc-in [:admin :settings :error] "Failed to save setting"))
+             :fx [[:dispatch [::load-view-options]]]}
+      (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
 ;; Remove Setting (make user-configurable)
@@ -118,10 +125,11 @@
   ::remove-setting-failure
   (fn [{:keys [db]} [_ entity-kw setting-kw error]]
     (log/error "Failed to remove setting" {:entity entity-kw :setting setting-kw :error error})
-    {:db (-> db
-           (assoc-in [:admin :settings :saving?] false)
-           (assoc-in [:admin :settings :error] "Failed to remove setting"))
-     :fx [[:dispatch [::load-view-options]]]}))
+    (cond-> {:db (-> db
+                   (assoc-in [:admin :settings :saving?] false)
+                   (assoc-in [:admin :settings :error] "Failed to remove setting"))
+             :fx [[:dispatch [::load-view-options]]]}
+      (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
 ;; Load Form Fields Config
@@ -146,13 +154,17 @@
              (assoc-in [:admin :settings :form-fields] form-fields)
              (assoc-in [:admin :settings :error] nil))})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::load-form-fields-failure
-  (fn [db [_ error]]
+  (fn [{:keys [db]} [_ error]]
     (log/error "Failed to load form fields" error)
-    (-> db
-      (assoc-in [:admin :settings :form-fields-loading?] false)
-      (assoc-in [:admin :settings :error] "Failed to load form fields"))))
+    (let [db' (-> db
+                (assoc-in [:admin :settings :form-fields-loading?] false)
+                (assoc-in [:admin :settings :error] "Failed to load form fields"))]
+      (if (unauthorized? error)
+        {:db db'
+         :dispatch [:admin/auth-invalid]}
+        {:db db'}))))
 
 ;; =============================================================================
 ;; Update Form Fields Entity Config
@@ -188,10 +200,11 @@
   ::update-form-fields-failure
   (fn [{:keys [db]} [_ entity-kw error]]
     (log/error "Failed to update form fields" {:entity entity-kw :error error})
-    {:db (-> db
-           (assoc-in [:admin :settings :saving?] false)
-           (assoc-in [:admin :settings :error] "Failed to save form fields"))
-     :fx [[:dispatch [::load-form-fields]]]}))
+    (cond-> {:db (-> db
+                   (assoc-in [:admin :settings :saving?] false)
+                   (assoc-in [:admin :settings :error] "Failed to save form fields"))
+             :fx [[:dispatch [::load-form-fields]]]}
+      (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
 ;; Load Table Columns Config
@@ -216,13 +229,17 @@
              (assoc-in [:admin :settings :table-columns] table-columns)
              (assoc-in [:admin :settings :error] nil))})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::load-table-columns-failure
-  (fn [db [_ error]]
+  (fn [{:keys [db]} [_ error]]
     (log/error "Failed to load table columns" error)
-    (-> db
-      (assoc-in [:admin :settings :table-columns-loading?] false)
-      (assoc-in [:admin :settings :error] "Failed to load table columns"))))
+    (let [db' (-> db
+                (assoc-in [:admin :settings :table-columns-loading?] false)
+                (assoc-in [:admin :settings :error] "Failed to load table columns"))]
+      (if (unauthorized? error)
+        {:db db'
+         :dispatch [:admin/auth-invalid]}
+        {:db db'}))))
 
 ;; =============================================================================
 ;; Update Table Columns Entity Config
@@ -258,10 +275,11 @@
   ::update-table-columns-failure
   (fn [{:keys [db]} [_ entity-kw error]]
     (log/error "Failed to update table columns" {:entity entity-kw :error error})
-    {:db (-> db
-           (assoc-in [:admin :settings :saving?] false)
-           (assoc-in [:admin :settings :error] "Failed to save table columns"))
-     :fx [[:dispatch [::load-table-columns]]]}))
+    (cond-> {:db (-> db
+                   (assoc-in [:admin :settings :saving?] false)
+                   (assoc-in [:admin :settings :error] "Failed to save table columns"))
+             :fx [[:dispatch [::load-table-columns]]]}
+      (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
 ;; Toggle Editing Mode

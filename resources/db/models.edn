@@ -48,6 +48,20 @@
   :indexes
   [[:idx_admins_email :btree {:fields [:email], :unique true}]
    [:idx_admins_status :btree {:fields [:status]}]]},
+ :admin_sessions
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:admin_id :uuid {:foreign-key :admins/id, :null false, :on-delete :cascade}]
+   [:token [:varchar 255] {:null false, :unique true}]
+   [:created_at :timestamptz {:null false, :default "NOW()"}]
+   [:last_activity :timestamptz {:null false}]
+   [:expires_at :timestamptz {:null false}]
+   [:ip_address :text]
+   [:user_agent :text]],
+  :indexes
+  [[:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}]
+   [:idx_admin_sessions_token :btree {:fields [:token], :unique true}]
+   [:idx_admin_sessions_expires :btree {:fields [:expires_at]}]]},
  :articles
  {:fields
   [[:id :uuid {:primary-key true}]

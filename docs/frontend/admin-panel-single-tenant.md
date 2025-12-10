@@ -34,7 +34,7 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 ## Settings Page
 
 - Page: `/admin/settings` (`app.admin.frontend.pages.settings`)  
-- Data source: `resources/public/admin/ui-config/view-options.edn` read/write via backend settings routes.  
+- Data source: `src/app/admin/frontend/config/view-options.edn` read/write via backend settings routes.  
 - Use it to lock list controls per-entity (show/hide edit/delete/select/timestamps/pagination/filtering); hardcoded controls are hidden in the UI while remaining effective.
 
 ## Extension Points

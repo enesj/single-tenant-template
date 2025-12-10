@@ -36,9 +36,9 @@
                         (catch Exception _ {:count 0}))
           total-admins (or (:count admin-count) 0)
 
-          ;; Active admin sessions are kept in an in-memory store
+          ;; Active admin sessions (DB-backed)
           active-sessions (try
-                            (count @admin-auth/session-store)
+                            (admin-auth/count-active-sessions db)
                             (catch Exception _ 0))
 
           ;; Recent audit activity count

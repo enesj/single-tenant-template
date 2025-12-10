@@ -1,0 +1,80 @@
+{:users
+ {:create-fields [:email :first-name :last-name :role :status],
+  :edit-fields [:first-name :last-name :role :status],
+  :required-fields [:email :first-name :last-name],
+  :field-config
+  {:email {:type :email, :validation :email},
+   :first-name {:type :text, :max-length 50},
+   :last-name {:type :text, :max-length 50},
+   :role {:type :select, :options [:member :admin :owner]},
+   :status {:type :select, :options [:active :inactive :suspended]}}},
+ :admins
+ {:create-fields [:email :full-name :password :role :status],
+  :edit-fields [:email :full-name :role :status],
+  :required-fields [:email :password],
+  :field-config
+  {:email {:type :email, :validation :email, :placeholder "admin@example.com"},
+   :full-name {:type :text, :max-length 255, :placeholder "Full Name"},
+   :password {:type :password, :min-length 8, :placeholder "Enter password (min 8 characters)"},
+   :role {:type :select, :options [:admin :support :owner], :default :admin},
+   :status {:type :select, :options [:active :suspended], :default :active}}},
+ :tenants
+ {:create-fields [:name :domain :plan :status],
+  :edit-fields [:name :plan :status],
+  :required-fields [:name :domain],
+  :field-config
+  {:name {:type :text, :max-length 100},
+   :domain {:type :text, :validation :domain},
+   :plan {:type :select, :options [:free :basic :premium :enterprise]},
+   :status {:type :select, :options [:active :inactive :trial]}}}
+ 
+ :suppliers
+ {:create-fields [:display-name :address :tax-id],
+  :edit-fields [:display-name :address :tax-id],
+  :required-fields [:display-name],
+  :field-config
+  {:display-name {:type :text, :max-length 255, :placeholder "Supplier name"},
+   :address {:type :text, :placeholder "Address (optional)"},
+   :tax-id {:type :text, :max-length 50, :placeholder "Tax ID (optional)"}}}
+ 
+ :payers
+ {:create-fields [:type :label :last4 :is-default],
+  :edit-fields [:type :label :last4 :is-default],
+  :required-fields [:type :label],
+  :field-config
+  {:type {:type :select, :options [:cash :card :bank-account :person]},
+   :label {:type :text, :max-length 255, :placeholder "Payment method name"},
+   :last4 {:type :text, :max-length 4, :placeholder "Last 4 digits (cards only)"},
+   :is-default {:type :boolean}}}
+
+ :articles
+ {:create-fields [:canonical-name :barcode :category],
+  :edit-fields [:canonical-name :barcode :category],
+  :required-fields [:canonical-name],
+  :field-config
+  {:canonical-name {:type :text, :max-length 255, :placeholder "Canonical name"},
+   :barcode {:type :text, :max-length 50, :placeholder "Barcode (optional)"},
+   :category {:type :text, :max-length 100, :placeholder "Category (optional)"}}}
+
+ :article-aliases
+ {:create-fields [:supplier-id :article-id :raw-label :confidence],
+  :edit-fields [:article-id :raw-label :confidence],
+  :required-fields [:supplier-id :article-id :raw-label],
+  :field-config
+  {:supplier-id {:type :uuid},
+   :article-id {:type :uuid},
+   :raw-label {:type :text, :max-length 255, :placeholder "Raw label"},
+   :confidence {:type :number, :min 0, :max 100, :default 100}}}
+
+ :price-observations
+ {:create-fields [:article-id :supplier-id :observed-at :qty :unit-price :line-total :currency],
+  :edit-fields [:article-id :supplier-id :observed-at :qty :unit-price :line-total :currency],
+  :required-fields [:article-id :supplier-id :line-total],
+  :field-config
+  {:article-id {:type :uuid},
+   :supplier-id {:type :uuid},
+   :observed-at {:type :datetime},
+   :qty {:type :number, :step 0.001},
+   :unit-price {:type :number, :step 0.01},
+   :line-total {:type :number, :step 0.01},
+   :currency {:type :text, :placeholder "Currency (default BAM)"}}}}

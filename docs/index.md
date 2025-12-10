@@ -6,7 +6,9 @@
 
 This repository is the **single-tenant template** extracted from the Hosting multi-tenant app. It keeps the shared/template/admin infrastructure (Clojure/ClojureScript, PostgreSQL, Shadow-CLJS, Babashka tooling) but ships **without Hosting/Financial/Integration business domains or tenant-aware RLS**. Hosting-specific docs remain as reference when you want examples of full domains.
 
-**New (2025-12-08):** Home Expenses Tracker domain is included and exposed under `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles, reports). See `docs/backend/http-api.md` and the implementation plan in `app-specs/home-expenses-tracker-plan.md`.
+**New (2025-12-08):** Home Expenses Tracker domain is included and exposed under `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles, article aliases, price observations, reports). See `docs/backend/http-api.md` and `docs/expenses/index.md` for details.
+
+**New (2025-12-10):** Admin Settings UI expansion with comprehensive configuration management for view options, form fields, and table columns. See `docs/frontend/admin-settings.md` for the complete guide.
 
 ## Quick Start
 
@@ -32,12 +34,17 @@ Common tasks:
 **Frontend**
 - `docs/frontend/app-shell.md` — app shell, routing, Shadow-CLJS builds
 - `docs/frontend/template-component-integration.md` — using template UI components
-- `docs/frontend/feature-guides/admin.md` — admin panel patterns (users/audit)
-- `docs/frontend/admin-panel-single-tenant.md` — (new) single-tenant admin flow and extension points
+- `docs/frontend/admin.md` — admin panel features (users, audit, settings)
+- `docs/frontend/admin-settings.md` — comprehensive admin settings configuration guide
+- `docs/frontend/admin-panel-single-tenant.md` — single-tenant admin flow and extension points
+- `docs/frontend/list-view-controls-configuration.md` — list view controls and configuration
 
 **Operations**
 - `docs/operations/README.md` — commands, env, deployment notes
 - `docs/migrations/migration-overview.md` — models/migrations workflow
+
+**Domains**
+- `docs/expenses/index.md` — complete expenses domain guide with new entities (articles, aliases, price observations)
 
 **Reference / Hosting examples (not present in this repo)**
 - Backend domains: `docs/backend/hosting-domain.md`, `docs/backend/financial-domain.md`, `docs/backend/integration-domain.md`
@@ -62,9 +69,10 @@ Browser → app.template.frontend.core → admin/template routes → services/DI
 
 | Area | Key Docs | Code Pointers |
 |------|----------|---------------|
-| Admin (template) | `docs/frontend/feature-guides/admin.md`, `docs/frontend/admin-panel-single-tenant.md` | `src/app/admin/frontend` |
+| Admin (template) | `docs/frontend/admin.md`, `docs/frontend/admin-settings.md`, `docs/frontend/admin-panel-single-tenant.md` | `src/app/admin/frontend` |
 | Template frontend | `docs/frontend/app-shell.md`, `docs/frontend/template-component-integration.md` | `src/app/template/frontend` |
 | Backend core | `docs/backend/single-tenant-template.md`, `docs/backend/http-api.md` | `src/app/backend` |
+| Domains | `docs/expenses/index.md` | `src/app/domain/expenses` |
 | Migrations/DB | `docs/migrations/migration-overview.md` | `resources/db/*` |
 | Hosting reference | Domain docs listed above | *Hosting repo only* |
 

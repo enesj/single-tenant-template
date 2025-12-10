@@ -20,10 +20,19 @@ All paths are relative to `/admin/api`.
 - `GET /admin/api/dashboard` – summary payload for the admin shell (namespace `app.backend.routes.admin.dashboard`).
 
 ### Settings (protected, `app.backend.routes.admin.settings`)
-- `GET /admin/api/settings` – return `{:view-options {...}}` from `resources/public/admin/ui-config/view-options.edn`.
+**View Options**
+- `GET /admin/api/settings` – return `{:view-options {...}}` from `src/app/admin/frontend/config/view-options.edn`.
 - `PUT /admin/api/settings` – replace the entire `view-options` map.
 - `PATCH /admin/api/settings/entity` – upsert a single entity setting (`entity-name`, `setting-key`, `setting-value`).
 - `DELETE /admin/api/settings/entity` – remove a hardcoded setting so it becomes user-configurable again.
+
+**Form Fields Configuration**
+- `GET /admin/api/settings/form-fields` – return all form-fields config from `src/app/admin/frontend/config/form-fields.edn`.
+- `PATCH /admin/api/settings/form-fields/entity` – update entity form configuration (create-fields, edit-fields, required-fields).
+
+**Table Columns Configuration**
+- `GET /admin/api/settings/table-columns` – return all table-columns config from `src/app/admin/frontend/config/table-columns.edn`.
+- `PATCH /admin/api/settings/table-columns/entity` – update entity table configuration (default-hidden, always-visible, column widths).
 
 ### Users (protected)
 - `GET /admin/api/users` – list users (supports pagination/filtering via query params in `admin-utils/extract-pagination-params`).
@@ -90,13 +99,29 @@ All paths are relative to `/admin/api`.
 **Articles / Price history**
 - `GET /admin/api/expenses/articles` – list/search.
 - `POST /admin/api/expenses/articles` – create; requires `canonical_name`.
+- `GET /admin/api/expenses/articles/:id` – fetch article.
+- `PUT /admin/api/expenses/articles/:id` – update article.
+- `DELETE /admin/api/expenses/articles/:id` – delete article.
 - `GET /admin/api/expenses/articles/unmapped-items` – expense items missing article mapping.
 - `POST /admin/api/expenses/articles/items/:item-id/map` – attach article to item (optional alias create).
-- `GET /admin/api/expenses/articles/:id` – fetch article.
 - `POST /admin/api/expenses/articles/:id/aliases` – add/replace alias for supplier/raw label.
 - `GET /admin/api/expenses/articles/:id/price-history` – price observations (optional `supplier_id`, `limit`).
 - `GET /admin/api/expenses/articles/:id/latest-prices` – latest price per supplier.
 - `GET /admin/api/expenses/articles/:id/compare` – price observations for comparisons (optional `from`, `limit`).
+
+**Article Aliases**
+- `GET /admin/api/expenses/article-aliases` – list aliases with optional filters.
+- `POST /admin/api/expenses/article-aliases` – create new alias.
+- `GET /admin/api/expenses/article-aliases/:id` – fetch alias.
+- `PUT /admin/api/expenses/article-aliases/:id` – update alias.
+- `DELETE /admin/api/expenses/article-aliases/:id` – delete alias.
+
+**Price Observations**
+- `GET /admin/api/expenses/price-observations` – list price observations with filters.
+- `POST /admin/api/expenses/price-observations` – create new price observation.
+- `GET /admin/api/expenses/price-observations/:id` – fetch price observation.
+- `PUT /admin/api/expenses/price-observations/:id` – update price observation.
+- `DELETE /admin/api/expenses/price-observations/:id` – delete price observation.
 
 **Reports**
 - `GET /admin/api/expenses/reports/summary` – totals for range.

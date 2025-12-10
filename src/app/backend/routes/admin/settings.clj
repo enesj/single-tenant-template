@@ -7,9 +7,9 @@
     [clojure.pprint :as pprint]
     [taoensso.timbre :as log]))
 
-(def ^:private view-options-path "resources/public/admin/ui-config/view-options.edn")
-(def ^:private form-fields-path "resources/public/admin/ui-config/form-fields.edn")
-(def ^:private table-columns-path "resources/public/admin/ui-config/table-columns.edn")
+(def ^:private view-options-path "src/app/admin/frontend/config/view-options.edn")
+(def ^:private form-fields-path "src/app/admin/frontend/config/form-fields.edn")
+(def ^:private table-columns-path "src/app/admin/frontend/config/table-columns.edn")
 
 (defn- read-view-options
   "Read view-options.edn file and parse it"

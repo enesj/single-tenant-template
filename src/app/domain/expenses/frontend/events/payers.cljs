@@ -1,77 +1,8 @@
 (ns app.domain.expenses.frontend.events.payers
+  "Payers domain events - generated using the expenses event factory."
   (:require
-    [ajax.core :as ajax]
-    [app.admin.frontend.adapters.expenses :as expenses-adapter]
-    [app.admin.frontend.utils.http :as admin-http]
-    [app.template.frontend.db.paths :as paths]
-    [day8.re-frame.http-fx]
-    [re-frame.core :as rf]))
+    [app.domain.expenses.frontend.events.events-factory :as factory]
+    [app.domain.expenses.frontend.events.entity-configs :as configs]))
 
-(def ^:private entity-key :payers)
-(def ^:private base-path [:admin :expenses :payers])
-(def ^:private default-per-page 50)
-
-(defn- resolve-pagination
-  [db {:keys [per-page page]}]
-  (let [existing-per-page (or (get-in db (paths/list-per-page entity-key))
-                            (get-in db (conj (paths/list-ui-state entity-key) :per-page))
-                            default-per-page)
-        existing-page (or (get-in db (paths/list-current-page entity-key))
-                        (get-in db (conj (paths/list-ui-state entity-key) :current-page))
-                        1)
-        per-page (or per-page existing-per-page default-per-page)
-        page (or page existing-page 1)]
-    {:per-page per-page :page page}))
-
-(defn- begin-load
-  [db params]
-  (let [{:keys [per-page page]} (resolve-pagination db params)]
-    (-> db
-      (assoc-in (paths/entity-loading? entity-key) true)
-      (assoc-in (paths/entity-error entity-key) nil)
-      (assoc-in [:admin :payers :loading?] true)
-      (assoc-in [:admin :payers :error] nil)
-      (assoc-in (paths/list-per-page entity-key) per-page)
-      (assoc-in (paths/list-current-page entity-key) page)
-      (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page})
-      (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page})
-      (assoc-in (conj base-path :loading?) true)
-      (assoc-in (conj base-path :error) nil))))
-
-(defn- finish-load
-  [db error?]
-  (let [error-val (when error? (admin-http/extract-error-message error?))]
-    (-> db
-      (assoc-in (paths/entity-loading? entity-key) false)
-      (assoc-in (paths/entity-error entity-key) error-val)
-      (assoc-in [:admin :payers :loading?] false)
-      (assoc-in [:admin :payers :error] error-val)
-      (assoc-in (conj base-path :loading?) false)
-      (assoc-in (conj base-path :error) error-val))))
-
-(rf/reg-event-fx
-  ::load
-  (fn [{:keys [db]} [_ {:keys [type] :as params}]]
-    {:db (begin-load db params)
-     :http-xhrio (admin-http/admin-get
-                   {:uri "/admin/api/expenses/payers"
-                    :params (cond-> {} type (assoc :type type))
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::loaded params]
-                    :on-failure [::load-failed]})}))
-
-(rf/reg-event-fx
-  ::loaded
-  (fn [{:keys [db]} [_ {:keys [per-page page]} {:keys [payers]}]]
-    (let [{:keys [per-page page]} (resolve-pagination db {:per-page per-page :page page})]
-      {:db (-> db
-             (finish-load nil)
-             (assoc-in (conj base-path :items) (vec (or payers [])))
-             (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page})
-             (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page}))
-       :dispatch-n [[::expenses-adapter/sync-payers payers]]})))
-
-(rf/reg-event-fx
-  ::load-failed
-  (fn [{:keys [db]} [_ error]]
-    {:db (finish-load db error)}))
+;; Register standard CRUD events for payers using the factory
+(factory/register-entity-events! configs/payers-config)

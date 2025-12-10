@@ -16,7 +16,7 @@ Goal: Surface additional expenses-domain tables (articles, article_aliases, pric
 - [x] Implement list/load events + CRUD bridges (if supported) pointing at the correct admin API endpoints.
 
 4) UI config updates
-- [x] Extend `resources/public/admin/ui-config` (entities.edn, table-columns.edn, form-fields.edn, view-options.edn if needed) with sensible defaults for the three entities and fill missing view-options for existing expenses entities (suppliers, payers, etc.).
+- [x] Extend `src/app/admin/frontend/config` (entities.edn, table-columns.edn, form-fields.edn, view-options.edn if needed) with sensible defaults for the three entities and fill missing view-options for existing expenses entities (suppliers, payers, etc.).
 
 5) Verification
 - [ ] Manual check in admin UI: navigation highlights, lists load without 405, create/edit/delete where applicable (articles, article-aliases, price-observations, plus regression for suppliers/payers).
@@ -32,7 +32,7 @@ Notes: Mirror the supplier/payer pattern for CRUD bridges to avoid template gene
 - Entity registry (for adapter init + actions) is `src/app/admin/frontend/system/entity_registry.cljs`; currently registers :receipts, :suppliers, :payers (plus core admin entities).
 - Expenses admin adapters + CRUD bridges are in `src/app/admin/frontend/adapters/expenses.cljs`. Bridges already exist for :suppliers, :payers, :expenses, :receipts pointing at `/admin/api/expenses/{suppliers|payers|entries|receipts}` and refresh their lists on success. Follow this pattern for new entities.
 - Form submit interceptor that reroutes admin CRUD through bridges is `src/app/admin/frontend/events/users/template/form_interceptors.cljs`; currently handles :suppliers, :payers, :expenses, :receipts (and :users). New entity keys must be added here to avoid 405s.
-- Admin UI configs are static EDN files under `resources/public/admin/ui-config/`:
+- Admin UI configs are static EDN files under `src/app/admin/frontend/config/`:
   - `entities.edn` describes page titles, adapter init fns, display flags for :expenses/:receipts/:suppliers/:payers.
   - `table-columns.edn` has column layouts for :expenses, :receipts, :suppliers, :payers (no articles/aliases/price_observations yet).
   - `form-fields.edn` defines create/edit fields for :suppliers and :payers; none for articles/aliases/price_observations.

@@ -8,7 +8,7 @@
 ## Constraints / Notes
 - Follow template component integration patterns used by Users/Audit/Login Events.
 - Keep IDs as strings in template store; handle namespaced keys defensively.
-- Respect `resources/public/admin/ui-config/view-options.edn` when wiring `display-settings`.
+- Respect `src/app/admin/frontend/config/view-options.edn` when wiring `display-settings`.
 - Admin served at http://localhost:8085/admin; hot reload via `bb run-app` + `npm run watch:admin`.
 
 ## References

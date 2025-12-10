@@ -1,28 +1,37 @@
 (ns app.admin.frontend.config.loader
   (:require
-    [cljs.reader :as reader]
     [taoensso.timbre :as log]))
 
 (defonce config-cache (atom {}))
 
-(defn- fetch-config-file
-  "Fetch and parse an EDN configuration file"
-  [file-path]
-  (-> (js/fetch file-path)
-    (.then (fn [response]
-             (if (.-ok response)
-               (.text response)
-               (js/Promise.reject (js/Error. (str "Failed to load " file-path))))))
-    (.then (fn [text]
-             (try
-               ;; Use cljs.reader to align with preloader behavior and avoid partial parsing issues
-               (reader/read-string text)
-               (catch js/Error e
-                 (log/error "Failed to parse EDN from" file-path e)
-                 {}))))
-    (.catch (fn [error]
-              (log/error "Failed to load config file:" file-path error)
-              {}))))
+(def ^:private config-endpoints
+  {:table-columns {:url "/admin/api/settings/table-columns"
+                   :response-key :table-columns}
+   :view-options {:url "/admin/api/settings"
+                  :response-key :view-options}
+   :form-fields {:url "/admin/api/settings/form-fields"
+                 :response-key :form-fields}})
+
+(defn- fetch-config
+  "Fetch config data from the admin API and return a Clojure map"
+  [config-type]
+  (if-let [{:keys [url response-key]} (get config-endpoints config-type)]
+    (-> (js/fetch url #js {:credentials "include"})
+      (.then (fn [response]
+               (if (.-ok response)
+                 (.json response)
+                 (js/Promise.reject (js/Error. (str "Failed to load " url))))))
+      (.then (fn [data]
+               (let [parsed (js->clj data :keywordize-keys true)]
+                 (get parsed response-key {}))))
+      (.catch (fn [error]
+                (log/error "Failed to load config" {:config-type config-type
+                                                    :url url
+                                                    :error error})
+                {})))
+    (do
+      (log/error "No endpoint configured for config type" config-type)
+      (js/Promise.resolve {}))))
 
 (defn- transform-inverted-config
   "Transform inverted config format to internal format.
@@ -58,30 +67,29 @@
       ;; Fallback - return as is (shouldn't happen after migration)
       entity-config)))
 
-(defn- load-config-file!
-  "Load a config file and cache it"
-  [config-type file-name]
-  (let [file-path (str "/admin/ui-config/" file-name)]
-    (-> (fetch-config-file file-path)
-      (.then (fn [config]
+(defn- load-config!
+  "Load a config type from the admin API and cache it"
+  [config-type]
+  (-> (fetch-config config-type)
+    (.then (fn [config]
                ;; Transform table-columns configs from inverted format
-               (let [final-config (if (= config-type :table-columns)
-                                    (into {} (map (fn [[k v]]
-                                                    [k (transform-inverted-config v)])
-                                               config))
-                                    config)]
+             (let [final-config (if (= config-type :table-columns)
+                                  (into {} (map (fn [[k v]]
+                                                  [k (transform-inverted-config v)])
+                                             config))
+                                  config)]
                  ;; Merge into existing cache to avoid overwriting preloaded entries
-                 (swap! config-cache update config-type (fnil merge {}) final-config)
-                 (log/debug "Loaded config:" config-type final-config)
-                 final-config))))))
+               (swap! config-cache update config-type (fnil merge {}) final-config)
+               (log/debug "Loaded config:" config-type final-config)
+               final-config)))))
 
 (defn load-all-configs!
-  "Load all configuration files"
+  "Load all configuration files from the admin API"
   []
   (js/Promise.all
-    #js [(load-config-file! :table-columns "table-columns.edn")
-         (load-config-file! :view-options "view-options.edn")
-         (load-config-file! :form-fields "form-fields.edn")]))
+    #js [(load-config! :table-columns)
+         (load-config! :view-options)
+         (load-config! :form-fields)]))
 
 (defn load-all-configs
   "Get all configuration data from cache (synchronous version)"

@@ -23,7 +23,7 @@ User Preferences ────────┘
 ### Reactive pipeline
 - `app.template.frontend.hooks.display-settings` merges hardcoded + user settings.
 - `app.template.frontend.components.list.cells` renders cells using the merged settings (single source of truth).
-- Hardcoded values can come from page props or `resources/public/admin/ui-config/view-options.edn`.
+- Hardcoded values can come from page props or `src/app/admin/frontend/config/view-options.edn`.
 
 ## Field-Level Configuration (models.edn)
 
@@ -205,7 +205,7 @@ resources/db/
 3. **Limit filtering**: Disable filtering for complex data types
 
 ## Admin Settings page
-- Hardcoded view settings live in `resources/public/admin/ui-config/view-options.edn` and can be edited via the admin UI at `/admin/settings` (see `app.admin.frontend.pages.settings`).
+- Hardcoded view settings live in `src/app/admin/frontend/config/view-options.edn` and can be edited via the admin UI at `/admin/settings` (see `app.admin.frontend.pages.settings`).
 4. **Consider performance**: Hide expensive computed fields by default
 
 ### **Page Configuration**

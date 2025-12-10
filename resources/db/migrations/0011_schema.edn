@@ -1,0 +1,27 @@
+({:action :create-table,
+  :model-name :admin_sessions,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :admin-id
+   {:foreign-key :admins/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :token {:null false, :unique true, :type [:varchar 255]},
+   :created-at {:null false, :default "NOW()", :type :timestamptz},
+   :last-activity {:null false, :type :timestamptz},
+   :expires-at {:null false, :type :timestamptz},
+   :ip-address {:type :text},
+   :user-agent {:type :text}}}
+ {:action :create-index,
+  :index-name :idx-admin-sessions-token,
+  :model-name :admin_sessions,
+  :options {:fields [:token], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admin-sessions-admin-id,
+  :model-name :admin_sessions,
+  :options {:fields [:admin_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admin-sessions-expires,
+  :model-name :admin_sessions,
+  :options {:fields [:expires_at], :type :btree}})

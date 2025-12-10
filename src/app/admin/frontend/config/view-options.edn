@@ -1,0 +1,127 @@
+{:suppliers
+ {:show-delete? false,
+  :search-fields [:display-name :normalized-key :tax-id],
+  :filters {:has-tax-id {:type :boolean}},
+  :show-select? true,
+  :pagination
+  {:default-page-size 50, :available-page-sizes [25 50 100]},
+  :default-sort {:field :created-at, :direction :desc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :admins
+ {:show-delete? true,
+  :search-fields [:email :full-name],
+  :filters
+  {:role {:type :select, :options [:owner :admin :support]},
+   :status {:type :select, :options [:active :suspended]}},
+  :show-select? true,
+  :export-formats [:csv :json],
+  :bulk-actions [],
+  :pagination
+  {:default-page-size 25, :available-page-sizes [10 25 50]},
+  :default-sort {:field :created-at, :direction :desc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :articles
+ {:show-delete? true,
+  :show-edit? true,
+  :search-fields [:canonical-name :barcode :category],
+  :filters {:category {:type :text}},
+  :show-select? true,
+  :pagination
+  {:default-page-size 50, :available-page-sizes [25 50 100]},
+  :default-sort {:field :canonical-name, :direction :asc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :expenses
+ {:search-fields [:supplier-display-name :payer-label :status],
+  :filters {:status {:type :select, :options ["posted" "draft"]}},
+  :show-select? true,
+  :pagination
+  {:default-page-size 25, :available-page-sizes [10 25 50]},
+  :default-sort {:field :purchased-at, :direction :desc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :price-observations
+ {:show-delete? false,
+  :show-edit? false,
+  :search-fields [:article-canonical-name :supplier-display-name],
+  :filters {:currency {:type :text}},
+  :show-select? true,
+  :pagination
+  {:default-page-size 50, :available-page-sizes [25 50 100]},
+  :default-sort {:field :observed-at, :direction :desc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :payers
+ {:show-delete? false,
+  :search-fields [:label :type],
+  :filters
+  {:type
+   {:type :select, :options [:cash :card :bank-account :person]}},
+  :show-select? true,
+  :pagination
+  {:default-page-size 50, :available-page-sizes [25 50 100]},
+  :default-sort {:field :label, :direction :asc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :audit-logs
+ {:pagination
+  {:default-page-size 20, :available-page-sizes [10 20 50 100]},
+  :default-sort {:field :created-at, :direction :desc},
+  :search-fields [:action :entity-type :ip-address],
+  :filters
+  {:entity-type
+   {:type :select, :options [:users :transactions :properties]},
+   :action
+   {:type :select, :options [:create :update :delete :login :logout]},
+   :created-at {:type :date-range}},
+  :export-formats [:csv :json],
+  :bulk-actions [:export :archive],
+  :show-edit? false},
+ :receipts
+ {:show-select? true,
+  :show-edit? false,
+  :search-fields [:original-filename :status :supplier-guess],
+  :pagination
+  {:default-page-size 25, :available-page-sizes [10 25 50]},
+  :default-sort {:field :created-at, :direction :desc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :login-events
+ {:show-edit? false,
+  :search-fields
+  [:principal-email :principal-name :ip-address :reason],
+  :filters
+  {:principal-type {:type :select, :options [:admin :user]},
+   :success {:type :select, :options [true false]}},
+  :export-formats [:csv :json],
+  :bulk-actions [:export],
+  :pagination
+  {:default-page-size 20, :available-page-sizes [20 50 100]},
+  :show-highlights? false,
+  :default-sort {:field :created-at, :direction :desc}},
+ :article-aliases
+ {:show-select? true,
+  :show-edit? true,
+  :show-delete? true,
+  :search-fields
+  [:raw-label-normalized
+   :supplier-display-name
+   :article-canonical-name],
+  :pagination
+  {:default-page-size 50, :available-page-sizes [25 50 100]},
+  :default-sort {:field :created-at, :direction :desc},
+  :show-pagination? true,
+  :show-filtering? true},
+ :users
+ {:search-fields [:email :first-name :last-name],
+  :filters
+  {:status {:type :select, :options [:active :inactive :suspended]},
+   :role {:type :select, :options [:member :admin :owner]}},
+  :export-formats [:csv :json],
+  :bulk-actions [:activate :deactivate :suspend :export],
+  :pagination
+  {:default-page-size 25, :available-page-sizes [25 50 100]},
+  :default-sort {:field :created-at, :direction :desc},
+  :show-add-button? true}}

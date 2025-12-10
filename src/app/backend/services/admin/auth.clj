@@ -14,7 +14,6 @@
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
-    [next.jdbc.sql :as sql]
     [taoensso.timbre :as log])
   (:import
     [java.util UUID]))
@@ -138,53 +137,76 @@
               nil)))))))
 
 ;; ============================================================================
-;; Session Management
+;; Session Management (DB-backed)
 ;; ============================================================================
 
-(defonce session-store (atom {}))
-
 (defn create-admin-session!
-  "Create a new admin session"
+  "Create a new admin session and persist it so sessions survive BE reloads."
   [db admin-id ip-address user-agent]
   (let [session-id (UUID/randomUUID)
         token (generate-session-token)
         now (time/instant)
         expires-at (time/plus now (time/hours 8))]
-    (swap! session-store assoc token {:id session-id
-                                      :admin-id admin-id
-                                      :created-at now
-                                      :last-activity now
-                                      :expires-at expires-at
-                                      :ip-address ip-address
-                                      :user-agent user-agent})
+    (jdbc/execute-one! db
+      (hsql/format {:insert-into :admin_sessions
+                    :values [{:id session-id
+                              :admin_id admin-id
+                              :token token
+                              :created_at now
+                              :last_activity now
+                              :expires_at expires-at
+                              :ip_address ip-address
+                              :user_agent user-agent}]}))
     {:id session-id
      :token token
      :expires_at expires-at}))
 
 (defn get-admin-by-session
-  "Get admin by session token"
+  "Get admin by session token; returns nil when missing or expired."
   [db token]
-  (when-let [{:keys [admin-id expires-at]} (@session-store token)]
-    (when (time/after? expires-at (time/instant))
-      (find-admin-by-id db admin-id))))
+  (let [now (time/instant)
+        session (jdbc/execute-one! db
+                  (hsql/format {:select [:admin_id :expires_at]
+                                :from [:admin_sessions]
+                                :where [:and
+                                        [:= :token token]
+                                        [:> :expires_at now]]}))]
+    (when session
+      ;; Handle both namespaced and non-namespaced keys from next.jdbc
+      (find-admin-by-id db (or (:admin_id session) (:admin_sessions/admin_id session))))))
 
 (defn update-session-activity!
   "Update last activity timestamp for a session"
   [db token]
-  (swap! session-store update token (fn [session]
-                                      (when session
-                                        (assoc session :last-activity (time/instant))))))
+  (jdbc/execute-one! db
+    (hsql/format {:update :admin_sessions
+                  :set {:last_activity (time/instant)}
+                  :where [:= :token token]})))
 
 (defn invalidate-session!
   "Invalidate an admin session"
   [db token]
-  (swap! session-store dissoc token))
+  (jdbc/execute-one! db
+    (hsql/format {:delete-from :admin_sessions
+                  :where [:= :token token]})))
 
 (defn invalidate-all-admin-sessions!
   "Invalidate all sessions for an admin"
   [db admin-id]
-  (swap! session-store
-    (fn [sessions]
-      (into {} (remove (fn [[_ {:keys [admin-id]}]]
-                         (= admin-id admin-id))
-                 sessions)))))
+  (jdbc/execute-one! db
+    (hsql/format {:delete-from :admin_sessions
+                  :where [:= :admin_id admin-id]})))
+
+(defn count-active-sessions
+  "Return number of non-expired admin sessions."
+  [db]
+  (try
+    (let [now (time/instant)
+          row (jdbc/execute-one! db
+                (hsql/format {:select [[[:count :*] :count]]
+                              :from [:admin_sessions]
+                              :where [:> :expires_at now]}))]
+      (or (:count row) 0))
+    (catch Exception e
+      (log/warn e "Failed to count active admin sessions")
+      0)))
