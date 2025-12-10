@@ -30,7 +30,7 @@
     (when-let [db fixtures/*test-db*]
       (let [first (suppliers/find-or-create-supplier! db "Bingo Centar" {:address "Main"})
             second (suppliers/find-or-create-supplier! db "  bingo-centar " {})]
-        (is (= (:id first) (:id second)))))))
+        (is (= (:id (:supplier first)) (:id (:supplier second))))))))
 
 (deftest payers-default-per-type-test
   (when-let [db fixtures/*test-db*]
@@ -46,7 +46,8 @@
 
 (deftest receipts-approve-creates-expense-and-links
   (when-let [db fixtures/*test-db*]
-    (let [supplier (suppliers/find-or-create-supplier! db "Konzum" {})
+    (let [supplier-result (suppliers/find-or-create-supplier! db "Konzum" {})
+          supplier (:supplier supplier-result)
           payer (payers/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
           upload (receipts/upload-receipt! db {:storage_key "s3://bucket/r1.jpg"
                                                :bytes (.getBytes "hello world")})
@@ -67,7 +68,8 @@
 
 (deftest expenses-price-observation-recorded-when-article-present
   (when-let [db fixtures/*test-db*]
-    (let [supplier (suppliers/find-or-create-supplier! db "DM" {})
+    (let [supplier-result (suppliers/find-or-create-supplier! db "DM" {})
+          supplier (:supplier supplier-result)
           payer (payers/create-payer! db {:type "cash" :label "Cash"})
           article-name (str "Toothpaste-" (UUID/randomUUID))
           article (articles/create-article! db {:canonical_name article-name})
@@ -88,7 +90,8 @@
 
 (deftest expenses-soft-delete-excluded-from-list
   (when-let [db fixtures/*test-db*]
-    (let [supplier (suppliers/find-or-create-supplier! db "Pharmacy" {})
+    (let [supplier-result (suppliers/find-or-create-supplier! db "Pharmacy" {})
+          supplier (:supplier supplier-result)
           payer (payers/create-payer! db {:type "account" :label "Bank"})
           exp (expenses/create-expense! db
                 {:supplier_id (:id supplier)
