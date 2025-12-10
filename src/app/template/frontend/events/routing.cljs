@@ -104,8 +104,7 @@
   :page/init-expenses-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :expenses-list)
-     :dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]}))
+    {:db (assoc-in db (paths/current-page) :expenses-list)}))
 
 (rf/reg-event-fx
   :page/init-expense-upload

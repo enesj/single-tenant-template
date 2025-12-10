@@ -338,9 +338,17 @@
 
 (defn process-models-for-frontend
   "Process models data to include validation specs for frontend consumption.
-   Takes the complete models-data structure and returns processed models with validation specs."
+   Accepts either the raw models map (as loaded from resources/db/models.edn)
+   or a wrapped structure like {:data {...}}. Returns a map of
+   model-name -> model-def with an added :validation-specs entry containing
+   per-field validation metadata."
   [models-data]
-  (let [data-section (:data models-data)]
+  (let [;; Support both {:data {...}} and plain maps/vectors
+        data-section (cond
+                       (and (map? models-data) (:data models-data)) (:data models-data)
+                       (map? models-data) models-data
+                       (vector? models-data) (into {} models-data)
+                       :else {})]
     (reduce-kv
       (fn [acc model-name model-def]
         (let [processed-fields

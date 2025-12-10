@@ -3,6 +3,7 @@
 
    Handles user authentication flow, session management, and logout functionality."
   (:require
+    [app.admin.frontend.adapters.users :as admin-users-adapter]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [re-frame.core :as rf]
@@ -77,13 +78,17 @@
                             ;; Members and above go to expense dashboard
                             (contains? #{"member" "admin" "owner"} user-role) "/dashboard"
                             ;; Viewers or other roles go to entities
-                            :else "/entities")]
+                            :else "/entities")
+            base-effects (cond-> {:db updated-db}
+                           (and authenticated? (= current-page :login))
+                           (assoc :redirect redirect-path))]
 
-        ;; If user is authenticated and on login page, redirect them based on role
-        (if (and authenticated? (= current-page :login))
-          {:db updated-db
-           :redirect redirect-path}
-          {:db updated-db})))))
+        ;; Mirror the resolved session user into the shared template
+        ;; entity store so FK table columns pointing at :users can
+        ;; resolve labels via list-view + select-options.
+        (cond-> base-effects
+          user (update :fx (fnil conj [])
+                 [:dispatch [::admin-users-adapter/sync-users-to-template [user]]]))))))
 
 ;; Handle failure to fetch auth status
 (rf/reg-event-db

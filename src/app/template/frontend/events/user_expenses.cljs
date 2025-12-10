@@ -2,6 +2,7 @@
   "User-facing expense dashboard events.
    Fetches expense summary, recent expenses, and aggregates for the user scope."
   (:require
+    [app.admin.frontend.adapters.expenses :as admin-expenses-adapter]
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
@@ -80,18 +81,21 @@
                       :on-success [:user-expenses/fetch-recent-success]
                       :on-failure [:user-expenses/fetch-recent-failure]})})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   :user-expenses/fetch-recent-success
   common-interceptors
-  (fn [db [response]]
+  (fn [{:keys [db]} [response]]
     (let [{:keys [data total limit offset]} response]
-      (-> db
-        (assoc-in [:user-expenses :recent :loading?] false)
-        (assoc-in [:user-expenses :recent :error] nil)
-        (assoc-in [:user-expenses :recent :items] (vec data))
-        (assoc-in [:user-expenses :recent :total] total)
-        (assoc-in [:user-expenses :recent :limit] limit)
-        (assoc-in [:user-expenses :recent :offset] offset)))))
+      {:db (-> db
+             (assoc-in [:user-expenses :recent :loading?] false)
+             (assoc-in [:user-expenses :recent :error] nil)
+             (assoc-in [:user-expenses :recent :items] (vec data))
+             (assoc-in [:user-expenses :recent :total] total)
+             (assoc-in [:user-expenses :recent :limit] limit)
+             (assoc-in [:user-expenses :recent :offset] offset))
+       ;; Also sync into the shared template entity store so both admin and
+       ;; user table views can depend on the same data source.
+       :dispatch [::admin-expenses-adapter/sync-expenses data]})))
 
 (rf/reg-event-db
   :user-expenses/fetch-recent-failure
@@ -336,13 +340,18 @@
                     :on-success [:user-expenses/fetch-suppliers-success]
                     :on-failure [:user-expenses/fetch-suppliers-failure]})}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   :user-expenses/fetch-suppliers-success
   common-interceptors
-  (fn [db [response]]
-    (-> db
-      (assoc-in [:user-expenses :suppliers :loading?] false)
-      (assoc-in [:user-expenses :suppliers :items] (or (:data response) [])))))
+  (fn [{:keys [db]} [response]]
+    (let [items (or (:data response) [])]
+      {:db (-> db
+             (assoc-in [:user-expenses :suppliers :loading?] false)
+             (assoc-in [:user-expenses :suppliers :items] items))
+       ;; Also mirror suppliers into the shared template entity store so that
+       ;; FK columns like expenses.supplier_id can resolve labels via
+       ;; list-view + select-options on the user-facing pages.
+       :dispatch [::admin-expenses-adapter/sync-suppliers items]})))
 
 (rf/reg-event-db
   :user-expenses/fetch-suppliers-failure
@@ -363,13 +372,18 @@
                     :on-success [:user-expenses/fetch-payers-success]
                     :on-failure [:user-expenses/fetch-payers-failure]})}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   :user-expenses/fetch-payers-success
   common-interceptors
-  (fn [db [response]]
-    (-> db
-      (assoc-in [:user-expenses :payers :loading?] false)
-      (assoc-in [:user-expenses :payers :items] (or (:data response) [])))))
+  (fn [{:keys [db]} [response]]
+    (let [items (or (:data response) [])]
+      {:db (-> db
+             (assoc-in [:user-expenses :payers :loading?] false)
+             (assoc-in [:user-expenses :payers :items] items))
+       ;; Mirror payers into the shared template entity store so that
+       ;; FK columns like expenses.payer_id can resolve labels via the
+       ;; same vector-config + list-view pipeline as admin pages.
+       :dispatch [::admin-expenses-adapter/sync-payers items]})))
 
 (rf/reg-event-db
   :user-expenses/fetch-payers-failure
@@ -420,7 +434,7 @@
     {:db (-> db
            (assoc-in [:user-expenses :settings :loading?] true)
            (assoc-in [:user-expenses :settings :data] {:default_currency "BAM"
-                                                        :notifications_enabled true})
+                                                       :notifications_enabled true})
            (assoc-in [:user-expenses :settings :loading?] false))}))
 
 (rf/reg-event-fx

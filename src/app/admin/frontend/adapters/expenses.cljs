@@ -107,7 +107,12 @@
     expense
     {:entity-ns :expenses
      :id-keys [:id]
-     :stringify-keys [:supplier_id :payer_id :receipt_id]
+     ;; Stringify foreign-key identifiers so they can be used as
+     ;; stable string IDs in the shared template entity store.
+     :stringify-keys [:supplier_id :payer_id :receipt_id :user_id]
+     ;; Alias commonly used fields to their kebab-case counterparts so
+     ;; vector-config / entity-specs (which are based on models.edn) can
+     ;; resolve them by the expected IDs like :supplier-id, :payer-id, etc.
      :alias-keys {:supplier_display_name [:supplier-display-name]
                   :supplier_normalized_key [:supplier-normalized-key]
                   :payer_label [:payer-label]
@@ -116,7 +121,12 @@
                   :purchased_at [:purchased-at]
                   :is_posted [:is-posted]
                   :created_at [:created-at]
-                  :updated_at [:updated-at]}
+                  :updated_at [:updated-at]
+                  ;; FK id aliases used by list-view generated specs
+                  :supplier_id [:supplier-id]
+                  :payer_id [:payer-id]
+                  :user_id [:user-id]
+                  :receipt_id [:receipt-id]}
      :post-transform (fn [m]
                        (let [posted? (get m :is-posted)]
                          (assoc m :status (if (true? posted?) "posted" "draft"))))}))

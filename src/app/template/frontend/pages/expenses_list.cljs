@@ -2,8 +2,11 @@
   "User-facing expense list page with filtering and pagination."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.confirm-dialog :as confirm-dialog]
+    [app.template.frontend.components.icons :refer [edit-icon delete-icon]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui use-state use-effect]]
     [uix.re-frame :refer [use-subscribe]]
     [app.template.frontend.subs.user-expenses]))
 
@@ -130,33 +133,51 @@
 ;; Main Page
 ;; ========================================================================
 
+(defui my-expense-actions
+  [{:keys [id] :as item}]
+  (let [expense-id (or id (:id item))]
+    (when expense-id
+      ($ :div {:class "flex items-center justify-end gap-2"}
+        ($ button
+          {:btn-type :primary
+           :shape "circle"
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (rf/dispatch [:navigate-to (str "/expenses/" expense-id)]))}
+          ($ edit-icon))
+        ($ button
+          {:btn-type :danger
+           :shape "circle"
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (confirm-dialog/show-confirm
+                         {:title "Delete expense"
+                          :message "Do you want to delete this expense?"
+                          :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
+                          :on-cancel nil}))}
+          ($ delete-icon))))))
+
 (defui expenses-list-page []
-  (let [expenses (or (use-subscribe [:user-expenses/recent]) [])
-        loading? (boolean (use-subscribe [:user-expenses/recent-loading?]))
-        error (use-subscribe [:user-expenses/recent-error])
-        total (or (use-subscribe [:user-expenses/recent-total]) 0)
-        limit (or (use-subscribe [:user-expenses/recent-limit]) 25)
-        offset (or (use-subscribe [:user-expenses/recent-offset]) 0)
-        [current-filters set-current-filters!] (use-state {})
-        
-        handle-filter-change (fn [key value]
-                               (let [new-filters (if (empty? value)
-                                                   (dissoc current-filters key)
-                                                   (assoc current-filters key value))]
-                                 (set-current-filters! new-filters)
-                                 (rf/dispatch [:user-expenses/fetch-recent
-                                               (merge {:limit limit :offset 0} new-filters)])))
-        
-        handle-page-change (fn [new-offset]
-                             (rf/dispatch [:user-expenses/fetch-recent
-                                           (merge {:limit limit :offset new-offset} current-filters)]))
-        
-        handle-view (fn [id]
-                      (rf/dispatch [:navigate-to (str "/expenses/" id)]))
-        
-        handle-edit (fn [id]
-                      (rf/dispatch [:navigate-to (str "/expenses/" id "?edit=true")]))]
-    
+  (let [entity-name :expenses
+        ;; Use shared entity specs when available; fall back to nil which
+        ;; list-view can still handle for basic rendering.
+        entity-spec (use-subscribe [:entity-specs/by-name entity-name])
+        error (use-subscribe [:user-expenses/recent-error])]
+
+    ;; Ensure we kick off a user-scoped fetch so that the shared
+    ;; template entity store for :expenses and its FK references is
+    ;; populated via the user-expenses pipeline and the expenses
+    ;; admin adapter sync events.
+    (use-effect
+      (fn []
+        ;; Primary list data – user-scoped expenses
+        (rf/dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}])
+        ;; Reference data for FK columns in the list-view (supplier & payer)
+        (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        js/undefined)
+      [])
+
     ($ :div {:class "min-h-screen bg-base-100"}
       ;; Header
       ($ :header {:class "bg-white border-b border-base-200"}
@@ -164,7 +185,8 @@
           ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
             ($ :div
               ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "My Expenses")
-              ($ :p {:class "text-sm text-base-content/70"} "View and manage your expense history"))
+              ($ :p {:class "text-sm text-base-content/70"}
+                "View and manage your expense history"))
             ($ :div {:class "flex gap-2"}
               ($ button {:btn-type :primary
                          :on-click #(rf/dispatch [:navigate-to "/expenses/new"])}
@@ -172,51 +194,26 @@
               ($ button {:btn-type :ghost
                          :on-click #(rf/dispatch [:navigate-to "/expenses"])}
                 "Dashboard")))))
-      
-      ;; Error banner
+
+      ;; Error banner (from user-expenses pipeline)
       (when error
         ($ :div {:class "max-w-6xl mx-auto px-4 mt-4"}
           ($ :div {:class "ds-alert ds-alert-error"}
             ($ :span error))))
-      
-      ;; Main content
+
+      ;; Main content: generic list-view backed by shared entity store
       ($ :main {:class "max-w-6xl mx-auto px-4 py-6"}
-        ;; Filters
-        ($ filters {:on-filter-change handle-filter-change})
-        
-        ;; Table
-        ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 overflow-hidden"}
-          ($ :div {:class "overflow-x-auto"}
-            ($ :table {:class "ds-table ds-table-zebra w-full"}
-              ($ :thead
-                ($ :tr
-                  ($ :th "Supplier")
-                  ($ :th "Payer")
-                  ($ :th {:class "text-right"} "Amount")
-                  ($ :th "Date")
-                  ($ :th "Status")
-                  ($ :th {:class "text-right"} "Actions")))
-              ($ :tbody
-                (cond
-                  loading?
-                  (for [i (range 5)]
-                    ($ expense-table-skeleton {:key i}))
-                  
-                  (empty? expenses)
-                  ($ :tr
-                    ($ :td {:col-span 6 :class "text-center py-8 text-base-content/50"}
-                      "No expenses found. Start by adding your first expense!"))
-                  
-                  :else
-                  (for [expense expenses]
-                    ($ expense-table-row {:key (:id expense)
-                                          :expense expense
-                                          :on-view handle-view
-                                          :on-edit handle-edit})))))))
-        
-        ;; Pagination
-        (when (and (not loading?) (pos? total))
-          ($ pagination {:total total
-                         :limit limit
-                         :offset offset
-                         :on-page-change handle-page-change}))))))
+        ($ list-view
+          {:entity-name entity-name
+           :entity-spec entity-spec
+           :title "My Expenses"
+           :render-actions my-expense-actions
+           ;; User-facing defaults – no bulk selection/edit/delete, but keep
+           ;; filtering + pagination.
+           :display-settings {:show-select? false
+                              :show-edit? false
+                              :show-delete? false
+                              :show-filtering? true
+                              :show-pagination? true
+                              :show-add-button? false
+                              :per-page 25}})))))

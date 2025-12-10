@@ -1,7 +1,7 @@
 (ns app.template.frontend.components.list.fields
   (:require
-   [uix.core :refer [$ defui]]
-   [uix.re-frame :refer [use-subscribe]]))
+    [uix.core :refer [$ defui]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 (defui select-field-value [{:keys [field value]}]
   (let [raw-options (:options field)
@@ -14,8 +14,14 @@
         options (if is-dynamic-options?
                   dynamic-options
                   raw-options)
-        option (first (filter #(= (:value %) value) options))]
-    ($ :span (or (:label option) ""))))
+        option (first (filter #(= (:value %) value) options))
+        label (or (:label option)
+                  ;; Fallback: when options have not been loaded yet
+                  ;; (e.g., user-scoped FKs like receipts), show the
+                  ;; raw value instead of an empty cell.
+                (when (some? value) (str value))
+                "")]
+    ($ :span label)))
 
 (defn- truncate-text
   "Truncates text to specified length with ellipsis if needed."

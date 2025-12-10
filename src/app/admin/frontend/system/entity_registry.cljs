@@ -6,6 +6,7 @@
     [app.admin.frontend.adapters.admins :as admins-adapter]
     [app.admin.frontend.adapters.expenses :as expenses-adapter]
     [app.admin.frontend.events.admins] ; Required for side effects (event registration)
+    [app.admin.frontend.events.entity-sync] ; Sync domain entities into template store
     [app.admin.frontend.subs.admins] ; Required for side effects (subscription registration)
     [app.admin.frontend.components.enhanced-action-buttons :as enhanced-actions]
     [app.admin.frontend.components.user-actions :as user-actions]
@@ -40,6 +41,10 @@
     :custom-actions admin-actions/admin-admin-actions}
 
    ;; Expenses domain admin entities
+   :expenses
+   {:init-fn expenses-adapter/init-expenses-adapter!
+    :actions enhanced-actions/enhanced-action-buttons}
+
    :receipts
    {:init-fn expenses-adapter/init-receipts-adapter!
     :actions enhanced-actions/enhanced-action-buttons}
