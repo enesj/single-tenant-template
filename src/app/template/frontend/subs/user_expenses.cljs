@@ -65,3 +65,89 @@
   :user-expenses/by-supplier-error
   (fn [db _]
     (get-in db [:user-expenses :by-supplier :error])))
+
+;; Pagination info for recent list
+(rf/reg-sub
+  :user-expenses/recent-total
+  (fn [db _]
+    (get-in db [:user-expenses :recent :total])))
+
+(rf/reg-sub
+  :user-expenses/recent-limit
+  (fn [db _]
+    (get-in db [:user-expenses :recent :limit])))
+
+(rf/reg-sub
+  :user-expenses/recent-offset
+  (fn [db _]
+    (get-in db [:user-expenses :recent :offset])))
+
+;; Current expense detail
+(rf/reg-sub
+  :user-expenses/current-expense
+  (fn [db _]
+    (get-in db [:user-expenses :current-expense :data])))
+
+(rf/reg-sub
+  :user-expenses/current-expense-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :current-expense :loading?])))
+
+(rf/reg-sub
+  :user-expenses/current-expense-error
+  (fn [db _]
+    (get-in db [:user-expenses :current-expense :error])))
+
+;; Form state
+(rf/reg-sub
+  :user-expenses/form-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :form :loading?])))
+
+(rf/reg-sub
+  :user-expenses/form-error
+  (fn [db _]
+    (get-in db [:user-expenses :form :error])))
+
+;; Suppliers and payers for forms
+(rf/reg-sub
+  :user-expenses/suppliers
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :items])))
+
+(rf/reg-sub
+  :user-expenses/payers
+  (fn [db _]
+    (get-in db [:user-expenses :payers :items])))
+
+;; Upload state
+(rf/reg-sub
+  :user-expenses/upload-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :upload :loading?])))
+
+(rf/reg-sub
+  :user-expenses/upload-error
+  (fn [db _]
+    (get-in db [:user-expenses :upload :error])))
+
+(rf/reg-sub
+  :user-expenses/recent-receipts
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :items])))
+
+;; Settings
+(rf/reg-sub
+  :user-expenses/settings
+  (fn [db _]
+    (get-in db [:user-expenses :settings :data])))
+
+(rf/reg-sub
+  :user-expenses/settings-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :settings :loading?])))
+
+(rf/reg-sub
+  :user-expenses/settings-saving?
+  (fn [db _]
+    (get-in db [:user-expenses :settings :saving?])))

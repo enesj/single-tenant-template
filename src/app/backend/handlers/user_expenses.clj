@@ -219,3 +219,43 @@
           (log/error e "Error getting spending by supplier")
           (json-response {:error "Failed to get spending by supplier"} 500)))
       (unauthorized-response))))
+
+;; ============================================================================
+;; Reference Data Handlers (Suppliers, Payers)
+;; ============================================================================
+
+(defn list-suppliers-handler
+  "Handler factory for listing suppliers available to users."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (try
+        (let [params (:query-params request)
+              limit (or (some-> (:limit params) parse-long) 100)
+              offset (or (some-> (:offset params) parse-long) 0)
+              ;; Use the suppliers service
+              suppliers-svc (requiring-resolve 'app.domain.expenses.services.suppliers/list-suppliers)
+              suppliers (suppliers-svc db {:limit limit :offset offset})]
+          (json-response {:data suppliers}))
+        (catch Exception e
+          (log/error e "Error listing suppliers")
+          (json-response {:error "Failed to list suppliers"} 500)))
+      (unauthorized-response))))
+
+(defn list-payers-handler
+  "Handler factory for listing payers available to users."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (try
+        (let [params (:query-params request)
+              limit (or (some-> (:limit params) parse-long) 100)
+              offset (or (some-> (:offset params) parse-long) 0)
+              ;; Use the payers service
+              payers-svc (requiring-resolve 'app.domain.expenses.services.payers/list-payers)
+              payers (payers-svc db {:limit limit :offset offset})]
+          (json-response {:data payers}))
+        (catch Exception e
+          (log/error e "Error listing payers")
+          (json-response {:error "Failed to list payers"} 500)))
+      (unauthorized-response))))

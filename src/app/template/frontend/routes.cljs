@@ -344,34 +344,34 @@
 
    ;; Upload receipt
    ["/expenses/upload"
-    {:name :expenses-upload
-     :view :expenses-upload
-     :controllers (make-simple-controller :page/init-expenses-upload)}]
+    {:name :expense-upload
+     :view :expense-upload
+     :controllers (make-simple-controller :page/init-expense-upload)}]
 
    ;; New expense (manual entry)
    ["/expenses/new"
-    {:name :expenses-new
-     :view :expenses-new
-     :controllers (make-simple-controller :page/init-expenses-new)}]
-
-   ;; Expense detail
-   ["/expenses/:expense-id"
-    {:name :expenses-detail
-     :view :expenses-detail
-     :parameters {:path {:expense-id string?}}
-     :controllers (make-simple-controller :page/init-expenses-detail)}]
+    {:name :expense-new
+     :view :expense-new
+     :controllers (make-simple-controller :page/init-expense-new)}]
 
    ;; Reports
    ["/expenses/reports"
-    {:name :expenses-reports
-     :view :expenses-reports
-     :controllers (make-simple-controller :page/init-expenses-reports)}]
+    {:name :expense-reports
+     :view :expense-reports
+     :controllers (make-simple-controller :page/init-expense-reports)}]
 
    ;; User settings
    ["/expenses/settings"
-    {:name :expenses-settings
-     :view :expenses-settings
-     :controllers (make-simple-controller :page/init-expenses-settings)}]])
+    {:name :expense-settings
+     :view :expense-settings
+     :controllers (make-simple-controller :page/init-expense-settings)}]
+
+   ;; Expense detail (kept after literal routes to avoid catching static paths)
+   ["/expenses/:expense-id"
+    {:name :expense-detail
+     :view :expense-detail
+     :parameters {:path {:expense-id string?}}
+     :controllers (make-simple-controller :page/init-expense-detail)}]])
 
 ;; Define routes using the helper functions
 ;; Define routes using the helper functions

@@ -177,3 +177,289 @@
     (-> db
       (assoc-in [:user-expenses :by-supplier :loading?] false)
       (assoc-in [:user-expenses :by-supplier :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Single expense detail
+;; ---------------------------------------------------------------------------
+
+(def expense-detail-endpoint (api/versioned-endpoint "/expenses"))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-expense
+  common-interceptors
+  (fn [{:keys [db]} [expense-id]]
+    {:db (-> db
+           (assoc-in [:user-expenses :current-expense :loading?] true)
+           (assoc-in [:user-expenses :current-expense :error] nil))
+     :http-xhrio (http/api-request
+                   {:method :get
+                    :uri (str expense-detail-endpoint "/" expense-id)
+                    :on-success [:user-expenses/fetch-expense-success]
+                    :on-failure [:user-expenses/fetch-expense-failure]})}))
+
+(rf/reg-event-db
+  :user-expenses/fetch-expense-success
+  common-interceptors
+  (fn [db [response]]
+    (-> db
+      (assoc-in [:user-expenses :current-expense :loading?] false)
+      (assoc-in [:user-expenses :current-expense :error] nil)
+      (assoc-in [:user-expenses :current-expense :data] (:data response)))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-expense-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch expense detail" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :current-expense :loading?] false)
+      (assoc-in [:user-expenses :current-expense :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Create expense
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/create-expense
+  common-interceptors
+  (fn [{:keys [db]} [expense-data]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil))
+     :http-xhrio (http/api-request
+                   {:method :post
+                    :uri list-endpoint
+                    :params expense-data
+                    :on-success [:user-expenses/create-expense-success]
+                    :on-failure [:user-expenses/create-expense-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/create-expense-success
+  common-interceptors
+  (fn [{:keys [db]} [response]]
+    (let [expense-id (get-in response [:data :id])]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] false)
+             (assoc-in [:user-expenses :form :error] nil))
+       :dispatch-n [[:user-expenses/fetch-recent {:limit 5}]
+                    [:navigate-to (str "/expenses/" expense-id)]]})))
+
+(rf/reg-event-db
+  :user-expenses/create-expense-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to create expense" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Delete expense
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/delete-expense
+  common-interceptors
+  (fn [{:keys [db]} [expense-id]]
+    {:db (assoc-in db [:user-expenses :form :loading?] true)
+     :http-xhrio (http/api-request
+                   {:method :delete
+                    :uri (str list-endpoint "/" expense-id)
+                    :on-success [:user-expenses/delete-expense-success]
+                    :on-failure [:user-expenses/delete-expense-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/delete-expense-success
+  common-interceptors
+  (fn [{:keys [db]} [_response]]
+    {:db (assoc-in db [:user-expenses :form :loading?] false)
+     :dispatch-n [[:user-expenses/fetch-recent {:limit 25}]
+                  [:navigate-to "/expenses/list"]]}))
+
+(rf/reg-event-db
+  :user-expenses/delete-expense-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to delete expense" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Post expense (mark as posted)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/post-expense
+  common-interceptors
+  (fn [{:keys [db]} [expense-id]]
+    {:db (assoc-in db [:user-expenses :form :loading?] true)
+     :http-xhrio (http/api-request
+                   {:method :put
+                    :uri (str list-endpoint "/" expense-id)
+                    :params {:is_posted true}
+                    :on-success [:user-expenses/post-expense-success expense-id]
+                    :on-failure [:user-expenses/post-expense-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/post-expense-success
+  common-interceptors
+  (fn [{:keys [db]} [expense-id _response]]
+    {:db (assoc-in db [:user-expenses :form :loading?] false)
+     :dispatch [:user-expenses/fetch-expense expense-id]}))
+
+(rf/reg-event-db
+  :user-expenses/post-expense-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to post expense" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Suppliers and payers for forms
+;; ---------------------------------------------------------------------------
+
+(def suppliers-endpoint (api/versioned-endpoint "/expenses/suppliers"))
+(def payers-endpoint (api/versioned-endpoint "/expenses/payers"))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-suppliers
+  common-interceptors
+  (fn [{:keys [db]} [opts]]
+    {:db (assoc-in db [:user-expenses :suppliers :loading?] true)
+     :http-xhrio (http/api-request
+                   {:method :get
+                    :uri suppliers-endpoint
+                    :params (select-keys opts [:limit :offset])
+                    :on-success [:user-expenses/fetch-suppliers-success]
+                    :on-failure [:user-expenses/fetch-suppliers-failure]})}))
+
+(rf/reg-event-db
+  :user-expenses/fetch-suppliers-success
+  common-interceptors
+  (fn [db [response]]
+    (-> db
+      (assoc-in [:user-expenses :suppliers :loading?] false)
+      (assoc-in [:user-expenses :suppliers :items] (or (:data response) [])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-suppliers-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch suppliers" {:error error})
+    (assoc-in db [:user-expenses :suppliers :loading?] false)))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-payers
+  common-interceptors
+  (fn [{:keys [db]} [opts]]
+    {:db (assoc-in db [:user-expenses :payers :loading?] true)
+     :http-xhrio (http/api-request
+                   {:method :get
+                    :uri payers-endpoint
+                    :params (select-keys opts [:limit :offset])
+                    :on-success [:user-expenses/fetch-payers-success]
+                    :on-failure [:user-expenses/fetch-payers-failure]})}))
+
+(rf/reg-event-db
+  :user-expenses/fetch-payers-success
+  common-interceptors
+  (fn [db [response]]
+    (-> db
+      (assoc-in [:user-expenses :payers :loading?] false)
+      (assoc-in [:user-expenses :payers :items] (or (:data response) [])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-payers-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch payers" {:error error})
+    (assoc-in db [:user-expenses :payers :loading?] false)))
+
+;; ---------------------------------------------------------------------------
+;; Upload receipt (placeholder)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/upload-receipt
+  common-interceptors
+  (fn [{:keys [db]} [_file]]
+    ;; TODO: Implement actual file upload
+    {:db (-> db
+           (assoc-in [:user-expenses :upload :loading?] true)
+           (assoc-in [:user-expenses :upload :error] nil))
+     :dispatch-later [{:ms 2000
+                       :dispatch [:user-expenses/upload-receipt-success {:id "placeholder"}]}]}))
+
+(rf/reg-event-fx
+  :user-expenses/upload-receipt-success
+  common-interceptors
+  (fn [{:keys [db]} [_response]]
+    {:db (assoc-in db [:user-expenses :upload :loading?] false)
+     :dispatch [:navigate-to "/expenses/new"]}))
+
+(rf/reg-event-db
+  :user-expenses/upload-receipt-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :upload :loading?] false)
+      (assoc-in [:user-expenses :upload :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Settings
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/fetch-settings
+  common-interceptors
+  (fn [{:keys [db]} _]
+    ;; TODO: Implement actual settings fetch
+    {:db (-> db
+           (assoc-in [:user-expenses :settings :loading?] true)
+           (assoc-in [:user-expenses :settings :data] {:default_currency "BAM"
+                                                        :notifications_enabled true})
+           (assoc-in [:user-expenses :settings :loading?] false))}))
+
+(rf/reg-event-fx
+  :user-expenses/save-settings
+  common-interceptors
+  (fn [{:keys [db]} [settings-data]]
+    ;; TODO: Implement actual settings save
+    {:db (-> db
+           (assoc-in [:user-expenses :settings :saving?] true)
+           (assoc-in [:user-expenses :settings :data] settings-data))
+     :dispatch-later [{:ms 500
+                       :dispatch [:user-expenses/save-settings-success settings-data]}]}))
+
+(rf/reg-event-db
+  :user-expenses/save-settings-success
+  common-interceptors
+  (fn [db [_settings]]
+    (assoc-in db [:user-expenses :settings :saving?] false)))
+
+;; ---------------------------------------------------------------------------
+;; Export (placeholder)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/export
+  common-interceptors
+  (fn [_cofx [opts]]
+    (log/info "Export requested" opts)
+    ;; TODO: Implement actual export
+    {}))
+
+;; ---------------------------------------------------------------------------
+;; Delete all (placeholder)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/delete-all
+  common-interceptors
+  (fn [_cofx _]
+    (log/info "Delete all requested")
+    ;; TODO: Implement actual delete all
+    {}))

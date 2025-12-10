@@ -10,6 +10,12 @@
     [app.template.frontend.pages.home :refer [home-page]]
     [app.template.frontend.pages.waiting-room :refer [waiting-room-page]]
     [app.template.frontend.pages.expenses-dashboard :refer [expenses-dashboard-page]]
+    [app.template.frontend.pages.expenses-list :refer [expenses-list-page]]
+    [app.template.frontend.pages.expense-new :refer [expense-new-page]]
+    [app.template.frontend.pages.expense-detail :refer [expense-detail-page]]
+    [app.template.frontend.pages.expense-upload :refer [expense-upload-page]]
+    [app.template.frontend.pages.expense-reports :refer [expense-reports-page]]
+    [app.template.frontend.pages.expense-settings :refer [expense-settings-page]]
     [app.template.frontend.routes :as routes]
     [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.confirm-dialog :refer [confirm-dialog]]
@@ -225,12 +231,12 @@
           ;; User expense tracking pages
           :waiting-room ($ waiting-room-page)
           :expenses-dashboard ($ expenses-dashboard-page)
-          :expenses-list ($ :div {:class "ds-container p-4"} "Expenses List - Coming Soon")
-          :expense-upload ($ :div {:class "ds-container p-4"} "Receipt Upload - Coming Soon")
-          :expense-new ($ :div {:class "ds-container p-4"} "Add Expense - Coming Soon")
-          :expense-detail ($ :div {:class "ds-container p-4"} "Expense Detail - Coming Soon")
-          :expense-reports ($ :div {:class "ds-container p-4"} "Expense Reports - Coming Soon")
-          :expense-settings ($ :div {:class "ds-container p-4"} "Expense Settings - Coming Soon")
+          :expenses-list ($ expenses-list-page)
+          :expense-upload ($ expense-upload-page)
+          :expense-new ($ expense-new-page)
+          :expense-detail ($ expense-detail-page)
+          :expense-reports ($ expense-reports-page)
+          :expense-settings ($ expense-settings-page)
           ;; If no matching route, default to home page instead of showing 'not found'
           ($ :div {:class "ds-container p-4"} ($ home-page))))
 

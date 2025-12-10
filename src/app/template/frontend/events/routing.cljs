@@ -117,7 +117,9 @@
   :page/init-expense-new
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :expense-new)}))
+    {:db (assoc-in db (paths/current-page) :expense-new)
+     :dispatch-n [[:user-expenses/fetch-suppliers {:limit 100}]
+                  [:user-expenses/fetch-payers {:limit 100}]]}))
 
 (rf/reg-event-fx
   :page/init-expense-detail
@@ -126,24 +128,24 @@
     {:db (-> db
            (assoc-in (paths/current-page) :expense-detail)
            (assoc-in [:ui :current-expense-id] expense-id))
-     ;; TODO: Dispatch fetch event for specific expense
-     }))
+     :dispatch (when expense-id [:user-expenses/fetch-expense expense-id])}))
 
 (rf/reg-event-fx
   :page/init-expense-reports
   common-interceptors
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :expense-reports)
-     ;; TODO: Dispatch fetch events for expense reports
-     }))
+     :dispatch-n [[:user-expenses/fetch-summary]
+                  [:user-expenses/fetch-by-month {:months-back 6}]
+                  [:user-expenses/fetch-by-supplier {:limit 10}]]}))
 
 (rf/reg-event-fx
   :page/init-expense-settings
   common-interceptors
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :expense-settings)
-     ;; TODO: Dispatch fetch events for user expense settings
-     }))
+     :dispatch-n [[:user-expenses/fetch-settings]
+                  [:user-expenses/fetch-payers {:limit 100}]]}))
 
 (rf/reg-event-db
   :navigated

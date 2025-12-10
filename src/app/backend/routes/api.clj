@@ -216,6 +216,9 @@
     ["/summary" {:get {:handler (user-expenses-handlers/expense-summary-handler db)}}]
     ["/by-month" {:get {:handler (user-expenses-handlers/spending-by-month-handler db)}}]
     ["/by-supplier" {:get {:handler (user-expenses-handlers/spending-by-supplier-handler db)}}]
+    ;; Reference data endpoints (suppliers, payers)
+    ["/suppliers" {:get {:handler (user-expenses-handlers/list-suppliers-handler db)}}]
+    ["/payers" {:get {:handler (user-expenses-handlers/list-payers-handler db)}}]
     ;; CRUD endpoints
     ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}
          :post {:handler (user-expenses-handlers/create-expense-handler db)}}]
