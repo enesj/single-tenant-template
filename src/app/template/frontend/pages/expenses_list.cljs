@@ -106,7 +106,7 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "My Expenses"
-           :render-actions my-expense-actions
+           :render-actions (fn [props] ($ my-expense-actions props))
            ;; User-facing defaults – no bulk selection/edit/delete, but keep
            ;; filtering + pagination.
            :display-settings {:show-select? false
