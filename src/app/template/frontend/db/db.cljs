@@ -55,10 +55,12 @@
     :page/init-logout
     :page/init-onboarding})
 
-(defn- should-validate-event? [models-data event-id]
-  (or models-data
-    (nil? event-id)
-    (not (contains? initialization-events event-id))))
+(defn- should-validate-event?
+  [models-data event-id]
+  (let [initialization-event? (contains? initialization-events event-id)]
+    (and models-data
+      (or (nil? event-id)
+        (not initialization-event?)))))
 
 (defn models-data->map
   "Normalizes models-data into a keyword-indexed map regardless of JSON/EDN shape."

@@ -233,7 +233,9 @@
                             ;; use it exclusively. Otherwise, fall back to the template defaults
                             ;; which can optionally include custom actions.
                             :actions (if-let [override (:actions-override props)]
-                                       (override item-clj)
+                                       ($ override (assoc item-clj
+                                                     :show-edit? (:show-edit? props)
+                                                     :show-delete? (:show-delete? props)))
                                        ($ cells/action-buttons
                                          {:item item-clj
                                           :entity-name (:entity-name props)

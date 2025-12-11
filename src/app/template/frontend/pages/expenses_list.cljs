@@ -14,148 +14,47 @@
 ;; Formatting helpers
 ;; ========================================================================
 
-(defn format-money
-  "Format a number with currency."
-  [amount currency]
-  (cond
-    (nil? amount) "--"
-    :else (try
-            (.toLocaleString (js/Number amount) "en-US"
-              #js {:style "currency"
-                   :currency (or currency "USD")
-                   :minimumFractionDigits 2
-                   :maximumFractionDigits 2})
-            (catch :default _
-              (str (or currency "$") " " (.toFixed (js/Number amount) 2))))))
-
-(defn format-date
-  "Full date format for list view."
-  [date-str]
-  (when date-str
-    (.toLocaleDateString (js/Date. date-str) "en-US"
-      #js {:year "numeric" :month "short" :day "numeric"})))
-
-(defn status-badge [expense]
-  (let [posted? (:is_posted expense)]
-    ($ :span {:class (str "ds-badge ds-badge-sm "
-                       (if posted? "ds-badge-success" "ds-badge-warning"))}
-      (if posted? "Posted" "Pending"))))
-
 ;; ========================================================================
 ;; Table Components
 ;; ========================================================================
-
-(defui expense-table-row [{:keys [expense on-view on-edit]}]
-  (let [{:keys [id supplier_display_name payer_label total_amount currency purchased_at]} expense]
-    ($ :tr {:class "hover:bg-base-200 cursor-pointer"
-            :on-click #(when on-view (on-view id))}
-      ($ :td {:class "font-medium"} (or supplier_display_name "—"))
-      ($ :td (or payer_label "—"))
-      ($ :td {:class "text-right font-mono"} (format-money total_amount currency))
-      ($ :td (format-date purchased_at))
-      ($ :td (status-badge expense))
-      ($ :td {:class "text-right"}
-        ($ :div {:class "flex gap-1 justify-end"}
-          ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
-                      :on-click (fn [e]
-                                  (.stopPropagation e)
-                                  (when on-view (on-view id)))}
-            "View")
-          ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
-                      :on-click (fn [e]
-                                  (.stopPropagation e)
-                                  (when on-edit (on-edit id)))}
-            "Edit"))))))
-
-(defui expense-table-skeleton []
-  ($ :tr
-    (for [i (range 6)]
-      ($ :td {:key i}
-        ($ :div {:class "h-4 bg-base-300 rounded animate-pulse"})))))
 
 ;; ========================================================================
 ;; Pagination Component
 ;; ========================================================================
 
-(defui pagination [{:keys [total limit offset on-page-change]}]
-  (let [current-page (inc (quot offset limit))
-        total-pages (max 1 (js/Math.ceil (/ total limit)))
-        can-prev? (> current-page 1)
-        can-next? (< current-page total-pages)]
-    ($ :div {:class "flex items-center justify-between mt-4"}
-      ($ :span {:class "text-sm text-base-content/70"}
-        (str "Showing " (inc offset) "-" (min (+ offset limit) total) " of " total))
-      ($ :div {:class "ds-join"}
-        ($ :button {:class (str "ds-join-item ds-btn ds-btn-sm" (when-not can-prev? " ds-btn-disabled"))
-                    :disabled (not can-prev?)
-                    :on-click #(on-page-change (- offset limit))}
-          "«")
-        ($ :span {:class "ds-join-item ds-btn ds-btn-sm ds-btn-active"}
-          (str "Page " current-page " of " total-pages))
-        ($ :button {:class (str "ds-join-item ds-btn ds-btn-sm" (when-not can-next? " ds-btn-disabled"))
-                    :disabled (not can-next?)
-                    :on-click #(on-page-change (+ offset limit))}
-          "»")))))
-
 ;; ========================================================================
 ;; Filter Component
 ;; ========================================================================
-
-(defui filters [{:keys [on-filter-change]}]
-  (let [[show-filters? set-show-filters!] (use-state false)]
-    ($ :div {:class "mb-4"}
-      ($ :div {:class "flex items-center gap-2 mb-2"}
-        ($ :button {:class "ds-btn ds-btn-ghost ds-btn-sm"
-                    :on-click #(set-show-filters! (not show-filters?))}
-          (if show-filters? "Hide Filters" "Show Filters")
-          ($ :span {:class "ml-1"} (if show-filters? "▲" "▼"))))
-      (when show-filters?
-        ($ :div {:class "bg-base-200 p-4 rounded-lg grid grid-cols-1 md:grid-cols-3 gap-4"}
-          ($ :div
-            ($ :label {:class "ds-label"} ($ :span {:class "ds-label-text"} "Status"))
-            ($ :select {:class "ds-select ds-select-sm ds-select-bordered w-full"
-                        :on-change #(on-filter-change :is_posted (.. % -target -value))}
-              ($ :option {:value ""} "All")
-              ($ :option {:value "true"} "Posted")
-              ($ :option {:value "false"} "Pending")))
-          ($ :div
-            ($ :label {:class "ds-label"} ($ :span {:class "ds-label-text"} "From Date"))
-            ($ :input {:type "date"
-                       :class "ds-input ds-input-sm ds-input-bordered w-full"
-                       :on-change #(on-filter-change :from (.. % -target -value))}))
-          ($ :div
-            ($ :label {:class "ds-label"} ($ :span {:class "ds-label-text"} "To Date"))
-            ($ :input {:type "date"
-                       :class "ds-input ds-input-sm ds-input-bordered w-full"
-                       :on-change #(on-filter-change :to (.. % -target -value))})))))))
 
 ;; ========================================================================
 ;; Main Page
 ;; ========================================================================
 
 (defui my-expense-actions
-  [{:keys [id] :as item}]
+  [{:keys [id show-edit? show-delete?] :as item}]
   (let [expense-id (or id (:id item))]
     (when expense-id
       ($ :div {:class "flex items-center justify-end gap-2"}
-        ($ button
-          {:btn-type :primary
-           :shape "circle"
-           :on-click (fn [e]
-                       (.stopPropagation e)
-                       (rf/dispatch [:navigate-to (str "/expenses/" expense-id)]))}
-          ($ edit-icon))
-        ($ button
-          {:btn-type :danger
-           :shape "circle"
-           :on-click (fn [e]
-                       (.stopPropagation e)
-                       (confirm-dialog/show-confirm
-                         {:title "Delete expense"
-                          :message "Do you want to delete this expense?"
-                          :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
-                          :on-cancel nil}))}
-          ($ delete-icon))))))
+        (when show-edit?
+          ($ button
+            {:btn-type :primary
+             :shape "circle"
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (rf/dispatch [:navigate-to (str "/expenses/" expense-id)]))}
+            ($ edit-icon)))
+        (when show-delete?
+          ($ button
+            {:btn-type :danger
+             :shape "circle"
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (confirm-dialog/show-confirm
+                           {:title "Delete expense"
+                            :message "Do you want to delete this expense?"
+                            :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
+                            :on-cancel nil}))}
+            ($ delete-icon)))))))
 
 (defui expenses-list-page []
   (let [entity-name :expenses
