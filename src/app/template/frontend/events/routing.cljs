@@ -6,6 +6,7 @@
     [app.template.frontend.events.list.crud :as crud-events]
     [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.events.list.selection :as selection-events]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [reitit.frontend.controllers :as rtfc]
     [taoensso.timbre :as log]))
@@ -163,8 +164,19 @@
   common-interceptors
   (fn [{:keys [db]} [new-match]]
     (let [old-match (:current-route db)
-          controllers (rtfc/apply-controllers (:controllers old-match) new-match)]
-      {:dispatch [:navigated new-match controllers]})))
+          controllers (rtfc/apply-controllers (:controllers old-match) new-match)
+          path (str (.-pathname js/window.location) (.-search js/window.location))
+          admin-path? (str/starts-with? path "/admin")]
+      (cond-> {:dispatch [:navigated new-match controllers]}
+        admin-path? (assoc :routing/store-last-admin-path path)))))
+
+(rf/reg-fx
+ :routing/store-last-admin-path
+  (fn [path]
+    (try
+      (js/localStorage.setItem "last-admin-path" path)
+      (catch :default _e
+        (log/warn "Failed to persist last admin path" {:path path})))))
 
 ;; Subscriptions
 (rf/reg-sub

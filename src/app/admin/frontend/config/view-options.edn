@@ -41,7 +41,8 @@
   {:default-page-size 25, :available-page-sizes [10 25 50]},
   :default-sort {:field :purchased-at, :direction :desc},
   :show-pagination? true,
-  :show-filtering? true},
+  :show-filtering? true,
+  :show-batch-edit? true},
  :price-observations
  {:show-delete? false,
   :show-edit? false,
@@ -66,9 +67,7 @@
   :show-pagination? true,
   :show-filtering? true},
  :audit-logs
- {:pagination
-  {:default-page-size 20, :available-page-sizes [10 20 50 100]},
-  :default-sort {:field :created-at, :direction :desc},
+ {:show-edit? false,
   :search-fields [:action :entity-type :ip-address],
   :filters
   {:entity-type
@@ -76,9 +75,13 @@
    :action
    {:type :select, :options [:create :update :delete :login :logout]},
    :created-at {:type :date-range}},
+  :show-select? true,
   :export-formats [:csv :json],
   :bulk-actions [:export :archive],
-  :show-edit? false},
+  :pagination
+  {:default-page-size 20, :available-page-sizes [10 20 50 100]},
+  :show-add-button? true,
+  :default-sort {:field :created-at, :direction :desc}},
  :receipts
  {:show-select? true,
   :show-edit? false,

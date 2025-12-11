@@ -17,7 +17,7 @@
             captured (atom nil)
             btn-found (atom false)]
         (with-redefs [confirm-dialog/show-confirm (fn [cfg] (reset! captured cfg))
-                      app.shared.frontend.components.action-buttons/action-buttons (fn [{:keys [delete]}]
+                      shared-ab/action-buttons (fn [{:keys [delete]}]
                                                   ;; Auto-trigger delete click to avoid headless DOM flakiness
                                                                                      (js/setTimeout
                                                                                        (fn []
@@ -59,7 +59,7 @@
             captured (atom nil)
             btn-found (atom false)]
         (with-redefs [confirm-dialog/show-confirm (fn [cfg] (reset! captured cfg))
-                      app.shared.frontend.components.action-buttons/action-buttons (fn [{:keys [delete]}]
+                      shared-ab/action-buttons (fn [{:keys [delete]}]
                                                                                      ($ :button {:id (:id delete)
                                                                                                  :on-click (:on-click delete)}
                                                                                        "Delete"))]

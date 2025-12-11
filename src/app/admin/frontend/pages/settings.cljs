@@ -585,8 +585,9 @@
         editing? (use-subscribe [::settings-events/editing?])
         config-tab (use-subscribe [::settings-events/config-tab])
 
-        ;; Local state
-        [domain-tab set-domain-tab!] (use-state "system")
+        ;; Local state (persisted)
+        domain-tab (use-subscribe [::settings-events/domain-tab])
+        set-domain-tab! (fn [tab] (rf/dispatch [::settings-events/set-domain-tab tab]))
         render-main-tab (fn [label key]
                           (tabs/tab-link {:label label
                                           :active? (= config-tab key)
@@ -617,6 +618,7 @@
     ;; Load data on mount
     (use-effect
       (fn []
+        (rf/dispatch [::settings-events/restore-ui-state])
         (rf/dispatch [::settings-events/load-view-options])
         (rf/dispatch [::settings-events/load-form-fields])
         (rf/dispatch [::settings-events/load-table-columns])

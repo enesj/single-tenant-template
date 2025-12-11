@@ -14,28 +14,41 @@
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- toggle-column!
-  "Toggle column visibility for the given entity and field."
-  [entity-kw field-id]
-  (rf/dispatch [:admin/toggle-column-visibility entity-kw field-id]))
+  "Toggle column visibility for the given entity and field.
+
+   - Vector-config entities (admin tables) use the admin event.
+   - Legacy/template entities use template list settings events."
+  [vector-mode? entity-kw field-id]
+  (rf/dispatch
+    (if vector-mode?
+      [:admin/toggle-column-visibility entity-kw field-id]
+      [::settings-events/toggle-column-visibility entity-kw field-id])))
 
 (defn- toggle-field-filtering! [entity-kw field-id]
   (rf/dispatch [::settings-events/toggle-field-filtering entity-kw field-id]))
 
 (defui column-visibility-settings
   "Controls for column visibility"
-  [{:keys [entity-name current-entity-name _global-settings?]}]
+  [{:keys [entity-name current-entity-name _global-settings?] :as props}]
   (let [entity-type (or current-entity-name entity-name)
         entity-kw (if (keyword? entity-type) entity-type (keyword entity-type))
-        ;; Use modern admin entity spec subscription
-        {:keys [entity-spec]} (template-utils/use-entity-spec entity-kw :admin)
+        vector-mode? (column-config/vector-config? entity-kw)
+        provided-entity-spec (:entity-spec props)
+        ;; Call the hook unconditionally (Rules of Hooks). Use as fallback.
+        {:keys [entity-spec] :as _spec-hook} (template-utils/use-entity-spec entity-kw :admin)
+        effective-entity-spec (or provided-entity-spec entity-spec)
         entity-fields (cond
-                        (and (map? entity-spec) (:fields entity-spec)) (:fields entity-spec)
-                        (sequential? entity-spec) entity-spec
-                        (map? entity-spec) (vals entity-spec)
+                        (and (map? effective-entity-spec) (:fields effective-entity-spec)) (:fields effective-entity-spec)
+                        (sequential? effective-entity-spec) effective-entity-spec
+                        (map? effective-entity-spec) (vals effective-entity-spec)
                         :else [])
         entity-config (use-subscribe [::admin-subs/entity-config entity-kw])
-        visible-columns (or (use-subscribe [::admin-subs/visible-columns entity-kw]) [])
-        filterable-columns (or (use-subscribe [:admin/filterable-columns entity-kw]) [])
+        ;; Use the same visibility source as list-view (vector-config vs template prefs)
+        visible-source (column-config/visible-columns-source vector-mode? entity-kw)
+        raw-visible-columns (use-subscribe visible-source)
+        visible-columns (column-config/get-visible-columns vector-mode? entity-kw raw-visible-columns)
+        ;; Filterable columns come from config (if present). If missing, treat all as filter-configurable.
+        filterable-columns (or (use-subscribe [::ui-subs/filterable-fields entity-kw]) [])
         filterable-state (or (use-subscribe [::settings-events/filterable-fields entity-kw]) {})
         normalize-key (fn [k]
                         (cond
@@ -43,8 +56,8 @@
                           (keyword? k) k
                           (string? k) (keyword k)
                           :else (keyword (str k))))
-        visible-column-set (into #{} (keep normalize-key) visible-columns)
-        filterable-column-set (into #{} (keep normalize-key) filterable-columns)
+        filterable-column-set (when (seq filterable-columns)
+                                (into #{} (keep normalize-key) filterable-columns))
         filterable-state-normalized (into {}
                                       (keep (fn [[k v]]
                                               (when-let [nk (normalize-key k)]
@@ -70,10 +83,14 @@
                       field-name (name field-id)
                       ;; Disable toggle for always-visible columns
                       is-column-configurable? (not (contains? always-visible-set field-id))
-                      ;; Check if this column is in the filterable-columns set
-                      is-filter-configurable? (contains? filterable-column-set field-id)
-                      ;; Determine visibility directly from subscription
-                      is-column-visible? (contains? visible-column-set field-id)
+                        ;; If config doesn't specify filterable columns, treat all columns as filter-configurable.
+                        is-filter-configurable? (if (set? filterable-column-set)
+                                    (contains? filterable-column-set field-id)
+                                    true)
+                        ;; Determine visibility from the (possibly sparse) visible map (defaults to true)
+                        is-column-visible? (let [sentinel ::not-found
+                                    v (get visible-columns field-id sentinel)]
+                                  (if (not= v sentinel) v true))
                       ;; Determine filterable state from per-entity overrides
                       is-field-filterable? (and is-filter-configurable?
                                              (get filterable-state-normalized field-id true))]
@@ -93,7 +110,7 @@
                                    "This column is not configurable")
                           :on-click (fn [_e]
                                       (when is-column-configurable?
-                                        (toggle-column! entity-kw field-id)))}
+                                        (toggle-column! vector-mode? entity-kw field-id)))}
                 field-label)
 
               ;; Filter icon overlay - show if column is visible and filterable

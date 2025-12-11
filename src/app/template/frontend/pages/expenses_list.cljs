@@ -6,7 +6,7 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [edit-icon delete-icon]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state use-effect]]
+    [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]
     [app.template.frontend.subs.user-expenses]))
 
@@ -80,7 +80,7 @@
     ($ :div {:class "min-h-screen bg-base-100"}
       ;; Header
       ($ :header {:class "bg-white border-b border-base-200"}
-        ($ :div {:class "max-w-6xl mx-auto px-4 py-4 sm:py-6"}
+        ($ :div {:class "w-full px-4 py-4 sm:py-6"}
           ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
             ($ :div
               ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "My Expenses")
@@ -96,12 +96,12 @@
 
       ;; Error banner (from user-expenses pipeline)
       (when error
-        ($ :div {:class "max-w-6xl mx-auto px-4 mt-4"}
+        ($ :div {:class "w-full px-4 mt-4"}
           ($ :div {:class "ds-alert ds-alert-error"}
             ($ :span error))))
 
       ;; Main content: generic list-view backed by shared entity store
-      ($ :main {:class "max-w-6xl mx-auto px-4 py-6"}
+      ($ :main {:class "w-full px-4 py-6"}
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec

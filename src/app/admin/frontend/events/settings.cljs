@@ -282,25 +282,80 @@
       (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
+;; UI State Persistence (tabs, edit mode, domain tab)
+;; =============================================================================
+
+(def ^:private settings-ui-storage-key "admin-settings-ui-state")
+
+(rf/reg-fx
+ ::persist-ui-state
+  (fn [ui-state]
+    (try
+      (js/localStorage.setItem settings-ui-storage-key (js/JSON.stringify (clj->js ui-state)))
+      (catch :default e
+        (log/warn "Failed to persist admin settings UI state" {:error e :ui-state ui-state})))))
+
+(rf/reg-event-fx
+  ::restore-ui-state
+  (fn [{:keys [db]} _]
+    (let [raw (.getItem js/localStorage settings-ui-storage-key)
+          parsed (when raw
+                   (try
+                     (js->clj (js/JSON.parse raw) :keywordize-keys true)
+                     (catch :default _ nil)))]
+      {:db (cond-> db
+             (map? parsed)
+             (-> (assoc-in [:admin :settings :editing?] (boolean (:editing? parsed)))
+               (assoc-in [:admin :settings :config-tab] (or (:config-tab parsed) "view-options"))
+               (assoc-in [:admin :settings :domain-tab] (or (:domain-tab parsed) "system"))))})))
+
+;; =============================================================================
 ;; Toggle Editing Mode
 ;; =============================================================================
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::toggle-editing
-  (fn [db _]
+  (fn [{:keys [db]} _]
     (let [current (get-in db [:admin :settings :editing?] false)
-          new-val (not current)]
+          new-val (not current)
+          config-tab (get-in db [:admin :settings :config-tab] "view-options")
+          domain-tab (get-in db [:admin :settings :domain-tab] "system")
+          ui-state {:editing? new-val
+                    :config-tab config-tab
+                    :domain-tab domain-tab}]
       (log/info "Toggle editing" {:current current :new-val new-val})
-      (assoc-in db [:admin :settings :editing?] new-val))))
+      {:db (assoc-in db [:admin :settings :editing?] new-val)
+       ::persist-ui-state ui-state})))
 
 ;; =============================================================================
 ;; Active Config Tab
 ;; =============================================================================
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::set-config-tab
-  (fn [db [_ tab]]
-    (assoc-in db [:admin :settings :config-tab] tab)))
+  (fn [{:keys [db]} [_ tab]]
+    (let [editing? (get-in db [:admin :settings :editing?] false)
+          domain-tab (get-in db [:admin :settings :domain-tab] "system")
+          ui-state {:editing? editing?
+                    :config-tab tab
+                    :domain-tab domain-tab}]
+      {:db (assoc-in db [:admin :settings :config-tab] tab)
+       ::persist-ui-state ui-state})))
+
+;; =============================================================================
+;; Active Domain Tab
+;; =============================================================================
+
+(rf/reg-event-fx
+  ::set-domain-tab
+  (fn [{:keys [db]} [_ tab]]
+    (let [editing? (get-in db [:admin :settings :editing?] false)
+          config-tab (get-in db [:admin :settings :config-tab] "view-options")
+          ui-state {:editing? editing?
+                    :config-tab config-tab
+                    :domain-tab tab}]
+      {:db (assoc-in db [:admin :settings :domain-tab] tab)
+       ::persist-ui-state ui-state})))
 
 ;; =============================================================================
 ;; Subscriptions
@@ -355,3 +410,8 @@
   ::config-tab
   (fn [db _]
     (get-in db [:admin :settings :config-tab] "view-options")))
+
+(rf/reg-sub
+  ::domain-tab
+  (fn [db _]
+    (get-in db [:admin :settings :domain-tab] "system")))

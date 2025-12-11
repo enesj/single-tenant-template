@@ -179,8 +179,11 @@
 
         ;; Create base headers from entity fields using vector-config only (no legacy :admin metadata)
         ;; Pre-compute filterable and sortable sets from vector-config (if available)
+        ;; IMPORTANT: if admin config returns an empty collection for an entity with no
+        ;; vector-config, treat it as "no restriction" (default sortable). Only restrict
+        ;; when the config provides a non-empty set of sortable columns.
         sortable-set (let [sc (use-subscribe [:admin/sortable-columns entity-name])]
-                       (when (coll? sc) (set sc)))
+                 (when (seq sc) (set sc)))
         filterable-set (cond
                          (map? filterable-fields) filterable-fields
                          (coll? filterable-fields) (set filterable-fields)
