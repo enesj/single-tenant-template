@@ -1,30 +1,30 @@
-<!-- ai: {:namespaces [app.backend.services.* app.backend.routes.admin-*] :tags [:backend :architecture :single-tenant] :kind :guide} -->
+<!-- ai: {:namespaces [app.admin.backend.services.* app.template.backend.services.* app.template.backend.routes.admin-* app.domain.backend.expenses.*] :tags [:backend :architecture :single-tenant] :kind :guide} -->
 
 # Backend Services (Single-Tenant)
 
 This app runs a single-tenant admin backend. Multi-tenant domain services (hosting/financial/integration) were removed; only the services below are active.
 
 ## Service Map (high level)
-- **Admin users** (`app.backend.services.admin.users`) – CRUD + role changes + email verification + password resets + impersonation support.
-- **Admin audit** (`app.backend.services.admin.audit`) – write/list audit events; merges admin/user context and normalizes principal identifiers.
-- **Monitoring: login events** (`app.backend.services.monitoring.login-events`) – record/list login attempts for admins/users, normalize principal info for UI.
-- **Admin service façade** (`app.backend.services.admin`) – higher-level helpers for advanced operations (e.g., `get-user-activity`, role updates) used by `admin.user-operations` routes.
-- **Shared helpers** – response coercion, pagination, and logging in `app.backend.routes.admin.utils`.
+- **Admin users** (`app.admin.backend.services.admin.users`) – CRUD + role changes + email verification + password resets + impersonation support.
+- **Admin audit** (`app.admin.backend.services.admin.audit`) – write/list audit events; merges admin/user context and normalizes principal identifiers.
+- **Monitoring: login events** (`app.template.backend.services.monitoring.login-events`) – record/list login attempts for admins/users, normalize principal info for UI.
+- **Admin service façade** (`app.admin.backend.services.admin`) – higher-level helpers for advanced operations (e.g., `get-user-activity`, role updates) used by `admin.user-operations` routes.
+- **Shared helpers** – response coercion, pagination, and logging in `app.template.backend.routes.admin.utils`.
 
 ## Domain: Home Expenses Tracker (new)
-- **Suppliers** (`app.domain.expenses.services.suppliers`) — CRUD, normalization/dedupe by `normalized_key`, search/count helpers.
-- **Payers** (`app.domain.expenses.services.payers`) — CRUD, default-per-type management, suggestions from payment hints.
-- **Receipts** (`app.domain.expenses.services.receipts`) — upload with file-hash dedupe, status transitions, approve → post expense, extraction storage.
-- **Expenses** (`app.domain.expenses.services.expenses`) — create/update with line items, soft delete, listing filters; records price observations.
-- **Articles/Aliases/Price history** (`app.domain.expenses.services.articles`, `price-history`) — canonical articles, alias mapping, price observation queries.
-- **Reports** (`app.domain.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
-- **Routes** mounted under `/admin/api/expenses` via `app.domain.expenses.routes.core` (see `docs/backend/http-api.md` for endpoint map).
+- **Suppliers** (`app.domain.backend.expenses.services.suppliers`) — CRUD, normalization/dedupe by `normalized_key`, search/count helpers.
+- **Payers** (`app.domain.backend.expenses.services.payers`) — CRUD, default-per-type management, suggestions from payment hints.
+- **Receipts** (`app.domain.backend.expenses.services.receipts`) — upload with file-hash dedupe, status transitions, approve → post expense, extraction storage.
+- **Expenses** (`app.domain.backend.expenses.services.expenses`) — create/update with line items, soft delete, listing filters; records price observations.
+- **Articles/Aliases/Price history** (`app.domain.backend.expenses.services.articles`, `price-history`) — canonical articles, alias mapping, price observation queries.
+- **Reports** (`app.domain.backend.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
+- **Routes** mounted under `/admin/api/expenses` via `app.domain.backend.expenses.routes.core` (see `docs/backend/http-api.md` for endpoint map).
 
 ## How Routes Bind to Services
-- `app.backend.routes.admin.users` → basic user CRUD.
-- `app.backend.routes.admin.user-operations` → role update, force verify email, reset password, impersonation, activity aggregation, advanced search.
-- `app.backend.routes.admin.audit` → global audit listing/export.
-- `app.backend.routes.admin.login-events` → login event listing.
+- `app.template.backend.routes.admin.users` → basic user CRUD.
+- `app.template.backend.routes.admin.user-operations` → role update, force verify email, reset password, impersonation, activity aggregation, advanced search.
+- `app.template.backend.routes.admin.audit` → global audit listing/export.
+- `app.template.backend.routes.admin.login-events` → login event listing.
 
 ## Monitoring/Audit Data Shape
 - **Audit events**: include `principal-id`, `principal-type` (`admin|user`), `action`, `metadata`, `created-at`. Use `admin-utils/log-admin-action` when adding new admin actions.

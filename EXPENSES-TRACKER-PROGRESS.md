@@ -56,7 +56,7 @@ Successfully created and migrated all 8 expense tracker domain tables to the dat
 ### What shipped
 - Implemented domain services: suppliers (normalize/dedupe), payers (defaults per type), receipts (upload + status + approval), expenses (with items + soft delete), articles + aliases, price history, reports.
 - Added HoneySQL queries with enum casts for `payer_type`, `receipt_status`, `currency`.
-- Admin API routes mounted under `/admin/api/expenses` via `src/app/domain/expenses/routes/*` and `src/app/backend/routes/admin_api.clj`.
+- Admin API routes mounted under `/admin/api/expenses` via `src/app/domain/backend/expenses/routes/*` and `src/app/template/backend/routes/admin_api.clj`.
 - Added migration-backed schema already applied.
 - Integration tests for services cover supplier dedupe, payer defaults, receipt approval → expense, price observation recording, and soft-delete exclusion; all passing (5 tests, 13 assertions).
 

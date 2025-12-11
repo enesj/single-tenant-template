@@ -52,7 +52,7 @@ Common tasks:
 
 ## Template vs Hosting (at a glance)
 
-- **Template scope (this repo)**: single-tenant; template/admin/shared code only; simplified admin auth; DB defined in `resources/db/models.edn`.
+- **Template scope (this repo)**: single-tenant; template/admin/shared code only; simplified admin auth; DB generated into `resources/db/models.edn` from `resources/db/{template,shared,domain}/**`.
 - **Hosting reference**: multi-tenant RLS, tenant context middleware, full property/financial/integration domains. Use these docs as examples when adding your own domains.
 
 ## Architecture Snapshot (template)
@@ -62,8 +62,8 @@ Browser → app.template.frontend.core → admin/template routes → services/DI
 ```
 
 - Frontend: Re-frame + UIX, routes in `app.template.frontend.routes`, admin bootstrap in `app.admin.frontend.core`.
-- Backend: `app.backend.core` with DI container `app.template.di.config`.
-- DB: migrations sourced from `resources/db/models.edn`; use `clj -X:migrations-dev` / `bb` tasks.
+- Backend: `app.template.backend.core` with DI container `app.template.di.config`.
+- DB: migrations are generated from source files in `resources/db/{template,shared,domain}/**` (merged into `resources/db/models.edn`).
 
 ## Development Navigation
 
@@ -71,8 +71,8 @@ Browser → app.template.frontend.core → admin/template routes → services/DI
 |------|----------|---------------|
 | Admin (template) | `docs/frontend/admin.md`, `docs/frontend/admin-settings.md`, `docs/frontend/admin-panel-single-tenant.md` | `src/app/admin/frontend` |
 | Template frontend | `docs/frontend/app-shell.md`, `docs/frontend/template-component-integration.md` | `src/app/template/frontend` |
-| Backend core | `docs/backend/single-tenant-template.md`, `docs/backend/http-api.md` | `src/app/backend` |
-| Domains | `docs/expenses/index.md` | `src/app/domain/expenses` |
+| Backend core | `docs/backend/single-tenant-template.md`, `docs/backend/http-api.md` | `src/app/template/backend` |
+| Domains | `docs/expenses/index.md` | `src/app/domain/backend/expenses`, `src/app/domain/frontend/expenses` |
 | Migrations/DB | `docs/migrations/migration-overview.md` | `resources/db/*` |
 | Hosting reference | Domain docs listed above | *Hosting repo only* |
 

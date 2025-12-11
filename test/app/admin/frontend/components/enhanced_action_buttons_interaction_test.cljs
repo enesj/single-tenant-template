@@ -4,7 +4,7 @@
     [app.admin.frontend.components.enhanced-action-buttons :as buttons]
     [app.admin.frontend.test-setup :as setup]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
-    [app.shared.frontend.components.action-buttons :as shared-ab]
+    [app.template.frontend.shared.components.action-buttons :as shared-ab]
     [cljs.test :refer-macros [deftest is testing async]]
     [uix.core :refer [$]]))
 

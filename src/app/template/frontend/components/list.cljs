@@ -1,6 +1,6 @@
 (ns app.template.frontend.components.list
   (:require
-   [app.frontend.utils.id :as id-utils]
+   [app.template.frontend.utils.id :as id-utils]
    [app.shared.keywords :as kw]
    [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
    [app.template.frontend.components.filter :refer [filter-form]]

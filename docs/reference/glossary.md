@@ -29,7 +29,7 @@ Key terms used across the single-tenant template, admin backend, and admin UI.
 ## Database
 - **UUID PK** — All primary keys are UUIDs; exposed as strings in JSON.
 - **Enums** — `user-role`, `user-status`, `admin-role`, `admin-status`, `audit-actor-type`, `login-principal-type` (see `resources/db/models.edn`).
-- **Canonical Schema** — Defined in `resources/db/models.edn`; migrations generated via `app.migrations.simple-repl`.
+- **Canonical Schema** — Materialized in `resources/db/models.edn` from canonical sources under `resources/db/{template,shared,domain}/**`; migrations generated via `app.template.backend.migrations.simple-repl`.
 
 ## Security
 - **Admin Auth Middleware** — `wrap-admin-authentication` protects `/admin/api/**`; expects the admin token and sets `:admin` on the request map.

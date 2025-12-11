@@ -3,7 +3,7 @@
    
    Tests metrics, config, and health endpoints."
   (:require
-   [app.backend.services.monitoring.login-events :as login-monitoring]
+   [app.template.backend.services.monitoring.login-events :as login-monitoring]
    [app.backend.test-helpers :as h]
     [clojure.string :as str]
    [clojure.test :refer [deftest is testing]]

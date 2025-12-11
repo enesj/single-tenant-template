@@ -4,7 +4,7 @@
     [app.admin.frontend.components.admin-page-wrapper :as wrapper]
     [app.admin.frontend.subs.auth]
     [app.admin.frontend.test-setup :as setup]
-    [app.frontend.utils.test-utils :as test-utils]
+    [app.template.frontend.utils.test-utils :as test-utils]
     [app.template.frontend.utils.shared :as template-utils]
     [cljs.test :refer-macros [deftest is testing async]]
     [clojure.string :as str]

@@ -89,7 +89,7 @@ The test system reuses the dev system infrastructure with test-specific configur
 |------|---------|
 | `test/app/backend/fixtures.clj` | System lifecycle hooks for Kaocha |
 | `test/app/backend/test_helpers.clj` | Shared test utilities |
-| `src/app/backend/core.clj` | Contains `with-test-system` |
+| `src/app/template/backend/core.clj` | Contains `with-test-system` |
 | `src/system/state.clj` | Shared atoms for system state |
 
 ## Test Categories

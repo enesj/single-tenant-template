@@ -132,7 +132,7 @@ All expense domain APIs are mounted under `/admin/api/expenses`:
 
 ### Service Layer
 
-Key services in `src/app/domain/expenses/services/`:
+Key services in `src/app/domain/backend/expenses/services/`:
 
 - **articles.clj** - Article CRUD and alias management
 - **price_history.clj** - Price observation tracking

@@ -1,7 +1,7 @@
 (ns app.template.frontend.events.list.crud
   "CRUD operations for list entities - fetching, deletion, and error handling"
   (:require
-    [app.shared.frontend.bridges.crud :as crud-bridges]
+    [app.template.frontend.shared.bridges.crud :as crud-bridges]
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]

@@ -5,7 +5,7 @@
 Fast pointers for AI agents (and humans) to the current single-tenant docs. Use these before broad searches.
 
 ## Quick recipes
-- By namespace: `rg -n "<!-- ai: .*app\.backend\.routes" docs`
+- By namespace: `rg -n "<!-- ai: .*app\.template\.backend\.routes" docs`
 - By task keyword: `rg -n "\brun-app\b|\bbe-test\b|\bfe-test\b|\blint\b|\bcljfmt\b" docs/operations`
 - Migrations/workflow: `rg -n "migrate|models.edn|mig/" docs/migrations`
 
@@ -38,7 +38,7 @@ npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
 ## Metadata for RAG
 All docs should start with:
 ```markdown
-<!-- ai: {:namespaces [app.backend.routes app.shared.http]
+<!-- ai: {:namespaces [app.template.backend.routes app.shared.http]
          :tags [:backend :http]
          :kind :reference} -->
 ```

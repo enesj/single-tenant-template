@@ -1,10 +1,10 @@
 (ns app.backend.routes-smoke-test
   (:require
-   [app.backend.routes :as routes]
-   [app.backend.routes.admin-api :as admin-api]
-   [app.backend.services.admin.dashboard :as admin-dashboard]
-   [app.backend.services.monitoring.login-events :as login-monitoring]
-   [app.backend.webserver :as webserver]
+   [app.template.backend.routes :as routes]
+   [app.template.backend.routes.admin-api :as admin-api]
+   [app.admin.backend.services.admin.dashboard :as admin-dashboard]
+   [app.template.backend.services.monitoring.login-events :as login-monitoring]
+   [app.template.backend.webserver :as webserver]
    [cheshire.core :as json]
     [clojure.string :as str]
    [clojure.test :refer [deftest is]]

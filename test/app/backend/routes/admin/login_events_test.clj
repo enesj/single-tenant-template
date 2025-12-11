@@ -5,8 +5,8 @@
    - Listing login events with filtering
    - Handler creation validation"
   (:require
-    [app.backend.routes.admin.login-events :as login-events]
-    [app.backend.services.monitoring.login-events :as login-monitoring]
+    [app.template.backend.routes.admin.login-events :as login-events]
+    [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 

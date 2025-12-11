@@ -1,6 +1,6 @@
 (ns app.template.frontend.state.normalize
   (:require
-    [app.frontend.utils.id :as id-utils]
+    [app.template.frontend.utils.id :as id-utils]
     [clojure.string]))
 
 (defn extract-entity-id

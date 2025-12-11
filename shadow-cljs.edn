@@ -29,12 +29,12 @@
            :features-to-install
            [:formatters :hints]}}
 
-         :modules {:app {:preloads [app.frontend.dev.tracing]}}}
+         :modules {:app {:preloads [app.template.frontend.dev.tracing]}}}
 
    :modules
    {:app
     {:init-fn app.template.frontend.core/init
-     :preloads [app.frontend.preload.silence]}}}
+     :preloads [app.template.frontend.preload.silence]}}}
 
   :admin
   {:target :browser
@@ -46,8 +46,8 @@
    :modules
    {:app
     {:init-fn app.admin.frontend.core/init
-     :preloads [app.frontend.preload.silence
-                app.frontend.dev.tracing]}}}
+     :preloads [app.template.frontend.preload.silence
+                app.template.frontend.dev.tracing]}}}
 
 ;; ClojureScript test build (browser)
   :test

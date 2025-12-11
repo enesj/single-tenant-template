@@ -6,7 +6,7 @@
    - Access to test database and service container
    - Transaction-based test isolation fixtures"
   (:require
-    [app.backend.core :as backend]
+    [app.template.backend.core :as backend]
     [next.jdbc :as jdbc]
     [system.state :as state]
     [taoensso.timbre :as log]))

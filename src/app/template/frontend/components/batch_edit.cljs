@@ -1,6 +1,6 @@
 (ns app.template.frontend.components.batch-edit
   (:require
-    [app.frontend.utils.id :as id-utils]
+    [app.template.frontend.utils.id :as id-utils]
     [app.template.frontend.components.batch-edit.fields :as batch-fields]
     [app.template.frontend.components.batch-edit.hooks :as batch-hooks]
     [app.template.frontend.components.batch-edit.ui :as batch-ui]

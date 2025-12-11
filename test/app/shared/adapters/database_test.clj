@@ -1,6 +1,6 @@
 (ns app.shared.adapters.database-test
   (:require
-    [app.shared.adapters.database :as db-adapter]
+    [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.test :refer [deftest is testing]]))
 
 (deftest convert-app-keys->camel-keys-test

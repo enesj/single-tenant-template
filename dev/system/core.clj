@@ -1,6 +1,6 @@
 (ns system.core
   (:require
-   [app.backend.core :refer [await-scheduler init with-my-system]]
+   [app.template.backend.core :refer [await-scheduler init with-my-system]]
    [clojure.tools.namespace.repl :refer [refresh refresh-all set-refresh-dirs]]
    [io.aviso.exception :refer [write-exception]]
    [system.state :refer [instance state]]

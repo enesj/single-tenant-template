@@ -18,14 +18,14 @@ Single-tenant frontend built with Shadow CLJS, Re-frame, and UIx. The app shell 
           :output-dir "resources/public/js/main"
           :asset-path "/js/main"
           :modules {:app {:init-fn app.template.frontend.core/init
-                         :preloads [app.frontend.preload.silence]}}}
+                         :preloads [app.template.frontend.preload.silence]}}}
 
   :admin {:target :browser
           :output-dir "resources/public/js/admin"
           :asset-path "/js/admin"
           :modules {:app {:init-fn app.admin.frontend.core/init
-                         :preloads [app.frontend.preload.silence
-                                    app.frontend.dev.tracing]}}}
+                         :preloads [app.template.frontend.preload.silence
+                                    app.template.frontend.dev.tracing]}}}
 
   :test  {:target :browser-test
           :test-dir "target/test"

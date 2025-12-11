@@ -2,11 +2,11 @@
 
 ## Overview & Architecture
 - Single-tenant SaaS template built with Clojure/ClojureScript and PostgreSQL.
-- Core structure: Admin (admin panel), Backend (core services), Frontend (UI utilities), Template (shared SaaS infrastructure), Shared (cross-platform utilities).
+- Core structure: Admin (admin panel), Template (shared SaaS infrastructure), Domain (feature modules), Shared (cross-platform utilities).
 
 ## Project Structure (Quick Map)
 ```
-src/app/        # admin, backend, frontend, migrations, shared, template
+src/app/        # admin, template, domain, shared (plus a small frontend/ folder for global assets)
 test/           # *_test.clj / *_test.cljs mirroring src
 resources/      # public assets, db models/migrations
 config/         # base + secrets (local only)

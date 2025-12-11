@@ -1,63 +1,77 @@
 (ns app.template.backend.routes.auth
-  "Template authentication routes using service-oriented architecture"
   (:require
-    [app.backend.services.monitoring.login-events :as login-monitoring]
     [app.template.shared.auth :as shared-auth]
     [app.shared.data :as shared-data]
     [app.shared.date :as shared-date]
     [app.template.backend.auth.service :as auth-service]
-    [app.template.backend.routes.utils :as route-utils]
+    [app.template.backend.routes.utils :as route-utils :refer [error-response get-service-container]]
+    [app.template.backend.services.monitoring.login-events :as login-monitoring]
+    [app.shared.http :refer [json-response]]
     [cheshire.core :as json]
     [clojure.walk :as walk]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
-;; Forward declaration to satisfy usages above its definition
-(declare sanitize-for-serialization)
+;; Auth Routes
+;;
+;; This namespace provides route handlers for authentication.
+;; It uses the AuthenticationService to perform the actual logic.
 
-;; Utility functions for error responses
-(defn error-response
-  [message status]
-  {:status status
-   :headers {"Content-Type" "application/json"}
-   :body (cheshire.core/generate-string {:error message})})
+(def logout-handler
+  "Handle logout by clearing the session"
+  (fn [req]
+    (log/info "Processing logout request")
+    (-> (response/response (json/generate-string {:success true}))
+      (response/content-type "application/json")
+      (assoc :session nil))))
 
-;; Utility functions for JSON responses
-(defn json-response
-  [body & [session-data]]
-  (let [response {:status 200
-                   :headers {"Content-Type" "application/json"}
-                   :body (cheshire.core/generate-string body)}]
-    (if session-data
-      (assoc response :session session-data)
-      response)))
+(defn- sanitize-for-serialization
+  "Helper function to sanitize objects for JSON/EDN serialization"
+  [obj]
+  (walk/postwalk
+    (fn [x]
+      (cond
+        ;; Handle all UUID types
+        (instance? java.util.UUID x) (str x)
+        ;; Handle all time/date types
+        (instance? java.time.LocalDateTime x) (str x)
+        (instance? java.time.ZonedDateTime x) (str x)
+        (instance? java.time.OffsetDateTime x) (str x)
+        (instance? java.time.Instant x) (str x)
+        (instance? java.time.LocalDate x) (str x)
+        (instance? java.time.LocalTime x) (str x)
+        ;; Handle SQL types
+        (instance? java.sql.Timestamp x) (str x)
+        (instance? java.sql.Date x) (str x)
+        (instance? java.sql.Time x) (str x)
+        ;; Handle numeric types that might not serialize
+        (instance? java.math.BigDecimal x) (str x)
+        (instance? java.math.BigInteger x) (str x)
+        :else x))
+    obj))
 
-(defn get-service-container
-  "Extract the template service container from the Ring request.
-   The backend webserver middleware associates it under :service-container."
-  [req]
-  (:service-container req))
 
-(defn logout-handler
-  "Handle user logout by clearing session"
-  [_]
-  (-> (response/redirect "/about")
-    (assoc :session nil)))
-
-;; NEW: User registration endpoint
 (defn register-handler
+  "Handler for user registration"
   [auth-service]
   (fn [req]
-    (route-utils/with-error-handling "user-register"
-      (let [{:keys [_db]} (get-service-container req)
-            ;; Support both camelCase and kebab-case from frontend
-            {:keys [email full-name fullName password]} (:body-params req)
-            ;; Canonicalize names
-            email (or email (get (:body-params req) :email))
-            full-name (or full-name fullName (get (:body-params req) :full_name))
-            password password]
-        (log/info "register-handler body-params" (:body-params req))
-
+    (route-utils/with-error-handling "user-registration"
+      (let [{:keys [email full-name password]} (:body-params req)]
+        (log/info "Processing registration request for:" email)
+        ;; Note: We log the keys of the request, but be careful not to log the password!
+        (log/info "Request keys:" (keys req))
+        (log/info "Body params keys:" (keys (:body-params req)))
+        
+        ;; Use a more robust check for password presence
+        (when (or (empty? email) (empty? password))
+           (log/warn "Missing email or password in registration request")
+           (error-response "Email and password are required" 400))
+           
+        (let [;; Since we pull email/password from body-params, we can just pass them to the service
+            ;; But let's verify specific params if we need to debug
+            _ (log/debug "Email present:" (not (empty? email)))
+            _ (log/debug "Password present:" (not (empty? password)))]
+        
         ;; Call registration service (handles validation, email verification and email sending)
         (let [result (auth-service/register-user-with-password!
                        auth-service
@@ -80,7 +94,7 @@
             (-> (json-response {:success true
                                 :verification-required false
                                 :user sanitized-user})
-                (assoc-in [:session :auth-session] {:user sanitized-user}))))))))
+                (assoc-in [:session :auth-session] {:user sanitized-user})))))))))
 
 ;; NEW: Email/password login endpoint
 (defn login-handler
@@ -138,30 +152,7 @@
                 ;; Default error
                 (error-response "Invalid email or password" 401)))))))))
 
-(defn- sanitize-for-serialization
-  "Helper function to sanitize objects for JSON/EDN serialization"
-  [obj]
-  (walk/postwalk
-    (fn [x]
-      (cond
-        ;; Handle all UUID types
-        (instance? java.util.UUID x) (str x)
-        ;; Handle all time/date types
-        (instance? java.time.LocalDateTime x) (str x)
-        (instance? java.time.ZonedDateTime x) (str x)
-        (instance? java.time.OffsetDateTime x) (str x)
-        (instance? java.time.Instant x) (str x)
-        (instance? java.time.LocalDate x) (str x)
-        (instance? java.time.LocalTime x) (str x)
-        ;; Handle SQL types
-        (instance? java.sql.Timestamp x) (str x)
-        (instance? java.sql.Date x) (str x)
-        (instance? java.sql.Time x) (str x)
-        ;; Handle numeric types that might not serialize
-        (instance? java.math.BigDecimal x) (str x)
-        (instance? java.math.BigInteger x) (str x)
-        :else x))
-    obj))
+
 
 (defn auth-status-handler
   "Handle authentication status check"

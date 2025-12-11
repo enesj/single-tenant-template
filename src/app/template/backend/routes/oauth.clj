@@ -1,51 +1,129 @@
 (ns app.template.backend.routes.oauth
   (:require
-   [app.template.backend.auth.service :as auth-service]
-   [app.template.backend.routes.utils :as route-utils]
-   [clj-http.client :as http]
-   [clojure.string :as str]
-   [clojure.walk :as walk]
-   [ring.util.response :as response]
-   [taoensso.timbre :as log]))
+    [app.template.shared.auth :as shared-auth]
+    [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.routes.utils :as route-utils :refer [error-response get-oauth-configs]]
+    [cheshire.core :as json]
+    [clj-http.client :as http]
+    [clojure.string :as str]
+    [clojure.walk :as walk]
+    [ring.util.response :as response]
+    [taoensso.timbre :as log])
+  (:import
+    (java.net URLDecoder URLEncoder)))
+
+;; OAuth Routes
+;;
+;; This namespace provides route handlers for OAuth authentication.
+;; It handles the OAuth callback, token exchange, and user creation/login via Auth Service.
+
+(defn- build-auth-url [base-url params]
+  (let [query-string (str/join "&"
+                       (map (fn [[k v]]
+                              (str (name k) "=" (java.net.URLEncoder/encode (str v) "UTF-8")))
+                         params))]
+    (str base-url "?" query-string)))
+
+(defn- html-error-response
+  "Generate HTML error response"
+  [title message]
+  {:status 400
+   :headers {"Content-Type" "text/html"}
+   :body (str "<h1>" title "</h1>"
+           "<p>" message "</p>"
+           "<p><a href='/'>Return to Home</a></p>")})
+
+(defn- normalize-scopes
+  "Normalize OAuth scopes to a provider-compatible string.
+   Accepts string or sequential (vector/list) and joins with spaces."
+  [scopes]
+  (cond
+    (nil? scopes) nil
+    (string? scopes) scopes
+    (sequential? scopes) (str/join " " scopes)
+    :else (str scopes)))
+
+(defn google-login-handler
+  "Initiate Google OAuth login"
+  []
+  (fn [req]
+    (route-utils/with-error-handling "google-login"
+      (let [config (get-in req [:service-container :config])
+            oauth-configs (route-utils/get-oauth-configs config)
+            provider-config (:google oauth-configs)]
+        (if provider-config
+          (let [base-url (or (:authorization-uri provider-config)
+                           (:authorize-uri provider-config))
+                params {:client_id (:client-id provider-config)
+                        :redirect_uri (:redirect-uri provider-config)
+                        :scope (or (normalize-scopes (:scopes provider-config))
+                                 "email profile openid")
+                        :response_type "code"
+                        :access_type "offline"
+                        :prompt "consent"}]
+            (if base-url
+              (response/redirect (build-auth-url base-url params))
+              (do
+                (log/error "Google OAuth authorize URI missing in config")
+                (html-error-response "Configuration Error" "Google OAuth authorize URI is missing."))))
+          (do
+            (log/error "Google OAuth configuration missing")
+            (html-error-response "Configuration Error" "Google OAuth is not configured.")))))))
+
+(defn github-login-handler
+  "Initiate GitHub OAuth login"
+  []
+  (fn [req]
+    (route-utils/with-error-handling "github-login"
+      (let [config (get-in req [:service-container :config])
+            oauth-configs (route-utils/get-oauth-configs config)
+            provider-config (:github oauth-configs)]
+        (if provider-config
+          (let [base-url (or (:authorization-uri provider-config)
+                           (:authorize-uri provider-config))
+                params {:client_id (:client-id provider-config)
+                        :redirect_uri (:redirect-uri provider-config)
+                        :scope (or (normalize-scopes (:scopes provider-config))
+                                 "user:email")}]
+            (if base-url
+              (response/redirect (build-auth-url base-url params))
+              (do
+                (log/error "GitHub OAuth authorize URI missing in config")
+                (html-error-response "Configuration Error" "GitHub OAuth authorize URI is missing."))))
+          (do
+            (log/error "GitHub OAuth configuration missing")
+            (html-error-response "Configuration Error" "GitHub OAuth is not configured.")))))))
+
+(comment "normalize-scopes moved above handlers")
 
 (defn- sanitize-for-serialization
-  "Helper function to sanitize objects for JSON/EDN serialization.
-   We keep only simple types and stringify common DB/time types."
+  "Helper function to sanitize objects for JSON/EDN serialization"
   [obj]
   (walk/postwalk
     (fn [x]
       (cond
+        ;; Handle all UUID types
         (instance? java.util.UUID x) (str x)
+        ;; Handle all time/date types
         (instance? java.time.LocalDateTime x) (str x)
         (instance? java.time.ZonedDateTime x) (str x)
         (instance? java.time.OffsetDateTime x) (str x)
         (instance? java.time.Instant x) (str x)
         (instance? java.time.LocalDate x) (str x)
         (instance? java.time.LocalTime x) (str x)
+        ;; Handle SQL types
         (instance? java.sql.Timestamp x) (str x)
         (instance? java.sql.Date x) (str x)
         (instance? java.sql.Time x) (str x)
+        ;; Handle numeric types that might not serialize
         (instance? java.math.BigDecimal x) (str x)
         (instance? java.math.BigInteger x) (str x)
         :else x))
     obj))
 
-;; OAuth2 configuration maps
-(defn get-oauth-configs
-  "Get OAuth configuration from application config instead of hardcoded values"
-  [config]
-  (let [oauth-config (:oauth config)]
-    {:github (merge (:github oauth-config)
-               {:launch-uri "/oauth2/github"
-                :basic-auth? false})
-     :google (merge (:google oauth-config)
-               {:launch-uri "/login/google"
-                :basic-auth? false})}))
-
-;; Function to fetch Google user info using access token
 (defn- fetch-google-user-info [access-token]
   (try
-    (let [response (http/get "https://www.googleapis.com/oauth2/v3/userinfo"
+    (let [response (http/get "https://www.googleapis.com/oauth2/v2/userinfo"
                      {:headers {"Authorization" (str "Bearer " access-token)}
                       :accept :json
                       :as :json})
@@ -105,15 +183,6 @@
         (log/error "Failed to exchange OAuth code for token:" (.getMessage e))
         nil))))
 
-(defn- html-error-response
-  "Generate HTML error response"
-  [title message]
-  {:status 400
-   :headers {"Content-Type" "text/html"}
-   :body (str "<h1>" title "</h1>"
-           "<p>" message "</p>"
-           "<p><a href='/'>Return to Home</a></p>")})
-
 ;; Enhanced OAuth callback handler with tenant-aware authentication
 (defn oauth-callback-handler
   "Create OAuth callback handler using authentication service with onboarding flow support"
@@ -167,7 +236,7 @@
                           ;; Redirect with session containing only user data
                           (-> (response/redirect redirect-url)
                             (assoc :session {:auth-session {:user sanitized-user}})))
-                        
+
                         (catch clojure.lang.ExceptionInfo e
                           (let [ex-data (ex-data e)]
                             (if (= :account-conflict (:type ex-data))

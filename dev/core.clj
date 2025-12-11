@@ -1,6 +1,6 @@
 (ns core
   (:require
-   [app.backend.core :as backend]
+   [app.template.backend.core :as backend]
    [nrepl.server :as nrepl]
    [shadow.cljs.devtools.api :as shadow.api]
    [shadow.cljs.devtools.server :as shadow.server]

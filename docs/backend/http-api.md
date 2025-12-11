@@ -1,11 +1,11 @@
-<!-- ai: {:namespaces [app.backend.routes.admin-api] :tags [:backend :http :single-tenant] :kind :reference} -->
+<!-- ai: {:namespaces [app.template.backend.routes.admin-api] :tags [:backend :http :single-tenant] :kind :reference} -->
 
 # HTTP API (Single-Tenant Admin)
 
 This is the current admin API surface for the single-tenant app. All routes live under `/admin/api` on **http://localhost:8085** and are secured by admin auth middleware.
 
 ## Base Shape
-- **Auth**: `app.backend.middleware.admin/wrap-admin-authentication` expects an admin token (dev mode may relax). Pass `x-admin-token: <token>` or the token cookie set by the admin login flow.
+- **Auth**: `app.template.backend.middleware.admin/wrap-admin-authentication` expects an admin token (dev mode may relax). Pass `x-admin-token: <token>` or the token cookie set by the admin login flow.
 - **Content**: JSON request/response. Success responses use `{:success true :data ...}`; errors use `{:success false :error {:message ...}}`.
 - **Middleware**: JSON body parsing + security headers + admin auth (for protected routes). Rate-limiting hooks are available but may be disabled in dev.
 
@@ -13,13 +13,13 @@ This is the current admin API surface for the single-tenant app. All routes live
 All paths are relative to `/admin/api`.
 
 ### Auth (public)
-- `POST /admin/api/login` – exchange credentials for admin token (namespace `app.backend.routes.admin.auth`).
+- `POST /admin/api/login` – exchange credentials for admin token (namespace `app.template.backend.routes.admin.auth`).
 - `POST /admin/api/logout` – invalidate token.
 
 ### Dashboard (protected)
-- `GET /admin/api/dashboard` – summary payload for the admin shell (namespace `app.backend.routes.admin.dashboard`).
+- `GET /admin/api/dashboard` – summary payload for the admin shell (namespace `app.template.backend.routes.admin.dashboard`).
 
-### Settings (protected, `app.backend.routes.admin.settings`)
+### Settings (protected, `app.template.backend.routes.admin.settings`)
 **View Options**
 - `GET /admin/api/settings` – return `{:view-options {...}}` from `src/app/admin/frontend/config/view-options.edn`.
 - `PUT /admin/api/settings` – replace the entire `view-options` map.
@@ -41,7 +41,7 @@ All paths are relative to `/admin/api`.
 - `PUT /admin/api/users/:id` – update user.
 - `DELETE /admin/api/users/:id` – delete/deactivate user.
 
-### Advanced User Operations (protected, `app.backend.routes.admin.user-operations`)
+### Advanced User Operations (protected, `app.template.backend.routes.admin.user-operations`)
 - `PUT /admin/api/user-management/role/:id` – update role (`owner|admin|member|viewer`).
 - `POST /admin/api/user-management/verify-email/:id` – force email verification.
 - `POST /admin/api/user-management/reset-password/:id` – reset password.
@@ -49,17 +49,17 @@ All paths are relative to `/admin/api`.
 - `POST /admin/api/user-management/impersonate/:id` – create impersonation session.
 - `GET /admin/api/user-management/search` – advanced search (filters: `search`, `status`, `email-verified`, `role`, `auth-provider`, `sort-by`, `sort-order`, pagination).
 
-### Audit Logs (protected, `app.backend.routes.admin.audit`)
+### Audit Logs (protected, `app.template.backend.routes.admin.audit`)
 - `GET /admin/api/audit` – list audit events with filters: `principal-id`, `principal-type` (`admin|user`), `action`, `from`/`to` (ISO timestamps), `limit`, `offset`. Returns normalized keys ready for admin UI tables/export.
 - `DELETE /admin/api/audit/:id` – delete a single audit log (admin action; RLS bypassed within txn).
 - `DELETE /admin/api/audit/bulk` – delete multiple audit logs; body `{:ids [<uuid> ...]}`.
 
-### Login Events (protected, `app.backend.routes.admin.login-events`)
+### Login Events (protected, `app.template.backend.routes.admin.login-events`)
 - `GET /admin/api/login-events` – list login events for admins and users. Filters: `principal-type` (`admin|user`), `success?` (`true|false`), `limit` (default 100), `offset` (default 0). Response fields include `principal-id`, `principal-name/email` when available, `ip-address`, `user-agent`, `created-at`, and `reason`.
 - `DELETE /admin/api/login-events/:id` – delete a login event (admin action; RLS bypassed within txn).
 - `DELETE /admin/api/login-events/bulk` – delete multiple login events; body `{:ids [<uuid> ...]}`.
 
-### Home Expenses (protected, mounted at `/admin/api/expenses`, `app.domain.expenses.routes.*`)
+### Home Expenses (protected, mounted at `/admin/api/expenses`, `app.domain.backend.expenses.routes.*`)
 **Suppliers**
 - `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by).
 - `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
@@ -160,6 +160,6 @@ x-admin-token: <token>
 Returns paginated audit rows suitable for the global audit page and per-user modal.
 
 ## Notes for Contributors
-- Add new admin endpoints under `src/app/backend/routes/admin/*` and compose them in `app.backend.routes.admin-api/admin-api-routes`.
+- Add new admin endpoints under `src/app/template/backend/routes/admin/*` and compose them in `app.template.backend.routes.admin-api/admin-api-routes`.
 - Keep responses normalized (`success-response`/`error-response` helpers in `admin-utils`).
 - Update this file when endpoints or parameters change.

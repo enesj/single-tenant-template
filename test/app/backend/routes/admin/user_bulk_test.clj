@@ -7,8 +7,8 @@
    - Batch update users
    - Export users to CSV"
   (:require
-    [app.backend.routes.admin.user-bulk :as user-bulk]
-    [app.backend.services.admin :as admin-service]
+    [app.template.backend.routes.admin.user-bulk :as user-bulk]
+    [app.admin.backend.services.admin :as admin-service]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 

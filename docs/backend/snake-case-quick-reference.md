@@ -9,7 +9,7 @@
 rg --type cljs ":[a-z_]+_[a-z_]+" src/ | grep -v "_v2\|/full_name\|/subscription_tier"
 
 # Find snake_case violations in backend return maps
-rg --type clj ":[a-z_]+_[a-z_]+" src/app/backend/services/ | grep -v "sql\|jdbc\|db"
+rg --type clj ":[a-z_]+_[a-z_]+" src/app/{template,admin}/backend/services/ | grep -v "sql\|jdbc\|db"
 
 # Find get-in usage with snake_case
 rg --type cljs "get-in.*:.*_" src/
@@ -23,7 +23,7 @@ rg --type cljs ":.*_.*overview\|:.*_.*status\|:.*_.*data" src/
 ### Backend Service Pattern
 ```clojure
 ;; Add import
-[app.backend.services.admin.monitoring.shared :as monitoring-shared]
+[app.admin.backend.services.admin.monitoring.shared :as monitoring-shared]
 
 ;; Replace function
 (defn get-data [db]

@@ -1,7 +1,7 @@
 (ns app.template.backend.routes.password-reset
   "Password reset and change API routes for users"
   (:require
-    [app.backend.services.gmail-smtp :as gmail-smtp]
+    [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [app.template.backend.auth.password-reset :as pwd-reset]
     [app.template.backend.routes.utils :as route-utils]
     [cheshire.core :as json]

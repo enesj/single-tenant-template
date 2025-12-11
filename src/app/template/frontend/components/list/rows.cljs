@@ -4,7 +4,7 @@
    This module uses reactive cell components from the cells module for selection
    and actions. Components are re-exported for backward compatibility."
   (:require
-   [app.frontend.utils.id :as id-utils]
+   [app.template.frontend.utils.id :as id-utils]
    [app.shared.keywords :as kw]
    [app.template.frontend.components.form :refer [form]]
    [app.template.frontend.components.list.cells :as cells]

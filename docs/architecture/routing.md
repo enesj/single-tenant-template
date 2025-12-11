@@ -5,7 +5,7 @@
 Admin-only app. Backend routes are under `/admin/api`; frontend routes are the admin SPA pages served from the same server.
 
 ## Backend (Reitit)
-- Composed in `app.backend.routes.admin-api` at `/admin/api`.
+- Composed in `app.template.backend.routes.admin-api` at `/admin/api`.
 - Public: `/auth/login`, `/auth/logout`.
 - Protected (admin auth middleware):
   - `/dashboard`
@@ -15,6 +15,7 @@ Admin-only app. Backend routes are under `/admin/api`; frontend routes are the a
   - `/login-events` (global login history)
   - Dev: `/dev-get-rate-limits`, `/dev-clear-rate-limits`, `/test-put`
 - Middleware layering: security headers/HTTPS → admin auth → JSON/error helpers (`admin.utils`) → handler.
+- Middleware layering: security headers/HTTPS → admin auth → JSON/error helpers (`app.template.backend.routes.admin.utils`) → handler.
 - Conflict avoidance: keep literal routes (e.g., `/search`) separate from param routes (`/:id`) under clear prefixes as done in `user-management`.
 
 ## Frontend (Re-frame/Uix)

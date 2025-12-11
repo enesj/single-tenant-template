@@ -1,7 +1,7 @@
 (ns app.template.backend.db.adapter
   "Database adapter implementation for template infrastructure"
   (:require
-    [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.template.backend.utils.adapters.database :refer [convert-pg-objects]]
     [app.shared.field-casting :as field-casting]
     [app.template.backend.db.protocols :as db-protocols]
     [clojure.string :as str]

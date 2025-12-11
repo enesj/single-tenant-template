@@ -6,8 +6,8 @@
    - Integration performance metrics
    - Webhook status"
   (:require
-    [app.backend.routes.admin.integrations :as integrations]
-    [app.backend.services.admin :as admin-service]
+    [app.template.backend.routes.admin.integrations :as integrations]
+    [app.admin.backend.services.admin :as admin-service]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 

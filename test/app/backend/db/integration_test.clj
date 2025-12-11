@@ -8,9 +8,9 @@
    Tests use transaction rollback for isolation - no data persists."
   (:require
    [app.backend.fixtures :as fixtures]
-   [app.backend.services.admin.audit :as audit-service]
-   [app.backend.services.admin.auth :as admin-auth]
-   [app.backend.services.admin.users :as user-service]
+   [app.admin.backend.services.admin.audit :as audit-service]
+   [app.admin.backend.services.admin.auth :as admin-auth]
+   [app.admin.backend.services.admin.users :as user-service]
     [clojure.set :as set]
    [clojure.test :refer [deftest is testing use-fixtures]]
    [honey.sql :as hsql]

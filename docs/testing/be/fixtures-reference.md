@@ -13,7 +13,7 @@ Test fixtures provide system lifecycle management and test isolation utilities.
 ```clojure
 (ns app.backend.fixtures
   (:require
-    [app.backend.core :as backend]
+    [app.template.backend.core :as backend]
     [system.state :as state]
     [taoensso.timbre :as log]))
 ```
@@ -25,7 +25,7 @@ Test fixtures provide system lifecycle management and test isolation utilities.
 Kaocha `before-suite` hook that starts the test system:
 
 ```clojure
-(defn start-test-system []
+(defn start-test-system [suite _test-plan]
   "Starts test system with :test profile"
   ;; 1. Creates future running backend/with-test-system
   ;; 2. Publishes system state to system.state/state atom
@@ -41,7 +41,7 @@ Kaocha `before-suite` hook that starts the test system:
 Kaocha `after-suite` hook that stops the test system:
 
 ```clojure
-(defn reset-test-system! []
+(defn reset-test-system! [suite _test-plan]
   "Stops test system and cleans up state"
   ;; 1. Cancels the system future
   ;; 2. Resets state atoms to nil

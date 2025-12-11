@@ -37,7 +37,7 @@ Ran 212 tests containing 1251 assertions.
   "Tests for my-feature component/event/subscription"
   (:require
     [app.admin.frontend.test-setup :as setup]
-    [app.frontend.utils.test-utils :as test-utils]
+    [app.template.frontend.utils.test-utils :as test-utils]
     [cljs.test :refer [deftest is testing]]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -68,7 +68,7 @@ Ran 212 tests containing 1251 assertions.
   (:require
     [app.admin.frontend.components.button :as button]
     [app.admin.frontend.test-setup :as setup]
-    [app.frontend.utils.test-utils :as test-utils]
+    [app.template.frontend.utils.test-utils :as test-utils]
     [cljs.test :refer [deftest is testing]]
     [clojure.string :as str]
     [uix.core :refer [$]]))

@@ -9,7 +9,7 @@
    - Parent components don't need to pass visibility props
    - Changes to settings immediately reflect in the UI"
   (:require
-    [app.frontend.utils.id :as id-utils]
+    [app.template.frontend.utils.id :as id-utils]
     [app.shared.keywords :as kw]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.common :refer [checkbox]]

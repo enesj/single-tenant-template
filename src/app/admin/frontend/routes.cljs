@@ -9,7 +9,7 @@
     [app.admin.frontend.pages.settings :as settings]
     [app.admin.frontend.pages.users :as users]
     [app.admin.frontend.pages.audit :as audit]
-    [app.domain.expenses.frontend.routes :as expenses-routes]
+    [app.domain.frontend.expenses.routes :as expenses-routes]
     [re-frame.core :as rf]))
 
 (defn guarded-start

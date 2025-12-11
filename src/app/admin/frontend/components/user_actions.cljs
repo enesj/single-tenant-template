@@ -3,7 +3,7 @@
   (:require
     [app.template.frontend.components.action-components :as shared-actions]
     [app.shared.field-metadata :as field-meta]
-    [app.frontend.utils.id :as id-utils]
+    [app.template.frontend.utils.id :as id-utils]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.dropdown :as dropdown]
     [re-frame.core :as rf]

@@ -1,8 +1,8 @@
 (ns app.template.backend.email.service
   "Email service for sending verification and notification emails"
   (:require
-    [app.backend.services.gmail-smtp :as gmail-smtp]
-    [app.backend.services.postmark-email :as postmark-email]
+    [app.template.backend.services.gmail-smtp :as gmail-smtp]
+    [app.template.backend.services.postmark-email :as postmark-email]
     [taoensso.timbre :as log]))
 
 (defn create-base-url

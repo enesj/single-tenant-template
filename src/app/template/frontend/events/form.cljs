@@ -1,6 +1,6 @@
 (ns app.template.frontend.events.form
   (:require
-    [app.shared.frontend.crud.success :as crud-success]
+    [app.template.frontend.shared.crud.success :as crud-success]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]

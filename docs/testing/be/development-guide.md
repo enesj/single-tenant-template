@@ -48,7 +48,7 @@ clj -M:test -m kaocha.runner --focus-meta :integration
   (:require
     [clojure.test :refer [deftest is testing]]
     [app.backend.test-helpers :as h]
-    [app.backend.routes.admin.my-feature :as my-feature]))
+    [app.template.backend.routes.admin.my-feature :as my-feature]))
 
 (deftest feature-handler-test
   (testing "returns 200 for valid request"

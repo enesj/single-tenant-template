@@ -8,9 +8,9 @@
   - app.shared.frontend.utils.entity
   - app.shared.frontend.utils.db"
   (:require
-    [app.shared.frontend.bridges.crud :as shared-bridges]
-    [app.shared.frontend.utils.db :as db-utils]
-    [app.shared.frontend.utils.entity :as entity-utils]
+    [app.template.frontend.shared.bridges.crud :as shared-bridges]
+    [app.template.frontend.shared.utils.db :as db-utils]
+    [app.template.frontend.shared.utils.entity :as entity-utils]
     [clojure.string :as str]))
 
 ;; Ensure template CRUD bridge event handlers are registered during adapter load in tests

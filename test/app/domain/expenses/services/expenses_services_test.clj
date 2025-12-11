@@ -2,11 +2,11 @@
   "Integration tests for Home Expenses domain services."
   (:require
     [app.backend.fixtures :as fixtures]
-    [app.domain.expenses.services.articles :as articles]
-    [app.domain.expenses.services.expenses :as expenses]
-    [app.domain.expenses.services.payers :as payers]
-    [app.domain.expenses.services.receipts :as receipts]
-    [app.domain.expenses.services.suppliers :as suppliers]
+    [app.domain.backend.expenses.services.articles :as articles]
+    [app.domain.backend.expenses.services.expenses :as expenses]
+    [app.domain.backend.expenses.services.payers :as payers]
+    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as hsql]
     [next.jdbc :as jdbc])

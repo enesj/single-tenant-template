@@ -4,7 +4,7 @@
 
 The **single-tenant starter** is a pre-baked project template that ships with:
 
-- A reloadable **backend** (Clojure + http-kit + Reitit) wired via `app.backend.core`.
+- A reloadable **backend** (Clojure + http-kit + Reitit) wired via `app.template.backend.core`.
 - A reloadable **frontend** (ClojureScript + shadow-cljs + re-frame + Uix) with a simple landing page.
 - Shared/template UI components (buttons, cards, etc.) and shared libraries (validation, schemas, HTTP utilities).
 - AI/dev tooling folders: `.claude`, `.clojure-mcp`, `.codex`, `.clj-kondo`.
@@ -44,15 +44,14 @@ At a high level the generated project looks like:
 - `resources/public/` – `index.html`, CSS, and JS output directory (`/js/main`).
 - `resources/db/models.edn` – includes a simple `:users` table so the starter has a working DB-backed list view.
 - `scripts/` – shell helpers (backend/frontend/dev scripts, console monitoring).
-- `src/app/backend/`
+- `src/app/template/backend/`
   - `core.clj` – loads config, creates DB pool, starts HTTP server.
-  - `routes.clj` – minimal routes: `GET /` (SPA shell), `GET /api/health` (JSON), `GET /api/users` (users JSON).
-  - `backend/services/users.clj` – read-only service for listing users from the `users` table.
+  - `routes.clj` – Ring/Reitit routes: SPA shell + JSON APIs (e.g. health/users) depending on enabled features.
   - `webserver.clj` – http-kit server wiring.
-- `src/app/migrations/`
-  - `simple_repl.clj` – small REPL helper for generating and running automigrate schema migrations from `resources/db/models.edn`.
-- `src/app/frontend/`
-  - `core.cljs` – SPA entrypoint: landing page + a simple users table rendered from `/api/users`.
+- `src/app/template/backend/migrations/`
+  - `simple_repl.clj` – REPL helper for generating and running automigrate migrations from the canonical model sources.
+- `src/app/template/frontend/`
+  - `core.cljs` – SPA entrypoint.
 - `src/app/shared/` – shared utilities (validation, pagination, HTTP, schemas).
 - `src/app/template/` – UI component library + shared SaaS helpers, adapted to avoid domain-specific dependencies for the starter.
 - `src/system/state.clj` – shared dev-system state.
@@ -88,18 +87,18 @@ The starter intentionally ships with **no business domain**. To add one:
    - Reuse patterns from `resources/db/models.edn` in the Hosting repo as a reference.
 2. **Generate migrations**:
    - Use the `:migrations-dev` alias in `deps.edn` with the starter’s `models.edn`.
-   - Alternatively, from a REPL, use `app.migrations.simple-repl`:
-     - `(require '[app.migrations.simple-repl :as mig])`
+   - Alternatively, from a REPL, use `app.template.backend.migrations.simple-repl`:
+     - `(require '[app.template.backend.migrations.simple-repl :as mig])`
      - `(mig/make-schema-migration!)`
      - `(mig/migrate!)`
 3. **Add backend domain code**:
-   - Create `src/app/domain/<your-domain>/backend/*` for services, routes, and DB helpers.
-   - Integrate with the existing `app.backend.routes` or add new route namespaces.
+  - Create `src/app/domain/backend/<your-domain>/*` for services, routes, and DB helpers.
+  - Integrate with the existing `app.template.backend.routes` / `app.template.backend.routes.admin-api` or add new route namespaces.
 4. **Add frontend domain code**:
    - Create pages under `src/app/<your-namespace>/frontend/pages/*`.
    - Reuse `app.template.frontend.components.*` for tables, forms, filters, and layout.
 5. **Wire routes & UI**:
-   - Extend `app.frontend.core` to add navigation to your new pages.
+  - Extend `app.template.frontend.core` (and/or admin shell routes) to add navigation to your new pages.
    - Optionally introduce a client-side router using `reitit.frontend` if needed.
 
 Because the starter already includes shared/template modules, you can follow the same patterns as the main Hosting app without bringing over multi-tenant domains or RLS policies.

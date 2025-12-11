@@ -58,10 +58,10 @@ This project uses the **automigrate** library with a single-tenant default.
 
 ## 🧪 REPL Utilities (preferred path)
 
-Run migrations through `src/app/migrations/simple_repl.clj` instead of the old deps aliases:
+Run migrations through `src/app/template/backend/migrations/simple_repl.clj` instead of the old deps aliases:
 
 ```clojure
-(require '[app.migrations.simple-repl :as mig])
+(require '[app.template.backend.migrations.simple-repl :as mig])
 
 (mig/make-all-migrations!)            ;; merge models → schema → extended
 (mig/migrate!)                       ;; apply pending migrations (default :dev)

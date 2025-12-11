@@ -1,4 +1,4 @@
-<!-- ai: {:namespaces [app.migrations.simple-repl] :tags [:migrations :database] :kind :overview} -->
+<!-- ai: {:namespaces [app.template.backend.migrations.simple-repl] :tags [:migrations :database] :kind :overview} -->
 
 # Migration System Overview (Single-Tenant)
 
@@ -113,7 +113,7 @@ The system uses centralized field type handling (`app.shared.field-casting`):
 ### 2. Migration generation & application (simple REPL workflow)
 
 ```clojure
-(require '[app.migrations.simple-repl :as mig])
+(require '[app.template.backend.migrations.simple-repl :as mig])
 
 ;; Merge hierarchical models -> schema migration -> extended migrations
 (mig/make-all-migrations!)
@@ -201,7 +201,7 @@ bb clean-db --dev
 #    ❌ DO NOT edit resources/db/models.edn (it's auto-generated)
 
 # 3. From a REPL, generate and apply migrations
-# (require '[app.migrations.simple-repl :as mig])
+# (require '[app.template.backend.migrations.simple-repl :as mig])
 # (mig/make-all-migrations!)  ; Merges template/shared/domain → models.edn, generates migrations
 # (mig/migrate!)              ; Applies migrations to database
 

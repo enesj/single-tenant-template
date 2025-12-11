@@ -3,7 +3,7 @@
    
    Tests dashboard stats structure and fallback behavior."
   (:require
-    [app.backend.services.admin.dashboard :as dashboard]
+    [app.admin.backend.services.admin.dashboard :as dashboard]
     [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================

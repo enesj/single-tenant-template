@@ -9,8 +9,8 @@
    - Deleting admins
    - Role and status management"
   (:require
-   [app.backend.routes.admin.admins :as admins]
-   [app.backend.services.admin :as admin-service]
+   [app.template.backend.routes.admin.admins :as admins]
+   [app.admin.backend.services.admin :as admin-service]
    [app.backend.test-helpers :as h]
    [clojure.test :refer [deftest is testing use-fixtures]]))
 

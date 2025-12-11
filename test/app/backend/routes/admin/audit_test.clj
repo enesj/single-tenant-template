@@ -3,8 +3,8 @@
    
    Tests audit log structure, filtering, and retrieval."
   (:require
-    [app.backend.services.admin.audit :as audit]
-    [app.shared.adapters.database :as db-adapter]
+    [app.admin.backend.services.admin.audit :as audit]
+    [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================

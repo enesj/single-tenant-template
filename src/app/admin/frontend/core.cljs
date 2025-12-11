@@ -24,7 +24,7 @@
     [app.admin.frontend.subs.login-events]
     [app.admin.frontend.subs.users]
     [app.admin.frontend.subs.expenses]
-    [app.domain.expenses.frontend.core :as expenses-domain]
+    [app.domain.frontend.expenses.core :as expenses-domain]
     [app.template.frontend.events.core]
     [app.template.frontend.events.form]
     [app.template.frontend.events.list.batch]

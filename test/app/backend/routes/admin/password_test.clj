@@ -7,7 +7,7 @@
    - Reset password with token
    - Change password (authenticated)"
   (:require
-    [app.backend.routes.admin.password :as password]
+    [app.template.backend.routes.admin.password :as password]
     [app.template.backend.auth.password-reset :as pwd-reset]
     [app.backend.test-helpers :as h]
     [cheshire.core :as json]

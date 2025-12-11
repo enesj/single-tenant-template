@@ -1,4 +1,4 @@
-<!-- ai: {:namespaces [app.migrations.simple-repl] :tags [:migrations :database] :kind :guide} -->
+<!-- ai: {:namespaces [app.template.backend.migrations.simple-repl] :tags [:migrations :database] :kind :guide} -->
 
 # Complete Migration Guide (Single-Tenant)
 
@@ -26,10 +26,13 @@ resources/db/
 │   ├── views.edn
 │   ├── triggers.edn
 │   └── policies.edn
-├── domain/           # Business domains (add your own)
-│   ├── hosting/
-│   ├── financial/
-│   └── integration/
+├── domain/           # Business domain schemas
+│   ├── models.edn    # Flat domain models (supported)
+│   └── <domain>/     # Optional modular domains (also supported)
+│       ├── models.edn
+│       ├── functions.edn
+│       ├── triggers.edn
+│       └── views.edn
 └── migrations/       # Sequential migration files
     ├── 0001_schema.edn
     ├── 0002_add_indexes.edn
@@ -45,7 +48,7 @@ resources/db/
 The system automatically consolidates hierarchical EDN files into a single `models.edn` file:
 
 ```clojure
-;; From: src/app/migrations/hierarchical_models.clj
+;; From: src/app/template/backend/migrations/hierarchical_models.clj
 (defn read-hierarchical-edn
   "Read EDN files from hierarchical structure and merge them"
   [base-path file-name]
@@ -67,7 +70,7 @@ The system automatically consolidates hierarchical EDN files into a single `mode
 docker-compose up -d
 
 # Launch a REPL (e.g., clj -M:nrepl) and run:
-# (require '[app.migrations.simple-repl :as mig])
+# (require '[app.template.backend.migrations.simple-repl :as mig])
 # (mig/make-all-migrations!)  ;; merge models -> schema -> extended
 # (mig/migrate!)              ;; apply pending migrations to :dev
 # (mig/status)                ;; inspect status
@@ -131,7 +134,7 @@ docker-compose up -d
 ### 3. Migration Commands (REPL-first)
 
 ```clojure
-(require '[app.migrations.simple-repl :as mig])
+(require '[app.template.backend.migrations.simple-repl :as mig])
 
 ;; Merge models -> schema -> extended, then apply
 (mig/make-all-migrations!)
@@ -248,7 +251,7 @@ In the single-tenant template, models may include extra per-field metadata such 
                     :placeholder "Enter email"}}}]
 ```
 
-These keys are **for the application layer only** (validation and UI) and are not understood by Automigrate. Before generating schema migrations, `app.migrations.function-defaults/load-and-preprocess-models` strips these metadata keys and normalises `:default` values into the format Automigrate expects. This keeps one canonical EDN model file that serves both:
+These keys are **for the application layer only** (validation and UI) and are not understood by Automigrate. Before generating schema migrations, `app.template.backend.migrations.function-defaults/load-and-preprocess-models` strips these metadata keys and normalises `:default` values into the format Automigrate expects. This keeps one canonical EDN model file that serves both:
 
 - the migration system (via the preprocessed `db/models_processed.edn`), and
 - the frontend/backend validation layer (via the original `models.edn`).
@@ -305,7 +308,7 @@ In the template we model timestamp automation via the **extended EDN pipeline**:
 After editing these EDN files, regenerate and apply extended migrations from a REPL:
 
 ```clojure
-(require '[app.migrations.simple-repl :as mig])
+(require '[app.template.backend.migrations.simple-repl :as mig])
 (mig/make-all-migrations!)  ;; or (mig/regenerate-extended-migrations-clean!)
 (mig/migrate!)              ;; apply to :dev
 ```
@@ -528,7 +531,7 @@ pg_dump -h prod-host -U prod-user production_db | psql -h staging-host -U stagin
 
 ```clojure
 ;; Run from a REPL configured for staging
-(require '[app.migrations.simple-repl :as mig])
+(require '[app.template.backend.migrations.simple-repl :as mig])
 (mig/migrate! :staging)
 (mig/status :staging)
 ```

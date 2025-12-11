@@ -2,7 +2,7 @@
 
 # Database Schema Reference (Single-Tenant Template)
 
-Canonical schema lives in `resources/db/models.edn` and is generated via the migrations helper in `src/app/migrations/simple_repl.clj` (`mig/make-all-migrations!`, `mig/migrate!`, etc.). There is no tenant/RLS layer in this template.
+Canonical schema is materialized in `resources/db/models.edn`, generated from the canonical model sources under `resources/db/{template,shared,domain}/**`. Migrations are generated and applied via the migrations helper in `src/app/template/backend/migrations/simple_repl.clj` (`app.template.backend.migrations.simple-repl`). There is no tenant/RLS layer in this template.
 
 ## Tables & Types
 
@@ -34,5 +34,5 @@ Canonical schema lives in `resources/db/models.edn` and is generated via the mig
 
 ## Notes
 - Schema is single-database, single-tenant; no `tenant_id` columns or RLS policies are present.
-- Always edit `resources/db/models.edn` then regenerate migrations; do not hand-edit `resources/db/migrations/*`.
+- Always edit canonical model sources in `resources/db/{template,shared,domain}/**` then regenerate migrations; do not hand-edit `resources/db/models.edn` or `resources/db/migrations/*`.
 - For monitoring data (audit/login events), frontend expects epoch millis for `created_at`; backend services normalize PG timestamps accordingly.

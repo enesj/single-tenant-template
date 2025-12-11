@@ -3,7 +3,7 @@
      [app.admin.frontend.components.layout :refer [admin-layout]]
      [app.admin.frontend.subs.auth]
      [app.admin.frontend.test-setup :as setup]
-     [app.frontend.utils.test-utils :as test-utils]
+     [app.template.frontend.utils.test-utils :as test-utils]
      [cljs.test :refer [deftest is testing]]
      [clojure.string :as str]
      [re-frame.core :as rf]

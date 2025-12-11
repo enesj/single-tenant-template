@@ -6,16 +6,18 @@ This document explains what the **single-tenant template** includes, how it diff
 
 ## What’s Included
 
-- **Backend entrypoint**: `app.backend.core`
+- **Backend entrypoint**: `app.template.backend.core`
   - Loads config via Aero (`config/base.edn`), builds HikariCP pool, wires DI with `app.template.di.config/create-service-container`.
-  - Webserver setup in `app.backend.webserver`.
+  - Webserver setup in `app.template.backend.webserver`.
 - **Frontend entrypoint**: `app.template.frontend.core`
   - Boots template routes and components, calls `app.admin.frontend.core/init-admin!`, mounts `current-page`.
   - Admin routes: `/admin/login`, `/admin`, `/admin/users`, `/admin/audit`, `/admin/login-events`.
-- **Domain sample (new)**: Home Expenses Tracker backend domain under `src/app/domain/expenses` with services/routes mounted at `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles/price-history, reports). Frontend pages are pending.
+- **Domain sample (new)**: Home Expenses Tracker domain lives under:
+  - Backend: `src/app/domain/backend/expenses` (services + routes mounted at `/admin/api/expenses`)
+  - Frontend: `src/app/domain/frontend/expenses` (admin-facing pages/components wired into the admin SPA)
 - **Admin UI**: `src/app/admin/frontend/*` with list/form patterns and templates.
 - **Template/shared libs**: `src/app/template/*`, `src/app/shared/*` (components, validation, schemas, HTTP, CRUD helpers).
-- **Database models**: `resources/db/models.edn` (single-tenant; includes audit/login event tables).
+- **Database models**: source EDN under `resources/db/{template,shared,domain}/**` merged into `resources/db/models.edn` (single-tenant; includes audit/login event tables + domain tables).
 - **Tooling**: Babashka tasks (`bb run-app`, tests, lint), Shadow-CLJS builds, nREPL-ready dev loop.
 
 ## What’s NOT Included (Hosting Reference Only)
@@ -38,8 +40,10 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 ## Where to Extend
 
 ### Backend
-- Add services/routes under `src/app/backend` or introduce your own domain namespaces (e.g., `src/app/domain/<your-domain>/backend`).
-- Wire new routes in `app.backend.routes` (or add a new routes ns) and register services in the DI container (`app.template.di.config`).
+- Template backend/runtime concerns: add routes/middleware/webserver glue under `src/app/template/backend`.
+- Admin-only backend services live under `src/app/admin/backend`.
+- Domain backend code lives under `src/app/domain/backend/<your-domain>`.
+- Wire new routes in `app.template.backend.routes` / `app.template.backend.routes.admin-api` and register services in the DI container (`app.template.di.config`).
 - Reuse shared response/HTTP utilities in `src/app/shared`.
 
 ### Frontend
@@ -48,10 +52,10 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 - Routing: update `app.template.frontend.routes` and include your page/view in `current-page`.
 
 ### Database & Migrations
-- Edit `resources/db/models.edn` to add tables/fields.
-- Generate/apply migrations:
-  - `clj -X:migrations-dev` (dev) / `clj -X:migrations-test` (test)
-  - `bb backup-db`, `bb restore-db` for safety.
+- Do **not** edit `resources/db/models.edn` directly (it is generated).
+- Edit source files under `resources/db/{template,shared,domain}/**` (e.g. `resources/db/domain/models.edn`).
+- Generate/apply migrations via the REPL helper (`app.template.backend.migrations.simple-repl`) or via the bb/clj tasks documented in `docs/migrations/*`.
+- Use `bb backup-db`, `bb restore-db` for safety.
 - RLS: this template runs single-tenant by default. If you add tenant-aware features, follow the Hosting docs for RLS patterns.
 
 ## Single-Tenant Auth Notes
@@ -64,7 +68,7 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 
 | Area | Namespaces/Files |
 |------|------------------|
-| Backend entry | `src/app/backend/core.clj`, `src/app/backend/webserver.clj` |
+| Backend entry | `src/app/template/backend/core.clj`, `src/app/template/backend/webserver.clj` |
 | DI container | `src/app/template/di/config.clj` |
 | Admin pages | `src/app/admin/frontend/pages/*` |
 | Frontend shell | `src/app/template/frontend/core.cljs`, `src/app/template/frontend/routes.cljs` |

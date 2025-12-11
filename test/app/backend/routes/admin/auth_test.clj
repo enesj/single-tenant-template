@@ -4,7 +4,7 @@
    Tests password hashing, verification, session management,
    and token generation."
   (:require
-    [app.backend.services.admin.auth :as auth]
+    [app.admin.backend.services.admin.auth :as auth]
     [buddy.core.codecs :as codecs]
     [buddy.core.hash :as hash]
     [clojure.string :as str]

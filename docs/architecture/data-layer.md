@@ -5,8 +5,9 @@
 Single schema, no RLS. Core tables: `admins`, `users`, `audit_events`, `login_events`, plus supporting tables defined in `resources/db/models.edn`.
 
 ## Schema Source
-- Canonical: `resources/db/models.edn` (only one file; no domain folders).
-- Migrations: generate/apply via `app.migrations.simple-repl` (`mig/make-all-migrations!`, `mig/migrate!`). Do not hand-edit `resources/db/migrations/*`.
+- Canonical inputs: source EDN in `resources/db/{template,shared,domain}/**`.
+- Generated output: `resources/db/models.edn` (auto-merged from template/shared/domain sources).
+- Migrations: generate/apply via `app.template.backend.migrations.simple-repl` (`mig/make-all-migrations!`, `mig/migrate!`). Do not hand-edit `resources/db/migrations/*`.
 
 ## Key Tables (current app)
 - `admins`: platform admins (email, role, password_hash, created_at).
@@ -21,7 +22,7 @@ Single schema, no RLS. Core tables: `admins`, `users`, `audit_events`, `login_ev
 
 ## Migrations Workflow
 ```clojure
-(require '[app.migrations.simple-repl :as mig])
+(require '[app.template.backend.migrations.simple-repl :as mig])
 (mig/make-all-migrations!)  ; regen from models.edn
 (mig/migrate!)             ; apply
 (mig/status)               ; inspect

@@ -6,8 +6,8 @@
    - Create entity handler
    - Error handling for unsupported entities"
   (:require
-    [app.backend.routes.admin.entities :as entities]
-    [app.backend.services.admin :as admin-service]
+    [app.template.backend.routes.admin.entities :as entities]
+    [app.admin.backend.services.admin :as admin-service]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 

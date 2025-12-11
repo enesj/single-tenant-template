@@ -1,16 +1,16 @@
-<!-- ai: {:namespaces [app.backend.middleware.security] :tags [:backend :security :single-tenant] :kind :reference} -->
+<!-- ai: {:namespaces [app.template.backend.middleware.security] :tags [:backend :security :single-tenant] :kind :reference} -->
 
 # Security Middleware (Single-Tenant)
 
 This app uses a small, production-ready Ring stack that wraps all admin routes. Multi-tenant/RLS-specific notes were removed; this doc reflects the current single-tenant setup.
 
 ## Stack
-Applied in `app.backend.middleware.security` (see `wrap-security`):
+Applied in `app.template.backend.middleware.security` (see `wrap-security`):
 1. **HTTPS enforcement** (`force-https-middleware`) – redirects HTTP→HTTPS outside local/dev. Set `DISABLE_HTTPS_REDIRECT=true` to bypass for testing.
-2. **Rate limiting** (`app.backend.middleware.rate-limiting/wrap-rate-limiting`, optional) – can be enabled; dev helpers exist at `/admin/api/dev-get-rate-limits` and `/admin/api/dev-clear-rate-limits`.
+2. **Rate limiting** (`app.template.backend.middleware.rate-limiting/wrap-rate-limiting`, optional) – can be enabled; dev helpers exist at `/admin/api/dev-get-rate-limits` and `/admin/api/dev-clear-rate-limits`.
 3. **Security headers** (`security-headers-middleware`) – adds X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, and stricter Cache-Control/CSP for admin routes.
 
-Admin auth (`app.backend.middleware.admin/wrap-admin-authentication`) is applied separately inside the admin route tree; keep it in place for any `/admin/api/**` additions.
+Admin auth (`app.template.backend.middleware.admin/wrap-admin-authentication`) is applied separately inside the admin route tree; keep it in place for any `/admin/api/**` additions.
 
 ## Admin Session Management
 - **Token generation**: UUID-based session tokens created on successful login.
@@ -24,7 +24,7 @@ Admin auth (`app.backend.middleware.admin/wrap-admin-authentication`) is applied
 - **Invalidation**: `invalidate-session!` removes a single session; `invalidate-all-admin-sessions!` clears all sessions for an admin.
 
 ## Usage
-Wrap your Ring handler (already wired in `app.backend.routes/create-app`):
+Wrap your Ring handler (already wired in `app.template.backend.routes/app-routes`):
 ```clojure
 (-> routes
     security/wrap-security) ; HTTPS → rate limit → headers

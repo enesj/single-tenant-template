@@ -17,11 +17,11 @@ Admin SPA (8085) → /admin/api/** (Ring/Reitit)
 ```
 
 ## Core Pieces
-- **Web server**: `app.backend.webserver` started by `app.backend.core/-main` (config from `config/base.edn`).
-- **Routing**: `app.backend.routes.admin-api` composes auth, dashboard, users/user-management, audit, login-events. Admin frontend routes (Re-frame) live in `app.template.frontend.routes` with admin pages in `src/app/admin/frontend/pages`.
-- **Middleware**: `app.backend.middleware.security` (HTTPS/headers/[optional rate limit]), `app.backend.middleware.admin/wrap-admin-authentication`, JSON parsing/helpers in `app.backend.routes.admin.utils`.
-- **Services**: `app.backend.services.admin.*` (users, audit, facade), `app.backend.services.monitoring.login-events` (login history).
-- **Data**: Single models file; migrations generated/applied via `app.migrations.simple-repl`.
+- **Web server**: `app.template.backend.webserver` started by `app.template.backend.core/-main` (config from `config/base.edn`).
+- **Routing**: `app.template.backend.routes.admin-api` composes auth, dashboard, users/user-management, audit, login-events, and domain mounts (e.g. expenses). Admin frontend routes (Re-frame) live in `app.template.frontend.routes` with admin pages in `src/app/admin/frontend/pages`.
+- **Middleware**: `app.template.backend.middleware.security` (HTTPS/headers/[optional rate limit]), `app.template.backend.middleware.admin/wrap-admin-authentication`, JSON parsing/helpers in `app.template.backend.routes.admin.utils`.
+- **Services**: `app.admin.backend.services.admin.*` (users, audit, facade, monitoring helpers), `app.template.backend.services.monitoring.login-events` (login history).
+- **Data**: Source EDN in `resources/db/{template,shared,domain}/**` merged into `resources/db/models.edn`; migrations generated/applied via `app.template.backend.migrations.simple-repl`.
 
 ## Development Basics
 - Run stack: `bb run-app` → http://localhost:8085/admin

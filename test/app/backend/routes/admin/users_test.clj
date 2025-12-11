@@ -3,8 +3,8 @@
    
    Tests user listing, search, and data normalization."
   (:require
-    [app.backend.services.admin.users :as users]
-    [app.shared.adapters.database :as db-adapter]
+    [app.admin.backend.services.admin.users :as users]
+    [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================

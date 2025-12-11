@@ -2,7 +2,7 @@
   "Utility functions for reducing duplication in route handlers.
    Provides centralized error handling, request data extraction, and response patterns."
   (:require
-    [app.shared.adapters.database :as db-adapter]
+    [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.stacktrace]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
@@ -64,6 +64,16 @@
 ;; ================================================================================
 ;; Request Data Extraction
 ;; ================================================================================
+
+(defn get-service-container
+  "Get service container from request."
+  [request]
+  (:service-container request))
+
+(defn get-oauth-configs
+  "Get OAuth configurations from config."
+  [config]
+  (:oauth config))
 
 (defn extract-common-data
   "Extract commonly used data from request.

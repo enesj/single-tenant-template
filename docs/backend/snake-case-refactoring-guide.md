@@ -45,7 +45,7 @@ git add . && git commit -m "backup: before snake_case refactoring"
 ### Phase 1: Backend Service Analysis
 
 #### 1.1 Identify Backend Services
-- Look for services in `src/app/backend/services/`
+- Look for services in `src/app/{template,admin}/backend/services/`
 - Focus on services that return data to frontend
 - Common patterns: monitoring, admin, reporting services
 
@@ -66,8 +66,8 @@ git add . && git commit -m "backup: before snake_case refactoring"
 #### 1.3 Check for Existing Normalization
 ```bash
 # Search for existing normalization usage
-rg "normalize-audit-map" src/app/backend/
-rg "audit-service/normalize" src/app/backend/
+rg "normalize-audit-map" src/app/{template,admin}/backend/
+rg "audit-service/normalize" src/app/{template,admin}/backend/
 ```
 
 ### Phase 2: Backend Service Refactoring
@@ -75,7 +75,7 @@ rg "audit-service/normalize" src/app/backend/
 #### 2.1 Add Shared Monitoring Import
 ```clojure
 ;; Add to existing require block
-[app.backend.services.admin.monitoring.shared :as monitoring-shared]
+[app.admin.backend.services.admin.monitoring.shared :as monitoring-shared]
 ```
 
 #### 2.2 Replace Error Handling Pattern
@@ -174,7 +174,7 @@ rg --type cljs "get-in.*_" src/app/*/frontend/
 #### 5.1 Test Backend Normalization
 ```clojure
 ;; Test in REPL
-(require '[app.backend.services.admin.SERVICE :as service] :reload)
+(require '[app.admin.backend.services.admin.SERVICE :as service] :reload)
 
 ;; Test sample data
 (let [sample-data {:snake_case_key "value"
@@ -325,7 +325,7 @@ Create an issue/task for each namespace with this checklist:
 ## Snake_case Refactoring: [NAMESPACE]
 
 ### Files to Update:
-- [ ] `src/app/backend/services/.../[service].clj`
+- [ ] `src/app/{template,admin}/backend/services/.../[service].clj`
 - [ ] `src/app/[domain]/frontend/pages/[page].cljs`
 
 ### Backend Changes:
@@ -363,7 +363,7 @@ Use this command to scan for remaining snake_case violations:
 rg --type cljs ":[a-z_]+_[a-z_]+" src/ | grep -v "_v2\|/full_name\|/subscription_tier"
 
 # Search for snake_case in Clojure files (backend return maps)
-rg --type clj ":[a-z_]+_[a-z_]+" src/app/backend/services/ | grep -v "sql\|jdbc\|db"
+rg --type clj ":[a-z_]+_[a-z_]+" src/app/{template,admin}/backend/services/ | grep -v "sql\|jdbc\|db"
 
 # Find get-in usage with snake_case
 rg --type cljs "get-in.*:.*_" src/
@@ -377,7 +377,7 @@ rg --type cljs ":.*_.*overview\|:.*_.*status\|:.*_.*data" src/
 ### Backend Normalization
 ```clojure
 ;; Import the audit service
-[app.backend.services.admin.audit :as audit-service]
+[app.admin.backend.services.admin.audit :as audit-service]
 
 ;; Recursive normalization (recommended)
 (audit-service/normalize-audit-map-recursive data)
@@ -386,7 +386,7 @@ rg --type cljs ":.*_.*overview\|:.*_.*status\|:.*_.*data" src/
 (audit-service/normalize-audit-map data)
 
 ;; Shared monitoring utilities
-[app.backend.services.admin.monitoring.shared :as monitoring-shared]
+[app.admin.backend.services.admin.monitoring.shared :as monitoring-shared]
 (monitoring-shared/with-monitoring-error-handling "operation" success-fn error-data impl-fn)
 ```
 

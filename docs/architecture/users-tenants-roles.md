@@ -15,11 +15,11 @@ This app has no tenants. Two principal actor types exist: **admins** (platform o
 - Users are currently flat (no tenant-scoped roles); pages/permissions are enforced at the route/service level.
 
 ## Authentication
-- Admin auth: `app.backend.middleware.admin/wrap-admin-authentication` protects `/admin/api/**`. Tokens returned by `POST /admin/api/login`.
+- Admin auth: `app.template.backend.middleware.admin/wrap-admin-authentication` protects `/admin/api/**`. Tokens returned by `POST /admin/api/login`.
 - User auth: Full email/password and OAuth authentication via `/api/v1/auth/*` endpoints. User logins are captured in `login_events` for monitoring.
 
 ## Monitoring Hooks
 - Use `admin-utils/log-admin-action` to emit audit entries when adding new admin operations.
-- Login events are recorded via `app.backend.services.monitoring.login-events`; ensure new auth flows call it.
+- Login events are recorded via `app.template.backend.services.monitoring.login-events`; ensure new auth flows call it.
 
 If you later add multi-tenant constructs, reintroduce tenant context and document the role model accordingly; the current app is single-tenant.

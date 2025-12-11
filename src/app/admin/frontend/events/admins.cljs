@@ -2,7 +2,7 @@
   "Admin account management events"
   (:require
     [app.admin.frontend.utils.http :as admin-http]
-    [app.frontend.utils.state :as state-utils]
+    [app.template.frontend.utils.state :as state-utils]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.state.normalize :as normalize]
     [re-frame.core :as rf]

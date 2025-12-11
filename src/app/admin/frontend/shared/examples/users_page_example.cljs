@@ -11,7 +11,7 @@
    [app.admin.frontend.components.user-actions :refer [admin-user-actions]]
    [app.admin.frontend.security.wrapper :as security]
    [app.admin.frontend.services.deletion-constraints :as deletion-constraints]
-   [app.frontend.utils.id :as id-utils]
+   [app.template.frontend.utils.id :as id-utils]
    [app.template.frontend.components.list :refer [list-view]]
    [app.template.frontend.subs.entity :as entity-subs]
    [re-frame.core :refer [dispatch]]

@@ -9,8 +9,8 @@
    - Impersonate user
    - Advanced user search"
   (:require
-    [app.backend.routes.admin.user-operations :as user-ops]
-    [app.backend.services.admin :as admin-service]
+    [app.template.backend.routes.admin.user-operations :as user-ops]
+    [app.admin.backend.services.admin :as admin-service]
     [app.backend.test-helpers :as h]
     [app.shared.field-metadata :as field-meta]
     [clojure.test :refer [deftest is testing use-fixtures]]))

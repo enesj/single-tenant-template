@@ -29,7 +29,7 @@ src/app/admin/frontend/
 ### Backend Integration
 
 ```
-src/app/backend/routes/admin/
+src/app/template/backend/routes/admin/
 └── settings.cljs                 # API endpoints for all config types
 ```
 

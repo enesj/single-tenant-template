@@ -1,7 +1,7 @@
 (ns app.admin.frontend.events.dashboard
   (:require
     [app.admin.frontend.utils.http :as admin-http]
-    [app.frontend.utils.state :as state-utils]
+    [app.template.frontend.utils.state :as state-utils]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]))
 

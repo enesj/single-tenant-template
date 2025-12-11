@@ -2,7 +2,7 @@
   "Batch operations for list views - bulk updates and inline editing"
   (:require
    [app.admin.frontend.events.users.utils :as admin-utils]
-   [app.frontend.utils.id :as id-utils]
+   [app.template.frontend.utils.id :as id-utils]
    [app.template.frontend.api :as api]
    [app.template.frontend.api.http :as http]
    [app.template.frontend.db.db :refer [common-interceptors]]

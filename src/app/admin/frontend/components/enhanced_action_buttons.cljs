@@ -1,8 +1,8 @@
 (ns app.admin.frontend.components.enhanced-action-buttons
   "Simplified action buttons for single-tenant admin tables."
   (:require
-    [app.frontend.utils.id :as id-utils]
-    [app.shared.frontend.components.action-buttons :refer [action-buttons]]
+    [app.template.frontend.utils.id :as id-utils]
+    [app.template.frontend.shared.components.action-buttons :refer [action-buttons]]
     [app.shared.keywords :as kw]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]

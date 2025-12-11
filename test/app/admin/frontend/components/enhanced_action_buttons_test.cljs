@@ -11,7 +11,7 @@
   (:require
     [app.admin.frontend.components.enhanced-action-buttons :as buttons]
     [app.admin.frontend.test-setup :as setup]
-    [app.frontend.utils.test-utils :as test-utils]
+    [app.template.frontend.utils.test-utils :as test-utils]
     [cljs.test :refer [deftest is testing]]
     [clojure.string :as str]
     [re-frame.db :as rf-db]

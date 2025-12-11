@@ -7,8 +7,8 @@
    
    This namespace is kept for reference but may be removed in a future cleanup."
   (:require
-    [app.frontend.utils.state :as state-utils]
-    [app.shared.frontend.crud.success :as crud-success]
+    [app.template.frontend.utils.state :as state-utils]
+    [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]))
 
 ;; =============================================================================

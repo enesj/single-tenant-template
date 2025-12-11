@@ -5,7 +5,7 @@
     [app.admin.frontend.handlers.generic :as generic-handlers]
     [app.admin.frontend.renderers.content :as content-renderer]
     [app.admin.frontend.renderers.modals :as modal-renderer]
-    [app.frontend.utils.id :as id-utils]
+    [app.template.frontend.utils.id :as id-utils]
     [app.template.frontend.subs.entity :as entity-subs]
     [uix.core :refer [$ defui use-memo]]
     [uix.re-frame :refer [use-subscribe]]))

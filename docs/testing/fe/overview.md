@@ -39,7 +39,7 @@ Karma tests run in a real browser, catching issues that jsdom simulation might m
 
 | File | Purpose |
 |------|---------|
-| `src/app/frontend/utils/test_utils.cljs` | Core rendering & assertion utilities |
+| `src/app/template/frontend/utils/test_utils.cljs` | Core rendering & assertion utilities |
 | `test/app/admin/frontend/test_setup.cljs` | Admin panel test fixtures & helpers |
 | `test/karma-adapter.js` | Custom Karma adapter for shadow-cljs |
 | `test/capture-test-results.js` | Test result capture for Karma |
@@ -74,7 +74,7 @@ test/
 ```clojure
 (ns my-test
   (:require
-    [app.frontend.utils.test-utils :as test-utils]
+    [app.template.frontend.utils.test-utils :as test-utils]
     [uix.core :refer [$]]))
 
 ;; Initialize test environment (call once at namespace level)

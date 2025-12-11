@@ -7,7 +7,7 @@
    - Updating single entity settings
    - Removing entity settings"
   (:require
-    [app.backend.routes.admin.settings :as settings]
+    [app.template.backend.routes.admin.settings :as settings]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 

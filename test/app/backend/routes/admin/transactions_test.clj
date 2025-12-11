@@ -6,8 +6,8 @@
    - Transaction trends
    - Suspicious transactions detection"
   (:require
-    [app.backend.routes.admin.transactions :as transactions]
-    [app.backend.services.admin :as admin-service]
+    [app.template.backend.routes.admin.transactions :as transactions]
+    [app.admin.backend.services.admin :as admin-service]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
