@@ -1,185 +1,108 @@
 (ns app.domain.frontend.expenses.components.expense-form
-  "Reusable expense form components for both page and modal contexts.
-
-   This namespace provides:
-   - expense-form-body: The core form UI (fields + line items)
-   - expense-add-form-modal: Wrapper for modal add use case
-   - expense-edit-form-modal: Wrapper for modal edit use case"
+  "Reusable expense form components using the template form system."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local line-items-input new-line-item total-amount-input]]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
     [app.domain.frontend.expenses.events.payers :as payers-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
     [app.domain.frontend.expenses.ui.select-options :as select-options]
-    [app.shared.type-conversion :as type-conv]
-    [clojure.string :as str]
+    [app.template.frontend.components.form :refer [form]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-effect use-state]]
+    [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; =============================================================================
-;; Helper Functions (shared with page)
+;; Constants & Data
 ;; =============================================================================
-
-(defn- pad-two
-  [value]
-  (let [s (str value)]
-    (if (< (count s) 2)
-      (str "0" s)
-      s)))
-
-(defn current-datetime-local
-  "Returns current date/time in ISO local format for datetime-local inputs."
-  []
-  (let [now (js/Date.)]
-    (str (.getFullYear now)
-      "-"
-      (pad-two (inc (.getMonth now)))
-      "-"
-      (pad-two (.getDate now))
-      "T"
-      (pad-two (.getHours now))
-      ":"
-      (pad-two (.getMinutes now)))))
-
-(defn new-line-item
-  "Creates a new empty line item with a random ID."
-  []
-  {:id (str (random-uuid))
-   :raw_label ""
-   :qty ""
-   :unit_price ""
-   :line_total ""})
-
-(defn format-decimal
-  "Format a number to a 2 decimal place string for inputs."
-  [n]
-  (when (some? n)
-    (.toFixed n 2)))
-
-(defn safe-parse-number
-  "Parse either a string or number, returning nil for invalid inputs."
-  [value]
-  (cond
-    (number? value) value
-    (string? value) (type-conv/parse-number value)
-    :else nil))
-
-(defn- recalc-line-total-if-possible
-  "When qty and unit price are both present and line-total is blank, auto-calc it."
-  [item]
-  (let [qty-num (safe-parse-number (:qty item))
-        unit-num (safe-parse-number (:unit_price item))
-        line-str (:line_total item)]
-    (if (and (number? qty-num) (number? unit-num) (str/blank? (str line-str)))
-      (let [product (* qty-num unit-num)]
-        (assoc item :line_total (format-decimal product)))
-      item)))
-
-(defn update-line-item
-  "Updates a specific field in a line item and recalculates total if possible."
-  [items item-id key value]
-  (mapv (fn [item]
-          (if (= item-id (:id item))
-            (-> item
-              (assoc key value)
-              recalc-line-total-if-possible)
-            item))
-    items))
-
-(defn remove-line-item
-  "Removes a line item, ensuring at least one empty item remains."
-  [items item-id]
-  (let [remaining (vec (remove #(= item-id (:id %)) items))]
-    (if (seq remaining)
-      remaining
-      [(new-line-item)])))
-
-(defn prepare-line-items
-  "Prepares line items for submission, filtering out incomplete items."
-  [items]
-  (keep (fn [{:keys [raw_label article_id qty unit_price line_total]}]
-          (let [parsed-total (safe-parse-number line_total)]
-            (when (and (not (str/blank? raw_label)) parsed-total)
-              (let [qty-num (safe-parse-number qty)
-                    unit-num (safe-parse-number unit_price)
-                    base {:raw_label raw_label
-                          :line_total parsed-total}
-                    base (cond-> base
-                           qty-num (assoc :qty qty-num)
-                           unit-num (assoc :unit_price unit-num))
-                    article-id (when (and article_id
-                                       (not (str/blank? (str article_id))))
-                                 article_id)]
-                (if article-id
-                  (assoc base :article_id article-id)
-                  base)))))
-    items))
-
-(defn line-items-total
-  "Calculates the sum of all line item totals."
-  [items]
-  (->> items
-    (map (fn [{:keys [line_total]}] (safe-parse-number line_total)))
-    (remove nil?)
-    (reduce + 0)))
 
 (def currency-options
   [{:label "BAM" :value "BAM"}
    {:label "EUR" :value "EUR"}
    {:label "USD" :value "USD"}])
 
-(def ^:private amount-tolerance 0.01)
+(def line-item-columns
+  [{:id :raw_label
+    :label "Label"
+    :type :text
+    :placeholder "e.g. Milk, Bread"}
+   {:id :qty
+    :label "Qty"
+    :type :number
+    :step "0.01"
+    :min "0"
+    :width "w-24"}
+   {:id :unit_price
+    :label "Unit Price"
+    :type :number
+    :step "0.01"
+    :min "0"
+    :width "w-32"}
+   {:id :line_total
+    :label "Line Total"
+    :type :number
+    :step "0.01"
+    :min "0"
+    :width "w-32"}])
+
+(defn get-expense-form-spec
+  [suppliers payers]
+  [{:id :supplier_id
+    :type :select
+    :label "Supplier"
+    :required true
+    :placeholder "Select supplier"
+    :options (map (fn [s] {:value (:id s) :label (select-options/supplier-label s)}) suppliers)}
+   {:id :payer_id
+    :type :select
+    :label "Payer"
+    :required true
+    :placeholder "Select payer"
+    :options (map (fn [p] {:value (:id p) :label (str (:label p) (when (:type p) (str " (" (:type p) ")")))}) payers)}
+   {:id :purchased_at
+    :type :datetime-local ;; standard input type
+    :label "Purchased at"
+    :required true}
+   {:id :total_amount
+    :component total-amount-input ;; Custom component
+    :label "Total amount"
+    :required true}
+   {:id :currency
+    :type :select
+    :label "Currency"
+    :required true
+    :options currency-options}
+   {:id :notes
+    :type :textarea
+    :label "Notes"
+    :required false
+    :placeholder "Optional notes"}
+   {:id :items
+    :component line-items-input ;; Custom component
+    :label "Line Items"
+    :columns line-item-columns}])
 
 ;; =============================================================================
-;; Form Body Component
+;; Form Body Wrapper
 ;; =============================================================================
 
 (defui expense-form-body
-  "Core expense form UI - used in both page and modal contexts.
-   
-   Props:
-   - :mode - :create or :edit
-   - :initial-data - Optional initial form values (for edit mode)
-   - :on-submit - fn called with form data when submitted
-   - :on-cancel - fn called when cancel is clicked
-   - :loading? - Boolean for loading state
-   - :form-error - Error message from backend
-   - :show-header? - Whether to show header with title (default: true for page, false for modal)"
-  [{:keys [mode initial-data on-submit on-cancel loading? form-error show-header?]}]
+  [{:keys [mode initial-data on-submit on-cancel loading?]}]
   (let [suppliers (use-subscribe [:expenses/suppliers])
         payers (use-subscribe [:expenses/payers])
+        ;; Generate spec with current options
+        entity-spec (get-expense-form-spec suppliers payers)
+        
+        ;; Prepare initial values
+        default-values {:currency "BAM"
+                        :purchased_at (current-datetime-local)
+                        :items [(new-line-item)]}
+        form-initial-values (merge default-values initial-data)
 
-        ;; Initialize state from initial-data or defaults
-        ;; Support both kebab-case (from entity store) and snake_case (from API)
-        initial-supplier (or (:supplier-id initial-data) (:supplier_id initial-data) nil)
-        initial-payer (or (:payer-id initial-data) (:payer_id initial-data) nil)
-        initial-purchased-at (or (:purchased-at initial-data) (:purchased_at initial-data) (current-datetime-local))
-        initial-total (if-let [t (or (:total-amount initial-data) (:total_amount initial-data))]
-                        (format-decimal t)
-                        "")
-        initial-currency (or (:currency initial-data) "BAM")
-        initial-notes (or (:notes initial-data) "")
-        initial-items (if-let [items (:items initial-data)]
-                        (mapv (fn [item]
-                                {:id (or (:id item) (str (random-uuid)))
-                                 :raw_label (or (:raw-label item) (:raw_label item) "")
-                                 :qty (if-let [q (:qty item)] (str q) "")
-                                 :unit_price (if-let [u (or (:unit-price item) (:unit_price item))] (format-decimal u) "")
-                                 :line_total (if-let [lt (or (:line-total item) (:line_total item))] (format-decimal lt) "")})
-                          items)
-                        [(new-line-item)])
+        ;; Handle form submission translation
+        handle-submit (fn [{:keys [values]}]
+                        (on-submit values))]
 
-        [supplier-id set-supplier-id!] (use-state initial-supplier)
-        [payer-id set-payer-id!] (use-state initial-payer)
-        [purchased-at set-purchased-at!] (use-state initial-purchased-at)
-        [total-amount set-total-amount!] (use-state initial-total)
-        [currency set-currency!] (use-state initial-currency)
-        [notes set-notes!] (use-state initial-notes)
-        [line-items set-line-items!] (use-state initial-items)
-        [validation-error set-validation-error!] (use-state nil)]
-
-    ;; Load suppliers and payers on mount
+    ;; Load dependencies
     (use-effect
       (fn []
         (rf/dispatch [::suppliers-events/load-list {:limit 100 :offset 0}])
@@ -187,276 +110,36 @@
         js/undefined)
       [])
 
-    ;; Auto-select first supplier/payer if none selected (create mode only)
-    (use-effect
-      (fn []
-        (when (and (= mode :create) (seq suppliers) (not supplier-id))
-          (set-supplier-id! (:id (first suppliers))))
-        (when (and (= mode :create) (seq payers) (not payer-id))
-          (set-payer-id! (:id (first payers)))))
-      [mode payer-id supplier-id suppliers payers])
-
-    (let [prepared-items (prepare-line-items line-items)
-          computed-total (line-items-total prepared-items)
-          parsed-total (safe-parse-number total-amount)
-          total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
-                       (js/Math.abs (- parsed-total computed-total)))
-          total-mismatch? (and total-diff (> total-diff amount-tolerance))
-
-          handle-line-change (fn [item-id key]
-                               (fn [e]
-                                 (set-line-items!
-                                   (update-line-item line-items item-id key (.. e -target -value)))))
-          remove-item (fn [item-id]
-                        (set-line-items! (remove-line-item line-items item-id)))
-          add-item (fn []
-                     (set-line-items! (conj line-items (new-line-item))))
-
-          handle-submit (fn []
-                          (let [effective-total (or parsed-total (when (pos? computed-total) computed-total))
-                                has-items? (seq prepared-items)
-                                diff (when (and (number? effective-total) (pos? computed-total))
-                                       (js/Math.abs (- effective-total computed-total)))]
-                            (cond
-                              (or (str/blank? supplier-id)
-                                (str/blank? payer-id)
-                                (str/blank? purchased-at))
-                              (set-validation-error! "Supplier, payer, and purchased date are required.")
-
-                              (not has-items?)
-                              (set-validation-error! "Add at least one line item with a label and line total.")
-
-                              (or (nil? effective-total) (<= effective-total 0))
-                              (set-validation-error! "Enter a total amount greater than 0 (or fill from line items).")
-
-                              (and (pos? computed-total) (> diff amount-tolerance))
-                              (set-validation-error!
-                                (str "Total amount (" (format-decimal effective-total)
-                                  ") must match line items total (" (format-decimal computed-total) ")."))
-
-                              :else
-                              (do
-                                (set-validation-error! nil)
-                                (on-submit {:supplier_id supplier-id
-                                            :payer_id payer-id
-                                            :purchased_at purchased-at
-                                            :currency currency
-                                            :notes notes
-                                            :total_amount effective-total
-                                            :items (vec prepared-items)})))))]
-
-      ($ :div {:class "space-y-6"}
-        ;; Header (optional, for page context)
-        (when show-header?
-          ($ :div {:class "flex items-center justify-between"}
-            ($ :h1 {:class "text-2xl font-bold"}
-              (if (= mode :edit) "Edit Expense" "Create Expense"))
-            ($ :div {:class "flex gap-2"}
-              ($ :button {:class "ds-btn ds-btn-outline ds-btn-sm"
-                          :type "button"
-                          :on-click on-cancel}
-                "Cancel")
-              ($ :button {:class (str "ds-btn ds-btn-primary ds-btn-sm" (when loading? " ds-btn-disabled"))
-                          :type "button"
-                          :disabled loading?
-                          :on-click handle-submit}
-                (if loading?
-                  ($ :span {:class "flex items-center gap-2"}
-                    ($ :span "Saving")
-                    ($ :span {:class "ds-loading ds-loading-spinner text-current"}))
-                  "Save Expense")))))
-
-        ;; Errors
-        (when validation-error
-          ($ :div {:class "ds-alert ds-alert-error"}
-            ($ :span validation-error)))
-        (when form-error
-          ($ :div {:class "ds-alert ds-alert-error"}
-            ($ :span form-error)))
-
-        ;; Supplier and Payer row
-        ($ :div {:class "grid gap-4 md:grid-cols-2"}
-          ($ :div {:class "space-y-3"}
-            ($ :label {:class "label"}
-              ($ :span {:class "label-text"} "Supplier"))
-            ($ :select {:class "ds-select ds-select-bordered w-full"
-                        :value (or supplier-id "")
-                        :on-change #(set-supplier-id! (.. % -target -value))}
-              ($ :option {:value "" :disabled true} "Select supplier")
-              (for [supplier suppliers
-                    :let [id (:id supplier)]]
-                ($ :option {:key id :value id} (select-options/supplier-label supplier)))))
-          ($ :div {:class "space-y-3"}
-            ($ :label {:class "label"}
-              ($ :span {:class "label-text"} "Payer"))
-            ($ :select {:class "ds-select ds-select-bordered w-full"
-                        :value (or payer-id "")
-                        :on-change #(set-payer-id! (.. % -target -value))}
-              ($ :option {:value "" :disabled true} "Select payer")
-              (for [{:keys [id label type]} payers]
-                ($ :option {:key id :value id}
-                  (str label (when type (str " (" type ")"))))))))
-
-        ;; Date, Amount, Currency row
-        ($ :div {:class "grid gap-4 md:grid-cols-3"}
-          ($ :div {:class "space-y-2"}
-            ($ :label {:class "label"}
-              ($ :span {:class "label-text"} "Purchased at"))
-            ($ :input {:class "ds-input ds-input-bordered w-full"
-                       :type "datetime-local"
-                       :value purchased-at
-                       :on-change #(set-purchased-at! (.. % -target -value))}))
-          ($ :div {:class "space-y-2"}
-            ($ :label {:class "label"}
-              ($ :span {:class "label-text"} "Total amount"))
-            ($ :div {:class "flex gap-2"}
-              ($ :input {:class "ds-input ds-input-bordered w-full"
-                         :type "number"
-                         :step "0.01"
-                         :value total-amount
-                         :on-change #(set-total-amount! (.. % -target -value))})
-              (when (pos? computed-total)
-                ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
-                            :type "button"
-                            :on-click #(set-total-amount! (format-decimal computed-total))}
-                  "Use total")))
-            (when (pos? computed-total)
-              ($ :p {:class "text-xs text-base-content/60"}
-                (str "Line items total: " (shared/format-value computed-total "0" false))
-                (when total-mismatch?
-                  ($ :span {:class "text-error ml-2"} "(does not match total)")))))
-          ($ :div {:class "space-y-2"}
-            ($ :label {:class "label"}
-              ($ :span {:class "label-text"} "Currency"))
-            ($ :select {:class "ds-select ds-select-bordered w-full"
-                        :value currency
-                        :on-change #(set-currency! (.. % -target -value))}
-              (for [{:keys [value label]} currency-options]
-                ($ :option {:key value :value value} label)))))
-
-        ;; Notes
-        ($ :div {:class "space-y-2"}
-          ($ :label {:class "label"}
-            ($ :span {:class "label-text"} "Notes"))
-          ($ :textarea {:class "ds-textarea ds-textarea-bordered w-full"
-                        :rows 3
-                        :value notes
-                        :placeholder "Optional notes"
-                        :on-change #(set-notes! (.. % -target -value))}))
-
-        ;; Line Items
-        ($ :div {:class "space-y-4"}
-          ($ :div {:class "flex items-center justify-between"}
-            ($ :h2 {:class "text-lg font-semibold"} "Line Items")
-            ($ :button {:class "ds-btn ds-btn-ghost ds-btn-sm"
-                        :type "button"
-                        :on-click add-item}
-              "Add line item"))
-          ($ :div {:class "overflow-x-auto"}
-            ($ :table {:class "ds-table w-full"}
-              ($ :thead
-                ($ :tr
-                  ($ :th "Label")
-                  ($ :th "Qty")
-                  ($ :th "Unit Price")
-                  ($ :th "Line Total")
-                  ($ :th "")))
-              ($ :tbody
-                (for [{:keys [id raw_label qty unit_price line_total]} line-items]
-                  ($ :tr {:key id}
-                    ($ :td
-                      ($ :input {:class "ds-input ds-input-bordered w-full"
-                                 :type "text"
-                                 :value raw_label
-                                 :placeholder "e.g. Milk, Bread"
-                                 :on-change (handle-line-change id :raw_label)}))
-                    ($ :td
-                      ($ :input {:class "ds-input ds-input-bordered w-full"
-                                 :type "number"
-                                 :step "0.01"
-                                 :min "0"
-                                 :value qty
-                                 :on-change (handle-line-change id :qty)}))
-                    ($ :td
-                      ($ :input {:class "ds-input ds-input-bordered w-full"
-                                 :type "number"
-                                 :step "0.01"
-                                 :min "0"
-                                 :value unit_price
-                                 :on-change (handle-line-change id :unit_price)}))
-                    ($ :td
-                      ($ :input {:class "ds-input ds-input-bordered w-full"
-                                 :type "number"
-                                 :step "0.01"
-                                 :min "0"
-                                 :value line_total
-                                 :on-change (handle-line-change id :line_total)}))
-                    ($ :td
-                      ($ :button {:class "text-xs text-error"
-                                  :type "button"
-                                  :on-click #(remove-item id)}
-                        "Remove"))))))))
-
-        ;; Modal footer buttons (shown when not showing header)
-        (when-not show-header?
-          ($ :div {:class "flex justify-end gap-2 pt-4"}
-            ($ :button {:class "ds-btn ds-btn-outline"
-                        :type "button"
-                        :on-click on-cancel}
-              "Cancel")
-            ($ :button {:class (str "ds-btn ds-btn-primary" (when loading? " ds-btn-disabled"))
-                        :type "button"
-                        :disabled loading?
-                        :on-click handle-submit}
-              (if loading?
-                ($ :span {:class "flex items-center gap-2"}
-                  ($ :span "Saving")
-                  ($ :span {:class "ds-loading ds-loading-spinner text-current"}))
-                "Save Expense"))))))))
+    ($ form
+      {:entity-name "expense" ;; Use a generic name or "expense-entry"
+       :entity-spec entity-spec
+       :editing (= mode :edit)
+       :initial-values form-initial-values
+       :on-cancel on-cancel
+       :on-submit handle-submit
+       :button-text (if (= mode :edit) "Update Expense" "Save Expense")})))
 
 ;; =============================================================================
-;; Modal Form Wrappers
+;; Modal Wrappers
 ;; =============================================================================
 
 (defui expense-add-form-modal
-  "Modal wrapper for creating new expenses.
-   
-   Props:
-   - :on-success - Called after successful creation
-   - :on-cancel - Called when cancel is clicked"
   [{:keys [on-success on-cancel]}]
-  (let [loading? (use-subscribe [:expenses/form-loading?])
-        form-error (use-subscribe [:expenses/form-error])]
+  (let [loading? (use-subscribe [:expenses/form-loading?])]
     ($ expense-form-body
       {:mode :create
-       :show-header? false
        :loading? loading?
-       :form-error form-error
        :on-cancel on-cancel
        :on-submit (fn [form-data]
-                    ;; Dispatch create and handle success via effect
                     (rf/dispatch [::expenses-events/create-entry-modal form-data on-success]))})))
 
 (defui expense-edit-form-modal
-  "Modal wrapper for editing existing expenses.
-   
-   Props:
-   - :expense-id - ID of expense to edit
-   - :initial-data - Pre-loaded expense data (optional, will load if not provided)
-   - :on-success - Called after successful update
-   - :on-cancel - Called when cancel is clicked"
   [{:keys [expense-id initial-data on-success on-cancel]}]
-  (let [;; If no initial data, we need to load it
-        ;; For now, assume initial-data is provided by the list
-        loading? (use-subscribe [:expenses/form-loading?])
-        form-error (use-subscribe [:expenses/form-error])]
+  (let [loading? (use-subscribe [:expenses/form-loading?])]
     ($ expense-form-body
       {:mode :edit
        :initial-data initial-data
-       :show-header? false
        :loading? loading?
-       :form-error form-error
        :on-cancel on-cancel
        :on-submit (fn [form-data]
-                    ;; Dispatch update and handle success via effect
                     (rf/dispatch [::expenses-events/update-entry-modal expense-id form-data on-success]))})))

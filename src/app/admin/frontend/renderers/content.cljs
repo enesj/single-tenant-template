@@ -66,23 +66,48 @@
 (defn create-main-content-renderer
   "Create entity-specific main content renderer"
   [entity-config]
-  (let [{:keys [entity-key page-title custom-content]} entity-config]
+  (let [{:keys [entity-key page-title custom-content]} entity-config
+        list-overrides-raw (get-in entity-config [:components :list])
+        list-overrides (when (map? list-overrides-raw) list-overrides-raw)
+        ;; Guard against accidentally passing EDN symbols (from config files) where
+        ;; runtime functions are expected.
+        sanitize-overrides
+        (fn [overrides]
+          (let [fn-keys #{:render-add-form :render-edit-form :on-add-success :on-edit-success :render-actions}]
+            (reduce-kv
+              (fn [m k v]
+                (if (contains? fn-keys k)
+                  (cond
+                    (nil? v) (assoc m k nil)
+                    (fn? v) (assoc m k v)
+                    :else (do
+                            (when ^boolean js/goog.DEBUG
+                              (js/console.warn
+                                "[admin/content] Ignoring non-function list override"
+                                (clj->js {:entity entity-key :key k :value v})))
+                            m))
+                  (assoc m k v)))
+              {}
+              (or overrides {}))))]
     (fn [entity-spec propagated-settings]
       (let [display-settings (effective-display-settings entity-config propagated-settings)
             per-page (or (:per-page display-settings) 10)
             actions (actions-renderer/create-actions-renderer entity-config display-settings)
-            list-title (or page-title (str/capitalize (name entity-key)))]
+            list-title (or page-title (str/capitalize (name entity-key)))
+            overrides (sanitize-overrides list-overrides)
+            effective-entity-spec (or (:entity-spec overrides) entity-spec)
+            base-props {:entity-name entity-key
+                        :entity-spec effective-entity-spec
+                        :title list-title
+                        :show-add-form? (true? (:show-add-button? display-settings))
+                        :per-page per-page
+                        :display-settings display-settings
+                        :page-display-settings (:display-settings entity-config)
+                        :render-actions actions}
+            list-props (merge base-props (dissoc overrides :entity-spec))]
         ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
           ($ :div {:class "ds-card-body p-0"}
             (when (true? (:active-filters-display custom-content))
               (render-active-filters entity-key))
             ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
-              ($ list-view
-                {:entity-name entity-key
-                 :entity-spec entity-spec
-                 :title list-title
-                 :show-add-form? (true? (:show-add-button? display-settings))
-                 :per-page per-page
-                 :display-settings display-settings
-                 :page-display-settings (:display-settings entity-config)
-                 :render-actions actions}))))))))
+              ($ list-view list-props))))))))

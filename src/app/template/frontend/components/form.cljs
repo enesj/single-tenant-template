@@ -91,43 +91,51 @@
 
     ($ :div {:id component-id}
       (let [input-type (:input-type field-spec)]
-        (case ui-type
-          :input ($ input (assoc field-props :fork-errors errors :form-id form-id))
-          :number ($ number-input (assoc field-props :fork-errors errors :form-id form-id))
-          :checkbox ($ checkbox-input (assoc field-props :fork-errors errors :form-id form-id))
-          :textarea ($ textarea-input (assoc field-props :form-id form-id))
-          :select ($ select-input (assoc field-props :form-id form-id))
-          :json ($ json-editor (assoc field-props :fork-errors errors :form-id form-id))
-          :array ($ array-input (assoc field-props :fork-errors errors :form-id form-id))
-          ;; Handle nil/null types by detecting input-type or defaulting to input
-          nil (cond
-                ;; Number types
-                (#{:integer :decimal "integer" "decimal" "number"} input-type)
-                (do
-                  (log/debug "Field" (:id field-spec) "has nil type but number input-type, using number-input")
-                  ($ number-input (assoc field-props :fork-errors errors :form-id form-id)))
-                ;; Boolean types
-                (#{:boolean "boolean"} input-type)
-                (do
-                  (log/debug "Field" (:id field-spec) "has nil type but boolean input-type, using checkbox-input")
-                  ($ checkbox-input (assoc field-props :fork-errors errors :form-id form-id)))
-                ;; JSON types
-                (#{:jsonb "jsonb" "json"} input-type)
-                (do
-                  (log/debug "Field" (:id field-spec) "has nil type but json input-type, using json-editor")
-                  ($ json-editor (assoc field-props :fork-errors errors :form-id form-id)))
-                ;; Array types
-                (#{:array "array"} input-type)
-                (do
-                  (log/debug "Field" (:id field-spec) "has nil type but array input-type, using array-input")
-                  ($ array-input (assoc field-props :fork-errors errors :form-id form-id)))
-                ;; Default to input
-                :else
-                (do
-                  (log/debug "Field" (:id field-spec) "has nil/unknown type, defaulting to input")
-                  ($ input (assoc field-props :fork-errors errors :form-id form-id))))
-          ;; Default case for any other unrecognized field type
-          ($ input (assoc field-props :fork-errors errors :form-id form-id)))))))
+        ;; Prioritize custom component if present
+        (if (:component field-spec)
+          (let [CustomComponent (:component field-spec)]
+            ($ CustomComponent (assoc field-props
+                                 :fork-errors errors
+                                 :form-id form-id
+                                 :values (:values props)
+                                 :field-spec field-spec)))
+          (case ui-type
+            :input ($ input (assoc field-props :fork-errors errors :form-id form-id))
+            :number ($ number-input (assoc field-props :fork-errors errors :form-id form-id))
+            :checkbox ($ checkbox-input (assoc field-props :fork-errors errors :form-id form-id))
+            :textarea ($ textarea-input (assoc field-props :form-id form-id))
+            :select ($ select-input (assoc field-props :form-id form-id))
+            :json ($ json-editor (assoc field-props :fork-errors errors :form-id form-id))
+            :array ($ array-input (assoc field-props :fork-errors errors :form-id form-id))
+            ;; Handle nil/null types by detecting input-type or defaulting to input
+            nil (cond
+                  ;; Number types
+                  (#{:integer :decimal "integer" "decimal" "number"} input-type)
+                  (do
+                    (log/debug "Field" (:id field-spec) "has nil type but number input-type, using number-input")
+                    ($ number-input (assoc field-props :fork-errors errors :form-id form-id)))
+                  ;; Boolean types
+                  (#{:boolean "boolean"} input-type)
+                  (do
+                    (log/debug "Field" (:id field-spec) "has nil type but boolean input-type, using checkbox-input")
+                    ($ checkbox-input (assoc field-props :fork-errors errors :form-id form-id)))
+                  ;; JSON types
+                  (#{:jsonb "jsonb" "json"} input-type)
+                  (do
+                    (log/debug "Field" (:id field-spec) "has nil type but json input-type, using json-editor")
+                    ($ json-editor (assoc field-props :fork-errors errors :form-id form-id)))
+                  ;; Array types
+                  (#{:array "array"} input-type)
+                  (do
+                    (log/debug "Field" (:id field-spec) "has nil type but array input-type, using array-input")
+                    ($ array-input (assoc field-props :fork-errors errors :form-id form-id)))
+                  ;; Default to input
+                  :else
+                  (do
+                    (log/debug "Field" (:id field-spec) "has nil/unknown type, defaulting to input")
+                    ($ input (assoc field-props :fork-errors errors :form-id form-id))))
+            ;; Default case for any other unrecognized field type
+            ($ input (assoc field-props :fork-errors errors :form-id form-id))))))))
 
 (defui form-fields
   [{:keys [editing set-dirty form-id] :as props}]
@@ -186,12 +194,13 @@
    :entity-name {:type :string :required true}
    :editing {:type :boolean :required false}
    :initial-values {:type :map :required false}
+   :on-submit {:type :function :required false}
    :set-editing! {:type :function :required false}})
 
 (defui form
   "Renders a form with fields based on entity specification"
   {:prop-types form-props}
-  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing!] :as _props}]
+  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing! on-submit] :as _props}]
   (let [form-success? (urf/use-subscribe [::form-subs/form-success entity-name])
         submitted? (urf/use-subscribe [::form-subs/submitted? entity-name])
         form-errors (urf/use-subscribe [::form-subs/form-errors entity-name])]
@@ -280,30 +289,32 @@
        :keywordize-keys true
        :prevent-default? true
        :clean-on-unmount? false
-       :on-submit #(do
-                     (let [dirty (:dirty %)
-                           values (:values %)
-                           reset (:reset %)
-                           _ (log/debug "Form submission:"
-                               {:entity-name entity-name
-                                :editing editing
-                                :dirty dirty
-                                :values values
-                                :settings-value (get values :settings)})
-                           changed-values (-> values
-                                            (select-keys (cons :id (keys dirty))))]
-                       (log/debug "Form submission - changed values:"
-                         {:changed-values changed-values
-                          :settings-in-changed (contains? changed-values :settings)})
-                       (rf/dispatch [::form-events/submit-form
-                                     (assoc %
-                                       :values (if editing changed-values values)
-                                       :entity-name entity-name
-                                       :editing editing)])
-                       (if editing (set-editing! nil)
-                         (reset {:values initial-values
-                                 :touched (set (keys initial-values))}))
-                       (rf/dispatch [::form-events/set-submitted entity-name true])))
+
+       :on-submit (or on-submit
+                    #(do
+                       (let [dirty (:dirty %)
+                             values (:values %)
+                             reset (:reset %)
+                             _ (log/debug "Form submission:"
+                                 {:entity-name entity-name
+                                  :editing editing
+                                  :dirty dirty
+                                  :values values
+                                  :settings-value (get values :settings)})
+                             changed-values (-> values
+                                              (select-keys (cons :id (keys dirty))))]
+                         (log/debug "Form submission - changed values:"
+                           {:changed-values changed-values
+                            :settings-in-changed (contains? changed-values :settings)})
+                         (rf/dispatch [::form-events/submit-form
+                                       (assoc %
+                                         :values (if editing changed-values values)
+                                         :entity-name entity-name
+                                         :editing editing)])
+                         (if editing (set-editing! nil)
+                           (reset {:values initial-values
+                                   :touched (set (keys initial-values))}))
+                         (rf/dispatch [::form-events/set-submitted entity-name true]))))
 
        :on-cancel #(do
                      (rf/dispatch [::form-events/set-submitted entity-name false])

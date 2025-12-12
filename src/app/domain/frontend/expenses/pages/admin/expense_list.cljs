@@ -1,15 +1,13 @@
 (ns app.domain.frontend.expenses.pages.admin.expense-list
   "Admin expense list page with custom modal forms for add/edit."
   (:require
-    [app.admin.frontend.components.layout :as layout]
+    [app.admin.frontend.components.generic-admin-entity-page :refer [generic-admin-entity-page]]
     [app.domain.frontend.expenses.components.expense-form :refer [expense-add-form-modal
                                                                   expense-edit-form-modal]]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
-    [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-effect]]
-    [uix.re-frame :refer [use-subscribe]]))
+    [uix.core :refer [$ defui]]))
 
 ;; =============================================================================
 ;; Entity Spec for Expenses List Display
@@ -87,31 +85,16 @@
 ;; Main Page Component
 ;; =============================================================================
 
-(defui admin-expense-list-page []
-  ($ layout/admin-layout
-    (let [;; Refresh list callback
-          refresh-list (fn []
-                         (rf/dispatch [::expenses-events/load-list {}]))]
-
-      ;; Load expenses on mount
-      (use-effect
-        (fn []
-          (rf/dispatch [::expenses-events/load-list {}])
-          js/undefined)
-        [])
-
-      ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
-        ($ :div {:class "ds-card-body p-0"}
-          ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
-            ($ list-view
-              {:entity-name :expenses
-               :entity-spec expenses-entity-spec
-               :title "Expenses"
-               :display-settings expenses-display-settings
-               ;; Enable modal forms
-               :form-display :modal
-               :render-add-form render-add-form
-               :render-edit-form render-edit-form
-               ;; Success callbacks refresh the list
-               :on-add-success refresh-list
-               :on-edit-success refresh-list})))))))
+(defui admin-expense-list-page
+  []
+  (let [refresh-list #(rf/dispatch [::expenses-events/load-list {}])]
+    ($ generic-admin-entity-page
+      {:children :expenses
+       :list-overrides {:entity-spec expenses-entity-spec
+                        :display-settings expenses-display-settings
+                        :form-display :modal
+                        :render-add-form render-add-form
+                        :render-edit-form render-edit-form
+                        :on-add-success refresh-list
+                        :on-edit-success refresh-list
+                        :render-actions nil}})))

@@ -29,30 +29,46 @@
   "Generic configuration-driven admin entity page"
   [entity-key]
   (let [actual-entity-key (extract-entity-key entity-key)
+        ;; Page-level overrides (optional). This is the recommended way to pass
+        ;; functions (e.g. custom modal form renderers) into the generic pipeline.
+        page-opts (when (map? entity-key)
+                    (dissoc entity-key :children))
+        list-overrides (:list-overrides page-opts)
+        page-opts (dissoc page-opts :list-overrides)
+
         entity-config (use-subscribe [:admin/entity-config actual-entity-key])
+        ;; Only merge overrides once the config exists (prevents flicker and
+        ;; ensures we still rely on the canonical entity-config for defaults).
+        merged-config (when entity-config
+                        (cond-> (merge entity-config (or page-opts {}))
+                          (map? list-overrides)
+                          (update-in [:components :list] (fnil merge {}) list-overrides)))
+
         ;; Call all hooks at the top level to satisfy Rules of Hooks
         entity-data (use-subscribe [::entity-subs/paginated-entities actual-entity-key])
-        {:keys [page-title page-description adapter-init-fn features components] :as config} (or entity-config {})
+        {:keys [page-title page-description adapter-init-fn features components] :as config} (or merged-config {})
         {:keys [modals custom-header]} components
         entity-ids (->> entity-data (map id-utils/extract-entity-id) (filter some?) vec)
         selection-change-handler (use-memo #(generic-handlers/create-generic-selection-handler actual-entity-key)
-                                  [actual-entity-key])
-        additional-effects (use-memo #(when entity-config
+                                   [actual-entity-key])
+        additional-effects (use-memo #(when merged-config
                                         (generic-handlers/create-generic-additional-effects config))
-                               [entity-config config])
-        render-main-content (when entity-config (content-renderer/create-main-content-renderer config))
+                             [merged-config config])
+        render-main-content (when merged-config (content-renderer/create-main-content-renderer config))
         header-render (use-memo #(build-header-renderer custom-header) [custom-header])
         ;; Always call the hook, but pass conditional parameters to handle logic inside
         _ (generic-handlers/use-deletion-constraints
             actual-entity-key
             entity-ids
-            (and entity-config (true? (:deletion-constraints? features))))]
+            (and merged-config (true? (:deletion-constraints? features))))]
 
     (when ^boolean js/goog.DEBUG
       (js/console.log "generic-admin-entity-page state"
         (clj->js {:entity actual-entity-key
                   :has-config? (boolean entity-config)
-                  :entity-data-count (count entity-data)})))
+                  :entity-data-count (count entity-data)
+                  :has-page-overrides? (boolean page-opts)
+                  :has-list-overrides? (boolean list-overrides)})))
 
     (if-not entity-config
       ($ :div {:class "text-sm text-gray-400"}
