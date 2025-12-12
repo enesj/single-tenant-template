@@ -1,4 +1,4 @@
-(ns app.template.frontend.pages.expense-settings
+(ns app.domain.frontend.expenses.pages.user.expense-settings
   "User-facing expense settings page."
   (:require
     [app.template.frontend.components.button :refer [button]]

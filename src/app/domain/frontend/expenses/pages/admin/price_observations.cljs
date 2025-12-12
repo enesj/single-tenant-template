@@ -1,4 +1,4 @@
-(ns app.domain.frontend.expenses.pages.price-observations
+(ns app.domain.frontend.expenses.pages.admin.price-observations
   (:require
     [app.admin.frontend.components.generic-admin-entity-page :refer [generic-admin-entity-page]]
     [uix.core :refer [$ defui]]))

@@ -1,4 +1,4 @@
-(ns app.template.frontend.pages.expense-upload
+(ns app.domain.frontend.expenses.pages.user.expense-upload
   "User-facing receipt upload page for expense tracking."
   (:require
     [app.template.frontend.components.button :refer [button]]

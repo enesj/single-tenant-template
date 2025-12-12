@@ -1,203 +1,135 @@
-# NEXT-PROMPT.md
+# NEXT Agent Prompt — 2025-12-12 — ✅ IMPLEMENTATION COMPLETE
 
-**Date**: 2025-12-10
-**Topic**: Implement Phase 3B - User Experience & Dashboard for Home Expenses Tracker
-**PROMPT**: Create user-facing expense tracking experience with role-based access, mobile-first dashboard, and personal analytics
+**STATUS:** Implementation complete. Ready for manual testing.
 
----
+**PROMPT:** List view: support custom add/edit forms + modal; use for Admin Expenses
 
-## Context Snapshot (Single-Tenant Template Architecture)
+## Implementation Summary
 
-- **Template**: Single-tenant SaaS template with Clojure/ClojureScript + PostgreSQL, served at `http://localhost:8085`
-- **Current State**: Admin expense tracking UI complete (Phase 3A), now need user-facing experience (Phase 3B)
-- **Authentication**: Dual auth system - admin token auth (`/admin/api`) and user session auth (`/api/v1/auth`)
-- **Frontend**: Shadow-CLJS builds (`:app` for public, `:admin` for admin console) using Re-frame + UIX
-- **Backend**: Services with protocols-first approach, DI container in `app.template.di.config`
-- **Expenses Domain**: Complete backend services at `/admin/api/expenses/*`, database schema migrated (8 tables), domain implemented at `src/app/domain/expenses/` (services/, routes/, frontend/)
+### Changes Made
 
-## Task Focus
+#### Template List View Enhancement (`src/app/template/frontend/components/list.cljs`)
+- Added modal state management: `add-modal-open?`, `edit-modal-open?`, `edit-modal-item`
+- Added new props: `:render-add-form`, `:render-edit-form`, `:form-display`, `:on-add-success`, `:on-edit-success`
+- Modal rendering with `modal-wrapper` when custom forms provided and `:form-display :modal`
 
-Implement comprehensive user experience for personal expense tracking including:
-- Role-based access control (unassigned users vs assigned users)
-- Personal expense dashboard with analytics and insights
-- Mobile-optimized receipt upload and expense management
-- User settings and preferences
-- Integration with existing expenses backend services
+#### UI Components Updates
+- `list/ui.cljs` - header-section accepts `on-add-click` for custom add button behavior
+- `list/cells.cljs` - edit-button, action-buttons, reactive-action-cell accept `on-edit-click` callback
+- `list/rows.cljs` - render-row passes `on-edit-click` to action buttons
 
-## Code Map (Relevant Namespaces & Files)
+#### Expense Form Components (`src/app/domain/frontend/expenses/components/expense_form.cljs`)
+- Created `expense-form-body` - reusable form UI for both page and modal
+- Created `expense-add-form-modal` - modal wrapper for creating expenses
+- Created `expense-edit-form-modal` - modal wrapper for editing expenses
 
-### Frontend Core (`:app` build)
-- `src/app/template/frontend/core.cljs` - Main app entry point
-- `src/app/template/frontend/routes.cljs` - Route definitions and controllers
-- `src/app/template/frontend/events/auth.cljs` - User authentication events
-- `src/app/template/frontend/pages/home.cljs` - Landing page (role gating needed)
-- `src/app/template/frontend/pages/login.cljs` - User login page
-- `src/app/template/frontend/components/` - Reusable UI components
+#### Expense Events (`src/app/domain/frontend/expenses/events/expenses.cljs`)
+- Added `::create-entry-modal` with callback support
+- Added `::update-entry-modal` with callback support
+- Added `::call-modal-callback` helper event
 
-### User-Facing Pages to Create
-- `src/app/template/frontend/pages/expenses_dashboard.cljs` - Personal dashboard (new)
-- `src/app/template/frontend/pages/expenses_list.cljs` - Expense history (new)
-- `src/app/template/frontend/pages/receipt_upload.cljs` - Mobile receipt capture (new)
-- `src/app/template/frontend/pages/expenses_settings.cljs` - User preferences (new)
+#### Expense List Page (`src/app/domain/frontend/expenses/pages/admin/expense_list.cljs`)
+- Rewritten to use `list-view` directly with modal form props
+- Custom `expenses-entity-spec` for table display
+- `render-add-form` and `render-edit-form` functions for modal content
 
-### Backend Extensions (Reuse Existing Expenses Domain)
-- Extend existing `src/app/domain/expenses/services/` - Reuse suppliers, expenses, receipts, articles services with user filtering
-- Extend existing `src/app/domain/expenses/routes/` - Add user-specific routes alongside admin routes
-- `src/app/domain/expenses/services/user_access.clj` - User filtering and access control layer (new)
-- `src/app/domain/expenses/routes/user.clj` - User-facing API routes (new)
+### Files Modified
+1. `src/app/template/frontend/components/list.cljs`
+2. `src/app/template/frontend/components/list/ui.cljs`
+3. `src/app/template/frontend/components/list/cells.cljs`
+4. `src/app/template/frontend/components/list/rows.cljs`
+5. `src/app/template/frontend/events/config.cljs` (added noop event)
+6. `src/app/domain/frontend/expenses/components/expense_form.cljs` (NEW)
+7. `src/app/domain/frontend/expenses/events/expenses.cljs`
+8. `src/app/domain/frontend/expenses/pages/admin/expense_list.cljs`
 
-### Configuration
-- `shadow-cljs.edn` - Add new routes to `:app` build
-- `resources/db/models.edn` - User permissions table (if needed)
-
-## Commands to Run
-
-### Development
-```bash
-# Frontend development (app build for user experience)
-npm run watch          # :app build at http://localhost:8085
-npm run watch:admin    # :admin build at http://localhost:8085/admin
-
-# Backend compilation check (use system-logs skill)
-# Check for compilation errors with system-logs skill
-# Backend hot-reloads automatically on file changes
-
-# Note: App should be running continuously during development
-# Use system-logs skill to monitor backend compilation and runtime errors
-```
-
-### Testing
-```bash
-# Backend tests (save output first!)
-bb be-test 2>&1 | tee /tmp/be-test.txt
-
-# Frontend tests (save output first!)
-npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
-
-# Node tests for faster frontend test iteration
-bb fe-test-node
-```
-
-### Database
-```bash
-# Backup before schema changes
-bb backup-db
-
-# Migrations (if schema changes needed)
-clj -X:migrations-dev/migrate
-
-# Restore if needed
-bb restore-db
-```
-
-## Gotchas & Critical Details
-
-### Authentication & Authorization
-- **User sessions** use Ring session cookies (not bearer tokens like admin)
-- **Role-based access**: Users without expense tracking role see waiting/onboarding page
-- **Security**: Never expose other users' data - implement proper user filtering in services
-- **Mixed auth**: `/api/v1/auth` for users, `/admin/api` for admin - don't confuse
-
-### Architecture Patterns
-- **Services**: Follow protocol-first pattern (see existing expenses services)
-- **Frontend**: Use existing template components (`app.template.frontend.components.*`)
-- **State management**: Re-frame with proper app-db paths (don't leak data between users)
-- **Routing**: Use `guarded-start` pattern for authenticated routes
-
-### Mobile-First Requirements
-- **DaisyUI classes**: Use responsive classes (`ds-*` prefixed for components)
-- **Touch-friendly**: Large tap targets for receipt upload and expense entry
-- **PWA features**: Consider offline support for receipt capture
-- **Camera integration**: Direct mobile camera access for receipt photos
-
-### Data Access Patterns
-- **User filtering**: All backend services must filter by `user_id` from session
-- **Reuse existing expenses services**: Extend `src/app/domain/expenses/services/` with user filtering - DO NOT duplicate existing logic
-- **API consistency**: Follow existing JSON response patterns (`{:success true :data ...}`)
-- **Service patterns**: Use existing protocol-first services (suppliers, expenses, receipts, articles) with user-scoped access layer
-
-### Single-Tenant Assumptions
-- **No RLS**: Row Level Security not implemented (unlike Hosting repo)
-- **No tenant context**: No multi-tenant switching or tenant isolation
-- **Port**: App serves on 8085 (not 3000)
-
-## Implementation Checklist
-
-### Phase 1: Foundation & Role Gating
-- [ ] Create user role checking middleware/service
-- [ ] Implement waiting room page for unassigned users
-- [ ] Add role detection to home page routing
-- [ ] Create role assignment notification system
-- [ ] Test role-based access control
-
-### Phase 2: Dashboard & Core UI
-- [ ] Create personal expense dashboard page at `/dashboard` or `/expenses`
-- [ ] Implement recent expenses summary with pagination
-- [ ] Add monthly spending overview cards
-- [ ] Create quick receipt upload button/flow
-- [ ] Add pending receipts status tracker
-- [ ] Implement responsive dashboard layout
-
-### Phase 3: Expense Management
-- [ ] Create user expense list page with filters (date, supplier, status)
-- [ ] Implement expense detail view with line items
-- [ ] Add mobile-optimized expense creation form
-- [ ] Create receipt upload flow with camera integration
-- [ ] Add receipt status tracking and notifications
-- [ ] Implement expense editing capabilities
-
-### Phase 4: Backend Services (Reuse Existing Domain)
-- [ ] Extend existing expenses services (suppliers, expenses, receipts, articles) with user filtering layer
-- [ ] Add user authentication middleware to expenses API endpoints (reuse existing auth patterns)
-- [ ] Create user-specific analytics endpoints (reuse reports service patterns)
-- [ ] Implement receipt upload processing for users (extend existing receipts service)
-- [ ] Add user preference management endpoints (new service)
-- [ ] Ensure proper security boundaries between users (user filtering in service layer)
-
-### Phase 5: Mobile Optimization
-- [ ] Optimize all components for mobile screens
-- [ ] Implement touch-friendly interfaces
-- [ ] Add PWA manifest and service worker
-- [ ] Create offline receipt capture functionality
-- [ ] Test on actual mobile devices
-- [ ] Implement mobile-specific features (camera, gestures)
-
-### Phase 6: Analytics & Reporting
-- [ ] Create personal spending analytics dashboard
-- [ ] Implement category-wise spending breakdowns
-- [ ] Add monthly/yearly trend reports
-- [ ] Create top merchants analysis
-- [ ] Add budget tracking and alerts
-- [ ] Implement export functionality (PDF/CSV)
-
-### Phase 7: Settings & Preferences
-- [ ] Create user settings page
-- [ ] Implement notification preferences
-- [ ] Add default payment methods setup
-- [ ] Create currency and display preferences
-- [ ] Add data privacy and export settings
-- [ ] Implement profile management
-
-### Phase 8: Testing & Polish
-- [ ] Write comprehensive frontend tests for user flows
-- [ ] Add integration tests for user-specific backend services
-- [ ] Test role-based access control thoroughly
-- [ ] Verify mobile responsiveness across devices
-- [ ] Security audit for user data isolation
-- [ ] Performance testing for expense analytics queries
-
-## Next Agent Instructions
-
-1. **Use the clojure-mcp scratch-pad tool** to track implementation progress through these phases
-2. **Start with Phase 1** (Foundation & Role Gating) and complete each phase before moving to the next
-3. **Test authentication flows early** - role-based access is critical
-4. **Follow existing code patterns** - don't reinvent patterns from template components
-5. **REUSE existing expenses domain services** - extend `src/app/domain/expenses/services/` with user filtering, don't duplicate logic
-6. **Use system-logs skill** to monitor backend compilation and runtime errors instead of `bb run-app`
-7. **Save test output** using the critical testing workflow mentioned in docs
-8. **Document any schema changes** in migration files - never edit generated migrations
-9. **Start implementation immediately** after creating the detailed plan in scratch-pad
+### Verification
+- Both `app` and `admin` builds compile with 0 warnings
+- Plan file: `PLAN-list-view-expenses-modal.md`
 
 ---
 
-**Key Success Metrics**: Users can register, get assigned expense tracking role, log in to personal dashboard, upload receipts via mobile, track expenses with mobile-optimized interface, and view personal spending analytics.
+## Original Context
+
+## Context snapshot (single-tenant template)
+- Single-tenant SaaS template (Clojure/ClojureScript + PostgreSQL) with Admin UI served at `http://localhost:8085/admin`.
+- Admin UI uses Re-frame + UIx; common list/table UX comes from template components under `src/app/template/frontend/components/*`.
+- Many admin pages are configuration-driven via `generic-admin-entity-page` and `entities.edn`.
+- The template `list-view` currently supports **generic add** (inline “add form”) and **generic edit** (inline row edit) via `app.template.frontend.components.form/form`.
+- Expenses domain is mounted into admin router under `/admin/expenses`, `/admin/expenses/new`, `/admin/expenses/:id`.
+- Expenses are non-trivial: they depend on other entities (supplier, payer) and contain line-items; generic list-view form is not sufficient.
+- Requirement: allow `list-view` to accept **custom add/edit forms** and optionally show them in a **modal** (not only inline).
+
+## Task focus
+Implement reusable support in `list-view` for:
+1) **Custom add form** and **custom edit form** renderers (opt-in; keep existing behavior as default).
+2) Ability to render add/edit forms either **inline** (existing) or in a **modal**.
+3) For **Admin Expenses** list (`/admin/expenses`): show “Add” and “Edit” as modal windows using the UI/fields of the form at `/admin/expenses/new` (and a similar edit form).
+
+## Code map (starting points)
+- `src/app/template/frontend/components/list.cljs` — `list-view` main component; currently drives add-form toggle and row-editing.
+- `src/app/template/frontend/components/list/ui.cljs` — `header-section` and `add-item-section` (generic add form rendering).
+- `src/app/template/frontend/components/list/rows.cljs` — `render-row` decides inline edit form vs normal row.
+- `src/app/template/frontend/components/list/cells.cljs` — `edit-button` dispatches `::config-events/set-editing` (inline edit trigger).
+- `src/app/template/frontend/events/config.cljs` — UI events `::set-show-add-form`, `::set-editing` (currently global `[:ui ...]`).
+- `src/app/template/frontend/subs/ui.cljs` — subs `::show-add-form`, `::editing`, display-settings merging.
+- `src/app/template/frontend/components/modal_wrapper.cljs` + `src/app/template/frontend/components/modal.cljs` — existing modal implementations.
+
+Admin wiring:
+- `src/app/admin/frontend/components/generic_admin_entity_page.cljs` — config-driven pages; delegates rendering to content renderer.
+- `src/app/admin/frontend/renderers/content.cljs` — calls `list-view` with `:render-actions` and display settings.
+- `src/app/admin/frontend/renderers/actions.cljs` — creates row-actions renderer from entity config.
+- `src/app/admin/frontend/config/entities.edn` — includes `:expenses` config (currently `:show-edit? false`, `:show-add-button? true`).
+- `src/app/admin/frontend/events/users/template/form_interceptors.cljs` — intercepts generic template form submissions (incl. `:expenses`), routes them through template list CRUD; this is NOT suitable for expense line-items.
+
+Expenses domain:
+- `src/app/domain/frontend/expenses/routes.cljs` — admin routes: `/admin/expenses`, `/admin/expenses/new`, `/admin/expenses/:id`.
+- `src/app/domain/frontend/expenses/pages/admin/expense_list.cljs` — currently `($ generic-admin-entity-page :expenses)`.
+- `src/app/domain/frontend/expenses/pages/admin/expense_form.cljs` — `admin-expense-form-page` (manual expense entry; line-items; loads suppliers/payers; dispatches `::expenses-events/create-entry`).
+- `src/app/domain/frontend/expenses/pages/admin/expense_detail.cljs` — detail page (not an edit form today).
+- `src/app/domain/frontend/expenses/events/entity_configs.cljs` + `src/app/domain/frontend/expenses/events/events_factory.cljs` — generates `load-list`, `load-detail`, `create-entry` (note: create-success currently navigates to `/admin/expenses/:id`).
+
+## Commands to run (save outputs; do not re-run tests)
+- Start dev stack (already auto-reloads): `bb run-app`
+- Read logs (compile/runtime): `./scripts/sh/monitoring/read_output.sh -f`
+- Frontend tests (save once): `npm run test:cljs 2>&1 | tee /tmp/fe-test.txt`
+- Backend tests (save once): `bb be-test 2>&1 | tee /tmp/be-test.txt`
+
+## Skills to use (MCP)
+- `system-logs` — check backend/shadow build/runtime errors, restart system via nREPL if needed.
+- `app-db-inspect` — inspect re-frame app-db if modal/list state behaves oddly.
+- `reframe-events-analysis` — trace event sequences (especially around add/edit/open/close modal).
+
+## Gotchas / constraints
+- Admin UI runs on **8085**, not 3000.
+- `list-view` add/edit UI state is currently global (`[:ui :show-add-form]`, `[:ui :editing]`), so modal state must not leak across entities/pages.
+- `list-view` currently hides the table when `show-add-form?` is true (generic add mode). For modal add, keep table visible.
+- `cells/edit-button` hardcodes inline editing via `::config-events/set-editing`. For modal edit, you likely need an override (callback) or a custom actions renderer.
+- Expenses create currently uses `::expenses-events/create-entry` and then navigates to detail. For “create in modal from list”, adjust success behavior (e.g., optionally close modal + refresh list instead of navigating).
+- There is no obvious “update-entry” event in expenses events factory today; confirm backend supports `PUT /admin/api/expenses/entries/:id` and decide what edit should update (header fields only vs items too).
+
+## Checklist (what to do next session)
+1) Docs refresh: skim `docs/index.md` + `docs/ai-quick-access.md`, then re-skim relevant frontend docs after each phase.
+2) Add reusable API to `list-view`:
+   - Accept optional `:render-add-form` and `:render-edit-form` (or similar) and a `:form-display` mode (`:inline` vs `:modal`).
+   - Keep default behavior (generic inline add/edit) unchanged when custom props are absent.
+3) Implement modal behavior:
+   - Add internal (component-local) state for “add modal open?” and “edit modal open + which item?”.
+   - Reuse existing modal component(s) (`modal-wrapper` or `modal`) for consistent UX.
+   - Provide clean close behavior that clears errors and resets state.
+4) Wire expenses page to use the new extension points:
+   - Extract reusable form UI from `admin-expense-form-page` so it can render inside a modal (remove breadcrumbs/back button in modal variant).
+   - Add an Edit modal variant (prefill from `load-detail`; confirm update API/event and implement as needed).
+   - Update `entities.edn` / admin renderer wiring so `:expenses` uses custom add/edit forms and enables the appropriate actions.
+5) Verify end-to-end in the browser:
+   - `/admin/expenses`: Add opens modal with expense form UI; Save creates expense and refreshes list (no unwanted navigation).
+   - `/admin/expenses`: Edit opens modal with prefilled form; Save updates and refreshes list.
+   - Ensure other entities’ list views still work (no regressions).
+6) Tests:
+   - Run `npm run test:cljs 2>&1 | tee /tmp/fe-test.txt` once; only grep/analyze the saved file.
+
+## Planning / execution instructions (important)
+- Create a comprehensive implementation plan file in repo root (app root): `PLAN-list-view-expenses-modal.md`.
+- Use that plan file to track progress across phases.
+- Track each single phase’s implementation notes (what changed/what failed/hypothesis) in the Clojure MCP scratch pad.
+- After the plan is created, start implementation immediately (do not pause to ask for approval).

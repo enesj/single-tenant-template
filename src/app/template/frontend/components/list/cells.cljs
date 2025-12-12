@@ -90,13 +90,23 @@
 ;; =============================================================================
 
 (defui edit-button
-  "Edit button for a single row."
-  [{:keys [entity-name item-id]}]
+  "Edit button for a single row.
+   
+   Props:
+   - entity-name: Entity type keyword
+   - item-id: ID of the item
+   - item: Full item data (optional, for custom edit handlers)
+   - on-edit-click: Optional custom click handler fn that receives the item"
+  [{:keys [entity-name item-id item on-edit-click]}]
   (let [entity-name-lower (kw/lower-name entity-name)
         handle-edit-click (fn [_e]
                             (rf/dispatch [::crud-events/clear-error (kw/ensure-keyword entity-name)])
                             (rf/dispatch [::form-events/clear-form-errors (kw/ensure-keyword entity-name)])
-                            (rf/dispatch [::config-events/set-editing item-id]))]
+                            (if on-edit-click
+                              ;; Use custom handler (for modal edit)
+                              (on-edit-click item)
+                              ;; Default inline edit behavior
+                              (rf/dispatch [::config-events/set-editing item-id])))]
     ($ button
       {:id (str "btn-edit-" entity-name-lower "-" item-id)
        :btn-type :primary
@@ -133,8 +143,9 @@
    Props:
    - entity-name: keyword for the entity type
    - item: the row item data
-   - custom-actions: (optional) fn that receives item and returns additional action buttons"
-  [{:keys [entity-name item custom-actions]}]
+   - custom-actions: (optional) fn that receives item and returns additional action buttons
+   - on-edit-click: (optional) custom edit handler fn (for modal edit)"
+  [{:keys [entity-name item custom-actions on-edit-click]}]
   (let [{:keys [show-edit? show-delete?]} (use-action-visibility entity-name)
         item-id (id-utils/extract-entity-id item)]
     ($ :div {:class "flex items-center gap-2"}
@@ -142,7 +153,9 @@
       (when show-edit?
         ($ edit-button
           {:entity-name entity-name
-           :item-id item-id}))
+           :item-id item-id
+           :item item
+           :on-edit-click on-edit-click}))
       ;; Delete button (when enabled)
       (when show-delete?
         ($ delete-button
@@ -156,14 +169,22 @@
   "Legacy action buttons component for backward compatibility.
    Renders action buttons using explicit show-edit?/show-delete? props.
    
-   DEPRECATED: Prefer reactive-action-cell which subscribes to settings directly."
-  [{:keys [entity-name item show-edit? show-delete? custom-actions]}]
+   Props:
+   - entity-name: Entity type keyword
+   - item: Full item data
+   - show-edit?: Whether to show edit button
+   - show-delete?: Whether to show delete button
+   - custom-actions: Optional custom actions render fn
+   - on-edit-click: Optional custom edit handler fn (for modal edit)"
+  [{:keys [entity-name item show-edit? show-delete? custom-actions on-edit-click]}]
   (let [item-id (id-utils/extract-entity-id item)]
     ($ :div {:class "flex items-center gap-2"}
       (when show-edit?
         ($ edit-button
           {:entity-name entity-name
-           :item-id item-id}))
+           :item-id item-id
+           :item item
+           :on-edit-click on-edit-click}))
       (when show-delete?
         ($ delete-button
           {:entity-name entity-name

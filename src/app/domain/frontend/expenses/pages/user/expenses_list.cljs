@@ -1,4 +1,4 @@
-(ns app.template.frontend.pages.expenses-list
+(ns app.domain.frontend.expenses.pages.user.expenses-list
   "User-facing expense list page with filtering and pagination."
   (:require
     [app.template.frontend.components.button :refer [button]]

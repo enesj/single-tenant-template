@@ -34,7 +34,7 @@
                                (set-show-add-form! false))
                  :button-text "Save"})))))
 
-(defui header-section [{:keys [title show-add-form? set-show-add-form! set-editing! entity-name show-add-button?]}]
+(defui header-section [{:keys [title show-add-form? set-show-add-form! set-editing! entity-name show-add-button? on-add-click]}]
   (let [plus-icon-el ($ plus-icon)
         button-id (str "btn-add-" (str/lower-case (name title)))
         ;; Session + metadata to determine if adding is allowed
@@ -56,15 +56,19 @@
           ($ button
             {:shape "circle"
              :id button-id
-             :on-click #(do
-                          ;; Clear any errors
-                          (rf/dispatch [::crud-events/clear-error (keyword entity-name)])
-                          (rf/dispatch [::form-events/clear-form-errors (keyword entity-name)])
+             :on-click (if on-add-click
+                         ;; Use custom handler if provided (for modal mode)
+                         on-add-click
+                         ;; Default inline behavior
+                         #(do
+                            ;; Clear any errors
+                            (rf/dispatch [::crud-events/clear-error (keyword entity-name)])
+                            (rf/dispatch [::form-events/clear-form-errors (keyword entity-name)])
 
-                          ;; Set UI state for add form
-                          (set-show-add-form! true)
-                          (rf/dispatch [::config-events/set-show-add-form true])
+                            ;; Set UI state for add form
+                            (set-show-add-form! true)
+                            (rf/dispatch [::config-events/set-show-add-form true])
 
-                          ;; Reset editing state
-                          (set-editing! nil))
+                            ;; Reset editing state
+                            (set-editing! nil)))
              :children plus-icon-el}))))))

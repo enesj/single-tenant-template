@@ -88,6 +88,48 @@
       (is (= 1 (count (:items expense))))
       (is (= (inc before) after)))))
 
+(deftest expenses-create-accepts-body-with-items-two-arity
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-result (suppliers/find-or-create-supplier! db "TwoArity Supplier" {})
+          supplier (:supplier supplier-result)
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "1.23")
+                     :currency "BAM"
+                     :notes "two arity"
+                     :items [{:raw_label "Test" :line_total (bigdec "1.23")}]})]
+      (is (:id expense))
+      (is (= 1 (count (:items expense))))
+      (is (= "Test" (-> expense :items first :raw_label))))))
+
+(deftest expenses-create-coerces-api-string-types
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-result (suppliers/find-or-create-supplier! db "Coerce Supplier" {})
+          supplier (:supplier supplier-result)
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          article-name (str "CoerceArticle-" (UUID/randomUUID))
+          article (articles/create-article! db {:canonical_name article-name})
+          expense (expenses/create-expense! db
+                    {:supplier_id (str (:id supplier))
+                     :payer_id (str (:id payer))
+                     ;; HTML `datetime-local` format (no timezone)
+                     :purchased_at "2025-01-02T03:04"
+                     :total_amount "2.34"
+                     :currency "BAM"
+                     :is_posted "false"
+                     :items [{:raw_label "Item"
+                              :article_id (str (:id article))
+                              :qty "1"
+                              :unit_price "2.34"
+                              :line_total "2.34"}]})]
+      (is (:id expense))
+      (is (= false (:is_posted expense)))
+      (is (= 1 (count (:items expense))))
+      (is (= "Item" (-> expense :items first :raw_label))))))
+
 (deftest expenses-soft-delete-excluded-from-list
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "Pharmacy" {})

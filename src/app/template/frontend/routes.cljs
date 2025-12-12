@@ -2,7 +2,8 @@
   (:require
     [app.admin.frontend.routes :as admin-routes]
     [app.admin.frontend.core :as admin-core]
-    [app.template.frontend.events.bootstrap :as bootstrap-events] ;; Import admin routes
+    [app.template.frontend.events.bootstrap :as bootstrap-events]
+    [app.template.frontend.routing.router :as router-util]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [reitit.coercion.spec :as rcs]
@@ -175,14 +176,16 @@
 (defn make-redirect-controller
   "Creates a controller that redirects to an entity URL using SPA navigation"
   [entity-name route-type]
-  (let [target-path (case route-type
-                      :detail (str "/entities/" entity-name)
-                      :add (str "/entities/" entity-name "/add")
-                      :update (fn [item-id] (str "/entities/" entity-name "/update/" item-id)))]
+  (let [target-route (case route-type
+                       :detail [:entity-detail {:entity-name entity-name}]
+                       :add [:entity-add {:entity-name entity-name}]
+                       :update (fn [item-id]
+                                 [:entity-update {:entity-name entity-name
+                                                  :item-id (str item-id)}]))]
     [{:start (fn [match-or-identity]
                (when ^boolean js/goog.DEBUG
                  (log/info "🔄 Redirecting app route to entity:"
-                   {:entity-name entity-name :route-type route-type :target-path target-path}))
+                   {:entity-name entity-name :route-type route-type}))
 
                (if (= route-type :update)
                  ;; For update routes, extract the item-id from parameters
@@ -193,9 +196,9 @@
                                  (get-in match-or-identity [:parameters :path :item-id]))]
                    (when item-id
                      ;; Use reitit navigation
-                     (js/setTimeout #(rtfe/push-state (target-path item-id)) 10)))
+                     (js/setTimeout #(apply rtfe/push-state (target-route item-id)) 10)))
                  ;; For detail and add routes, redirect directly using reitit navigation
-                 (js/setTimeout #(rtfe/push-state target-path) 10)))
+                 (js/setTimeout #(apply rtfe/push-state target-route) 10)))
       :stop (fn [_] nil)}]))
 
 (defn- generate-app-routes
@@ -557,6 +560,9 @@
 
 ;; This function must be exported for core.cljs to use
 (defn init-routes! []
+  ;; Register the router with the utility namespace so routing events can match paths
+  (router-util/set-router! router)
+
   ;; Start the router
   (when ^boolean goog.DEBUG
 

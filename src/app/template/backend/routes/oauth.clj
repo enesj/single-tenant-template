@@ -1,16 +1,12 @@
 (ns app.template.backend.routes.oauth
   (:require
-    [app.template.shared.auth :as shared-auth]
     [app.template.backend.auth.service :as auth-service]
-    [app.template.backend.routes.utils :as route-utils :refer [error-response get-oauth-configs]]
-    [cheshire.core :as json]
+    [app.template.backend.routes.utils :as route-utils :refer [get-oauth-configs]]
     [clj-http.client :as http]
     [clojure.string :as str]
     [clojure.walk :as walk]
     [ring.util.response :as response]
-    [taoensso.timbre :as log])
-  (:import
-    (java.net URLDecoder URLEncoder)))
+    [taoensso.timbre :as log]))
 
 ;; OAuth Routes
 ;;
@@ -226,9 +222,9 @@
                       ;; Use auth service to process OAuth callback (single-tenant)
                       (try
                         (let [session-data (auth-service/process-oauth-callback auth-service user-info provider)
-                              user-email (get-in session-data [:user :email])
-                              sanitized-user (sanitize-for-serialization (:user session-data))
-                              redirect-url "/entities"]
+                          user-email (get-in session-data [:user :email])
+                          sanitized-user (sanitize-for-serialization (:user session-data))
+                          redirect-url "/expenses"]
 
                           (log/info "Authentication successful for:" user-email)
                           (log/info "Redirecting user" user-email "to:" redirect-url)

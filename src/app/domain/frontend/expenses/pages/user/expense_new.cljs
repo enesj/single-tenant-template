@@ -1,4 +1,4 @@
-(ns app.template.frontend.pages.expense-new
+(ns app.domain.frontend.expenses.pages.user.expense-new
   "User-facing expense creation form."
   (:require
     [app.template.frontend.components.button :refer [button]]

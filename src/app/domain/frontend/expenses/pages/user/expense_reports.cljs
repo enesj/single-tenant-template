@@ -1,7 +1,8 @@
-(ns app.template.frontend.pages.expense-reports
+(ns app.domain.frontend.expenses.pages.user.expense-reports
   "User-facing expense reports and analytics page."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -24,7 +25,7 @@
               (str (or currency "$") " " (.toFixed (js/Number amount) 2))))))
 
 (defn month-name [month-key]
-  (let [[year month] (clojure.string/split (name month-key) #"-")]
+  (let [[year month] (str/split (name month-key) #"-")]
     (str (get ["" "Jan" "Feb" "Mar" "Apr" "May" "Jun" 
                "Jul" "Aug" "Sep" "Oct" "Nov" "Dec"]
            (js/parseInt month 10))

@@ -1,4 +1,4 @@
-(ns app.template.frontend.pages.expenses-dashboard
+(ns app.domain.frontend.expenses.pages.user.expenses-dashboard
   "User-facing expense dashboard page.
    Shows personal expense summary, recent expenses, and quick actions for expense management."
   (:require

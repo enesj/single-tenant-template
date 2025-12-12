@@ -1,7 +1,8 @@
-(ns app.template.frontend.pages.expense-detail
+(ns app.domain.frontend.expenses.pages.user.expense-detail
   "User-facing expense detail view."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -155,7 +156,7 @@
                 ($ info-card {:label "Date" :value (format-short-date purchased_at) :icon "📅"}))
               
               ;; Notes
-              (when (and notes (not (clojure.string/blank? notes)))
+              (when (and notes (not (str/blank? notes)))
                 ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
                   ($ :h3 {:class "font-semibold mb-2"} "Notes")
                   ($ :p {:class "text-base-content/80 whitespace-pre-wrap"} notes)))

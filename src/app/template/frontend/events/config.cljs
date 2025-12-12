@@ -100,3 +100,10 @@
              [:dispatch [:app.template.frontend.events.list.batch/hide-batch-edit-inline entity-type]])
            ;; Return empty sequence when value is nil/falsy
            [])}))
+
+;; No-op event for cases where an event is required but no action is needed
+;; (e.g., modal-wrapper requires on-close event vector but we handle close locally)
+(rf/reg-event-db
+  ::noop
+  (fn [db _]
+    db))

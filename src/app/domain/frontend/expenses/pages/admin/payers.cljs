@@ -1,7 +1,7 @@
-(ns app.domain.frontend.expenses.pages.article-aliases
+(ns app.domain.frontend.expenses.pages.admin.payers
   (:require
     [app.admin.frontend.components.generic-admin-entity-page :refer [generic-admin-entity-page]]
     [uix.core :refer [$ defui]]))
 
-(defui admin-article-aliases-page []
-  ($ generic-admin-entity-page :article-aliases))
+(defui admin-payers-page []
+  ($ generic-admin-entity-page :payers))

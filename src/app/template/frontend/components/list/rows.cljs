@@ -241,7 +241,8 @@
                                           :entity-name (:entity-name props)
                                           :show-edit? (:show-edit? props)
                                           :show-delete? (:show-delete? props)
-                                          :custom-actions (:custom-actions props)}))
+                                          :custom-actions (:custom-actions props)
+                                          :on-edit-click (:on-edit-click props)}))
                             :show-timestamps? (:show-timestamps? props)
                             :visible-columns visible-columns
                             :entity-name entity-name

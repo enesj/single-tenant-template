@@ -1,4 +1,4 @@
-(ns app.domain.frontend.expenses.pages.expense-detail
+(ns app.domain.frontend.expenses.pages.admin.expense-detail
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]

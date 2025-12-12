@@ -1,10 +1,11 @@
-(ns app.domain.frontend.expenses.pages.expense-form
+(ns app.domain.frontend.expenses.pages.admin.expense-form
   "Manual expense entry form for the expenses domain"
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
     [app.domain.frontend.expenses.events.payers :as payers-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
+    [app.domain.frontend.expenses.ui.select-options :as select-options]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -84,10 +85,10 @@
 (defn- prepare-line-items
   [items]
   (keep (fn [{:keys [raw_label article_id qty unit_price line_total]}]
-      (let [parsed-total (safe-parse-number line_total)]
+          (let [parsed-total (safe-parse-number line_total)]
             (when (and (not (str/blank? raw_label)) parsed-total)
-      (let [qty-num (safe-parse-number qty)
-        unit-num (safe-parse-number unit_price)
+              (let [qty-num (safe-parse-number qty)
+                    unit-num (safe-parse-number unit_price)
                     base {:raw_label raw_label
                           :line_total parsed-total}
                     base (cond-> base
@@ -117,11 +118,11 @@
 
 (defn- handle-submit!
   [{:keys [supplier-id payer-id purchased-at total-amount currency notes _line-items prepared-items computed-total set-validation-error!]}]
-    (let [parsed-total (safe-parse-number total-amount)
-      effective-total (or parsed-total (when (pos? computed-total) computed-total))
-      has-items? (seq prepared-items)
-      diff (when (and (number? effective-total) (pos? computed-total))
-         (js/Math.abs (- effective-total computed-total)))]
+  (let [parsed-total (safe-parse-number total-amount)
+        effective-total (or parsed-total (when (pos? computed-total) computed-total))
+        has-items? (seq prepared-items)
+        diff (when (and (number? effective-total) (pos? computed-total))
+               (js/Math.abs (- effective-total computed-total)))]
     (cond
       (or (str/blank? supplier-id)
         (str/blank? payer-id)
@@ -166,8 +167,8 @@
         [validation-error set-validation-error!] (use-state nil)]
     (use-effect
       (fn []
-        (rf/dispatch [::suppliers-events/load {:limit 100}])
-        (rf/dispatch [::payers-events/load {}])
+        (rf/dispatch [::suppliers-events/load-list {:limit 100 :offset 0}])
+        (rf/dispatch [::payers-events/load-list {:limit 100 :offset 0}])
         js/undefined)
       [])
     (use-effect
@@ -177,11 +178,11 @@
         (when (and (seq payers) (not payer-id))
           (set-payer-id! (:id (first payers)))))
       [payer-id supplier-id suppliers payers])
-        (let [prepared-items (prepare-line-items line-items)
+    (let [prepared-items (prepare-line-items line-items)
           computed-total (line-items-total prepared-items)
           parsed-total (safe-parse-number total-amount)
           total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
-               (js/Math.abs (- parsed-total computed-total)))
+                       (js/Math.abs (- parsed-total computed-total)))
           total-mismatch? (and total-diff (> total-diff amount-tolerance))
           handle-line-change (fn [item-id key]
                                (fn [e]
@@ -238,8 +239,9 @@
                         :value (or supplier-id "")
                         :on-change #(set-supplier-id! (.. % -target -value))}
               ($ :option {:value "" :disabled true} "Select supplier")
-              (for [{:keys [id display_name]} suppliers]
-                ($ :option {:key id :value id} display_name))))
+              (for [supplier suppliers
+                    :let [id (:id supplier)]]
+                ($ :option {:key id :value id} (select-options/supplier-label supplier)))))
           ($ :div {:class "space-y-3"}
             ($ :label {:class "label"}
               ($ :span {:class "label-text"} "Payer"))
@@ -320,28 +322,28 @@
                                  :type "text"
                                  :value raw_label
                                  :placeholder "e.g. Milk, Bread"
-                                 :on-change ((handle-line-change id :raw_label))}))
+                                 :on-change (handle-line-change id :raw_label)}))
                     ($ :td
                       ($ :input {:class "input input-bordered w-full"
                                  :type "number"
                                  :step "0.01"
                                  :min "0"
                                  :value qty
-                                 :on-change ((handle-line-change id :qty))}))
+                                 :on-change (handle-line-change id :qty)}))
                     ($ :td
                       ($ :input {:class "input input-bordered w-full"
                                  :type "number"
                                  :step "0.01"
                                  :min "0"
                                  :value unit_price
-                                 :on-change ((handle-line-change id :unit_price))}))
+                                 :on-change (handle-line-change id :unit_price)}))
                     ($ :td
                       ($ :input {:class "input input-bordered w-full"
                                  :type "number"
                                  :step "0.01"
                                  :min "0"
                                  :value line_total
-                                 :on-change ((handle-line-change id :line_total))}))
+                                 :on-change (handle-line-change id :line_total)}))
                     ($ :td
                       ($ :button {:class "text-xs text-error"
                                   :type "button"

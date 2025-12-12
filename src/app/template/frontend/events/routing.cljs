@@ -6,9 +6,11 @@
     [app.template.frontend.events.list.crud :as crud-events]
     [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.events.list.selection :as selection-events]
+    [app.template.frontend.routing.router :as router-util]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [reitit.frontend.controllers :as rtfc]
+    [reitit.frontend.easy :as rtfe]
     [taoensso.timbre :as log]))
 
 ;; Events
@@ -105,7 +107,11 @@
   :page/init-expenses-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :expenses-list)}))
+    {:db (assoc-in db (paths/current-page) :expenses-list)
+     ;; Ensure we don't accidentally show the generic CRUD add-form in the
+     ;; user expenses list (it's driven by a global template flag).
+     :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
+                  [:app.template.frontend.events.config/set-editing nil]]}))
 
 (rf/reg-event-fx
   :page/init-expense-upload
@@ -159,16 +165,70 @@
         (assoc :current-route new-match)
         (assoc :controllers controllers)))))
 
+(rf/reg-fx
+ :routing/push-state
+  (fn [route-or-path]
+    (try
+      (cond
+        ;; Preferred: explicit route-name navigation
+        (vector? route-or-path) (apply rtfe/push-state route-or-path)
+        (keyword? route-or-path) (rtfe/push-state route-or-path)
+
+        ;; Backwards-compatible: allow UI code to pass a string path ("/foo/bar?x=1")
+        (string? route-or-path)
+        (let [location (.-location js/globalThis)
+              origin (or (some-> location .-origin) "http://localhost")
+              url (js/URL. route-or-path origin)
+              path (.-pathname url)
+              query-params (let [sp (js/URLSearchParams. (.-search url))
+                                 entries (js/Array.from (.entries sp))]
+                             (when (pos? (.-length entries))
+                               (into {}
+                                 (map (fn [[k v]] [(keyword k) v])
+                                   (js->clj entries)))))
+              match (router-util/match-by-path path)
+              route-name (get-in match [:data :name])
+              path-params (get-in match [:parameters :path])]
+          (if route-name
+            (rtfe/push-state route-name path-params query-params)
+            (do
+              (log/warn "No route match for path navigation" {:path route-or-path})
+              (when location
+                (set! (.-href location) route-or-path)))))
+
+        :else
+        (do
+          (log/warn "Unsupported navigation target" {:to route-or-path})
+          nil))
+      (catch :default e
+        (log/error e "Failed to navigate" {:to route-or-path})))))
+
 (rf/reg-event-fx
   :navigate-to
   common-interceptors
   (fn [{:keys [db]} [new-match]]
-    (let [old-match (:current-route db)
-          controllers (rtfc/apply-controllers (:controllers old-match) new-match)
-          path (str (.-pathname js/window.location) (.-search js/window.location))
-          admin-path? (str/starts-with? path "/admin")]
-      (cond-> {:dispatch [:navigated new-match controllers]}
-        admin-path? (assoc :routing/store-last-admin-path path)))))
+    (cond
+      (map? new-match)
+      (let [old-match (:current-route db)
+            controllers (rtfc/apply-controllers (:controllers old-match) new-match)
+            location (.-location js/globalThis)
+            path (str (or (some-> location .-pathname) "")
+                   (or (some-> location .-search) ""))
+            admin-path? (str/starts-with? path "/admin")]
+        (cond-> {:dispatch [:navigated new-match controllers]}
+          admin-path? (assoc :routing/store-last-admin-path path)))
+
+      ;; Programmatic navigation from UI code (pages, buttons)
+      (or (string? new-match) (keyword? new-match) (vector? new-match))
+      {:routing/push-state new-match}
+
+      (nil? new-match)
+      {}
+
+      :else
+      (do
+        (log/warn "Unsupported :navigate-to target" {:target new-match})
+        {}))))
 
 (rf/reg-fx
  :routing/store-last-admin-path

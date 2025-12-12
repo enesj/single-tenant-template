@@ -1,35 +1,52 @@
 (ns app.template.frontend.components.list
   (:require
-   [app.template.frontend.utils.id :as id-utils]
-   [app.shared.keywords :as kw]
-   [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
-   [app.template.frontend.components.filter :refer [filter-form]]
-   [app.template.frontend.components.filter.ui :refer [compact-active-filters]]
-   [app.template.frontend.components.list.rows :refer [render-row]]
-   [app.template.frontend.components.list.table :refer [make-table-headers]]
-   [app.template.frontend.components.list.ui :refer [add-item-section
-                                                     header-section]]
-   [app.template.frontend.components.messages :refer [error-alert]]
-   [app.template.frontend.components.pagination :refer [pagination]]
-   [app.template.frontend.components.table :refer [table]]
-   [app.template.frontend.events.config :as config-events]
-   [app.template.frontend.events.list.batch :as batch-events]
-   [app.template.frontend.events.list.filters :as filter-events]
-   [app.template.frontend.events.list.selection :as selection-events]
-   [app.template.frontend.events.list.settings :as settings-events]
-   [app.template.frontend.events.list.ui-state :as ui-events]
-   [app.template.frontend.subs.entity :as entity-subs]
-   [app.template.frontend.subs.list :as list-subs]
-   [app.template.frontend.subs.ui :as ui-subs]
-   [app.template.frontend.utils.column-config :as column-config]
-   [re-frame.core :as rf]
-   [uix.core :as uix :refer [$ defui use-effect use-state]]
-   [uix.dom]
-   [uix.re-frame :refer [use-subscribe]]))
+    [app.template.frontend.utils.id :as id-utils]
+    [app.shared.keywords :as kw]
+    [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
+    [app.template.frontend.components.filter :refer [filter-form]]
+    [app.template.frontend.components.filter.ui :refer [compact-active-filters]]
+    [app.template.frontend.components.list.rows :refer [render-row]]
+    [app.template.frontend.components.list.table :refer [make-table-headers]]
+    [app.template.frontend.components.list.ui :refer [add-item-section
+                                                      header-section]]
+    [app.template.frontend.components.messages :refer [error-alert]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    [app.template.frontend.components.pagination :refer [pagination]]
+    [app.template.frontend.components.table :refer [table]]
+    [app.template.frontend.events.config :as config-events]
+    [app.template.frontend.events.form :as form-events]
+    [app.template.frontend.events.list.batch :as batch-events]
+    [app.template.frontend.events.list.crud :as crud-events]
+    [app.template.frontend.events.list.filters :as filter-events]
+    [app.template.frontend.events.list.selection :as selection-events]
+    [app.template.frontend.events.list.settings :as settings-events]
+    [app.template.frontend.events.list.ui-state :as ui-events]
+    [app.template.frontend.subs.entity :as entity-subs]
+    [app.template.frontend.subs.list :as list-subs]
+    [app.template.frontend.subs.ui :as ui-subs]
+    [app.template.frontend.utils.column-config :as column-config]
+    [re-frame.core :as rf]
+    [uix.core :as uix :refer [$ defui use-effect use-state]]
+    [uix.dom]
+    [uix.re-frame :refer [use-subscribe]]))
 
 (defui list-view
-  "Renders a list of items with pagination, add form, and error handling."
-  [{:keys [entity-name entity-spec title display-settings filterable-columns _per-page]
+  "Renders a list of items with pagination, add form, and error handling.
+   
+   Supports both inline and modal form display modes:
+   - :form-display :inline (default) - Forms replace the table when active
+   - :form-display :modal - Forms show in modal overlay, table stays visible
+   
+   Custom form renderers:
+   - :render-add-form - fn that receives props and returns add form UI
+   - :render-edit-form - fn that receives (item props) and returns edit form UI
+   
+   Modal callbacks:
+   - :on-add-success - Called after successful add (closes modal, can trigger refresh)
+   - :on-edit-success - Called after successful edit (closes modal, can trigger refresh)"
+  [{:keys [entity-name entity-spec title display-settings filterable-columns _per-page
+           ;; New props for custom forms and modal support
+           render-add-form render-edit-form form-display on-add-success on-edit-success]
     :as props}]
   (let [items (use-subscribe [::entity-subs/paginated-entities entity-name])
         loading? (use-subscribe [::entity-subs/loading? entity-name])
@@ -74,7 +91,18 @@
         ;; State management for inline filter
         [active-inline-filter, set-active-inline-filter] (use-state nil)
         [inline-filter-field-spec, set-inline-filter-field-spec] (use-state nil)
-        [inline-filter-value, set-inline-filter-value] (use-state "")]
+        [inline-filter-value, set-inline-filter-value] (use-state "")
+
+        ;; Modal state management for custom forms
+        ;; These are component-local to avoid conflicts between entity pages
+        [add-modal-open? set-add-modal-open!] (use-state false)
+        [edit-modal-open? set-edit-modal-open!] (use-state false)
+        [edit-modal-item set-edit-modal-item!] (use-state nil)
+
+        ;; Determine form display mode
+        use-modal-forms? (= form-display :modal)
+        has-custom-add-form? (some? render-add-form)
+        has-custom-edit-form? (some? render-edit-form)]
 
     ;; Store the current entity type in the app state when it changes
     (use-effect
@@ -88,6 +116,10 @@
         (set-active-inline-filter nil)
         (set-inline-filter-field-spec nil)
         (set-inline-filter-value "")
+        ;; Clear modal state when entity changes
+        (set-add-modal-open! false)
+        (set-edit-modal-open! false)
+        (set-edit-modal-item! nil)
         ;; Return cleanup function (optional)
         (fn [] nil))
       [entity-name])
@@ -141,6 +173,47 @@
                                 (set-inline-filter-field-spec nil)
                                 (set-inline-filter-value ""))
 
+          ;; Modal handlers for custom forms
+          handle-add-click (fn []
+                             (rf/dispatch [::crud-events/clear-error entity-kw])
+                             (rf/dispatch [::form-events/clear-form-errors entity-kw])
+                             (if (and use-modal-forms? has-custom-add-form?)
+                               ;; Open add modal
+                               (set-add-modal-open! true)
+                               ;; Fall back to inline behavior
+                               (do
+                                 (rf/dispatch [::config-events/set-show-add-form true])
+                                 (rf/dispatch [::config-events/set-editing nil]))))
+
+          handle-add-modal-close (fn []
+                                   (set-add-modal-open! false))
+
+          handle-add-modal-success (fn []
+                                     (set-add-modal-open! false)
+                                     (when on-add-success
+                                       (on-add-success)))
+
+          handle-edit-click (fn [item]
+                              (rf/dispatch [::crud-events/clear-error entity-kw])
+                              (rf/dispatch [::form-events/clear-form-errors entity-kw])
+                              (if (and use-modal-forms? has-custom-edit-form?)
+                                ;; Open edit modal with item
+                                (do
+                                  (set-edit-modal-item! item)
+                                  (set-edit-modal-open! true))
+                                ;; Fall back to inline behavior
+                                (rf/dispatch [::config-events/set-editing (id-utils/extract-entity-id item)])))
+
+          handle-edit-modal-close (fn []
+                                    (set-edit-modal-open! false)
+                                    (set-edit-modal-item! nil))
+
+          handle-edit-modal-success (fn []
+                                      (set-edit-modal-open! false)
+                                      (set-edit-modal-item! nil)
+                                      (when on-edit-success
+                                        (on-edit-success)))
+
           base-props (merge (assoc props
                               :editing editing
                               :set-editing! #(rf/dispatch [::config-events/set-editing %])
@@ -158,7 +231,10 @@
                               ;; Allow callers (e.g., admin pages) to fully override row actions.
                               ;; When provided, rows will render only this component for actions,
                               ;; and will not show the template's default action-buttons.
-                              :actions-override (:render-actions props))
+                              :actions-override (:render-actions props)
+                              ;; Pass modal edit handler for action buttons to use
+                              :on-edit-click (when (and use-modal-forms? has-custom-edit-form?)
+                                               handle-edit-click))
                        merged-display-settings)
 
           ;; Debug removed
@@ -182,12 +258,52 @@
                                               :on-inline-filter-click handle-inline-filter-click
                                               ;; Table should render strictly from the supplied entity-spec
                                               ;; (vector-config). No fallback to form specs.
-                                              :entity-spec entity-spec))]
+                                              :entity-spec entity-spec))
+
+          ;; Determine if we should show inline add form (non-modal mode only)
+          show-inline-add-form? (and show-add-form? (not use-modal-forms?))]
 
       ;; Return the component UI
       ($ :div {:class "w-full flex justify-start items-start"
                :id (str "table-" (kw/ensure-name entity-name))}
         ($ :div {:class "p-2 w-full"}
+          ;; Modal for custom add form
+          (when (and add-modal-open? has-custom-add-form?)
+            ($ modal-wrapper
+              {:visible? true
+               :title (str "Add " title)
+               :size :large
+               :on-close [::config-events/noop] ;; Use local handler instead
+               :close-button-id (str "btn-close-add-modal-" (kw/ensure-name entity-name))}
+              ;; Override close via custom handler
+              ($ :div {:class "relative"}
+                ;; Close button override (since modal-wrapper dispatches events)
+                ($ :button {:class "ds-btn ds-btn-sm ds-btn-circle ds-btn-ghost absolute right-0 top-0"
+                            :on-click handle-add-modal-close}
+                  "✕")
+                (render-add-form {:entity-name entity-name
+                                  :entity-spec entity-spec
+                                  :on-success handle-add-modal-success
+                                  :on-cancel handle-add-modal-close}))))
+
+          ;; Modal for custom edit form
+          (when (and edit-modal-open? has-custom-edit-form? edit-modal-item)
+            ($ modal-wrapper
+              {:visible? true
+               :title (str "Edit " title)
+               :size :large
+               :on-close [::config-events/noop]
+               :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
+              ($ :div {:class "relative"}
+                ($ :button {:class "ds-btn ds-btn-sm ds-btn-circle ds-btn-ghost absolute right-0 top-0"
+                            :on-click handle-edit-modal-close}
+                  "✕")
+                (render-edit-form edit-modal-item
+                  {:entity-name entity-name
+                   :entity-spec entity-spec
+                   :on-success handle-edit-modal-success
+                   :on-cancel handle-edit-modal-close}))))
+
           ;; Remove the old modal filter form rendering
           nil
 
@@ -239,8 +355,8 @@
             ($ :div ($ :span "Loading..."))
             :else                                           ;; Otherwise, display the list
             ($ :div
-              (if show-add-form?
-                ;; If show-add-form? is true, display the add item section
+              (if show-inline-add-form?
+                ;; If show-add-form? is true (inline mode), display the add item section
                 ($ add-item-section base-props)
                 ;; Otherwise, display the table with pagination in same container
                 (let [items-vec (vec (or items []))]
@@ -252,7 +368,10 @@
                        :set-show-add-form! #(rf/dispatch [::config-events/set-show-add-form %])
                        :set-editing! #(rf/dispatch [::config-events/set-editing %])
                        :entity-name entity-name
-                       :show-add-button? (:show-add-button? merged-display-settings)})
+                       :show-add-button? (:show-add-button? merged-display-settings)
+                       ;; Pass custom add click handler for modal mode
+                       :on-add-click (when (and use-modal-forms? has-custom-add-form?)
+                                       handle-add-click)})
 
                     ($ :div {:class "ds-divider"})                    ;; Divider after header
                     ($ table
