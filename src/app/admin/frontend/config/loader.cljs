@@ -16,19 +16,24 @@
   "Fetch config data from the admin API and return a Clojure map"
   [config-type]
   (if-let [{:keys [url response-key]} (get config-endpoints config-type)]
-    (-> (js/fetch url #js {:credentials "include"})
-      (.then (fn [response]
-               (if (.-ok response)
-                 (.json response)
-                 (js/Promise.reject (js/Error. (str "Failed to load " url))))))
-      (.then (fn [data]
-               (let [parsed (js->clj data :keywordize-keys true)]
-                 (get parsed response-key {}))))
-      (.catch (fn [error]
-                (log/error "Failed to load config" {:config-type config-type
-                                                    :url url
-                                                    :error error})
-                {})))
+    (let [token (.getItem js/localStorage "admin-token")
+          opts (if token
+                 #js {:credentials "include"
+                      :headers #js {"x-admin-token" token}}
+                 #js {:credentials "include"})]
+      (-> (js/fetch url opts)
+        (.then (fn [response]
+                 (if (.-ok response)
+                   (.json response)
+                   (js/Promise.reject (js/Error. (str "Failed to load " url))))))
+        (.then (fn [data]
+                 (let [parsed (js->clj data :keywordize-keys true)]
+                   (get parsed response-key {}))))
+        (.catch (fn [error]
+                  (log/error "Failed to load config" {:config-type config-type
+                                                      :url url
+                                                      :error error})
+                  {}))))
     (do
       (log/error "No endpoint configured for config type" config-type)
       (js/Promise.resolve {}))))

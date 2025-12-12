@@ -9,7 +9,6 @@
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
     [app.domain.frontend.expenses.pages.admin.expense-detail :as expense-detail]
-    [app.domain.frontend.expenses.pages.admin.expense-form :as expense-form]
     [app.domain.frontend.expenses.pages.admin.expense-list :as expense-list]
     [app.domain.frontend.expenses.pages.admin.payers :as payers]
     [app.domain.frontend.expenses.pages.admin.receipts :as receipts]
@@ -54,10 +53,6 @@
                                     (let [page (parse-int (or (:page query) (get query "page")))
                                           per-page (parse-int (or (:per-page query) (get query "per-page")))]
                                       [[::expenses-events/load-list {:page page :per-page per-page}]])))]}]
-   ["/expenses/new"
-    {:name :admin-expense-new
-     :view expense-form/admin-expense-form-page
-     :controllers [(guarded-start nil)]}]
    ["/expenses/:id"
     {:name :admin-expense-detail
      :view expense-detail/admin-expense-detail-page

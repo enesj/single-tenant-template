@@ -412,7 +412,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :upload :loading?] false)
-     :dispatch [:navigate-to "/expenses/new"]}))
+     :dispatch [:navigate-to "/expenses/list"]}))
 
 (rf/reg-event-db
   :user-expenses/upload-receipt-failure

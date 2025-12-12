@@ -43,10 +43,10 @@
   :page/init-entities
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :entities)
+    {:db (assoc-in db (paths/current-page) :entities)}))
      ;; Remove fetch-entities dispatch - the entities component handles this
      ;; based on route parameters, not UI state
-     }))
+
 
 (rf/reg-event-fx
   :page/init-entity-detail
