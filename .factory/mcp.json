@@ -13,7 +13,7 @@
       "command": "/bin/sh",
       "args": [
         "-c",
-        "source .api_credentials.sh && cd /Users/enes/Projects/clojure-mcp && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-shadow-dual"
+        "source .api_credentials.sh && cd /Users/enes/Projects/clojure-mcp && PATH=/opt/homebrew/bin:$PATH && clojure -Sdeps '{:deps {io.modelcontextprotocol.sdk/mcp {:mvn/version \"0.17.0\"}}}' -X:mcp-shadow-dual"
       ],
       "env": {
         "HOME": "/tmp"

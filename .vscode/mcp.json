@@ -1,0 +1,50 @@
+{
+  "servers": {
+    "clojure-mcp": {
+      "type": "stdio",
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "cd /Users/enes/Projects/clojure-mcp && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-shadow-dual"
+      ],
+      "env": {
+        "HOME": "/tmp"
+      }
+    },
+    "chrome-mcp": {
+      "type": "stdio",
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "PATH=/opt/homebrew/bin:$PATH && npx node /Users/enes/.nvm/versions/node/v22.17.0/lib/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js"
+      ]
+    },
+    "postgres": {
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "set -a; [ -f /Users/enes/Projects/single-tenant-template/.postgres.env ] && source /Users/enes/Projects/single-tenant-template/.postgres.env; set +a; exec /Users/enes/Projects/toolbox --prebuilt postgres --stdio"
+      ]
+    },
+    "morph-mcp": {
+      "command": "/Users/enes/.nvm/versions/node/v22.17.0/bin/npx",
+      "args": [
+        "-y",
+        "@morphllm/morphmcp"
+      ],
+      "env": {
+        "PATH": "/Users/enes/.nvm/versions/node/v22.17.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        "MORPH_API_KEY": "sk-ZlUOi49NcwN3i-W872D0H9fP3GcMso2eY6V-94ZyoNv7cafg",
+        "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
+      }
+    },
+    "mcp-vector-search": {
+      "type": "stdio",
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "cd /Users/enes/Projects/single-tenant-template && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-vector-search"
+      ]
+    }
+  }
+}
