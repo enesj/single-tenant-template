@@ -1,31 +1,22 @@
 (ns app.template.backend.routes.api
   (:require
-   [app.template.backend.handlers.user-expenses :as user-expenses-handlers]
-   [app.template.backend.middleware.user :as user-middleware]
-   [app.template.backend.routes.entities :as entities]
-   [app.admin.backend.services.admin.dashboard :as admin-dashboard]
-   [app.template.backend.services.monitoring.login-events :as login-monitoring]
-   [app.shared.http :as http]
-   [cheshire.core :as json]
-   [java-time.api :as time]
-   [malli.transform :as mt]
-   [muuntaja.core :as m]
-   [reitit.coercion.malli :as malli-coercion]
-   [reitit.ring.coercion :as coercion]
-   [reitit.ring.middleware.muuntaja :as muuntaja]
-   [reitit.ring.middleware.parameters :as parameters]
-   [ring.util.response :as response]
-   [taoensso.timbre :as log]))
+    [app.domain.backend.expenses.routes.user-api :as user-expenses-routes]
+    [app.template.backend.middleware.user :as user-middleware]
+    [app.template.backend.routes.entities :as entities]
+    [app.admin.backend.services.admin.dashboard :as admin-dashboard]
+    [app.template.backend.services.monitoring.login-events :as login-monitoring]
+    [app.shared.http :as http]
+    [cheshire.core :as json]
+    [java-time.api :as time]
+    [malli.transform :as mt]
+    [muuntaja.core :as m]
+    [reitit.coercion.malli :as malli-coercion]
+    [reitit.ring.coercion :as coercion]
+    [reitit.ring.middleware.muuntaja :as muuntaja]
+    [reitit.ring.middleware.parameters :as parameters]
+    [ring.util.response :as response]
+    [taoensso.timbre :as log]))
 
-(def custom-string-transformer
-  (mt/transformer
-    {:name :string
-     :decoders {:string (fn [value]
-                          (cond
-                            (string? value) value
-                            (number? value) (str value)
-                            (keyword? value) (name value)
-                            :else value))}}))
 
 (defn- compile-schema
   "A custom schema compiler that ignores the second argument (options)
@@ -126,19 +117,16 @@
    ;; to avoid conflicts. All specific paths like /config or /metrics
    ;; must be defined before the generic /:entity patterns.
 
-   ["/config" {:get {:handler (fn [req]
+   ["/config" {:get {:handler (fn [_req]
                                 (try
-                                  (log/info "=== CONFIG ENDPOINT CALLED ===")
-                                  (let [_req-service-container (:service-container req)
-                                        safe-models-data (or md {})
+                                  (let [safe-models-data (or md {})
                                         ;; Process models to include validation specs
                                         processed-models (when (seq safe-models-data)
-                                                           ((requiring-resolve 'app.shared.validation.metadata/process-models-for-frontend) safe-models-data))
+                                                           ((requiring-resolve 'app.shared.validation.metadata/process-models-for-frontend)
+                                                            safe-models-data))
                                         frontend-config {:entity-configs {}
                                                          :models-data safe-models-data
                                                          :validation-specs processed-models}]
-                                    (log/info "Config endpoint success with models-data keys:" (when safe-models-data (keys safe-models-data)))
-                                    (log/info "Config endpoint validation specs keys:" (when processed-models (keys processed-models)))
                                     (response/response frontend-config))
                                   (catch Exception e
                                     (log/error e "ERROR in config handler")
@@ -209,25 +197,11 @@
                                                  (when-let [handler-fn (requiring-resolve 'app.template.backend.routes.email-verification/resend-verification-handler)]
                                                    ((handler-fn db email-service) req))))}}]]
 
-   ;; User expense routes - requires authenticated user
-   ["/expenses"
-    {:middleware [#(user-middleware/wrap-user-authentication %)]}
-    ;; Dashboard/summary endpoints
-    ["/summary" {:get {:handler (user-expenses-handlers/expense-summary-handler db)}}]
-    ["/by-month" {:get {:handler (user-expenses-handlers/spending-by-month-handler db)}}]
-    ["/by-supplier" {:get {:handler (user-expenses-handlers/spending-by-supplier-handler db)}}]
-    ;; Reference data endpoints (suppliers, payers)
-    ["/suppliers" {:get {:handler (user-expenses-handlers/list-suppliers-handler db)}}]
-    ["/payers" {:get {:handler (user-expenses-handlers/list-payers-handler db)}}]
-    ;; CRUD endpoints
-    ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}
-         :post {:handler (user-expenses-handlers/create-expense-handler db)}}]
-    ["/:id" {:get {:handler (user-expenses-handlers/get-expense-handler db)}
-             :put {:handler (user-expenses-handlers/update-expense-handler db)}
-             :delete {:handler (user-expenses-handlers/delete-expense-handler db)}}]]
+   ;; Expenses domain: user-facing expense routes (mounted under /api/v1/expenses)
+   (user-expenses-routes/routes db user-middleware/wrap-user-authentication)
 
    ;; Generic entity CRUD routes - but we need to handle users specially
-   ;; Transform ["/:entity" config & subroutes] to ["/entities/:entity" config & suboutes]
+   ;; Transform ["/:entity" config & subroutes] to ["/entities/:entity" config & subroutes]
    (let [entity-routes (entities/entities-routes db md service-container)
          [_entity-path route-config & subroutes] (first entity-routes)
          ;; Create a custom handler that checks for users and delegates appropriately
@@ -249,8 +223,3 @@
      ;; Replace "/:entity" with "/entities/:entity" in the path and use updated config
      (into ["/entities/:entity" updated-route-config] subroutes))])
 
-(defn create-api-routes
-  "Create API routes with version prefix"
-  [db md service-container]
-  ["/api" {}
-   ["/v1" (create-versioned-api-routes db md service-container "v1")]])

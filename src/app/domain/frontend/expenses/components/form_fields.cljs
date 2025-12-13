@@ -1,9 +1,9 @@
 (ns app.domain.frontend.expenses.components.form-fields
   "Custom form fields for expense form"
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+
     [app.template.frontend.components.common :as common]
-    [app.template.frontend.components.icons :refer [delete-icon]]
+
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]))
@@ -102,13 +102,13 @@
   [{:keys [value on-change error field-spec]}]
   (let [items (if (seq value) value [(new-line-item)])
         columns (:columns field-spec)
-        
+
         add-item (fn []
                    (on-change (conj items (new-line-item))))
-        
+
         remove-item (fn [id]
                       (on-change (remove-line-item items id)))
-        
+
         handle-line-change (fn [item-id key]
                              (fn [e]
                                (on-change
@@ -183,7 +183,7 @@
             "Use total")))
       (when (pos? computed-total)
         ($ :p {:class "text-xs text-base-content/60"}
-          (str "Line items total: " (shared/format-value computed-total "0" false))
+          (str "Line items total: " (or (format-decimal computed-total) "0.00"))
           (when total-mismatch?
             ($ :span {:class "text-error ml-2"} "(does not match total)"))))
       (when error

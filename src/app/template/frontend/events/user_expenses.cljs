@@ -68,7 +68,7 @@
 (rf/reg-event-fx
   :user-expenses/fetch-recent
   common-interceptors
-  (fn [{:keys [db]} [_ {:keys [limit offset]}]]
+  (fn [{:keys [db]} [{:keys [limit offset]}]]
     (let [limit* (or limit 5)
           offset* (or offset 0)]
       {:db (-> db
@@ -113,7 +113,7 @@
 (rf/reg-event-fx
   :user-expenses/fetch-by-month
   common-interceptors
-  (fn [{:keys [db]} [_ {:keys [months-back]}]]
+  (fn [{:keys [db]} [{:keys [months-back]}]]
     (let [months* (or months-back 6)]
       {:db (-> db
              (assoc-in [:user-expenses :by-month :loading?] true)
@@ -150,7 +150,7 @@
 (rf/reg-event-fx
   :user-expenses/fetch-by-supplier
   common-interceptors
-  (fn [{:keys [db]} [_ {:keys [limit from to]}]]
+  (fn [{:keys [db]} [{:keys [limit from to]}]]
     (let [limit* (or limit 5)]
       {:db (-> db
              (assoc-in [:user-expenses :by-supplier :loading?] true)
@@ -201,14 +201,17 @@
                     :on-success [:user-expenses/fetch-expense-success]
                     :on-failure [:user-expenses/fetch-expense-failure]})}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   :user-expenses/fetch-expense-success
   common-interceptors
-  (fn [db [response]]
-    (-> db
-      (assoc-in [:user-expenses :current-expense :loading?] false)
-      (assoc-in [:user-expenses :current-expense :error] nil)
-      (assoc-in [:user-expenses :current-expense :data] (:data response)))))
+  (fn [{:keys [db]} [response]]
+    (let [expense (:data response)
+          updated-db (-> db
+                       (assoc-in [:user-expenses :current-expense :loading?] false)
+                       (assoc-in [:user-expenses :current-expense :error] nil)
+                       (assoc-in [:user-expenses :current-expense :data] expense))]
+      (cond-> {:db updated-db}
+        expense (assoc :dispatch [::admin-expenses-adapter/sync-expenses [expense]])))))
 
 (rf/reg-event-db
   :user-expenses/fetch-expense-failure
@@ -245,7 +248,7 @@
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
-       :dispatch-n [[:user-expenses/fetch-recent {:limit 5}]
+       :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
                     [:navigate-to (str "/expenses/" expense-id)]]})))
 
 (rf/reg-event-db
@@ -256,6 +259,136 @@
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Create expense (modal)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/create-expense-modal
+  common-interceptors
+  (fn [{:keys [db]} [expense-data on-success]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil))
+     :http-xhrio (http/api-request
+                   {:method :post
+                    :uri list-endpoint
+                    :params expense-data
+                    :on-success [:user-expenses/create-expense-modal-success on-success]
+                    :on-failure [:user-expenses/create-expense-modal-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/create-expense-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [on-success response]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] false)
+           (assoc-in [:user-expenses :form :error] nil))
+     :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]]
+     :fx [(when on-success
+            [:dispatch-later {:ms 100
+                              :dispatch [:user-expenses/call-modal-callback on-success]}])]}))
+
+(rf/reg-event-db
+  :user-expenses/create-expense-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to create expense (modal)" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Update expense
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/update-expense
+  common-interceptors
+  (fn [{:keys [db]} [expense-id expense-data]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil))
+     :http-xhrio (http/api-request
+                   {:method :put
+                    :uri (str list-endpoint "/" expense-id)
+                    :params expense-data
+                    :on-success [:user-expenses/update-expense-success expense-id]
+                    :on-failure [:user-expenses/update-expense-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/update-expense-success
+  common-interceptors
+  (fn [{:keys [db]} [expense-id response]]
+    (let [expense (:data response)]
+      (cond-> {:db (-> db
+                     (assoc-in [:user-expenses :form :loading?] false)
+                     (assoc-in [:user-expenses :form :error] nil))
+               :dispatch-n [[:user-expenses/fetch-expense expense-id]
+                            [:user-expenses/fetch-recent {:limit 25 :offset 0}]]}
+        expense (assoc :dispatch [::admin-expenses-adapter/sync-expenses [expense]])))))
+
+(rf/reg-event-db
+  :user-expenses/update-expense-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to update expense" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Update expense (modal)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/update-expense-modal
+  common-interceptors
+  (fn [{:keys [db]} [expense-id expense-data on-success]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil))
+     :http-xhrio (http/api-request
+                   {:method :put
+                    :uri (str list-endpoint "/" expense-id)
+                    :params expense-data
+                    :on-success [:user-expenses/update-expense-modal-success expense-id on-success]
+                    :on-failure [:user-expenses/update-expense-modal-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/update-expense-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [expense-id on-success response]]
+    (let [expense (:data response)]
+      (cond-> {:db (-> db
+                     (assoc-in [:user-expenses :form :loading?] false)
+                     (assoc-in [:user-expenses :form :error] nil))
+               :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
+                            [:user-expenses/fetch-expense expense-id]]
+               :fx [(when on-success
+                      [:dispatch-later {:ms 100
+                                        :dispatch [:user-expenses/call-modal-callback on-success]}])]}
+        expense
+        (assoc :dispatch [::admin-expenses-adapter/sync-expenses [expense]])))))
+
+(rf/reg-event-db
+  :user-expenses/update-expense-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to update expense (modal)" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; Helper event to call modal callback
+(rf/reg-event-fx
+  :user-expenses/call-modal-callback
+  common-interceptors
+  (fn [_cofx [callback]]
+    (when callback
+      (callback))
+    {}))
 
 ;; ---------------------------------------------------------------------------
 ;; Delete expense
@@ -277,7 +410,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch-n [[:user-expenses/fetch-recent {:limit 25}]
+     :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
                   [:navigate-to "/expenses/list"]]}))
 
 (rf/reg-event-db
