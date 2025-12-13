@@ -165,8 +165,7 @@
 
          ;; No webhooks in single-tenant template
 
-
-        ;; CRITICAL: Completely separate admin routes from all other routes
+;; CRITICAL: Completely separate admin routes from all other routes
         ;; Admin API routes - Define as standalone routes, not nested under /admin
         admin-api-routes (admin-api/admin-api-routes db service-container)
 
@@ -181,7 +180,11 @@
          ["/audit" {:get {:handler admin-render-page}}]
          ["/login-events" {:get {:handler admin-render-page}}]
          ["/receipts" {:get {:handler admin-render-page}}]
+         ["/admin-settings" {:get {:handler admin-render-page}}]
+         ;; Legacy: keep serving the SPA for the old settings URL
          ["/settings" {:get {:handler admin-render-page}}]
+         ;; Legacy typo: keep serving the SPA for /admin/amin-settings
+         ["/amin-settings" {:get {:handler admin-render-page}}]
          ;; catch-all for any other admin SPA paths (e.g., /admin/expenses, /admin/suppliers)
          ["/*path" {:get {:handler admin-render-page}}]]
 

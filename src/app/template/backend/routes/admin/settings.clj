@@ -11,6 +11,13 @@
 (def ^:private form-fields-path "src/app/admin/frontend/config/form-fields.edn")
 (def ^:private table-columns-path "src/app/admin/frontend/config/table-columns.edn")
 
+;; User-facing (domain-owned) UI config for expenses.
+;; This is edited via /admin/user-settings and stored alongside the domain.
+(def ^:private user-entities-path "src/app/domain/frontend/expenses/config/entities.edn")
+(def ^:private user-view-options-path "src/app/domain/frontend/expenses/config/view-options.edn")
+(def ^:private user-form-fields-path "src/app/domain/frontend/expenses/config/form-fields.edn")
+(def ^:private user-table-columns-path "src/app/domain/frontend/expenses/config/table-columns.edn")
+
 (defn- read-view-options
   "Read view-options.edn file and parse it"
   []
@@ -294,6 +301,155 @@
           (utils/error-response "Missing required fields: entity-name, entity-config" :status 400))))
     "Failed to update table columns"))
 
+;; =============================================================================
+;; User UI Config (Domain-Owned) Handlers
+;; =============================================================================
+
+(defn- read-user-entities
+  []
+  (try
+    (let [file (io/file user-entities-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read user entities.edn")
+      (throw (ex-info "Failed to read user entities file" {:status 500})))))
+
+(defn- write-user-entities!
+  [entities]
+  (try
+    (let [file (io/file user-entities-path)]
+      (io/make-parents file)
+      (spit file (with-out-str (pprint/pprint entities))))
+    (catch Exception e
+      (log/error e "Failed to write user entities.edn")
+      (throw (ex-info "Failed to write user entities file" {:status 500})))))
+
+(defn- read-user-view-options
+  []
+  (try
+    (let [file (io/file user-view-options-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read user view-options.edn")
+      (throw (ex-info "Failed to read user view options file" {:status 500})))))
+
+(defn- write-user-view-options!
+  [view-options]
+  (try
+    (let [file (io/file user-view-options-path)]
+      (io/make-parents file)
+      (spit file (with-out-str (pprint/pprint view-options))))
+    (catch Exception e
+      (log/error e "Failed to write user view-options.edn")
+      (throw (ex-info "Failed to write user view options file" {:status 500})))))
+
+(defn- read-user-form-fields
+  []
+  (try
+    (let [file (io/file user-form-fields-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read user form-fields.edn")
+      (throw (ex-info "Failed to read user form fields file" {:status 500})))))
+
+(defn- write-user-form-fields!
+  [form-fields]
+  (try
+    (let [file (io/file user-form-fields-path)]
+      (io/make-parents file)
+      (spit file (with-out-str (pprint/pprint form-fields))))
+    (catch Exception e
+      (log/error e "Failed to write user form-fields.edn")
+      (throw (ex-info "Failed to write user form fields file" {:status 500})))))
+
+(defn- read-user-table-columns
+  []
+  (try
+    (let [file (io/file user-table-columns-path)]
+      (if (.exists file)
+        (edn/read-string (slurp file))
+        {}))
+    (catch Exception e
+      (log/error e "Failed to read user table-columns.edn")
+      (throw (ex-info "Failed to read user table columns file" {:status 500})))))
+
+(defn- write-user-table-columns!
+  [table-columns]
+  (try
+    (let [file (io/file user-table-columns-path)]
+      (io/make-parents file)
+      (spit file (with-out-str (pprint/pprint table-columns))))
+    (catch Exception e
+      (log/error e "Failed to write user table-columns.edn")
+      (throw (ex-info "Failed to write user table columns file" {:status 500})))))
+
+(defn get-user-ui-config-handler
+  "GET handler - return all user-facing (domain-owned) UI config"
+  [_db]
+  (utils/with-error-handling
+    (fn [_request]
+      (utils/json-response
+        {:entities (read-user-entities)
+         :view-options (read-user-view-options)
+         :form-fields (read-user-form-fields)
+         :table-columns (read-user-table-columns)}))
+    "Failed to read user UI config"))
+
+(defn update-user-ui-config-handler
+  "PUT handler - update user-facing (domain-owned) UI config.
+
+  Accepts any subset of:
+  - :entities
+  - :view-options
+  - :form-fields
+  - :table-columns"
+  [_db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            entities (:entities body)
+            view-options (:view-options body)
+            form-fields (:form-fields body)
+            table-columns (:table-columns body)
+            admin-id (utils/get-admin-id request)
+            context (utils/extract-request-context request)]
+        (when-not (or entities view-options form-fields table-columns)
+          (throw (ex-info "No config provided" {:status 400})))
+
+        (utils/log-admin-action-with-context
+          "update-user-ui-config"
+          admin-id
+          "user-ui-settings"
+          nil
+          {:updated-keys (->> {:entities (boolean entities)
+                               :view-options (boolean view-options)
+                               :form-fields (boolean form-fields)
+                               :table-columns (boolean table-columns)}
+                           (filter (comp true? val))
+                           (map key)
+                           vec)}
+          (:ip-address context)
+          (:user-agent context))
+
+        (when entities (write-user-entities! entities))
+        (when view-options (write-user-view-options! view-options))
+        (when form-fields (write-user-form-fields! form-fields))
+        (when table-columns (write-user-table-columns! table-columns))
+
+        (utils/success-response
+          {:message "User UI config updated successfully"
+           :entities (or entities (read-user-entities))
+           :view-options (or view-options (read-user-view-options))
+           :form-fields (or form-fields (read-user-form-fields))
+           :table-columns (or table-columns (read-user-table-columns))})))
+    "Failed to update user UI config"))
+
 ;; Route definitions
 (defn routes
   "Settings route definitions"
@@ -309,4 +465,8 @@
    ["/form-fields/entity" {:patch (update-form-fields-entity-handler db)}]
    ;; Table columns config
    ["/table-columns" {:get (get-table-columns-handler db)}]
-   ["/table-columns/entity" {:patch (update-table-columns-entity-handler db)}]])
+   ["/table-columns/entity" {:patch (update-table-columns-entity-handler db)}]
+
+   ;; User UI (domain-owned)
+   ["/user-ui-config" {:get (get-user-ui-config-handler db)
+                       :put (update-user-ui-config-handler db)}]])

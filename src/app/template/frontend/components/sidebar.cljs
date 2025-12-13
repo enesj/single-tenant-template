@@ -1,0 +1,39 @@
+(ns app.template.frontend.components.sidebar
+  (:require [uix.core :refer [$ defui]]))
+
+(defui sidebar-item [{:keys [label href icon active? on-click className]}]
+  ($ :li {:class "mb-1"}
+    ($ :a {:href href
+           :on-click on-click
+           :class (str (if active? "ds-active" "") " " className)}
+      (when icon
+        icon)
+      label)))
+
+(defui sidebar-section [{:keys [title items]}]
+  ($ :<>
+    (when title
+      ($ :li {:class "ds-menu-title mt-4 mb-2"}
+        ($ :span title)))
+    (for [{:keys [label] :as item} items]
+      ($ sidebar-item (assoc item :key label)))))
+
+(defui sidebar [{:keys [title sections footer className]}]
+  ($ :div {:class (str "hidden md:flex md:flex-shrink-0 text-base-content " className)}
+    ($ :div {:class "flex flex-col w-64"}
+      ;; Sidebar container using base-200 background
+      ($ :div {:class "flex flex-col h-0 flex-1 bg-base-200"}
+        ;; Header area
+        ($ :div {:class "flex-1 flex flex-col pt-5 pb-4 overflow-y-auto"}
+          ($ :div {:class "flex items-center flex-shrink-0 px-4 mb-2"}
+            ($ :h1 {:class "text-xl font-bold"} title))
+          
+          ;; Navigation Menu using DaisyUI menu component
+          ($ :ul {:class "ds-menu ds-menu-md w-full px-2"}
+            (for [{:keys [title] :as section} sections]
+              ($ sidebar-section (assoc section :key (or title "main"))))))
+        
+        ;; Footer
+        (when footer
+          ($ :div {:class "flex-shrink-0 border-t border-base-300 p-4 bg-base-200"}
+            footer))))))

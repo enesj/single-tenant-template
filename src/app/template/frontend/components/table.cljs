@@ -1,13 +1,13 @@
 (ns app.template.frontend.components.table
   (:require
-   [app.shared.keywords :as kw]
-   [app.template.frontend.components.icons :refer [settings-icon]]
-   [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
-   [app.template.frontend.events.list.settings :as settings-events]
-   [app.template.frontend.subs.ui :as ui-subs]
-   [uix.core :as uix :refer [$ defui]]
-   [uix.dom]
-   [uix.re-frame :refer [use-subscribe]]))
+    [app.shared.keywords :as kw]
+    [app.template.frontend.components.icons :refer [settings-icon]]
+    [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
+    [app.template.frontend.events.list.settings :as settings-events]
+    [app.template.frontend.subs.ui :as ui-subs]
+    [uix.core :as uix :refer [$ defui]]
+    [uix.dom]
+    [uix.re-frame :refer [use-subscribe]]))
 
 (defn get-array-length [cells]
   (cond
@@ -260,6 +260,7 @@
         ;; Get hardcoded settings from view-options.edn via subscription
         ;; These are settings that are locked by admins and can't be changed by users
         hardcoded-settings (use-subscribe [::ui-subs/hardcoded-view-options effective-entity-name])]
+
     ($ :div {:id (when entity-name (str "table-" (kw/ensure-name entity-name)))}
       ($ :div {:class "overflow-x-auto max-w-full"
                :style {:max-width (str table-width "px")

@@ -32,7 +32,9 @@
   [{:keys [entity-name current-entity-name _global-settings?] :as props}]
   (let [entity-type (or current-entity-name entity-name)
         entity-kw (if (keyword? entity-type) entity-type (keyword entity-type))
-        vector-mode? (column-config/vector-config? entity-kw)
+        admin-config-loaded? (use-subscribe [:admin/config-loaded?])
+        vector-mode? (and admin-config-loaded?
+                       (column-config/vector-config? entity-kw))
         provided-entity-spec (:entity-spec props)
         ;; Call the hook unconditionally (Rules of Hooks). Use as fallback.
         {:keys [entity-spec] :as _spec-hook} (template-utils/use-entity-spec entity-kw :admin)
@@ -84,13 +86,13 @@
                       ;; Disable toggle for always-visible columns
                       is-column-configurable? (not (contains? always-visible-set field-id))
                         ;; If config doesn't specify filterable columns, treat all columns as filter-configurable.
-                        is-filter-configurable? (if (set? filterable-column-set)
-                                    (contains? filterable-column-set field-id)
-                                    true)
+                      is-filter-configurable? (if (set? filterable-column-set)
+                                                (contains? filterable-column-set field-id)
+                                                true)
                         ;; Determine visibility from the (possibly sparse) visible map (defaults to true)
-                        is-column-visible? (let [sentinel ::not-found
-                                    v (get visible-columns field-id sentinel)]
-                                  (if (not= v sentinel) v true))
+                      is-column-visible? (let [sentinel ::not-found
+                                               v (get visible-columns field-id sentinel)]
+                                           (if (not= v sentinel) v true))
                       ;; Determine filterable state from per-entity overrides
                       is-field-filterable? (and is-filter-configurable?
                                              (get filterable-state-normalized field-id true))]
@@ -143,29 +145,28 @@
         ;; Then use their results conditionally
         curr-entity-name (or current-entity-name entity-type-sub)
 
-        controls (:controls entity-settings)
-        {:keys [show-edit-control?
-                show-delete-control? show-highlights-control?
-                show-select-control?]} (or controls {})
-
         ;; Current setting values - directly from entity-settings subscription
         curr-show-edit? (:show-edit? entity-settings)
         curr-show-delete? (:show-delete? entity-settings)
         curr-show-highlights? (:show-highlights? entity-settings)
         curr-show-select? (:show-select? entity-settings)
         curr-show-pagination? (:show-pagination? entity-settings)
+        curr-show-timestamps? (:show-timestamps? entity-settings)
+        curr-show-filtering? (:show-filtering? entity-settings)
+        curr-show-add-button? (:show-add-button? entity-settings)
+        curr-show-batch-edit? (:show-batch-edit? entity-settings)
+        curr-show-batch-delete? (:show-batch-delete? entity-settings)
 
         ;; Helper component for toggle buttons
-        ;; Hardcoded settings are now completely hidden from the UI
-        toggle-button (fn [{:keys [label is-active? control-visible? event-key hardcoded-key]}]
-                        (let [should-show (if (nil? control-visible?) true control-visible?)
-                              ;; Check if this control is hardcoded at page level
-                              is-hardcoded? (and hardcoded-display-settings
-                                              hardcoded-key
-                                              (contains? hardcoded-display-settings hardcoded-key))
+        ;; Locked settings (from resolver) are hidden from the UI
+        toggle-button (fn [{:keys [label is-active? event-key hardcoded-key]}]
+                        (let [;; Check if this setting is locked (hardcoded at policy level)
+                              is-locked? (and hardcoded-display-settings
+                                           hardcoded-key
+                                           (contains? hardcoded-display-settings hardcoded-key))
                               toggle-id (str "toggle-" (-> label str/lower-case (str/replace #"\s+" "-")))]
-                          ;; Hide the control entirely if it's hardcoded
-                          (when (and should-show (not is-hardcoded?))
+                          ;; Hide the control entirely if it's locked
+                          (when (not is-locked?)
                             ($ :div {:id toggle-id
                                      :class "flex justify-between items-center p-1 rounded-md cursor-pointer"
                                      :on-click #(rf/dispatch [event-key entity-kw])}
@@ -190,37 +191,62 @@
         ;; Edit control
         (toggle-button {:label "Edit"
                         :is-active? curr-show-edit?
-                        :control-visible? show-edit-control?
                         :event-key ::ui-events/toggle-edit
                         :hardcoded-key :show-edit?})
 
         ;; Delete control
         (toggle-button {:label "Delete"
                         :is-active? curr-show-delete?
-                        :control-visible? show-delete-control?
                         :event-key ::ui-events/toggle-delete
                         :hardcoded-key :show-delete?})
 
         ;; Highlights control
         (toggle-button {:label "Highlights"
                         :is-active? curr-show-highlights?
-                        :control-visible? show-highlights-control?
                         :event-key ::ui-events/toggle-highlights
                         :hardcoded-key :show-highlights?})
 
         ;; Selection control
         (toggle-button {:label "Selection"
                         :is-active? curr-show-select?
-                        :control-visible? show-select-control?
                         :event-key ::ui-events/toggle-select
                         :hardcoded-key :show-select?})
 
         ;; Pagination control
         (toggle-button {:label "Pagination"
                         :is-active? curr-show-pagination?
-                        :control-visible? true
                         :event-key ::ui-events/toggle-pagination
                         :hardcoded-key :show-pagination?})
+
+        ;; Timestamps control
+        (toggle-button {:label "Timestamps"
+                        :is-active? curr-show-timestamps?
+                        :event-key ::ui-events/toggle-timestamps
+                        :hardcoded-key :show-timestamps?})
+
+        ;; Filtering control (global master switch)
+        (toggle-button {:label "Filtering"
+                        :is-active? curr-show-filtering?
+                        :event-key ::ui-events/toggle-filtering
+                        :hardcoded-key :show-filtering?})
+
+        ;; Add button control
+        (toggle-button {:label "Add Button"
+                        :is-active? curr-show-add-button?
+                        :event-key ::ui-events/toggle-add-button
+                        :hardcoded-key :show-add-button?})
+
+        ;; Batch Edit control
+        (toggle-button {:label "Batch Edit"
+                        :is-active? curr-show-batch-edit?
+                        :event-key ::ui-events/toggle-batch-edit
+                        :hardcoded-key :show-batch-edit?})
+
+        ;; Batch Delete control
+        (toggle-button {:label "Batch Delete"
+                        :is-active? curr-show-batch-delete?
+                        :event-key ::ui-events/toggle-batch-delete
+                        :hardcoded-key :show-batch-delete?})
 
         ;; Table width control
         (let [current-width (use-subscribe [::settings-events/table-width entity-kw])

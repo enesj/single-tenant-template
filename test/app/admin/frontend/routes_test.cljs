@@ -25,7 +25,10 @@
                      :admin-audit
                      :admin-login-events
                      :admin-admins
-                     :admin-settings}]
+                     :admin-admin-settings
+                     :admin-user-settings
+                     :admin-settings-legacy
+                     :admin-amin-settings-legacy}]
       (is (set/subset? expected names)))))
 
 (deftest guarded-start-wraps-dispatch

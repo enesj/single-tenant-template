@@ -9,11 +9,11 @@
    - Mock fallback for when DOM rendering returns empty
    - Consistent rendering utilities across all test files"
   (:require
-   [clojure.string :as str]
-   [goog.object :as gobj]
-   [re-frame.db :as rf-db]
-   [re-frame.registrar :as rf-registrar]
-   [uix.dom :as uix.dom]))
+    [clojure.string :as str]
+    [goog.object :as gobj]
+    [re-frame.db :as rf-db]
+    [re-frame.registrar :as rf-registrar]
+    [uix.dom :as uix.dom]))
 
 ;; Load react-dom for flushSync in tests
 (def ^:private react-dom
@@ -86,25 +86,25 @@
    a ClojureScript PersistentArrayMap. The argv IS the props map directly,
    not an array wrapping the props."
   [element]
-  (let [raw-props (.-props element)
+  (let [raw-props (.-props ^js element)
         ;; UIx stores props in argv property - it's a CLJS PersistentArrayMap
         argv-obj (when raw-props (gobj/get raw-props "argv"))
-        
+
         ;; argv is the props map directly - check if it's a CLJS map
         props-map (cond
                     ;; If argv is a CLJS map, use it directly
                     (map? argv-obj) argv-obj
-                    
+
                     ;; If we can convert it to a map via into {} 
                     (and argv-obj (seqable? argv-obj))
                     (try (into {} argv-obj) (catch :default _ {}))
-                    
+
                     ;; If raw-props is a JS object, convert it
                     (object? raw-props)
                     (try (deep-js->clj raw-props) (catch :default _ {}))
-                    
+
                     :else {})
-        
+
         ;; Extract entity-name directly from props-map
         en-raw (:entity-name props-map)
         entity-name (cond
@@ -383,7 +383,7 @@
       (try
         ;; Use flushSync to force synchronous rendering
         (if (and react-dom (gobj/get react-dom "flushSync"))
-          (.flushSync react-dom (fn [] (uix.dom/render-root element root)))
+          (.flushSync ^js react-dom (fn [] (uix.dom/render-root element root)))
           (uix.dom/render-root element root))
         (let [html (.-innerHTML container)]
           ;; Return the actual HTML if we got something, otherwise use mock

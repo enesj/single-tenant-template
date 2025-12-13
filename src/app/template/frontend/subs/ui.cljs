@@ -1,31 +1,28 @@
 (ns app.template.frontend.subs.ui
   "UI state subscriptions for the template frontend.
    
-   DISPLAY SETTINGS ARCHITECTURE:
-   ==============================
+   DISPLAY SETTINGS ARCHITECTURE (Simplified):
+   ===========================================
    
-   The `::entity-display-settings` subscription is the SINGLE AUTHORITATIVE SOURCE
-   for display settings. It handles all merging logic with the following precedence:
+   Uses the unified resolver at `app.template.frontend.settings.resolver`.
    
-   1. Hardcoded settings from [:admin :settings :view-options] (API-updated)
-   2. Hardcoded settings from [:admin :config :view-options] (app init)
-   3. User preferences from [:ui :entity-prefs entity-name :display] (NEW PATH)
-   4. Legacy user prefs from [:ui :entity-configs entity-name] (DEPRECATED)
-   5. Default values from [:ui :defaults]
-   6. Global defaults from [:ui]
-   7. Fallback default values (defined in default-display-settings)
+   The `::resolved-display-settings` subscription returns:
+   - :effective — final computed values for UI
+   - :locked    — map of locked setting-key → locked-value
+   - :defaults  — resolved defaults for 'reset' UX
    
-   USER PREFERENCES PATH STRUCTURE:
-   ================================
-   New path: [:ui :entity-prefs <entity> :display :show-*]
-   Legacy path: [:ui :entity-configs <entity> :show-*] (deprecated, read-only)
+   The legacy `::entity-display-settings` subscription returns just the effective
+   values for backward compatibility.
    
-   RECOMMENDED USAGE:
-   - Components should use `app.template.frontend.hooks.display-settings/use-display-settings`
-     which wraps this subscription with a cleaner API
-   - The hook provides convenience functions like `use-show-select?`, `use-action-visibility`
-   - Direct subscription is still supported for backward compatibility"
+   PRECEDENCE (highest → lowest):
+   1. Locks from feature constraints (read-only, batch-ops-disabled)
+   2. Locks from view-options.edn / admin settings API
+   3. User preferences from [:ui :entity-prefs]
+   4. Entity config defaults from entities.edn
+   5. Fallback defaults (in-code)"
   (:require
+    [app.template.frontend.settings.resolver :as resolver]
+    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (rf/reg-sub
@@ -41,98 +38,94 @@
       created-ids)))
 
 ;; ============================================================================
-;; Default Display Settings
+;; Default Display Settings (kept for backward compatibility)
 ;; ============================================================================
 
 (def default-display-settings
   "Default values for all display settings.
-   These are used as fallback when no other source provides a value."
-  {:show-timestamps?    true
-   :show-edit?          true
-   :show-delete?        true
-   :show-highlights?    true
-   :show-select?        true
-   :show-filtering?     true
-   :show-pagination?    true
-   :show-add-button?    true
-   :show-batch-edit?    false
-   :show-batch-delete?  false})
+   DEPRECATED: Use resolver/fallback-defaults instead."
+  resolver/fallback-defaults)
 
-(def default-control-settings
-  "Default values for control visibility settings.
-   Controls determine whether users can toggle display settings."
-  {:show-timestamps-control?  true
-   :show-edit-control?        true
-   :show-delete-control?      true
-   :show-highlights-control?  true
-   :show-select-control?      true
-   :show-filtering-control?   true
-   :show-invert-selection?    true
-   :show-delete-selected?     true})
+;; ============================================================================
+;; Unified Display Settings Resolution
+;; ============================================================================
 
+(defn- gather-resolver-sources
+  "Gather all sources needed for the display settings resolver from app-db.
+
+  NOTE: We support two independent config sources:
+  - Admin routes: [:admin :config] (loaded via /admin/api/*)
+  - User routes:  [:domain :config] (preloaded domain-owned config)
+
+  This keeps admin vs user defaults separate even when they share an entity name
+  (e.g. :expenses appears on both /admin/* and /expenses/*).
+
+  User preferences ([:ui :entity-prefs]) still apply to both."
+  [db entity-kw]
+  (let [handler (get-in db [:routing :handler])
+        admin-route? (and handler (str/starts-with? (name handler) "admin"))
+
+        settings-view-options (get-in db [:admin :settings :view-options entity-kw])
+        config-view-options (get-in db [:admin :config :view-options entity-kw])
+        domain-view-options (get-in db [:domain :config :view-options entity-kw])
+
+        view-options (if admin-route?
+                       (merge config-view-options settings-view-options)
+                       domain-view-options)
+
+        entity-config (if admin-route?
+                      ;; Entity config from entities.edn (admin registry)
+                        (or (get-in db [:admin :entity-registry entity-kw]) {})
+                      ;; Domain-owned entities.edn (user routes)
+                        (or (get-in db [:domain :config :entities entity-kw]) {}))
+
+        user-prefs (get-in db [:ui :entity-prefs entity-kw :display])
+        legacy-prefs (get-in db [:ui :entity-configs entity-kw])]
+    {:view-options view-options
+     :entity-config entity-config
+     :user-prefs user-prefs
+     :legacy-prefs legacy-prefs}))
+
+;; Returns the full resolved settings including :effective, :locked, and :defaults.
+;; This is the primary subscription for components that need lock information.
+(rf/reg-sub
+  ::resolved-display-settings
+  (fn [db [_ entity-name]]
+    (if entity-name
+      (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))]
+        (resolver/resolve-display-settings
+          entity-kw
+          (gather-resolver-sources db entity-kw)))
+      ;; Return default structure if no entity name
+      {:effective resolver/fallback-defaults
+       :locked {}
+       :defaults resolver/fallback-defaults})))
+
+;; Returns just the effective display settings for backward compatibility.
+;; Components that need lock information should use ::resolved-display-settings.
 (rf/reg-sub
   ::entity-display-settings
   (fn [db [_ entity-name]]
-    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+    (if entity-name
+      (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))]
+        (:effective (resolver/resolve-display-settings
+                      entity-kw
+                      (gather-resolver-sources db entity-kw))))
+      ;; Return fallback defaults if no entity name
+      resolver/fallback-defaults)))
 
-          ;; Get hardcoded view-options from all sources (merged in priority order)
-          settings-view-options (get-in db [:admin :settings :view-options entity-kw])
-          config-view-options (get-in db [:admin :config :view-options entity-kw])
-          hardcoded (merge config-view-options settings-view-options)
-
-          ;; Helper to get a setting value with proper precedence
-          get-setting (fn [setting-key]
-                        (let [;; Check hardcoded first
-                              hardcoded-value (get hardcoded setting-key)
-                              ;; If hardcoded, that's the value (can't be overridden)
-                              ;; Otherwise, check user preferences (new path first, then legacy)
-                              new-path-value (get-in db [:ui :entity-prefs entity-kw :display setting-key])
-                              legacy-value (get-in db [:ui :entity-configs entity-kw setting-key])
-                              defaults-value (get-in db [:ui :defaults setting-key])
-                              global-value (get-in db [:ui setting-key])
-                              default-value (get default-display-settings setting-key)]
-                          (cond
-                            ;; Hardcoded takes absolute precedence
-                            (contains? hardcoded setting-key) hardcoded-value
-                            ;; New path user preferences
-                            (some? new-path-value) new-path-value
-                            ;; Legacy path user preferences
-                            (some? legacy-value) legacy-value
-                            ;; UI defaults
-                            (some? defaults-value) defaults-value
-                            ;; Global UI value
-                            (some? global-value) global-value
-                            ;; Fallback default
-                            :else default-value)))
-
-          ;; Helper to get control visibility (not hardcoded, just user preferences)
-          get-control (fn [control-key]
-                        (let [new-path-value (get-in db [:ui :entity-prefs entity-kw :display :controls control-key])
-                              legacy-value (get-in db [:ui :entity-configs entity-kw :controls control-key])
-                              default-value (get default-control-settings control-key)]
-                          (cond
-                            (some? new-path-value) new-path-value
-                            (some? legacy-value) legacy-value
-                            :else default-value)))]
-
-      {:show-timestamps?   (get-setting :show-timestamps?)
-       :show-edit?         (get-setting :show-edit?)
-       :show-delete?       (get-setting :show-delete?)
-       :show-highlights?   (get-setting :show-highlights?)
-       :show-select?       (get-setting :show-select?)
-       :show-filtering?    (get-setting :show-filtering?)
-       :show-pagination?   (get-setting :show-pagination?)
-       :show-add-button?   (get-setting :show-add-button?)
-       :show-batch-edit?   (get-setting :show-batch-edit?)
-       :show-batch-delete? (get-setting :show-batch-delete?)
-       :controls {:show-timestamps-control?  (get-control :show-timestamps-control?)
-                  :show-edit-control?        (get-control :show-edit-control?)
-                  :show-delete-control?      (get-control :show-delete-control?)
-                  :show-highlights-control?  (get-control :show-highlights-control?)
-                  :show-select-control?      (get-control :show-select-control?)
-                  :show-filtering-control?   (get-control :show-filtering-control?)
-                  :show-invert-selection?    (get-control :show-invert-selection?)
-                  :show-delete-selected?     (get-control :show-delete-selected?)}})))
+;; Returns the map of locked settings (setting-key → locked-value).
+;; Use this to determine which toggles should be hidden in the settings panel.
+(rf/reg-sub
+  ::locked-display-settings
+  (fn [db [_ entity-name]]
+    (if entity-name
+      (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))]
+        (:locked (resolver/resolve-display-settings
+                   entity-kw
+                   (gather-resolver-sources db entity-kw))))
+      ;; Return empty map if no entity name provided
+      {})))
 
 (rf/reg-sub
   ::show-add-form
@@ -144,20 +137,17 @@
   (fn [db _]
     (get-in db [:ui :editing])))
 
-;; Subscription to get all hardcoded view-options for an entity
-;; This is used by the settings panel to hide controls that are admin-locked
+;; Subscription to get all locked view-options for an entity
+;; This is used by the settings panel to hide controls that cannot be changed
+;; DEPRECATED: Use ::locked-display-settings instead.
+;; Returns locked settings for backward compatibility with settings panel.
 (rf/reg-sub
   ::hardcoded-view-options
-  (fn [db [_ entity-name]]
-    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-          ;; Read from app-db sources only (no config-loader cache reads at runtime)
-          ;; Priority: settings (API-updated) > config (app init)
-          settings-view-options (get-in db [:admin :settings :view-options entity-kw])
-          config-db-view-options (get-in db [:admin :config :view-options entity-kw])]
-      ;; Merge with settings taking precedence
-      (merge {}
-        config-db-view-options
-        settings-view-options))))
+  (fn [[_ entity-name]]
+    (rf/subscribe [::locked-display-settings entity-name]))
+  (fn [locked _]
+    ;; Return as-is or empty map; the locked map now includes feature constraint locks too
+    (or locked {})))
 
 ;; Subscription to get the list of filterable fields for an entity
 ;; Reads from app-db (table-columns config loaded at init)
@@ -174,11 +164,51 @@
 (rf/reg-sub
   ::visible-columns
   (fn [db [_ entity-name]]
-    ;; Read from new path first, fall back to legacy
-    ;; New: [:ui :entity-prefs <entity> :columns :visible]
-    ;; Legacy: [:ui :entity-configs <entity> :visible-columns]
-    (or (get-in db [:ui :entity-prefs entity-name :columns :visible])
-      (get-in db [:ui :entity-configs entity-name :visible-columns])
-      nil)))
-;; Note: We don't provide a default map here, instead we handle defaults at rendering time
-;; This allows us to properly track which columns have been explicitly set vs. using defaults
+    ;; Precedence:
+    ;; 1) Per-user prefs ([:ui :entity-prefs])
+    ;; 2) Legacy prefs ([:ui :entity-configs])
+    ;; 3) Config defaults (admin or domain table-columns)
+    (let [entity-kw (cond
+                      (nil? entity-name) nil
+                      (keyword? entity-name) entity-name
+                      :else (keyword entity-name))
+          explicit (when entity-kw
+                     (get-in db [:ui :entity-prefs entity-kw :columns :visible]))
+          legacy (when entity-kw
+                   (get-in db [:ui :entity-configs entity-kw :visible-columns]))
+          handler (get-in db [:routing :handler])
+          admin-route? (and handler (str/starts-with? (name handler) "admin"))
+          table-config (when entity-kw
+                         (if admin-route?
+                           (get-in db [:admin :config :table-columns entity-kw])
+                           (get-in db [:domain :config :table-columns entity-kw])))
+          normalize-col (fn [k]
+                          (cond
+                            (nil? k) nil
+                            (keyword? k) k
+                            (string? k) (keyword k)
+                            :else (keyword (str k))))
+          available (->> (or (:available-columns table-config) [])
+                      (keep normalize-col)
+                      vec)
+          hidden (cond
+                   (seq (:default-hidden-columns table-config))
+                   (->> (:default-hidden-columns table-config)
+                     (keep normalize-col)
+                     vec)
+
+                   ;; Vector-config shape: derive hidden = available - default-visible
+                   (and (seq available) (seq (:default-visible-columns table-config)))
+                   (let [visible-set (into #{} (keep normalize-col) (:default-visible-columns table-config))]
+                     (->> available
+                       (remove visible-set)
+                       vec))
+
+                   :else nil)
+          defaults (when (seq hidden)
+                     ;; Provide explicit false entries for hidden columns.
+                     ;; Rendering treats missing keys as visible.
+                     (into {} (map (fn [k] [k false]) hidden)))]
+      (or explicit legacy defaults nil))))
+;; Note: We don't provide a default true-map here.
+;; Rendering treats missing keys as visible, so we only emit explicit false entries.

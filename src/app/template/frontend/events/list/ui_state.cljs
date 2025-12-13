@@ -172,3 +172,35 @@
     (if-let [entity-key (->entity-key entity-type)]
       (toggle-entity-flag db entity-key [:show-pagination?] true)
       (update-in db [:ui :show-pagination?] not))))
+
+(rf/reg-event-db
+  ::toggle-filtering
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (toggle-entity-flag db entity-key [:show-filtering?] true)
+      (update-in db [:ui :show-filtering?] not))))
+
+(rf/reg-event-db
+  ::toggle-add-button
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (toggle-entity-flag db entity-key [:show-add-button?] true)
+      (update-in db [:ui :show-add-button?] not))))
+
+(rf/reg-event-db
+  ::toggle-batch-edit
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (toggle-entity-flag db entity-key [:show-batch-edit?] false)
+      (update-in db [:ui :show-batch-edit?] not))))
+
+(rf/reg-event-db
+  ::toggle-batch-delete
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (toggle-entity-flag db entity-key [:show-batch-delete?] false)
+      (update-in db [:ui :show-batch-delete?] not))))

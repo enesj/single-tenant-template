@@ -565,6 +565,7 @@
   []
   (let [;; View options state
         editable-view-options (use-subscribe [::settings-events/editable-view-options])
+  view-options-dirty? (use-subscribe [::settings-events/view-options-dirty?])
         config-view-options (use-subscribe [:admin/all-view-options])
         all-view-options (if (seq editable-view-options)
                            editable-view-options
@@ -598,14 +599,18 @@
                              (rf/dispatch [::settings-events/toggle-editing]))
 
         handle-view-option-change (fn [entity-name setting-key new-value]
-                                    (if (nil? new-value)
-                                      (rf/dispatch [::settings-events/remove-entity-setting
-                                                    (name entity-name)
-                                                    (name setting-key)])
-                                      (rf/dispatch [::settings-events/update-entity-setting
-                                                    (name entity-name)
-                                                    (name setting-key)
-                                                    new-value])))
+                                    (rf/dispatch [::settings-events/set-view-option-draft
+                                                  entity-name
+                                                  setting-key
+                                                  new-value]))
+
+        handle-view-options-save (fn [e]
+                                  (when e (.preventDefault e))
+                                  (rf/dispatch [::settings-events/save-view-options]))
+
+        handle-view-options-discard (fn [e]
+                                      (when e (.preventDefault e))
+                                      (rf/dispatch [::settings-events/reset-view-options-draft]))
 
         handle-form-fields-save (fn [entity-name config]
                                   (rf/dispatch [::settings-events/update-form-fields-entity
@@ -618,7 +623,6 @@
     ;; Load data on mount
     (use-effect
       (fn []
-        (rf/dispatch [::settings-events/restore-ui-state])
         (rf/dispatch [::settings-events/load-view-options])
         (rf/dispatch [::settings-events/load-form-fields])
         (rf/dispatch [::settings-events/load-table-columns])
@@ -662,18 +666,37 @@
             (render-main-tab "📝 Form Fields" "form-fields")
             (render-main-tab "📊 Table Columns" "table-columns"))
 
-          ;; Edit toggle button
-          ($ :button {:type "button"
-                      :class (str "ds-btn ds-btn-sm "
-                               (if editing? "ds-btn-warning" "ds-btn-primary")
-                               (when (or loading? saving?) " ds-btn-disabled"))
-                      :on-click handle-toggle-edit
-                      :disabled (or loading? saving?)}
-            (if saving?
-              ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
-              (if editing?
-                "Stop Editing"
-                "Edit Settings"))))
+          ;; Actions
+          ($ :div {:class "flex items-center gap-2"}
+            (when (and editing? (= config-tab "view-options"))
+              ($ :button {:type "button"
+                          :class (str "ds-btn ds-btn-sm ds-btn-ghost"
+                                   (when (or loading? saving? (not view-options-dirty?)) " ds-btn-disabled"))
+                          :on-click handle-view-options-discard
+                          :disabled (or loading? saving? (not view-options-dirty?))}
+                "Discard changes"))
+
+            (when (and editing? (= config-tab "view-options"))
+              ($ :button {:type "button"
+                          :class (str "ds-btn ds-btn-sm ds-btn-primary"
+                                   (when (or loading? saving? (not view-options-dirty?)) " ds-btn-disabled"))
+                          :on-click handle-view-options-save
+                          :disabled (or loading? saving? (not view-options-dirty?))}
+                (if saving?
+                  ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
+                  "Save settings")))
+
+            ($ :button {:type "button"
+                        :class (str "ds-btn ds-btn-sm "
+                                 (if editing? "ds-btn-warning" "ds-btn-primary")
+                                 (when (or loading? saving?) " ds-btn-disabled"))
+                        :on-click handle-toggle-edit
+                        :disabled (or loading? saving?)}
+              (if (and saving? (not (= config-tab "view-options")))
+                ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
+                (if editing?
+                  "Stop Editing"
+                  "Edit Settings")))))
 
         ;; Edit mode instructions
         (when editing?
@@ -682,7 +705,7 @@
               ($ :h4 {:class "font-bold"} "Edit Mode Active")
               ($ :p {:class "text-sm"}
                 (case config-tab
-                  "view-options" "Click on any setting to cycle through: Enabled → Disabled → Remove. Changes are saved immediately."
+                  "view-options" "Click on any setting to cycle through: Enabled → Disabled → Remove. Click 'Save settings' to persist."
                   "form-fields" "Click fields to toggle them in each list. Click 'Save Changes' to persist."
                   "table-columns" "Click columns to toggle them in each list. Click 'Save Changes' to persist."
                   "Changes are saved immediately.")))))

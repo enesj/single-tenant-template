@@ -6,6 +6,11 @@
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
+(defn- safe-map
+  "Normalize nil to empty map for comparisons/merges."
+  [x]
+  (if (map? x) x {}))
+
 (defn- unauthorized?
   "Return true when an XHR error represents a 401/unauthorized response."
   [error]
@@ -31,8 +36,70 @@
       (log/info "Loaded view options from backend" {:count (count view-options)})
       {:db (-> db
              (assoc-in [:admin :settings :loading?] false)
+             ;; Keep both the persisted (saved) copy and the editable draft.
+             ;; Draft is what the UI edits; saved is used for diffing / discard.
+             (assoc-in [:admin :settings :view-options-saved] view-options)
              (assoc-in [:admin :settings :view-options] view-options)
+             ;; Also keep the global admin config in sync so list pages pick up locks
+             ;; even if they aren't reading from :admin/:settings.
+             (assoc-in [:admin :config :view-options] view-options)
              (assoc-in [:admin :settings :error] nil))})))
+
+;; =============================================================================
+;; View Options Draft Editing (staged changes)
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-view-option-draft
+  (fn [db [_ entity-name setting-key new-value]]
+    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))]
+      (if (nil? new-value)
+        (update-in db [:admin :settings :view-options entity-kw] dissoc setting-kw)
+        (assoc-in db [:admin :settings :view-options entity-kw setting-kw] new-value)))))
+
+(rf/reg-event-db
+  ::reset-view-options-draft
+  (fn [db _]
+    (let [saved (safe-map (get-in db [:admin :settings :view-options-saved]))]
+      (assoc-in db [:admin :settings :view-options] saved))))
+
+(rf/reg-event-fx
+  ::save-view-options
+  (fn [{:keys [db]} _]
+    (let [draft (safe-map (get-in db [:admin :settings :view-options]))]
+      {:db (-> db
+             (assoc-in [:admin :settings :saving?] true)
+             (assoc-in [:admin :settings :error] nil))
+       :http-xhrio (admin-http/admin-put
+                     {:uri "/admin/api/settings"
+                      :params {:view-options draft}
+                      :on-success [::save-view-options-success]
+                      :on-failure [::save-view-options-failure]})})))
+
+(rf/reg-event-fx
+  ::save-view-options-success
+  (fn [{:keys [db]} [_ response]]
+    (let [saved (safe-map (:view-options response))]
+      (log/info "View options saved successfully" {:count (count saved)})
+      ;; Update the config-loader cache so admin/template list pages pick up the change.
+      (config-loader/register-preloaded-config! :view-options saved)
+      {:db (-> db
+             (assoc-in [:admin :settings :saving?] false)
+             (assoc-in [:admin :settings :last-saved] (js/Date.now))
+             (assoc-in [:admin :settings :error] nil)
+             (assoc-in [:admin :settings :view-options-saved] saved)
+             (assoc-in [:admin :settings :view-options] saved)
+             (assoc-in [:admin :config :view-options] saved))})))
+
+(rf/reg-event-fx
+  ::save-view-options-failure
+  (fn [{:keys [db]} [_ error]]
+    (log/error "Failed to save view options" error)
+    (cond-> {:db (-> db
+                   (assoc-in [:admin :settings :saving?] false)
+                   (assoc-in [:admin :settings :error] "Failed to save view options"))}
+      (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 (rf/reg-event-fx
   ::load-view-options-failure
@@ -282,34 +349,6 @@
       (unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; =============================================================================
-;; UI State Persistence (tabs, edit mode, domain tab)
-;; =============================================================================
-
-(def ^:private settings-ui-storage-key "admin-settings-ui-state")
-
-(rf/reg-fx
- ::persist-ui-state
-  (fn [ui-state]
-    (try
-      (js/localStorage.setItem settings-ui-storage-key (js/JSON.stringify (clj->js ui-state)))
-      (catch :default e
-        (log/warn "Failed to persist admin settings UI state" {:error e :ui-state ui-state})))))
-
-(rf/reg-event-fx
-  ::restore-ui-state
-  (fn [{:keys [db]} _]
-    (let [raw (.getItem js/localStorage settings-ui-storage-key)
-          parsed (when raw
-                   (try
-                     (js->clj (js/JSON.parse raw) :keywordize-keys true)
-                     (catch :default _ nil)))]
-      {:db (cond-> db
-             (map? parsed)
-             (-> (assoc-in [:admin :settings :editing?] (boolean (:editing? parsed)))
-               (assoc-in [:admin :settings :config-tab] (or (:config-tab parsed) "view-options"))
-               (assoc-in [:admin :settings :domain-tab] (or (:domain-tab parsed) "system"))))})))
-
-;; =============================================================================
 ;; Toggle Editing Mode
 ;; =============================================================================
 
@@ -318,14 +357,13 @@
   (fn [{:keys [db]} _]
     (let [current (get-in db [:admin :settings :editing?] false)
           new-val (not current)
-          config-tab (get-in db [:admin :settings :config-tab] "view-options")
-          domain-tab (get-in db [:admin :settings :domain-tab] "system")
-          ui-state {:editing? new-val
-                    :config-tab config-tab
-                    :domain-tab domain-tab}]
+          ;; When leaving edit mode, discard any staged view-options changes.
+          db' (if (false? new-val)
+                (let [saved (safe-map (get-in db [:admin :settings :view-options-saved]))]
+                  (assoc-in db [:admin :settings :view-options] saved))
+                db)]
       (log/info "Toggle editing" {:current current :new-val new-val})
-      {:db (assoc-in db [:admin :settings :editing?] new-val)
-       ::persist-ui-state ui-state})))
+      {:db (assoc-in db' [:admin :settings :editing?] new-val)})))
 
 ;; =============================================================================
 ;; Active Config Tab
@@ -334,13 +372,7 @@
 (rf/reg-event-fx
   ::set-config-tab
   (fn [{:keys [db]} [_ tab]]
-    (let [editing? (get-in db [:admin :settings :editing?] false)
-          domain-tab (get-in db [:admin :settings :domain-tab] "system")
-          ui-state {:editing? editing?
-                    :config-tab tab
-                    :domain-tab domain-tab}]
-      {:db (assoc-in db [:admin :settings :config-tab] tab)
-       ::persist-ui-state ui-state})))
+    {:db (assoc-in db [:admin :settings :config-tab] tab)}))
 
 ;; =============================================================================
 ;; Active Domain Tab
@@ -349,13 +381,17 @@
 (rf/reg-event-fx
   ::set-domain-tab
   (fn [{:keys [db]} [_ tab]]
-    (let [editing? (get-in db [:admin :settings :editing?] false)
-          config-tab (get-in db [:admin :settings :config-tab] "view-options")
-          ui-state {:editing? editing?
-                    :config-tab config-tab
-                    :domain-tab tab}]
-      {:db (assoc-in db [:admin :settings :domain-tab] tab)
-       ::persist-ui-state ui-state})))
+    {:db (assoc-in db [:admin :settings :domain-tab] tab)}))
+
+;; =============================================================================
+;; Derived View Options State
+;; =============================================================================
+
+(rf/reg-sub
+  ::view-options-dirty?
+  (fn [db _]
+    (not= (safe-map (get-in db [:admin :settings :view-options]))
+          (safe-map (get-in db [:admin :settings :view-options-saved])))))
 
 ;; =============================================================================
 ;; Subscriptions

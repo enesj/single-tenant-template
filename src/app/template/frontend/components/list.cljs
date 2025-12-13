@@ -70,7 +70,9 @@
         user-filterable-settings (use-subscribe [::settings-events/filterable-fields entity-name])
         filterable-fields (or filterable-columns filterable-fields-subscription)
         entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-        vector-mode? (column-config/vector-config? entity-kw)
+        admin-config-loaded? (use-subscribe [:admin/config-loaded?])
+        vector-mode? (and admin-config-loaded?
+                 (column-config/vector-config? entity-kw))
         visible-source (column-config/visible-columns-source vector-mode? entity-kw)
         raw-visible-columns (use-subscribe visible-source)
         visible-columns (column-config/get-visible-columns vector-mode? entity-kw raw-visible-columns)

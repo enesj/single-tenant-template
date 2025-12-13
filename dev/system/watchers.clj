@@ -31,7 +31,13 @@
       (first args))))
 
 (defn- clojure-file? [_ {:keys [file]}]
-  (re-matches #"[^.].*(\.clj|\.edn|\.cljc)$" (.getName file)))
+  (let [file-name (.getName file)
+        file-path (.getPath file)
+        admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\\.edn$" file-path))]
+    (and (re-matches #"[^.].*(\\.clj|\\.edn|\\.cljc)$" file-name)
+         ;; These EDN files are edited at runtime via /admin/settings; restarting the
+         ;; dev system on each save causes disruptive full page reloads.
+         (not admin-ui-config-edn?))))
 
 (defn watch-handler [context event]
   (binding [*ns* *ns*]

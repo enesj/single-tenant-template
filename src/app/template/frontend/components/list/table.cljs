@@ -182,11 +182,34 @@
         ;; IMPORTANT: if admin config returns an empty collection for an entity with no
         ;; vector-config, treat it as "no restriction" (default sortable). Only restrict
         ;; when the config provides a non-empty set of sortable columns.
+        normalize-col (fn [col]
+                        (cond
+                          (nil? col) nil
+                          (keyword? col) col
+                          (string? col) (keyword col)
+                          :else (keyword (str col))))
+
         sortable-set (let [sc (use-subscribe [:admin/sortable-columns entity-name])]
-                 (when (seq sc) (set sc)))
+                       ;; Normalize string/keyword column keys and only restrict sorting
+                       ;; when a non-empty set is provided.
+                       (when (seq sc)
+                         (into #{} (keep normalize-col) sc)))
+
         filterable-set (cond
-                         (map? filterable-fields) filterable-fields
-                         (coll? filterable-fields) (set filterable-fields)
+                         ;; Support boolean-map style configs (normalize keys)
+                         (map? filterable-fields)
+                         (into {}
+                           (keep (fn [[k v]]
+                                   (when-let [nk (normalize-col k)]
+                                     [nk v])))
+                           filterable-fields)
+
+                         ;; Support vector/set style configs. Treat empty as "no restriction".
+                         (coll? filterable-fields)
+                         (let [xs (into [] (keep normalize-col) filterable-fields)]
+                           (when (seq xs)
+                             (set xs)))
+
                          :else nil)
 
         base-headers (mapv (fn [field]
@@ -256,13 +279,13 @@
                                                       (cond
                                                         (not= current sentinel) current
                                                         (not= legacy-val sentinel) legacy-val
-                                                        :else nil)))
+                                                        :else sentinel)))
                                   column-visible? (fn [key]
                                                     (let [value (resolve-setting visible-columns key)]
-                                                      (if (nil? value) true value)))
+                                                      (if (= value sentinel) true value)))
                                   field-filterable? (fn [key]
                                                       (let [user-setting (resolve-setting (or user-filterable-settings {}) key)]
-                                                        (if (not= user-setting ::not-found)
+                                                        (if (not= user-setting sentinel)
                                                           ;; User has explicitly set filterable setting - use it
                                                           user-setting
                                                           ;; No user setting, check vector config for filterable columns
