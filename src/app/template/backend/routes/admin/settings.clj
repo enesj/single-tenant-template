@@ -1,6 +1,7 @@
 (ns app.template.backend.routes.admin.settings
   "Admin settings API - read/write view-options.edn"
   (:require
+    [app.shared.specs.view-options :as view-options-spec]
     [app.template.backend.routes.admin.utils :as utils]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
@@ -18,21 +19,48 @@
 (def ^:private user-form-fields-path "src/app/domain/frontend/expenses/config/form-fields.edn")
 (def ^:private user-table-columns-path "src/app/domain/frontend/expenses/config/table-columns.edn")
 
+(defn- display-setting-key?
+  "True when the key represents one of the list-view display toggles.
+
+  In the new schema these are stored under :display-locks (and optionally :display-defaults).
+  This keeps admin settings and user settings aligned."
+  [k]
+  (and (keyword? k)
+    (re-matches #"show-.*\?" (name k))))
+
 (defn- read-view-options
-  "Read view-options.edn file and parse it"
+  "Read view-options.edn file and parse it.
+   Validates the file content against the Malli spec."
   []
   (try
     (let [file (io/file view-options-path)]
       (if (.exists file)
-        (edn/read-string (slurp file))
+        (let [data (edn/read-string (slurp file))
+              validation (view-options-spec/validate-view-options-strict data)]
+          (when-not (:valid? validation)
+            (log/warn "view-options.edn validation issues:"
+              {:errors (:errors validation)
+               :warnings (:warnings validation)}))
+          data)
         {}))
     (catch Exception e
       (log/error e "Failed to read view-options.edn")
       (throw (ex-info "Failed to read settings file" {:status 500})))))
 
 (defn- write-view-options!
-  "Write view-options map to EDN file with pretty printing"
+  "Write view-options map to EDN file with pretty printing.
+   Validates the data before writing and throws on invalid data."
   [view-options]
+  ;; Validate before writing - throw on invalid data
+  (let [{:keys [valid? errors nested-locks-errors]}
+        (view-options-spec/validate-view-options-strict view-options)]
+    (when-not valid?
+      (log/error "Attempted to write invalid view-options data"
+        {:errors errors :nested-locks-errors nested-locks-errors})
+      (throw (ex-info "Invalid view-options data"
+               {:status 400
+                :errors errors
+                :nested-locks-errors nested-locks-errors}))))
   (try
     (let [file (io/file view-options-path)]
       ;; Ensure parent directory exists
@@ -155,7 +183,9 @@
                                           :setting-value setting-value})]
         (if (and entity-name setting-key (not= setting-value ::not-found))
           (let [current-options (read-view-options)
-                updated-options (assoc-in current-options [entity-name setting-key] setting-value)]
+                updated-options (if (display-setting-key? setting-key)
+                                  (assoc-in current-options [entity-name :display-locks setting-key] setting-value)
+                                  (assoc-in current-options [entity-name setting-key] setting-value))]
             ;; Log the action
             (utils/log-admin-action-with-context
               "update-entity-setting"
@@ -164,7 +194,9 @@
               nil
               {:entity entity-name
                :setting setting-key
-               :old-value (get-in current-options [entity-name setting-key])
+               :old-value (if (display-setting-key? setting-key)
+                            (get-in current-options [entity-name :display-locks setting-key])
+                            (get-in current-options [entity-name setting-key]))
                :new-value setting-value}
               (:ip-address context)
               (:user-agent context))
@@ -190,9 +222,13 @@
             context (utils/extract-request-context request)]
         (if (and entity-name setting-key)
           (let [current-options (read-view-options)
-                entity-settings (get current-options entity-name {})
-                updated-entity-settings (dissoc entity-settings setting-key)
-                updated-options (assoc current-options entity-name updated-entity-settings)]
+                display? (display-setting-key? setting-key)
+                old-value (if display?
+                            (get-in current-options [entity-name :display-locks setting-key])
+                            (get-in current-options [entity-name setting-key]))
+                updated-options (if display?
+                                  (update-in current-options [entity-name :display-locks] dissoc setting-key)
+                                  (update current-options entity-name dissoc setting-key))]
             ;; Log the action
             (utils/log-admin-action-with-context
               "remove-entity-setting"
@@ -201,7 +237,7 @@
               nil
               {:entity entity-name
                :setting setting-key
-               :old-value (get-in current-options [entity-name setting-key])}
+               :old-value old-value}
               (:ip-address context)
               (:user-agent context))
             ;; Write to file
@@ -327,18 +363,38 @@
       (throw (ex-info "Failed to write user entities file" {:status 500})))))
 
 (defn- read-user-view-options
+  "Read user view-options.edn file and parse it.
+   Validates the data and logs warnings if issues found."
   []
   (try
     (let [file (io/file user-view-options-path)]
       (if (.exists file)
-        (edn/read-string (slurp file))
+        (let [data (edn/read-string (slurp file))
+              {:keys [valid? errors nested-locks-errors]}
+              (view-options-spec/validate-view-options-strict data)]
+          (when-not valid?
+            (log/warn "user view-options.edn validation issues:"
+              {:errors errors :nested-locks-errors nested-locks-errors}))
+          data)
         {}))
     (catch Exception e
       (log/error e "Failed to read user view-options.edn")
       (throw (ex-info "Failed to read user view options file" {:status 500})))))
 
 (defn- write-user-view-options!
+  "Write user view-options.edn file with pretty printing.
+   Validates the data before writing and throws on invalid data."
   [view-options]
+  ;; Validate before writing - throw on invalid data
+  (let [{:keys [valid? errors nested-locks-errors]}
+        (view-options-spec/validate-view-options-strict view-options)]
+    (when-not valid?
+      (log/error "Attempted to write invalid user view-options data"
+        {:errors errors :nested-locks-errors nested-locks-errors})
+      (throw (ex-info "Invalid user view-options data"
+               {:status 400
+                :errors errors
+                :nested-locks-errors nested-locks-errors}))))
   (try
     (let [file (io/file user-view-options-path)]
       (io/make-parents file)

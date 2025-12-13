@@ -15,8 +15,11 @@
    5. Entity config defaults from entities.edn
    6. Fallback defaults (in-code)
    
-   NOTE: Current view-options.edn uses presence = locked semantics.
-   Phase 2 will add explicit :display-defaults vs :display-locks support.")
+   NOTE: Resolver supports both:
+   - New explicit schema (:display-defaults / :display-locks)
+   - Legacy admin schema where presence of :show-*? keys means 'locked'
+
+   Prefer the explicit schema for new configs.")
 
 ;; ============================================================================
 ;; Fallback defaults (in-code)

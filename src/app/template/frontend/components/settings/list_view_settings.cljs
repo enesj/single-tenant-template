@@ -45,10 +45,10 @@
                         (map? effective-entity-spec) (vals effective-entity-spec)
                         :else [])
         entity-config (use-subscribe [::admin-subs/entity-config entity-kw])
-        ;; Use the same visibility source as list-view (vector-config vs template prefs)
-        visible-source (column-config/visible-columns-source vector-mode? entity-kw)
-        raw-visible-columns (use-subscribe visible-source)
-        visible-columns (column-config/get-visible-columns vector-mode? entity-kw raw-visible-columns)
+        ;; Unified visible columns subscription applies policy defaults/locks and route-aware sources.
+        visible-columns (use-subscribe [::ui-subs/visible-columns entity-kw])
+        locked-columns (use-subscribe [::ui-subs/locked-visible-columns entity-kw])
+        locked-column-set (set (keys (or locked-columns {})))
         ;; Filterable columns come from config (if present). If missing, treat all as filter-configurable.
         filterable-columns (or (use-subscribe [::ui-subs/filterable-fields entity-kw]) [])
         filterable-state (or (use-subscribe [::settings-events/filterable-fields entity-kw]) {})
@@ -65,6 +65,7 @@
                                               (when-let [nk (normalize-key k)]
                                                 [nk v])))
                                       filterable-state)
+        ;; Back-compat: always-visible also locks visibility.
         always-visible-set (set (map normalize-key (or (:always-visible entity-config) [])))]
 
     (when (seq entity-fields)
@@ -83,8 +84,9 @@
                       metadata-label (get-in entity-config [:column-metadata field-id :label])
                       field-label (or raw-label metadata-label (when field-id (-> field-id name str/capitalize)))
                       field-name (name field-id)
-                      ;; Disable toggle for always-visible columns
-                      is-column-configurable? (not (contains? always-visible-set field-id))
+                      ;; Disable toggle for locked columns (policy locks + always-visible)
+                      is-column-configurable? (and (not (contains? always-visible-set field-id))
+                                              (not (contains? locked-column-set field-id)))
                         ;; If config doesn't specify filterable columns, treat all columns as filter-configurable.
                       is-filter-configurable? (if (set? filterable-column-set)
                                                 (contains? filterable-column-set field-id)
@@ -109,7 +111,10 @@
                                      " cursor-not-allowed"))
                           :disabled (not is-column-configurable?)
                           :title (when (not is-column-configurable?)
-                                   "This column is not configurable")
+                                   (cond
+                                     (contains? always-visible-set field-id) "This column is always visible"
+                                     (contains? locked-column-set field-id) "This column visibility is locked by policy"
+                                     :else "This column is not configurable"))
                           :on-click (fn [_e]
                                       (when is-column-configurable?
                                         (toggle-column! vector-mode? entity-kw field-id)))}

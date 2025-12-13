@@ -1,5 +1,12 @@
 {:expenses
- {:available-columns [:purchased_at :supplier_id :payer_id :currency :total_amount :notes :is_posted]
-  :default-hidden-columns [:notes]
-  :unsortable-columns [:notes]
-  :unfilterable-columns [:notes]}}
+ {:available-columns
+  ["purchased_at"
+   "supplier_id"
+   "payer_id"
+   "currency"
+   "total_amount"
+   "notes"
+   "is_posted"],
+  :default-hidden-columns ["notes"],
+  :unsortable-columns ["notes"],
+  :unfilterable-columns ["notes"]}}

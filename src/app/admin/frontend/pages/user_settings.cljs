@@ -60,66 +60,104 @@
     {}
     entities))
 
+(defn- next-setting-state
+  "Cycle: inherit → default true → default false → lock true → lock false → inherit"
+  [{:keys [kind value]}]
+  (case kind
+    :inherit {:kind :default :value true}
+    :default (if (true? value)
+               {:kind :default :value false}
+               {:kind :lock :value true})
+    :lock (if (true? value)
+            {:kind :lock :value false}
+            {:kind :inherit})
+    ;; :immutable or unknown
+    {:kind :inherit}))
+
+(defn- state-badge
+  [{:keys [kind value]}]
+  (case kind
+    :immutable
+    {:class (str "ds-badge ds-badge-sm "
+              (if (true? value) "ds-badge-success" "ds-badge-error"))
+     :text (str "Enforced " (if (true? value) "On" "Off"))}
+
+    :lock
+    {:class (str "ds-badge ds-badge-sm "
+              (if (true? value) "ds-badge-success" "ds-badge-error"))
+     :text (str "Locked " (if (true? value) "On" "Off"))}
+
+    :default
+    {:class (str "ds-badge ds-badge-sm "
+              (if (true? value) "ds-badge-success" "ds-badge-error"))
+     :text (str "Default " (if (true? value) "On" "Off"))}
+
+    ;; inherit
+    {:class "ds-badge ds-badge-ghost ds-badge-sm"
+     :text "Inherit"}))
+
+(defn- next-state-hint
+  [{:keys [kind value]}]
+  (case kind
+    :lock (str "→ Locked " (if (true? value) "On" "Off"))
+    :default (str "→ Default " (if (true? value) "On" "Off"))
+    :inherit "→ Inherit"
+    ""))
+
 (defui setting-badge
-  [{:keys [entity-kw setting-key draft-display locked]}]
-  (let [locked? (contains? locked setting-key)
-        locked-val (get locked setting-key)
-        has? (contains? draft-display setting-key)
-        value (get draft-display setting-key)
-        next-value (cond
-                     locked? nil
-                     (true? value) false
-                     (false? value) nil
-                     :else true)
+  [{:keys [entity-kw setting-key draft-defaults draft-locks immutable-locks]}]
+  (let [immutable? (contains? immutable-locks setting-key)
+        immutable-val (get immutable-locks setting-key)
+
+        lock? (contains? draft-locks setting-key)
+        lock-val (get draft-locks setting-key)
+
+        default? (contains? draft-defaults setting-key)
+        default-val (get draft-defaults setting-key)
+
+        state (cond
+                immutable? {:kind :immutable :value immutable-val}
+                lock? {:kind :lock :value lock-val}
+                default? {:kind :default :value default-val}
+                :else {:kind :inherit})
+
+        next-state (when-not immutable?
+                     (next-setting-state state))
+
+        {:keys [class text]} (state-badge state)
+
         click! (fn [e]
                  (.preventDefault e)
-                 (when-not locked?
+                 (when-not immutable?
                    (rf/dispatch [::user-settings-events/set-display-setting-draft
                                  entity-kw
                                  setting-key
-                                 next-value])))]
+                                 next-state])))]
     ($ :button
       {:type "button"
        :class (str "flex items-center gap-2 p-2 rounded-lg w-full text-left bg-base-200 "
-                (if locked?
+                (if immutable?
                   "opacity-60 cursor-not-allowed"
                   "hover:bg-base-300 transition-colors"))
-       :disabled locked?
+       :disabled immutable?
        :on-click click!}
       ($ :span {:class "text-sm font-medium min-w-[120px]"}
         (setting-label setting-key))
-      (cond
-        locked?
-        ($ :span {:class (str "ds-badge ds-badge-sm "
-                           (if (true? locked-val) "ds-badge-success" "ds-badge-error"))}
-          (str "Locked " (if (true? locked-val) "On" "Off")))
-
-        (and has? (true? value))
-        ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Enabled")
-
-        (and has? (false? value))
-        ($ :span {:class "ds-badge ds-badge-error ds-badge-sm"} "Disabled")
-
-        :else
-        ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"} "Default"))
-      (when-not locked?
+      ($ :span {:class class} text)
+      (when-not immutable?
         ($ :span {:class "text-xs text-base-content/50 ml-auto"}
-          (cond
-            (true? value) "→ Disabled"
-            (false? value) "→ Default"
-            :else "→ Enabled"))))))
+          (next-state-hint next-state))))))
 
 (defui entity-view-options-card
   [{:keys [entity-kw draft]}]
   (let [view-options (get-in draft [:view-options entity-kw])
         entity-config (get-in draft [:entities entity-kw])
-        {:keys [locked]} (resolver/resolve-display-settings
-                           entity-kw
-                           {:view-options view-options
-                            :entity-config entity-config
-                            :user-prefs nil
-                            :legacy-prefs nil})
-        draft-display (or (get-in draft [:view-options entity-kw :display-settings]) {})]
+
+        ;; Feature constraints are always enforced and cannot be overridden.
+        immutable-locks (resolver/feature-constraints->locks (:features entity-config))
+
+        draft-defaults (or (get view-options :display-defaults) {})
+        draft-locks (or (get view-options :display-locks) {})]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -135,8 +173,9 @@
             ($ setting-badge {:key (str (name entity-kw) "-" (name setting-key))
                               :entity-kw entity-kw
                               :setting-key setting-key
-                              :draft-display draft-display
-                              :locked locked})))))))
+                              :draft-defaults draft-defaults
+                              :draft-locks draft-locks
+                              :immutable-locks immutable-locks})))))))
 
 (defui entity-columns-card
   [{:keys [entity-kw draft table-columns-config]}]
@@ -282,4 +321,4 @@
 (defui admin-user-settings-page
   []
   ($ layout/admin-layout
-    ($ user-settings-content)))
+    {:children ($ user-settings-content)}))

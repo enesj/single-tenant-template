@@ -1,6 +1,7 @@
 (ns app.template.frontend.subs.ui-test
   "Tests for UI subscriptions"
   (:require
+    [app.domain.frontend.expenses.config.preload :as expenses-config]
     [app.template.frontend.settings.resolver :as resolver]
     [app.template.frontend.subs.ui :as ui-subs]
     [cljs.test :refer [deftest is testing]]
@@ -31,9 +32,28 @@
       (is (map? (:effective result)) "Should have :effective key")
       (is (true? (get-in result [:effective :show-edit?])) "Fallback default for edit"))))
 
+(deftest domain-view-options-policy-locks-test
+  (testing "Domain view-options can express policy locks that override user prefs"
+    (let [view-options (expenses-config/view-options :expenses)]
+      (is (contains? view-options :display-locks)
+        "Domain config should support explicit :display-locks")
+      (let [result (resolver/resolve-display-settings
+                     :expenses
+                     {:view-options view-options
+                      :entity-config (or (expenses-config/entity-config :expenses) {})
+                      :user-prefs {:show-delete? true
+                                   :show-select? true}
+                      :legacy-prefs {}})]
+        (is (false? (get-in result [:effective :show-select?]))
+          "Locked select should override user preference")
+        (is (false? (get-in result [:effective :show-delete?]))
+          "Locked delete should override user preference")
+        (is (contains? (:locked result) :show-select?) "Select should be recorded as locked")
+        (is (contains? (:locked result) :show-delete?) "Delete should be recorded as locked")))))
+
 (deftest entity-display-settings-precedence-test
   (testing "Resolver with entity config display-settings"
-    (let [result (resolver/resolve-display-settings 
+    (let [result (resolver/resolve-display-settings
                    :items
                    {:view-options {}
                     :entity-config {:display-settings {:show-edit? false}
@@ -44,7 +64,7 @@
       (is (false? (get-in result [:effective :show-edit?])) "Entity display-settings override defaults")
       ;; User prefs are applied
       (is (true? (get-in result [:effective :show-delete?])) "User prefs should be applied")
-      ;; Fallback defaults apply for unset values  
+      ;; Fallback defaults apply for unset values
       (is (true? (get-in result [:effective :show-timestamps?])) "Fallback default applies when not set")))
 
   (testing "Locks override user preferences"
@@ -92,6 +112,24 @@
   (testing "visible-columns returns entity config map"
     (reset-db! {:ui {:entity-configs {:items {:visible-columns {:name true :id false}}}}})
     (is (= {:name true :id false}
+          @(rf/subscribe [::ui-subs/visible-columns :items])))))
+
+(deftest visible-columns-policy-locks-override-user-prefs-test
+  (testing "visible-columns applies :column-locks over per-user prefs"
+    (reset-db!
+      {:domain {:config {:table-columns {:items {:available-columns [:a :b]}}
+                         :view-options {:items {:column-locks {:a false}}}}}
+       :ui {:entity-prefs {:items {:columns {:visible {:a true :b true}}}}}})
+    (is (= {:a false :b true}
+          @(rf/subscribe [::ui-subs/visible-columns :items])))))
+
+(deftest visible-columns-always-visible-overrides-user-prefs-test
+  (testing "visible-columns always-visible columns are enforced true"
+    (reset-db!
+      {:domain {:config {:table-columns {:items {:available-columns [:id :name]
+                                                 :always-visible [:id]}}}}
+       :ui {:entity-prefs {:items {:columns {:visible {:id false :name true}}}}}})
+    (is (= {:id true :name true}
           @(rf/subscribe [::ui-subs/visible-columns :items])))))
 
 (deftest filterable-fields-vector-config-test

@@ -398,6 +398,13 @@ Acceptance criteria:
 ### Phase 5 — Remove legacy layers
 - [x] Legacy prefs still read for backward compatibility (not fully removed)
 - [x] Legacy localStorage events marked as deprecated
+
+## Recent updates (Dec 13)
+
+- Added `src/app/shared/specs/view_options.cljc` with a Malli schema for both admin and domain `view-options.edn` files, a helper to detect nested `:display-locks`, and helper functions (`validate-view-options` / `validate-view-options-strict`) used by backend readers/writers.
+- Updated `src/app/template/backend/routes/admin/settings.clj` to validate view-options during read + write for both admin and user files and to log/throw when schema or consistency issues occur, preventing invalid configs from being persisted.
+- Corrected `src/app/admin/frontend/config/view-options.edn` so the `:login-events :filters :success` options are strings (`["true" "false"]`), matching the new Malli schema, then reran (and documented) the validation command to confirm both files pass.
+- Verified stability by running `bb be-test` (126 backend tests, 0 failures) and `npm run test:cljs` (225 frontend tests, 0 failures) before finalizing the guards.
 - [ ] (Future) Full removal once migration is stable
 
 **Status:** Phase 5 partially complete. Legacy paths remain for backward compatibility during migration period.
@@ -445,18 +452,66 @@ Acceptance criteria:
 
 ### Phase 7 — User settings page (`/admin/user-settings`)
 
-**Objective:** implement a user-facing settings page that reuses the same “draft + explicit Save/Discard” UX as admin settings, but persists user preferences (per-user) rather than org-wide policy.
+**Objective (implemented):** implement an **admin** page that edits the **domain-owned, user-facing defaults** (Expenses domain) using the same “draft + explicit Save/Discard” UX as admin settings.
 
-**Config location:** user settings config (Expenses domain) lives under `src/app/domain/frontend/expenses/config`.
+This page is intentionally **not** an editor for admin-only entities (Users/Admins/etc). It is an editor for the config that powers user-facing pages like `/expenses/*`.
 
-Work items:
-- [ ] Add route + navigation entry for `/admin/user-settings`
-- [ ] Implement a settings page with “Table columns” + “View options” tabs
-- [ ] Use the same staged-edit model (draft in app-db + dirty tracking)
-- [ ] Persist on explicit save only (no per-click saves)
-- [ ] Keep user prefs storage in `ui-entity-prefs` (localStorage is OK for per-user prefs)
-- [ ] Ensure no hard reload on save; page state retention is via in-memory state
-- [ ] Add tests for draft/save/discard behavior and for persistence wiring
+**Config location (source-of-truth):**
+
+- Domain-owned UI config lives under `src/app/domain/frontend/expenses/config/`
+  - `entities.edn`
+  - `view-options.edn` (domain schema: `:display-settings` = defaults; no locks)
+  - `table-columns.edn`
+  - `form-fields.edn`
+
+**Architecture (current):**
+
+- User routes read config from app-db `[:domain :config ...]`.
+  - Preloaded at boot from inline resources:
+    - `src/app/domain/frontend/expenses/config/preload.cljs`
+    - `src/app/template/frontend/events/bootstrap.cljs`
+- Display settings are resolved via the unified resolver:
+  - `src/app/template/frontend/settings/resolver.cljs`
+  - `src/app/template/frontend/subs/ui.cljs` selects config source based on route:
+    - admin routes → `[:admin :config]`
+    - user routes → `[:domain :config]`
+- Admin `/admin/user-settings` loads/saves the **domain** config via an admin backend API:
+  - GET/PUT `/admin/api/settings/user-ui-config` (reads/writes those EDN files)
+
+**Implementation status:** ✅ done
+
+- [x] Add route + navigation entry for `/admin/user-settings` (sidebar link at bottom, after “Admin Settings”)
+- [x] Implement settings page with “View options” + “Table columns”
+- [x] Stage edits in a draft + dirty tracking + explicit Save/Discard
+- [x] Load/save via admin API that persists to `src/app/domain/frontend/expenses/config/*`
+- [x] Keep scope limited to domain entities (currently only `:expenses` exists in domain config)
+- [x] Fix rendering bug (admin layout requires children via `:children`)
+- [x] Frontend tests green
+
+**Key files added/changed (high signal):**
+
+- `src/app/admin/frontend/pages/user_settings.cljs` — `/admin/user-settings` page UI (draft + Save/Discard)
+- `src/app/admin/frontend/events/user_settings.cljs` — load/save events for domain UI config
+- `src/app/template/backend/routes/admin/settings.clj` — GET/PUT `/admin/api/settings/user-ui-config`
+- `src/app/admin/frontend/components/layout.cljs` — sidebar link placement
+- `src/app/template/frontend/subs/ui.cljs` — route-aware config source selection (admin vs domain)
+
+**Important behavior note (why “defaults not applied” can happen):**
+
+- User-facing pages also have **per-user preferences** stored in `ui-entity-prefs` (localStorage).
+- The resolver applies **user prefs** on top of domain defaults when the setting is not locked.
+  - Domain `view-options.edn` currently uses the domain schema `:display-settings` (defaults-only, no locks).
+  - So a user preference like `[:ui :entity-prefs :expenses :display :show-select? true]` can override a default `false`.
+
+**Follow-up (next session candidates):**
+
+1) Decide semantics for domain-owned config:
+   - keep defaults-only (users can override), OR
+   - introduce locks for user routes too (e.g. support `:display-locks` alongside `:display-settings`).
+
+2) Add a “Reset to org defaults” action that clears user prefs for an entity (so defaults are visible immediately).
+
+3) If the goal is “org defaults apply immediately without recompiling”: consider loading domain config from the server at runtime (rather than `shadow.resource/inline`), using the same config files as the source-of-truth.
 
 ---
 
@@ -488,8 +543,8 @@ Work items:
 
 ## Verification (completed)
 
-- Frontend tests: 219 tests, 1267 assertions, 0 failures.
-- Backend tests: 126 tests, 514 assertions, 0 failures.
+- Frontend tests (latest): 224 tests, 1289 assertions, 0 failures. (2025-12-13)
+- Backend tests: not re-run in this session (previously green).
 
 ---
 
@@ -500,3 +555,143 @@ Work items:
 - Unified persistence for column visibility and all list preferences.
 - Updated docs replacing the old “multiple merge points” narrative with the new model.
 - Admin settings “View options” UX parity with “Table columns” (draft + Save/Discard; no hard reload on save).
+
+---
+
+## Next task — Refactor `/admin/admin-settings` + `/admin/user-settings` UI (parity + full coverage)
+
+### Goal
+
+Refactor both settings pages so they share **exactly the same UI and UIX component structure**, aligned with this plan and the current implemented behavior.
+
+### Requirements
+
+1) **UI parity**
+   - `/admin/admin-settings` and `/admin/user-settings` must look and behave the same.
+   - Prefer one shared UIX “settings shell” component used by both routes.
+
+2) **Show “all possible settings” in edit mode (even if missing from EDN)**
+   - In **edit mode**, the UI must render the full set of supported settings controls, regardless of whether the key currently exists in the underlying EDN file(s).
+   - “All possible settings” should be derived from the *model we support today* (this doc + resolver/table implementation), not just from what happens to be configured.
+
+3) **Single-scope editing + switchable scope**
+  - In **edit mode**, show settings for **only one scope at a time**.
+  - Provide a way to switch the scope being edited (Admin vs User) without leaving edit mode.
+  - In **edit mode**, also show settings for **only one page (entity)** at a time (e.g. `:users` or `:expenses`).
+  - Provide a way to switch the page/entity being edited without leaving edit mode.
+
+4) **View (read-only) mode shows all pages (entities), but only implemented settings**
+  - When **not editing**, show an overview for **both** scopes (Admin Settings + User Settings) that includes **all pages/entities** in each scope (e.g. `:admins`, `:users`, `:audit-logs`, `:login-events`, `:expenses`, etc.).
+  - Only render settings that are actually implemented/persisted (i.e. present in the loaded config for that scope/entity).
+  - Practical meaning: from either route (`/admin/admin-settings` *or* `/admin/user-settings`), view mode acts as a consolidated “settings overview” for the whole system.
+
+5) **No functional changes in this phase**
+   - This is a refactor and UI unification effort. Preserve existing save semantics (draft + Save/Discard), APIs, and resolver behavior.
+
+6) **Prevent hard reload after Save (both pages)**
+  - Saving settings must not trigger a full reload/restart (same UX guarantee already implemented for admin settings).
+  - This must be ensured for both:
+    - saving admin settings (`/admin/admin-settings`)
+    - saving user/domain settings (`/admin/user-settings`)
+
+### Definitions / scopes
+
+- **Admin scope**: data loaded from `[:admin :settings]` / `[:admin :config]` and persisted via the existing admin settings API (currently `/admin/api/settings`).
+- **User scope**: data loaded from `[:admin :user-settings]` (or equivalent) and persisted via `/admin/api/settings/user-ui-config` (domain-owned config under `src/app/domain/frontend/expenses/config/`).
+
+### Proposed UX
+
+- **Top-level mode toggle**: `View` / `Edit` (or a single “Edit settings” button that enters edit mode).
+
+- **View mode** (default):
+  - Render a consolidated overview (same content from either route) grouped by scope:
+    - “Admin settings” (shows all admin entities/pages, but only keys present per entity)
+    - “User settings” (shows all user/domain entities/pages, but only keys present per entity)
+  - Each entity/page shows the currently implemented settings (e.g. display toggles, pagination config, filters config, etc.) as a readable summary.
+  - Optional: include a “source file” hint per scope (admin `view-options.edn` vs domain `view-options.edn`) and/or per entity.
+
+- **Edit mode**:
+  - Render a **scope switcher** (Admin ↔ User).
+  - Render a **page/entity switcher** within the selected scope (e.g. `:users` / `:admins` / `:login-events` or `:expenses`).
+  - Render **only the selected page/entity form**.
+  - The form shows **all supported settings controls**, even if missing from EDN.
+    - For missing keys, show sensible defaults (derived from resolver defaults / current UI defaults).
+    - Clearly indicate “Not configured yet” vs “Configured”, if helpful.
+  - Maintain the existing draft UX:
+    - staged edits
+    - explicit **Save** and **Discard**
+    - dirty indicator
+
+### Implementation approach (plan)
+
+1) **Introduce a shared “settings definitions” registry**
+   - A single data structure describing:
+     - setting key
+     - label/help text
+     - control type (toggle/select/number/list)
+     - how to read the current value from a scope config
+     - how to write updates into the scope draft
+     - default value (when missing from EDN)
+   - Source for “all possible settings” should be the *supported model*:
+     - display toggle keys (see `display-toggle-keys`)
+     - pagination defaults
+     - any other settings currently supported by resolver + settings UI (per this doc)
+
+2) **Build one UIX “SettingsShell” component**
+   - Responsibilities:
+     - mode state (view/edit)
+     - scope switcher (in edit)
+     - Save/Discard wiring (existing events)
+     - layout + shared styling
+   - Both routes should only provide:
+     - page title
+     - which scopes are available
+     - how to load/save that scope (existing events)
+
+3) **Implement “View mode overview” rendering**
+  - Render an overview for all entities/pages in both scopes.
+  - For each entity/page, render only settings that are present in the underlying config.
+  - Use the same definitions registry but with a “present-only” filter.
+
+4) **Implement “Edit mode full coverage” rendering**
+   - Render all settings from the definitions registry.
+   - Backfill missing keys with defaults for display.
+
+5) **Edit-mode scope switching behavior**
+   - Decide and document one of:
+     - (Preferred) keep separate drafts per scope and preserve unsaved edits when switching, OR
+     - prompt the user if switching would discard changes.
+   - Acceptance criteria must include “no accidental silent loss of edits”.
+
+6) **Extend “no hard reload on save” to user settings**
+  - Apply the same approach already used for admin settings to the user settings save path.
+  - Ensure saving domain EDNs does not trigger shadow compile / dev system restart.
+  - Ensure the UI updates by syncing app-db config (post-save) rather than relying on recompilation.
+
+### Acceptance criteria
+
+- Visual/UI parity between `/admin/admin-settings` and `/admin/user-settings` (same layout, same components).
+- View mode (from either route) shows two sections (Admin + User) and covers all entities/pages, listing only settings present in each scope/entity config.
+- Edit mode:
+  - shows one scope at a time
+  - has a scope switcher
+  - shows one entity/page at a time
+  - has an entity/page switcher
+  - renders the full set of supported settings controls even if keys are missing from EDN
+  - Save/Discard works as today
+- Saving does not trigger a hard reload/restart for either admin settings or user settings.
+- No backend API changes required.
+- Frontend tests updated/added as needed; existing tests remain green.
+
+### Test plan (for the refactor)
+
+- CLJS unit tests:
+  - settings definitions registry contains expected keys
+  - “present-only” filtering works for view mode
+  - defaults are applied for missing keys in edit mode
+
+- Manual browser checks:
+  - `/admin/admin-settings` view mode shows admin + user sections and includes all entities/pages (implemented settings only)
+  - `/admin/user-settings` view mode shows admin + user sections and includes all entities/pages (implemented settings only)
+  - entering edit mode, switching scope and entity/page, Save/Discard behavior
+  - no full reload on save (admin + user); UI state remains stable

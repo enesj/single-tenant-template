@@ -26,7 +26,6 @@
     {:on-success on-success
      :on-cancel on-cancel}))
 
-
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
   (let [expense-id (id-utils/extract-entity-id item)]
@@ -129,16 +128,4 @@
            :render-edit-form render-edit-form
            :on-add-success refresh-list
            :on-edit-success refresh-list
-           :custom-actions custom-actions
-           ;; User-facing defaults
-           :display-settings {:show-select? false
-                              :show-edit? true
-                              :show-delete? false
-                              :show-filtering? true
-                              :show-pagination? true
-                              :show-add-button? true
-                              :show-batch-edit? false
-                              :show-batch-delete? false
-                              :show-timestamps? true
-                              :show-highlights? true
-                              :per-page 25}})))))
+           :custom-actions custom-actions})))))

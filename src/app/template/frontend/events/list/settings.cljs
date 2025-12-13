@@ -17,6 +17,7 @@
    
    Events read from both paths during migration, write to new path only."
   (:require
+    [clojure.string]
     [app.template.frontend.interceptors.persistence :as persistence]
     [re-frame.core :as rf]))
 
@@ -60,14 +61,37 @@
     (if (and entity-name field-name)
       (let [entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
             field-key (if (keyword? field-name) field-name (keyword field-name))
+            route-name (get-in db [:current-route :data :name])
+            admin-route? (and route-name
+                           (clojure.string/starts-with? (name route-name) "admin"))
+            entity-view-options (if admin-route?
+                                 (merge
+                                   (get-in db [:admin :config :view-options entity-key])
+                                   (get-in db [:admin :settings :view-options entity-key]))
+                                 (get-in db [:domain :config :view-options entity-key]))
+            locked-cols (:column-locks entity-view-options)
+            locked? (and (map? locked-cols) (contains? locked-cols field-key))
+            table-config (if admin-route?
+                           (get-in db [:admin :config :table-columns entity-key])
+                           (get-in db [:domain :config :table-columns entity-key]))
+            always-visible? (contains?
+                             (into #{} (map (fn [k]
+                                              (cond
+                                                (keyword? k) k
+                                                (string? k) (keyword k)
+                                                :else (keyword (str k)))))
+                               (or (:always-visible table-config) []))
+                             field-key)
             ;; Read from new path first, fall back to legacy
             current-map (or (get-in db [:ui :entity-prefs entity-key :columns :visible])
                           (get-in db [:ui :entity-configs entity-key :visible-columns])
                           {})
             current-setting (get current-map field-key true)
             updated-map (assoc current-map field-key (not current-setting))]
-        ;; Write to new path only
-        (assoc-in db [:ui :entity-prefs entity-key :columns :visible] updated-map))
+        (if (or locked? always-visible?)
+          db
+          ;; Write to new path only
+          (assoc-in db [:ui :entity-prefs entity-key :columns :visible] updated-map)))
       db)))
 
 (rf/reg-event-db

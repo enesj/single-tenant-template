@@ -51,7 +51,7 @@
 ;; ============================================================================
 
 (defn- gather-resolver-sources
-  "Gather all sources needed for the display settings resolver from app-db.
+  "Collect all input sources needed by the display-settings resolver.
 
   NOTE: We support two independent config sources:
   - Admin routes: [:admin :config] (loaded via /admin/api/*)
@@ -62,8 +62,9 @@
 
   User preferences ([:ui :entity-prefs]) still apply to both."
   [db entity-kw]
-  (let [handler (get-in db [:routing :handler])
-        admin-route? (and handler (str/starts-with? (name handler) "admin"))
+  (let [;; Route name is stored in [:current-route :data :name] by reitit-frontend
+        route-name (get-in db [:current-route :data :name])
+        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
 
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
         config-view-options (get-in db [:admin :config :view-options entity-kw])
@@ -85,6 +86,39 @@
      :entity-config entity-config
      :user-prefs user-prefs
      :legacy-prefs legacy-prefs}))
+
+(defn- gather-view-options-for-entity
+  "Return the appropriate entity-specific view-options map for the current route.
+
+  Admin routes: merge preloaded config + runtime settings draft.
+  User routes:  use domain-owned config only."
+  [db entity-kw]
+  (let [route-name (get-in db [:current-route :data :name])
+        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        settings-view-options (get-in db [:admin :settings :view-options entity-kw])
+        config-view-options (get-in db [:admin :config :view-options entity-kw])
+        domain-view-options (get-in db [:domain :config :view-options entity-kw])]
+    (if admin-route?
+      (merge config-view-options settings-view-options)
+      domain-view-options)))
+
+(defn- normalize-col
+  [k]
+  (cond
+    (nil? k) nil
+    (keyword? k) k
+    (string? k) (keyword k)
+    :else (keyword (str k))))
+
+(defn- normalize-col-map
+  "Normalize a column visibility map so all keys are keywords." 
+  [m]
+  (when (map? m)
+    (into {}
+      (keep (fn [[k v]]
+              (when-let [kk (normalize-col k)]
+                [kk v])))
+      m)))
 
 ;; Returns the full resolved settings including :effective, :locked, and :defaults.
 ;; This is the primary subscription for components that need lock information.
@@ -164,33 +198,59 @@
 (rf/reg-sub
   ::visible-columns
   (fn [db [_ entity-name]]
-    ;; Precedence:
-    ;; 1) Per-user prefs ([:ui :entity-prefs])
-    ;; 2) Legacy prefs ([:ui :entity-configs])
-    ;; 3) Config defaults (admin or domain table-columns)
+    ;; Column visibility precedence (highest → lowest):
+    ;; 1) Policy locks from view-options (:column-locks)
+    ;; 2) Per-user prefs ([:ui :entity-prefs])
+    ;; 3) Legacy prefs ([:ui :entity-configs])
+    ;; 4) Policy defaults from view-options (:column-defaults)
+    ;; 5) Config defaults (admin or domain table-columns)
     (let [entity-kw (cond
                       (nil? entity-name) nil
                       (keyword? entity-name) entity-name
                       :else (keyword entity-name))
-          explicit (when entity-kw
-                     (get-in db [:ui :entity-prefs entity-kw :columns :visible]))
-          legacy (when entity-kw
-                   (get-in db [:ui :entity-configs entity-kw :visible-columns]))
-          handler (get-in db [:routing :handler])
-          admin-route? (and handler (str/starts-with? (name handler) "admin"))
+          ;; Route name is stored in [:current-route :data :name] by reitit-frontend
+          route-name (get-in db [:current-route :data :name])
+          admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
           table-config (when entity-kw
                          (if admin-route?
                            (get-in db [:admin :config :table-columns entity-kw])
                            (get-in db [:domain :config :table-columns entity-kw])))
-          normalize-col (fn [k]
-                          (cond
-                            (nil? k) nil
-                            (keyword? k) k
-                            (string? k) (keyword k)
-                            :else (keyword (str k))))
           available (->> (or (:available-columns table-config) [])
                       (keep normalize-col)
                       vec)
+          always-visible (->> (or (:always-visible table-config) [])
+                           (keep normalize-col)
+                           vec)
+          always-visible-set (set always-visible)
+
+          ;; Policy (view-options) column defaults/locks
+          entity-view-options (when entity-kw (gather-view-options-for-entity db entity-kw))
+          policy-defaults (normalize-col-map (:column-defaults entity-view-options))
+          policy-locks (normalize-col-map (:column-locks entity-view-options))
+
+          ;; Per-user column prefs (map). Admin vector mode may store only an ordered vector.
+          explicit-map (when entity-kw
+                         (normalize-col-map (get-in db [:ui :entity-prefs entity-kw :columns :visible])))
+          explicit-order (when entity-kw
+                           (->> (get-in db [:ui :entity-prefs entity-kw :columns :visible-order])
+                             (keep normalize-col)
+                             vec))
+          admin-visible-vector (when entity-kw
+                                 (->> (get-in db [:admin :config :table-columns entity-kw :visible-columns])
+                                   (keep normalize-col)
+                                   vec))
+          derived-from-vector (when (and (seq available)
+                                      (not (map? explicit-map))
+                                      (or (seq explicit-order) (seq admin-visible-vector)))
+                               (let [visible-set (into #{} (or explicit-order admin-visible-vector))]
+                                 (into {}
+                                   (map (fn [k]
+                                          [k (or (contains? always-visible-set k)
+                                               (contains? visible-set k))]))
+                                   available)))
+          legacy (when entity-kw
+                   (normalize-col-map (get-in db [:ui :entity-configs entity-kw :visible-columns])))
+
           hidden (cond
                    (seq (:default-hidden-columns table-config))
                    (->> (:default-hidden-columns table-config)
@@ -205,10 +265,46 @@
                        vec))
 
                    :else nil)
-          defaults (when (seq hidden)
-                     ;; Provide explicit false entries for hidden columns.
-                     ;; Rendering treats missing keys as visible.
-                     (into {} (map (fn [k] [k false]) hidden)))]
-      (or explicit legacy defaults nil))))
+          defaults-from-config (when (seq hidden)
+                                 ;; Provide explicit false entries for hidden columns.
+                                 ;; Rendering treats missing keys as visible.
+                                 (into {} (map (fn [k] [k false]) hidden)))
+
+          defaults (merge (or defaults-from-config {})
+                     (or policy-defaults {}))
+
+          user-choice (or explicit-map derived-from-vector legacy)
+
+          ;; Always-visible columns are effectively locks = true.
+          locks (merge (or policy-locks {})
+                  (into {} (map (fn [k] [k true]) always-visible)))
+
+          effective (-> (or defaults {})
+                      (merge (or user-choice {}))
+                      (merge locks))]
+      (when entity-kw
+        effective))))
 ;; Note: We don't provide a default true-map here.
 ;; Rendering treats missing keys as visible, so we only emit explicit false entries.
+
+(rf/reg-sub
+  ::locked-visible-columns
+  (fn [db [_ entity-name]]
+    (let [entity-kw (cond
+                      (nil? entity-name) nil
+                      (keyword? entity-name) entity-name
+                      :else (keyword entity-name))
+          table-config (when entity-kw
+                         (let [route-name (get-in db [:current-route :data :name])
+                               admin-route? (and route-name (str/starts-with? (name route-name) "admin"))]
+                           (if admin-route?
+                             (get-in db [:admin :config :table-columns entity-kw])
+                             (get-in db [:domain :config :table-columns entity-kw]))))
+          always-visible (->> (or (:always-visible table-config) [])
+                           (keep normalize-col)
+                           vec)
+          entity-view-options (when entity-kw (gather-view-options-for-entity db entity-kw))
+          policy-locks (normalize-col-map (:column-locks entity-view-options))]
+      (when entity-kw
+        (merge (or policy-locks {})
+          (into {} (map (fn [k] [k true]) always-visible)))))))

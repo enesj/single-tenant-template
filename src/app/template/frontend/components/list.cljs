@@ -70,12 +70,13 @@
         user-filterable-settings (use-subscribe [::settings-events/filterable-fields entity-name])
         filterable-fields (or filterable-columns filterable-fields-subscription)
         entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+        ;; Vector-config is only enabled once admin config is loaded.
+        ;; We still use the unified visible-columns subscription underneath so policy defaults/locks apply.
         admin-config-loaded? (use-subscribe [:admin/config-loaded?])
         vector-mode? (and admin-config-loaded?
-                 (column-config/vector-config? entity-kw))
-        visible-source (column-config/visible-columns-source vector-mode? entity-kw)
-        raw-visible-columns (use-subscribe visible-source)
-        visible-columns (column-config/get-visible-columns vector-mode? entity-kw raw-visible-columns)
+                       (column-config/vector-config? entity-kw))
+        visible-columns-raw (use-subscribe (column-config/visible-columns-source vector-mode? entity-kw))
+        visible-columns (column-config/get-visible-columns vector-mode? entity-kw visible-columns-raw)
         sort-config (use-subscribe [::list-subs/sort-config entity-name])
         active-filters (use-subscribe [::list-subs/active-filters entity-name])
         batch-edit-inline-state (use-subscribe [::list-subs/batch-edit-inline entity-name])

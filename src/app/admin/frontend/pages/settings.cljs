@@ -124,7 +124,8 @@
   "Card displaying all hardcoded settings for a single entity"
   [{:keys [entity-name settings editing? on-change setting-keys]}]
   (let [setting-keys (or setting-keys display-setting-keys)
-        hardcoded-settings (select-keys settings setting-keys)
+        locks (or (:display-locks settings) {})
+        hardcoded-settings (select-keys locks setting-keys)
         has-any-hardcoded? (seq hardcoded-settings)
         ;; In edit mode, show all possible settings
         display-settings (if editing?
@@ -163,12 +164,12 @@
   (let [entity-count (count all-view-options)
         entities-with-hardcoded (filter
                                   (fn [[_ settings]]
-                                    (some #(contains? settings %) all-setting-keys))
+                                    (some #(contains? (or (:display-locks settings) {}) %) all-setting-keys))
                                   all-view-options)
         hardcoded-entity-count (count entities-with-hardcoded)
         total-hardcoded-settings (reduce
                                    (fn [acc [_ settings]]
-                                     (+ acc (count (select-keys settings all-setting-keys))))
+                                     (+ acc (count (select-keys (or (:display-locks settings) {}) all-setting-keys))))
                                    0
                                    all-view-options)]
     ($ :div {:class "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6"}
@@ -565,7 +566,7 @@
   []
   (let [;; View options state
         editable-view-options (use-subscribe [::settings-events/editable-view-options])
-  view-options-dirty? (use-subscribe [::settings-events/view-options-dirty?])
+        view-options-dirty? (use-subscribe [::settings-events/view-options-dirty?])
         config-view-options (use-subscribe [:admin/all-view-options])
         all-view-options (if (seq editable-view-options)
                            editable-view-options
@@ -605,8 +606,8 @@
                                                   new-value]))
 
         handle-view-options-save (fn [e]
-                                  (when e (.preventDefault e))
-                                  (rf/dispatch [::settings-events/save-view-options]))
+                                   (when e (.preventDefault e))
+                                   (rf/dispatch [::settings-events/save-view-options]))
 
         handle-view-options-discard (fn [e]
                                       (when e (.preventDefault e))

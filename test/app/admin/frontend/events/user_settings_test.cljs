@@ -11,8 +11,10 @@
   ([overrides]
    (merge
      {:entities {:expenses {:title "My Expenses"}}
-      :view-options {:expenses {:display-settings {:show-edit? true
-                                                   :show-delete? false}}}
+      :view-options {:expenses {:display-defaults {:show-edit? true}
+                                :display-locks {:show-delete? false}
+                                :column-defaults {:notes false}
+                                :column-locks {:purchased_at true}}}
       :form-fields {:expenses {:create-fields [:purchased_at]
                                :edit-fields [:purchased_at]}}
       :table-columns {:expenses {:available-columns [:purchased_at :notes]
@@ -44,8 +46,10 @@
     (let [db @rf-db/app-db]
       (is (= {:expenses {:title "My Expenses"}}
             (get-in db [:domain :config :entities])))
-      (is (= {:expenses {:display-settings {:show-edit? true
-                                            :show-delete? false}}}
+      (is (= {:expenses {:display-defaults {:show-edit? true}
+             :display-locks {:show-delete? false}
+             :column-defaults {:notes false}
+             :column-locks {:purchased_at true}}}
             (get-in db [:domain :config :view-options])))
       (is (= {:expenses {:available-columns [:purchased_at :notes]
                          :default-hidden-columns [:notes]}}
@@ -57,19 +61,55 @@
       (is (nil? (get-in db [:admin :user-settings :error]))))))
 
 (deftest display-setting-draft-set-and-clear
-  (testing "::set-display-setting-draft updates :display-settings in draft"
+  (testing "::set-display-setting-draft updates :display-defaults/:display-locks in draft"
     (setup/reset-db!)
     (setup/install-http-stub!)
 
     (rf/dispatch-sync [::user-settings/init])
     (setup/respond-success! (example-response))
 
-    (rf/dispatch-sync [::user-settings/set-display-setting-draft :expenses :show-edit? false])
-    (is (= false (get-in @rf-db/app-db [:admin :user-settings :draft :view-options :expenses :display-settings :show-edit?])))
+    (rf/dispatch-sync [::user-settings/set-display-setting-draft
+                       :expenses
+                       :show-edit?
+                       {:kind :default :value false}])
+    (is (= false (get-in @rf-db/app-db
+                   [:admin :user-settings :draft :view-options :expenses :display-defaults :show-edit?])))
 
-    ;; nil means remove key
-    (rf/dispatch-sync [::user-settings/set-display-setting-draft :expenses :show-edit? nil])
-    (is (nil? (get-in @rf-db/app-db [:admin :user-settings :draft :view-options :expenses :display-settings :show-edit?])))))
+    ;; inherit means remove from both defaults and locks
+    (rf/dispatch-sync [::user-settings/set-display-setting-draft
+                       :expenses
+                       :show-edit?
+                       {:kind :inherit}])
+    (is (nil? (get-in @rf-db/app-db
+                [:admin :user-settings :draft :view-options :expenses :display-defaults :show-edit?])))
+    (is (nil? (get-in @rf-db/app-db
+                [:admin :user-settings :draft :view-options :expenses :display-locks :show-edit?])))))
+
+(deftest column-visibility-setting-draft-set-and-clear
+  (testing "::set-column-visibility-setting-draft updates :column-defaults/:column-locks in draft"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+
+    (rf/dispatch-sync [::user-settings/init])
+    (setup/respond-success! (example-response))
+
+    ;; Set a lock to false (hidden)
+    (rf/dispatch-sync [::user-settings/set-column-visibility-setting-draft
+                       :expenses
+                       :notes
+                       {:kind :lock :value false}])
+    (is (= false (get-in @rf-db/app-db
+                    [:admin :user-settings :draft :view-options :expenses :column-locks :notes])))
+
+    ;; inherit means remove from both defaults and locks
+    (rf/dispatch-sync [::user-settings/set-column-visibility-setting-draft
+                       :expenses
+                       :notes
+                       {:kind :inherit}])
+    (is (nil? (get-in @rf-db/app-db
+                [:admin :user-settings :draft :view-options :expenses :column-defaults :notes])))
+    (is (nil? (get-in @rf-db/app-db
+                [:admin :user-settings :draft :view-options :expenses :column-locks :notes])))))
 
 (deftest toggle-column-visibility-updates-default-hidden-columns
   (testing "::toggle-column-visibility-draft edits :default-hidden-columns (inverted schema)"
@@ -97,7 +137,10 @@
     (rf/dispatch-sync [::user-settings/init])
     (setup/respond-success! (example-response))
 
-    (rf/dispatch-sync [::user-settings/set-display-setting-draft :expenses :show-edit? false])
+    (rf/dispatch-sync [::user-settings/set-display-setting-draft
+                       :expenses
+                       :show-edit?
+                       {:kind :default :value false}])
     (rf/dispatch-sync [::user-settings/save])
 
     (let [req (setup/last-http-request)
@@ -106,16 +149,18 @@
       (is (= "/admin/api/settings/user-ui-config" (:uri req)))
       (is (= #{:entities :view-options :form-fields :table-columns}
             (set (keys payload))))
-      (is (= false (get-in payload [:view-options :expenses :display-settings :show-edit?]))))
+      (is (= false (get-in payload [:view-options :expenses :display-defaults :show-edit?]))))
 
     ;; Simulate backend returning the updated config
     (setup/respond-success!
       (example-response
-        {:view-options {:expenses {:display-settings {:show-edit? false
-                                                      :show-delete? false}}}}))
+        {:view-options {:expenses {:display-defaults {:show-edit? false}
+                                   :display-locks {:show-delete? false}
+                                   :column-defaults {:notes false}
+                                   :column-locks {:purchased_at true}}}}))
 
     (let [db @rf-db/app-db]
-      (is (= false (get-in db [:domain :config :view-options :expenses :display-settings :show-edit?])))
+      (is (= false (get-in db [:domain :config :view-options :expenses :display-defaults :show-edit?])))
       (is (false? (get-in db [:admin :user-settings :saving?] false)))
       (is (number? (get-in db [:admin :user-settings :last-saved])))
       (is (= (get-in db [:admin :user-settings :draft])

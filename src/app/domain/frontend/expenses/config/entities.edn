@@ -1,2 +1,1 @@
-{:expenses
- {:title "My Expenses"}}
+{:expenses {:title "My Expenses"}}

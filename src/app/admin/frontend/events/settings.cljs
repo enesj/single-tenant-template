@@ -16,6 +16,15 @@
   [error]
   (= 401 (or (:status error) (get-in error [:response :status]))))
 
+(defn- display-setting-key?
+  "True when the key is one of the list-view display toggles.
+
+  In the new schema, these live under :display-defaults / :display-locks.
+  (Historically they were top-level keys in view-options.edn.)"
+  [k]
+  (and (keyword? k)
+    (re-matches #"show-.*\?" (name k))))
+
 ;; =============================================================================
 ;; Load View Options from Backend
 ;; =============================================================================
@@ -53,10 +62,103 @@
   ::set-view-option-draft
   (fn [db [_ entity-name setting-key new-value]]
     (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))]
-      (if (nil? new-value)
-        (update-in db [:admin :settings :view-options entity-kw] dissoc setting-kw)
-        (assoc-in db [:admin :settings :view-options entity-kw setting-kw] new-value)))))
+          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
+          display? (display-setting-key? setting-kw)
+          base-path [:admin :settings :view-options entity-kw]]
+      (cond
+        (and display? (nil? new-value))
+        (update-in db (conj base-path :display-locks) (fnil dissoc {}) setting-kw)
+
+        display?
+        (assoc-in db (conj base-path :display-locks setting-kw) new-value)
+
+        (nil? new-value)
+        (update-in db base-path dissoc setting-kw)
+
+        :else
+        (assoc-in db (conj base-path setting-kw) new-value)))))
+
+;; =============================================================================
+;; Display toggles draft editing (explicit defaults vs locks)
+;; =============================================================================
+
+;; new-state schema:
+;; - {:kind :inherit}
+;; - {:kind :default :value boolean}
+;; - {:kind :lock :value boolean}
+(rf/reg-event-db
+  ::set-display-setting-draft
+  (fn [db [_ entity-name setting-key new-state]]
+    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
+          kind (:kind new-state)
+          value (:value new-state)
+          defaults-path [:admin :settings :view-options entity-kw :display-defaults]
+          locks-path [:admin :settings :view-options entity-kw :display-locks]]
+      (cond
+        (or (nil? entity-kw) (nil? setting-kw) (not (display-setting-key? setting-kw)))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil dissoc {}) setting-kw)
+          (update-in locks-path (fnil dissoc {}) setting-kw))
+
+        (and (= kind :default) (boolean? value))
+        (-> db
+          ;; A default only applies when not locked.
+          (update-in locks-path (fnil dissoc {}) setting-kw)
+          (assoc-in (conj defaults-path setting-kw) value))
+
+        (and (= kind :lock) (boolean? value))
+        (-> db
+          ;; A lock supersedes any default.
+          (update-in defaults-path (fnil dissoc {}) setting-kw)
+          (assoc-in (conj locks-path setting-kw) value))
+
+        :else
+        db))))
+
+;; =============================================================================
+;; Column visibility draft editing (explicit defaults vs locks)
+;; =============================================================================
+
+;; new-state schema:
+;; - {:kind :inherit}
+;; - {:kind :default :value boolean}
+;; - {:kind :lock :value boolean}
+(rf/reg-event-db
+  ::set-column-visibility-setting-draft
+  (fn [db [_ entity-name column-key new-state]]
+    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+          column-kw (if (keyword? column-key) column-key (keyword column-key))
+          kind (:kind new-state)
+          value (:value new-state)
+          defaults-path [:admin :settings :view-options entity-kw :column-defaults]
+          locks-path [:admin :settings :view-options entity-kw :column-locks]]
+      (cond
+        (or (nil? entity-kw) (nil? column-kw))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil dissoc {}) column-kw)
+          (update-in locks-path (fnil dissoc {}) column-kw))
+
+        (and (= kind :default) (boolean? value))
+        (-> db
+          ;; A default only applies when not locked.
+          (update-in locks-path (fnil dissoc {}) column-kw)
+          (assoc-in (conj defaults-path column-kw) value))
+
+        (and (= kind :lock) (boolean? value))
+        (-> db
+          ;; A lock supersedes any default.
+          (update-in defaults-path (fnil dissoc {}) column-kw)
+          (assoc-in (conj locks-path column-kw) value))
+
+        :else
+        db))))
 
 (rf/reg-event-db
   ::reset-view-options-draft
@@ -118,11 +220,16 @@
   ::update-entity-setting
   (fn [{:keys [db]} [_ entity-name setting-key new-value]]
     (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))]
-      {:db (-> db
-             (assoc-in [:admin :settings :saving?] true)
-             ;; Optimistically update the local state
-             (assoc-in [:admin :settings :view-options entity-kw setting-kw] new-value))
+          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
+          display? (display-setting-key? setting-kw)
+          base-path [:admin :settings :view-options entity-kw]
+          db' (cond
+                display?
+                (assoc-in db (conj base-path :display-locks setting-kw) new-value)
+
+                :else
+                (assoc-in db (conj base-path setting-kw) new-value))]
+      {:db (assoc-in db' [:admin :settings :saving?] true)
        :http-xhrio (admin-http/admin-patch
                      {:uri "/admin/api/settings/entity"
                       :params {:entity-name (name entity-kw)
@@ -137,7 +244,11 @@
     (log/info "Setting updated successfully" {:entity entity-kw :setting setting-kw :value new-value})
     ;; Also update the config-loader cache so components pick up the change
     (let [current-options (config-loader/get-all-view-options)
-          updated-options (assoc-in current-options [entity-kw setting-kw] new-value)]
+          display? (display-setting-key? setting-kw)
+          path (if display?
+                 [entity-kw :display-locks setting-kw]
+                 [entity-kw setting-kw])
+          updated-options (assoc-in current-options path new-value)]
       (config-loader/register-preloaded-config! :view-options updated-options))
     {:db (-> db
            (assoc-in [:admin :settings :saving?] false)
@@ -163,11 +274,16 @@
   ::remove-entity-setting
   (fn [{:keys [db]} [_ entity-name setting-key]]
     (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))]
-      {:db (-> db
-             (assoc-in [:admin :settings :saving?] true)
-             ;; Optimistically remove from local state
-             (update-in [:admin :settings :view-options entity-kw] dissoc setting-kw))
+          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
+          display? (display-setting-key? setting-kw)
+          base-path [:admin :settings :view-options entity-kw]
+          db' (cond
+                display?
+                (update-in db (conj base-path :display-locks) (fnil dissoc {}) setting-kw)
+
+                :else
+                (update-in db base-path dissoc setting-kw))]
+      {:db (assoc-in db' [:admin :settings :saving?] true)
        :http-xhrio (admin-http/admin-delete
                      {:uri "/admin/api/settings/entity"
                       :params {:entity-name (name entity-kw)
@@ -181,7 +297,10 @@
     (log/info "Setting removed successfully" {:entity entity-kw :setting setting-kw})
     ;; Also update the config-loader cache
     (let [current-options (config-loader/get-all-view-options)
-          updated-options (update current-options entity-kw dissoc setting-kw)]
+          display? (display-setting-key? setting-kw)
+          updated-options (if display?
+                            (update-in current-options [entity-kw :display-locks] (fnil dissoc {}) setting-kw)
+                            (update current-options entity-kw dissoc setting-kw))]
       (config-loader/register-preloaded-config! :view-options updated-options))
     {:db (-> db
            (assoc-in [:admin :settings :saving?] false)
@@ -391,7 +510,7 @@
   ::view-options-dirty?
   (fn [db _]
     (not= (safe-map (get-in db [:admin :settings :view-options]))
-          (safe-map (get-in db [:admin :settings :view-options-saved])))))
+      (safe-map (get-in db [:admin :settings :view-options-saved])))))
 
 ;; =============================================================================
 ;; Subscriptions

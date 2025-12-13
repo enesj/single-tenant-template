@@ -2,7 +2,6 @@
   "Simplified helpers for vector-based column configuration."
   (:require
     [app.admin.frontend.config.loader :as admin-config]
-    [app.admin.frontend.subs.config :as admin-subs]
     [app.template.frontend.events.list.settings :as settings-events]))
 
 (defn vector-config?
@@ -13,41 +12,54 @@
     (catch :default _ false)))
 
 (defn visible-columns-source
-  "Return the appropriate subscription vector for visible columns."
-  [vector-mode? entity-kw]
-  (if vector-mode?
-    [::admin-subs/visible-columns entity-kw]
-    [:app.template.frontend.subs.ui/visible-columns entity-kw]))
+  "Return the subscription vector for visible columns.
+
+  NOTE: We intentionally use the unified `:app.template.frontend.subs.ui/visible-columns`
+  subscription in both modes so policy defaults/locks apply consistently.
+  `vector-mode?` is still accepted so callers/tests can gate other vector-config behavior."
+  [_vector-mode? entity-kw]
+  [:app.template.frontend.subs.ui/visible-columns entity-kw])
 
 (defn get-visible-columns
-  "Get visible columns directly as vector (no conversion needed!)"
+  "Get visible columns as a boolean map.
+
+  In legacy/template mode, the source is already a boolean map.
+
+  In vector-config mode, the source may be either:
+  - a boolean map (preferred; unified subs already resolved), or
+  - a vector of column keys (older admin vector-config shape)."
   [vector-mode? entity-kw raw-value]
   (if-not vector-mode?
     ;; Legacy/template mode keeps boolean-map as-is
     (or raw-value {})
-    ;; Vector-config mode: convert vector of keys -> boolean map for all available columns
-    (let [normalize (fn [k]
-                      (cond
-                        (nil? k) nil
-                        (keyword? k) k
-                        (string? k) (keyword k)
-                        :else (keyword (str k))))
-          visible-set (into #{} (keep normalize) (or raw-value []))
-          available (or (admin-config/get-available-columns entity-kw) [])
-          ;; Build a complete boolean map so table/rows can resolve definitively
-          base-map (into {}
-                     (map (fn [k]
-                            (let [kk (normalize k)]
-                              [kk (contains? visible-set kk)]))
-                       available))
-          ;; Ensure always-visible columns cannot be false
-          adjusted (reduce (fn [m k]
-                             (if (admin-config/is-always-visible? entity-kw k)
-                               (assoc m k true)
-                               m))
-                     base-map
-                     (keep normalize available))]
-      adjusted)))
+    (cond
+      (map? raw-value)
+      raw-value
+
+      ;; Vector-config mode: convert vector of keys -> boolean map for all available columns
+      :else
+      (let [normalize (fn [k]
+                        (cond
+                          (nil? k) nil
+                          (keyword? k) k
+                          (string? k) (keyword k)
+                          :else (keyword (str k))))
+            visible-set (into #{} (keep normalize) (or raw-value []))
+            available (or (admin-config/get-available-columns entity-kw) [])
+            ;; Build a complete boolean map so table/rows can resolve definitively
+            base-map (into {}
+                       (map (fn [k]
+                              (let [kk (normalize k)]
+                                [kk (contains? visible-set kk)]))
+                         available))
+            ;; Ensure always-visible columns cannot be false
+            adjusted (reduce (fn [m k]
+                               (if (admin-config/is-always-visible? entity-kw k)
+                                 (assoc m k true)
+                                 m))
+                       base-map
+                       (keep normalize available))]
+        adjusted))))
 
 (defn toggle-column-event
   "Dispatch vector for toggling a column's visibility."

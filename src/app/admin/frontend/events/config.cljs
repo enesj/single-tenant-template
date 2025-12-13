@@ -81,6 +81,9 @@
                         (string? col) (keyword col)
                         :else (keyword (str col))))
           entity-key (keyword entity-name)
+          policy-locks (merge
+                         (get-in db [:admin :config :view-options entity-key :column-locks])
+                         (get-in db [:admin :settings :view-options entity-key :column-locks]))
           current-visible (->> (or (get-in db [:admin :config :table-columns entity-name :visible-columns])
                                  (get-in db [:admin :config :table-columns entity-name :default-visible-columns])
                                  [])
@@ -91,7 +94,8 @@
                         vec)
           column-name (normalize column-name)
           always-visible (set (map normalize (get-in db [:admin :config :table-columns entity-name :always-visible] [])))]
-      (if (nil? column-name)
+      (if (or (nil? column-name)
+            (and (map? policy-locks) (contains? policy-locks column-name)))
         {:db db}
         (let [removing? (some #{column-name} current-visible)
             ;; Do not allow hiding always-visible columns

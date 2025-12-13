@@ -105,38 +105,128 @@
     (assoc-in db [:admin :user-settings :tab] tab)))
 
 ;; =============================================================================
-;; Draft editing: view-options defaults
+;; Draft editing: view-options (defaults + locks)
 ;; =============================================================================
 
+;; new-state schema:
+;; - {:kind :inherit}
+;; - {:kind :default :value boolean}
+;; - {:kind :lock :value boolean}
 (rf/reg-event-db
   ::set-display-setting-draft
-  (fn [db [_ entity setting-key new-value]]
+  (fn [db [_ entity setting-key new-state]]
     (let [entity-kw (normalize-kw entity)
           setting-kw (normalize-kw setting-key)
-          base-path [:admin :user-settings :draft :view-options entity-kw :display-settings]]
+          defaults-path [:admin :user-settings :draft :view-options entity-kw :display-defaults]
+          locks-path [:admin :user-settings :draft :view-options entity-kw :display-locks]
+          kind (:kind new-state)
+          value (:value new-state)]
       (cond
         (or (nil? entity-kw) (nil? setting-kw))
         db
 
-        (nil? new-value)
-        (update-in db base-path dissoc setting-kw)
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil dissoc {}) setting-kw)
+          (update-in locks-path (fnil dissoc {}) setting-kw))
+
+        (and (= kind :default) (boolean? value))
+        (-> db
+          ;; A default only applies when not locked.
+          (update-in locks-path (fnil dissoc {}) setting-kw)
+          (assoc-in (conj defaults-path setting-kw) value))
+
+        (and (= kind :lock) (boolean? value))
+        (-> db
+          ;; A lock supersedes any default.
+          (update-in defaults-path (fnil dissoc {}) setting-kw)
+          (assoc-in (conj locks-path setting-kw) value))
 
         :else
-        (assoc-in db (conj base-path setting-kw) new-value)))))
+        db))))
+
+;; =============================================================================
+;; Draft editing: column visibility policy (defaults + locks)
+;; =============================================================================
+
+;; new-state schema:
+;; - {:kind :inherit}
+;; - {:kind :default :value boolean}
+;; - {:kind :lock :value boolean}
+(rf/reg-event-db
+  ::set-column-visibility-setting-draft
+  (fn [db [_ entity column-key new-state]]
+    (let [entity-kw (normalize-kw entity)
+          column-kw (normalize-kw column-key)
+          defaults-path [:admin :user-settings :draft :view-options entity-kw :column-defaults]
+          locks-path [:admin :user-settings :draft :view-options entity-kw :column-locks]
+          kind (:kind new-state)
+          value (:value new-state)]
+      (cond
+        (or (nil? entity-kw) (nil? column-kw))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil dissoc {}) column-kw)
+          (update-in locks-path (fnil dissoc {}) column-kw))
+
+        (and (= kind :default) (boolean? value))
+        (-> db
+          ;; A default only applies when not locked.
+          (update-in locks-path (fnil dissoc {}) column-kw)
+          (assoc-in (conj defaults-path column-kw) value))
+
+        (and (= kind :lock) (boolean? value))
+        (-> db
+          ;; A lock supersedes any default.
+          (update-in defaults-path (fnil dissoc {}) column-kw)
+          (assoc-in (conj locks-path column-kw) value))
+
+        :else
+        db))))
 
 (rf/reg-event-db
   ::reset-entity-display-draft
   (fn [db [_ entity]]
     (let [entity-kw (normalize-kw entity)
-          saved-display (get-in db [:admin :user-settings :saved :view-options entity-kw :display-settings])]
+          saved-defaults (get-in db [:admin :user-settings :saved :view-options entity-kw :display-defaults])
+          saved-locks (get-in db [:admin :user-settings :saved :view-options entity-kw :display-locks])
+          saved-col-defaults (get-in db [:admin :user-settings :saved :view-options entity-kw :column-defaults])
+          saved-col-locks (get-in db [:admin :user-settings :saved :view-options entity-kw :column-locks])]
       (cond
-        (nil? entity-kw) db
-
-        (map? saved-display)
-        (assoc-in db [:admin :user-settings :draft :view-options entity-kw :display-settings] saved-display)
+        (nil? entity-kw)
+        db
 
         :else
-        (update-in db [:admin :user-settings :draft :view-options entity-kw] dissoc :display-settings)))))
+        (-> db
+          (cond->
+            (map? saved-defaults)
+            (assoc-in [:admin :user-settings :draft :view-options entity-kw :display-defaults] saved-defaults)
+
+            (not (map? saved-defaults))
+            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :display-defaults))
+
+          (cond->
+            (map? saved-locks)
+            (assoc-in [:admin :user-settings :draft :view-options entity-kw :display-locks] saved-locks)
+
+            (not (map? saved-locks))
+            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :display-locks))
+
+          (cond->
+            (map? saved-col-defaults)
+            (assoc-in [:admin :user-settings :draft :view-options entity-kw :column-defaults] saved-col-defaults)
+
+            (not (map? saved-col-defaults))
+            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :column-defaults))
+
+          (cond->
+            (map? saved-col-locks)
+            (assoc-in [:admin :user-settings :draft :view-options entity-kw :column-locks] saved-col-locks)
+
+            (not (map? saved-col-locks))
+            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :column-locks)))))))
 
 ;; =============================================================================
 ;; Draft editing: table-columns defaults (inverted schema)
