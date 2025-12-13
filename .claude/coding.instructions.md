@@ -10,7 +10,7 @@
 
 ## Migrations Workflow
 
-⚠️ **IMPORTANT: Read the migrations documentation first.** Search for "migrations" in MCP Vector Search to find the complete guide before making any changes. Key docs: `docs/migrations/complete-guide.md`, `docs/migrations/migration-overview.md`.
+⚠️ **IMPORTANT: Read the migrations documentation first.** Use Morph MCP (Warp Grep) to search `docs/migrations/**` (and related docs) before making any changes. Key docs: `docs/migrations/complete-guide.md`, `docs/migrations/migration-overview.md`.
 
 **Quick workflow**: Edit canonical EDN under `resources/db/{template,shared}` → run REPL helpers via `src/app/migrations/simple_repl.clj` → never hand-edit `resources/db/migrations/*`.
 

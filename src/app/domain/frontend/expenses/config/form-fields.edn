@@ -1,0 +1,3 @@
+{:expenses
+ {:create-fields [:purchased_at :supplier_id :payer_id :currency :total_amount :notes]
+  :edit-fields [:purchased_at :supplier_id :payer_id :currency :total_amount :notes]}}

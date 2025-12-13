@@ -1,0 +1,13 @@
+{:expenses
+ {:display-settings
+  {:show-select? false
+   :show-edit? true
+   :show-delete? false
+   :show-filtering? true
+   :show-pagination? true
+   :show-add-button? true
+   :show-batch-edit? false
+   :show-batch-delete? false
+   :show-timestamps? true
+   :show-highlights? true
+   :per-page 25}}}

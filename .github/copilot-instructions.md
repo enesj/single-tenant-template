@@ -4,7 +4,7 @@
 
 ### Documentation-First Approach
 
-- **At the beginning of any new task**, use MCP Vector Search to read relevant documentation before writing code.
+- **At the beginning of any new task**, use Morph MCP (Warp Grep) to find and read relevant documentation before writing code.
 - Search for concepts, patterns, or domain terms related to the task (e.g., "authentication", "migrations", "validation", "entity store").
 - This ensures you follow established patterns and avoid reinventing solutions that already exist in the codebase.
 
@@ -25,7 +25,7 @@
   - Frontend event flow or performance issues → **reframe-events-analysis**.
   - Backend errors, build failures, or compile problems → **system-logs**.
 - Be documentation-first when stuck:
-  - Use MCP Vector Search to consult project docs before inventing new patterns.
+  - Use Morph MCP (Warp Grep) to consult project docs before inventing new patterns.
 - Add or improve logging when debugging:
   - Prefer small, targeted logs around the failing path over large refactors; keep high-value logs.
 - After backend changes:
@@ -55,7 +55,7 @@
 
 ## Migrations Workflow
 
-⚠️ **IMPORTANT: Read the migrations documentation first.** Search for "migrations" in MCP Vector Search to find the complete guide before making any changes. Key docs: `docs/migrations/complete-guide.md`, `docs/migrations/migration-overview.md`.
+⚠️ **IMPORTANT: Read the migrations documentation first.** Use Morph MCP (Warp Grep) to search `docs/migrations/**` (and related docs) before making any changes. Key docs: `docs/migrations/complete-guide.md`, `docs/migrations/migration-overview.md`.
 
 **Quick workflow**: Edit canonical EDN under `resources/db/{template,shared}` → run REPL helpers via `src/app/migrations/simple_repl.clj` → never hand-edit `resources/db/migrations/*`.
 

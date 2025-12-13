@@ -3,7 +3,7 @@
 description: "Research repo docs and draft a high-quality next-session prompt into a root markdown file."
 argument-hint: "PROMPT=\"short text about the upcoming work\""
 
-You are creating a reusable research workflow to prep a strong working prompt for the *next* Agent session. Follow these steps exactly; adapt only the PROMPT argument. Always read the relevant docs at the start **and again after each implementation phase** to refresh context. Default to MCP server tools (skills, vector search, eval) whenever available instead of local/native tools. At the start, inspect available skills under `.claude/skills` (via MCP Vector Search or listing) and use them when applicable.
+You are creating a reusable research workflow to prep a strong working prompt for the *next* Agent session. Follow these steps exactly; adapt only the PROMPT argument. Always read the relevant docs at the start **and again after each implementation phase** to refresh context. Default to MCP tools (skills, Warp Grep search, eval) whenever available instead of local/native tools. At the start, inspect available skills under `.claude/skills` (via Morph MCP / Warp Grep or listing) and use them when applicable.
 
 ## 1) Inputs
 - `PROMPT` (required): phrase for the upcoming work (e.g., "admin users pagination", "add domain X backend", "harden login events export").
@@ -16,7 +16,7 @@ You are creating a reusable research workflow to prep a strong working prompt fo
   - Frontend: `docs/frontend/app-shell.md`, `docs/frontend/admin-panel-single-tenant.md`, `docs/frontend/feature-guides/admin.md`, `docs/frontend/template-component-integration.md`.
   - Ops/dev: `docs/operations/dev-environment.md`.
   - DB/migrations: `docs/migrations/migration-overview.md`, `resources/db/models.edn`.
-- Use MCP Vector Search when helpful: `{ "query": "<TOPIC or namespace>", "metadata": { "section": "skills|backend|frontend|operations|migrations|architecture" } }`.
+- Use Morph MCP (Warp Grep) to search the repo for TOPIC/namespace references (docs + skills), then open the returned files and read the relevant sections.
 - Use `rg` for code pointers (e.g., `rg -n "<keyword>" src docs resources`).
 
 ## 3) Extract essentials (short notes; re-check docs mid-implementation)

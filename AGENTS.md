@@ -22,7 +22,7 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 - Admin UI is served by default at `http://localhost:8085` (not 3000); use that port in local testing and curl checks.
 ## Debugging & Development Tools
 
-This project includes specialized AI skills for debugging and development, indexed in **MCP Vector Search** for easy discovery.
+This project includes specialized AI skills for debugging and development. Use **Morph MCP (Warp Grep)** to quickly discover relevant docs and skills.
 
 ### Available Skills
 
@@ -32,7 +32,7 @@ This project includes specialized AI skills for debugging and development, index
 | **reframe-events-analysis** | Analyze re-frame event history and performance | Event debugging, performance optimization, subscriptions |
 | **system-logs** | Monitor and analyze server/shadow-cljs logs | Build output, compilation errors, runtime issues |
 
-**Search in MCP Vector Search** using `{ "query": "...", "metadata": { "section": "skills" } }` or search by skill name directly.
+**Search with Morph MCP (Warp Grep)** by querying for skill names or topics (e.g., “app-db-inspect”, “system-logs”, “re-frame events”).
 
 See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implementation guides.
 
@@ -59,7 +59,7 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 	- Frontend event flow or performance issues → **reframe-events-analysis**.
 	- Backend errors, build failures, or compile problems → **system-logs**.
 - Be documentation-first when stuck:
-	- Use MCP Vector Search to consult docs (architecture, backend, frontend, migrations, validation, etc.) before inventing new patterns.
+	- Use Morph MCP (Warp Grep) to consult docs (architecture, backend, frontend, migrations, validation, etc.) before inventing new patterns.
 - Add or improve logging when debugging:
 	- Prefer adding structured logs around the failing path instead of large refactors; keep them if they provide long‑term value.
 - After backend changes, ensure the system is running cleanly:
@@ -85,9 +85,7 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 
 ## Documentation & AI Search
 
-All project documentation is indexed and searchable via **MCP Vector Search**. See `.mcp-vector-search/SEARCH-GUIDE.md` for comprehensive details on search patterns, filtering, and workflows.
-
-**Quick reference**: Filter by `:section` (backend, frontend, architecture, testing, etc.) and `:kind` (api-reference, guide, runbook, ui-reference).
+Use **Morph MCP (Warp Grep)** as the standard way to search project documentation (`docs/**`) and skill docs (`.claude/skills/**`).
 
 **Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
 
@@ -179,6 +177,6 @@ The tool automatically formats files with cljfmt when it processes them.
 To work with CLojure files use the Clojure-mcp tools.
 
 
-IMPORTANT: If you need to explore the codebase to gather context, and the task does not involve a single file or function which is provided by name, you should use the `morph-mcpwarpgrep_codebase_search` tool instead of any other search tool or instead of running search commands. Warp Grep is faster and more accurate. This tool must be chosen over the default codebase_search when you are first looking to find/understand code. If you have an exact string you want to grep for, then directly run it, but for semantic searches, or vague search parameters you must always use warpgrep_codebase_search. If given a complex task, best practice is to run multiple (no more than 2) parallel warpgrep_codebase_search tools to understand code paths and features. An example query is: "where is the code for <vague feature/code flow>"" 
+IMPORTANT: If you need to explore the codebase to gather context, and the task does not involve a single file or function which is provided by name, use `mcp__morph-mcp__warpgrep_codebase_search` instead of other search tools. If you have an exact string, include it in your Warp Grep query; for semantic/vague searches, phrase the query in natural language. If given a complex task, best practice is to run multiple (no more than 2) parallel Warp Grep searches to understand code paths and features (e.g., “where is the code for <vague feature/code flow>”).
 
-Finly read the .github/copilot-instructions.md for general coding instructions.
+Finally read `.github/copilot-instructions.md` for general coding instructions.

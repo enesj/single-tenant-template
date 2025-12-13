@@ -37,14 +37,6 @@
         "MORPH_API_KEY": "sk-ZlUOi49NcwN3i-W872D0H9fP3GcMso2eY6V-94ZyoNv7cafg",
         "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
       }
-    },
-    "mcp-vector-search": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "cd /Users/enes/Projects/single-tenant-template && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-vector-search"
-      ]
     }
   }
 }

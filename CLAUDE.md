@@ -48,9 +48,7 @@ bb be-test | grep ERROR
 
 ## Documentation & AI Search
 
-All project documentation is indexed and searchable via **MCP Vector Search**. See `.mcp-vector-search/SEARCH-GUIDE.md` for comprehensive details on search patterns, filtering, and workflows.
-
-**Quick reference**: Filter by `:section` (backend, frontend, architecture, etc.) and `:kind` (api-reference, guide, runbook, ui-reference).
+Use **Morph MCP (Warp Grep)** as the standard way to search project documentation (`docs/**`) and skill docs (`.claude/skills/**`).
 
 **Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
 

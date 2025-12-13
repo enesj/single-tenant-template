@@ -16,14 +16,6 @@
       "env": {
         "HOME": "/tmp"
       }
-    },
-    "mcp-vector-search": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "cd /Users/enes/Projects/single-tenant-template && PATH=/opt/homebrew/bin:$PATH && clojure -X:mcp-vector-search"
-      ]
     }
   },
   "codex": {
