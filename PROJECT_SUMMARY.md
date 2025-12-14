@@ -66,31 +66,45 @@ test/                                         # Test files mirroring src/ struct
 ## Important Dependencies & Their Roles
 
 ### Backend Dependencies
-- **Ring** (v1.14.2): HTTP server abstraction and middleware
-- **next.jdbc** (v1.3.1048): Database connection and query building
-- **HikariCP** (v3.2.0): Connection pooling and performance
+- **Ring** (v1.15.3): HTTP server abstraction and middleware
+- **next.jdbc** (v1.3.1070): Database connection and query building
+- **HikariCP** (v3.3.0): Connection pooling and performance
 - **PostgreSQL** (v42.7.7): Primary database with RLS support
 - **aero** (v1.1.6): Configuration management with profile support
 - **buddy** (v1.12.0): Security (password hashing, JWT)
-- **reitit** (v0.9.1): Data validation and coercion
-- **timbre** (v6.6.2): Structured logging
-- **http-kit** (v2.8.0): HTTP client for external API calls
+- **reitit** (v0.9.2): Data validation and coercion
+- **timbre** (v6.8.0): Structured logging
+- **http-kit** (v2.8.1): HTTP client for external API calls
+- **cheshire** (v6.1.0): JSON serialization and parsing
+- **malli** (v0.20.0): Data schema validation
+- **spec-tools** (v0.10.8): Spec instrumentation and validation
+- **nREPL** (v1.5.1): Network REPL for Clojure development
+- **stripe-clojure** (v1.1.0): Stripe payment processing integration
 
 ### Frontend Dependencies
-- **Shadow-CLJS** (v3.1.7): ClojureScript compilation and hot reload
+- **Shadow-CLJS** (v3.3.4): ClojureScript compilation and hot reload
 - **re-frame** (v1.4.3): Frontend state management and event handling
-- **Uix** (v1.4.4): Modern ClojureScript UI library (React-like)
+- **Uix** (v1.4.8): Modern ClojureScript UI library (React-like)
 - **Tailwind CSS** (v4.0.0+): Utility-first CSS framework
 - **DaisyUI** (v4.0.0+): Component library built on Tailwind
 
 ### Development & Testing Tools
-- **Babashka** (v1.12.203): Fast Clojure scripting for automation
+- **Babashka** (v1.12.213): Fast Clojure scripting for automation
 - **Kaocha** (v1.91.1392): Backend test runner
-- **clj-kondo** (v2025.06.05): Static analysis and linting
+- **clj-kondo** (v2025.10.23): Static analysis and linting
 - **cljfmt** (v0.9.2): Code formatting
 - **Chrome DevTools MCP**: Browser automation and debugging integration
 - **Playwright** (v1.52.0): E2E browser testing
 - **Etaoin** (v1.1.43): Browser automation (alternative to Playwright)
+
+### Specialized MCP Skills
+- **app-db-inspect**: Inspect re-frame app-db state safely for debugging frontend state issues
+- **reframe-events-analysis**: Analyze re-frame event history and performance using browser tracing tools
+- **system-logs**: Monitor and analyze server logs and shadow-cljs build output
+- **clojure-mcp:create-update-project-summary**: Automatically creates or updates LLM-friendly project documentation
+
+### Custom Slash Commands
+- **/clear**: Clears the terminal screen for better visibility during development sessions
 
 ## Available Tools/APIs with Usage Examples
 

@@ -131,6 +131,22 @@ All paths are relative to `/admin/api`.
 - `GET /admin/api/expenses/reports/monthly` – monthly totals.
 - `GET /admin/api/expenses/reports/top-suppliers` – top suppliers (optional `limit`).
 
+### User Expenses API (protected via user auth)
+Mounted at `/api/v1/expenses` (defined in `app.domain.backend.expenses.routes.user-api`).
+
+- `GET /api/v1/expenses/summary` – Expense summary metrics.
+- `GET /api/v1/expenses/by-month` – Monthly spending breakdown.
+- `GET /api/v1/expenses/by-supplier` – Supplier spending breakdown.
+- `GET /api/v1/expenses/suppliers` – List active suppliers.
+- `GET /api/v1/expenses/payers` – List active payment methods.
+
+**CRUD Operations**
+- `GET /api/v1/expenses` – List user expenses.
+- `POST /api/v1/expenses` – Create new expense.
+- `GET /api/v1/expenses/:id` – Fetch specific expense.
+- `PUT /api/v1/expenses/:id` – Update expense.
+- `DELETE /api/v1/expenses/:id` – Delete expense.
+
 ### Dev Helpers (no auth; for local debugging only)
 - `GET /admin/api/dev-get-rate-limits` – inspect rate-limit state.
 - `POST /admin/api/dev-clear-rate-limits` – reset rate limits.

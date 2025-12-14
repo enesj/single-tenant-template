@@ -82,6 +82,25 @@ Forms are configured per entity in `src/app/admin/frontend/config/form-fields.ed
 - Required field validation
 - Field-specific configuration (type, validation rules)
 
+## User Expenses Interface
+
+In addition to the admin panel, the expenses domain provides a user-facing interface for personal expense management.
+
+### Routes
+
+- `/expenses` - Personal expense dashboard and list
+- `/expenses/new` - Quick expense entry
+- `/expenses/upload` - Receipt upload wizard
+- `/expenses/reports` - Personal spending reports
+
+### Key Features
+
+1. **Dashboard**: Overview of recent spending and monthly trends (`expenses_dashboard.cljs`)
+2. **Quick Entry**: Simplified form for rapid expense recording (`expense_new.cljs`)
+3. **Smart Upload**: Drag-and-drop receipt upload with OCR status tracking (`expense_upload.cljs`)
+4. **Detail View**: Interactive expense details with inline editing (`expense_detail.cljs`)
+5. **Reports**: Visual breakdown of expenses by category and supplier (`expense_reports.cljs`)
+
 ## Backend Implementation
 
 ### API Endpoints

@@ -18,6 +18,7 @@ app.admin.frontend.*
 │   ├── audit.cljs      ; audit log table
 │   └── login_events.cljs ; global login events table
 ├── components/         ; layout, tables, stats, monitoring widgets
+│   └── sidebar.cljs    ; main navigation with DaisyUI menu
 └── adapters/
     ├── users.cljs
     ├── audit.cljs
@@ -62,26 +63,16 @@ Admin operations require the admin role:
 
 ## Admin Settings
 
-The admin settings page (`/admin/settings`) provides comprehensive UI configuration management with three main sections:
+The admin settings page (`/admin/settings`) provides comprehensive UI configuration management using a **unified architecture** that handles both admin-facing and user-facing configurations.
 
-### View Options
-Configure display toggles and action buttons for entity list views:
-- **Display Settings**: Control edit/delete buttons, highlights, selection, timestamps, pagination
-- **Action Settings**: Configure add button, batch edit, and batch delete visibility
+See the complete guide in `docs/frontend/admin-settings.md`.
 
-### Form Fields
-Manage form field configurations per entity:
-- **Create Fields**: Define which fields appear in creation forms
-- **Edit Fields**: Configure fields for edit forms
-- **Required Fields**: Set mandatory fields for form validation
-- **Field Configuration**: Set field types, validation rules, and placeholder text
-
-### Table Columns
-Configure table column behavior:
-- **Default Hidden Columns**: Set columns that are hidden by default
-- **Always Visible Columns**: Force certain columns to always show
-- **Unfilterable/Unsortable Columns**: Disable filtering or sorting for specific columns
-- **Column Widths**: Configure column display widths
+### Key Features
+- **Unified Interface**: Toggle between Admin and User scopes in one UI.
+- **View Options**: Control display toggles and action buttons (edit/delete/select).
+- **Form Fields**: Configure field existence, requirements, and validation.
+- **Table Columns**: manage visibility, ordering, widths, and sorting/filtering.
+- **User Defaults**: Set default view states and lock controls for end-users.
 
 ## User Management (Quick Reference)
 
