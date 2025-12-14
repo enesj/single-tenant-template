@@ -30,6 +30,8 @@
   (fn [{:keys [db]} [response]]
     (let [models-data (:models-data response)
           validation-specs (:validation-specs response)
+          domain-ui-config (when (map? (:domain-ui-config response))
+                             (:domain-ui-config response))
           ;; Use models-data to populate entities and lists if available.
           ;; Only run the full `make-db-with-models-data` initialization when
           ;; the entities map is still empty; if entities already contain data
@@ -68,7 +70,8 @@
 
           final-db (cond-> db-with-defaults
                      models-data (assoc :models-data models-data)
-                     validation-specs (assoc :validation-specs validation-specs))]
+                     validation-specs (assoc :validation-specs validation-specs)
+                     domain-ui-config (update-in [:domain :config] (fnil merge {}) domain-ui-config))]
 
       {:db final-db
        :dispatch [::entity-specs/initialize-entity-specs]})))

@@ -112,7 +112,15 @@
 (defui admin-entity-editor
   "Editor for a single admin entity's settings."
   [{:keys [entity-kw settings on-change on-column-change]}]
-  (let [table-config (use-subscribe [:admin/table-config entity-kw])]
+  (let [table-config-from-ui (use-subscribe [:admin/table-config entity-kw])
+        table-configs-from-settings (use-subscribe [::admin-settings-events/table-columns])
+        table-config-from-settings (get table-configs-from-settings entity-kw)
+        ;; Prefer the UI config cache when it has usable metadata, but fall back to
+        ;; the settings API payload (loaded by ::admin-settings-events/load-table-columns)
+        ;; so Columns editing works even if the UI config loader hasn't populated yet.
+        table-config (if (seq (:available-columns table-config-from-ui))
+                       table-config-from-ui
+                       table-config-from-settings)]
     ($ views/admin-entity-settings-card
       {:entity-name entity-kw
        :settings settings

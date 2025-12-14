@@ -7,6 +7,8 @@
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.http :as http]
     [cheshire.core :as json]
+    [clojure.edn :as edn]
+    [clojure.java.io :as io]
     [java-time.api :as time]
     [malli.transform :as mt]
     [muuntaja.core :as m]
@@ -16,6 +18,38 @@
     [reitit.ring.middleware.parameters :as parameters]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
+
+(def ^:private expenses-domain-ui-config-paths
+  {:entities "src/app/domain/frontend/expenses/config/entities.edn"
+   :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
+   :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
+   :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"})
+
+(defn- safe-read-edn-file
+  "Read an EDN file from disk. Returns {} when missing/unreadable.
+
+  These files are edited at runtime via /admin/user-settings, so we load them
+  dynamically to avoid shadow-cljs treating them as build inputs."
+  [path]
+  (try
+    (let [f (io/file path)]
+      (if (.exists f)
+        (edn/read-string (slurp f))
+        {}))
+    (catch Exception e
+      (log/warn e "Failed to read domain UI config EDN" {:path path})
+      {})))
+
+(defn- load-expenses-domain-ui-config
+  "Load the expenses domain UI config bundle.
+
+  Shape matches what admin /admin/api/settings/user-ui-config returns:
+  {:entities {...} :view-options {...} :form-fields {...} :table-columns {...}}"
+  []
+  (into {}
+    (map (fn [[k path]]
+           [k (safe-read-edn-file path)]))
+    expenses-domain-ui-config-paths))
 
 
 (defn- compile-schema
@@ -126,7 +160,11 @@
                                                             safe-models-data))
                                         frontend-config {:entity-configs {}
                                                          :models-data safe-models-data
-                                                         :validation-specs processed-models}]
+                                                         :validation-specs processed-models
+                                                         ;; Domain-owned UI config (user-facing list pages).
+                                                         ;; This is loaded dynamically so editing these EDNs via the
+                                                         ;; admin settings UI does not trigger shadow rebuilds.
+                                                         :domain-ui-config (load-expenses-domain-ui-config)}]
                                     (response/response frontend-config))
                                   (catch Exception e
                                     (log/error e "ERROR in config handler")

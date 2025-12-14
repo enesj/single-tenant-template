@@ -11,18 +11,20 @@
   {:default-page-size 50, :available-page-sizes [25 50 100]},
   :default-sort {:field "created-at", :direction "desc"}},
  :admins
- {:display-locks
-  {:show-select? true, :show-pagination? true, :show-filtering? true},
+ {:display-defaults {},
   :search-fields ["email" "full-name"],
+  :column-defaults {},
   :filters
   {:role {:type "select", :options ["owner" "admin" "support"]},
    :status {:type "select", :options ["active" "suspended"]}},
+  :column-locks {:full-name false},
   :export-formats ["csv" "json"],
   :bulk-actions [],
   :pagination
   {:default-page-size 25, :available-page-sizes [10 25 50]},
   :default-sort {:field "created-at", :direction "desc"},
-  :display-defaults {:show-delete? false}},
+  :display-locks
+  {:show-select? true, :show-pagination? true, :show-filtering? true}},
  :articles
  {:display-locks
   {:show-delete? true,
@@ -134,5 +136,5 @@
   :pagination
   {:default-page-size 25, :available-page-sizes [25 50 100]},
   :default-sort {:field "created-at", :direction "desc"},
-  :display-locks
-  {:show-add-button? false, :show-batch-edit? true, :show-edit? true}}}
+  :display-locks {:show-batch-edit? true, :show-edit? true},
+  :display-defaults {:show-add-button? true}}}

@@ -12,7 +12,7 @@ This plan proposes a simpler, more explicit, and easier-to-reason-about system f
   - Legacy routes redirect to it:
     - `http://localhost:8085/admin/settings`
     - `http://localhost:8085/admin/amin-settings`
-- Next: user settings page (to implement): `http://localhost:8085/admin/user-settings`
+- User settings page: `http://localhost:8085/admin/user-settings` (implemented; unified settings UI)
 
 ---
 
@@ -460,7 +460,7 @@ This page is intentionally **not** an editor for admin-only entities (Users/Admi
 
 - Domain-owned UI config lives under `src/app/domain/frontend/expenses/config/`
   - `entities.edn`
-  - `view-options.edn` (domain schema: `:display-settings` = defaults; no locks)
+  - `view-options.edn` (domain schema: `:display-defaults` + `:display-locks`)
   - `table-columns.edn`
   - `form-fields.edn`
 
@@ -490,24 +490,27 @@ This page is intentionally **not** an editor for admin-only entities (Users/Admi
 
 **Key files added/changed (high signal):**
 
-- `src/app/admin/frontend/pages/user_settings.cljs` — `/admin/user-settings` page UI (draft + Save/Discard)
-- `src/app/admin/frontend/events/user_settings.cljs` — load/save events for domain UI config
+- `src/app/admin/frontend/pages/unified_settings.cljs` — unified settings page used by both `/admin/admin-settings` and `/admin/user-settings`
+- `src/app/admin/frontend/events/unified_settings.cljs` — unified state management (draft + load/save)
 - `src/app/template/backend/routes/admin/settings.clj` — GET/PUT `/admin/api/settings/user-ui-config`
 - `src/app/admin/frontend/components/layout.cljs` — sidebar link placement
 - `src/app/template/frontend/subs/ui.cljs` — route-aware config source selection (admin vs domain)
+
+**Resolved regression (2025-12-14):** `/admin/user-settings` toggles were unclickable because `:editing?` was not passed to `user-entity-settings-card` in `user-entity-editor`.
 
 **Important behavior note (why “defaults not applied” can happen):**
 
 - User-facing pages also have **per-user preferences** stored in `ui-entity-prefs` (localStorage).
 - The resolver applies **user prefs** on top of domain defaults when the setting is not locked.
-  - Domain `view-options.edn` currently uses the domain schema `:display-settings` (defaults-only, no locks).
-  - So a user preference like `[:ui :entity-prefs :expenses :display :show-select? true]` can override a default `false`.
+- Domain `view-options.edn` uses the explicit schema:
+  - `:display-defaults` for defaults
+  - `:display-locks` for forced/immutable values
+  - So a user preference like `[:ui :entity-prefs :expenses :display :show-select? true]` can override a default `false` only when that key is not locked.
 
 **Follow-up (next session candidates):**
 
-1) Decide semantics for domain-owned config:
-   - keep defaults-only (users can override), OR
-   - introduce locks for user routes too (e.g. support `:display-locks` alongside `:display-settings`).
+1) Review the current domain-owned defaults/locks split:
+   - confirm which keys should be defaults vs locked for user-facing pages.
 
 2) Add a “Reset to org defaults” action that clears user prefs for an entity (so defaults are visible immediately).
 
@@ -543,7 +546,7 @@ This page is intentionally **not** an editor for admin-only entities (Users/Admi
 
 ## Verification (completed)
 
-- Frontend tests (latest): 224 tests, 1289 assertions, 0 failures. (2025-12-13)
+- Frontend tests (latest): 228 tests, 1300 assertions, 0 failures. (2025-12-14)
 - Backend tests: not re-run in this session (previously green).
 
 ---
@@ -558,7 +561,9 @@ This page is intentionally **not** an editor for admin-only entities (Users/Admi
 
 ---
 
-## Next task — Refactor `/admin/admin-settings` + `/admin/user-settings` UI (parity + full coverage)
+## Completed follow-up — Refactor `/admin/admin-settings` + `/admin/user-settings` UI (parity + full coverage)
+
+This is now implemented. See `PLAN-settings-ui-parity.md` for the detailed implementation plan and current status.
 
 ### Goal
 

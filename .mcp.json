@@ -17,13 +17,19 @@
         "HOME": "/tmp"
       }
     }
-  },
-  "codex": {
+  ,
+  "morph-mcp": {
     "type": "stdio",
-    "command": "codex",
+    "command": "/bin/sh",
     "args": [
-      "mcp-server"
-    ]
+      "-c",
+      "set -a; [ -f /Users/enes/Projects/single-tenant-template/.api_credentials.sh ] && source /Users/enes/Projects/single-tenant-template/.api_credentials.sh; set +a; exec /Users/enes/.nvm/versions/node/v22.17.0/bin/npx -y @morphllm/morphmcp"
+    ],
+    "env": {
+      "PATH": "/Users/enes/.nvm/versions/node/v22.17.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+      "WARPGREP_EXCLUDES": ".git,node_modules,target,.shadow-cljs,.clj-kondo,.cpcache,dist,build,out,.next,.idea,.vscode,.DS_Store,npm-debug.log*,yarn-debug.log*,yarn-error.log*",
+      "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
+    }
   }
 }
-
+}

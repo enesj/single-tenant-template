@@ -132,6 +132,17 @@
     (is (= {:id true :name true}
           @(rf/subscribe [::ui-subs/visible-columns :items])))))
 
+(deftest visible-columns-normalizes-snake-case-domain-columns-test
+  (testing "visible-columns normalizes snake_case columns to kebab-case for entity-spec compatibility"
+    (reset-db!
+      {:domain {:config {:table-columns {:expenses {:available-columns ["purchased_at" "notes"]
+                                                    :default-hidden-columns ["notes"]}}
+                         :view-options {:expenses {:column-locks {:purchased_at false}}}}}
+       :ui {}})
+    (is (= {:purchased-at false
+            :notes false}
+          @(rf/subscribe [::ui-subs/visible-columns :expenses])))))
+
 (deftest filterable-fields-vector-config-test
   (testing "filterable-fields reads from app-db config"
     ;; Set up app-db with table-columns config

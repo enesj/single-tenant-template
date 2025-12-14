@@ -21,6 +21,7 @@
    4. Entity config defaults from entities.edn
    5. Fallback defaults (in-code)"
   (:require
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.settings.resolver :as resolver]
     [clojure.string :as str]
     [re-frame.core :as rf]))
@@ -106,9 +107,9 @@
   [k]
   (cond
     (nil? k) nil
-    (keyword? k) k
-    (string? k) (keyword k)
-    :else (keyword (str k))))
+    (keyword? k) (model-naming/db-keyword->app k)
+    (string? k) (-> k model-naming/db-keyword->app keyword)
+    :else (-> (str k) model-naming/db-keyword->app keyword)))
 
 (defn- normalize-col-map
   "Normalize a column visibility map so all keys are keywords." 

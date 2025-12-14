@@ -4,7 +4,6 @@
    Handles application initialization, theme management, and core setup."
   (:require
     [ajax.core :as ajax]
-    [app.domain.frontend.expenses.config.preload :as expenses-config]
     [app.template.frontend.events.auth :as auth-events]
     [app.template.frontend.events.config :as config-events]
     [app.template.frontend.interceptors.persistence :as persistence]
@@ -64,10 +63,9 @@
                        ;; Add empty entity-specific configs
                        (assoc-in [:ui :entity-configs] {})
                        ;; Domain-owned UI config (user-facing routes)
-                       (assoc-in [:domain :config :entities :expenses] (expenses-config/entity-config :expenses))
-                       (assoc-in [:domain :config :view-options :expenses] (expenses-config/view-options :expenses))
-                       (assoc-in [:domain :config :form-fields :expenses] (expenses-config/form-fields :expenses))
-                       (assoc-in [:domain :config :table-columns :expenses] (expenses-config/table-columns :expenses))
+                       ;; Loaded at runtime via /api/v1/config so saving domain EDNs doesn't
+                       ;; trigger shadow rebuilds or dev-system restarts.
+                       (assoc-in [:domain :config] {})
                        ;; Initialize session data
                        (assoc-in [:session] {:loading? true})
                        ;; Keep existing UI settings for backward compatibility

@@ -1,7 +1,8 @@
 # PLAN — Refactor /admin/admin-settings + /admin/user-settings UI (parity + full coverage)
 
 **Created**: 2025-12-13
-**Status**: In Progress
+**Updated**: 2025-12-14
+**Status**: Complete
 
 ---
 
@@ -22,7 +23,9 @@ Refactor both settings pages so they share **exactly the same UI and UIX compone
 
 ---
 
-## Current State Analysis
+## Legacy baseline (pre-refactor)
+
+> Note: This section describes the starting point before the unified settings refactor. Both routes now use `src/app/admin/frontend/pages/unified_settings.cljs`.
 
 ### Admin Settings (`/admin/admin-settings`)
 - **File**: `src/app/admin/frontend/pages/settings.cljs`
@@ -152,50 +155,53 @@ Refactor both settings pages so they share **exactly the same UI and UIX compone
 **Objective**: Both `/admin/admin-settings` and `/admin/user-settings` use the shared shell.
 
 **Tasks**:
-- [ ] Refactor `settings.cljs` to use `settings-shell`
-- [ ] Refactor `user_settings.cljs` to use `settings-shell`
-- [ ] Remove duplicated code
-- [ ] Ensure visual parity
+- [x] Route both pages to unified settings UI (`unified-settings-page`)
+- [x] Remove duplicated UI in favor of shared components
+- [x] Ensure visual parity
 
 ### Phase 9 — Testing and verification
 **Objective**: All tests pass, manual verification complete.
 
 **Tasks**:
-- [ ] Run FE tests: `npm run test:cljs 2>&1 | tee /tmp/fe-test.txt`
-- [ ] Verify `/admin/admin-settings` view mode shows both scopes
-- [ ] Verify `/admin/user-settings` view mode shows both scopes
-- [ ] Verify edit mode scope switching
-- [ ] Verify edit mode entity switching
-- [ ] Verify Save/Discard behavior
-- [ ] Verify no full reload on save
+- [x] Run FE tests: `npm run test:cljs 2>&1 | tee /tmp/fe-test.txt`
+- [x] Verify `/admin/admin-settings` view mode shows both scopes
+- [x] Verify `/admin/user-settings` view mode shows both scopes
+- [x] Verify edit mode scope switching
+- [x] Verify edit mode entity switching
+- [x] Verify Save/Discard behavior
+- [x] Verify no full reload on save
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] Visual/UI parity between `/admin/admin-settings` and `/admin/user-settings`
-- [ ] View mode (from either route) shows two sections (Admin + User) with all entities/pages
-- [ ] Edit mode shows one scope at a time with scope switcher
-- [ ] Edit mode shows one entity at a time with entity switcher
-- [ ] Edit mode renders full set of supported settings controls
-- [ ] Save/Discard works as today
-- [ ] Saving does not trigger hard reload/restart
-- [ ] No backend API changes required
-- [ ] Frontend tests remain green
+- [x] Visual/UI parity between `/admin/admin-settings` and `/admin/user-settings`
+- [x] View mode (from either route) shows two sections (Admin + User) with all entities/pages
+- [x] Edit mode shows one scope at a time with scope switcher
+- [x] Edit mode shows one entity at a time with entity switcher
+- [x] Edit mode renders full set of supported settings controls
+- [x] Save/Discard works as today
+- [x] Saving does not trigger hard reload/restart
+- [x] No backend API changes required
+- [x] Frontend tests remain green
 
 ---
 
 ## Key Files
 
-### Existing (to modify)
+### Current (in use)
+- `src/app/admin/frontend/pages/unified_settings.cljs`
+- `src/app/admin/frontend/events/unified_settings.cljs`
+- `src/app/admin/frontend/components/settings_shell.cljs`
+- `src/app/admin/frontend/components/settings_views.cljs`
+- `src/app/admin/frontend/settings/definitions.cljs`
+- `src/app/admin/frontend/routes.cljs`
+
+### Legacy baseline (no longer routed to)
 - `src/app/admin/frontend/pages/settings.cljs`
 - `src/app/admin/frontend/pages/user_settings.cljs`
 - `src/app/admin/frontend/events/settings.cljs`
 - `src/app/admin/frontend/events/user_settings.cljs`
-
-### New (to create)
-- `src/app/admin/frontend/settings/definitions.cljs`
-- `src/app/admin/frontend/components/settings_shell.cljs`
 
 ---
 
@@ -211,13 +217,21 @@ Refactor both settings pages so they share **exactly the same UI and UIX compone
 | 6. Entity switcher | ✅ Complete | Entity dropdown in edit mode |
 | 7. No reload on save | ✅ Complete | Using existing save mechanisms |
 | 8. Refactor both pages | ✅ Complete | Both routes use `unified-settings-page` |
-| 9. Testing | ✅ Complete | 225 tests, 0 failures |
+| 9. Testing | ✅ Complete | `npm run test:cljs` green (228 tests, 0 failures) |
 
 ## Implementation Summary
 
 ### Scope Clarification (Updated)
 - **Admin Settings** (`/admin/admin-settings`): Controls display settings for admin pages showing entities like `:users`, `:admins`, `:audit-logs`, `:login-events`, `:expenses`, `:receipts`, `:suppliers`, `:payers`, `:articles`, etc.
 - **User Settings** (`/admin/user-settings`): Controls display settings for user-facing pages (currently only `:expenses` entity)
+
+### Resolved regressions
+
+- **2025-12-14 — `/admin/user-settings` toggles unclickable**
+  - **Symptom**: all “Default On/Off” toggles rendered but could not be clicked.
+  - **Root cause**: `user-entity-editor` did not pass `:editing? true` to `views/user-entity-settings-card`, so rows rendered as non-clickable `<span>`.
+  - **Fix**: pass `:editing? true` when rendering `user-entity-settings-card`.
+  - **Verification**: confirmed in browser (toggles render as `<button>` and cycle states) + `npm run test:cljs` green.
 
 ### New Files Created
 - `src/app/admin/frontend/settings/definitions.cljs` - Shared settings definitions registry with detailed tooltips
