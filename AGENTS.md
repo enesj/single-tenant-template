@@ -54,6 +54,7 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 		npm run test:cljs | grep FAIL
 		npm run test:cljs | grep ERROR
 		```
+	- Never run the entire test suite when you're working on a concrete problem. Run only the relevant test(s): a single test file, a focused test suite, or tagged/filtered tests (use your test runner's selector/filter options). This speeds feedback and avoids noise.
 - Use skills when relevant:
 	- Frontend state/auth/UI issues → **app-db-inspect**.
 	- Frontend event flow or performance issues → **reframe-events-analysis**.
@@ -115,6 +116,8 @@ npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
 bb be-test 2>&1 | tee /tmp/be-test.txt
 # Then grep/search the saved files - NEVER re-run tests!
 ```
+
+**🚨 NEW RULE:** When working on a concrete problem, do NOT run the entire test suite — run only the relevant test(s) (single test file, focused suite, or tagged tests). This reduces turnaround time and avoids noisy output; save the full output before analysis as above.
 
 # Clojure REPL Evaluation 
 

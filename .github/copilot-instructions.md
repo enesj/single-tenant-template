@@ -1,6 +1,7 @@
 ## Repo Instructions for Copilot Chat
 
 - Treat this file and `AGENTS.md` as your primary instructions for this repo.
+- Never revert changes authored by the user or another agent during this session unless those changes explicitly conflict with the Copilot task you are executing.
 
 ### Documentation-First Approach
 
@@ -32,6 +33,7 @@
   - Use the `system-logs` skill to restart the system and re-attach to logs; ensure there are no startup/runtime errors.
 - After frontend or shared FE/BE build changes:
   - Run shadow-cljs compile for the relevant builds (e.g. `app`, `admin`) and fix any breaking errors/warnings.
+- When you need to verify behavior for a concrete problem, do NOT run the full suite — run just the relevant test(s) (single file, focused suite, or tagged tests) so feedback stays fast and output stays manageable.
 - Always confirm fixes
 
 ### Planning & Phased Execution
@@ -74,10 +76,11 @@
 - Fallback behavior: If `:entity-spec` is omitted, settings fall back to the template spec; computed/admin-only fields might be missing from toggles.
 - Example:
   ```clojure
-  ($ list-view
-     {:entity-name :users
-      :entity-spec users-entity-spec
-      :title "Users"})
+  (comment
+    ($ list-view
+       {:entity-name :users
+        :entity-spec users-entity-spec
+        :title "Users"}))
   ```
 - Recommendation: Admin pages should pass the spec produced by the admin spec generator to ensure toggles match admin-visible columns.
 
