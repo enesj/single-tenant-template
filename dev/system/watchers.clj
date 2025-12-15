@@ -49,21 +49,21 @@
 
 (defn- clojure-file-details [{:keys [file]}]
   (let [file-name (.getName file)
-        file-path (.getPath file)])
-  matches-extension? (boolean (re-matches #"[^.].*(\.clj|\.edn|\.cljc)$" file-name))
-  admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\.edn$" file-path))
-  domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\.edn$" file-path))
-  excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
-  ;; These EDN files are edited at runtime via /admin/settings; restarting the
-  ;; dev system on each save causes disruptive full page reloads.
-  passes? (and matches-extension? (not excluded-edn?))
-  {:file-name file-name
-   :file-path file-path
-   :matches-extension? matches-extension?
-   :admin-ui-config-edn? admin-ui-config-edn?
-   :domain-ui-config-edn? domain-ui-config-edn?
-   :excluded-edn? excluded-edn?
-   :passes? passes?})
+        file-path (.getPath file)
+        matches-extension? (boolean (re-matches #"[^.].*(\.clj|\.edn|\.cljc)$" file-name))
+        admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\.edn$" file-path))
+        domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\.edn$" file-path))
+        excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
+        ;; These EDN files are edited at runtime via /admin/settings; restarting the
+        ;; dev system on each save causes disruptive full page reloads.
+        passes? (and matches-extension? (not excluded-edn?))]
+       {:file-name file-name
+        :file-path file-path
+        :matches-extension? matches-extension?
+        :admin-ui-config-edn? admin-ui-config-edn?
+        :domain-ui-config-edn? domain-ui-config-edn?
+        :excluded-edn? excluded-edn?
+        :passes? passes?}))
 
 (defn- clojure-file? [_ event]
   (:passes? (clojure-file-details event)))

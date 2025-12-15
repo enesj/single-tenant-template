@@ -11,4 +11,4 @@
    :show-delete? false,
    :show-edit? false},
   :column-locks {:supplier_id false},
-  :column-defaults {:purchased_at true}}}
+  :column-defaults {:purchased_at false}}}
