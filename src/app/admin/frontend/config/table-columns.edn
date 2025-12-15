@@ -36,7 +36,7 @@
   :filterable-columns
   ["email" "full-name" "role" "status" "last-login-at"],
   :sortable-columns ["email" "full-name" "role" "status" "created-at"],
-  :always-visible [],
+  :always-visible ["id"],
   :computed-fields {},
   :column-config
   {:role {:width "100px", :formatter "admin-role-badge"},

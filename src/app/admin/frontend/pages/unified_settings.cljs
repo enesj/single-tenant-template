@@ -232,22 +232,30 @@
         (if (empty? available)
           ($ :p {:class "text-sm text-base-content/60"} "No columns configured")
           ($ :div {:class "overflow-x-auto"}
-            ($ :table {:class "ds-table ds-table-sm w-full"}
+            ($ :table {:class "ds-table ds-table-sm w-full table-fixed"}
               ($ :thead
                 ($ :tr
-                  ($ :th "Column")
-                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
-                          :data-tip "Structurally enforced always visible; users cannot hide these."}
-                    "Always Visible")
-                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
-                          :data-tip "Visible by default when the table loads."}
-                    "Default Visible")
-                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
-                          :data-tip "Can be used in filter controls."}
-                    "Filterable")
-                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
-                          :data-tip "Can be sorted by clicking the column header."}
-                    "Sortable")))
+                  ($ :th {:class "whitespace-nowrap"} "Column")
+
+                  ;; IMPORTANT: don't apply ds-tooltip directly to <th>.
+                  ;; DaisyUI tooltips set display/position styles that can break table-cell layout,
+                  ;; leading to header/body column misalignment.
+                  ($ :th {:class "text-center whitespace-nowrap"}
+                    ($ :div {:class "ds-tooltip ds-tooltip-bottom"
+                             :data-tip "Structurally enforced always visible; users cannot hide these."}
+                      "Always Visible"))
+                  ($ :th {:class "text-center whitespace-nowrap"}
+                    ($ :div {:class "ds-tooltip ds-tooltip-bottom"
+                             :data-tip "Visible by default when the table loads."}
+                      "Default Visible"))
+                  ($ :th {:class "text-center whitespace-nowrap"}
+                    ($ :div {:class "ds-tooltip ds-tooltip-bottom"
+                             :data-tip "Can be used in filter controls."}
+                      "Filterable"))
+                  ($ :th {:class "text-center whitespace-nowrap"}
+                    ($ :div {:class "ds-tooltip ds-tooltip-bottom"
+                             :data-tip "Can be sorted by clicking the column header."}
+                      "Sortable"))))
               ($ :tbody
                 (for [col available]
                   (let [enforced? (contains? always-visible col)]
@@ -297,12 +305,13 @@
   (let [table-config-from-ui (use-subscribe [:admin/table-config entity-kw])
         table-configs-from-settings (use-subscribe [::admin-settings-events/table-columns])
         table-config-from-settings (get table-configs-from-settings entity-kw)
-        ;; Prefer the UI config cache when it has usable metadata, but fall back to
-        ;; the settings API payload (loaded by ::admin-settings-events/load-table-columns)
-        ;; so Columns editing works even if the UI config loader hasn't populated yet.
-        table-config (if (seq (:available-columns table-config-from-ui))
-                       table-config-from-ui
-                       table-config-from-settings)]
+        ;; Merge both sources:
+        ;; - UI cache often has richer metadata (labels, formatters)
+        ;; - settings payload is the authoritative structural config (incl. :always-visible)
+        ;;
+        ;; This also prevents regressions where "always visible" columns show up as
+        ;; policy defaults ("Default On") because the UI cache didn't include :always-visible.
+        table-config (merge (or table-config-from-ui {}) (or table-config-from-settings {}))]
     ($ views/admin-entity-settings-card
       {:entity-name entity-kw
        :settings settings
