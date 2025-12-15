@@ -3,12 +3,12 @@
   Every watcher detects changes in their corresponding namespaces and reflect
   changes by restarting/rerendering changed parts on the system."
   (:require
-   [clojure.core.async :refer [go]]
-   [hawk.core :as hawk]
-   [system.state :refer [backend-watcher models-watcher postcss-watcher]]
-   [taoensso.timbre :as log])
+    [clojure.core.async :refer [go]]
+    [hawk.core :as hawk]
+    [system.state :refer [backend-watcher models-watcher postcss-watcher]]
+    [taoensso.timbre :as log])
   (:import
-   [java.util Timer TimerTask]))
+    [java.util Timer TimerTask]))
 
 ;;# BACKEND WATCHER
 ;;# --------------------------------------------------------------------------
@@ -49,21 +49,21 @@
 
 (defn- clojure-file-details [{:keys [file]}]
   (let [file-name (.getName file)
-        file-path (.getPath file)
+        file-path (.getPath file)])
   matches-extension? (boolean (re-matches #"[^.].*(\.clj|\.edn|\.cljc)$" file-name))
   admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\.edn$" file-path))
   domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\.edn$" file-path))
-        excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
-        ;; These EDN files are edited at runtime via /admin/settings; restarting the
-        ;; dev system on each save causes disruptive full page reloads.
-        passes? (and matches-extension? (not excluded-edn?))]
-    {:file-name file-name
-     :file-path file-path
-     :matches-extension? matches-extension?
-     :admin-ui-config-edn? admin-ui-config-edn?
-     :domain-ui-config-edn? domain-ui-config-edn?
-     :excluded-edn? excluded-edn?
-     :passes? passes?}))
+  excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
+  ;; These EDN files are edited at runtime via /admin/settings; restarting the
+  ;; dev system on each save causes disruptive full page reloads.
+  passes? (and matches-extension? (not excluded-edn?))
+  {:file-name file-name
+   :file-path file-path
+   :matches-extension? matches-extension?
+   :admin-ui-config-edn? admin-ui-config-edn?
+   :domain-ui-config-edn? domain-ui-config-edn?
+   :excluded-edn? excluded-edn?
+   :passes? passes?})
 
 (defn- clojure-file? [_ event]
   (:passes? (clojure-file-details event)))
@@ -113,9 +113,9 @@
                              :exists (.exists f)
                              :dir? (.isDirectory f)
                              :canonical-path (try (.getCanonicalPath f)
-                                                  (catch Throwable _t
-                                                    (.getAbsolutePath f)))}))
-                        paths)]
+                                               (catch Throwable _t
+                                                 (.getAbsolutePath f)))}))
+                    paths)]
     (log/info {:event :watcher/start
                :watcher :backend
                :impl :hawk
@@ -215,8 +215,8 @@
                       :exists (.exists (java.io.File. "resources/db"))
                       :dir? (.isDirectory (java.io.File. "resources/db"))
                       :canonical-path (try (.getCanonicalPath (java.io.File. "resources/db"))
-                                           (catch Throwable _t
-                                             (.getAbsolutePath (java.io.File. "resources/db"))))}]
+                                        (catch Throwable _t
+                                          (.getAbsolutePath (java.io.File. "resources/db"))))}]
              :thread (.getName (Thread/currentThread))})
   (let [watcher (hawk/watch! {:watcher :polling}
                   [{:paths ["resources/db"]
