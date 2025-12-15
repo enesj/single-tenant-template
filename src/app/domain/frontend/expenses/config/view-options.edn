@@ -1,6 +1,6 @@
 {:expenses
  {:display-defaults
-  {:show-pagination? true,
+  {:show-pagination? false,
    :show-add-button? true,
    :show-highlights? true,
    :show-timestamps? true},

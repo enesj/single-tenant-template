@@ -6,7 +6,7 @@
    :show-pagination? true,
    :show-filtering? true}},
  :admins
- {:column-locks {:full-name false},
+ {:column-locks {},
   :display-locks
   {:show-select? true, :show-pagination? true, :show-filtering? true},
   :column-defaults {:id true}},

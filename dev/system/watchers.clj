@@ -5,7 +5,6 @@
   (:require
    [clojure.core.async :refer [go]]
    [hawk.core :as hawk]
-   [io.aviso.ansi :as ansi]
    [system.state :refer [backend-watcher models-watcher postcss-watcher]]
    [taoensso.timbre :as log])
   (:import
@@ -15,7 +14,7 @@
 ;;# --------------------------------------------------------------------------
 
 (defn- debounce [callback timeout]
-  (let [timer (Timer.)
+  (let [timer (Timer. "dev-system-watchers-debounce" true)
         task (atom nil)]
     (fn [& args]
       (when-let [running-task ^TimerTask @task]
@@ -23,52 +22,130 @@
 
       (let [new-task (proxy [TimerTask] []
                        (run []
-                         (apply callback args)
-                         (reset! task nil)
-                         (.purge timer)))]
+                         (try
+                           (apply callback args)
+                           (catch Throwable t
+                             ;; A thrown exception inside TimerTask can kill the Timer thread,
+                             ;; effectively disabling future debounced tasks.
+                             (log/error t {:event :watcher/debounce-callback-error
+                                           :timeout-ms timeout
+                                           :callback (str callback)}))
+                           (finally
+                             (reset! task nil)
+                             (try
+                               (.purge timer)
+                               (catch Throwable _t
+                                 ;; best-effort cleanup
+                                 nil))))))]
         (reset! task new-task)
-        (.schedule timer new-task timeout))
+        (try
+          (.schedule timer new-task timeout)
+          (catch Throwable t
+            (reset! task nil)
+            (log/error t {:event :watcher/debounce-schedule-error
+                          :timeout-ms timeout
+                          :callback (str callback)}))))
       (first args))))
 
-(defn- clojure-file? [_ {:keys [file]}]
+(defn- clojure-file-details [{:keys [file]}]
   (let [file-name (.getName file)
         file-path (.getPath file)
-        admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\\.edn$" file-path))
-        domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\\.edn$" file-path))]
-    (and (re-matches #"[^.].*(\\.clj|\\.edn|\\.cljc)$" file-name)
-         ;; These EDN files are edited at runtime via /admin/settings; restarting the
-         ;; dev system on each save causes disruptive full page reloads.
-          (not (or admin-ui-config-edn?
-                   domain-ui-config-edn?)))))
+  matches-extension? (boolean (re-matches #"[^.].*(\.clj|\.edn|\.cljc)$" file-name))
+  admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\.edn$" file-path))
+  domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\.edn$" file-path))
+        excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
+        ;; These EDN files are edited at runtime via /admin/settings; restarting the
+        ;; dev system on each save causes disruptive full page reloads.
+        passes? (and matches-extension? (not excluded-edn?))]
+    {:file-name file-name
+     :file-path file-path
+     :matches-extension? matches-extension?
+     :admin-ui-config-edn? admin-ui-config-edn?
+     :domain-ui-config-edn? domain-ui-config-edn?
+     :excluded-edn? excluded-edn?
+     :passes? passes?}))
+
+(defn- clojure-file? [_ event]
+  (:passes? (clojure-file-details event)))
 
 (defn watch-handler [context event]
   (binding [*ns* *ns*]
-    (let [file-path (.getPath (:file event))
-          file-name (.getName (:file event))]
-      (println (ansi/yellow (str "Backend watcher triggered by: " file-path)))
-      (println (ansi/yellow (str "File name: " file-name)))
-      (println (ansi/yellow (str "Event type: " (:kind event))))
-      (when (clojure-file? nil event)
-        (println (ansi/green "Processing Clojure file change..."))
-        ((:fn context) file-path))
-      (when-not (clojure-file? nil event)
-        (println (ansi/red "Ignoring non-Clojure file"))))
+    (let [details (clojure-file-details event)
+          file-path (:file-path details)
+          file-name (:file-name details)
+          event-kind (:kind event)
+          passes? (:passes? details)]
+      (log/info {:event :watcher/event
+                 :watcher :backend
+                 :kind event-kind
+                 :file-path file-path
+                 :file-name file-name
+                 :passes-filter? passes?
+                 :cwd (System/getProperty "user.dir")
+                 :thread (.getName (Thread/currentThread))
+                 :details (dissoc details :file-path :file-name :passes?)})
+      (when passes?
+        (try
+          ((:fn context) file-path)
+          (catch Throwable t
+            (log/error t {:event :watcher/restart-callback-error
+                          :watcher :backend
+                          :kind event-kind
+                          :file-path file-path
+                          :file-name file-name}))))
+      (when-not passes?
+        (log/info {:event :watcher/event-ignored
+                   :watcher :backend
+                   :kind event-kind
+                   :file-path file-path
+                   :file-name file-name
+                   :details (dissoc details :file-path :file-name)})))
     context))
 
 (defn watch-backend
   "Automatically restarts the system if backend related files are changed."
   [callback]
-  (log/info "Starting backend file watcher")
-  (let [watcher (hawk/watch! {:watcher :polling}
-                  [{:paths ["src/app" "dev" "config" "vendor"]
-                    :context (constantly {:fn callback})
-                    :filter clojure-file?
-                    :handler (debounce watch-handler 50)}])]
-    (reset! backend-watcher watcher)))
+  (let [paths ["src/app" "dev" "config" "vendor"]
+        cwd (System/getProperty "user.dir")
+        path-info (mapv (fn [p]
+                          (let [f (java.io.File. p)]
+                            {:path p
+                             :exists (.exists f)
+                             :dir? (.isDirectory f)
+                             :canonical-path (try (.getCanonicalPath f)
+                                                  (catch Throwable _t
+                                                    (.getAbsolutePath f)))}))
+                        paths)]
+    (log/info {:event :watcher/start
+               :watcher :backend
+               :impl :hawk
+               :mode :polling
+               :cwd cwd
+               :paths path-info
+               :thread (.getName (Thread/currentThread))})
+    (let [watcher (hawk/watch! {:watcher :polling}
+                    [{:paths paths
+                      :context (constantly {:fn callback})
+                      :filter clojure-file?
+                      :handler (debounce watch-handler 50)}])]
+      (reset! backend-watcher watcher)
+      (log/info {:event :watcher/started
+                 :watcher :backend
+                 :backend-watcher-set? (boolean @backend-watcher)
+                 :watcher-class (some-> watcher class str)})
+      watcher)))
 
 (defn stop-backend-watcher []
-  (hawk/stop! backend-watcher)
-  (reset! backend-watcher nil))
+  (when-let [watcher @backend-watcher]
+    (try
+      (hawk/stop! watcher)
+      (catch Throwable t
+        (log/error t {:event :watcher/stop-error
+                      :watcher :backend}))))
+  (reset! backend-watcher nil)
+  (log/info {:event :watcher/stopped
+             :watcher :backend
+             :backend-watcher-set? (boolean @backend-watcher)}))
 
 ;;# POSTCSS WATCHER
 ;;# --------------------------------------------------------------------------
@@ -76,9 +153,15 @@
 (defn postcss-watch
   "Runs postcss watcher in parallel thread and redirects std output to main console."
   []
-  (println (ansi/cyan "Starting postcss watcher"))
+  (log/info {:event :watcher/start
+             :watcher :postcss
+             :impl :process
+             :cwd (System/getProperty "user.dir")
+             :thread (.getName (Thread/currentThread))})
   (when @postcss-watcher
-    (println (ansi/cyan "Stopping existing postcss watcher"))
+    (log/info {:event :watcher/stop-requested
+               :watcher :postcss
+               :reason :restart})
     (.destroyForcibly @postcss-watcher))
 
   (let [pb (ProcessBuilder. ["npm" "run" "postcss:watch"])
@@ -94,11 +177,16 @@
 (defn reset-postcss-watch
   "Kills current postcss process and start the new one."
   []
-  (println (ansi/red "RESET-POSTCSS-WATCH CALLED!"))
+  (log/info {:event :watcher/restart-requested
+             :watcher :postcss})
   (when @postcss-watcher
-    (println (ansi/red "Destroying existing postcss watcher"))
+    (log/info {:event :watcher/stop-requested
+               :watcher :postcss
+               :reason :restart})
     (.destroyForcibly @postcss-watcher))
-  (println (ansi/red "Starting new postcss watcher in go block"))
+  (log/info {:event :watcher/start-requested
+             :watcher :postcss
+             :mode :core-async})
   (go (postcss-watch)))
 
 ;;# MODELS.EDN WATCHER
@@ -118,15 +206,38 @@
   "Watches for changes to models.edn file and triggers callback.
    Typically used to notify about schema changes that may require migration."
   [callback]
-  (log/info "Starting models.edn file watcher")
+  (log/info {:event :watcher/start
+             :watcher :models
+             :impl :hawk
+             :mode :polling
+             :cwd (System/getProperty "user.dir")
+             :paths [{:path "resources/db"
+                      :exists (.exists (java.io.File. "resources/db"))
+                      :dir? (.isDirectory (java.io.File. "resources/db"))
+                      :canonical-path (try (.getCanonicalPath (java.io.File. "resources/db"))
+                                           (catch Throwable _t
+                                             (.getAbsolutePath (java.io.File. "resources/db"))))}]
+             :thread (.getName (Thread/currentThread))})
   (let [watcher (hawk/watch! {:watcher :polling}
                   [{:paths ["resources/db"]
                     :context (constantly {:fn callback})
                     :filter models-file?
                     :handler (debounce models-watch-handler 100)}])]
-    (reset! models-watcher watcher)))
+    (reset! models-watcher watcher)
+    (log/info {:event :watcher/started
+               :watcher :models
+               :models-watcher-set? (boolean @models-watcher)
+               :watcher-class (some-> watcher class str)})
+    watcher))
 
 (defn stop-models-watcher []
   (when @models-watcher
-    (hawk/stop! @models-watcher)
-    (reset! models-watcher nil)))
+    (try
+      (hawk/stop! @models-watcher)
+      (catch Throwable t
+        (log/error t {:event :watcher/stop-error
+                      :watcher :models})))
+    (reset! models-watcher nil)
+    (log/info {:event :watcher/stopped
+               :watcher :models
+               :models-watcher-set? (boolean @models-watcher)})))

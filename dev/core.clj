@@ -5,14 +5,27 @@
    [shadow.cljs.devtools.api :as shadow.api]
    [shadow.cljs.devtools.server :as shadow.server]
    [system.core :refer [restart-system start-system]]
-   [system.watchers :as watchers]))
+   [system.state :as system-state]
+   [system.watchers :as watchers]
+   [taoensso.timbre :as log]))
 
 (defn suppress-stderr []
-  (let [err (java.io.PrintStream. "/dev/null")]
-    (System/setErr err)))
+  (let [env (System/getenv "DEV_SUPPRESS_STDERR")
+        suppress? (not (contains? #{"0" "false" "FALSE" "no" "NO"} (or env "")))]
+    (if suppress?
+      (do
+        (log/warn {:event :dev/stderr-suppressed
+                   :cwd (System/getProperty "user.dir")
+                   :hint "Set DEV_SUPPRESS_STDERR=false to keep stderr visible"})
+        (let [err (java.io.PrintStream. "/dev/null")]
+          (System/setErr err)))
+      (log/info {:event :dev/stderr-not-suppressed
+                 :cwd (System/getProperty "user.dir")
+                 :DEV_SUPPRESS_STDERR env}))))
 
 (defn handle-models-change [file-path]
-  (println "🔄 Models.edn changed - restarting system...")
+  (log/info {:event :models/changed
+             :file-path file-path})
   (restart-system file-path))
 
 (defn write-postgres-env-file []
@@ -24,15 +37,25 @@
                       "POSTGRES_USER=" user "\n"
                       "POSTGRES_PASSWORD=" password "\n")]
     (spit ".postgres.env" env-content)
-    (println "✅ Postgres environment variables written to .postgres.env")))
+    (log/info {:event :dev/postgres-env-written
+               :file ".postgres.env"
+               :host host
+               :port port
+               :dbname dbname
+               :user user})))
 
 (defn start-dev []
-  (println "START-DEV CALLED!")
+  (log/info {:event :dev/start-called
+             :cwd (System/getProperty "user.dir")
+             :thread (.getName (Thread/currentThread))})
   (write-postgres-env-file)
   (suppress-stderr)
   (start-system)
   (watchers/watch-backend restart-system)
   (watchers/watch-models handle-models-change)
+  (log/info {:event :dev/watchers-state
+             :backend-watcher-set? (boolean @system-state/backend-watcher)
+             :models-watcher-set? (boolean @system-state/models-watcher)})
   ;;(println "CREATING GO BLOCK FOR POSTCSS WATCH")
   ;;(go (watchers/postcss-watch))
   (shadow.server/start!)
@@ -42,8 +65,11 @@
   ;; Select browser REPL on main thread before starting nREPL
   (shadow.api/nrepl-select :app)
   (nrepl/start-server :port 7888)
-  (println "nREPL server started on port 7888")
-  (println "Shadow-cljs watching :app and :test builds")
-  (println "📋 File watchers active:")
-  (println "   • Backend files (triggers system restart)")
-  (println "   • Models.edn (notifies about schema changes)"))
+  (log/info {:event :dev/nrepl-started
+             :port 7888})
+  (log/info {:event :dev/shadow-watch-started
+             :builds [:app]
+             :note "(shadow.api/watch :test) currently commented out"})
+  (log/info {:event :dev/start-dev-finished
+             :watchers [:backend :models]
+             :admin-url "http://localhost:8085"}))
