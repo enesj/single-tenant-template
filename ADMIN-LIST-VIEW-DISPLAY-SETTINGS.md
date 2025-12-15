@@ -31,9 +31,18 @@ The *in-table* settings row is rendered by the shared table component:
 - Clicking the settings icon toggles the panel (`settings-panel-visible?`)
 - The panel UI is `src/app/template/frontend/components/settings/list_view_settings.cljs:129` (`list-view-settings-panel`)
 
-This is separate from the *global admin settings page* at `/admin/settings`:
+This is separate from the routed settings pages:
 
-- `src/app/admin/frontend/pages/settings.cljs` (edits `view-options`, `table-columns`, `form-fields` via API)
+- `/admin/admin-settings` (admin scope)
+- `/admin/user-settings` (user scope)
+
+(``/admin/settings`` is a legacy route that redirects to ``/admin/admin-settings``.)
+
+- `src/app/admin/frontend/pages/unified_settings.cljs` (edits display toggles + column visibility defaults/locks)
+
+There is also a legacy “Admin UI Configuration” page:
+
+- `src/app/admin/frontend/pages/settings.cljs` (edits `view-options`, `table-columns`, `form-fields` via API; currently not routed)
 
 ---
 
@@ -90,7 +99,7 @@ This file is preloaded and registered at startup:
 Hardcoded/locked display toggles live in:
 
 - `src/app/admin/frontend/config/view-options.edn` (preloaded)
-- plus any server-side overrides loaded/edited from `/admin/settings`:
+- plus any server-side overrides loaded/edited from the admin settings UI (`/admin/admin-settings`):
   - `src/app/admin/frontend/events/settings.cljs:18` (`::load-view-options` → stores in `[:admin :settings :view-options]`)
 
 They’re loaded into app-db for general consumption by:
@@ -105,12 +114,11 @@ Column definitions live in:
 
 - `src/app/admin/frontend/config/table-columns.edn`
 
-This file is **in “inverted” format** (e.g. `:default-hidden-columns`, `:unfilterable-columns`, `:unsortable-columns`) and is transformed at preload/load time:
+This file is stored and used in the **internal (non-inverted)** shape.
 
-- `src/app/admin/frontend/config/preload.cljs:9` (`transform-inverted-config`)
-- `src/app/admin/frontend/config/loader.cljs:41` (`transform-inverted-config`)
+There is no longer any preload/load-time conversion step in the frontend loader (no `:default-hidden-columns`, `:unfilterable-columns`, or `:unsortable-columns`; and no `transform-inverted-config` in `src/app/admin/frontend/config/loader.cljs`).
 
-After transform, entities have:
+Per entity, the primary policy keys are:
 
 - `:default-visible-columns`
 - `:filterable-columns`
@@ -167,6 +175,29 @@ Admin pages also do a separate merge before that:
 
 This means *today* there are multiple default/merge layers (template defaults, entities.edn defaults, view-options hardcoded, and per-user prefs).
 
+### 5.4 Rows-per-page (`:per-page`) precedence + seeding
+
+Rows-per-page is intentionally treated as **list UI state**, not a hardcoded "display toggle":
+
+Precedence (highest → lowest):
+
+1. Existing list UI state per-page (user choice)
+  - Stored under the entity list UI state and controlled by `::ui-events/set-per-page`.
+2. Configured default per-page
+  - Provided either via the `list-view` prop `:per-page`, or via `entities.edn` `:display-settings :per-page`.
+3. Fallback
+  - If nothing else is present, list UI defaults fall back to 10.
+
+Seeding rule:
+
+- `list-view` will **seed** `:per-page` into list UI state only when it is missing.
+- If the user already has a per-page choice in UI state, config defaults do **not** overwrite it.
+
+Code references:
+
+- `src/app/template/frontend/components/list.cljs` computes an effective per-page and conditionally dispatches the seed.
+- `src/app/template/frontend/events/list/ui_state.cljs` owns `::set-per-page` and default/fallback behavior.
+
 ---
 
 ## 6) Column visibility (admin pages)
@@ -194,11 +225,11 @@ In vector-config mode, the *raw* visible columns value is a **vector** stored un
 
 ### 6.3 Default visible columns (admin mode)
 
-Defaults come from `table-columns.edn` via the “inverted config” transform:
+Defaults come directly from the `table-columns.edn` entity entry (internal shape):
 
 - `src/app/admin/frontend/config/table-columns.edn` (per entity)
   - `:available-columns`
-  - `:default-hidden-columns` → transformed to `:default-visible-columns`
+  - `:default-visible-columns`
   - `:always-visible` columns cannot be hidden
 
 ### 6.4 Column visibility toggles in the table settings panel

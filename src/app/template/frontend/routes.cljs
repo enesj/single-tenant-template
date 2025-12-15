@@ -6,7 +6,7 @@
     [app.template.frontend.routing.router :as router-util]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [reitit.coercion.spec :as rcs]
+    [reitit.coercion.malli :as rcm]
     [reitit.frontend :as rtf]
     [reitit.frontend.easy :as rtfe]
     [taoensso.timbre :as log]))
@@ -489,7 +489,7 @@
 
 ;; Define the router instance early so it's available to usages below
 (def router
-  (rtf/router routes {:data {:coercion rcs/coercion}
+  (rtf/router routes {:data {:coercion rcm/coercion}
                       :conflicts prefer-literal-route-conflicts}))
 
 (defn on-navigate

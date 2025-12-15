@@ -36,7 +36,7 @@
                 (:default input-width))]
 
     (merge
-      (select-keys field-spec [:id :required :type :input-type :options :label :step])
+      (select-keys field-spec [:id :required :type :input-type :options :label :step :min :max :default])
       {:disabled disabled?
        :value field-value
        :class width

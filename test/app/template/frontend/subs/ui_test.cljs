@@ -136,7 +136,7 @@
   (testing "visible-columns normalizes snake_case columns to kebab-case for entity-spec compatibility"
     (reset-db!
       {:domain {:config {:table-columns {:expenses {:available-columns ["purchased_at" "notes"]
-                                                    :default-hidden-columns ["notes"]}}
+                                                    :default-visible-columns ["purchased_at"]}}
                          :view-options {:expenses {:column-locks {:purchased_at false}}}}}
        :ui {}})
     (is (= {:purchased-at false

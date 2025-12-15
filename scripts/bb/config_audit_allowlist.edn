@@ -1,0 +1,6 @@
+#{
+  ;; Add keys here (keywords or strings) that you expect to be config-only or otherwise "unused" by grep.
+  ;; Example:
+  ;; :computed-fields
+  ;; :formatter
+}

@@ -92,6 +92,10 @@
            (println "Combining files...")
            (apply shell "bb" "scripts/bb/project-management/file_combiner.clj" args))},
 
+  config-audit
+  {:doc "Audit frontend config EDN keys for potential unused settings. Usage: bb config-audit [--strict] [--allowlist <path>]",
+   :task (apply shell "bb" "scripts/bb/config_audit.clj" *command-line-args*)},
+
   commit
   {:doc "Auto-commit all staged changes with a generated commit message. Use --test to run tests before commit.",
    :task (let [args *command-line-args*

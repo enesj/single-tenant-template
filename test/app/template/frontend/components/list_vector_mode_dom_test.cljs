@@ -7,10 +7,11 @@
     [app.template.frontend.components.list.ui :as list-ui]
     [app.template.frontend.components.settings.list-view-settings :as list-view-settings]
     [app.template.frontend.components.table :as table]
+    [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.utils.column-config :as column-config]
     [app.template.frontend.utils.shared :as template-utils]
-    [cljs.test :refer-macros [async deftest is testing]]
+    [cljs.test :refer-macros [async deftest is]]
     [re-frame.core :as rf]
     [uix.core :refer [$]]
     [uix.re-frame :as uix-rf]))
@@ -155,4 +156,112 @@
           (fn [_container]
             (is (= false @seen-vector-mode)
               "list-view must not enter vector-config mode when :admin/config-loaded? is false")
+            (done)))))))
+
+(deftest list-view-seeds-per-page-from-prop-when-ui-state-missing
+  (async done
+    (let [dispatched (atom [])
+          record-dispatch (fn [evt] (swap! dispatched conj evt))]
+      (with-redefs [rf/dispatch record-dispatch
+                    column-config/vector-config? (constantly false)
+                    ;; Stub the heavy UI components away
+                    list-table/make-table-headers (fn [_] [])
+                    list-ui/header-section (fn [_] ($ :div))
+                    table/table (fn [_] ($ :div))
+                    ;; Keep list-view subscriptions stable
+                    uix-rf/use-subscribe (fn [query]
+                                           (cond
+                                             (= query [:admin/config-loaded?]) false
+
+                                             ;; Entity/list subscriptions used by list-view
+                                             (= (first query) :app.template.frontend.subs.entity/paginated-entities) []
+                                             (= (first query) :app.template.frontend.subs.entity/loading?) false
+                                             (= (first query) :app.template.frontend.subs.entity/error) nil
+                                             (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                             (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                             (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                             (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                             (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                             (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                             (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                             (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                             (= (first query) :app.template.frontend.subs.list/active-filters) {}
+                                             (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                             ;; Critical: simulate no existing per-page in UI state
+                                             (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                             (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                             ;; Form spec subscription
+                                             (= (first query) :form-entity-specs/by-name) {:fields []}
+
+                                             ;; Visible-columns subscription
+                                             (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+
+                                             :else nil))]
+        (mount-component!
+          ($ list/list-view
+            {:entity-name :users
+             :entity-spec {:fields []}
+             :title "Users"
+             ;; Provide per-page as a top-level prop (admin pages do this)
+             :per-page 25
+             :display-settings {}})
+          (fn [_container]
+            (is (some #(= [::ui-events/set-per-page :users 25] %)
+                  @dispatched)
+              "list-view should seed per-page into UI state when missing")
+            (done)))))))
+
+(deftest list-view-does-not-seed-per-page-when-ui-state-already-set
+  (async done
+    (let [dispatched (atom [])
+          record-dispatch (fn [evt] (swap! dispatched conj evt))]
+      (with-redefs [rf/dispatch record-dispatch
+                    column-config/vector-config? (constantly false)
+                    list-table/make-table-headers (fn [_] [])
+                    list-ui/header-section (fn [_] ($ :div))
+                    table/table (fn [_] ($ :div))
+                    uix-rf/use-subscribe (fn [query]
+                                           (cond
+                                             (= query [:admin/config-loaded?]) false
+
+                                             ;; Entity/list subscriptions used by list-view
+                                             (= (first query) :app.template.frontend.subs.entity/paginated-entities) []
+                                             (= (first query) :app.template.frontend.subs.entity/loading?) false
+                                             (= (first query) :app.template.frontend.subs.entity/error) nil
+                                             (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                             (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                             (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                             (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                             (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                             (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                             (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                             (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                             (= (first query) :app.template.frontend.subs.list/active-filters) {}
+                                             (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                             ;; Critical: simulate an existing per-page in UI state
+                                             (= (first query) :app.template.frontend.subs.list/entity-ui-state) {:per-page 10}
+                                             (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                             (= (first query) :form-entity-specs/by-name) {:fields []}
+                                             (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+
+                                             :else nil))]
+        (mount-component!
+          ($ list/list-view
+            {:entity-name :users
+             :entity-spec {:fields []}
+             :title "Users"
+             :per-page 25
+             :display-settings {}})
+          (fn [_container]
+            (is (not (some #(= [::ui-events/set-per-page :users 25] %)
+                       @dispatched))
+              "list-view must not overwrite an existing per-page")
             (done)))))))

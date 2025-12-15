@@ -18,7 +18,7 @@
       :form-fields {:expenses {:create-fields [:purchased_at]
                                :edit-fields [:purchased_at]}}
       :table-columns {:expenses {:available-columns [:purchased_at :notes]
-                                 :default-hidden-columns [:notes]}}}
+                                 :default-visible-columns [:purchased_at]}}}
      overrides)))
 
 (deftest init-triggers-load-request
@@ -52,7 +52,7 @@
              :column-locks {:purchased_at true}}}
             (get-in db [:domain :config :view-options])))
       (is (= {:expenses {:available-columns [:purchased_at :notes]
-                         :default-hidden-columns [:notes]}}
+                         :default-visible-columns [:purchased_at]}}
             (get-in db [:domain :config :table-columns])))
 
       (is (= (get-in db [:admin :user-settings :draft])
@@ -111,8 +111,8 @@
     (is (nil? (get-in @rf-db/app-db
                 [:admin :user-settings :draft :view-options :expenses :column-locks :notes])))))
 
-(deftest toggle-column-visibility-updates-default-hidden-columns
-  (testing "::toggle-column-visibility-draft edits :default-hidden-columns (inverted schema)"
+(deftest toggle-column-visibility-updates-default-visible-columns
+  (testing "::toggle-column-visibility-draft edits :default-visible-columns"
     (setup/reset-db!)
     (setup/install-http-stub!)
 
@@ -121,13 +121,13 @@
 
     ;; Hide :purchased_at too
     (rf/dispatch-sync [::user-settings/toggle-column-visibility-draft :expenses :purchased_at])
-    (is (= [:purchased_at :notes]
-          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-hidden-columns])))
+        (is (= []
+          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-visible-columns])))
 
     ;; Unhide :notes
     (rf/dispatch-sync [::user-settings/toggle-column-visibility-draft :expenses :notes])
-    (is (= [:purchased_at]
-          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-hidden-columns])))))
+        (is (= [:notes]
+          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-visible-columns])))))
 
 (deftest save-sends-put-and-updates-state-on-success
   (testing "::save sends PUT and syncs state on success"

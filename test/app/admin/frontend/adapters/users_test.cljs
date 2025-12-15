@@ -40,10 +40,11 @@
             (take 2 (:on-failure req)))))))
 
 (deftest initialize-users-adapter-sets-default-ui
-  (testing "initialize event seeds list pagination defaults"
+  (testing "initialize event seeds list pagination current-page without hardcoding per-page"
     (setup/reset-db!)
     (rf/dispatch-sync [::users-adapter/initialize-users-adapter-with-config])
     (let [db @rf-db/app-db
           base (paths/list-ui-state :users)]
       (is (= 1 (get-in db (conj base :pagination :current-page))))
-      (is (= 10 (get-in db (conj base :pagination :per-page)))))))
+      (is (nil? (get-in db (conj base :pagination :per-page)))
+        "per-page should be left unset so list-view can seed it from configured defaults"))))

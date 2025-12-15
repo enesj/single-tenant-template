@@ -411,13 +411,13 @@
                 (name col)))))
 
         ($ column-list-editor
-          {:label "Default Hidden"
-           :columns (:default-hidden-columns local-config)
+          {:label "Default Visible"
+           :columns (:default-visible-columns local-config)
            :available-columns available-columns
            :editing? editing?
-           :help-text "Columns hidden by default (users can show them)"
+           :help-text "Columns visible by default (users can hide them unless always visible)"
            :on-change (fn [new-cols]
-                        (set-local-config! (assoc local-config :default-hidden-columns new-cols)))})
+                        (set-local-config! (assoc local-config :default-visible-columns new-cols)))})
 
         ($ column-list-editor
           {:label "Always Visible"
@@ -429,22 +429,22 @@
                         (set-local-config! (assoc local-config :always-visible new-cols)))})
 
         ($ column-list-editor
-          {:label "Unfilterable"
-           :columns (:unfilterable-columns local-config)
+          {:label "Filterable"
+           :columns (:filterable-columns local-config)
            :available-columns available-columns
            :editing? editing?
-           :help-text "Columns that cannot be filtered"
+           :help-text "Columns that can be filtered"
            :on-change (fn [new-cols]
-                        (set-local-config! (assoc local-config :unfilterable-columns new-cols)))})
+                        (set-local-config! (assoc local-config :filterable-columns new-cols)))})
 
         ($ column-list-editor
-          {:label "Unsortable"
-           :columns (:unsortable-columns local-config)
+          {:label "Sortable"
+           :columns (:sortable-columns local-config)
            :available-columns available-columns
            :editing? editing?
-           :help-text "Columns that cannot be sorted"
+           :help-text "Columns that can be sorted"
            :on-change (fn [new-cols]
-                        (set-local-config! (assoc local-config :unsortable-columns new-cols)))})))))
+                        (set-local-config! (assoc local-config :sortable-columns new-cols)))}))))))
 
 ;; =============================================================================
 ;; Main Content Tabs

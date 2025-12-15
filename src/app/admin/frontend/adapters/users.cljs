@@ -89,7 +89,7 @@
                 [[(conj metadata-path :sort) {:field :created_at :direction :desc}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :created_at :direction :desc}
-                                 :pagination (merge {:current-page 1 :per-page 10}
+                                 :pagination (merge {:current-page 1}
                                                (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])
           fetch-config (adapters.core/maybe-fetch-config db)]

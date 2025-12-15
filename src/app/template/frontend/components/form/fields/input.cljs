@@ -60,7 +60,11 @@
               (:input-type all-props)
               (assoc :type (or input-type "text"))
               (:step all-props)
-              (assoc :step (or (:step all-props) "0.01"))))
+              (assoc :step (or (:step all-props) "0.01"))
+              (:min all-props)
+              (assoc :min (:min all-props))
+              (:max all-props)
+              (assoc :max (:max all-props))))
           (when field-error
             ($ :div {:class error-class
                      :role "alert"}

@@ -255,26 +255,19 @@
 ;; =============================================================================
 
 (defn- initialize-entity-ui-state
-  [db entity-key {:keys [per-page sort-field sort-direction]
-                  :or {per-page 25 sort-direction :desc}}]
+  [db entity-key {:keys [sort-field sort-direction]
+                  :or {sort-direction :desc}}]
   (let [metadata-path (paths/entity-metadata entity-key)
         ui-state-path (paths/list-ui-state entity-key)
         selected-path (paths/entity-selected-ids entity-key)
-        existing-per-page (or (get-in db (paths/list-per-page entity-key)) per-page)
-        existing-page (or (get-in db (paths/list-current-page entity-key)) 1)
         sort-config (cond-> {}
                       sort-field (assoc :field sort-field)
                       sort-direction (assoc :direction sort-direction))]
     (adapters.core/assoc-paths db
-      [[metadata-path {:loading? false
-                       :error nil
-                       :sort sort-config
-                       :pagination {:page existing-page :per-page existing-per-page}}]
+      [[(conj metadata-path :sort) sort-config]
        [ui-state-path {:sort sort-config
-                       :pagination {:current-page existing-page :per-page existing-per-page}
-                       :per-page existing-per-page}]
-       [(paths/list-per-page entity-key) existing-per-page]
-       [(paths/list-current-page entity-key) existing-page]
+                       :pagination (merge {:current-page 1}
+                                     (:pagination (get-in db ui-state-path)))}]
        [selected-path #{}]])))
 
 (rf/reg-event-db
@@ -284,31 +277,31 @@
 
 (defn init-expenses-adapter!
   []
-  (rf/dispatch [::initialize-entity :expenses {:per-page 25 :sort-field :purchased-at :sort-direction :desc}]))
+  (rf/dispatch [::initialize-entity :expenses {:sort-field :purchased-at :sort-direction :desc}]))
 
 (defn init-receipts-adapter!
   []
-  (rf/dispatch [::initialize-entity :receipts {:per-page 25 :sort-field :created-at :sort-direction :desc}]))
+  (rf/dispatch [::initialize-entity :receipts {:sort-field :created-at :sort-direction :desc}]))
 
 (defn init-suppliers-adapter!
   []
-  (rf/dispatch [::initialize-entity :suppliers {:per-page 50 :sort-field :created-at :sort-direction :desc}]))
+  (rf/dispatch [::initialize-entity :suppliers {:sort-field :created-at :sort-direction :desc}]))
 
 (defn init-payers-adapter!
   []
-  (rf/dispatch [::initialize-entity :payers {:per-page 50 :sort-field :label :sort-direction :asc}]))
+  (rf/dispatch [::initialize-entity :payers {:sort-field :label :sort-direction :asc}]))
 
 (defn init-articles-adapter!
   []
-  (rf/dispatch [::initialize-entity :articles {:per-page 50 :sort-field :created-at :sort-direction :desc}]))
+  (rf/dispatch [::initialize-entity :articles {:sort-field :created-at :sort-direction :desc}]))
 
 (defn init-article-aliases-adapter!
   []
-  (rf/dispatch [::initialize-entity :article-aliases {:per-page 50 :sort-field :created-at :sort-direction :desc}]))
+  (rf/dispatch [::initialize-entity :article-aliases {:sort-field :created-at :sort-direction :desc}]))
 
 (defn init-price-observations-adapter!
   []
-  (rf/dispatch [::initialize-entity :price-observations {:per-page 50 :sort-field :observed-at :sort-direction :desc}]))
+  (rf/dispatch [::initialize-entity :price-observations {:sort-field :observed-at :sort-direction :desc}]))
 
 (defn- suppliers-request
   "Create HTTP request config for suppliers admin API."

@@ -68,29 +68,16 @@
     (let [metadata-path (paths/entity-metadata :login-events)
           ui-state-path (paths/list-ui-state :login-events)
           selected-ids-path (paths/entity-selected-ids :login-events)
-          existing-per-page (or (get-in db (paths/list-per-page :login-events))
-                              (get-in db (conj ui-state-path :per-page))
-                              (get-in db (conj ui-state-path :pagination :per-page)))
-          existing-page (or (get-in db (paths/list-current-page :login-events))
-                          (get-in db (conj ui-state-path :current-page))
-                          (get-in db (conj ui-state-path :pagination :current-page)))
-          per-page (or existing-per-page 20)
-          page (or existing-page 1)
           db* (adapters.core/assoc-paths db
                 [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
-                 [(conj metadata-path :pagination) {:page page :per-page per-page}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :created-at :direction :desc}
-                                 :current-page page
-                                 :per-page per-page
-                                 :pagination {:current-page page :per-page per-page}}]
-                 [(paths/list-per-page :login-events) per-page]
-                 [(paths/list-current-page :login-events) page]
+                                 :pagination (merge {:current-page 1}
+                                               (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])
           fetch-config (adapters.core/maybe-fetch-config db)]
       (cond-> {:db db*}
-        fetch-config (assoc :dispatch-n [fetch-config])
-        :else (assoc :dispatch-n [])))))
+        fetch-config (assoc :dispatch-n [fetch-config])))))
 
 (defn init-login-events-adapter!
   "Initialize the login events adapter for template system integration"

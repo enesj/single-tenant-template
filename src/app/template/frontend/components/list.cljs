@@ -44,7 +44,7 @@
    Modal callbacks:
    - :on-add-success - Called after successful add (closes modal, can trigger refresh)
    - :on-edit-success - Called after successful edit (closes modal, can trigger refresh)"
-  [{:keys [entity-name entity-spec title display-settings filterable-columns _per-page
+  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page
            ;; New props for custom forms and modal support
            render-add-form render-edit-form form-display on-add-success on-edit-success]
     :as props}]
@@ -84,9 +84,17 @@
         ;; Keep form-entity-spec for the add/edit form only. Table rendering
         ;; uses the provided entity-spec (vector-config) exclusively.
         form-entity-spec (use-subscribe [:form-entity-specs/by-name (keyword entity-name)])
-        per-page (or (:per-page ui-state)
-                   (get-in ui-state [:pagination :per-page])
-                   10)
+        configured-per-page (let [raw (or per-page (:per-page display-settings))
+                parsed (cond
+                   (number? raw) raw
+                   (string? raw) (js/parseInt raw 10)
+                   :else nil)]
+                  (when (and (number? parsed) (pos? parsed)) parsed))
+        existing-per-page (or (:per-page ui-state)
+                  (get-in ui-state [:pagination :per-page]))
+        effective-per-page (or existing-per-page
+                 configured-per-page
+                 10)
         {:keys [show-highlights?]} merged-display-settings
         ;; Subscribe to table width configuration for header alignment
         table-width (use-subscribe [::settings-events/table-width (some-> entity-name keyword)])
@@ -126,6 +134,15 @@
         ;; Return cleanup function (optional)
         (fn [] nil))
       [entity-name])
+
+    ;; Seed per-page once per entity when the list has no existing per-page.
+    ;; This makes entities.edn (:display-settings {:per-page ...}) actually work.
+    (use-effect
+      (fn []
+        (when (and configured-per-page (nil? existing-per-page))
+          (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page]))
+        (fn [] nil))
+      [entity-name configured-per-page existing-per-page])
 
     ;; Sync inline filter value with active filters when they change
     (use-effect
@@ -391,9 +408,9 @@
                          ;; IMPORTANT: Pass hardcoded settings (page props + view-options) for settings panel control visibility
                        :page-display-settings hardcoded-view-options
                          ;; Pass rows per page props to table for settings panel
-                       :per-page per-page
+                       :per-page effective-per-page
                        :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])
-                       :rows-per-page-options [5 10 25 50 100]})
+                         :rows-per-page-options [5 10 20 25 50 100]})
                       ;; Display pagination controls within same container as table
                       ;; Check both pagination display setting and whether there are multiple pages
                     (when (and (get merged-display-settings :show-pagination? true)
@@ -403,7 +420,7 @@
                          :total-pages total-pages
                          :on-page-change #(rf/dispatch [::ui-events/set-current-page entity-name %])
                            ;; Pass rows per page data and options
-                         :per-page per-page
+                         :per-page effective-per-page
                          :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])
-                         :rows-per-page-options [5 10 25 50 100]
+                         :rows-per-page-options [5 10 20 25 50 100]
                          :entity-name entity-name}))))))))))))

@@ -181,8 +181,14 @@
   [{:keys [entity-kw draft table-columns-config]}]
   (let [entity-config (get table-columns-config entity-kw)
         available (vec (:available-columns entity-config))
-        hidden (set (:default-hidden-columns entity-config))
-        visible (set (remove hidden available))]
+        always-visible (set (or (:always-visible entity-config) []))
+      has-default-visible? (and (map? entity-config)
+            (contains? entity-config :default-visible-columns))
+      configured-visible (vec (or (:default-visible-columns entity-config) []))
+      visible (-> (if has-default-visible?
+            (set configured-visible)
+            (set available))
+                (into always-visible))]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}

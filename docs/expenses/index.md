@@ -250,14 +250,16 @@ Expense entities are configured in `src/app/admin/frontend/config/`:
             :color-class "text-blue-600"}}
 
 ;; table-columns.edn
-{:articles {:available-columns [:canonical_name :description :category :created-at]
-            :default-hidden-columns [:description]
-            :always-visible [:canonical_name]}}
+{:articles {:available-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at :id]
+            :default-visible-columns [:canonical-name :barcode :category :created-at]
+            :filterable-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at]
+            :sortable-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at]
+            :always-visible [:canonical-name]}}
 
 ;; form-fields.edn
-{:articles {:create-fields [:canonical_name :description :category]
-            :edit-fields [:canonical_name :description :category :active?]
-            :required-fields [:canonical_name]}}
+{:articles {:create-fields [:canonical-name :barcode :category]
+            :edit-fields [:canonical-name :barcode :category]
+            :required-fields [:canonical-name]}}
 ```
 
 ## Integration Points

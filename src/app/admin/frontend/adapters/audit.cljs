@@ -59,33 +59,18 @@
     (let [metadata-path (paths/entity-metadata :audit-logs)
           ui-state-path (paths/list-ui-state :audit-logs)
           selected-ids-path (paths/entity-selected-ids :audit-logs)
-          ;; Determine existing pagination if already present to avoid overriding user choice
-          existing-per-page (or (get-in db (paths/list-per-page :audit-logs))
-                              (get-in db (conj ui-state-path :per-page))
-                              (get-in db (conj ui-state-path :pagination :per-page)))
-          existing-page (or (get-in db (paths/list-current-page :audit-logs))
-                          (get-in db (conj ui-state-path :current-page))
-                          (get-in db (conj ui-state-path :pagination :current-page)))
-
-          per-page (or existing-per-page 10)
-          page (or existing-page 1)
-
-          ;; Initialize ALL relevant pagination/sort paths; but use existing values when present
+          ;; Seed only current-page and preserve existing pagination (including per-page) if present.
+          ;; Per-page defaults are seeded by list-view from entities.edn (:display-settings :per-page).
           db* (adapters.core/assoc-paths db
                 [[(conj metadata-path :sort) {:field :timestamp :direction :desc}]
-                 [(conj metadata-path :pagination) {:page page :per-page per-page}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :timestamp :direction :desc}
-                                 :current-page page
-                                 :per-page per-page
-                                 :pagination {:current-page page :per-page per-page}}]
-                 [(paths/list-per-page :audit-logs) per-page]
-                 [(paths/list-current-page :audit-logs) page]
+                                 :pagination (merge {:current-page 1}
+                                               (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])
           fetch-config (adapters.core/maybe-fetch-config db)]
       (cond-> {:db db*}
-        fetch-config (assoc :dispatch-n [fetch-config])
-        :else (assoc :dispatch-n [])))))
+        fetch-config (assoc :dispatch-n [fetch-config])))))
 
 ;; Handle successful audit log deletion from main events
 (rf/reg-event-db

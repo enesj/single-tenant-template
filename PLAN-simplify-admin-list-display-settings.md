@@ -16,6 +16,163 @@ This plan proposes a simpler, more explicit, and easier-to-reason-about system f
 
 ---
 
+## Current state (as of 2025-12-14)
+
+This plan is being used as a “living” implementation tracker. Below is the precise state of work completed so far in this branch, plus follow-ups and open questions.
+
+### ✅ Completed changes (config + frontend)
+
+#### 1) Pruned unused `view-options.edn` keys (admin + domain)
+
+- **Admin:** `src/app/admin/frontend/config/view-options.edn`
+  - Removed currently-unused keys (and empty placeholder maps) that were *not consumed anywhere* in the current UI:
+    - `:search-fields`, `:filters`, `:pagination` (`:default-page-size`, `:available-page-sizes`), `:default-sort`, `:export-formats`, `:bulk-actions`
+    - removed empty `:display-defaults` / `:column-defaults` entries where they provided no value
+  - Kept only what currently matters for list UI behavior:
+    - `:display-defaults` (where used)
+    - `:display-locks`
+    - `:column-locks`
+
+- **Domain (user-facing expenses):** `src/app/domain/frontend/expenses/config/view-options.edn`
+  - Removed `:per-page` and empty `:column-defaults`.
+  - Kept `:display-defaults`, `:display-locks`, `:column-locks`.
+
+**Finding:** there are **no runtime references** to `:default-page-size` / `:available-page-sizes` in `src/**/*.cljs`.
+
+#### 2) Migrated `table-columns.edn` away from inverted keys (admin + domain)
+
+- **Admin:** `src/app/admin/frontend/config/table-columns.edn`
+- **Domain (user-facing expenses):** `src/app/domain/frontend/expenses/config/table-columns.edn`
+
+Both now persist and use the internal “positive” keys:
+
+- `:default-visible-columns`
+- `:filterable-columns`
+- `:sortable-columns`
+
+…and no longer use the inverted keys:
+
+- `:default-hidden-columns`
+- `:unfilterable-columns`
+- `:unsortable-columns`
+
+#### 3) Removed the “inverted → internal” conversion logic in the frontend
+
+- `src/app/admin/frontend/config/loader.cljs`
+  - Removed the now-obsolete `transform-inverted-config` logic for table-columns.
+- `src/app/template/frontend/subs/ui.cljs`
+  - Removed fallback support for `:default-hidden-columns` in `::visible-columns`.
+
+#### 4) Updated legacy (no longer primary-routed) settings/editor code paths to not break
+
+Even though `/admin/admin-settings` and `/admin/user-settings` are unified, the following legacy files were updated so they don’t crash or regress if used:
+
+- `src/app/admin/frontend/events/user_settings.cljs`
+- `src/app/admin/frontend/pages/user_settings.cljs`
+- `src/app/admin/frontend/pages/settings.cljs`
+
+#### 5) Updated tests
+
+- `test/app/template/frontend/subs/ui_test.cljs`
+- `test/app/admin/frontend/events/user_settings_test.cljs`
+
+### ✅ Verification status
+
+- **FE tests:** re-run successfully:
+  - `npm run test:cljs` → **237 tests / 1318 assertions / 0 failures / 0 errors**
+  - Full output saved to: `/tmp/fe-test-2025-12-14.txt`
+
+### 🔎 Follow-up findings (pagination / :per-page)
+
+- `:per-page` appears widely in **UI state and routing/query param plumbing**.
+- There are **no runtime call sites** that read `:per-page` from `view-options.edn`.
+- Domain removal of `:per-page` from `src/app/domain/frontend/expenses/config/view-options.edn` is therefore expected to be safe.
+
+Related note: `src/app/admin/frontend/config/entities.edn` contains `:display-settings {:per-page ...}` for multiple entities.
+
+✅ This is now wired up:
+
+- `src/app/template/frontend/components/list.cljs` reads `:per-page` (top-level prop) and/or `:display-settings :per-page` as a configured default.
+- If list UI state does not already have a per-page value, `list-view` seeds it once by dispatching `::ui-events/set-per-page`.
+- User changes still win (UI state remains the source of truth after initialization).
+
+Implementation note: admin adapters no longer hardcode `:per-page` into list UI state during initialization (they only seed `:current-page 1` and preserve any existing pagination), so config-driven defaults can take effect.
+
+### 📄 Documentation drift to fix later
+
+Some docs were previously stale due to the `table-columns.edn` key shape change.
+
+- `ADMIN-LIST-VIEW-DISPLAY-SETTINGS.md` now reflects the internal (non-inverted) shape.
+- `docs/expenses/index.md` contains example config; verify periodically that examples match the current `entities.edn` / `table-columns.edn` shapes.
+
+### 🧾 Report file created/updated
+
+- `ADMIN-CONFIG-EDN-USAGE-REPORT.md`
+  - Updated to reflect that `table-columns.edn` now stores the internal key shape (no load-time transform).
+
+### Files touched (for quick handoff)
+
+- Config (admin):
+  - `src/app/admin/frontend/config/view-options.edn`
+  - `src/app/admin/frontend/config/table-columns.edn`
+- Config (domain / user-facing):
+  - `src/app/domain/frontend/expenses/config/view-options.edn`
+  - `src/app/domain/frontend/expenses/config/table-columns.edn`
+- Frontend logic:
+  - `src/app/admin/frontend/config/loader.cljs`
+  - `src/app/template/frontend/subs/ui.cljs`
+- Legacy admin settings/editor paths updated for compatibility:
+  - `src/app/admin/frontend/events/user_settings.cljs`
+  - `src/app/admin/frontend/pages/user_settings.cljs`
+  - `src/app/admin/frontend/pages/settings.cljs`
+- Tests updated:
+  - `test/app/admin/frontend/events/user_settings_test.cljs`
+  - `test/app/template/frontend/subs/ui_test.cljs`
+
+### ⚠️ Working tree note: unrelated deletions present
+
+`git status` currently shows several deleted files under:
+
+- `src/app/shared/schemas/**`
+- `src/app/template/backend/subscription/service.clj`
+
+These look **unrelated** to the admin list display settings work. A quick search found **no current references** to those namespaces in `src/**/*.clj*`, but the deletions still need an intentional decision (keep vs revert) before this branch is finalized.
+
+Update: these files have been **restored from HEAD** to keep this branch focused on admin list display settings changes.
+
+### ▶️ Next session checklist (recommended)
+
+1) **Decide what to do with the unrelated deletions**
+  - Identify whether the removed schema/subscription files were intentional.
+  - If accidental, revert them before continuing work on this plan.
+
+2) **Update stale docs** (optional but recommended to avoid future confusion)
+  - Refresh `ADMIN-LIST-VIEW-DISPLAY-SETTINGS.md` sections that describe inverted table-columns keys/transform.
+  - Update `docs/expenses/index.md` examples to use `:default-visible-columns` (and friends).
+
+3) **Clarify pagination defaults policy**
+  - ✅ Done: `:display-settings :per-page` is now a real config-driven default.
+    - `list-view` seeds per-page into UI state when missing.
+    - Admin adapters avoid hardcoding per-page so defaults can apply.
+
+4) **(Optional) Add validation for `table-columns.edn`**
+  - Now that the internal key shape is canonical, consider adding a small schema/validator to prevent drift (e.g. ensure defaults/filters/sortables are subsets of `:available-columns`).
+
+5) **Re-verify quickly before handing off**
+  - Capture test output once (don’t re-run repeatedly):
+
+  ```bash
+  npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
+  ```
+
+  - Snapshot working tree:
+
+  ```bash
+  git status --porcelain=v1
+  ```
+
+---
+
 ## Goals
 
 1. **One place to compute effective settings**

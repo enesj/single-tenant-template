@@ -1,9 +1,12 @@
 {:suppliers
  {:available-columns
   [:display-name :normalized-key :address :tax-id :created-at :id],
-  :default-hidden-columns [:id],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns
+  [:display-name :normalized-key :address :tax-id :created-at],
+  :filterable-columns
+  [:display-name :normalized-key :address :tax-id :created-at],
+  :sortable-columns
+  [:display-name :normalized-key :address :tax-id :created-at],
   :always-visible [:display-name],
   :computed-fields {},
   :column-config
@@ -14,27 +17,36 @@
    :created-at {:width "170px", :formatter :date}}},
  :admins
  {:available-columns
-  [:id
-   :email
-   :full-name
-   :role
-   :status
-   :last-login-at
-   :created-at
-   :updated-at],
-  :default-hidden-columns [],
-  :unfilterable-columns [:id :created-at :updated-at :last-login-at],
-  :unsortable-columns [:id :last-login-at :updated-at],
-  :always-visible [:email],
+  ["id"
+   "email"
+   "full-name"
+   "role"
+   "status"
+   "last-login-at"
+   "created-at"
+   "updated-at"],
+  :default-visible-columns
+  ["id"
+   "email"
+   "full-name"
+   "role"
+   "status"
+   "last-login-at"
+   "created-at"
+   "updated-at"],
+  :filterable-columns
+  ["email" "full-name" "role" "status" "last-login-at"],
+  :sortable-columns ["email" "full-name" "role" "status" "created-at"],
+  :always-visible ["email"],
   :computed-fields {},
   :column-config
-  {:role {:width "100px", :formatter :admin-role-badge},
-   :updated-at {:width "140px", :formatter :date},
-   :email {:width "220px", :formatter :email-link},
-   :last-login-at {:width "160px", :formatter :date},
-   :status {:width "100px", :formatter :status-badge},
+  {:role {:width "100px", :formatter "admin-role-badge"},
+   :updated-at {:width "140px", :formatter "date"},
+   :email {:width "220px", :formatter "email-link"},
+   :last-login-at {:width "160px", :formatter "date"},
+   :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
-   :created-at {:width "140px", :formatter :date}}},
+   :created-at {:width "140px", :formatter "date"}}},
  :articles
  {:available-columns
   [:canonical-name
@@ -44,9 +56,22 @@
    :created-at
    :updated-at
    :id],
-  :default-hidden-columns [:id :normalized-key :updated-at],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns
+  [:canonical-name :barcode :category :created-at],
+  :filterable-columns
+  [:canonical-name
+   :barcode
+   :category
+   :normalized-key
+   :created-at
+   :updated-at],
+  :sortable-columns
+  [:canonical-name
+   :barcode
+   :category
+   :normalized-key
+   :created-at
+   :updated-at],
   :always-visible [:canonical-name],
   :computed-fields {},
   :column-config
@@ -67,9 +92,33 @@
    :purchased-at
    :status
    :id],
-  :default-hidden-columns [:id],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns
+  [:supplier-display-name
+   :supplier-normalized-key
+   :payer-label
+   :payer-type
+   :total-amount
+   :currency
+   :purchased-at
+   :status],
+  :filterable-columns
+  [:supplier-display-name
+   :supplier-normalized-key
+   :payer-label
+   :payer-type
+   :total-amount
+   :currency
+   :purchased-at
+   :status],
+  :sortable-columns
+  [:supplier-display-name
+   :supplier-normalized-key
+   :payer-label
+   :payer-type
+   :total-amount
+   :currency
+   :purchased-at
+   :status],
   :always-visible
   [:supplier-display-name :total-amount :purchased-at :status],
   :computed-fields {},
@@ -93,9 +142,32 @@
    :currency
    :expense-item-id
    :id],
-  :default-hidden-columns [:id :expense-item-id],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns
+  [:article-canonical-name
+   :supplier-display-name
+   :observed-at
+   :unit-price
+   :line-total
+   :qty
+   :currency],
+  :filterable-columns
+  [:article-canonical-name
+   :supplier-display-name
+   :observed-at
+   :unit-price
+   :line-total
+   :qty
+   :currency
+   :expense-item-id],
+  :sortable-columns
+  [:article-canonical-name
+   :supplier-display-name
+   :observed-at
+   :unit-price
+   :line-total
+   :qty
+   :currency
+   :expense-item-id],
   :always-visible
   [:article-canonical-name
    :supplier-display-name
@@ -113,9 +185,9 @@
    :expense-item-id {:width "200px"}}},
  :payers
  {:available-columns [:label :type :is-default :id],
-  :default-hidden-columns [:id],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns [:label :type :is-default],
+  :filterable-columns [:label :type :is-default],
+  :sortable-columns [:label :type :is-default],
   :always-visible [:label],
   :computed-fields {},
   :column-config
@@ -133,9 +205,34 @@
    "ip-address"
    "user-agent"
    "changes"],
-  :default-hidden-columns ["entity-id" "user-agent"],
-  :unfilterable-columns [],
-  :unsortable-columns [],
+  :default-visible-columns
+  ["action"
+   "entity-type"
+   "entity-name"
+   "admin-email"
+   "admin-name"
+   "ip-address"
+   "changes"],
+  :filterable-columns
+  ["action"
+   "entity-type"
+   "entity-id"
+   "entity-name"
+   "admin-email"
+   "admin-name"
+   "ip-address"
+   "user-agent"
+   "changes"],
+  :sortable-columns
+  ["action"
+   "entity-type"
+   "entity-id"
+   "entity-name"
+   "admin-email"
+   "admin-name"
+   "ip-address"
+   "user-agent"
+   "changes"],
   :always-visible ["action"],
   :computed-fields
   {:entity-name
@@ -163,9 +260,12 @@
  :receipts
  {:available-columns
   [:original-filename :status :supplier-guess :created-at :id],
-  :default-hidden-columns [:id],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns
+  [:original-filename :status :supplier-guess :created-at],
+  :filterable-columns
+  [:original-filename :status :supplier-guess :created-at],
+  :sortable-columns
+  [:original-filename :status :supplier-guess :created-at],
   :always-visible [:original-filename :status :created-at],
   :computed-fields {},
   :column-config
@@ -183,9 +283,31 @@
    "reason"
    "ip-address"
    "user-agent"],
-  :default-hidden-columns ["user-agent"],
-  :unfilterable-columns [],
-  :unsortable-columns ["reason"],
+  :default-visible-columns
+  ["created-at"
+   "principal-type"
+   "principal-email"
+   "principal-name"
+   "success"
+   "reason"
+   "ip-address"],
+  :filterable-columns
+  ["created-at"
+   "principal-type"
+   "principal-email"
+   "principal-name"
+   "success"
+   "reason"
+   "ip-address"
+   "user-agent"],
+  :sortable-columns
+  ["created-at"
+   "principal-type"
+   "principal-email"
+   "principal-name"
+   "success"
+   "ip-address"
+   "user-agent"],
   :always-visible ["user-agent"],
   :computed-fields {},
   :column-config
@@ -205,9 +327,24 @@
    :confidence
    :created-at
    :id],
-  :default-hidden-columns [:id],
-  :unfilterable-columns [:id],
-  :unsortable-columns [:id],
+  :default-visible-columns
+  [:supplier-display-name
+   :article-canonical-name
+   :raw-label-normalized
+   :confidence
+   :created-at],
+  :filterable-columns
+  [:supplier-display-name
+   :article-canonical-name
+   :raw-label-normalized
+   :confidence
+   :created-at],
+  :sortable-columns
+  [:supplier-display-name
+   :article-canonical-name
+   :raw-label-normalized
+   :confidence
+   :created-at],
   :always-visible [:supplier-display-name :raw-label-normalized],
   :computed-fields {},
   :column-config
@@ -218,27 +355,28 @@
    :created-at {:width "170px", :formatter :date}}},
  :users
  {:available-columns
-  [:id
-   :email
-   :full-name
-   :status
-   :role
-   :last-login-at
-   :email-verified-at
-   :created-at
-   :updated-at],
-  :default-hidden-columns [:last-login-at :updated-at],
-  :unfilterable-columns [:id :email-verified-at],
-  :unsortable-columns
-  [:id :role :last-login-at :email-verified-at :updated-at],
-  :always-visible [:id :email],
+  ["id"
+   "email"
+   "full-name"
+   "status"
+   "role"
+   "last-login-at"
+   "email-verified-at"
+   "created-at"
+   "updated-at"],
+  :default-visible-columns
+  ["id" "status" "role" "email-verified-at" "created-at"],
+  :filterable-columns
+  ["status" "role" "last-login-at" "created-at" "updated-at"],
+  :sortable-columns ["status" "created-at"],
+  :always-visible ["id" "email"],
   :computed-fields {},
   :column-config
-  {:role {:width "100px", :formatter :role-badge},
-   :updated-at {:width "140px", :formatter :date},
-   :email {:width "200px", :formatter :email-link},
-   :email-verified-at {:width "180px", :formatter :date},
-   :last-login-at {:width "160px", :formatter :date},
-   :status {:width "100px", :formatter :status-badge},
+  {:role {:width "100px", :formatter "role-badge"},
+   :updated-at {:width "140px", :formatter "date"},
+   :email {:width "200px", :formatter "email-link"},
+   :email-verified-at {:width "180px", :formatter "date"},
+   :last-login-at {:width "160px", :formatter "date"},
+   :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
-   :created-at {:width "140px", :formatter :date}}}}
+   :created-at {:width "140px", :formatter "date"}}}}

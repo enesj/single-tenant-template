@@ -229,7 +229,7 @@
             (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :column-locks)))))))
 
 ;; =============================================================================
-;; Draft editing: table-columns defaults (inverted schema)
+;; Draft editing: table-columns defaults
 ;; =============================================================================
 
 (rf/reg-event-db
@@ -239,7 +239,13 @@
           column-kw (normalize-kw column-name)
           entity-config (safe-map (get-in db [:admin :user-settings :draft :table-columns entity-kw]))
           available (normalize-cols (:available-columns entity-config))
-          hidden-set (into #{} (normalize-cols (:default-hidden-columns entity-config)))]
+          always-visible-set (into #{} (normalize-cols (:always-visible entity-config)))
+          has-default-visible? (contains? entity-config :default-visible-columns)
+          default-visible (normalize-cols (if has-default-visible?
+                                           (:default-visible-columns entity-config)
+                                           available))
+          visible-set (into #{} default-visible)
+          visible-set (into visible-set always-visible-set)]
       (cond
         (or (nil? entity-kw) (nil? column-kw))
         db
@@ -247,18 +253,21 @@
         (not (some #{column-kw} available))
         db
 
+        (contains? always-visible-set column-kw)
+        db
+
         :else
-        (let [hiding? (not (contains? hidden-set column-kw))
-              new-hidden-set (if hiding?
-                               (conj hidden-set column-kw)
-                               (disj hidden-set column-kw))
+        (let [currently-visible? (contains? visible-set column-kw)
+              new-visible-set (if currently-visible?
+                                (disj visible-set column-kw)
+                                (conj visible-set column-kw))
               ;; Preserve ordering based on available-columns
-              new-hidden (->> available
-                           (filter new-hidden-set)
-                           vec)]
+              new-visible (->> available
+                            (filter new-visible-set)
+                            vec)]
           (assoc-in db
-            [:admin :user-settings :draft :table-columns entity-kw :default-hidden-columns]
-            new-hidden))))))
+            [:admin :user-settings :draft :table-columns entity-kw :default-visible-columns]
+            new-visible))))))
 
 (rf/reg-event-db
   ::reset-columns-draft
@@ -378,3 +387,105 @@
   ::table-columns-config
   (fn [db _]
     (safe-map (get-in db [:admin :user-settings :draft :table-columns]))))
+
+;; =============================================================================
+;; Draft editing: entities config
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-entity-title-draft
+  (fn [db [_ entity new-title]]
+    (let [entity-kw (normalize-kw entity)]
+      (if (nil? entity-kw)
+        db
+        (assoc-in db [:admin :user-settings :draft :entities entity-kw :title] new-title)))))
+
+(rf/reg-event-db
+  ::reset-entity-draft
+  (fn [db [_ entity]]
+    (let [entity-kw (normalize-kw entity)
+          saved-entity (get-in db [:admin :user-settings :saved :entities entity-kw])]
+      (if (nil? entity-kw)
+        db
+        (assoc-in db [:admin :user-settings :draft :entities entity-kw] (safe-map saved-entity))))))
+
+;; =============================================================================
+;; Draft editing: form-fields config
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-form-field-list-draft
+  (fn [db [_ entity field-type fields]]
+    (let [entity-kw (normalize-kw entity)
+          field-type-kw (normalize-kw field-type)]
+      (if (or (nil? entity-kw) (nil? field-type-kw))
+        db
+        (assoc-in db [:admin :user-settings :draft :form-fields entity-kw field-type-kw] (vec fields))))))
+
+(rf/reg-event-db
+  ::toggle-form-field-draft
+  (fn [db [_ entity field-type field-name]]
+    (let [entity-kw (normalize-kw entity)
+          field-type-kw (normalize-kw field-type)
+          field-str (if (keyword? field-name) (name field-name) (str field-name))
+          path [:admin :user-settings :draft :form-fields entity-kw field-type-kw]
+          current-fields (vec (or (get-in db path) []))
+          field-set (set current-fields)]
+      (if (or (nil? entity-kw) (nil? field-type-kw))
+        db
+        (let [new-fields (if (contains? field-set field-str)
+                           (vec (remove #{field-str} current-fields))
+                           (conj current-fields field-str))]
+          (assoc-in db path new-fields))))))
+
+(rf/reg-event-db
+  ::reset-form-fields-draft
+  (fn [db [_ entity]]
+    (let [entity-kw (normalize-kw entity)
+          saved-config (get-in db [:admin :user-settings :saved :form-fields entity-kw])]
+      (if (nil? entity-kw)
+        db
+        (assoc-in db [:admin :user-settings :draft :form-fields entity-kw] (safe-map saved-config))))))
+
+;; =============================================================================
+;; Draft editing: table-columns config (structural, not policy)
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-table-column-list-draft
+  (fn [db [_ entity list-type columns]]
+    (let [entity-kw (normalize-kw entity)
+          list-type-kw (normalize-kw list-type)]
+      (if (or (nil? entity-kw) (nil? list-type-kw))
+        db
+        (assoc-in db [:admin :user-settings :draft :table-columns entity-kw list-type-kw] (vec columns))))))
+
+(rf/reg-event-db
+  ::toggle-table-column-in-list-draft
+  (fn [db [_ entity list-type column-name]]
+    (let [entity-kw (normalize-kw entity)
+          list-type-kw (normalize-kw list-type)
+          col-str (if (keyword? column-name) (name column-name) (str column-name))
+          path [:admin :user-settings :draft :table-columns entity-kw list-type-kw]
+          current-cols (vec (or (get-in db path) []))
+          col-set (set current-cols)]
+      (if (or (nil? entity-kw) (nil? list-type-kw))
+        db
+        (let [new-cols (if (contains? col-set col-str)
+                         (vec (remove #{col-str} current-cols))
+                         (conj current-cols col-str))]
+          (assoc-in db path new-cols))))))
+
+;; =============================================================================
+;; Additional subscriptions for config editing
+;; =============================================================================
+
+(rf/reg-sub
+  ::entities-config
+  (fn [db _]
+    (safe-map (get-in db [:admin :user-settings :draft :entities]))))
+
+(rf/reg-sub
+  ::form-fields-config
+  (fn [db _]
+    (safe-map (get-in db [:admin :user-settings :draft :form-fields]))))

@@ -252,20 +252,11 @@
           legacy (when entity-kw
                    (normalize-col-map (get-in db [:ui :entity-configs entity-kw :visible-columns])))
 
-          hidden (cond
-                   (seq (:default-hidden-columns table-config))
-                   (->> (:default-hidden-columns table-config)
-                     (keep normalize-col)
-                     vec)
-
-                   ;; Vector-config shape: derive hidden = available - default-visible
-                   (and (seq available) (seq (:default-visible-columns table-config)))
+          hidden (when (and (seq available) (seq (:default-visible-columns table-config)))
                    (let [visible-set (into #{} (keep normalize-col) (:default-visible-columns table-config))]
                      (->> available
                        (remove visible-set)
-                       vec))
-
-                   :else nil)
+                       vec)))
           defaults-from-config (when (seq hidden)
                                  ;; Provide explicit false entries for hidden columns.
                                  ;; Rendering treats missing keys as visible.

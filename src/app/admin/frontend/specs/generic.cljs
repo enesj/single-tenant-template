@@ -220,7 +220,9 @@
       options)))
 
 (defn- build-field-spec-from-config
-  "Build a field spec from form-fields.edn field configuration"
+  "Build a field spec from form-fields.edn field configuration.
+   Supports keys: :type, :label, :options, :placeholder, :default,
+   :min-length, :max-length, :validation, :min, :max, :step"
   [field-key field-config _editing?]
   (let [base {:id field-key
               :label (or (:label field-config)
@@ -236,10 +238,17 @@
         with-placeholder (if (:placeholder field-config)
                            (assoc with-options :placeholder (:placeholder field-config))
                            with-options)
+        ;; Add all validation and constraint keys
         with-validation (cond-> with-placeholder
                           (:min-length field-config) (assoc :min-length (:min-length field-config))
                           (:max-length field-config) (assoc :max-length (:max-length field-config))
-                          (:validation field-config) (assoc :validation (:validation field-config)))]
+                          (:validation field-config) (assoc :validation (:validation field-config))
+                          ;; Numeric field constraints
+                          (:min field-config) (assoc :min (:min field-config))
+                          (:max field-config) (assoc :max (:max field-config))
+                          (:step field-config) (assoc :step (:step field-config))
+                          ;; Default value for field initialization
+                          (:default field-config) (assoc :default (:default field-config)))]
     with-validation))
 
 (defn- generate-admin-form-entity-spec-from-db

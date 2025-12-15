@@ -38,55 +38,15 @@
       (log/error "No endpoint configured for config type" config-type)
       (js/Promise.resolve {}))))
 
-(defn- transform-inverted-config
-  "Transform inverted config format to internal format.
-   The inverted format specifies what to HIDE/DISABLE rather than what to SHOW/ENABLE."
-  [entity-config]
-  (let [available (:available-columns entity-config)]
-    (if (or (:default-hidden-columns entity-config)
-          (:unfilterable-columns entity-config)
-          (:unsortable-columns entity-config))
-      ;; New inverted format - transform it
-      (let [;; Convert hidden to visible
-            visible-columns (if-let [hidden (:default-hidden-columns entity-config)]
-                              (vec (remove (set hidden) available))
-                              (:default-visible-columns entity-config))
-
-            ;; Convert unfilterable to filterable
-            filterable-columns (if-let [unfilterable (:unfilterable-columns entity-config)]
-                                 (vec (remove (set unfilterable) available))
-                                 (:filterable-columns entity-config))
-
-            ;; Convert unsortable to sortable
-            sortable-columns (if-let [unsortable (:unsortable-columns entity-config)]
-                               (vec (remove (set unsortable) available))
-                               (:sortable-columns entity-config))]
-
-        (-> entity-config
-            ;; Remove inverted keys
-          (dissoc :default-hidden-columns :unfilterable-columns :unsortable-columns)
-            ;; Add standard keys
-          (assoc :default-visible-columns visible-columns
-            :filterable-columns filterable-columns
-            :sortable-columns sortable-columns)))
-      ;; Fallback - return as is (shouldn't happen after migration)
-      entity-config)))
-
 (defn- load-config!
   "Load a config type from the admin API and cache it"
   [config-type]
   (-> (fetch-config config-type)
     (.then (fn [config]
-               ;; Transform table-columns configs from inverted format
-             (let [final-config (if (= config-type :table-columns)
-                                  (into {} (map (fn [[k v]]
-                                                  [k (transform-inverted-config v)])
-                                             config))
-                                  config)]
-                 ;; Merge into existing cache to avoid overwriting preloaded entries
-               (swap! config-cache update config-type (fnil merge {}) final-config)
-               (log/debug "Loaded config:" config-type final-config)
-               final-config)))))
+             ;; Merge into existing cache to avoid overwriting preloaded entries
+             (swap! config-cache update config-type (fnil merge {}) config)
+             (log/debug "Loaded config:" config-type config)
+             config))))
 
 (defn load-all-configs!
   "Load all configuration files from the admin API"

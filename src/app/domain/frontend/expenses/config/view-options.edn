@@ -10,6 +10,5 @@
    :show-batch-delete? false,
    :show-delete? false,
    :show-edit? false},
-  :per-page 25,
-  :column-locks {:purchased_at false, :supplier_id false},
-  :column-defaults {}}}
+  :column-locks {:supplier_id false},
+  :column-defaults {:purchased_at true}}}

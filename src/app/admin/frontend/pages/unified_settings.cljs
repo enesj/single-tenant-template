@@ -10,13 +10,13 @@
     [app.admin.frontend.components.layout :as layout]
     [app.admin.frontend.components.settings-shell :as shell]
     [app.admin.frontend.components.settings-views :as views]
+    [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.events.settings :as admin-settings-events]
     [app.admin.frontend.events.unified-settings :as unified-events]
     [app.admin.frontend.events.user-settings :as user-settings-events]
     [app.admin.frontend.settings.definitions :as defs]
     [app.template.frontend.settings.resolver :as resolver]
     [clojure.set :as set]
-    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -75,7 +75,7 @@
 
 (defui view-mode-content
   "Content for view mode - shows overview of both scopes."
-  [{:keys [page-scope admin-config user-config user-draft]}]
+  [{:keys [page-scope admin-config user-draft]}]
   (let [user-view-options (or (:view-options user-draft) {})
         user-entities (or (:entities user-draft) {})]
     ($ :div {:class "space-y-8"}
@@ -104,6 +104,150 @@
                                    {:key (name entity-kw)
                                     :entity-kw entity-kw
                                     :settings (get admin-config entity-kw)}))})))))
+
+;; =============================================================================
+;; Config Tabs and Editors for User Scope
+;; =============================================================================
+
+(defui config-tabs
+  "Tab bar for switching between config types."
+  [{:keys [tab on-tab-change]}]
+  ($ :div {:class "ds-tabs ds-tabs-boxed mb-6"}
+    (tabs/tab-link {:label "📋 View Options"
+                    :active? (= tab "view-options")
+                    :on-select #(on-tab-change "view-options")})
+    (tabs/tab-link {:label "📝 Entities"
+                    :active? (= tab "entities")
+                    :on-select #(on-tab-change "entities")})
+    (tabs/tab-link {:label "📄 Form Fields"
+                    :active? (= tab "form-fields")
+                    :on-select #(on-tab-change "form-fields")})
+    (tabs/tab-link {:label "📊 Table Columns"
+                    :active? (= tab "table-columns")
+                    :on-select #(on-tab-change "table-columns")})))
+
+(defui entity-config-editor
+  "Editor for entities.edn - entity title."
+  [{:keys [entity-kw entities-config on-title-change on-reset]}]
+  (let [entity-config (get entities-config entity-kw {})
+        title (or (:title entity-config) "")]
+    ($ :div {:class "ds-card bg-base-100 shadow-md"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-4"}
+          ($ :h3 {:class "ds-card-title text-lg"} "Entity Configuration")
+          (when on-reset
+            ($ :button {:type "button"
+                        :class "ds-btn ds-btn-xs ds-btn-ghost"
+                        :on-click #(on-reset entity-kw)}
+              "Reset")))
+        ($ :div {:class "form-control"}
+          ($ :label {:class "label"}
+            ($ :span {:class "label-text"} "Display Title"))
+          ($ :input {:type "text"
+                     :class "ds-input ds-input-bordered w-full"
+                     :value title
+                     :on-change (fn [e]
+                                  (on-title-change entity-kw (-> e .-target .-value)))}))))))
+
+(defui form-fields-editor
+  "Editor for form-fields.edn - create/edit field lists."
+  [{:keys [entity-kw form-fields-config table-columns-config on-toggle on-reset]}]
+  (let [entity-config (get form-fields-config entity-kw {})
+        table-config (get table-columns-config entity-kw {})
+        available-cols (or (:available-columns table-config) [])
+        create-fields (set (or (:create-fields entity-config) []))
+        edit-fields (set (or (:edit-fields entity-config) []))]
+    ($ :div {:class "ds-card bg-base-100 shadow-md"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-4"}
+          ($ :h3 {:class "ds-card-title text-lg"} "Form Fields Configuration")
+          (when on-reset
+            ($ :button {:type "button"
+                        :class "ds-btn ds-btn-xs ds-btn-ghost"
+                        :on-click #(on-reset entity-kw)}
+              "Reset")))
+
+        ;; Create Fields
+        ($ :div {:class "mb-4"}
+          ($ :h4 {:class "text-sm font-semibold mb-2"} "Create Form Fields")
+          ($ :p {:class "text-xs text-base-content/60 mb-2"}
+            "Fields shown when creating a new record")
+          (if (seq available-cols)
+            ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
+              (for [col available-cols]
+                ($ :label {:key (str "create-" col)
+                           :class "flex items-center gap-2 p-2 rounded-lg bg-base-200"}
+                  ($ :input {:type "checkbox"
+                             :class "ds-checkbox ds-checkbox-sm"
+                             :checked (contains? create-fields col)
+                             :on-change #(on-toggle entity-kw :create-fields col)})
+                  ($ :span {:class "text-sm"} col))))
+            ($ :p {:class "text-sm text-base-content/60"} "No columns available")))
+
+        ;; Edit Fields
+        ($ :div
+          ($ :h4 {:class "text-sm font-semibold mb-2"} "Edit Form Fields")
+          ($ :p {:class "text-xs text-base-content/60 mb-2"}
+            "Fields shown when editing an existing record")
+          (if (seq available-cols)
+            ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
+              (for [col available-cols]
+                ($ :label {:key (str "edit-" col)
+                           :class "flex items-center gap-2 p-2 rounded-lg bg-base-200"}
+                  ($ :input {:type "checkbox"
+                             :class "ds-checkbox ds-checkbox-sm"
+                             :checked (contains? edit-fields col)
+                             :on-change #(on-toggle entity-kw :edit-fields col)})
+                  ($ :span {:class "text-sm"} col))))
+            ($ :p {:class "text-sm text-base-content/60"} "No columns available")))))))
+
+(defui table-columns-editor
+  "Editor for table-columns.edn - structural column configuration."
+  [{:keys [entity-kw table-columns-config on-toggle on-reset]}]
+  (let [entity-config (get table-columns-config entity-kw {})
+        available (or (:available-columns entity-config) [])
+        default-visible (set (or (:default-visible-columns entity-config) []))
+        filterable (set (or (:filterable-columns entity-config) []))
+        sortable (set (or (:sortable-columns entity-config) []))]
+    ($ :div {:class "ds-card bg-base-100 shadow-md"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-4"}
+          ($ :h3 {:class "ds-card-title text-lg"} "Table Columns Configuration")
+          (when on-reset
+            ($ :button {:type "button"
+                        :class "ds-btn ds-btn-xs ds-btn-ghost"
+                        :on-click #(on-reset entity-kw)}
+              "Reset")))
+
+        (if (empty? available)
+          ($ :p {:class "text-sm text-base-content/60"} "No columns configured")
+          ($ :div {:class "overflow-x-auto"}
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ :thead
+                ($ :tr
+                  ($ :th "Column")
+                  ($ :th {:class "text-center"} "Default Visible")
+                  ($ :th {:class "text-center"} "Filterable")
+                  ($ :th {:class "text-center"} "Sortable")))
+              ($ :tbody
+                (for [col available]
+                  ($ :tr {:key col}
+                    ($ :td {:class "font-medium"} col)
+                    ($ :td {:class "text-center"}
+                      ($ :input {:type "checkbox"
+                                 :class "ds-checkbox ds-checkbox-sm"
+                                 :checked (contains? default-visible col)
+                                 :on-change #(on-toggle entity-kw :default-visible-columns col)}))
+                    ($ :td {:class "text-center"}
+                      ($ :input {:type "checkbox"
+                                 :class "ds-checkbox ds-checkbox-sm"
+                                 :checked (contains? filterable col)
+                                 :on-change #(on-toggle entity-kw :filterable-columns col)}))
+                    ($ :td {:class "text-center"}
+                      ($ :input {:type "checkbox"
+                                 :class "ds-checkbox ds-checkbox-sm"
+                                 :checked (contains? sortable col)
+                                 :on-change #(on-toggle entity-kw :sortable-columns col)}))))))))))))
 
 ;; =============================================================================
 ;; Edit Mode Content - Single Scope Editor
@@ -154,13 +298,16 @@
 
 (defui edit-mode-content
   "Content for edit mode - shows editor for selected entity."
-  [{:keys [scope selected-entity admin-config user-draft]}]
-  (let [on-admin-change (fn [entity-name setting-key new-state]
+  [{:keys [scope selected-entity admin-config user-draft tab on-tab-change
+           admin-form-fields admin-table-columns]}]
+  (let [;; Admin handlers
+        on-admin-change (fn [entity-name setting-key new-state]
                           (rf/dispatch [::admin-settings-events/set-display-setting-draft
                                         entity-name setting-key new-state]))
         on-admin-column-change (fn [entity-name column-key new-state]
                                  (rf/dispatch [::admin-settings-events/set-column-visibility-setting-draft
                                                entity-name column-key new-state]))
+        ;; User handlers
         on-user-change (fn [entity-kw setting-key new-state]
                          (rf/dispatch [::user-settings-events/set-display-setting-draft
                                        entity-kw setting-key new-state]))
@@ -168,32 +315,123 @@
                                 (rf/dispatch [::user-settings-events/set-column-visibility-setting-draft
                                               entity-kw column-key new-state]))
         on-user-reset (fn [entity-kw]
-                        (rf/dispatch [::user-settings-events/reset-entity-display-draft entity-kw]))]
+                        (rf/dispatch [::user-settings-events/reset-entity-display-draft entity-kw]))
+        ;; User entity/form-fields/table-columns handlers
+        on-user-title-change (fn [entity-kw title]
+                               (rf/dispatch [::user-settings-events/set-entity-title-draft entity-kw title]))
+        on-user-entity-reset (fn [entity-kw]
+                               (rf/dispatch [::user-settings-events/reset-entity-draft entity-kw]))
+        on-user-form-field-toggle (fn [entity-kw field-type field-name]
+                                    (rf/dispatch [::user-settings-events/toggle-form-field-draft
+                                                  entity-kw field-type field-name]))
+        on-user-form-fields-reset (fn [entity-kw]
+                                    (rf/dispatch [::user-settings-events/reset-form-fields-draft entity-kw]))
+        on-user-table-column-toggle (fn [entity-kw list-type col-name]
+                                      (rf/dispatch [::user-settings-events/toggle-table-column-in-list-draft
+                                                    entity-kw list-type col-name]))
+        on-user-table-columns-reset (fn [entity-kw]
+                                      (rf/dispatch [::user-settings-events/reset-columns-draft entity-kw]))]
     (if-not selected-entity
       ($ :div {:class "ds-alert ds-alert-info"}
         ($ :span "Select an entity to edit its settings."))
       (case scope
         :admin
-        ($ :div {:class "max-w-2xl"}
-          ($ admin-entity-editor
-            {:entity-kw selected-entity
-             :settings (get admin-config selected-entity)
-             :on-change on-admin-change
-             :on-column-change on-admin-column-change}))
+        (let [table-columns-config (or admin-table-columns {})
+              form-fields-config (or admin-form-fields {})]
+          ($ :div {:class "max-w-4xl"}
+            ;; Tab bar for admin scope
+            ($ config-tabs {:tab tab :on-tab-change on-tab-change})
+
+            ;; Tab content
+            (case tab
+              "entities"
+              ($ :div {:class "ds-alert ds-alert-info"}
+                ($ :span "Entity configuration is not available for admin scope. Admin entities are defined in code."))
+
+              "form-fields"
+              ($ form-fields-editor
+                {:entity-kw selected-entity
+                 :form-fields-config form-fields-config
+                 :table-columns-config table-columns-config
+                 :on-toggle (fn [entity-kw field-type field-name]
+                              ;; Admin form-fields use immediate save via PATCH
+                              (let [current-config (get form-fields-config entity-kw {})
+                                    current-fields (set (or (get current-config field-type) []))
+                                    field-str (if (keyword? field-name) (name field-name) (str field-name))
+                                    new-fields (if (contains? current-fields field-str)
+                                                 (vec (remove #{field-str} current-fields))
+                                                 (conj (vec current-fields) field-str))
+                                    new-config (assoc current-config field-type new-fields)]
+                                (rf/dispatch [::admin-settings-events/update-form-fields-entity
+                                              entity-kw new-config])))})
+
+              "table-columns"
+              ($ table-columns-editor
+                {:entity-kw selected-entity
+                 :table-columns-config table-columns-config
+                 :on-toggle (fn [entity-kw list-type col-name]
+                              ;; Admin table-columns use immediate save via PATCH
+                              (let [current-config (get table-columns-config entity-kw {})
+                                    current-cols (set (or (get current-config list-type) []))
+                                    col-str (if (keyword? col-name) (name col-name) (str col-name))
+                                    new-cols (if (contains? current-cols col-str)
+                                               (vec (remove #{col-str} current-cols))
+                                               (conj (vec current-cols) col-str))
+                                    new-config (assoc current-config list-type new-cols)]
+                                (rf/dispatch [::admin-settings-events/update-table-columns-entity
+                                              entity-kw new-config])))})
+
+              ;; default: view-options
+              ($ admin-entity-editor
+                {:entity-kw selected-entity
+                 :settings (get admin-config selected-entity)
+                 :on-change on-admin-change
+                 :on-column-change on-admin-column-change}))))
 
         :user
         (let [view-options (get-in user-draft [:view-options selected-entity])
               entity-config (get-in user-draft [:entities selected-entity])
-              table-config (get-in user-draft [:table-columns selected-entity])]
-          ($ :div {:class "max-w-2xl"}
-            ($ user-entity-editor
-              {:entity-kw selected-entity
-               :view-options view-options
-               :entity-config entity-config
-               :table-config table-config
-               :on-change on-user-change
-               :on-column-change on-user-column-change
-               :on-reset on-user-reset})))
+              table-config (get-in user-draft [:table-columns selected-entity])
+              entities-config (:entities user-draft)
+              form-fields-config (:form-fields user-draft)
+              table-columns-config (:table-columns user-draft)]
+          ($ :div {:class "max-w-4xl"}
+            ;; Tab bar for user scope
+            ($ config-tabs {:tab tab :on-tab-change on-tab-change})
+
+            ;; Tab content
+            (case tab
+              "entities"
+              ($ entity-config-editor
+                {:entity-kw selected-entity
+                 :entities-config entities-config
+                 :on-title-change on-user-title-change
+                 :on-reset on-user-entity-reset})
+
+              "form-fields"
+              ($ form-fields-editor
+                {:entity-kw selected-entity
+                 :form-fields-config form-fields-config
+                 :table-columns-config table-columns-config
+                 :on-toggle on-user-form-field-toggle
+                 :on-reset on-user-form-fields-reset})
+
+              "table-columns"
+              ($ table-columns-editor
+                {:entity-kw selected-entity
+                 :table-columns-config table-columns-config
+                 :on-toggle on-user-table-column-toggle
+                 :on-reset on-user-table-columns-reset})
+
+              ;; default: view-options
+              ($ user-entity-editor
+                {:entity-kw selected-entity
+                 :view-options view-options
+                 :entity-config entity-config
+                 :table-config table-config
+                 :on-change on-user-change
+                 :on-column-change on-user-column-change
+                 :on-reset on-user-reset}))))
 
         ($ :div {:class "ds-alert ds-alert-warning"}
           ($ :span "Unknown scope"))))))
@@ -218,9 +456,18 @@
 
         ;; Admin config
         admin-config (use-subscribe [::unified-events/admin-view-options])
+        admin-form-fields (use-subscribe [::admin-settings-events/form-fields])
+        admin-table-columns (use-subscribe [::admin-settings-events/table-columns])
+        admin-tab (use-subscribe [::admin-settings-events/config-tab])
 
         ;; User config
         user-draft (use-subscribe [::user-settings-events/draft])
+
+        ;; Tab state for user scope config editing
+        user-tab (use-subscribe [::user-settings-events/tab])
+
+        ;; Current tab based on scope
+        tab (case scope :admin admin-tab user-tab)
 
         ;; Available entities for current scope (union of configured + known groups)
         available-entities (case scope
@@ -240,7 +487,11 @@
         on-save (fn []
                   (rf/dispatch [::unified-events/save-current-scope]))
         on-discard (fn []
-                     (rf/dispatch [::unified-events/discard-current-scope]))]
+                     (rf/dispatch [::unified-events/discard-current-scope]))
+        on-tab-change (fn [new-tab]
+                        (case scope
+                          :admin (rf/dispatch [::admin-settings-events/set-config-tab new-tab])
+                          :user (rf/dispatch [::user-settings-events/set-tab new-tab])))]
 
     ;; Initialize on mount
     (use-effect
@@ -285,7 +536,11 @@
           {:scope scope
            :selected-entity selected-entity
            :admin-config admin-config
-           :user-draft user-draft})))))
+           :admin-form-fields admin-form-fields
+           :admin-table-columns admin-table-columns
+           :user-draft user-draft
+           :tab tab
+           :on-tab-change on-tab-change})))))
 
 (defui unified-settings-page
   "Shared settings page with admin layout.
