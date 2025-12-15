@@ -59,8 +59,8 @@
   :components {:actions app.admin.frontend.components.enhanced-action-buttons/enhanced-action-buttons
                :modals [app.admin.frontend.components.user-details-modal/user-details-modal
                         app.admin.frontend.components.user-activity-modal/user-activity-modal]
-               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}
-    }
+               :custom-actions app.admin.frontend.components.user-actions/admin-user-actions}}
+
 
  :admins
  {:entity-key :admins

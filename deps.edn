@@ -17,7 +17,7 @@
   ;;io.micrometer/micrometer-core {:mvn/version "1.15.0"}
   ;;io.micrometer/micrometer-registry-prometheus {:mvn/version "1.15.0"}
   com.github.seancorfield/honeysql {:mvn/version "2.7.1364"},
-  ;;io.aviso/pretty {:mvn/version "1.4.4"},
+  io.aviso/pretty {:mvn/version "1.4.4"},
   ;;lambdaisland/regal {:mvn/version "0.1.175"},
   ;;luminus-transit/luminus-transit {:mvn/version "0.1.6"}
   metosin/malli {:mvn/version "0.20.0"

@@ -5,4 +5,4 @@
  {:action :create-index,
   :index-name :idx-users-email-verified,
   :model-name :users,
-  :options {:fields [:email_verified], :type :btree}}])
+  :options {:fields [:email_verified], :type :btree}}]

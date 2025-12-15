@@ -84,12 +84,13 @@
         handle-three-dots-click (fn [e]
                                   (when has-multiple-selection?
                                     (.stopPropagation e)
-                                    ;; Dispatch entity-specific batch actions based on entity type
-                                    (case entity-name
-                                      :users (rf/dispatch [:admin/show-batch-user-actions selected-ids])
-                                      :tenants (rf/dispatch [:admin/show-batch-tenant-actions selected-ids])
-                                      ;; Default fallback - could be extended for other entities
-                                      (log/warn "No batch actions defined for entity:" entity-name))))]
+            ;; Dispatch entity-specific batch actions based on entity type
+            (case entity-name
+              :users (rf/dispatch [:admin/show-batch-user-actions selected-ids])
+              :tenants (rf/dispatch [:admin/show-batch-tenant-actions selected-ids])
+              :audit-logs (rf/dispatch [:admin/show-batch-audit-actions selected-ids])
+              ;; Default fallback - could be extended for other entities
+              (log/warn "No batch actions defined for entity:" entity-name))))]
     ($ :div {:class "flex items-center gap-2 overflow-visible flex-shrink-0"}
       ;; Edit button - now enabled only when multiple items are selected AND batch edit is allowed
       (when show-batch-edit?

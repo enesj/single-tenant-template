@@ -1,6 +1,10 @@
 (ns app.template.backend.routes.api
   (:require
     [app.domain.backend.expenses.routes.user-api :as user-expenses-routes]
+    [app.shared.specs.entities :as entities-spec]
+    [app.shared.specs.form-fields :as form-fields-spec]
+    [app.shared.specs.table-columns :as table-columns-spec]
+    [app.shared.specs.view-options :as view-options-spec]
     [app.template.backend.middleware.user :as user-middleware]
     [app.template.backend.routes.entities :as entities]
     [app.admin.backend.services.admin.dashboard :as admin-dashboard]
@@ -25,16 +29,32 @@
    :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
    :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"})
 
+(def ^:private expenses-domain-ui-config-validators
+  {:entities entities-spec/validate-user-entities
+   :view-options view-options-spec/validate-view-options-strict
+   :form-fields form-fields-spec/validate-form-fields-strict
+   :table-columns table-columns-spec/validate-table-columns-strict})
+
 (defn- safe-read-edn-file
   "Read an EDN file from disk. Returns {} when missing/unreadable.
 
   These files are edited at runtime via /admin/user-settings, so we load them
   dynamically to avoid shadow-cljs treating them as build inputs."
-  [path]
+  [k path]
   (try
     (let [f (io/file path)]
       (if (.exists f)
-        (edn/read-string (slurp f))
+        (let [data (edn/read-string (slurp f))
+              validate-fn (get expenses-domain-ui-config-validators k)]
+          (when validate-fn
+            (let [validation (validate-fn data)]
+              (when-not (:valid? validation)
+                (log/warn "Domain UI config EDN validation issues"
+                  {:config k
+                   :path path
+                   :errors (:errors validation)
+                   :warnings (:warnings validation)}))))
+          data)
         {}))
     (catch Exception e
       (log/warn e "Failed to read domain UI config EDN" {:path path})
@@ -48,7 +68,7 @@
   []
   (into {}
     (map (fn [[k path]]
-           [k (safe-read-edn-file path)]))
+             [k (safe-read-edn-file k path)]))
     expenses-domain-ui-config-paths))
 
 
