@@ -27,7 +27,6 @@
    "updated-at"],
   :default-visible-columns
   ["id"
-   "email"
    "full-name"
    "role"
    "status"
@@ -37,7 +36,7 @@
   :filterable-columns
   ["email" "full-name" "role" "status" "last-login-at"],
   :sortable-columns ["email" "full-name" "role" "status" "created-at"],
-  :always-visible ["email"],
+  :always-visible [],
   :computed-fields {},
   :column-config
   {:role {:width "100px", :formatter "admin-role-badge"},

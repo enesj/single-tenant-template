@@ -324,6 +324,12 @@
                                      (string? k) (keyword k)
                                      :else (keyword (str k))))
                               (or (:always-visible table-config) [])))
+        enforced-cols (->> available-cols (filter always-visible) vec)
+        policy-cols (->> available-cols (remove always-visible) vec)
+        ;; Policy maps may contain always-visible keys (historical/manual edits).
+        ;; They are redundant because always-visible is enforced at a lower layer.
+        policy-col-defaults (apply dissoc col-defaults always-visible)
+        policy-col-locks (apply dissoc col-locks always-visible)
         col-metadata (or (:column-metadata table-config) {})]
     ($ :div {:class "ds-card bg-base-100 shadow-md hover:shadow-lg transition-shadow"}
       ($ :div {:class "ds-card-body p-4"}
@@ -362,15 +368,40 @@
               ($ :h4 {:class "text-sm font-semibold"} "Columns")
               ($ :div {:class "flex items-center gap-2"}
                 ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
-                  (str (count col-defaults) " defaults"))
+                  (str (count policy-col-defaults) " defaults"))
                 ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
-                  (str (count col-locks) " locks"))))
+                  (str (count policy-col-locks) " locks"))
+                (when (seq enforced-cols)
+                  ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"}
+                    (str (count enforced-cols) " enforced")))))
+
+            (when (seq enforced-cols)
+              ($ :div {:class "mb-3 text-xs text-base-content/60"}
+                "Some columns are marked as "
+                ($ :span {:class "font-semibold"} "always visible")
+                " in "
+                ($ :span {:class "font-mono"} "table-columns.edn")
+                ". They are enforced and cannot be changed here."))
+
             ($ :div {:class "grid grid-cols-1 gap-2"}
-              (for [col available-cols
+              (when (seq enforced-cols)
+                (for [col enforced-cols
+                      :when col]
+                  (let [label (or (get-in col-metadata [col :label])
+                                (-> col name (str/replace #"[_-]" " ") str/capitalize))
+                        tip (str "This column is always visible (enforced by table-columns.edn).")]
+                    ($ :div {:key (str (name entity-name) "-col-enforced-" (name col))
+                             :class "ds-tooltip ds-tooltip-top w-full"
+                             :data-tip tip}
+                      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+                        ($ :span {:class "text-sm font-medium min-w-[160px]"} label)
+                        ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Always visible")
+                        ($ :span {:class "text-xs text-base-content/50 ml-auto"} "configured in table-columns"))))))
+
+              (for [col policy-cols
                     :when col]
                 (let [default-val (when (contains? col-defaults col) (get col-defaults col))
                       lock-val (when (contains? col-locks col) (get col-locks col))
-                      immutable? (contains? always-visible col)
                       label (or (get-in col-metadata [col :label])
                               (-> col name (str/replace #"[_-]" " ") str/capitalize))
                       tip (str "Controls the default and lock visibility for the '" label "' column.")]
@@ -381,8 +412,6 @@
                      :column-label label
                      :default-val default-val
                      :lock-val lock-val
-                     :immutable? immutable?
-                     :immutable-val true
                      :lock-style :admin
                      :editing? editing?
                      :help-text tip
@@ -423,6 +452,10 @@
                                      (string? k) (keyword k)
                                      :else (keyword (str k))))
                               (or (:always-visible table-config) [])))
+        enforced-cols (->> available-cols (filter always-visible) vec)
+        policy-cols (->> available-cols (remove always-visible) vec)
+        policy-col-defaults (apply dissoc col-defaults always-visible)
+        policy-col-locks (apply dissoc col-locks always-visible)
         col-metadata (or (:column-metadata table-config) {})]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
@@ -463,15 +496,40 @@
               ($ :h4 {:class "text-sm font-semibold"} "Columns")
               ($ :div {:class "flex items-center gap-2"}
                 ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
-                  (str (count col-defaults) " defaults"))
+                  (str (count policy-col-defaults) " defaults"))
                 ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
-                  (str (count col-locks) " locks"))))
+                  (str (count policy-col-locks) " locks"))
+                (when (seq enforced-cols)
+                  ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"}
+                    (str (count enforced-cols) " enforced")))))
+
+            (when (seq enforced-cols)
+              ($ :div {:class "mb-3 text-xs text-base-content/60"}
+                "Some columns are marked as "
+                ($ :span {:class "font-semibold"} "always visible")
+                " in "
+                ($ :span {:class "font-mono"} "table-columns.edn")
+                ". They are enforced and cannot be changed here."))
+
             ($ :div {:class "grid grid-cols-1 gap-2"}
-              (for [col available-cols
+              (when (seq enforced-cols)
+                (for [col enforced-cols
+                      :when col]
+                  (let [label (or (get-in col-metadata [col :label])
+                                (-> col name (str/replace #"[_-]" " ") str/capitalize))
+                        tip (str "This column is always visible (enforced by table-columns.edn).")]
+                    ($ :div {:key (str (name entity-kw) "-col-enforced-" (name col))
+                             :class "ds-tooltip ds-tooltip-top w-full"
+                             :data-tip tip}
+                      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+                        ($ :span {:class "text-sm font-medium min-w-[160px]"} label)
+                        ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Always visible")
+                        ($ :span {:class "text-xs text-base-content/50 ml-auto"} "configured in table-columns"))))))
+
+              (for [col policy-cols
                     :when col]
                 (let [default-val (when (contains? col-defaults col) (get col-defaults col))
                       lock-val (when (contains? col-locks col) (get col-locks col))
-                      immutable? (contains? always-visible col)
                       label (or (get-in col-metadata [col :label])
                               (-> col name (str/replace #"[_-]" " ") str/capitalize))
                       tip (str "Controls the default and lock visibility for the '" label "' column.")]
@@ -482,8 +540,6 @@
                      :column-label label
                      :default-val default-val
                      :lock-val lock-val
-                     :immutable? immutable?
-                     :immutable-val true
                      :lock-style :user
                      :editing? editing?
                      :help-text tip
@@ -497,10 +553,9 @@
   "Render a domain section header with its entities.
    
    Props:
-   - :domain-key - keyword identifying the domain
    - :domain-config - map with :title, :description, :icon, :color
    - :children - content to render inside the section"
-  [{:keys [domain-key domain-config children]}]
+  [{:keys [domain-config children]}]
   (let [color-classes (defs/domain-color-classes (:color domain-config))]
     ($ :div {:class "mb-8 last:mb-0"}
       ;; Domain header

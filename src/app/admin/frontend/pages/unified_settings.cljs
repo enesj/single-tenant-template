@@ -140,14 +140,16 @@
                         :class "ds-btn ds-btn-xs ds-btn-ghost"
                         :on-click #(on-reset entity-kw)}
               "Reset")))
-        ($ :div {:class "form-control"}
-          ($ :label {:class "label"}
-            ($ :span {:class "label-text"} "Display Title"))
-          ($ :input {:type "text"
-                     :class "ds-input ds-input-bordered w-full"
-                     :value title
-                     :on-change (fn [e]
-                                  (on-title-change entity-kw (-> e .-target .-value)))}))))))
+        ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
+                 :data-tip "Controls the display name used in headings/navigation for this entity."}
+          ($ :div {:class "form-control"}
+            ($ :label {:class "label"}
+              ($ :span {:class "label-text"} "Display Title"))
+            ($ :input {:type "text"
+                       :class "ds-input ds-input-bordered w-full"
+                       :value title
+                       :on-change (fn [e]
+                                    (on-title-change entity-kw (-> e .-target .-value)))})))))))
 
 (defui form-fields-editor
   "Editor for form-fields.edn - create/edit field lists."
@@ -176,7 +178,8 @@
             ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
               (for [col available-cols]
                 ($ :label {:key (str "create-" col)
-                           :class "flex items-center gap-2 p-2 rounded-lg bg-base-200"}
+                           :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
+                           :data-tip (str "Toggle whether “" col "” is shown in the Create form.")}
                   ($ :input {:type "checkbox"
                              :class "ds-checkbox ds-checkbox-sm"
                              :checked (contains? create-fields col)
@@ -193,7 +196,8 @@
             ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
               (for [col available-cols]
                 ($ :label {:key (str "edit-" col)
-                           :class "flex items-center gap-2 p-2 rounded-lg bg-base-200"}
+                           :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
+                           :data-tip (str "Toggle whether “" col "” is shown in the Edit form.")}
                   ($ :input {:type "checkbox"
                              :class "ds-checkbox ds-checkbox-sm"
                              :checked (contains? edit-fields col)
@@ -206,6 +210,7 @@
   [{:keys [entity-kw table-columns-config on-toggle on-reset]}]
   (let [entity-config (get table-columns-config entity-kw {})
         available (or (:available-columns entity-config) [])
+        always-visible (set (or (:always-visible entity-config) []))
         default-visible (set (or (:default-visible-columns entity-config) []))
         filterable (set (or (:filterable-columns entity-config) []))
         sortable (set (or (:sortable-columns entity-config) []))]
@@ -219,6 +224,11 @@
                         :on-click #(on-reset entity-kw)}
               "Reset")))
 
+        ($ :div {:class "text-xs text-base-content/60 mb-3"}
+          ($ :p "“Always Visible” columns are structurally enforced by "
+            ($ :code {:class "px-1"} "table-columns.edn")
+            ". They will always show up in the table (even if “Default Visible” is unchecked), and they won’t be configurable from the “View Options” policy tab."))
+
         (if (empty? available)
           ($ :p {:class "text-sm text-base-content/60"} "No columns configured")
           ($ :div {:class "overflow-x-auto"}
@@ -226,28 +236,56 @@
               ($ :thead
                 ($ :tr
                   ($ :th "Column")
-                  ($ :th {:class "text-center"} "Default Visible")
-                  ($ :th {:class "text-center"} "Filterable")
-                  ($ :th {:class "text-center"} "Sortable")))
+                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
+                          :data-tip "Structurally enforced always visible; users cannot hide these."}
+                    "Always Visible")
+                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
+                          :data-tip "Visible by default when the table loads."}
+                    "Default Visible")
+                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
+                          :data-tip "Can be used in filter controls."}
+                    "Filterable")
+                  ($ :th {:class "text-center ds-tooltip ds-tooltip-bottom"
+                          :data-tip "Can be sorted by clicking the column header."}
+                    "Sortable")))
               ($ :tbody
                 (for [col available]
-                  ($ :tr {:key col}
-                    ($ :td {:class "font-medium"} col)
-                    ($ :td {:class "text-center"}
-                      ($ :input {:type "checkbox"
-                                 :class "ds-checkbox ds-checkbox-sm"
-                                 :checked (contains? default-visible col)
-                                 :on-change #(on-toggle entity-kw :default-visible-columns col)}))
-                    ($ :td {:class "text-center"}
-                      ($ :input {:type "checkbox"
-                                 :class "ds-checkbox ds-checkbox-sm"
-                                 :checked (contains? filterable col)
-                                 :on-change #(on-toggle entity-kw :filterable-columns col)}))
-                    ($ :td {:class "text-center"}
-                      ($ :input {:type "checkbox"
-                                 :class "ds-checkbox ds-checkbox-sm"
-                                 :checked (contains? sortable col)
-                                 :on-change #(on-toggle entity-kw :sortable-columns col)}))))))))))))
+                  (let [enforced? (contains? always-visible col)]
+                    ($ :tr {:key col}
+                      ($ :td {:class "font-medium"}
+                        ($ :div {:class "flex items-center gap-2"}
+                          ($ :span col)
+                          (when enforced?
+                            ($ :span {:class "ds-badge ds-badge-xs ds-badge-warning"}
+                              "Always visible"))))
+                      ($ :td {:class "text-center"}
+                        ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                                 :data-tip "If enabled, this column cannot be hidden in the table."}
+                          ($ :input {:type "checkbox"
+                                     :class "ds-checkbox ds-checkbox-sm"
+                                     :checked enforced?
+                                     :on-change #(on-toggle entity-kw :always-visible col)})))
+                      ($ :td {:class "text-center"}
+                        ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                                 :data-tip "If enabled, this column starts visible by default."}
+                          ($ :input {:type "checkbox"
+                                     :class "ds-checkbox ds-checkbox-sm"
+                                     :checked (contains? default-visible col)
+                                     :on-change #(on-toggle entity-kw :default-visible-columns col)})))
+                      ($ :td {:class "text-center"}
+                        ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                                 :data-tip "If enabled, this column can be used in filters."}
+                          ($ :input {:type "checkbox"
+                                     :class "ds-checkbox ds-checkbox-sm"
+                                     :checked (contains? filterable col)
+                                     :on-change #(on-toggle entity-kw :filterable-columns col)})))
+                      ($ :td {:class "text-center"}
+                        ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                                 :data-tip "If enabled, this column can be sorted."}
+                          ($ :input {:type "checkbox"
+                                     :class "ds-checkbox ds-checkbox-sm"
+                                     :checked (contains? sortable col)
+                                     :on-change #(on-toggle entity-kw :sortable-columns col)}))))))))))))))
 
 ;; =============================================================================
 ;; Edit Mode Content - Single Scope Editor
