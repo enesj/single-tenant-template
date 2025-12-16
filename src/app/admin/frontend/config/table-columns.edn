@@ -27,6 +27,7 @@
    "updated-at"],
   :default-visible-columns
   ["id"
+   "email"
    "full-name"
    "role"
    "status"

@@ -7,6 +7,34 @@
     [reitit.frontend.easy :as rtfe]
     [taoensso.timbre :as log]))
 
+(defn- event-vector?
+  "True when x looks like a re-frame event vector ([:event/id ...])."
+  [x]
+  (and (sequential? x)
+    (keyword? (first x))))
+
+(defn- normalize-dispatch-events
+  "Normalize a success-callback payload into a vector of valid event vectors.
+
+  Accepts:
+  - nil
+  - a single event vector: [:event/id ...]
+  - many event vectors: [[:event/a] [:event/b ...]]
+
+  IMPORTANT: An empty vector ([]) means no events and must NOT be dispatched,
+  otherwise re-frame treats it as an event with event-id nil." 
+  [on-auth-success]
+  (let [events (cond
+                 (nil? on-auth-success) []
+                 (and (sequential? on-auth-success) (empty? on-auth-success)) []
+                 (and (sequential? on-auth-success)
+                   (sequential? (first on-auth-success))) on-auth-success
+                 (sequential? on-auth-success) [on-auth-success]
+                 :else [])]
+    (->> events
+      (filter event-vector?)
+      vec)))
+
 (rf/reg-event-db
   :admin/clear-success-message
   (fn [db _]
@@ -120,11 +148,7 @@
              (cond-> role (assoc :admin/current-user-role role))
              (dissoc :admin/auth-checking?))
        ;; Execute the success callback(s) if provided, plus any route-specific actions
-       :dispatch-n (let [extras (cond
-                                  (and (sequential? on-auth-success)
-                                    (sequential? (first on-auth-success))) on-auth-success
-                                  (sequential? on-auth-success) [on-auth-success]
-                                  :else [])
+       :dispatch-n (let [extras (normalize-dispatch-events on-auth-success)
                          route-events (cond
                                         (= current-route :admin-advanced-dashboard) [[:admin/load-advanced-dashboard]]
                                         (= current-route :admin-dashboard) [[:admin/load-dashboard]]
@@ -181,11 +205,7 @@
       (cond
         ;; Already authenticated, trigger success callback immediately
         already-authenticated?
-        (let [extras (cond
-                       (and (sequential? on-auth-success)
-                         (sequential? (first on-auth-success))) on-auth-success
-                       (sequential? on-auth-success) [on-auth-success]
-                       :else [])]
+        (let [extras (normalize-dispatch-events on-auth-success)]
           {:dispatch-n (into [] (concat extras [[:admin/auth-success-immediate]]))})
 
         ;; Already checking auth, don't start another check
@@ -199,7 +219,8 @@
                (assoc :admin/auth-checking? true))
          :http-xhrio (admin-http/dashboard-request
                        {;; Pass-through payload with the original on-auth-success callbacks
-                        :on-success (conj [:admin/auth-valid] on-auth-success)
+              :on-success (conj [:admin/auth-valid] (when (seq (normalize-dispatch-events on-auth-success))
+                            on-auth-success))
                         :on-failure [:admin/auth-invalid]})}
 
         ;; No token, redirect to login

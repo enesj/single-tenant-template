@@ -25,9 +25,12 @@
     :else nil))
 
 (defn- default-badge-props
-  "Badge for a default value (nil/true/false)."
+  "Badge for a default value (nil/true/false or :mixed)."
   [default-val]
   (cond
+    (= default-val :mixed)
+    {:class "ds-badge ds-badge-ghost ds-badge-sm" :text "Mixed"}
+
     (true? default-val)
     {:class "ds-badge ds-badge-success ds-badge-sm" :text "Default On"}
 
@@ -47,6 +50,10 @@
   (let [lock-style (or lock-style :user)
         effective-lock (if immutable? immutable-val lock-val)]
     (cond
+    (= effective-lock :mixed)
+    {:class "ds-badge ds-badge-ghost ds-badge-sm"
+     :text "Mixed"}
+
       immutable?
       {:class (str "ds-badge ds-badge-sm "
                 (if (true? effective-lock) "ds-badge-success" "ds-badge-error"))
@@ -74,7 +81,7 @@
   "Small helper text showing the next value in the cycle."
   [{:keys [kind current-val lock-style]}]
   (let [lock-style (or lock-style :user)
-        next-val (next-tristate current-val)]
+        next-val (next-tristate (if (= current-val :mixed) nil current-val))]
     (case kind
       :default
       (str "→ " (cond
@@ -88,6 +95,75 @@
                   (false? next-val) (case lock-style :admin "Disabled" "Locked Off")
                   :else (case lock-style :admin "Not set" "Inherit")))
       nil)))
+
+(defn- uniform-or-mixed
+  "If all values are the same, returns that value; otherwise returns :mixed.
+
+  Values are expected to be one of nil/true/false." 
+  [vals]
+  (let [vals (vec vals)]
+    (cond
+      (empty? vals) nil
+      (apply = vals) (first vals)
+      :else :mixed)))
+
+(defui bulk-tristate-row
+  "A row with the same Default/Lock control UI, but applies to many keys.
+
+  Props:
+  - :label
+  - :default-val, :lock-val (nil/true/false/:mixed)
+  - :editing? boolean
+  - :lock-style :admin|:user
+  - :on-default-click fn []
+  - :on-lock-click fn []
+  - :help-text string"
+  [{:keys [label default-val lock-val editing? lock-style on-default-click on-lock-click help-text]}]
+  (let [lock-style (or lock-style :user)
+        editing? (boolean editing?)
+        clickable-default? (and editing? (fn? on-default-click))
+        clickable-lock? (and editing? (fn? on-lock-click))
+        {:keys [class text]} (default-badge-props default-val)
+        default-class class
+        default-text text
+        {:keys [class text]} (lock-badge-props {:lock-val lock-val :lock-style lock-style})
+        lock-class class
+        lock-text text]
+    ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
+             :data-tip (or help-text "Apply this to all items in this section.")}
+      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+        ($ :span {:class "text-sm font-medium min-w-[160px]"}
+          label)
+
+        ;; Default control
+        (if clickable-default?
+          ($ :button
+            {:type "button"
+             :class default-class
+             :on-click (fn [e]
+                         (.preventDefault e)
+                         (on-default-click))}
+            default-text)
+          ($ :span {:class default-class} default-text))
+        (when editing?
+          ($ :span {:class "text-xs text-base-content/50"}
+            (tristate-hint {:kind :default :current-val default-val})))
+
+        ($ :span {:class "mx-1 text-base-content/30"} "|")
+
+        ;; Lock control
+        (if clickable-lock?
+          ($ :button
+            {:type "button"
+             :class lock-class
+             :on-click (fn [e]
+                         (.preventDefault e)
+                         (on-lock-click))}
+            lock-text)
+          ($ :span {:class lock-class} lock-text))
+        (when editing?
+          ($ :span {:class "text-xs text-base-content/50 ml-auto"}
+            (tristate-hint {:kind :lock :current-val lock-val :lock-style lock-style})))))))
 
 (defui display-setting-row
   "Render a single setting row with separate Default and Lock controls.
@@ -303,7 +379,9 @@
    - :editing? - whether in edit mode
    - :on-change - fn [entity-name setting-key new-value]
    - :setting-keys - which setting keys to show (default: display-setting-keys)"
-  [{:keys [entity-name settings editing? on-change setting-keys table-config on-column-change]}]
+  [{:keys [entity-name settings editing? on-change on-display-settings-bulk
+           setting-keys table-config
+           on-column-change on-column-visibility-bulk]}]
   (let [setting-keys (or setting-keys defs/display-setting-keys)
         defaults (or (:display-defaults settings) {})
         locks (or (:display-locks settings) {})
@@ -349,6 +427,38 @@
 
         ;; Settings grid
         ($ :div {:class "grid grid-cols-1 gap-2"}
+          (when (and editing? (seq setting-keys) (fn? on-display-settings-bulk))
+            (let [bulk-default (uniform-or-mixed
+                                 (map (fn [k]
+                                        (if (contains? defaults k) (get defaults k) nil))
+                                   setting-keys))
+                  bulk-lock (uniform-or-mixed
+                              (map (fn [k]
+                                     (if (contains? locks k) (get locks k) nil))
+                                setting-keys))]
+              ($ bulk-tristate-row
+                {:label "All toggles"
+                 :default-val bulk-default
+                 :lock-val bulk-lock
+                 :editing? true
+                 :lock-style :admin
+                 :help-text "Apply Default/Lock to all display toggles for this entity."
+                 :on-default-click (fn []
+                                    ;; cycle the current aggregate state
+                                    (let [current (if (= bulk-default :mixed) nil bulk-default)
+                                          next-val (next-tristate current)
+                                          next-state (if (nil? next-val)
+                                                      {:kind :inherit}
+                                                      {:kind :default :value next-val})]
+                                      (on-display-settings-bulk entity-name setting-keys next-state)))
+                 :on-lock-click (fn []
+                                 ;; cycle the current aggregate lock state
+                                 (let [current (if (= bulk-lock :mixed) nil bulk-lock)
+                                       next-val (next-tristate current)
+                                       next-state (if (nil? next-val)
+                                                   {:kind :inherit}
+                                                   {:kind :lock :value next-val})]
+                                   (on-display-settings-bulk entity-name setting-keys next-state)))})))
           (for [setting-key setting-keys]
             (let [default-val (when (contains? defaults setting-key) (get defaults setting-key))
                   lock-val (when (contains? locks setting-key) (get locks setting-key))]
@@ -384,6 +494,38 @@
                 ". They are enforced and cannot be changed here."))
 
             ($ :div {:class "grid grid-cols-1 gap-2"}
+              (when (and editing? (seq policy-cols) (fn? on-column-visibility-bulk))
+                (let [bulk-default (uniform-or-mixed
+                                     (map (fn [c]
+                                            (if (contains? col-defaults c) (get col-defaults c) nil))
+                                       policy-cols))
+                      bulk-lock (uniform-or-mixed
+                                  (map (fn [c]
+                                         (if (contains? col-locks c) (get col-locks c) nil))
+                                    policy-cols))]
+                  ($ bulk-tristate-row
+                    {:label "All columns"
+                     :default-val bulk-default
+                     :lock-val bulk-lock
+                     :editing? true
+                     :lock-style :admin
+                     :help-text "Apply Default/Lock visibility to all configurable columns (always-visible columns are excluded)."
+                     :on-default-click (fn []
+                                        ;; cycle the current aggregate state
+                                        (let [current (if (= bulk-default :mixed) nil bulk-default)
+                                              next-val (next-tristate current)
+                                              next-state (if (nil? next-val)
+                                                          {:kind :inherit}
+                                                          {:kind :default :value next-val})]
+                                          (on-column-visibility-bulk entity-name policy-cols next-state)))
+                     :on-lock-click (fn []
+                                     ;; cycle the current aggregate lock state
+                                     (let [current (if (= bulk-lock :mixed) nil bulk-lock)
+                                           next-val (next-tristate current)
+                                           next-state (if (nil? next-val)
+                                                       {:kind :inherit}
+                                                       {:kind :lock :value next-val})]
+                                       (on-column-visibility-bulk entity-name policy-cols next-state)))})))
               (when (seq enforced-cols)
                 (for [col enforced-cols
                       :when col]
@@ -431,10 +573,12 @@
    - :draft-locks - map of locked settings
    - :immutable-locks - map of immutable (feature constraint) locks
    - :on-change - fn [entity-kw setting-key new-state]
+     - :on-display-settings-bulk - fn [entity-kw setting-keys new-state]
    - :on-reset - fn [entity-kw] - reset to saved values
    - :setting-keys - which setting keys to show"
   [{:keys [entity-kw entity-title draft-defaults draft-locks draft-column-defaults draft-column-locks
-           immutable-locks on-change on-reset setting-keys editing? table-config on-column-change]}]
+       immutable-locks on-change on-display-settings-bulk on-column-visibility-bulk
+      on-reset setting-keys editing? table-config on-column-change]}]
   (let [setting-keys (or setting-keys defs/all-setting-keys)
         editing? (boolean editing?)
         col-defaults (or draft-column-defaults {})
@@ -470,25 +614,64 @@
                                     (on-reset entity-kw))}
               "Reset")))
         ($ :div {:class "grid grid-cols-1 gap-2"}
-          (for [setting-key setting-keys]
-            (let [defaults (or draft-defaults {})
-                  locks (or draft-locks {})
-                  immutable (or immutable-locks {})
-                  default-val (when (contains? defaults setting-key) (get defaults setting-key))
-                  lock-val (when (contains? locks setting-key) (get locks setting-key))
-                  immutable? (contains? immutable setting-key)
-                  immutable-val (get immutable setting-key)]
-              ($ display-setting-row
-                {:key (str (name entity-kw) "-" (name setting-key))
-                 :entity-kw entity-kw
-                 :setting-key setting-key
-                 :default-val default-val
-                 :lock-val lock-val
-                 :immutable? immutable?
-                 :immutable-val immutable-val
-                 :lock-style :user
-                 :editing? editing?
-                 :on-change on-change}))))
+          (let [defaults (or draft-defaults {})
+                locks (or draft-locks {})
+                immutable (or immutable-locks {})
+                editable-setting-keys (->> setting-keys
+                                        (remove (fn [k] (contains? immutable k)))
+                                        vec)]
+            (when (and editing? (seq editable-setting-keys) (fn? on-display-settings-bulk))
+              (let [bulk-default (uniform-or-mixed
+                                   (map (fn [k]
+                                          (if (contains? defaults k) (get defaults k) nil))
+                                     editable-setting-keys))
+                    bulk-lock (uniform-or-mixed
+                                (map (fn [k]
+                                       (if (contains? locks k) (get locks k) nil))
+                                  editable-setting-keys))
+                    help (if (seq immutable)
+                           "Apply Default/Lock to all editable toggles for this entity (excludes enforced feature constraints)."
+                           "Apply Default/Lock to all toggles for this entity.")]
+                ($ bulk-tristate-row
+                  {:label "All toggles"
+                   :default-val bulk-default
+                   :lock-val bulk-lock
+                   :editing? true
+                   :lock-style :user
+                   :help-text help
+                   :on-default-click (fn []
+                                      ;; cycle the current aggregate state
+                                      (let [current (if (= bulk-default :mixed) nil bulk-default)
+                                            next-val (next-tristate current)
+                                            next-state (if (nil? next-val)
+                                                        {:kind :inherit}
+                                                        {:kind :default :value next-val})]
+                                        (on-display-settings-bulk entity-kw editable-setting-keys next-state)))
+                   :on-lock-click (fn []
+                                   ;; cycle the current aggregate lock state
+                                   (let [current (if (= bulk-lock :mixed) nil bulk-lock)
+                                         next-val (next-tristate current)
+                                         next-state (if (nil? next-val)
+                                                     {:kind :inherit}
+                                                     {:kind :lock :value next-val})]
+                                     (on-display-settings-bulk entity-kw editable-setting-keys next-state)))})))
+
+            (for [setting-key setting-keys]
+              (let [default-val (when (contains? defaults setting-key) (get defaults setting-key))
+                    lock-val (when (contains? locks setting-key) (get locks setting-key))
+                    immutable? (contains? immutable setting-key)
+                    immutable-val (get immutable setting-key)]
+                ($ display-setting-row
+                  {:key (str (name entity-kw) "-" (name setting-key))
+                   :entity-kw entity-kw
+                   :setting-key setting-key
+                   :default-val default-val
+                   :lock-val lock-val
+                   :immutable? immutable?
+                   :immutable-val immutable-val
+                   :lock-style :user
+                   :editing? editing?
+                   :on-change on-change})))))
 
         (when (seq available-cols)
           ($ :div {:class "mt-4"}
@@ -512,6 +695,38 @@
                 ". They are enforced and cannot be changed here."))
 
             ($ :div {:class "grid grid-cols-1 gap-2"}
+              (when (and editing? (seq policy-cols) (fn? on-column-visibility-bulk))
+                (let [bulk-default (uniform-or-mixed
+                                     (map (fn [c]
+                                            (if (contains? col-defaults c) (get col-defaults c) nil))
+                                       policy-cols))
+                      bulk-lock (uniform-or-mixed
+                                  (map (fn [c]
+                                         (if (contains? col-locks c) (get col-locks c) nil))
+                                    policy-cols))]
+                  ($ bulk-tristate-row
+                    {:label "All columns"
+                     :default-val bulk-default
+                     :lock-val bulk-lock
+                     :editing? true
+                     :lock-style :user
+                     :help-text "Apply Default/Lock visibility to all configurable columns (always-visible columns are excluded)."
+                     :on-default-click (fn []
+                                        ;; cycle the current aggregate state
+                                        (let [current (if (= bulk-default :mixed) nil bulk-default)
+                                              next-val (next-tristate current)
+                                              next-state (if (nil? next-val)
+                                                          {:kind :inherit}
+                                                          {:kind :default :value next-val})]
+                                          (on-column-visibility-bulk entity-kw policy-cols next-state)))
+                     :on-lock-click (fn []
+                                     ;; cycle the current aggregate lock state
+                                     (let [current (if (= bulk-lock :mixed) nil bulk-lock)
+                                           next-val (next-tristate current)
+                                           next-state (if (nil? next-val)
+                                                       {:kind :inherit}
+                                                       {:kind :lock :value next-val})]
+                                       (on-column-visibility-bulk entity-kw policy-cols next-state)))})))
               (when (seq enforced-cols)
                 (for [col enforced-cols
                       :when col]

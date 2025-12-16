@@ -9,7 +9,7 @@
  {:column-locks {},
   :display-locks
   {:show-select? true, :show-pagination? true, :show-filtering? true},
-  :column-defaults {:id true}},
+  :column-defaults {:id true, :email false}},
  :articles
  {:display-locks
   {:show-delete? true,

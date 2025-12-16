@@ -28,6 +28,56 @@
     (keep normalize-kw)
     vec))
 
+(defn- normalize-map-keys
+  "Keywordize map keys using normalize-kw, skipping keys that normalize to nil.
+
+  This is primarily to handle JSON-decoded responses where entity keys or
+  setting keys arrive as strings." 
+  [m]
+  (reduce-kv
+    (fn [acc k v]
+      (if-let [k' (normalize-kw k)]
+        (assoc acc k' v)
+        acc))
+    {}
+    (safe-map m)))
+
+(defn- normalize-entity-map
+  "Normalize a top-level entity map of {entity-key -> config-map}.
+
+  Entity keys are keywordized. The entity config map's keys are also
+  keywordized (values are left as-is)." 
+  [m]
+  (reduce-kv
+    (fn [acc entity-k entity-v]
+      (if-let [entity-kw (normalize-kw entity-k)]
+        (assoc acc entity-kw (if (map? entity-v) (normalize-map-keys entity-v) entity-v))
+        acc))
+    {}
+    (safe-map m)))
+
+(defn- normalize-user-view-options
+  "Normalize user view-options config.
+
+  - Entity keys are keywordized.
+  - Entity config keys are keywordized.
+  - Nested maps for defaults/locks (display + columns) have their keys
+    keywordized (so :expenses lookups work and bulk controls compute correctly)." 
+  [view-options]
+  (reduce-kv
+    (fn [acc entity-k entity-v]
+      (if-let [entity-kw (normalize-kw entity-k)]
+        (let [cfg (if (map? entity-v) (normalize-map-keys entity-v) {})
+              cfg (cond-> cfg
+                    (contains? cfg :display-defaults) (update :display-defaults normalize-map-keys)
+                    (contains? cfg :display-locks) (update :display-locks normalize-map-keys)
+                    (contains? cfg :column-defaults) (update :column-defaults normalize-map-keys)
+                    (contains? cfg :column-locks) (update :column-locks normalize-map-keys))]
+          (assoc acc entity-kw cfg))
+        acc))
+    {}
+    (safe-map view-options)))
+
 (defn- draft-config
   "Return the current draft config structure."
   [db]
@@ -60,10 +110,10 @@
 (rf/reg-event-db
   ::load-success
   (fn [db [_ response]]
-    (let [entities (safe-map (:entities response))
-          view-options (safe-map (:view-options response))
-          form-fields (safe-map (:form-fields response))
-          table-columns (safe-map (:table-columns response))
+    (let [entities (normalize-entity-map (:entities response))
+          view-options (normalize-user-view-options (:view-options response))
+          form-fields (normalize-entity-map (:form-fields response))
+          table-columns (normalize-entity-map (:table-columns response))
           draft {:entities entities
                  :view-options view-options
                  :form-fields form-fields
@@ -182,6 +232,104 @@
           ;; A lock supersedes any default.
           (update-in defaults-path (fnil dissoc {}) column-kw)
           (assoc-in (conj locks-path column-kw) value))
+
+        :else
+        db))))
+
+;; =============================================================================
+;; Bulk helpers: column visibility defaults
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-column-defaults-bulk
+  (fn [db [_ entity column-keys value]]
+    (let [entity-kw (normalize-kw entity)
+          cols (->> (or column-keys [])
+                 (keep normalize-kw)
+                 vec)
+          value (boolean value)
+          defaults-path [:admin :user-settings :draft :view-options entity-kw :column-defaults]
+          locks-path [:admin :user-settings :draft :view-options entity-kw :column-locks]]
+      (cond
+        (or (nil? entity-kw) (empty? cols))
+        db
+
+        :else
+        (reduce (fn [db' col]
+                  (assoc-in db' (conj defaults-path col) value))
+          (update-in db locks-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          cols)))))
+
+;; =============================================================================
+;; Bulk helpers: apply tristate to many display settings / columns
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-display-settings-bulk
+  (fn [db [_ entity setting-keys new-state]]
+    (let [entity-kw (normalize-kw entity)
+          keys (->> (or setting-keys [])
+                 (keep normalize-kw)
+                 vec)
+          kind (:kind new-state)
+          value (:value new-state)
+          defaults-path [:admin :user-settings :draft :view-options entity-kw :display-defaults]
+          locks-path [:admin :user-settings :draft :view-options entity-kw :display-locks]]
+      (cond
+        (or (nil? entity-kw) (empty? keys))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil (fn [m] (apply dissoc m keys)) {}))
+          (update-in locks-path (fnil (fn [m] (apply dissoc m keys)) {})))
+
+        (and (= kind :default) (boolean? value))
+        (reduce (fn [db' k]
+            (assoc-in db' (conj defaults-path k) value))
+          (update-in db locks-path (fnil (fn [m] (apply dissoc m keys)) {}))
+          keys)
+
+        (and (= kind :lock) (boolean? value))
+        (reduce (fn [db' k]
+            (assoc-in db' (conj locks-path k) value))
+          (update-in db defaults-path (fnil (fn [m] (apply dissoc m keys)) {}))
+          keys)
+
+        :else
+        db))))
+
+(rf/reg-event-db
+  ::set-column-visibility-bulk
+  (fn [db [_ entity column-keys new-state]]
+    (let [entity-kw (normalize-kw entity)
+          cols (->> (or column-keys [])
+                 (keep normalize-kw)
+                 vec)
+          kind (:kind new-state)
+          value (:value new-state)
+          defaults-path [:admin :user-settings :draft :view-options entity-kw :column-defaults]
+          locks-path [:admin :user-settings :draft :view-options entity-kw :column-locks]]
+      (cond
+        (or (nil? entity-kw) (empty? cols))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          (update-in locks-path (fnil (fn [m] (apply dissoc m cols)) {})))
+
+        (and (= kind :default) (boolean? value))
+        (reduce (fn [db' c]
+            (assoc-in db' (conj defaults-path c) value))
+          (update-in db locks-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          cols)
+
+        (and (= kind :lock) (boolean? value))
+        (reduce (fn [db' c]
+            (assoc-in db' (conj locks-path c) value))
+          (update-in db defaults-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          cols)
 
         :else
         db))))
@@ -307,10 +455,10 @@
 (rf/reg-event-db
   ::save-success
   (fn [db [_ response]]
-    (let [entities (safe-map (:entities response))
-          view-options (safe-map (:view-options response))
-          form-fields (safe-map (:form-fields response))
-          table-columns (safe-map (:table-columns response))
+    (let [entities (normalize-entity-map (:entities response))
+          view-options (normalize-user-view-options (:view-options response))
+          form-fields (normalize-entity-map (:form-fields response))
+          table-columns (normalize-entity-map (:table-columns response))
           saved {:entities entities
                  :view-options view-options
                  :form-fields form-fields

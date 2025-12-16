@@ -25,6 +25,20 @@
   (and (keyword? k)
     (re-matches #"show-.*\?" (name k))))
 
+(defn- normalize-kw
+  [x]
+  (cond
+    (nil? x) nil
+    (keyword? x) x
+    (string? x) (keyword x)
+    :else (keyword (str x))))
+
+(defn- normalize-kws
+  [xs]
+  (->> (or xs [])
+    (keep normalize-kw)
+    vec))
+
 ;; =============================================================================
 ;; Load View Options from Backend
 ;; =============================================================================
@@ -156,6 +170,104 @@
           ;; A lock supersedes any default.
           (update-in defaults-path (fnil dissoc {}) column-kw)
           (assoc-in (conj locks-path column-kw) value))
+
+        :else
+        db))))
+
+;; =============================================================================
+;; Bulk helpers: column visibility defaults
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-column-defaults-bulk
+  (fn [db [_ entity-name column-keys value]]
+    (let [entity-kw (normalize-kw entity-name)
+          cols (normalize-kws column-keys)
+          value (boolean value)
+          defaults-path [:admin :settings :view-options entity-kw :column-defaults]
+          locks-path [:admin :settings :view-options entity-kw :column-locks]]
+      (cond
+        (or (nil? entity-kw) (empty? cols))
+        db
+
+        :else
+        (reduce (fn [db' col]
+                  (assoc-in db' (conj defaults-path col) value))
+          (update-in db locks-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          cols)))))
+
+;; =============================================================================
+;; Bulk helpers: apply tristate to many display settings / columns
+;; =============================================================================
+
+(rf/reg-event-db
+  ::set-display-settings-bulk
+  (fn [db [_ entity-name setting-keys new-state]]
+    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+          keys (->> (or setting-keys [])
+                 (map (fn [k] (if (keyword? k) k (keyword k))))
+                 vec)
+          kind (:kind new-state)
+          value (:value new-state)
+          defaults-path [:admin :settings :view-options entity-kw :display-defaults]
+          locks-path [:admin :settings :view-options entity-kw :display-locks]]
+      (cond
+        (or (nil? entity-kw) (empty? keys))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil (fn [m] (apply dissoc m keys)) {}))
+          (update-in locks-path (fnil (fn [m] (apply dissoc m keys)) {})))
+
+        (and (= kind :default) (boolean? value))
+        (reduce (fn [db' k]
+            (assoc-in db' (conj defaults-path k) value))
+          (update-in db locks-path (fnil (fn [m] (apply dissoc m keys)) {}))
+          keys)
+
+        (and (= kind :lock) (boolean? value))
+        (reduce (fn [db' k]
+            (assoc-in db' (conj locks-path k) value))
+          (update-in db defaults-path (fnil (fn [m] (apply dissoc m keys)) {}))
+          keys)
+
+        :else
+        db))))
+
+(rf/reg-event-db
+  ::set-column-visibility-bulk
+  (fn [db [_ entity-name column-keys new-state]]
+    (let [entity-kw (normalize-kw entity-name)
+          cols (normalize-kws column-keys)
+          kind (:kind new-state)
+          value (:value new-state)
+          defaults-path [:admin :settings :view-options entity-kw :column-defaults]
+          locks-path [:admin :settings :view-options entity-kw :column-locks]]
+      (log/info "Bulk column visibility change"
+        {:entity entity-kw
+         :columns-count (count cols)
+         :state new-state})
+      (cond
+        (or (nil? entity-kw) (empty? cols))
+        db
+
+        (= kind :inherit)
+        (-> db
+          (update-in defaults-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          (update-in locks-path (fnil (fn [m] (apply dissoc m cols)) {})))
+
+        (and (= kind :default) (boolean? value))
+        (reduce (fn [db' c]
+            (assoc-in db' (conj defaults-path c) value))
+          (update-in db locks-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          cols)
+
+        (and (= kind :lock) (boolean? value))
+        (reduce (fn [db' c]
+            (assoc-in db' (conj locks-path c) value))
+          (update-in db defaults-path (fnil (fn [m] (apply dissoc m cols)) {}))
+          cols)
 
         :else
         db))))

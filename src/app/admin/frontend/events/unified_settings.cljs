@@ -1,14 +1,14 @@
 (ns app.admin.frontend.events.unified-settings
   "Unified events for settings pages with scope switching support.
-   
+
    This namespace provides events and subscriptions that support both
    admin-settings and user-settings pages with a unified UI.
-   
+
    Key concepts:
    - scope: :admin or :user - which config set to edit
    - mode: :view or :edit - whether viewing or editing
    - entity: keyword - which entity to edit in edit mode
-   
+
    State structure:
    [:admin :unified-settings]
      :mode - :view | :edit
@@ -30,8 +30,23 @@
 (rf/reg-event-fx
   ::init
   (fn [{:keys [db]} [_ {:keys [initial-scope fixed-scope load-admin? load-user?] :as opts}]]
-    (let [fixed-scope (when (some? fixed-scope) fixed-scope)
-          scope (or fixed-scope initial-scope :admin)
+    (let [prev-state (get-in db [:admin :unified-settings])
+          prev-fixed-scope (:fixed-scope prev-state)
+          fixed-scope (when (some? fixed-scope) fixed-scope)
+          ;; If we re-init for the *same* fixed-scope, keep mode/selection to avoid
+          ;; surprising UI resets (e.g. jumping back to overview after an edit).
+          reset-ui? (not= prev-fixed-scope fixed-scope)
+          scope (or fixed-scope (:scope prev-state) initial-scope :admin)
+          prev-mode (or (:mode prev-state) :view)
+          mode (if reset-ui? :view prev-mode)
+          prev-selected (:selected-entity prev-state)
+          default-entity (->> (defs/entities-for-scope scope)
+                           sort
+                           first)
+          selected-entity (cond
+                            reset-ui? nil
+                            (and (= mode :edit) (nil? prev-selected)) default-entity
+                            :else prev-selected)
           load-admin? (if (some? load-admin?) load-admin? true)
           load-user? (if (some? load-user?) load-user? true)
           fx (cond-> []
@@ -40,12 +55,19 @@
                load-admin? (conj [:dispatch [::admin-settings-events/load-form-fields]])
                load-admin? (conj [:dispatch [::admin-settings-events/load-table-columns]])
                load-user? (conj [:dispatch [::user-settings-events/init]]))]
-      (log/info "Initializing unified settings" (merge {:scope scope :fixed-scope fixed-scope} (dissoc opts :db)))
+      (log/info "Initializing unified settings"
+        (merge
+          {:scope scope
+           :fixed-scope fixed-scope
+           :reset-ui? reset-ui?
+           :mode mode
+           :selected-entity selected-entity}
+          (dissoc opts :db)))
       {:db (-> db
-             (assoc-in [:admin :unified-settings :mode] :view)
+             (assoc-in [:admin :unified-settings :mode] mode)
              (assoc-in [:admin :unified-settings :scope] scope)
              (assoc-in [:admin :unified-settings :fixed-scope] fixed-scope)
-             (assoc-in [:admin :unified-settings :selected-entity] nil))
+             (assoc-in [:admin :unified-settings :selected-entity] selected-entity))
        :fx fx})))
 
 ;; =============================================================================
@@ -55,7 +77,14 @@
 (rf/reg-event-fx
   ::set-mode
   (fn [{:keys [db]} [_ mode]]
-    (log/info "Setting unified settings mode" {:mode mode})
+    (let [prev-mode (get-in db [:admin :unified-settings :mode] :view)
+          current-scope (get-in db [:admin :unified-settings :scope] :admin)
+          selected-entity (get-in db [:admin :unified-settings :selected-entity])]
+      (log/info "Setting unified settings mode"
+        {:prev-mode prev-mode
+         :new-mode mode
+         :scope current-scope
+         :selected-entity selected-entity}))
     (let [current-scope (get-in db [:admin :unified-settings :scope] :admin)
           ;; When entering edit mode, select first entity for current scope if none selected
           selected-entity (get-in db [:admin :unified-settings :selected-entity])

@@ -16,6 +16,7 @@
     [app.admin.frontend.events.user-settings :as user-settings-events]
     [app.admin.frontend.settings.definitions :as defs]
     [app.template.frontend.settings.resolver :as resolver]
+    [taoensso.timbre :as timbre]
     [clojure.set :as set]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
@@ -207,7 +208,7 @@
 
 (defui table-columns-editor
   "Editor for table-columns.edn - structural column configuration."
-  [{:keys [entity-kw table-columns-config on-toggle on-reset]}]
+  [{:keys [entity-kw table-columns-config on-toggle on-reset on-set-list]}]
   (let [entity-config (get table-columns-config entity-kw {})
         available (or (:available-columns entity-config) [])
         always-visible (set (or (:always-visible entity-config) []))
@@ -228,6 +229,17 @@
           ($ :p "“Always Visible” columns are structurally enforced by "
             ($ :code {:class "px-1"} "table-columns.edn")
             ". They will always show up in the table (even if “Default Visible” is unchecked), and they won’t be configurable from the “View Options” policy tab."))
+
+        (when (and (seq available) (fn? on-set-list))
+          ($ :div {:class "flex items-center gap-2 mb-3"}
+            ($ :div {:class "ds-tooltip ds-tooltip-bottom"
+                     :data-tip "Marks all configured columns as Default Visible for this entity."}
+              ($ :button {:type "button"
+                          :class "ds-btn ds-btn-xs ds-btn-outline"
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (on-set-list entity-kw :default-visible-columns available))}
+                "Select All (Default Visible)"))))
 
         (if (empty? available)
           ($ :p {:class "text-sm text-base-content/60"} "No columns configured")
@@ -301,7 +313,8 @@
 
 (defui admin-entity-editor
   "Editor for a single admin entity's settings."
-  [{:keys [entity-kw settings on-change on-column-change]}]
+  [{:keys [entity-kw settings on-change on-display-settings-bulk
+           on-column-change on-column-visibility-bulk]}]
   (let [table-config-from-ui (use-subscribe [:admin/table-config entity-kw])
         table-configs-from-settings (use-subscribe [::admin-settings-events/table-columns])
         table-config-from-settings (get table-configs-from-settings entity-kw)
@@ -317,13 +330,17 @@
        :settings settings
        :editing? true
        :on-change on-change
+       :on-display-settings-bulk on-display-settings-bulk
        :setting-keys defs/all-setting-keys
        :table-config table-config
-       :on-column-change on-column-change})))
+       :on-column-change on-column-change
+       :on-column-visibility-bulk on-column-visibility-bulk})))
 
 (defui user-entity-editor
   "Editor for a single user entity's settings."
-  [{:keys [entity-kw view-options entity-config table-config on-change on-column-change on-reset]}]
+  [{:keys [entity-kw view-options entity-config table-config on-change on-display-settings-bulk
+           on-column-change on-column-visibility-bulk
+           on-reset]}]
   (let [immutable-locks (resolver/feature-constraints->locks (:features entity-config))
         draft-defaults (or (:display-defaults view-options) {})
         draft-locks (or (:display-locks view-options) {})
@@ -338,7 +355,9 @@
        :immutable-locks immutable-locks
        :editing? true
        :on-change on-change
+       :on-display-settings-bulk on-display-settings-bulk
        :on-column-change on-column-change
+       :on-column-visibility-bulk on-column-visibility-bulk
        :on-reset on-reset
        :setting-keys defs/all-setting-keys
        :table-config table-config})))
@@ -351,16 +370,28 @@
         on-admin-change (fn [entity-name setting-key new-state]
                           (rf/dispatch [::admin-settings-events/set-display-setting-draft
                                         entity-name setting-key new-state]))
+        on-admin-display-settings-bulk (fn [entity-name setting-keys new-state]
+                                         (rf/dispatch [::admin-settings-events/set-display-settings-bulk
+                                                       entity-name setting-keys new-state]))
         on-admin-column-change (fn [entity-name column-key new-state]
                                  (rf/dispatch [::admin-settings-events/set-column-visibility-setting-draft
                                                entity-name column-key new-state]))
+        on-admin-column-visibility-bulk (fn [entity-name column-keys new-state]
+                                          (rf/dispatch [::admin-settings-events/set-column-visibility-bulk
+                                                        entity-name column-keys new-state]))
         ;; User handlers
         on-user-change (fn [entity-kw setting-key new-state]
                          (rf/dispatch [::user-settings-events/set-display-setting-draft
                                        entity-kw setting-key new-state]))
+        on-user-display-settings-bulk (fn [entity-kw setting-keys new-state]
+                                        (rf/dispatch [::user-settings-events/set-display-settings-bulk
+                                                      entity-kw setting-keys new-state]))
         on-user-column-change (fn [entity-kw column-key new-state]
                                 (rf/dispatch [::user-settings-events/set-column-visibility-setting-draft
                                               entity-kw column-key new-state]))
+        on-user-column-visibility-bulk (fn [entity-kw column-keys new-state]
+                                         (rf/dispatch [::user-settings-events/set-column-visibility-bulk
+                                                       entity-kw column-keys new-state]))
         on-user-reset (fn [entity-kw]
                         (rf/dispatch [::user-settings-events/reset-entity-display-draft entity-kw]))
         ;; User entity/form-fields/table-columns handlers
@@ -426,14 +457,24 @@
                                                (conj (vec current-cols) col-str))
                                     new-config (assoc current-config list-type new-cols)]
                                 (rf/dispatch [::admin-settings-events/update-table-columns-entity
-                                              entity-kw new-config])))})
+                                              entity-kw new-config])))
+                 :on-set-list (fn [entity-kw list-type cols]
+                                (let [current-config (get table-columns-config entity-kw {})
+                                      cols' (->> (or cols [])
+                                              (map (fn [c] (if (keyword? c) (name c) (str c))))
+                                              vec)
+                                      new-config (assoc current-config list-type cols')]
+                                  (rf/dispatch [::admin-settings-events/update-table-columns-entity
+                                                entity-kw new-config])))})
 
               ;; default: view-options
               ($ admin-entity-editor
                 {:entity-kw selected-entity
                  :settings (get admin-config selected-entity)
                  :on-change on-admin-change
-                 :on-column-change on-admin-column-change}))))
+                 :on-display-settings-bulk on-admin-display-settings-bulk
+                 :on-column-change on-admin-column-change
+                 :on-column-visibility-bulk on-admin-column-visibility-bulk}))))
 
         :user
         (let [view-options (get-in user-draft [:view-options selected-entity])
@@ -468,7 +509,13 @@
                 {:entity-kw selected-entity
                  :table-columns-config table-columns-config
                  :on-toggle on-user-table-column-toggle
-                 :on-reset on-user-table-columns-reset})
+                 :on-reset on-user-table-columns-reset
+                 :on-set-list (fn [entity-kw list-type cols]
+                                (let [cols' (->> (or cols [])
+                                              (map (fn [c] (if (keyword? c) (name c) (str c))))
+                                              vec)]
+                                  (rf/dispatch [::user-settings-events/set-table-column-list-draft
+                                                entity-kw list-type cols'])))})
 
               ;; default: view-options
               ($ user-entity-editor
@@ -478,6 +525,8 @@
                  :table-config table-config
                  :on-change on-user-change
                  :on-column-change on-user-column-change
+                 :on-display-settings-bulk on-user-display-settings-bulk
+                 :on-column-visibility-bulk on-user-column-visibility-bulk
                  :on-reset on-user-reset}))))
 
         ($ :div {:class "ds-alert ds-alert-warning"}
@@ -573,21 +622,27 @@
        :on-discard on-discard}
 
       ;; Content based on mode
-      (if (= mode :view)
-        ($ view-mode-content
-          {:page-scope page-scope
-           :admin-config admin-config
-           :user-config (get user-draft :view-options {})
-           :user-draft user-draft})
-        ($ edit-mode-content
-          {:scope scope
-           :selected-entity selected-entity
-           :admin-config admin-config
-           :admin-form-fields admin-form-fields
-           :admin-table-columns admin-table-columns
-           :user-draft user-draft
-           :tab tab
-           :on-tab-change on-tab-change})))))
+      (do
+        (timbre/info "Rendering unified-settings-content"
+                     {:mode mode
+                      :scope scope
+                      :selected-entity selected-entity
+                      :admin-config-entities (keys admin-config)})
+        (if (= mode :view)
+          ($ view-mode-content
+            {:page-scope page-scope
+             :admin-config admin-config
+             :user-config (get user-draft :view-options {})
+             :user-draft user-draft})
+          ($ edit-mode-content
+            {:scope scope
+             :selected-entity selected-entity
+             :admin-config admin-config
+             :admin-form-fields admin-form-fields
+             :admin-table-columns admin-table-columns
+             :user-draft user-draft
+             :tab tab
+             :on-tab-change on-tab-change}))))))
 
 (defui unified-settings-page
   "Shared settings page with admin layout.
