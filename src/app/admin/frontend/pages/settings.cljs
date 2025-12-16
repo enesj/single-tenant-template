@@ -2,7 +2,7 @@
    "Admin page displaying all hardcoded list view settings from view-options.edn,
    form-fields.edn, and table-columns.edn with editing capabilities"
    (:require
-    [app.admin.frontend.components.layout :as layout]
+      #_[app.admin.frontend.components.layout :as layout]
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.events.settings :as settings-events]
     [clojure.string :as str]
@@ -158,7 +158,7 @@
              ($ :p {:class "text-base-content/60 text-sm italic"}
                 "All settings are user-configurable"))))))
 
- (defui settings-summary
+ #_ (defui settings-summary
    "Summary statistics for all hardcoded settings"
    [{:keys [all-view-options]}]
    (let [entity-count (count all-view-options)
@@ -191,7 +191,7 @@
            ($ :div {:class "ds-stat-value text-accent"} total-hardcoded-settings)
            ($ :div {:class "ds-stat-desc"} "Individual settings locked")))))
 
- (defui settings-legend
+ #_ (defui settings-legend
    "Legend explaining the setting states"
    []
    ($ :div {:class "ds-alert ds-alert-info mb-6"}
@@ -735,8 +735,8 @@
                 :on-save handle-table-columns-save
                 :loading? table-columns-loading?}))))))
 
-(defui admin-settings-page
-  "Admin settings overview page"
-  []
-  ($ layout/admin-layout
-     ($ admin-settings-content)))
+#_ (defui admin-settings-page
+     "Admin settings overview page"
+     []
+     ($ layout/admin-layout
+        ($ admin-settings-content)))

@@ -1,12 +1,12 @@
 (ns app.admin.frontend.pages.entities
-  (:require
-    [app.admin.frontend.components.admin-layout :refer [admin-layout]]
-    [app.admin.frontend.components.entity-page :refer [entity-page]]
-    [app.template.frontend.components.headline :refer [headline]]
-    [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]))
+  #_(:require
+      [app.admin.frontend.components.admin-layout :refer [admin-layout]]
+      [app.admin.frontend.components.entity-page :refer [entity-page]]
+      [app.template.frontend.components.headline :refer [headline]]
+      [re-frame.core :as rf]
+      [uix.core :refer [$ defui]]))
 
-(defui generic-admin-entity-page [entity-key]
+#_ (defui generic-admin-entity-page [entity-key]
   (let [{:keys [page-title page-description adapter-init-fn]} @(rf/subscribe [:admin/entity-config entity-key])
         auth-status @(rf/subscribe [:admin/auth-status])]
     ;; For visitors, show a friendly message
@@ -24,7 +24,7 @@
                        :subtitle (or page-description "Manage your data")})
           ($ entity-page {:entity-key entity-key}))))))
 
-(defui admin-entities-page []
+#_ (defui admin-entities-page []
   (let [entities (-> @(rf/subscribe [:admin/all-entity-configs]) keys vec)
         {:keys [selected-entity]} @(rf/subscribe [:admin/entity-ui-state])
         selected-entity (or selected-entity (first entities))]

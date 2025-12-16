@@ -1,6 +1,6 @@
 (ns app.template.frontend.pages.logout
   (:require
-    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    #_[app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.events.auth :as auth-events]
     [app.template.frontend.components.button :refer [button]]
     [re-frame.core :as rf]
@@ -74,54 +74,54 @@
                 ($ :li "You can sign back in anytime")))))))))
 
 ;; Logout success component (shown after successful logout)
-(defui logout-success-component
-  []
-  ($ :div {:class "min-h-screen flex items-center justify-center bg-base-200"}
-    ($ :div {:class "max-w-md w-full bg-base-100 shadow-xl rounded-lg p-8"}
-      ($ :div {:class "text-center"}
-        ;; Success icon
-        ($ :div {:class "mb-6"}
-          ($ :div {:class "w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-4"}
-            ($ :svg {:class "w-8 h-8 text-success-content" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
-              ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"}
-                :d "M5 13l4 4L19 7")))
-          ($ :h2 {:class "text-2xl font-bold text-base-content mb-2"} "Signed Out Successfully")
-          ($ :p {:class "text-base-content/70"} "You have been safely signed out of your account."))
+#_ (defui logout-success-component
+     []
+     ($ :div {:class "min-h-screen flex items-center justify-center bg-base-200"}
+       ($ :div {:class "max-w-md w-full bg-base-100 shadow-xl rounded-lg p-8"}
+         ($ :div {:class "text-center"}
+           ;; Success icon
+           ($ :div {:class "mb-6"}
+             ($ :div {:class "w-16 h-16 bg-success rounded-full flex items-center justify-center mx-auto mb-4"}
+               ($ :svg {:class "w-8 h-8 text-success-content" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
+                 ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"}
+                   :d "M5 13l4 4L19 7")))
+             ($ :h2 {:class "text-2xl font-bold text-base-content mb-2"} "Signed Out Successfully")
+             ($ :p {:class "text-base-content/70"} "You have been safely signed out of your account."))
 
-        ;; Action buttons
-        ($ :div {:class "space-y-3"}
-          ($ button {:btn-type :primary
-                     :class "w-full"
-                     :id "logout-success-sign-in-btn"
-                     :on-click #(set! (.-href js/window.location) "/login")}
-            "Sign In Again")
+           ;; Action buttons
+           ($ :div {:class "space-y-3"}
+             ($ button {:btn-type :primary
+                        :class "w-full"
+                        :id "logout-success-sign-in-btn"
+                        :on-click #(set! (.-href js/window.location) "/login")}
+               "Sign In Again")
 
-          ($ button {:btn-type :outline
-                     :class "w-full"
-                     :id "logout-success-home-btn"
-                     :on-click #(set! (.-href js/window.location) "/")}
-            "Return to Home"))))))
+             ($ button {:btn-type :outline
+                        :class "w-full"
+                        :id "logout-success-home-btn"
+                        :on-click #(set! (.-href js/window.location) "/")}
+               "Return to Home"))))))
 
 ;; Quick logout component (for use in navigation/modals)
-(defui quick-logout-modal
-  [{:keys [open? on-close]}]
-  ($ modal-wrapper
-    {:visible? open?
-     :title "Confirm Sign Out"
-     :size :small
-     :on-close (fn [] (when on-close (on-close)))
-     :close-button-id "quick-logout-close-x"}
+#_ (defui quick-logout-modal
+     [{:keys [open? on-close]}]
+     ($ modal-wrapper
+       {:visible? open?
+        :title "Confirm Sign Out"
+        :size :small
+        :on-close (fn [] (when on-close (on-close)))
+        :close-button-id "quick-logout-close-x"}
 
-    ($ :p {:class "mb-6"} "Are you sure you want to sign out of your account?")
+       ($ :p {:class "mb-6"} "Are you sure you want to sign out of your account?")
 
-    ($ :div {:class "ds-modal-action"}
-      ($ button {:btn-type :warning
-                 :id "quick-logout-confirm-btn"
-                 :on-click #(do
-                              (rf/dispatch [::auth-events/logout])
-                              (when on-close (on-close)))}
-        "Sign Out")
-      ($ button {:btn-type :outline
-                 :id "quick-logout-cancel-btn"
-                 :on-click on-close}
-        "Cancel"))))
+       ($ :div {:class "ds-modal-action"}
+         ($ button {:btn-type :warning
+                    :id "quick-logout-confirm-btn"
+                    :on-click #(do
+                                 (rf/dispatch [::auth-events/logout])
+                                 (when on-close (on-close)))}
+           "Sign Out")
+         ($ button {:btn-type :outline
+                    :id "quick-logout-cancel-btn"
+                    :on-click on-close}
+           "Cancel"))))

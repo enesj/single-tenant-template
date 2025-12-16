@@ -94,17 +94,17 @@
 
 ;; Convenience functions for common use cases
 
-(defn admin-message-display
+#_ (defn admin-message-display
   "Convenience function for admin-themed message display."
   [& args]
   ($ message-display (merge {:variant :admin} (first args))))
 
-(defn tenant-message-display
+#_ (defn tenant-message-display
   "Convenience function for tenant-themed message display."
   [& args]
   ($ message-display (merge {:variant :tenant} (first args))))
 
-(defn customer-message-display
+#_ (defn customer-message-display
   "Convenience function for customer-themed message display."
   [& args]
   ($ message-display (merge {:variant :customer} (first args))))

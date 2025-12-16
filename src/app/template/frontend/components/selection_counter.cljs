@@ -81,17 +81,17 @@
 
 ;; Convenience functions for common use cases
 
-(defn admin-selection-counter
+#_ (defn admin-selection-counter
   "Convenience function for admin-themed selection counter."
   [& args]
   ($ selection-counter (merge {:variant :admin} (first args))))
 
-(defn tenant-selection-counter
+#_ (defn tenant-selection-counter
   "Convenience function for tenant-themed selection counter."
   [& args]
   ($ selection-counter (merge {:variant :tenant} (first args))))
 
-(defn customer-selection-counter
+#_ (defn customer-selection-counter
   "Convenience function for customer-themed selection counter."
   [& args]
   ($ selection-counter (merge {:variant :customer} (first args))))

@@ -228,40 +228,40 @@
         ($ auth-form-footer {:message "Already have an account?"
                              :show-security-badge? true})))))
 
-(defui registration-success-page
-  "Registration success page shown after email verification"
-  []
-  (let [auth-status (use-subscribe [:auth-status])
-        verification-message (get-in auth-status [:session :verification-message])]
+#_ (defui registration-success-page
+     "Registration success page shown after email verification"
+     []
+     (let [auth-status (use-subscribe [:auth-status])
+           verification-message (get-in auth-status [:session :verification-message])]
 
-    ($ auth-form-container
-      ($ auth-form-header {:title "Email Verified!"
-                           :subtitle "Your email address has been successfully verified."})
+       ($ auth-form-container
+         ($ auth-form-header {:title "Email Verified!"
+                              :subtitle "Your email address has been successfully verified."})
 
-      ;; Success message
-      ($ :div {:class "ds-alert ds-alert-success mb-6"}
-        ($ :svg {:class "w-6 h-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-          ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                    :d "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"}))
-        ($ :div
-          ($ :h3 {:class "font-semibold text-lg mb-2"} "Verification Complete!")
-          ($ :p {:class "text-sm"} verification-message)))
+         ;; Success message
+         ($ :div {:class "ds-alert ds-alert-success mb-6"}
+           ($ :svg {:class "w-6 h-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+             ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                       :d "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"}))
+           ($ :div
+             ($ :h3 {:class "font-semibold text-lg mb-2"} "Verification Complete!")
+             ($ :p {:class "text-sm"} verification-message)))
 
-      ;; Action button
-      ($ :div {:class "space-y-4"}
-        ($ button {:btn-type :primary
-                   :class "w-full"
-                   :id "verification-login-btn"
-                   :on-click #(set! (.-href js/window.location) "/login")}
-          "Sign In to Your Account")))))
+         ;; Action button
+         ($ :div {:class "space-y-4"}
+           ($ button {:btn-type :primary
+                      :class "w-full"
+                      :id "verification-login-btn"
+                      :on-click #(set! (.-href js/window.location) "/login")}
+             "Sign In to Your Account")))))
 
-(defn registration-routes
-  "Registration routes for the application"
-  []
-  ["/register"
-   {:name :register
-    :view :register}
+#_ (defn registration-routes
+     "Registration routes for the application"
+     []
+     ["/register"
+      {:name :register
+       :view :register}
 
-   "/verify-email"
-   {:name :verify-email
-    :view :verify-email}])
+      "/verify-email"
+      {:name :verify-email
+       :view :verify-email}])

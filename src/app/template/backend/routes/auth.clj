@@ -4,9 +4,9 @@
     [app.shared.data :as shared-data]
     [app.shared.date :as shared-date]
     [app.template.backend.auth.service :as auth-service]
-    [app.template.backend.routes.utils :as route-utils :refer [error-response get-service-container]]
+    [app.template.backend.routes.utils :as route-utils :refer [get-service-container]]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
-    [app.shared.http :refer [json-response]]
+    [app.shared.http :as http :refer [json-response]]
     [cheshire.core :as json]
     [clojure.walk :as walk]
     [ring.util.response :as response]
@@ -65,7 +65,7 @@
         ;; Use a more robust check for password presence
         (when (or (empty? email) (empty? password))
            (log/warn "Missing email or password in registration request")
-           (error-response "Email and password are required" 400))
+            (http/bad-request-response "Email and password are required"))
            
         (let [;; Since we pull email/password from body-params, we can just pass them to the service
             ;; But let's verify specific params if we need to debug
@@ -111,7 +111,7 @@
 
         ;; Validate required fields
         (when (or (empty? email) (empty? password))
-          (error-response "Email and password are required" 400))
+          (http/bad-request-response "Email and password are required"))
 
         ;; Attempt authentication - wrap in try/catch since it throws on failure
         (try
@@ -147,10 +147,10 @@
               
               ;; Return appropriate error based on exception type
               (case (:type ex-data)
-                :validation-error (error-response "Invalid email or password" 401)
-                :forbidden (error-response "Account is not active" 403)
+                :validation-error (http/unauthorized-response "Invalid email or password")
+                :forbidden (http/forbidden-response "Account is not active")
                 ;; Default error
-                (error-response "Invalid email or password" 401)))))))))
+                (http/unauthorized-response "Invalid email or password")))))))))
 
 
 

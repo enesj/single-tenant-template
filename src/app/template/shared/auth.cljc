@@ -51,13 +51,12 @@
 
 (defn get-user-permissions
   "Get permissions based on user role. Override in domain for specific role-permission mappings.
-   Arity-1 returns empty set when no map is provided (single-tenant default)."
-  ([user role-permissions-map]
-   (when user
-     (let [role (:role user)]
-       (get role-permissions-map role #{}))))
-  ([user]
-   (get-user-permissions user {})))
+   When role-permissions-map is omitted, defaults to an empty map (single-tenant default)."
+  [user & more]
+  (when user
+    (let [role (:role user)
+          role-permissions-map (or (first more) {})]
+      (get role-permissions-map role #{}))))
 
 (defn user-can?
   "Check if user has specific permission"
