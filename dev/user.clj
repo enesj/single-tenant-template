@@ -1,14 +1,14 @@
 (ns user
-  {:clj-kondo/ignore [:unused-namespace :unused-refer]}
+  {:clj-kondo/ignore [:unused-namespace :unused-refer :unused-referred-var]}
   (:require
-   [clojure.string :as str]
-   [clojure.tools.namespace.repl :refer [disable-reload! disable-unload!]]
-   [core :as core]
-   [snitch.core :refer [defn* defmethod* *fn *let]]
-   [taoensso.timbre :as log])
+    [clojure.string :as str]
+    [clojure.tools.namespace.repl :refer [disable-reload! disable-unload!]]
+    [core :as core]
+    [snitch.core :refer [defn* defmethod* *fn *let]]
+    [taoensso.timbre :as log])
   (:import
-   (java.time ZoneId)
-   (java.time.format DateTimeFormatter)))
+    (java.time ZoneId)
+    (java.time.format DateTimeFormatter)))
 
 (log/merge-config!
   {:appenders
@@ -33,7 +33,6 @@
 
 (disable-unload!)
 (disable-reload!)
-
 
 ;; File watchers state
 (defonce file-watchers (atom nil))

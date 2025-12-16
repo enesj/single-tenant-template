@@ -1,10 +1,9 @@
 (ns fork.re-frame
   (:require
-   [fork.core :as core]
-   [re-frame.core :as rf]
-   [taoensso.timbre :as log]
-   [uix.core :refer [$ defui use-callback use-effect use-state]]
-   [uix.re-frame :as urf]))
+    [fork.core :as core]
+    [re-frame.core :as rf]
+    [uix.core :refer [$ defui use-callback use-effect use-state]]
+    [uix.re-frame :as urf]))
 
 (rf/reg-event-db
   ::init-form

@@ -6,11 +6,10 @@
    This script shows exactly what rate limiting data exists before clearing,
    performs the clear operation, and confirms the results afterward."
   (:require
-   [clojure.data.json :as json]
-   [clojure.java.shell :as shell]
-   [clojure.set]
-   [clojure.string :as str]
-   [clojure.walk :as walk]))
+    [clojure.data.json :as json]
+    [clojure.java.shell :as shell]
+    [clojure.set]
+    [clojure.string :as str]))
 
 (defn read-config-port
   "Read the server port from the application configuration file."
@@ -23,7 +22,7 @@
                         "../../../config/base.edn"]
           config-file (or (some #(let [f (java.io.File. %)]
                                    (when (.exists f) f)) config-paths)
-                         (java.io.File. "config/base.edn"))]
+                        (java.io.File. "config/base.edn"))]
       (if (.exists config-file)
         (let [config-content (slurp config-file)
               ;; Find webserver section and extract port
