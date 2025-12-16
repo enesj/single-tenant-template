@@ -14,7 +14,6 @@
     [app.admin.frontend.events.users.security]
     [app.admin.frontend.events.users.template.form-interceptors]
     [app.admin.frontend.events.users.template.messages]
-    [app.admin.frontend.events.users.template.success-handlers]
     [app.admin.frontend.security.wrapper]
     [app.admin.frontend.specs.generic]
     [app.admin.frontend.subs.auth]
@@ -39,7 +38,6 @@
     [re-frame.db :as rf-db]
     [taoensso.timbre :as log]))
 
-
 (defonce ^:private admin-initialized? (atom false))
 
 ;; =============================================================================
@@ -53,7 +51,7 @@
   "Small snapshot of app-db that helps debug unexpected resets of the unified
   settings editor (e.g. jumping from :edit back to :view).
 
-  Keep this intentionally tiny to avoid noisy logs." 
+  Keep this intentionally tiny to avoid noisy logs."
   [db]
   (let [route (or (:current-route db) {})
         route-name (or (get-in route [:data :name]) (:name route))
@@ -78,7 +76,7 @@
   "In dev, log when the unified-settings-related portion of app-db changes.
 
   This avoids relying on Chrome's expandable object rendering (which isn't
-  preserved in MCP console captures)." 
+  preserved in MCP console captures)."
   []
   (when (and ^boolean goog.DEBUG (compare-and-set! unified-debug-installed? false true))
     (rf/add-post-event-callback

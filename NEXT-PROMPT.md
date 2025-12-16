@@ -1,167 +1,260 @@
-# Next Session Prompt: Interactive Components ID Audit
+# Frontend Code Cleanup - Unused Functions and Namespaces
 
-**Date**: 2025-12-16
-**Task**: Find all interactive components in all cljs files in this app. Remember which interactive components don't have defined IDs and remember them in an .md file in root pad together with description of their functionality.
+**Date:** 2025-12-16
+**Prompt Focus:** Identify and safely remove unused frontend functions and namespaces
+**Target:** Frontend ClojureScript code (admin and template modules)
 
 ## Context Snapshot
 
-- **Repository**: Single-tenant SaaS template built with Clojure/ClojureScript and PostgreSQL
-- **Frontend**: Shadow CLJS, Re-frame, UIx components with two main builds (`:app` for public, `:admin` for admin console)
-- **Architecture**: Admin UI served at `http://localhost:8085`, using template component system with DaisyUI CSS classes (`ds-` prefix)
-- **Key Interactive Component Patterns**: UIx `defui` components, form inputs, buttons, on-click handlers, elements with `:id` attributes
-- **Component Libraries**: Template components in `src/app/template/frontend/components/*`, admin components in `src/app/admin/frontend/components/*`
+- **Repository:** Single-tenant SaaS template built with Clojure/ClojureScript
+- **Frontend Architecture:** Re-frame + UIx, Shadow-CLJS builds
+- **Build Targets:** `:app` (public shell) and `:admin` (admin console)
+- **Frontend Paths:**
+  - Admin frontend: `src/app/admin/frontend/`
+  - Template frontend: `src/app/template/frontend/`
+  - Domain frontend: `src/app/domain/frontend/`
+  - Tests: `test/app/*/frontend/`
+- **Entry Points:**
+  - Admin: `app.admin.frontend.core/init`
+  - App: `app.template.frontend.core/init`
 
 ## Task Focus
 
-Your mission is to comprehensively audit all interactive components across the ClojureScript codebase to identify accessibility and testing gaps. Specifically:
+Your goal is to identify and safely remove all unused frontend functions and namespaces from the ClojureScript codebase. This includes:
 
-1. **Find ALL interactive components** - buttons, inputs, forms, clickable elements, any UI elements with user interaction handlers
-2. **Check ID presence** - determine which interactive components have proper `:id` attributes for accessibility and testing
-3. **Document gaps** - create a comprehensive report of components missing IDs with their functionality descriptions
-4. **Generate actionable report** - output to `INTERACTIVE-COMPONENTS-ID-AUDIT.md` in repo root
+1. **Discovery Phase:** Find all potentially unused functions and namespaces
+2. **Verification Phase:** Confirm code is truly unused (not referenced via dynamic calls, metadata, or build-time includes)
+3. **Safe Removal Phase:** Remove unused code with proper backup and testing
 
-## Code Map - Key Areas to Inspect
+## Code Map
 
-### Core Interactive Component Namespaces
-- `src/app/template/frontend/components/form.cljs` - Core form rendering with field components
-- `src/app/template/frontend/components/form/fields/` - Input components (input.cljs, checkbox.cljs, select.cljs, textarea.cljs, number.cljs)
-- `src/app/template/frontend/components/button.cljs` - Button component system
-- `src/app/template/frontend/components/list/table.cljs` - Interactive table components
-- `src/app/template/frontend/components/list/` - List-related interactive components (rows.cljs, cells.cljs, ui.cljs)
-- `src/app/template/frontend/components/filter/` - Filter and search components
-- `src/app/template/frontend/components/batch_edit/` - Batch editing interface components
-- `src/app/template/frontend/components/dropdown.cljs` - Dropdown menu components
-- `src/app/template/frontend/components/modal.cljs` - Modal dialog components
+### Key Frontend Namespaces
 
-### Admin-Specific Interactive Components
-- `src/app/admin/frontend/components/enhanced_action_buttons.cljs` - Admin action buttons
-- `src/app/admin/frontend/components/user_actions.cljs` - User management actions
-- `src/app/admin/frontend/components/admin_actions.cljs` - Administrative operations
-- `src/app/admin/frontend/components/user_details_modal.cljs` - User detail modal
-- `src/app/admin/frontend/components/audit_actions.cljs` - Audit log interactions
-- `src/app/admin/frontend/components/audit_export_controls.cljs` - Export functionality
+#### Admin Module (`src/app/admin/frontend/`)
+- `events/` - Re-frame event handlers
+- `subs/` - Re-frame subscriptions
+- `components/` - UI components
+- `pages/` - Page-level components
+- `utils/` - Utility functions
+- `auth/` - Authentication logic
+- `renderers/` - Custom renderers
 
-### Domain-Specific Interactive Components
-- `src/app/domain/frontend/expenses/components/` - Expenses domain interactive forms and controls
-- `src/app/domain/frontend/expenses/pages/` - Expense management page components with forms and tables
+#### Template Module (`src/app/template/frontend/`)
+- `events/` - Core Re-frame events
+- `components/` - Shared UI components
+- `pages/` - Shared page components
+- `utils/` - Shared utilities
+- `hooks/` - React hooks
+- `api/` - HTTP client utilities
 
-### Pages with High Interactive Density
-- `src/app/admin/frontend/pages/` - Admin interface pages (login.cljs, users.cljs, dashboard.cljs, settings.cljs)
-- `src/app/template/frontend/pages/` - Template pages (login.cljs, register.cljs, entities.cljs)
-- `src/app/domain/frontend/expenses/pages/` - Expense domain pages (expense_new.cljs, expense_detail.cljs, expenses_list.cljs)
+#### Domain Module (`src/app/domain/frontend/`)
+- `expenses/` - Expenses domain frontend code
+
+### Build Configuration
+- Shadow-CLJS config: `shadow-cljs.edn`
+- Foreign libs configuration in build file
+- Preload configurations: `app.template.frontend.preload.*`
 
 ## Commands to Run
 
+### Development
 ```bash
-# Start the application for manual verification if needed
-bb run-app
+# Start admin build for hot-reload
+npm run watch:admin
 
-# Compile frontend builds to ensure all components are processable
-npm run build:admin
-npm run build
+# Run frontend tests (primary validation)
+npm run test:cljs
 
-# Run tests to understand component interaction patterns
-bb fe-test
-bb be-test  # For backend integration context
+# Run tests in watch mode during cleanup
+npm run test:cljs:watch
 
-# Search for interactive component patterns during development
-rg -n "defui|on-click|:on-click|input.*type|button.*type|form" src/**/*.cljs
+# Validate frontend configs (if any EDN configs)
+bb validate-frontend-config
 ```
 
-## Gotchas & Architecture Notes
+### Testing Commands
+```bash
+# Save test output before cleanup
+npm run test:cljs 2>&1 | tee /tmp/fe-test-before.txt
 
-- **UIx Component System**: Components use `defui` macro, not traditional Reagent components. Look for `($ :element)` syntax for DOM elements
-- **Form System**: Complex form infrastructure with dynamic field generation, field specs determine component types and attributes
-- **ID Generation Pattern**: Components may generate IDs programmatically using `form-id` and `field-id` combinations (see `form.cljs:66-67`)
-- **Event Handling**: Re-frame events handle interactions, look for `on-click` attributes and event dispatch patterns
-- **Accessibility**: Components should have proper `aria-*` attributes and semantic HTML structure
-- **Testing Support**: IDs are crucial for DOM testing - components without proper IDs are harder to test reliably
+# After each cleanup batch
+npm run test:cljs 2>&1 | tee /tmp/fe-test-after.txt
 
-## Interactive Component Detection Patterns
-
-Search for these patterns in ClojureScript files:
-
-1. **UIx Components**: `(defui component-name...`, `($ :element-type {:attrs...} ...)`
-2. **Click Handlers**: `:on-click`, `on-click`, event dispatch patterns
-3. **Form Elements**: `input`, `textarea`, `select`, `button` elements with interaction handlers
-4. **ID Attributes**: `:id` attribute assignment, programmatic ID generation
-5. **Event Dispatch**: `(rf/dispatch [...])` patterns tied to user interactions
-6. **Conditional Rendering**: Interactive elements that appear based on state
-
-## Expected Deliverable
-
-Create `INTERACTIVE-COMPONENTS-ID-AUDIT.md` in repo root with:
-
-### Structure:
-```markdown
-# Interactive Components ID Audit Report
-
-## Summary
-- Total interactive components found: X
-- Components with proper IDs: Y
-- Components missing IDs: Z
-- Coverage percentage: %
-
-## Components Missing IDs
-
-### Form Components
-- **Component**: [component-name]
-  - **File**: src/path/to/component.cljs
-  - **Functionality**: [description of what the component does]
-  - **Why it needs ID**: [testing/accessibility reason]
-
-### Button Components
-- **Component**: [component-name]
-  - **File**: src/path/to/component.cljs
-  - **Functionality**: [description]
-  - **Recommended ID pattern**: [suggestion]
-
-### Navigation Components
-[Continue for each category...]
-
-## Recommendations
-1. Priority components for ID implementation
-2. Suggested ID naming conventions
-3. Implementation approach for systematic ID addition
+# Compare results
+diff /tmp/fe-test-before.txt /tmp/fe-test-after.txt
 ```
 
-## Implementation Checklist
+### Backup Commands
+```bash
+# Create backup before changes
+cp -r src/app/ backup-frontend-$(date +%H%M%S)/
 
-1. **Scan Strategy Setup**
-   - [ ] Configure search patterns for interactive components
-   - [ ] Set up systematic file traversal approach
-   - [ ] Initialize results tracking structure
+# Or file-by-file
+cp src/app/admin/frontend/components/unused.cljs backup/unused.cljs.bak
+```
 
-2. **Component Discovery Phase**
-   - [ ] Scan all `.cljs` files for `defui` components
-   - [ ] Identify all elements with `:on-click` handlers
-   - [ ] Find all form elements (input, select, textarea, button)
-   - [ ] Locate modal, dropdown, and navigation components
-   - [ ] Capture components with dynamic rendering and state changes
+## Gotchas
 
-3. **ID Analysis Phase**
-   - [ ] Check each interactive component for `:id` attribute presence
-   - [ ] Analyze ID generation patterns (static vs dynamic)
-   - [ ] Document components with programmatic ID creation
-   - [ ] Identify components completely missing ID attributes
+### 1. Dynamic References
+- Namespaces might be loaded dynamically via `require` in runtime
+- Functions referenced by keywords in event dispatching
+- Components used via string-based routing
 
-4. **Documentation Phase**
-   - [ ] Create comprehensive component functionality descriptions
-   - [ ] Categorize components by type and priority
-   - [ ] Generate structured markdown report
-   - [ ] Provide actionable recommendations for ID implementation
+### 2. Build-time Includes
+- Preload configurations in `shadow-cljs.edn`
+- Foreign libs and externs
+- All namespaces mentioned in build configurations
 
-5. **Verification Phase**
-   - [ ] Cross-reference findings with actual component behavior
-   - [ ] Validate ID uniqueness and naming consistency
-   - [ ] Ensure report completeness and accuracy
+### 3. Meta-Programming
+- Macros that expand to use functions
+- Protocol implementations
+- Multimethod implementations
 
-## Success Criteria
+### 4. Inter-Namespace Dependencies
+- Template components used by admin
+- Shared utilities across modules
+- Event handlers crossing namespace boundaries
 
-- **Complete Coverage**: Every interactive component in the `.cljs` codebase is analyzed
-- **Clear Documentation**: Each component missing ID has clear functionality description and implementation recommendation
-- **Actionable Output**: Report provides systematic approach for adding missing IDs
-- **Quality Standards**: Components are categorized by testing/accessibility priority
-- **Pattern Recognition**: ID generation patterns are documented for consistent implementation
+### 5. Test-Only Code
+- Functions existing only for testing
+- Mock components in test directories
+- Test utilities and helpers
 
-Use the clojure-mcp scratch-pad tool to track your progress through each phase and maintain comprehensive notes during the component audit process.
+## Implementation Plan
+
+### Phase 1: Comprehensive Analysis
+1. **Build a complete function and namespace inventory**
+   - Parse all `.cljs` files for `defn` and `ns` forms
+   - Extract all function names with their namespaces
+   - Track function arity and metadata
+
+2. **Build a reference map**
+   - Find all direct function calls
+   - Find all namespace requires
+   - Track dynamic references (keywords, strings)
+   - Include references in tests
+
+3. **Identify potentially unused code**
+   - Functions with zero references
+   - Namespaces with no references from other namespaces
+   - Create initial candidate list
+
+### Phase 2: Verification Process
+For each candidate:
+
+1. **Check dynamic references**
+   - Search for function name as keyword
+   - Check string-based references in routing
+   - Look for meta-programming usage
+
+2. **Verify build configuration**
+   - Check if namespace in `shadow-cljs.edn`
+   - Verify preload configurations
+   - Check foreign libs dependencies
+
+3. **Cross-reference with tests**
+   - Check if function/namespace used in tests
+   - Verify if it's test-only code that should remain
+
+4. **Manual review for edge cases**
+   - Protocol implementations
+   - Multimethod dispatch functions
+   - Callback functions passed by reference
+
+### Phase 3: Safe Removal Workflow
+
+For each verified unused code:
+
+1. **Create backup**
+   ```bash
+   cp src/path/to/unused.cljs src/path/to/unused.cljs.bak
+   ```
+
+2. **Remove unused functions/namespaces**
+   - Remove `defn` forms
+   - Remove `:require` entries for unused namespaces
+   - Remove entire files if completely unused
+
+3. **Run tests immediately**
+   ```bash
+   npm run test:cljs
+   ```
+   - If tests fail: restore from backup and investigate
+
+4. **Run build verification**
+   ```bash
+   npm run build:admin
+   ```
+   - Ensure no build errors
+
+5. **Verify application runs**
+   - Check admin console loads
+   - Verify key functionality works
+
+6. **Document changes**
+   - Add to removal log
+   - Note any dependencies removed
+
+### Phase 4: Final Cleanup
+
+1. **Remove all backup files** after user confirmation
+2. **Update documentation** if needed
+3. **Run full test suite** one final time
+
+## Checklist
+
+- [ ] Build complete function/namespace inventory
+- [ ] Create comprehensive reference map
+- [ ] Generate initial list of unused code candidates
+- [ ] Save list to `UNUSED-FUNCTIONS.md` in repo root
+- [ ] Verify each candidate for dynamic references
+- [ ] Check build configurations for indirect references
+- [ ] Review test coverage for each candidate
+- [ ] Create backup workflow ready
+- [ ] Plan batch removal (small batches recommended)
+- [ ] Prepare rollback procedure for each batch
+
+## Safety Measures
+
+1. **Always backup before changes**
+2. **Test after each removal batch**
+3. **Keep backups until final approval**
+4. **Document all changes for review**
+5. **Use version control to track changes**
+
+## Output Files
+
+- `UNUSED-FUNCTIONS.md` - Initial list of candidates
+- `REMOVED-CODE-LOG.md` - Track all successful removals
+- Backup files with `.bak` extension
+- Test output files for before/after comparison
+
+## Tools to Use
+
+- **Chrome-MCP (Critical):** Essential for browser-based testing and verification of component functionality after removals
+  - Navigate to admin UI at `http://localhost:8085/admin`
+  - Test interactive elements to ensure they still work
+  - Verify DOM elements are present and functional
+  - Check console for JavaScript errors
+  - Validate component IDs are still accessible for testing
+
+- **ClojureScript eval:** Use MCP tool for runtime verification
+  - Evaluate function existence in running application
+  - Check namespace loading status
+  - Verify event handlers are registered
+
+- **App-DB Inspect:** Use skill for state verification
+  - Check re-frame state after code removal
+  - Verify subscriptions are working
+  - Ensure no dangling references in app-db
+
+- **System Logs:** Use skill for build/runtime monitoring
+  - Monitor Shadow-CLJS compilation
+  - Check for startup errors after changes
+  - Verify no missing dependencies
+
+- **Grep/rg:** For searching references
+- **Shadow-CLJS:** For build verification
+- **Git diff:** For reviewing changes
+
+Remember: When in doubt, keep the code. It's better to have unused code than to break functionality.

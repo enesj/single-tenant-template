@@ -3,8 +3,7 @@
   (:require
     [app.admin.frontend.events.users.template.delete-handlers]
     [app.admin.frontend.events.users.template.form-interceptors]
-    [app.admin.frontend.events.users.template.messages]
-    [app.admin.frontend.events.users.template.success-handlers]))
+    [app.admin.frontend.events.users.template.messages]))
 
 ;; This namespace serves as the main entry point for admin template system integration.
 ;; All template-related event handlers are now organized into focused modules:
