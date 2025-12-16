@@ -214,7 +214,12 @@
         always-visible (set (or (:always-visible entity-config) []))
         default-visible (set (or (:default-visible-columns entity-config) []))
         filterable (set (or (:filterable-columns entity-config) []))
-        sortable (set (or (:sortable-columns entity-config) []))]
+        sortable (set (or (:sortable-columns entity-config) []))
+        ;; Compute "all selected" states for each column type
+        all-always-visible? (and (seq available) (every? #(contains? always-visible %) available))
+        all-default-visible? (and (seq available) (every? #(contains? default-visible %) available))
+        all-filterable? (and (seq available) (every? #(contains? filterable %) available))
+        all-sortable? (and (seq available) (every? #(contains? sortable %) available))]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -229,17 +234,6 @@
           ($ :p "“Always Visible” columns are structurally enforced by "
             ($ :code {:class "px-1"} "table-columns.edn")
             ". They will always show up in the table (even if “Default Visible” is unchecked), and they won’t be configurable from the “View Options” policy tab."))
-
-        (when (and (seq available) (fn? on-set-list))
-          ($ :div {:class "flex items-center gap-2 mb-3"}
-            ($ :div {:class "ds-tooltip ds-tooltip-bottom"
-                     :data-tip "Marks all configured columns as Default Visible for this entity."}
-              ($ :button {:type "button"
-                          :class "ds-btn ds-btn-xs ds-btn-outline"
-                          :on-click (fn [e]
-                                      (.preventDefault e)
-                                      (on-set-list entity-kw :default-visible-columns available))}
-                "Select All (Default Visible)"))))
 
         (if (empty? available)
           ($ :p {:class "text-sm text-base-content/60"} "No columns configured")
@@ -267,7 +261,51 @@
                   ($ :th {:class "text-center whitespace-nowrap"}
                     ($ :div {:class "ds-tooltip ds-tooltip-bottom"
                              :data-tip "Can be sorted by clicking the column header."}
-                      "Sortable"))))
+                      "Sortable")))
+                ;; Toggle All row in thead for visual grouping
+                (when (and (seq available) (fn? on-set-list))
+                  ($ :tr {:class "bg-base-200"}
+                    ($ :th {:class "font-medium text-sm italic"} "Toggle All")
+                    ($ :th {:class "text-center"}
+                      ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                               :data-tip (if all-always-visible? "Deselect all" "Select all")}
+                        ($ :input {:type "checkbox"
+                                   :class "ds-checkbox ds-checkbox-sm"
+                                   :checked all-always-visible?
+                                   :on-change (fn [_]
+                                                (if all-always-visible?
+                                                  (on-set-list entity-kw :always-visible [])
+                                                  (on-set-list entity-kw :always-visible available)))})))
+                    ($ :th {:class "text-center"}
+                      ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                               :data-tip (if all-default-visible? "Deselect all" "Select all")}
+                        ($ :input {:type "checkbox"
+                                   :class "ds-checkbox ds-checkbox-sm"
+                                   :checked all-default-visible?
+                                   :on-change (fn [_]
+                                                (if all-default-visible?
+                                                  (on-set-list entity-kw :default-visible-columns [])
+                                                  (on-set-list entity-kw :default-visible-columns available)))})))
+                    ($ :th {:class "text-center"}
+                      ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                               :data-tip (if all-filterable? "Deselect all" "Select all")}
+                        ($ :input {:type "checkbox"
+                                   :class "ds-checkbox ds-checkbox-sm"
+                                   :checked all-filterable?
+                                   :on-change (fn [_]
+                                                (if all-filterable?
+                                                  (on-set-list entity-kw :filterable-columns [])
+                                                  (on-set-list entity-kw :filterable-columns available)))})))
+                    ($ :th {:class "text-center"}
+                      ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
+                               :data-tip (if all-sortable? "Deselect all" "Select all")}
+                        ($ :input {:type "checkbox"
+                                   :class "ds-checkbox ds-checkbox-sm"
+                                   :checked all-sortable?
+                                   :on-change (fn [_]
+                                                (if all-sortable?
+                                                  (on-set-list entity-kw :sortable-columns [])
+                                                  (on-set-list entity-kw :sortable-columns available)))}))))))
               ($ :tbody
                 (for [col available]
                   (let [enforced? (contains? always-visible col)]
