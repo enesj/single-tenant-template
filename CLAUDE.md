@@ -46,6 +46,29 @@ bb be-test | grep FAIL
 bb be-test | grep ERROR
 ```
 
+## Component ID Requirements (Browser Testing)
+
+🚨 **CRITICAL**: All interactive UI components MUST have unique `:id` attributes for browser testing via **chrome-mcp**.
+
+### When Creating New Components
+
+1. **Always accept an `:id` prop** and generate fallback IDs:
+   ```clojure
+   (let [field-id (or id (when formId (str formId "-input")))]
+     ($ :input {:id field-id ...}))
+   ```
+2. **Error elements** need IDs too: `(str field-id "-error")`
+3. See `INTERACTIVE-COMPONENTS-ID-AUDIT.md` for patterns and examples
+
+### Standard ID Patterns
+
+- Form fields: `(str formId "-" field-type)` → `"login-form-input"`
+- Buttons: `(str "btn-" action "-" context)` → `"btn-delete-users-123"`
+- Toggles: `(str "toggle-" label "-" entity)` → `"toggle-edit-users"`
+- Dropdowns: `(str "actions-btn-" entity-id)` → `"actions-btn-123"`
+
+---
+
 ## Documentation & AI Search
 
 Use **Morph MCP (Warp Grep)** as the standard way to search project documentation (`docs/**`) and skill docs (`.claude/skills/**`).

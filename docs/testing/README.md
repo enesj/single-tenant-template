@@ -37,6 +37,12 @@ clj -M:test -m kaocha.runner --focus app.backend.routes.admin.auth-test
 # Run Node.js tests (fast, primary)
 npm run test:cljs
 
+# Validate frontend config EDNs (fast, recommended when changing config)
+bb validate-frontend-config
+
+# Audit config keys vs usage (CI uses this in `npm run test:cljs:ci`)
+bb config-audit --strict
+
 # Run browser tests (Karma/Chrome)
 npm run test:cljs:karma
 

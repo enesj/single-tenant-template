@@ -1,283 +1,114 @@
 <!-- ai: {:tags [:frontend] :kind :guide} -->
 
-# List View Controls Configuration Guide
+# List View Controls & Configuration Guide
 
 ## Overview
 
-The list view controls system configures table display settings, column visibility, and user interactions. It merges **page-level hardcoded settings** with **user preferences**, but hardcoded settings are now **hidden from the UI** (controls do not render when locked).
+List-view settings (toggles + column visibility + filters) are resolved from a combination of:
 
-## Architecture
+- **Feature constraints** (entity-level business rules)
+- **Policy** (defaults/locks from `view-options.edn`)
+- **Per-user preferences** (stored in app-db under `[:ui :entity-prefs]`)
 
-### **Control Configuration Levels**
+The single source of truth for display-toggle resolution is `src/app/template/frontend/settings/resolver.cljs`.
 
-```
-Page Level (Hardcoded) ──┐
-                         ├── Merged Settings ──> Visual Display
-User Preferences ────────┘
-```
+## Core Concepts
 
-1. **Page Level**: Hardcoded constraints set by developers
-2. **User Preferences**: Runtime settings stored in Re-frame DB
-3. **Merged Settings**: Combination used for actual display behavior (controls are hidden when hardcoded)
+### Two layers: structural vs policy
 
-### Reactive pipeline
-- `app.template.frontend.hooks.display-settings` merges hardcoded + user settings.
-- `app.template.frontend.components.list.cells` renders cells using the merged settings (single source of truth).
-- Hardcoded values can come from page props or `src/app/admin/frontend/config/view-options.edn`.
+1. **Structural config** (`table-columns.edn`)
+   - Defines what columns exist and what they *can* do (available/filterable/sortable/always-visible).
+   - `:always-visible` is **enforced** (cannot be overridden by policy or user prefs).
 
-## Field-Level Configuration (models.edn)
+2. **Policy** (`view-options.edn`)
+   - Defines *defaults* and *locks* for display toggles and column visibility.
+   - Locks remove user control (either by hiding a toggle or disabling a column button).
 
-### **Admin Metadata Structure**
+### Display toggles precedence
 
-Fields are configured in `resources/db/template/models.edn` (and `resources/db/shared/models.edn`) with `:admin` metadata:
+`src/app/template/frontend/settings/resolver.cljs` applies this precedence (high → low):
 
-```clojure
-{:id :email
- :type :string
- :label "Email Address"
- :admin {:visible-in-table? true
-         :filterable? true
-         :sortable? true
-         :display-order 1}}
-```
+1. Locks from **feature constraints** (`entities.edn` → `:features`)
+2. Locks from **policy** (`view-options.edn`)
+3. **Per-user preferences** (`[:ui :entity-prefs <entity> :display]`)
+4. Policy defaults (`view-options.edn` → `:display-defaults`)
+5. Entity defaults (`entities.edn` → `:display-settings`)
+6. In-code fallback defaults
 
-### **Admin Configuration Options**
+## Where configuration lives
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `:visible-in-table?` | boolean | `true` | Whether column appears in table |
-| `:filterable?` | boolean | `true` | Whether field can be filtered |
-| `:sortable?` | boolean | `true` | Whether column can be sorted |
-| `:display-order` | integer | `nil` | Column order (lower = left) |
+### Admin (admin list pages)
 
-### **Example Field Configurations**
+Admin configuration EDNs are in `src/app/admin/frontend/config/` and are edited via `/admin/admin-settings`:
 
-```clojure
-;; Always visible, user can filter
-{:id :email
- :admin {:visible-in-table? true
-         :filterable? true
-         :display-order 1}}
+- `entities.edn`
+- `view-options.edn`
+- `form-fields.edn`
+- `table-columns.edn`
 
-;; Hidden by default, no filtering
-{:id :internal-id
- :admin {:visible-in-table? false
-         :filterable? false}}
+### Domain-owned user UI config (user-facing pages)
 
-;; Visible but no user control
-{:id :created-at
- :admin {:visible-in-table? true
-         :filterable? false
-         :display-order 99}}
-```
+Domain configuration EDNs are stored alongside the domain (currently Expenses) and are edited via `/admin/user-settings`:
 
-## Page-Level Control Configuration
+- `src/app/domain/frontend/expenses/config/entities.edn`
+- `src/app/domain/frontend/expenses/config/view-options.edn`
+- `src/app/domain/frontend/expenses/config/form-fields.edn`
+- `src/app/domain/frontend/expenses/config/table-columns.edn`
 
-### **Hardcoded Display Settings**
+## Policy schema (`view-options.edn`)
 
-Pages can enforce specific settings via props (controls are omitted entirely when locked):
+The schema is defined/validated in `src/app/shared/specs/view_options.cljc`.
+
+Preferred shape per entity:
 
 ```clojure
-;; In page component (e.g., admin/users.cljs)
-($ list-component
-  {:entity-name :users
-   :display-settings {:show-timestamps? false    ; Force OFF
-                      :show-pagination? true}    ; Force ON
-   ;; ... other props
-   })
+{:users
+ {:display-defaults {:show-pagination? true
+                     :show-timestamps? true}
+  :display-locks    {:show-delete? false}
+
+  ;; Column visibility policy (separate from structural table-columns.edn)
+  :column-defaults  {:email true :role true}
+  :column-locks     {:id true}}}
 ```
 
-### **Control Behavior Matrix**
+Legacy admin shape (deprecated): top-level `:show-*?` keys are treated as **locks when present**.
 
-| Hardcoded Value | Visual Appearance | User Interaction | Feature State |
-|----------------|-------------------|------------------|---------------|
-| `false` | Control **not shown** | ❌ Hidden | ❌ Disabled |
-| `true` | Control **not shown** | ❌ Hidden | ✅ Forced on |
-| Not set | Control rendered | ✅ User can toggle | ↕️ User controlled |
+## Per-user preferences (`[:ui :entity-prefs]`)
 
-### **Tooltip Messages**
+Template list settings events store user preferences under:
 
-Hardcoded controls are hidden, so tooltips only apply to user-controlled toggles.
+- `[:ui :entity-prefs <entity> :display :show-*]` — display toggles
+- `[:ui :entity-prefs <entity> :columns :visible]` — column visibility map (`:col -> boolean`)
+- `[:ui :entity-prefs <entity> :columns :width]` — table width
+- `[:ui :entity-prefs <entity> :filters :fields]` — per-field filtering enabled map
 
-## Available Controls
+See `src/app/template/frontend/events/list/settings.cljs` for the canonical structure (legacy paths are still read during migration but new writes go to `:entity-prefs` only).
 
-### **Main Display Controls**
+## UI behavior (what users see)
 
-| Control | Purpose | Default | Hardcoded Key |
-|---------|---------|---------|---------------|
-| **Edit** | Show edit buttons | `true` | `:show-edit?` |
-| **Delete** | Show delete buttons | `true` | `:show-delete?` |
-| **Highlights** | Row highlighting | `true` | `:show-highlights?` |
-| **Selection** | Multi-select checkboxes | `false` | `:show-select?` |
-| **Timestamps** | Created/updated columns | `true` | `:show-timestamps?` |
-| **Pagination** | Page navigation | `true` | `:show-pagination?` |
+### Locked display toggles
 
-### **Utility Controls**
+In the list-view settings panel, display toggles that are **locked by policy or feature constraints** are **hidden** (not rendered as interactive controls). This prevents users from toggling a setting that can’t change.
 
-| Control | Purpose | Behavior |
-|---------|---------|----------|
-| **Table Width** | Set table pixel width | Always interactive |
-| **Rows Per Page** | Items per page | Always interactive |
-| **Column Visibility** | Toggle specific columns | Based on field `:admin` config |
+### Column visibility controls
 
-### **Filter Icons**
+Column buttons remain visible, but they become non-interactive when:
 
-Timestamps and other controls with filtering show filter icons when:
-- Control is active (`is-active? = true`)
-- Field has filtering enabled (`:filterable? true`)
-- Control is not hardcoded (hardcoded controls are hidden)
+- The column is structurally enforced via `table-columns.edn` `:always-visible`, or
+- The column is locked via `view-options.edn` `:column-locks`
 
-## Implementation Files
+In those cases the button is disabled and explains why via a tooltip/title.
 
-### **Core Components**
+## Implementation pointers
 
-```
-src/app/template/frontend/components/
-├── settings/
-│   └── list_view_settings.cljs     # Main settings panel
-├── list/cells.cljs                 # Cell rendering (merged settings)
-├── list.cljs                       # List wrapper component
-├── table.cljs                      # Table component
-└── pagination.cljs                 # Pagination component
-```
+- Resolver (display toggles): `src/app/template/frontend/settings/resolver.cljs`
+- List view settings panel UI: `src/app/template/frontend/components/settings/list_view_settings.cljs`
+- Per-user preference events: `src/app/template/frontend/events/list/settings.cljs`
+- Admin settings editors (tri-state UI, table-columns editor, toggle-all): `src/app/admin/frontend/pages/unified_settings.cljs`
+- Settings view components (tri-state rows, bulk rows): `src/app/admin/frontend/components/settings_views.cljs`
 
-### **State Management**
+## Verification (fast checks)
 
-```
-src/app/template/frontend/
-├── events/list/ui-state.cljs       # Control toggle events
-├── hooks/display_settings.cljs     # Merge hardcoded + user settings
-└── subs/ui.cljs                    # Display settings subscriptions
-```
-
-### **Configuration Files**
-
-```
-resources/db/
-├── template/models.edn             # Template/admin fields (users, audit, login events)
-├── shared/models.edn               # Shared fields
-└── domain/*                        # Only if you add new domains
-```
-
-## Configuration Examples
-
-### **Admin Users Table**
-
-```clojure
-;; In resources/db/template/models.edn (single-tenant)
-{:table :users
- :fields [{:id :email
-           :admin {:visible-in-table? true
-                   :display-order 1}}
-          {:id :full-name
-           :admin {:visible-in-table? true
-                   :display-order 2}}
-          {:id :role
-           :admin {:visible-in-table? true
-                   :display-order 3}}
-          {:id :status
-           :admin {:visible-in-table? true
-                   :display-order 4}}
-          {:id :auth-provider
-           :admin {:visible-in-table? false}}]} ; Hidden by default
-```
-
-### **Page Configuration**
-
-```clojure
-;; In src/app/admin/frontend/pages/users.cljs
-(defui users-page []
-  ($ list-view
-    {:entity-name :users
-     :entity-spec users-entity-spec   ;; include rendered/computed fields
-     :display-settings {:show-timestamps? false    ; Hide timestamps always
-                        :show-select? true}        ; Enable selection always
-     :page-title "User Management"
-     :enable-search? true}))
-```
-
-## Best Practices
-
-### **Field Configuration**
-
-1. **Use display-order**: Set explicit order for important columns
-2. **Hide sensitive data**: Set `:visible-in-table? false` for internal IDs
-3. **Limit filtering**: Disable filtering for complex data types
-
-## Admin Settings page
-- Hardcoded view settings live in `src/app/admin/frontend/config/view-options.edn` and can be edited via the admin UI at `/admin/settings` (see `app.admin.frontend.pages.settings`).
-4. **Consider performance**: Hide expensive computed fields by default
-
-### **Page Configuration**
-
-1. **Minimal hardcoding**: Only hardcode when business logic requires it
-2. **User experience**: Don't hardcode `false` unless feature is genuinely unavailable
-3. **Documentation**: Comment why settings are hardcoded
-4. **Consistency**: Use same patterns across similar pages
-
-### **Control Visibility**
-
-```clojure
-;; Good: Hardcode only when needed
-{:show-edit? false}        ; When editing is not allowed
-{:show-timestamps? true}   ; When timestamps are critical
-
-;; Avoid: Over-constraining users
-{:show-highlights? false   ; Let users decide
- :show-select? false       ; Unless selection breaks functionality
- :show-pagination? false}  ; Unless single page is required
-```
-
-## Testing Scenarios
-
-### **Manual Testing Checklist**
-
-1. **No hardcoded settings**:
-   - ✅ All controls interactive
-   - ✅ User preferences persist
-   - ✅ Normal visual styling
-
-2. **Hardcoded `true`**:
-   - ✅ Control appears enabled
-   - ❌ Control not clickable
-   - ✅ Feature actually works
-   - ✅ Tooltip explains constraint
-
-3. **Hardcoded `false`**:
-   - ❌ Control appears disabled (grayed)
-   - ❌ Control not clickable
-   - ❌ Feature actually disabled
-   - ✅ Tooltip explains constraint
-
-4. **Column visibility**:
-   - ✅ Respects `:visible-in-table?` settings
-   - ✅ Maintains `:display-order`
-   - ✅ User can toggle configurable columns
-
-### **Browser Testing**
-
-```bash
-# Admin pages served at http://localhost:8085/admin
-# Test users list toggles
-open http://localhost:8085/admin/users
-```
-
-## Common Issues & Solutions
-
-### **Column Order Problems**
-- **Issue**: Columns appear in wrong order
-- **Solution**: Set explicit `:display-order` values in models.edn
-
-### **Controls Not Responding**
-- **Issue**: User cannot interact with controls
-- **Solution**: Check for hardcoded settings in page props
-
-### **Styling Inconsistencies**
-- **Issue**: Hardcoded controls look wrong
-- **Solution**: Verify visual state matches actual feature state
-
-### **Filter Icons Missing**
-- **Issue**: Filter icons don't appear
-- **Solution**: Ensure `:filterable? true` in field admin config
-
-This configuration system provides flexible, user-friendly control over list view behavior while maintaining clear boundaries between user preferences and application constraints.
+- Validate config EDNs: `bb validate-frontend-config`
+- Audit config keys vs usage: `bb config-audit --strict`

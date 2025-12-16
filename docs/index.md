@@ -38,6 +38,7 @@ Common tasks:
 - `docs/frontend/admin-settings.md` — comprehensive admin settings configuration guide
 - `docs/frontend/admin-panel-single-tenant.md` — single-tenant admin flow and extension points
 - `docs/frontend/list-view-controls-configuration.md` — list view controls and configuration
+- `docs/frontend/component-library.md` — component library with **ID requirements for browser testing**
 
 **Operations**
 - `docs/operations/README.md` — commands, env, deployment notes

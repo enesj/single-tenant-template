@@ -398,14 +398,16 @@
     :or {trigger-label "⋮"
          position :portal
          draggable? true}}]
-  (let [trigger ($ button {:btn-type :ghost
+  (let [trigger ($ button {:id (when entity-id (str "actions-btn-" entity-id))
+                           :btn-type :ghost
                            :shape "circle"
                            :class "!w-10 !h-10"
                            :title "Actions"
                            :style {:font-size "18px" :font-weight "bold"}}
                   trigger-label)]
 
-    ($ dropdown {:trigger trigger
+    ($ dropdown {:id (when entity-id (str "actions-dropdown-" entity-id))
+                 :trigger trigger
                  :position position
                  :class class
                  :draggable? draggable?}

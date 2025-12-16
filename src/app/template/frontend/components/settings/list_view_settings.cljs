@@ -86,7 +86,7 @@
                       field-name (name field-id)
                       ;; Disable toggle for locked columns (policy locks + always-visible)
                       is-column-configurable? (and (not (contains? always-visible-set field-id))
-                                              (not (contains? locked-column-set field-id)))
+                                                (not (contains? locked-column-set field-id)))
                         ;; If config doesn't specify filterable columns, treat all columns as filter-configurable.
                       is-filter-configurable? (if (set? filterable-column-set)
                                                 (contains? filterable-column-set field-id)
@@ -102,7 +102,8 @@
             ($ :div {:key (str "column-toggle-" field-name)
                      :class "relative inline-block"}
               ;; Main column visibility button
-              ($ :button {:key (str "btn-" field-name)
+              ($ :button {:id (str "col-toggle-" (name entity-kw) "-" field-name)
+                          :key (str "btn-" field-name)
                           :class (str "btn btn-sm m-1 mt-2 font-light pr-4 "
                                    (cond
                                      is-column-visible? "font-semibold"
@@ -123,7 +124,8 @@
               ;; Filter icon overlay - show if column is visible and filterable
               (when (and is-column-visible? is-filter-configurable?)
                 ($ :div {:class "absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center"}
-                  ($ filter-icon {:active? (and is-filter-configurable? is-field-filterable?)
+                  ($ filter-icon {:id (str "filter-toggle-" (name entity-kw) "-" field-name)
+                                  :active? (and is-filter-configurable? is-field-filterable?)
                                   :disabled? (not is-filter-configurable?)
                                   :title (when (not is-filter-configurable?)
                                            "Filtering is not available for this column")
@@ -169,7 +171,7 @@
                               is-locked? (and hardcoded-display-settings
                                            hardcoded-key
                                            (contains? hardcoded-display-settings hardcoded-key))
-                              toggle-id (str "toggle-" (-> label str/lower-case (str/replace #"\s+" "-")))]
+                              toggle-id (str "toggle-" (-> label str/lower-case (str/replace #"\s+" "-")) "-" (name entity-kw))]
                           ;; Hide the control entirely if it's locked
                           (when (not is-locked?)
                             ($ :div {:id toggle-id
@@ -259,7 +261,8 @@
           ($ :div {:id "table-width-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
             ($ :span {:class "text-sm font-medium"} "Table Width:")
-            ($ :input {:type "number"
+            ($ :input {:id (str "table-width-input-" (name entity-kw))
+                       :type "number"
                        :min "800"
                        :max "3000"
                        :step "100"
@@ -284,7 +287,7 @@
           ($ :div {:id "rows-per-page-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
             ($ :span {:class "text-sm font-medium"} "Rows per page:")
-            ($ :select {:id "rows-per-page"
+            ($ :select {:id (str "rows-per-page-" (name entity-kw))
                         :value per-page
                         :class "w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                         :on-change #(on-per-page-change (js/parseInt (.. % -target -value)))}

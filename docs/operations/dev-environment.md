@@ -13,10 +13,14 @@ Quick reference for the hot-reload stack (backend + Shadow CLJS + watchers) on p
 - Backend (Ring/Reitit) + file watchers (backend sources, `resources/db/models.edn`).
 - Shadow CLJS `:app` watch + browser REPL selection.
 - nREPL on 7888.
+- Structured dev logging via Timbre (watcher/system lifecycle events).
 
 ## Live Reload Flow
 1) `bb run-app` → script checks 8085 → launches dev profile under monitor.  
-2) Backend watcher restarts on `.clj/.cljc/.edn` changes in `src/app`, `dev`, `config`, `vendor`.  
+2) Backend watcher restarts on `.clj/.cljc/.edn` changes in `src/app`, `dev`, `config`, `vendor`, **except** runtime-edited UI config EDNs:
+   - `src/app/admin/frontend/config/*.edn`
+   - `src/app/domain/**/config/*.edn`
+   These are edited via `/admin/admin-settings` and `/admin/user-settings`; restarting on every save would cause disruptive full-page reloads.  
 3) Models watcher restarts on `resources/db/models.edn` changes.  
 4) Shadow `watch :app` pushes frontend updates automatically.  
 5) nREPL stays available for editor/Portal connections.
@@ -36,6 +40,7 @@ bb run-app
 - Watcher thrash: check `system.watchers` logs; extend debounce or fix generators.
 - nREPL conflicts: change port in `dev/core.clj` if 7888 is occupied.
 - Missing Shadow build: ensure `shadow-cljs.edn` has `:app`, rerun `bb run-app`.
+- Noisy stderr: dev startup suppresses stderr by default; set `DEV_SUPPRESS_STDERR=false` (or `0`/`no`) to keep stderr visible.
 
 ## Extend
 - Add watchers in `dev/system/watchers.clj` (reuse the debounce pattern).

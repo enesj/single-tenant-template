@@ -1,14 +1,17 @@
 (ns app.template.frontend.components.form.fields.number
   "Number input field component for integers and decimals"
   (:require
-   [app.template.frontend.components.common :as common]
-   [app.template.frontend.components.form.validation :as validation]
-   [uix.core :refer [$ defui]]))
+    [app.template.frontend.components.common :as common]
+    [app.template.frontend.components.form.validation :as validation]
+    [uix.core :refer [$ defui]]))
 
 (defui number-input
-  [{:keys [id label input-type error required class inline _on-change _value fork-errors step] :as all-props}]
+  [{:keys [id label input-type error required class inline _on-change _value fork-errors step formId] :as all-props}]
 
-  (let [base-class "ds-input ds-input-primary"
+  (let [;; Generate ID from formId if not explicitly provided
+        field-id (or id (when formId (str formId "-number")))
+        error-id (when field-id (str field-id "-error"))
+        base-class "ds-input ds-input-primary"
         label-class "ds-label"
         error-class "text-error"
         ;; Get errors from either the direct error prop or from Fork validation errors
@@ -27,19 +30,21 @@
                 (assoc
                   :class (str base-class " " class)
                   :type html-input-type
-                  :step input-step)
+                  :step input-step
+                  :id field-id)
                 (dissoc :error :input-type :disabled? :validate-server? :inline :fork-errors :formId :label :required))]
 
     ($ :div {:class (str "mb-4" (if inline " flex flex-row items-start gap-4"
                                   " flex flex-col items-start gap-4"))}
       ($ common/label {:text label
-                       :for id
+                       :for field-id
                        :required required
                        :class (str label-class (when inline " mb-0 min-w-[150px] text-left"))})
       ($ :div {:class (when inline "flex-1 text-left")}
         ($ common/input props)
         (when field-error
           ($ :div {:class error-class
+                   :id error-id
                    :role "alert"}
             ($ :div (if (string? field-error)
                       field-error

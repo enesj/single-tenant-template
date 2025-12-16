@@ -36,8 +36,9 @@
 
 (defui filter-label
   "Reusable label component for filters"
-  [{:keys [text class]}]
-  ($ :label {:class (str "block text-sm font-medium text-gray-700 mb-1 " (or class ""))}
+  [{:keys [text class for-id]}]
+  ($ :label {:class (str "block text-sm font-medium text-gray-700 mb-1 " (or class ""))
+             :for for-id}
     text))
 
 ;; Date input components
@@ -186,9 +187,11 @@
   "Select all / clear all controls for dropdown"
   [{:keys [on-select-all _on-clear-all]}]
   ($ :div {:class "px-3 py-2 border-b border-gray-100 flex justify-between"}
-    ($ :button {:class "text-xs text-blue-600 hover:text-blue-800"
+    ($ :button {:id "filter-select-all-btn"
+                :class "text-xs text-blue-600 hover:text-blue-800"
                 :on-click #(on-select-all true)}
       "Select All")
-    ($ :button {:class "text-xs text-red-600 hover:text-red-800"
+    ($ :button {:id "filter-clear-selection-btn"
+                :class "text-xs text-red-600 hover:text-red-800"
                 :on-click #(on-select-all false)}
       "Clear All")))

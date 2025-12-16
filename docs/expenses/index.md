@@ -76,11 +76,13 @@ Each entity supports configurable list view controls:
 
 #### Form Configuration
 
-Forms are configured per entity in `src/app/admin/frontend/config/form-fields.edn`:
+Admin forms (the `/admin/...` pages) are configured per entity in `src/app/admin/frontend/config/form-fields.edn`:
 - Create field lists
 - Edit field lists
 - Required field validation
 - Field-specific configuration (type, validation rules)
+
+User-facing forms (the `/expenses/...` pages) use the domain-owned UI config under `src/app/domain/frontend/expenses/config/` (editable via `/admin/user-settings`).
 
 ## User Expenses Interface
 
@@ -232,12 +234,21 @@ Key services in `src/app/domain/backend/expenses/services/`:
 
 ### UI Configuration
 
-Expense entities are configured in `src/app/admin/frontend/config/`:
+This domain has two related configuration locations:
 
-- **entities.edn** - Entity definitions and adapters
-- **table-columns.edn** - Column configurations for each entity
-- **form-fields.edn** - Form field definitions and validation
-- **view-options.edn** - Default view settings and controls
+**Admin UI (admin list pages)**
+- Stored in `src/app/admin/frontend/config/`
+- Edited via `/admin/admin-settings`
+
+**User UI config (domain-owned, user-facing defaults/locks)**
+- Stored in `src/app/domain/frontend/expenses/config/`
+- Edited via `/admin/user-settings`
+
+Both use the same EDN file types:
+- **entities.edn** - Entity definitions and metadata
+- **table-columns.edn** - Structural column configuration (incl. `:always-visible` enforcement)
+- **form-fields.edn** - Create/edit field lists + required fields
+- **view-options.edn** - Policy defaults/locks for display toggles and column visibility
 
 ### Example Configuration
 

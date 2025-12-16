@@ -245,6 +245,59 @@ Useful for compact login events tables.
 
 Ensure `aria-label`, keyboard handlers, and focus management on modals/dialogs. Use `tab-index` only when necessary.
 
+## Component ID Requirements (Browser Testing)
+
+🚨 **CRITICAL**: All interactive UI components MUST have unique `:id` attributes for automated browser testing via **chrome-mcp**.
+
+### Why This Matters
+
+Browser testing tools like chrome-mcp locate elements by ID. Without proper IDs:
+- ❌ Automated tests cannot reliably find interactive elements
+- ❌ Accessibility tools may not properly associate labels with inputs
+- ❌ Debugging becomes harder without unique element identifiers
+
+### ID Patterns by Component Type
+
+| Component Type | Pattern | Example |
+|---------------|---------|----------|
+| Form fields | `(str formId "-" field-type)` | `"login-form-input"`, `"user-form-select"` |
+| Buttons | `(str "btn-" action "-" context)` | `"btn-submit-login"`, `"btn-delete-users-123"` |
+| Settings toggles | `(str "toggle-" label "-" entity)` | `"toggle-timestamps-users"` |
+| Column toggles | `(str "col-toggle-" entity "-" field)` | `"col-toggle-users-email"` |
+| Action dropdowns | `(str "actions-btn-" entity-id)` | `"actions-btn-123"` |
+| Filter controls | `(str "filter-" type "-" field)` | `"filter-toggle-users-name"` |
+
+### Implementation Pattern
+
+When creating components, always:
+
+1. **Accept an `:id` prop** in the component's props map
+2. **Generate fallback IDs** when explicit ID not provided:
+
+```clojure
+(defui my-input [{:keys [id formId label value on-change]}]
+  (let [field-id (or id (when formId (str formId "-input")))
+        error-id (when field-id (str field-id "-error"))]
+    ($ :div
+      ($ :label {:for field-id} label)
+      ($ :input {:id field-id
+                 :value value
+                 :on-change on-change})
+      ($ :div {:id error-id :class "text-error"}
+        error-message))))
+```
+
+### Already Implemented
+
+Form field components in `src/app/template/frontend/components/form/fields/` auto-generate IDs:
+- `input.cljs` → `(str formId "-input")`
+- `select.cljs` → `(str formId "-select")`
+- `checkbox.cljs` → `(str formId "-checkbox")`
+- `textarea.cljs` → `(str formId "-textarea")`
+- `number.cljs` → `(str formId "-number")`
+
+See `INTERACTIVE-COMPONENTS-ID-AUDIT.md` in repo root for complete patterns and audit status.
+
 ## Performance
 
 - Memoize heavy rows (e.g., login events with many columns) when passing to lists/tables.
@@ -261,6 +314,7 @@ Favor small cljs tests for adapters/formatters that feed components (e.g., login
 3. Guard admin-only actions in events, not just UI.
 4. Pass `:entity-spec` that matches rendered columns so toggles/export work.
 5. Avoid embedding secrets/tokens in app-db; use headers in effects.
+6. **Always include `:id` attributes** on interactive elements for browser testing (see Component ID Requirements above).
 
 ---
 

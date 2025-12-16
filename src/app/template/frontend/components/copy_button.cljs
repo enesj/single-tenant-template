@@ -9,20 +9,24 @@
    Args:
      props: Map with keys:
        :text - The text to copy to clipboard (required)
+       :id - Button ID for testing/accessibility (optional, auto-generated if not provided)
        :class - Additional CSS classes (default: ds-btn ds-btn-xs ds-btn-ghost ds-btn-circle absolute top-2 right-2 opacity-60 hover:opacity-100 transition-opacity)
        :title - Tooltip text (default: \"Copy to clipboard\")
        :size - Icon size (default: \"w-3 h-3\")
        :success-duration - Duration in ms to show success state (default: 2000)
        :on-success - Optional callback function called when copy succeeds
        :on-click - Optional additional click handler"
-  [{:keys [text class title size success-duration on-success on-click]
+  [{:keys [id text class title size success-duration on-success on-click]
     :or {class "ds-btn ds-btn-xs ds-btn-ghost ds-btn-circle absolute top-2 right-2 opacity-60 hover:opacity-100 transition-opacity"
          title "Copy to clipboard"
          size "w-3 h-3"
          success-duration 2000}}]
-  (let [[copied? set-copied!] (use-state false)]
+  (let [[copied? set-copied!] (use-state false)
+        ;; Generate ID if not provided
+        button-id (or id "copy-btn")]
     ($ :button
-      {:class class
+      {:id button-id
+       :class class
        :title title
        :on-click (fn [e]
                    (.stopPropagation e)
@@ -44,18 +48,22 @@
    Args:
      props: Map with keys:
        :text - The text to copy to clipboard (required)
+       :id - Button ID for testing/accessibility (optional, auto-generated if not provided)
        :label - Button label (default: \"Copy\")
        :class - Additional CSS classes
        :size - Button size (default: ds-btn-xs)
        :success-text - Text to show when copied (default: \"Copied!\")"
-  [{:keys [text label class size success-text]
+  [{:keys [id text label class size success-text]
     :or {label "Copy"
          class ""
          size "ds-btn-xs"
          success-text "Copied!"}}]
-  (let [[copied? set-copied!] (use-state false)]
+  (let [[copied? set-copied!] (use-state false)
+        ;; Generate ID if not provided
+        button-id (or id "copy-inline-btn")]
     ($ :button
-      {:class (str "ds-btn " size " " class)
+      {:id button-id
+       :class (str "ds-btn " size " " class)
        :on-click (fn [e]
                    (.stopPropagation e)
                    (.writeText js/navigator.clipboard text)

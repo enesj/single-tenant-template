@@ -4,151 +4,145 @@
 
 ## Overview
 
-The admin settings page (`/admin/settings`) provides a centralized interface for managing UI configuration across the application. It supports both **admin-facing** settings (view options, form fields) and **user-facing** defaults (locks, initial states).
+The admin settings UI provides a centralized interface for managing UI configuration across the application:
+
+- **Admin settings**: `/admin/admin-settings` (admin panel behavior + admin entity configuration)
+- **User UI config**: `/admin/user-settings` (domain-owned defaults/locks for the user-facing app)
+- **Legacy**: `/admin/settings` redirects to `/admin/admin-settings`
+
+Both pages persist changes by writing EDN config files in-repo via backend endpoints under `/admin/api/settings/*`.
 
 ## Architecture
 
 ### Unified Settings Model
 
-The settings system is unified under a single "scope" concept:
+The settings system is unified under a single “scope” concept:
 
-1. **Admin Scope**: Configuring how the admin panel itself behaves.
-2. **User Scope**: Configuring defaults and constraints for the user-facing application.
+1. **Admin Scope**: Configuring how the admin panel behaves (admin list views, forms, table columns).
+2. **User UI Config Scope**: Configuring defaults and constraints for the user-facing application.
+
+The “User UI Config” scope is **domain-owned configuration** (currently the Expenses domain) and is **not** per-user localStorage preferences.
 
 ### Configuration Files
 
-Settings are stored in EDN files under `src/app/admin/frontend/config/`:
+Admin settings are stored in EDN files under `src/app/admin/frontend/config/`:
 
-- **`view-options.edn`**: Controls display toggles and action buttons.
-- **`form-fields.edn`**: Defines form field configurations per entity.
-- **`table-columns.edn`**: Configures table column behavior and properties.
-- **`entities.edn`**: Registry of known entities and their metadata.
+- **`entities.edn`**: Registry of known admin entities and their metadata.
+- **`view-options.edn`**: Policy defaults/locks for display toggles and per-column visibility policy.
+- **`form-fields.edn`**: Create/edit field lists and required fields per entity.
+- **`table-columns.edn`**: Structural column configuration (available columns, filterable/sortable, always-visible).
 
-### Frontend Components
+User-facing (domain-owned) UI config is stored alongside the domain (currently Expenses):
+
+- `src/app/domain/frontend/expenses/config/entities.edn`
+- `src/app/domain/frontend/expenses/config/view-options.edn`
+- `src/app/domain/frontend/expenses/config/form-fields.edn`
+- `src/app/domain/frontend/expenses/config/table-columns.edn`
+
+These domain files are edited via `/admin/user-settings` and persisted via the backend settings API.
+
+### Frontend Components (key files)
 
 ```
 src/app/admin/frontend/
-├── pages/unified_settings.cljs     # Main page with scope switching
-├── components/settings_shell.cljs  # Layout wrapper for settings UI
-├── components/settings_views.cljs  # Reusable settings card components
-├── events/unified_settings.cljs    # Unified state management
-└── definitions.cljs                # Entity groupings and domain logic
+├── pages/unified_settings.cljs        # Admin settings + user settings pages (scope switching)
+├── components/settings_shell.cljs     # Layout wrapper + save/discard UX
+├── components/settings_views.cljs     # Reusable cards/editors (tri-state controls, bulk rows)
+├── events/settings.cljs               # Admin scope load/save + patch helpers
+├── events/unified_settings.cljs       # Unified orchestration for the settings UI
+└── events/user_settings.cljs          # User UI config editor (domain-owned)
 ```
 
 ### Backend Integration
 
 ```
 src/app/template/backend/routes/admin/
-└── settings.cljs                 # API endpoints for all config types
+└── settings.clj                       # API endpoints for all config types
 ```
 
 ## View Options Configuration
 
-### Display Settings
+### Display Toggles (defaults + locks)
 
-Control how entity lists appear and behave:
+View options support a **new explicit schema** (preferred) and a legacy schema.
 
-| Setting | Type | Description | Default |
-|---------|------|-------------|---------|
-| `:show-edit?` | boolean | Show edit buttons in list rows | `true` |
-| `:show-delete?` | boolean | Show delete buttons in list rows | `true` |
-| `:show-highlights?` | boolean | Enable row highlighting on hover | `true` |
-| `:show-select?` | boolean | Show multi-select checkboxes | `false` |
-| `:show-timestamps?` | boolean | Show created/updated timestamp columns | `true` |
-| `:show-pagination?` | boolean | Show pagination controls | `true` |
+Preferred shape per entity:
 
-### Action Settings
+```clojure
+{:users
+ {:display-defaults {:show-pagination? true
+                     :show-timestamps? true}
+  :display-locks    {:show-delete? false}
 
-Configure batch operations and add buttons:
+  ;; Column visibility policy (separate from table-columns.edn)
+  :column-defaults  {:email true :role true}
+  :column-locks     {:id true}}}
+```
 
-| Setting | Type | Description | Default |
-|---------|------|-------------|---------|
-| `:show-add-button?` | boolean | Show "Add New" button in list header | `true` |
-| `:show-batch-edit?` | boolean | Enable batch edit operations | `false` |
-| `:show-batch-delete?` | boolean | Enable batch delete operations | `false` |
+Legacy admin shape (deprecated): top-level `:show-*?` keys are treated as **locks when present**.
 
-## UI Implementation
+Display toggle keys are defined in `src/app/shared/specs/view_options.cljc` (`display-toggle-keys`).
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `:show-edit?` | boolean | Show edit buttons in list rows |
+| `:show-delete?` | boolean | Show delete buttons in list rows |
+| `:show-highlights?` | boolean | Enable row highlighting on hover |
+| `:show-select?` | boolean | Show multi-select checkboxes |
+| `:show-timestamps?` | boolean | Show created/updated timestamp columns |
+| `:show-pagination?` | boolean | Show pagination controls |
+| `:show-filtering?` | boolean | Show filtering controls |
+| `:show-add-button?` | boolean | Show "Add New" button in list header |
+| `:show-batch-edit?` | boolean | Enable batch edit operations |
+| `:show-batch-delete?` | boolean | Enable batch delete operations |
+
+## Table Columns Configuration
+
+Table columns are structural config in `table-columns.edn`. The settings UI exposes per-entity editing for:
+
+- `:available-columns`
+- `:default-visible-columns`
+- `:filterable-columns`
+- `:sortable-columns`
+- `:always-visible` (**structural enforcement**)
+
+`:always-visible` columns are **always shown** and cannot be hidden via user preferences or view-options policy. In the UI, the editor includes a per-property **“Toggle All”** row to bulk-select/deselect each list.
+
+## UI Implementation Notes
 
 ### Unified Shell
 
-The settings page uses a unified shell (`settings_shell.cljs`) that provides:
+The settings shell provides:
 
-1. **Scope Switching**: Toggle between Admin and User settings modes.
-2. **State Management**: Handles dirty states, saving, and discarding changes.
-3. **Mode Toggle**: Switches between "View" (overview) and "Edit" (detailed configuration).
-
-### Edit Modes
-
-- **View Mode**: Shows a high-level overview of all configured entities for the current scope.
-- **Edit Mode**: Focuses on a single entity, allowing detailed modification of all available settings.
-
-### Real-time Updates
-
-Settings changes are applied immediately:
-
-1. **Optimistic Updates**: UI updates instantly on user action.
-2. **Draft State**: Changes are held in a draft state until explicitly saved.
-3. **API Synchronization**: centralized save event flushes the draft to the backend.
-
-## State Management
-
-Re-frame events handle unified settings operations (`events/unified_settings.cljs`):
-
-```clojure
-;; Scope & Mode
-:admin.unified-settings/set-scope    ; :admin | :user
-:admin.unified-settings/set-mode     ; :view | :edit
-:admin.unified-settings/set-selected-entity
-
-;; Persistence
-:admin.unified-settings/save-current-scope
-:admin.unified-settings/discard-current-scope
-```
+1. **Scope Switching**: Toggle between Admin and User UI config.
+2. **State Management**: Dirty state, save, and discard.
+3. **Mode Toggle**: View (overview) vs Edit (single-entity focus).
 
 ## API Integration
 
 ### Endpoints
 
+All endpoints below are under the admin API namespace:
+
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| GET | `/admin/api/settings` | Load admin view options |
-| PATCH | `/admin/api/settings/entity` | Update admin view option |
-| GET | `/admin/api/settings/user` | Load user settings |
-| PUT | `/admin/api/settings/user` | Save user settings |
+| GET | `/admin/api/settings` | Load admin `view-options.edn` |
+| PUT | `/admin/api/settings` | Replace admin `view-options.edn` (validated) |
+| PATCH | `/admin/api/settings/entity` | Update a single admin entity setting |
+| DELETE | `/admin/api/settings/entity` | Remove a single admin entity setting |
+| GET | `/admin/api/settings/form-fields` | Load admin `form-fields.edn` |
+| PATCH | `/admin/api/settings/form-fields/entity` | Patch admin form-fields for one entity |
+| GET | `/admin/api/settings/table-columns` | Load admin `table-columns.edn` |
+| PATCH | `/admin/api/settings/table-columns/entity` | Patch admin table-columns for one entity |
+| GET | `/admin/api/settings/user-ui-config` | Load domain-owned user UI config bundle |
+| PUT | `/admin/api/settings/user-ui-config` | Update domain-owned user UI config bundle (any subset; validated) |
 
-## Best Practices
+### Validation
 
-### Configuration Design
-
-1. **Consistent Defaults**: Use sensible defaults that work for most entities.
-2. **Progressive Enhancement**: Start minimal, add complexity as needed.
-3. **User Experience**: Don't disable features without clear reason.
-
-### UI Guidelines
-
-1. **Visual Feedback**: Show loading states during save operations.
-2. **Validation**: Validate configurations before applying.
-3. **Drafts**: Use the saving/dirty state to prevent accidental data loss.
-
-### Code Organization
-
-1. **Separation of Concerns**: Keep UI, events, and API logic separate.
-2. **Unified logic**: Use `unified_settings` namespace to bridge admin/user config logic.
-3. **Testing**: Unit test settings logic and integration.
+Settings writes are validated against Malli specs under `src/app/shared/specs/*`. Invalid payloads fail with HTTP `400` and include validation details in the response body/logs.
 
 ## Troubleshooting
 
-### Common Issues
-
-**Settings Not Applying**
-- Check browser console for JavaScript errors.
-- Verify API responses in network tab.
-- Ensure config loader is registered.
-
-**Missing Entity Options**
-- Confirm entity exists in `entities.edn`.
-- Check if entity has valid table columns.
-
-**Performance Issues**
-- Reduce number of configured columns in large tables.
-- Optimize expensive computed fields.
+**Settings not applying**
+- Check browser console for errors and the `/admin/api/settings/*` network calls.
+- If you edited EDN manually, run `bb validate-frontend-config` to confirm schema validity.

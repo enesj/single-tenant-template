@@ -1,10 +1,10 @@
 (ns app.template.frontend.components.form.fields.input
   "Input field components"
   (:require
-   [app.template.frontend.components.common :as common]
-   [app.template.frontend.components.form.fields.date-picker :refer [date-picker]]
-   [app.template.frontend.components.form.validation :as validation]
-   [uix.core :refer [$ defui]]))
+    [app.template.frontend.components.common :as common]
+    [app.template.frontend.components.form.fields.date-picker :refer [date-picker]]
+    [app.template.frontend.components.form.validation :as validation]
+    [uix.core :refer [$ defui]]))
 
 (def input-width
   {:text "w-1/2"
@@ -24,16 +24,20 @@
    :default "w-full"})
 
 (defui input
-  [{:keys [id label input-type error required class inline on-change value fork-errors] :as all-props}]
+  [{:keys [id label input-type error required class inline on-change value fork-errors formId] :as all-props}]
 
-  (let [base-class "ds-input ds-input-primary"
+  (let [;; Generate ID from formId if not explicitly provided
+        field-id (or id (when formId (str formId "-input")))
+        error-id (when field-id (str field-id "-error"))
+        base-class "ds-input ds-input-primary"
         label-class "ds-label"
         error-class "text-error"
         ;; Get errors from either the direct error prop or from Fork validation errors
         field-error (or error (when fork-errors (validation/get-field-errors fork-errors (keyword id))))
         props (-> all-props
                 (assoc
-                  :class (str base-class " " class))
+                  :class (str base-class " " class)
+                  :id field-id)
                 (dissoc :error :input-type :disabled? :validate-server? :inline :fork-errors :formId :label :required))]
 
     ;; For date type inputs, use the date-picker component
@@ -41,6 +45,7 @@
       ($ date-picker
         (cond-> all-props
           true (assoc
+                 :id field-id
                  :mode "single"
                  :highlighted-dates #{}                     ;; Empty set to avoid test data
                  :highlighted-class "ds-bg-secondary"       ;; Using DaisyUI class
@@ -51,7 +56,7 @@
       ($ :div {:class (str "mb-4" (if inline " flex flex-row items-start gap-4"
                                     " flex flex-col items-start gap-4"))}
         ($ common/label {:text label
-                         :for id
+                         :for field-id
                          :required required
                          :class (str label-class (when inline " mb-0 min-w-[150px] text-left"))})
         ($ :div {:class (when inline "flex-1 text-left")}
@@ -67,6 +72,7 @@
               (assoc :max (:max all-props))))
           (when field-error
             ($ :div {:class error-class
+                     :id error-id
                      :role "alert"}
               ($ :div (if (string? field-error)
                         field-error

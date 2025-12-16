@@ -13,7 +13,9 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/users` → user management + per-user activity modal (guarded)
   - `/admin/audit` → global audit logs (guarded)
   - `/admin/login-events` → global login events (guarded)
-  - `/admin/settings` → hardcoded list-view settings (read/write `view-options.edn`)
+  - `/admin/admin-settings` → admin UI configuration (view options, form fields, table columns)
+  - `/admin/user-settings` → domain-owned user UI config (user-facing defaults/locks; currently Expenses)
+  - `/admin/settings` → legacy redirect to `/admin/admin-settings`
 - **Guard**: `guarded-start` dispatches controller events only after admin auth is confirmed. Unauthed users are redirected to `/admin/login`.
 
 ## Data Flow (Users + Activity)
@@ -33,9 +35,13 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 
 ## Settings Page
 
-- Page: `/admin/settings` (`app.admin.frontend.pages.settings`)  
-- Data source: `src/app/admin/frontend/config/view-options.edn` read/write via backend settings routes.  
-- Use it to lock list controls per-entity (show/hide edit/delete/select/timestamps/pagination/filtering); hardcoded controls are hidden in the UI while remaining effective.
+- Pages:
+  - `/admin/admin-settings` (`app.admin.frontend.pages.unified-settings/admin-settings-page`)
+  - `/admin/user-settings` (`app.admin.frontend.pages.unified-settings/user-settings-page`)
+- Data sources:
+  - Admin scope: `src/app/admin/frontend/config/{view-options,form-fields,table-columns,entities}.edn`
+  - User UI config: `src/app/domain/**/config/*.edn` (currently `src/app/domain/frontend/expenses/config/*`)
+- Use it to set defaults/locks per-entity; locked display toggles are hidden in list-view controls while remaining effective.
 
 ## Extension Points
 

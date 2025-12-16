@@ -33,7 +33,8 @@ app.admin.frontend.*
 | Audit Logging | View admin actions | Admin | `/admin/audit` |
 | Login Events | View admin/user login attempts | Admin | `/admin/login-events` |
 | System Monitoring | Basic health/status | Admin | `/admin/dashboard` |
-| Admin Settings | Configure UI behavior and entity settings | Admin | `/admin/settings` |
+| Admin Settings | Configure admin UI + entity settings | Admin | `/admin/admin-settings` |
+| User UI Config | Configure user-facing defaults/locks | Admin | `/admin/user-settings` |
 
 ## Activity & Login Monitoring
 
@@ -63,7 +64,12 @@ Admin operations require the admin role:
 
 ## Admin Settings
 
-The admin settings page (`/admin/settings`) provides comprehensive UI configuration management using a **unified architecture** that handles both admin-facing and user-facing configurations.
+The admin settings UI is split into:
+
+- `/admin/admin-settings` — admin panel configuration (admin scope)
+- `/admin/user-settings` — domain-owned user UI config (user-facing defaults/locks)
+
+`/admin/settings` exists as a legacy redirect to `/admin/admin-settings`.
 
 See the complete guide in `docs/frontend/admin-settings.md`.
 

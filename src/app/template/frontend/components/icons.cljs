@@ -169,12 +169,12 @@
               :stroke-width "2"
               :d "M15 12a3 3 0 11-6 0 3 3 0 016 0z"})))
 
-(defui filter-icon [{:keys [on-click active? field-id disabled? title]}]
+(defui filter-icon [{:keys [id on-click active? field-id disabled? title]}]
   ($ button {:type "button"
              :btn-type :ghost
              :class (str "ds-btn-xs p-0 m-0 ml-1 "
                       (when disabled? "opacity-50 cursor-not-allowed"))
-             :id (when field-id (str "filter-icon-" (name field-id)))
+             :id (or id (when field-id (str "filter-icon-" (name field-id))))
              :tab-index (if disabled? -1 0)
              :aria-label "Filter"
              :title (or title "Filter")

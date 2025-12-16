@@ -24,6 +24,7 @@ Quick guide for configuring and running the template locally. Defaults match `co
 - Backend tests: `bb be-test`
 - Frontend tests (node): `npm run test:cljs`
 - Database helpers: `bb backup-db`, `bb restore-db` (see `scripts/bb/database/README.md`)
+- Frontend config checks (fast): `bb validate-frontend-config`, `bb config-audit` (also `npm run test:config-audit` in CI)
 
 ### 🚨 Testing - Always Save Output First
 ```bash
@@ -35,5 +36,6 @@ npm run test:cljs 2>&1 | tee /tmp/ops-fe-test.txt
 
 ## Config Tips
 - Override profiles via `:dev`/`:test` in `config/base.edn`; never commit real secrets.
-- Admin UI hardcoded view settings live in `src/app/admin/frontend/config/view-options.edn`.
+- Admin UI configuration lives in `src/app/admin/frontend/config/*.edn` and is editable via `/admin/admin-settings`.
+- Domain-owned user UI configuration (currently Expenses) lives in `src/app/domain/**/config/*.edn` and is editable via `/admin/user-settings`.
 - Keep `config/base.edn` in sync with docs; update this file if ports/envs change.

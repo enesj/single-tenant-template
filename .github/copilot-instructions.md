@@ -84,6 +84,35 @@
   ```
 - Recommendation: Admin pages should pass the spec produced by the admin spec generator to ensure toggles match admin-visible columns.
 
+## 🚨 Component ID Requirements (Browser Testing)
+
+**All interactive UI components MUST have unique `:id` attributes** for automated browser testing via **chrome-mcp**.
+
+### When Creating New Components
+
+1. **Always accept an `:id` prop** in component props
+2. **Generate fallback IDs** when explicit ID not provided:
+   ```clojure
+   (let [field-id (or id (when formId (str formId "-input")))]
+     ($ :input {:id field-id ...}))
+   ```
+3. **Error elements** should also have IDs: `(str field-id "-error")`
+
+### Standard ID Patterns
+
+| Component Type | Pattern | Example |
+|---------------|---------|----------|
+| Form fields | `(str formId "-" type)` | `"login-form-input"` |
+| Buttons | `(str "btn-" action "-" ctx)` | `"btn-delete-users-123"` |
+| Toggles | `(str "toggle-" label "-" entity)` | `"toggle-edit-users"` |
+| Column toggles | `(str "col-toggle-" entity "-" field)` | `"col-toggle-users-email"` |
+| Action dropdowns | `(str "actions-btn-" id)` | `"actions-btn-123"` |
+
+### Reference
+
+- **Audit report**: `INTERACTIVE-COMPONENTS-ID-AUDIT.md` (patterns, examples, implementation status)
+- **Form fields**: All fields in `components/form/fields/` auto-generate IDs from `formId`
+
 ## Security & Configuration
 - Secrets: never commit; keep in `config/.secrets.edn` and environment vars for CI/CD.
 - Security checks (manual):

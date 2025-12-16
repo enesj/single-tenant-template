@@ -1,6 +1,6 @@
 # Database Management Scripts
 
-This folder contains scripts for managing PostgreSQL databases in the hosting application.
+This folder contains scripts for managing PostgreSQL databases in the single-tenant template.
 
 ## Scripts
 
@@ -11,15 +11,14 @@ This folder contains scripts for managing PostgreSQL databases in the hosting ap
 
 ### Database Maintenance
 - **clean-db.clj** - Completely drops and recreates database (DANGER: destructive!)
-- **clean-and-init-dev-db.clj** - Initializes clean development database
-- **init-dev-db.clj** - Sets up development database with initial data
+- **clean_and_init_dev_db.clj** - Initializes a clean development database
 
 ### Schema Analysis
 - **compare_db_schemas.clj** - Compares database schemas between environments
 - **compare_with_models.clj** - Compares database schema with application models
 
 ### Tenant Management
-- **list-tenants.clj** - Lists all tenants in the multi-tenant system
+- **list_tenants.clj** - Hosting/multi-tenant legacy script (will fail in this repo; no `tenants` table)
 
 ## Usage Examples
 
@@ -34,7 +33,8 @@ bb database/clean_restore_db.clj dev backup_dev_2023-01-01_12-00-00.sql
 bb database/compare_db_schemas.clj dev prod
 
 # List all tenants
-bb database/list-tenants.clj dev
+# (Hosting-only) List tenants
+bb database/list_tenants.clj dev
 ```
 
 ## Safety Notes
