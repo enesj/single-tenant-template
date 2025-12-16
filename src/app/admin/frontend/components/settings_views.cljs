@@ -620,43 +620,44 @@
                 editable-setting-keys (->> setting-keys
                                         (remove (fn [k] (contains? immutable k)))
                                         vec)]
-            (when (and editing? (seq editable-setting-keys) (fn? on-display-settings-bulk))
-              (let [bulk-default (uniform-or-mixed
-                                   (map (fn [k]
-                                          (if (contains? defaults k) (get defaults k) nil))
-                                     editable-setting-keys))
-                    bulk-lock (uniform-or-mixed
-                                (map (fn [k]
-                                       (if (contains? locks k) (get locks k) nil))
-                                  editable-setting-keys))
-                    help (if (seq immutable)
-                           "Apply Default/Lock to all editable toggles for this entity (excludes enforced feature constraints)."
-                           "Apply Default/Lock to all toggles for this entity.")]
-                ($ bulk-tristate-row
-                  {:label "All toggles"
-                   :default-val bulk-default
-                   :lock-val bulk-lock
-                   :editing? true
-                   :lock-style :user
-                   :help-text help
-                   :on-default-click (fn []
-                                      ;; cycle the current aggregate state
-                                      (let [current (if (= bulk-default :mixed) nil bulk-default)
-                                            next-val (next-tristate current)
-                                            next-state (if (nil? next-val)
-                                                        {:kind :inherit}
-                                                        {:kind :default :value next-val})]
-                                        (on-display-settings-bulk entity-kw editable-setting-keys next-state)))
-                   :on-lock-click (fn []
-                                   ;; cycle the current aggregate lock state
-                                   (let [current (if (= bulk-lock :mixed) nil bulk-lock)
-                                         next-val (next-tristate current)
-                                         next-state (if (nil? next-val)
-                                                     {:kind :inherit}
-                                                     {:kind :lock :value next-val})]
-                                     (on-display-settings-bulk entity-kw editable-setting-keys next-state)))})))
+            ($ :<>
+              (when (and editing? (seq editable-setting-keys) (fn? on-display-settings-bulk))
+                (let [bulk-default (uniform-or-mixed
+                                     (map (fn [k]
+                                            (if (contains? defaults k) (get defaults k) nil))
+                                       editable-setting-keys))
+                      bulk-lock (uniform-or-mixed
+                                  (map (fn [k]
+                                         (if (contains? locks k) (get locks k) nil))
+                                    editable-setting-keys))
+                      help (if (seq immutable)
+                             "Apply Default/Lock to all editable toggles for this entity (excludes enforced feature constraints)."
+                             "Apply Default/Lock to all toggles for this entity.")]
+                  ($ bulk-tristate-row
+                    {:label "All toggles"
+                     :default-val bulk-default
+                     :lock-val bulk-lock
+                     :editing? true
+                     :lock-style :user
+                     :help-text help
+                     :on-default-click (fn []
+                                        ;; cycle the current aggregate state
+                                        (let [current (if (= bulk-default :mixed) nil bulk-default)
+                                              next-val (next-tristate current)
+                                              next-state (if (nil? next-val)
+                                                          {:kind :inherit}
+                                                          {:kind :default :value next-val})]
+                                          (on-display-settings-bulk entity-kw editable-setting-keys next-state)))
+                     :on-lock-click (fn []
+                                     ;; cycle the current aggregate lock state
+                                     (let [current (if (= bulk-lock :mixed) nil bulk-lock)
+                                           next-val (next-tristate current)
+                                           next-state (if (nil? next-val)
+                                                       {:kind :inherit}
+                                                       {:kind :lock :value next-val})]
+                                       (on-display-settings-bulk entity-kw editable-setting-keys next-state)))})))
 
-            (for [setting-key setting-keys]
+              (for [setting-key setting-keys]
               (let [default-val (when (contains? defaults setting-key) (get defaults setting-key))
                     lock-val (when (contains? locks setting-key) (get locks setting-key))
                     immutable? (contains? immutable setting-key)
@@ -671,7 +672,7 @@
                    :immutable-val immutable-val
                    :lock-style :user
                    :editing? editing?
-                   :on-change on-change})))))
+                   :on-change on-change}))))))
 
         (when (seq available-cols)
           ($ :div {:class "mt-4"}
