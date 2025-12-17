@@ -46,6 +46,7 @@
    :base-path [:admin :expenses :entries]
    :form-path [:admin :expenses :form]
    :api-endpoint "/admin/api/expenses/entries"
+   :detail-response-key :expense  ;; API returns singular :expense, not :expenses
    :has-forms? true
    :pagination-opts {:default-per-page 25}})
 

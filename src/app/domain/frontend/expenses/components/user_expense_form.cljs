@@ -2,7 +2,9 @@
   "User-facing expense modal forms.
 
   Similar UX to the admin expenses modal forms, but wired to user-scoped
-  events/endpoints (\"/api/v1/expenses\")."
+  events/endpoints (\"/api/v1/expenses\").
+  
+  Uses the master-detail-form wrapper for edit modal orchestration."
   (:require
     [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local
                                                                  format-decimal
@@ -12,6 +14,7 @@
                                                                  safe-parse-number]]
     [app.domain.frontend.expenses.ui.select-options :as select-options]
     [app.template.frontend.components.form :refer [form]]
+    [app.template.frontend.components.form.master-detail :refer [master-detail-form]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-memo use-state]]
@@ -96,7 +99,7 @@
     :columns line-item-columns}])
 
 ;; =============================================================================
-;; Helpers
+;; Normalization & Validation Helpers
 ;; =============================================================================
 
 (def ^:private amount-tolerance 0.01)
@@ -156,7 +159,7 @@
                 (number? unit-num) (assoc :unit_price unit-num)))))
     (or items [])))
 
-(defn- normalize-initial-data
+(defn normalize-initial-data
   "Normalize an expense entity (from the shared entity store) into form initial values."
   [expense]
   (letfn [(normalize-line-item [item]
@@ -208,6 +211,55 @@
        :notes notes
        :items normalized-items})))
 
+(defn validate-expense-values
+  "Validate expense form values. Returns {:ok? true} or {:ok? false :error \"...\"}."
+  [values]
+  (let [supplier-id (:supplier_id values)
+        payer-id (:payer_id values)
+        purchased-at (:purchased_at values)
+        prepared-items (vec (prepare-line-items (:items values)))
+        computed-total (line-items-total prepared-items)
+        parsed-total (safe-parse-number (:total_amount values))
+        effective-total (or parsed-total (when (pos? computed-total) computed-total))
+        total-diff (when (and (number? parsed-total)
+                           (number? computed-total)
+                           (pos? computed-total))
+                     (js/Math.abs (- parsed-total computed-total)))
+        total-mismatch? (and total-diff (> total-diff amount-tolerance))]
+    (cond
+      (or (str/blank? (str supplier-id))
+        (str/blank? (str payer-id))
+        (str/blank? (str purchased-at)))
+      {:ok? false :error "Supplier, payer, and date are required."}
+
+      (empty? prepared-items)
+      {:ok? false :error "Add at least one line item with a label and total."}
+
+      (or (nil? effective-total) (<= effective-total 0))
+      {:ok? false :error "Enter a total amount greater than 0."}
+
+      total-mismatch?
+      {:ok? false :error (str "Total (" (or (format-decimal effective-total) effective-total)
+                           ") must match line items (" (or (format-decimal computed-total) computed-total) ").")}
+
+      :else
+      {:ok? true})))
+
+(defn prepare-expense-submit-values
+  "Prepare expense form values for submission."
+  [values]
+  (let [prepared-items (vec (prepare-line-items (:items values)))
+        computed-total (line-items-total prepared-items)
+        parsed-total (safe-parse-number (:total_amount values))
+        effective-total (or parsed-total (when (pos? computed-total) computed-total))]
+    {:supplier_id (:supplier_id values)
+     :payer_id (:payer_id values)
+     :purchased_at (:purchased_at values)
+     :currency (:currency values)
+     :notes (:notes values)
+     :total_amount effective-total
+     :items prepared-items}))
+
 ;; =============================================================================
 ;; Form Body
 ;; =============================================================================
@@ -236,47 +288,12 @@
                               [initial-data])
 
         handle-submit (fn [{:keys [values]}]
-                        (let [supplier-id (:supplier_id values)
-                              payer-id (:payer_id values)
-                              purchased-at (:purchased_at values)
-                              currency (:currency values)
-                              notes (:notes values)
-                              prepared-items (vec (prepare-line-items (:items values)))
-                              computed-total (line-items-total prepared-items)
-                              parsed-total (safe-parse-number (:total_amount values))
-                              effective-total (or parsed-total (when (pos? computed-total) computed-total))
-                              total-diff (when (and (number? parsed-total)
-                                                 (number? computed-total)
-                                                 (pos? computed-total))
-                                           (js/Math.abs (- parsed-total computed-total)))
-                              total-mismatch? (and total-diff (> total-diff amount-tolerance))]
-                          (cond
-                            (or (str/blank? (str supplier-id))
-                              (str/blank? (str payer-id))
-                              (str/blank? (str purchased-at)))
-                            (set-validation-error! "Supplier, payer, and date are required.")
-
-                            (empty? prepared-items)
-                            (set-validation-error! "Add at least one line item with a label and total.")
-
-                            (or (nil? effective-total) (<= effective-total 0))
-                            (set-validation-error! "Enter a total amount greater than 0.")
-
-                            total-mismatch?
-                            (set-validation-error!
-                              (str "Total (" (or (format-decimal effective-total) effective-total)
-                                ") must match line items (" (or (format-decimal computed-total) computed-total) ")."))
-
-                            :else
+                        (let [validation-result (validate-expense-values values)]
+                          (if (:ok? validation-result)
                             (do
                               (set-validation-error! nil)
-                              (on-submit {:supplier_id supplier-id
-                                          :payer_id payer-id
-                                          :purchased_at purchased-at
-                                          :currency currency
-                                          :notes notes
-                                          :total_amount effective-total
-                                          :items prepared-items})))))]
+                              (on-submit (prepare-expense-submit-values values)))
+                            (set-validation-error! (:error validation-result)))))]
 
     (use-effect
       (fn []
@@ -314,52 +331,57 @@
                   (rf/dispatch [:user-expenses/create-expense-modal form-data on-success]))}))
 
 (defui user-expense-edit-form-modal
+  "Edit user expense modal using master-detail-form wrapper for detail orchestration."
   [{:keys [expense-id initial-data on-success on-cancel]}]
-  (let [expense-id* (some-> expense-id str)
-        [requested? set-requested!] (use-state false)
+  (let [expense-id-str (some-> expense-id str)
+        ;; Subscribe to detail state
         current-expense (use-subscribe [:user-expenses/current-expense])
-        loading? (boolean (use-subscribe [:user-expenses/current-expense-loading?]))
-        error (use-subscribe [:user-expenses/current-expense-error])
-        current-id (some-> (or (:id current-expense) (:expenses/id current-expense)) str)
-        detail-loaded? (and expense-id* current-id (= current-id expense-id*))
-        effective-data (if detail-loaded? current-expense initial-data)
-        normalized-data (use-memo
-                          #(normalize-initial-data effective-data)
-                          [effective-data])]
+        detail-loading? (boolean (use-subscribe [:user-expenses/current-expense-loading?]))
+        detail-error (use-subscribe [:user-expenses/current-expense-error])
+        suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
+        payers (or (use-subscribe [:user-expenses/payers]) [])
 
+        ;; Memoize entity-spec
+        entity-spec (use-memo
+                      #(get-expense-form-spec suppliers payers)
+                      [suppliers payers])
+
+        ;; Default values for expense form
+        default-values {:currency "BAM"
+                        :purchased_at (current-datetime-local)
+                        :items [(new-line-item)]}]
+
+    ;; Load dependencies (suppliers/payers)
     (use-effect
       (fn []
-        (when expense-id*
-          (rf/dispatch [:user-expenses/fetch-expense expense-id*]))
-        (set-requested! true)
+        (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         js/undefined)
-      [expense-id*])
+      [])
 
-    ($ :div {:class "space-y-2"}
-      (when (and requested? error)
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span error)))
+    ($ master-detail-form
+      {:mode :edit
+       :entity-name "user-expense"
+       :entity-spec entity-spec
+       :entity-id expense-id-str
 
-      (cond
-        detail-loaded?
-        ($ user-expense-form-body
-          {:key (str "user-expense-edit-" expense-id*)
-           :mode :edit
-           :initial-data normalized-data
-           :on-cancel on-cancel
-           :on-submit (fn [form-data]
-                        (rf/dispatch [:user-expenses/update-expense-modal expense-id* form-data on-success]))})
+       ;; Detail orchestration
+       :load-detail! (fn [id] (rf/dispatch [:user-expenses/fetch-expense id]))
+       :select-detail current-expense
+       :detail-loading? detail-loading?
+       :detail-error detail-error
 
-        (or (not requested?) loading?)
-        ($ :div {:class "text-sm text-base-content/60"}
-          "Loading expense…")
+       ;; Data transformation
+       :normalize-initial-data normalize-initial-data
+       :validate-values validate-expense-values
+       :prepare-submit-values prepare-expense-submit-values
 
-        :else
-        ;; If detail fetch fails, fall back to the list row data (may not include items).
-        ($ user-expense-form-body
-          {:key (str "user-expense-edit-" expense-id* "-fallback")
-           :mode :edit
-           :initial-data normalized-data
-           :on-cancel on-cancel
-           :on-submit (fn [form-data]
-                        (rf/dispatch [:user-expenses/update-expense-modal expense-id* form-data on-success]))})))))
+       ;; Callbacks
+       :on-submit (fn [prepared-data]
+                    (rf/dispatch [:user-expenses/update-expense-modal expense-id-str prepared-data on-success]))
+       :on-cancel on-cancel
+
+       ;; Optional
+       :initial-row-data initial-data
+       :default-values default-values
+       :button-text "Update Expense"})))

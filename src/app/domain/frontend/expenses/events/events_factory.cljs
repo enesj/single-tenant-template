@@ -147,11 +147,18 @@
         {:db (finish-load db entity-key base-path error)}))))
 
 (defn generate-detail-events
-  "Generates load-detail and detail-loaded events for an entity."
-  [{:keys [entity-key base-path api-endpoint] :as config}]
+  "Generates load-detail and detail-loaded events for an entity.
+   
+   Config options:
+   - :detail-response-key (optional) - key to extract entity from response.
+     Defaults to (keyword (name entity-key)). Use this when the API returns
+     a singular key (e.g. :expense) but entity-key is plural (e.g. :expenses)."
+  [{:keys [entity-key base-path api-endpoint detail-response-key] :as config}]
   (validate-entity-config config)
 
-  (let [event-ns (str "app.domain.frontend.expenses.events." (name entity-key))]
+  (let [event-ns (str "app.domain.frontend.expenses.events." (name entity-key))
+        ;; Allow override of response key for cases like :expenses -> :expense
+        response-key (or detail-response-key (keyword (name entity-key)))]
 
     ;; load-detail event
     (rf/reg-event-fx
@@ -170,7 +177,7 @@
     (rf/reg-event-db
       (keyword event-ns "detail-loaded")
       (fn [db [_ entity-id response]]
-        (let [entity (get response (keyword (name entity-key)))]
+        (let [entity (get response response-key)]
           (-> db
             (assoc-in (conj base-path :detail-loading?) false)
             (assoc-in (conj base-path :error) nil)
