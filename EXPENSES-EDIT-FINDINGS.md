@@ -1,122 +1,132 @@
 # Expenses edit/list debugging findings
 
-This document summarizes the issues investigated around `http://localhost:8085/expenses/list` (user expenses), what was found, what was changed, and what still needs follow-up.
+This document summarizes the issues investigated around `http://localhost:8085/expenses/list` (user expenses), what was found, what was changed, and how it was verified.
 
 ## Symptoms observed
 
-1. **Edit modal didn’t populate line items**
-   - Opening “Edit Expense” showed empty/placeholder line-items instead of the saved items.
+1. **Line totals didn’t update reliably**
+   - After entering qty + unit price, the line total sometimes didn’t recalculate on subsequent edits.
 
-2. **After canceling edit, the list collapsed to a single record**
-   - The table briefly showed only the edited/loaded expense until a refresh or re-fetch.
+2. **Expense total didn’t auto-track line items**
+   - `total_amount` didn’t automatically follow the sum of line items (only updated after clicking “Use total”).
 
-3. **“Update Expense” button flickered**
-   - After making a change, the button enabled briefly and then disabled again.
+3. **“Update Expense” stayed disabled**
+   - Even after valid changes (and total matching line-item sum), the submit button stayed disabled or flickered.
 
-4. **Textarea edits didn’t “stick”**
-   - Programmatic or manual changes to `notes` appeared to revert immediately, consistent with a controlled field whose `on-change` wasn’t actually wired.
+4. **Edit modal didn’t populate line items (after reopen)**
+   - After saving an expense and reopening edit, line items could be empty/placeholder.
+
+5. **Textarea edits didn’t “stick”**
+   - `notes` behaved like a controlled input whose `:on-change` was not wired.
 
 ## Root causes
 
-### A) Single-entity “sync” overwrote the entire `:expenses` entity store
+### A) Line-items state & total syncing logic was incomplete
 
-- The expenses adapter sync event is registered via:
-  - `src/app/admin/frontend/adapters/expenses.cljs` (`::sync-expenses`)
-  - `src/app/template/frontend/shared/utils/entity.cljs` (`register-sync-event!`)
+- `line_total` wasn’t consistently recalculated when qty/unit price changed.
+- The total input started in a “manual” mode that required explicitly pressing “Use total”.
 
-- `register-sync-event!` **replaces** the entity store for the given entity:
-  - overwrites `(paths/entity-data :expenses)`
-  - overwrites `(paths/entity-ids  :expenses)`
-
-So when code dispatches `::sync-expenses` with **one** expense (e.g. from a detail fetch), the shared entity store becomes “just that one expense”, which explains the list collapsing.
-
-Where this happens:
-- `src/app/template/frontend/events/user_expenses.cljs` in `:user-expenses/fetch-expense-success`:
-  - dispatches `::admin-expenses-adapter/sync-expenses` with `[expense]`
-
-### B) Fork form dirty-state reset from unstable `:initial-values`
+### B) Fork dirty-state reset from unstable `:initial-values`
 
 - The template `form` uses fork/fork.re-frame; fork treats `:initial-values` changes as reinitialization.
 - In the expenses edit modal, `initial-data` was being normalized/merged into a **fresh map** on each render, changing identity and causing fork to reset `dirty`.
 
 ### C) Shared textarea component wasn’t applying `:on-change`
 
-- `src/app/template/frontend/components/form/fields/textarea.cljs` previously merged props incorrectly (nested map), so the actual `:on-change` handler was not applied.
-- Result: a controlled textarea would continually render the old `:value`, making edits appear to “revert”, and keeping the form from becoming dirty.
+- `src/app/template/frontend/components/form/fields/textarea.cljs` previously merged props incorrectly, so the actual `:on-change` handler wasn’t applied.
 
-### D) Line-items data wasn’t present in the edit modal’s `initial-data`
+### D) Single-entity “sync” overwrote the entire `:expenses` entity store
 
-- The list view’s row data often does not include full `:items`.
-- The current edit modal (`user-expense-edit-form-modal`) uses the passed `initial-data` from the list row.
-- Unless the item is enriched with detail data (or the list endpoint includes items), line items will remain empty/placeholder.
+- `register-sync-event!` was correct for full-list sync, but dispatching it with a **single** expense replaced `(paths/entity-data :expenses)` + `(paths/entity-ids :expenses)`, collapsing the list.
+- Fix: add an explicit **upsert** path for single-entity detail fetch.
+
+### E) Backend update ignored line items + FE submit dropped item IDs
+
+- Server update path originally updated only the expense fields, not `expense_items`.
+- FE submit originally stripped `:id` from items, forcing delete+insert behavior and breaking stable item identity.
 
 ## Changes made (code pointers)
 
-### 1) Stabilize form initial values in the user expense form
+### Frontend (edit form UX & correctness)
 
-File: `src/app/domain/frontend/expenses/components/user_expense_form.cljs`
-- Memoized `entity-spec` and `:initial-values` via `use-memo`.
-- Memoized the normalized edit initial-data via `use-memo` in `user-expense-edit-form-modal`.
+- Line totals recalc on qty/unit price edits:
+  - `src/app/domain/frontend/expenses/components/form_fields.cljs`
+- Total amount auto-syncs to the line-items sum by default (“Use total” toggles back to auto mode):
+  - `src/app/domain/frontend/expenses/components/form_fields.cljs`
+- Preserve `expense_items.id` in submit payload:
+  - `src/app/domain/frontend/expenses/components/user_expense_form.cljs` (`prepare-line-items`)
+- Stable `fork` dirty tracking (no reinit on render):
+  - `src/app/domain/frontend/expenses/components/user_expense_form.cljs` (memoized `entity-spec`, `initial-values`, and normalized edit data)
+- Fix textarea `on-change` wiring:
+  - `src/app/template/frontend/components/form/fields/textarea.cljs`
+- Fetch expense detail for edit modal so items are present:
+  - `src/app/template/frontend/events/user_expenses.cljs` (`:user-expenses/fetch-expense`)
+- Upsert single expense into entity store (don’t clobber list):
+  - `src/app/admin/frontend/adapters/expenses.cljs` + `src/app/template/frontend/shared/utils/entity.cljs`
+- Fix “Update Expense” enable/disable logic (dirty/valid):
+  - `src/app/template/frontend/subs/form.cljs`
 
-Goal: prevent fork from reinitializing the form (and clearing `dirty`) on re-renders.
+### Frontend (browser-testing IDs)
 
-### 2) Fix textarea `on-change` wiring
+Added stable IDs for interactive form elements (needed for chrome-mcp):
 
-File: `src/app/template/frontend/components/form/fields/textarea.cljs`
-- Fixed props merging so `:on-change` is actually set.
+- Total amount input: `#expense-total_amount`
+- Line-items inputs:
+  - `#items-<expense_item_id>-raw_label`
+  - `#items-<expense_item_id>-qty`
+  - `#items-<expense_item_id>-unit_price`
+  - `#items-<expense_item_id>-line_total`
+- Line-items buttons:
+  - `#btn-add-items-line-item`
+  - `#btn-remove-items-line-item-<expense_item_id>`
 
-Goal: ensure text edits update fork state and remain visible.
+File:
+- `src/app/domain/frontend/expenses/components/form_fields.cljs`
 
-### 3) Routing/UI polish around manual expense entry
+### Backend (master-detail update)
 
-Files touched during the session:
-- `src/app/template/frontend/routes.cljs` (legacy `/expenses/new` now routes to the list page)
-- `src/app/domain/frontend/expenses/pages/user/expenses_dashboard.cljs`
-- `src/app/domain/frontend/expenses/pages/user/expense_upload.cljs`
-- `src/app/domain/frontend/expenses/pages/user/expenses_list.cljs`
+- `update-expense!` now performs a proper master-detail update:
+  - update the expense fields
+  - delete removed items
+  - update existing items (by `id`)
+  - insert new items
+  - return the expense **with items**
 
-Goal: converge UX around “list page + modal add/edit”.
+Files:
+- `src/app/domain/backend/expenses/services/expenses.clj`
+- `src/app/domain/backend/expenses/handlers/user_expenses.clj`
 
-## What remains to fix (recommended next steps)
+### Backend (error response shape)
 
-### 1) Replace “sync single expense” with an upsert/merge into the entity store
+- Ensure admin-auth middleware errors are real JSON (avoid FE parse errors on 401/403):
+  - `src/app/template/backend/middleware/admin.clj`
 
-Current behavior (problematic):
-- `::sync-expenses` replaces the entire store (good for “sync a full list”, bad for “enrich one entity”).
+### Tests
 
-Recommended approach:
-- Add a new event (or extend `register-sync-event!`) that **merges** normalized entities into existing `(paths/entity-data entity-key)` without replacing `entity-ids`.
-  - Example behavior: `(update-in db (paths/entity-data :expenses) merge entities-by-id)` and leave ids unchanged.
-  - Optionally: add newly seen ids to `(paths/entity-ids :expenses)` if missing.
+- Added focused integration test for updating expenses + items:
+  - `test/app/domain/expenses/services/expenses_services_test.clj`
 
-Then change `:user-expenses/fetch-expense-success` to dispatch the merge/upsert event instead of `::sync-expenses`.
+## Evidence / verification
 
-This would allow:
-- keeping the list stable (no collapse)
-- enriching a single row entity with detail fields (like `:items`) for the edit modal
+### chrome-mcp (edit flow)
 
-### 2) Ensure the backend returns line items on the detail endpoint
+For expense `cbcb31ce-1ccd-45be-a7d7-bc59fb287a72`:
 
-Even after FE enrichment, the edit modal can only render what the API returns.
-If `GET /api/v1/expenses/:id` returns `items: []`, line items will remain empty.
+1. Open edit modal from list: `#btn-edit-expenses-cbcb31ce-1ccd-45be-a7d7-bc59fb287a72`
+2. Change qty: `#items-60abcf64-7a9a-4342-b7d1-9cb745312b51-qty` → line total updates immediately.
+3. Confirm total auto-updates: `#expense-total_amount`.
+4. Confirm “Update Expense” enables after valid change: `#btn-update`.
+5. Submit and confirm request body includes item `id` and response returns `items[]` populated.
+6. Reopen edit modal and confirm items are still present.
 
-### 3) If “Update Expense” still flickers
+### ClojureScript eval
 
-After the textarea fix + memoization, the next suspect is any remaining reinit trigger:
-- changing `:initial-values` identity (from upstream subscriptions)
-- form wrapper re-mounts
+- Verified `app-db` state for current expense + entity store and validated the submit payload includes `items[].id`.
 
-A good debugging tactic is to log when `:initial-values` changes identity in the edit modal and correlate with `dirty` resets.
+### Postgres check
 
-## Evidence / notes
+- Verified `expense_items` row is updated in-place (same `id`, updated qty/line_total) for the above expense.
 
-- The overwrite behavior is confirmed by `register-sync-event!` implementation in `src/app/template/frontend/shared/utils/entity.cljs` (it uses `assoc-in` for both entity data + ids).
-- The textarea bug was consistent with controlled inputs reverting after `input/change` events.
+## Fork form support (master-detail)
 
-## Key files
-
-- User expenses events: `src/app/template/frontend/events/user_expenses.cljs`
-- Expenses adapter sync: `src/app/admin/frontend/adapters/expenses.cljs`
-- Template sync helper: `src/app/template/frontend/shared/utils/entity.cljs`
-- User expense form (modal): `src/app/domain/frontend/expenses/components/user_expense_form.cljs`
-- Shared textarea field: `src/app/template/frontend/components/form/fields/textarea.cljs`
+Fork supports master-detail via `fork/field-array` (insert/remove handlers and per-row change/blur handlers). Our vendored version (`vendor/fork/re_frame.cljs`) exposes `field-array`, so master-detail forms are supported in this codebase.
