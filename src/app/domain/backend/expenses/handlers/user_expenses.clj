@@ -142,7 +142,7 @@
         (if expense-id
           (try
             (let [body (or (:body-params request) (json/parse-string (slurp (:body request)) true))
-                  updates (select-keys body [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])]
+                  updates (select-keys body [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :items])]
               (if-let [expense (user-expenses/update-user-expense! db user-id expense-id updates)]
                 (json-response {:data expense})
                 (not-found-response "Expense not found or access denied")))

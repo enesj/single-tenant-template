@@ -6,7 +6,7 @@
 
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
-    [uix.core :refer [$ defui]]))
+    [uix.core :refer [$ defui use-effect use-state]]))
 
 ;; =============================================================================
 ;; Helper Functions
@@ -40,7 +40,10 @@
    :raw_label ""
    :qty ""
    :unit_price ""
-   :line_total ""})
+   :line_total ""
+   ;; When true, :line_total is treated as derived from qty * unit_price.
+   ;; When false, user edits to :line_total are preserved.
+   :line_total_auto? true})
 
 (defn format-decimal
   "Format a number to a 2 decimal place string for inputs."
@@ -57,14 +60,18 @@
     :else nil))
 
 (defn- recalc-line-total-if-possible
-  "When qty and unit price are both present and line-total is blank, auto-calc it."
+  "Auto-calc line total (qty * unit price) when possible and line total is not manually overridden."
   [item]
   (let [qty-num (safe-parse-number (:qty item))
         unit-num (safe-parse-number (:unit_price item))
-        line-str (:line_total item)]
-    (if (and (number? qty-num) (number? unit-num) (str/blank? (str line-str)))
-      (let [product (* qty-num unit-num)]
-        (assoc item :line_total (format-decimal product)))
+        line-str (:line_total item)
+        auto? (if (contains? item :line_total_auto?)
+                (true? (:line_total_auto? item))
+                true)]
+    (if (and auto? (number? qty-num) (number? unit-num))
+      (let [product (* qty-num unit-num)
+            formatted (format-decimal product)]
+        (assoc item :line_total formatted :line_total_auto? true))
       item)))
 
 (defn update-line-item
@@ -72,9 +79,12 @@
   [items item-id key value]
   (mapv (fn [item]
           (if (= item-id (:id item))
-            (-> item
-              (assoc key value)
-              recalc-line-total-if-possible)
+            (let [item* (assoc item key value)
+                  item* (if (= key :line_total)
+                          ;; If user clears line_total, allow auto mode again.
+                          (assoc item* :line_total_auto? (str/blank? (str value)))
+                          item*)]
+              (recalc-line-total-if-possible item*))
             item))
     items))
 
@@ -102,6 +112,13 @@
   [{:keys [value on-change error field-spec]}]
   (let [items (if (seq value) value [(new-line-item)])
         columns (:columns field-spec)
+        field-key (let [id (:id field-spec)]
+                    (cond
+                      (keyword? id) (name id)
+                      (string? id) id
+                      :else "items"))
+        input-id (fn [item-id col-id]
+                   (str field-key "-" (str item-id) "-" (name col-id)))
 
         add-item (fn []
                    (on-change (conj items (new-line-item))))
@@ -116,7 +133,8 @@
     ($ :div {:class "space-y-4"}
       ($ :div {:class "flex items-center justify-between"}
         ($ :h2 {:class "text-lg font-semibold"} (:label field-spec))
-        ($ :button {:class "ds-btn ds-btn-ghost ds-btn-sm"
+        ($ :button {:id (str "btn-add-" field-key "-line-item")
+                    :class "ds-btn ds-btn-ghost ds-btn-sm"
                     :type "button"
                     :on-click add-item}
           "Add line item"))
@@ -144,7 +162,8 @@
                             min-val (:min col)]]
                   ($ :td {:key col-id}
                     ($ common/input
-                      (cond-> {:class "ds-input ds-input-bordered w-full"
+                      (cond-> {:id (input-id item-id col-id)
+                               :class "ds-input ds-input-bordered w-full"
                                :value (or val "")
                                :type (name (or type :text))
                                :on-change (handle-line-change item-id col-id)}
@@ -152,7 +171,8 @@
                         step (assoc :step step)
                         min-val (assoc :min min-val)))))
                 ($ :td
-                  ($ :button {:class "text-xs text-error"
+                  ($ :button {:id (str "btn-remove-" field-key "-line-item-" (str item-id))
+                              :class "text-xs text-error"
                               :type "button"
                               :on-click #(remove-item item-id)}
                     "Remove")))))))
@@ -162,24 +182,43 @@
 (def ^:private amount-tolerance 0.01)
 
 (defui total-amount-input
-  [{:keys [value on-change values error]}]
-  (let [items (:items values)
+  [{:keys [id value on-change values error]}]
+  (let [field-key (let [id* id]
+                    (cond
+                      (keyword? id*) (name id*)
+                      (string? id*) id*
+                      :else "total_amount"))
+        input-id (str "expense-" field-key)
+        items (:items values)
         computed-total (line-items-total items)
         parsed-total (safe-parse-number value)
+        [auto-total? set-auto-total!] (use-state true)
         total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
                      (js/Math.abs (- parsed-total computed-total)))
         total-mismatch? (and total-diff (> total-diff amount-tolerance))]
+    (use-effect
+      (fn []
+        (when (and auto-total? (pos? computed-total) (not= parsed-total computed-total))
+          (on-change computed-total))
+        js/undefined)
+      [auto-total? computed-total parsed-total on-change])
     ($ :div {:class "space-y-1"}
       ($ :div {:class "flex gap-2"}
-        ($ :input {:class "ds-input ds-input-bordered w-full"
+        ($ :input {:id input-id
+                   :class "ds-input ds-input-bordered w-full"
                    :type "number"
                    :step "0.01"
                    :value (or value "")
-                   :on-change #(on-change (.. % -target -value))})
+                   :on-change (fn [e]
+                                (set-auto-total! false)
+                                (on-change (safe-parse-number (.. e -target -value))))})
         (when (pos? computed-total)
-          ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
+          ($ :button {:id (str "btn-use-total-" input-id)
+                      :class "ds-btn ds-btn-ghost ds-btn-xs"
                       :type "button"
-                      :on-click #(on-change (format-decimal computed-total))}
+                      :on-click (fn []
+                                  (set-auto-total! true)
+                                  (on-change computed-total))}
             "Use total")))
       (when (pos? computed-total)
         ($ :p {:class "text-xs text-base-content/60"}
@@ -187,4 +226,6 @@
           (when total-mismatch?
             ($ :span {:class "text-error ml-2"} "(does not match total)"))))
       (when error
-        ($ :div {:class "text-error text-sm mt-1"} error)))))
+        ($ :div {:id (str input-id "-error")
+                 :class "text-error text-sm mt-1"}
+          error)))))

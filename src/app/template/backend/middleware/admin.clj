@@ -1,9 +1,8 @@
 (ns app.template.backend.middleware.admin
   (:require
     [app.admin.backend.services.admin :as admin-service]
-    [ring.util.response :as response]
+    [app.template.backend.routes.admin.utils :as utils]
     [taoensso.timbre :as log]))
-
 
 (defn wrap-admin-authentication
   "Middleware to check for valid admin session"
@@ -31,14 +30,10 @@
             (handler (assoc request :admin admin)))
           (do
             (log/warn "❌ ADMIN AUTH FAILED: Invalid or expired session" {:token-preview (str (subs token 0 (min 8 (count token))) "...")})
-            (-> (response/response {:error "Invalid or expired admin session"})
-              (response/status 401)
-              (response/content-type "application/json"))))
+            (utils/error-response "Invalid or expired admin session" :status 401)))
         (do
           (log/warn "❌ ADMIN AUTH FAILED: No token provided" {:uri (:uri request)})
-          (-> (response/response {:error "Admin authentication required"})
-            (response/status 401)
-            (response/content-type "application/json")))))))
+          (utils/error-response "Admin authentication required" :status 401))))))
 
 (defn wrap-admin-audit
   "Middleware to automatically log admin actions"
@@ -75,6 +70,4 @@
       (if (>= (get role-hierarchy admin-role 0)
             (get role-hierarchy required-role 0))
         (handler request)
-        (-> (response/response {:error "Insufficient permissions"})
-          (response/status 403)
-          (response/content-type "application/json"))))))
+        (utils/error-response "Insufficient permissions" :status 403)))))

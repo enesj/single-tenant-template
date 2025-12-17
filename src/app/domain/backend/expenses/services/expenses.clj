@@ -121,6 +121,7 @@
 (defn- normalize-expense-item
   [item]
   (-> item
+    (update-if-present :id #(parse-uuid! :id %))
     (update-if-present :article_id #(parse-uuid! :article_id %))
     (update-if-present :qty #(parse-bigdec! :qty %))
     (update-if-present :unit_price #(parse-bigdec! :unit_price %))
@@ -197,13 +198,16 @@
                    :observed_at (:purchased_at expense)})))
          (assoc expense :items inserted-items))))))
 
+(declare get-expense-with-items)
+
 (defn update-expense!
-  "Update expense fields (not items). Returns updated expense."
-  [db id updates]
-  (let [updates* (-> updates
+  "Update expense fields and optionally line items (when :items is provided). Returns expense with :items."
+  [db id {:keys [items] :as body}]
+  (let [updates* (-> body
+                   (dissoc :items)
                    normalize-expense-data
                    (select-keys [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
-                   (update :currency #(when % [:cast % :currency]))
+                   (update-if-present :currency #(when % [:cast % :currency]))
                    (assoc :updated_at [:now]))
         sql-map {:update :expenses
                  :set updates*
@@ -211,7 +215,73 @@
                          [:= :id id]
                          [:is :deleted_at nil]]
                  :returning [:*]}]
-    (jdbc/execute-one! db (sql/format sql-map) {:builder-fn rs/as-unqualified-lower-maps})))
+    (jdbc/with-transaction [tx db]
+      (when-let [expense (jdbc/execute-one!
+                           tx
+                           (sql/format sql-map)
+                           {:builder-fn rs/as-unqualified-lower-maps})]
+        (when (contains? body :items)
+          (let [existing-ids (->> (jdbc/execute!
+                                    tx
+                                    (sql/format {:select [:id]
+                                                 :from [:expense_items]
+                                                 :where [:= :expense_id id]})
+                                    {:builder-fn rs/as-unqualified-lower-maps})
+                               (map :id)
+                               (into #{}))
+                items* (mapv normalize-expense-item (or items []))
+                update-items (filterv (fn [{item-id :id}]
+                                        (and item-id (contains? existing-ids item-id)))
+                               items*)
+                keep-ids (into #{} (map :id update-items))
+                insert-items (filterv (fn [{item-id :id}]
+                                        (not (and item-id (contains? existing-ids item-id))))
+                               items*)
+                delete-where (if (seq keep-ids)
+                               [:and
+                                [:= :expense_id id]
+                                [:not [:in :id keep-ids]]]
+                               [:= :expense_id id])]
+            (jdbc/execute! tx (sql/format {:delete-from :expense_items
+                                           :where delete-where}))
+            (doseq [item update-items]
+              (require-keys! item [:raw_label :line_total])
+              (jdbc/execute! tx
+                (sql/format {:update :expense_items
+                             :set (select-keys item [:raw_label :article_id :qty :unit_price :line_total])
+                             :where [:and
+                                     [:= :id (:id item)]
+                                     [:= :expense_id id]]})))
+            (let [item-rows (map (fn [{:keys [raw_label article_id qty unit_price line_total] :as item}]
+                                   (require-keys! item [:raw_label :line_total])
+                                   {:id (UUID/randomUUID)
+                                    :expense_id id
+                                    :raw_label raw_label
+                                    :article_id article_id
+                                    :qty qty
+                                    :unit_price unit_price
+                                    :line_total line_total})
+                              insert-items)
+                  inserted-items (if (seq item-rows)
+                                   (jdbc/execute!
+                                     tx
+                                     (sql/format {:insert-into :expense_items
+                                                  :values item-rows
+                                                  :returning [:*]})
+                                     {:builder-fn rs/as-unqualified-lower-maps})
+                                   [])]
+              (doseq [item inserted-items]
+                (when (and (:article_id item) (:supplier_id expense))
+                  (price-history/record-observation!
+                    tx {:article_id (:article_id item)
+                        :supplier_id (:supplier_id expense)
+                        :expense_item_id (:id item)
+                        :qty (:qty item)
+                        :unit_price (:unit_price item)
+                        :line_total (:line_total item)
+                        :currency (:currency expense)
+                        :observed_at (:purchased_at expense)}))))))
+        (get-expense-with-items tx id)))))
 
 (defn soft-delete-expense!
   "Soft delete expense."

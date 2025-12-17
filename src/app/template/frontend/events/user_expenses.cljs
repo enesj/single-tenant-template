@@ -2,7 +2,9 @@
   "User-facing expense dashboard events.
    Fetches expense summary, recent expenses, and aggregates for the user scope."
   (:require
+    [app.admin.frontend.adapters.core :as admin-core]
     [app.admin.frontend.adapters.expenses :as admin-expenses-adapter]
+    [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
@@ -13,6 +15,26 @@
 (def list-endpoint (api/versioned-endpoint "/expenses"))
 (def by-month-endpoint (api/versioned-endpoint "/expenses/by-month"))
 (def by-supplier-endpoint (api/versioned-endpoint "/expenses/by-supplier"))
+
+(def ^:private admin-expenses-endpoint "/admin/api/expenses/entries")
+(def ^:private admin-suppliers-endpoint "/admin/api/expenses/suppliers")
+(def ^:private admin-payers-endpoint "/admin/api/expenses/payers")
+
+(defn- admin-context?
+  [db]
+  (some? (admin-core/admin-token db)))
+
+(defn- xhrio
+  "Build an :http-xhrio config that uses admin endpoints when an admin token exists."
+  [db {:keys [method uri admin-uri params on-success on-failure]}]
+  (let [req {:method method
+             :uri uri
+             :params params
+             :on-success on-success
+             :on-failure on-failure}]
+    (if (admin-context? db)
+      (admin-http/admin-request (assoc req :uri admin-uri))
+      (http/api-request req))))
 
 ;; ---------------------------------------------------------------------------
 ;; Dashboard bootstrap
@@ -73,19 +95,25 @@
           offset* (or offset 0)]
       {:db (-> db
              (assoc-in [:user-expenses :recent :loading?] true)
-             (assoc-in [:user-expenses :recent :error] nil))
-       :http-xhrio (http/api-request
-                     {:method :get
-                      :uri list-endpoint
-                      :params {:limit limit* :offset offset*}
-                      :on-success [:user-expenses/fetch-recent-success]
-                      :on-failure [:user-expenses/fetch-recent-failure]})})))
+             (assoc-in [:user-expenses :recent :error] nil)
+             (assoc-in [:user-expenses :recent :limit] limit*)
+             (assoc-in [:user-expenses :recent :offset] offset*))
+       :http-xhrio (xhrio db
+                    {:method :get
+                     :uri list-endpoint
+                     :admin-uri admin-expenses-endpoint
+                     :params {:limit limit* :offset offset*}
+                     :on-success [:user-expenses/fetch-recent-success]
+                     :on-failure [:user-expenses/fetch-recent-failure]})})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-recent-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [{:keys [data total limit offset]} response]
+    (let [data (or (:data response) (:expenses response) [])
+          total (or (:total response) (count data))
+          limit (or (:limit response) (get-in db [:user-expenses :recent :limit]))
+          offset (or (:offset response) (get-in db [:user-expenses :recent :offset]))]
       {:db (-> db
              (assoc-in [:user-expenses :recent :loading?] false)
              (assoc-in [:user-expenses :recent :error] nil)
@@ -195,23 +223,24 @@
     {:db (-> db
            (assoc-in [:user-expenses :current-expense :loading?] true)
            (assoc-in [:user-expenses :current-expense :error] nil))
-     :http-xhrio (http/api-request
-                   {:method :get
-                    :uri (str expense-detail-endpoint "/" expense-id)
-                    :on-success [:user-expenses/fetch-expense-success]
-                    :on-failure [:user-expenses/fetch-expense-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :get
+                   :uri (str expense-detail-endpoint "/" expense-id)
+                   :admin-uri (str admin-expenses-endpoint "/" expense-id)
+                   :on-success [:user-expenses/fetch-expense-success]
+                   :on-failure [:user-expenses/fetch-expense-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expense-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense (:data response)
+    (let [expense (or (:data response) (:expense response))
           updated-db (-> db
                        (assoc-in [:user-expenses :current-expense :loading?] false)
                        (assoc-in [:user-expenses :current-expense :error] nil)
                        (assoc-in [:user-expenses :current-expense :data] expense))]
       (cond-> {:db updated-db}
-        expense (assoc :dispatch [::admin-expenses-adapter/sync-expenses [expense]])))))
+        expense (assoc :dispatch [::admin-expenses-adapter/upsert-expenses [expense]])))))
 
 (rf/reg-event-db
   :user-expenses/fetch-expense-failure
@@ -233,18 +262,20 @@
     {:db (-> db
            (assoc-in [:user-expenses :form :loading?] true)
            (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (http/api-request
-                   {:method :post
-                    :uri list-endpoint
-                    :params expense-data
-                    :on-success [:user-expenses/create-expense-success]
-                    :on-failure [:user-expenses/create-expense-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :post
+                   :uri list-endpoint
+                   :admin-uri admin-expenses-endpoint
+                   :params expense-data
+                   :on-success [:user-expenses/create-expense-success]
+                   :on-failure [:user-expenses/create-expense-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/create-expense-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense-id (get-in response [:data :id])]
+    (let [expense-id (or (get-in response [:data :id])
+                       (get-in response [:expense :id]))]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
@@ -271,12 +302,13 @@
     {:db (-> db
            (assoc-in [:user-expenses :form :loading?] true)
            (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (http/api-request
-                   {:method :post
-                    :uri list-endpoint
-                    :params expense-data
-                    :on-success [:user-expenses/create-expense-modal-success on-success]
-                    :on-failure [:user-expenses/create-expense-modal-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :post
+                   :uri list-endpoint
+                   :admin-uri admin-expenses-endpoint
+                   :params expense-data
+                   :on-success [:user-expenses/create-expense-modal-success on-success]
+                   :on-failure [:user-expenses/create-expense-modal-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/create-expense-modal-success
@@ -310,24 +342,25 @@
     {:db (-> db
            (assoc-in [:user-expenses :form :loading?] true)
            (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (http/api-request
-                   {:method :put
-                    :uri (str list-endpoint "/" expense-id)
-                    :params expense-data
-                    :on-success [:user-expenses/update-expense-success expense-id]
-                    :on-failure [:user-expenses/update-expense-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :put
+                   :uri (str list-endpoint "/" expense-id)
+                   :admin-uri (str admin-expenses-endpoint "/" expense-id)
+                   :params expense-data
+                   :on-success [:user-expenses/update-expense-success expense-id]
+                   :on-failure [:user-expenses/update-expense-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/update-expense-success
   common-interceptors
   (fn [{:keys [db]} [expense-id response]]
-    (let [expense (:data response)]
+    (let [expense (or (:data response) (:expense response))]
       (cond-> {:db (-> db
                      (assoc-in [:user-expenses :form :loading?] false)
                      (assoc-in [:user-expenses :form :error] nil))
                :dispatch-n [[:user-expenses/fetch-expense expense-id]
                             [:user-expenses/fetch-recent {:limit 25 :offset 0}]]}
-        expense (assoc :dispatch [::admin-expenses-adapter/sync-expenses [expense]])))))
+        expense (assoc :dispatch [::admin-expenses-adapter/upsert-expenses [expense]])))))
 
 (rf/reg-event-db
   :user-expenses/update-expense-failure
@@ -349,18 +382,19 @@
     {:db (-> db
            (assoc-in [:user-expenses :form :loading?] true)
            (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (http/api-request
-                   {:method :put
-                    :uri (str list-endpoint "/" expense-id)
-                    :params expense-data
-                    :on-success [:user-expenses/update-expense-modal-success expense-id on-success]
-                    :on-failure [:user-expenses/update-expense-modal-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :put
+                   :uri (str list-endpoint "/" expense-id)
+                   :admin-uri (str admin-expenses-endpoint "/" expense-id)
+                   :params expense-data
+                   :on-success [:user-expenses/update-expense-modal-success expense-id on-success]
+                   :on-failure [:user-expenses/update-expense-modal-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/update-expense-modal-success
   common-interceptors
   (fn [{:keys [db]} [expense-id on-success response]]
-    (let [expense (:data response)]
+    (let [expense (or (:data response) (:expense response))]
       (cond-> {:db (-> db
                      (assoc-in [:user-expenses :form :loading?] false)
                      (assoc-in [:user-expenses :form :error] nil))
@@ -370,7 +404,7 @@
                       [:dispatch-later {:ms 100
                                         :dispatch [:user-expenses/call-modal-callback on-success]}])]}
         expense
-        (assoc :dispatch [::admin-expenses-adapter/sync-expenses [expense]])))))
+        (assoc :dispatch [::admin-expenses-adapter/upsert-expenses [expense]])))))
 
 (rf/reg-event-db
   :user-expenses/update-expense-modal-failure
@@ -399,11 +433,12 @@
   common-interceptors
   (fn [{:keys [db]} [expense-id]]
     {:db (assoc-in db [:user-expenses :form :loading?] true)
-     :http-xhrio (http/api-request
-                   {:method :delete
-                    :uri (str list-endpoint "/" expense-id)
-                    :on-success [:user-expenses/delete-expense-success]
-                    :on-failure [:user-expenses/delete-expense-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :delete
+                   :uri (str list-endpoint "/" expense-id)
+                   :admin-uri (str admin-expenses-endpoint "/" expense-id)
+                   :on-success [:user-expenses/delete-expense-success]
+                   :on-failure [:user-expenses/delete-expense-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/delete-expense-success
@@ -431,12 +466,13 @@
   common-interceptors
   (fn [{:keys [db]} [expense-id]]
     {:db (assoc-in db [:user-expenses :form :loading?] true)
-     :http-xhrio (http/api-request
-                   {:method :put
-                    :uri (str list-endpoint "/" expense-id)
-                    :params {:is_posted true}
-                    :on-success [:user-expenses/post-expense-success expense-id]
-                    :on-failure [:user-expenses/post-expense-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :put
+                   :uri (str list-endpoint "/" expense-id)
+                   :admin-uri (str admin-expenses-endpoint "/" expense-id)
+                   :params {:is_posted true}
+                   :on-success [:user-expenses/post-expense-success expense-id]
+                   :on-failure [:user-expenses/post-expense-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/post-expense-success
@@ -466,18 +502,19 @@
   common-interceptors
   (fn [{:keys [db]} [opts]]
     {:db (assoc-in db [:user-expenses :suppliers :loading?] true)
-     :http-xhrio (http/api-request
-                   {:method :get
-                    :uri suppliers-endpoint
-                    :params (select-keys opts [:limit :offset])
-                    :on-success [:user-expenses/fetch-suppliers-success]
-                    :on-failure [:user-expenses/fetch-suppliers-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :get
+                   :uri suppliers-endpoint
+                   :admin-uri admin-suppliers-endpoint
+                   :params (select-keys opts [:limit :offset])
+                   :on-success [:user-expenses/fetch-suppliers-success]
+                   :on-failure [:user-expenses/fetch-suppliers-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-suppliers-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [items (or (:data response) [])]
+    (let [items (or (:data response) (:suppliers response) [])]
       {:db (-> db
              (assoc-in [:user-expenses :suppliers :loading?] false)
              (assoc-in [:user-expenses :suppliers :items] items))
@@ -498,18 +535,19 @@
   common-interceptors
   (fn [{:keys [db]} [opts]]
     {:db (assoc-in db [:user-expenses :payers :loading?] true)
-     :http-xhrio (http/api-request
-                   {:method :get
-                    :uri payers-endpoint
-                    :params (select-keys opts [:limit :offset])
-                    :on-success [:user-expenses/fetch-payers-success]
-                    :on-failure [:user-expenses/fetch-payers-failure]})}))
+     :http-xhrio (xhrio db
+                  {:method :get
+                   :uri payers-endpoint
+                   :admin-uri admin-payers-endpoint
+                   :params (select-keys opts [:limit :offset])
+                   :on-success [:user-expenses/fetch-payers-success]
+                   :on-failure [:user-expenses/fetch-payers-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-payers-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [items (or (:data response) [])]
+    (let [items (or (:data response) (:payers response) [])]
       {:db (-> db
              (assoc-in [:user-expenses :payers :loading?] false)
              (assoc-in [:user-expenses :payers :items] items))
@@ -548,12 +586,12 @@
      :dispatch [:navigate-to "/expenses/list"]}))
 
 #_(rf/reg-event-db
-  :user-expenses/upload-receipt-failure
-  common-interceptors
-  (fn [db [error]]
-    (-> db
-      (assoc-in [:user-expenses :upload :loading?] false)
-      (assoc-in [:user-expenses :upload :error] (http/extract-error-message error)))))
+    :user-expenses/upload-receipt-failure
+    common-interceptors
+    (fn [db [error]]
+      (-> db
+        (assoc-in [:user-expenses :upload :loading?] false)
+        (assoc-in [:user-expenses :upload :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Settings

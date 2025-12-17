@@ -1,0 +1,72 @@
+2025-12-17T14:52:07.444Z Eness-MacBook-Pro.local DEBUG [app.template.backend.utils.json-config:29] - Configuring JSON encoders for Java types...
+2025-12-17T14:52:07.467Z Eness-MacBook-Pro.local INFO [app.template.backend.utils.json-config:100] - JSON encoders configured successfully
+
+🧪 Backend Test REPL loaded
+   (run-all)        - Run all tests
+   (run-smoke)      - Run smoke tests
+   (run-ns 'ns)     - Run specific namespace
+   (status)         - Check test system status
+   (start-system!)  - Start test system manually
+   (stop-system!)   - Stop test system manually
+
+#object[clojure.lang.Namespace 0x2c16fca4 "app.backend.test-repl"]
+✓ Registered service for table: receipts
+✓ Registered service for table: suppliers
+✓ Registered service for table: reports
+✓ Registered service for table: expenses
+✓ Registered service for table: articles
+✓ Registered service for table: price_observations
+✓ Registered service for table: payers
+✓ Registered service for table: article_aliases
+✓ Registered service for table: price_observations
+✓ Registered service for table: payers
+✓ Registered service for table: suppliers
+2025-12-17T14:52:08.891Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:49] - 🧪 Starting test system (reusing dev infrastructure)...
+2025-12-17T14:52:09.092Z Eness-MacBook-Pro.local INFO [app.template.backend.core:143] - Creating service container using DI container...
+2025-12-17T14:52:09.093Z Eness-MacBook-Pro.local INFO [app.template.di.config:289] - Creating service container with DI...
+2025-12-17T14:52:09.093Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:157] - Registering template services with db-connection: com.zaxxer.hikari.HikariDataSource
+2025-12-17T14:52:09.097Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :type-casting-service
+2025-12-17T14:52:09.097Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :query-builder
+2025-12-17T14:52:09.097Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :metadata-service
+2025-12-17T14:52:09.098Z Eness-MacBook-Pro.local INFO [app.template.backend.email.service:42] - Creating Gmail SMTP email service with from-email: enes.jakic@gmail.com
+2025-12-17T14:52:09.098Z Eness-MacBook-Pro.local INFO [app.template.backend.services.gmail-smtp:205] - Creating Gmail SMTP email service with from email: enes.jakic@gmail.com and base-url: http://localhost:8085
+2025-12-17T14:52:09.099Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :email-service
+2025-12-17T14:52:09.099Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:166] - Creating database adapter with connection: com.zaxxer.hikari.HikariDataSource
+2025-12-17T14:52:09.099Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :db-adapter
+2025-12-17T14:52:09.099Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :validation-service
+2025-12-17T14:52:09.101Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :password-routes
+2025-12-17T14:52:09.101Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:221] - Creating auth service:
+2025-12-17T14:52:09.102Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:222] -   All services: (:type-casting-service :crud-routes :auth-routes :oauth-routes :query-builder :crud-service :validation-service :metadata-service :password-routes :auth-service :email-service :db-adapter)
+2025-12-17T14:52:09.102Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:223] -   Service statuses: {:type-casting-service :initialized, :query-builder :initialized, :metadata-service :initialized, :email-service :initialized, :db-adapter :initialized, :validation-service :initialized, :password-routes :initialized}
+2025-12-17T14:52:09.104Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:224] -   Database adapter: app.template.backend.db.adapter.PostgresAdapter
+2025-12-17T14:52:09.104Z Eness-MacBook-Pro.local DEBUG [app.template.di.config:225] -   Email service: app.template.backend.services.gmail_smtp.GmailSMTPEmailService
+2025-12-17T14:52:09.104Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :auth-service
+2025-12-17T14:52:09.105Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :auth-routes
+2025-12-17T14:52:09.106Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :oauth-routes
+2025-12-17T14:52:09.106Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :crud-service
+2025-12-17T14:52:09.108Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :crud-routes
+2025-12-17T14:52:09.109Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :type-casting-service
+2025-12-17T14:52:09.109Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :crud-routes
+2025-12-17T14:52:09.109Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :auth-routes
+2025-12-17T14:52:09.109Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :oauth-routes
+2025-12-17T14:52:09.110Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :query-builder
+2025-12-17T14:52:09.110Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :crud-service
+2025-12-17T14:52:09.110Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :validation-service
+2025-12-17T14:52:09.110Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :metadata-service
+2025-12-17T14:52:09.110Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :password-routes
+2025-12-17T14:52:09.111Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :auth-service
+2025-12-17T14:52:09.111Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :email-service
+2025-12-17T14:52:09.111Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :db-adapter
+2025-12-17T14:52:09.117Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: (:email_verification_tokens :suppliers :admins :articles :expenses :password_reset_tokens :login_events :payers :price_observations :audit_logs :expense_items :receipts :article_aliases :users)
+2025-12-17T14:52:09.117Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-17T14:52:09.118Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: (:email_verification_tokens :suppliers :admins :articles :expenses :password_reset_tokens :login_events :payers :price_observations :audit_logs :expense_items :receipts :article_aliases :users)
+2025-12-17T14:52:09.263Z Eness-MacBook-Pro.local INFO [app.template.backend.webserver:50] - Server started on port 8086
+2025-12-17T14:52:09.264Z Eness-MacBook-Pro.local INFO [app.template.backend.core:163] - 🚀 Starting system - host: localhost , port: 8086 - Auto-restart works!
+2025-12-17T14:52:09.264Z Eness-MacBook-Pro.local DEBUG [app.template.backend.utils.json-config:29] - Configuring JSON encoders for Java types...
+2025-12-17T14:52:09.265Z Eness-MacBook-Pro.local INFO [app.template.backend.utils.json-config:100] - JSON encoders configured successfully
+2025-12-17T14:52:09.305Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:77] - ✅ Test system ready {:database true, :service-container true, :config true}
+[(...............................)]2025-12-17T14:52:09.520Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:89] - 🧹 Stopping test system...
+2025-12-17T14:52:09.521Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:99] - ✅ Test system stopped
+2025-12-17T14:52:09.521Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:57] - Test system interrupted
+
+[32m8 tests, 31 assertions, 0 failures.[m

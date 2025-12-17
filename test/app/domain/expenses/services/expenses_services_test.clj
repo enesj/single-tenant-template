@@ -130,6 +130,52 @@
       (is (= 1 (count (:items expense))))
       (is (= "Item" (-> expense :items first :raw_label))))))
 
+(deftest expenses-update-upserts-items
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-result (suppliers/find-or-create-supplier! db "UpdateItems Supplier" {})
+          supplier (:supplier supplier-result)
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          article-name (str "UpdateItemsArticle-" (UUID/randomUUID))
+          article (articles/create-article! db {:canonical_name article-name})
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "5.00")
+                     :currency "BAM"}
+                    [{:raw_label "Old-1" :qty (bigdec "1") :unit_price (bigdec "2.00") :line_total (bigdec "2.00")}
+                     {:raw_label "Old-2" :line_total (bigdec "3.00")}])
+          [item-1 item-2] (:items expense)
+          before (count-table db :price_observations)
+          updated (expenses/update-expense! db
+                    (:id expense)
+                    {:total_amount (bigdec "7.00")
+                     :items [{:id (:id item-1)
+                              :raw_label "Updated"
+                              :qty (bigdec "2")
+                              :unit_price (bigdec "2.50")
+                              :line_total (bigdec "5.00")}
+                             {:raw_label "New"
+                              :article_id (:id article)
+                              :qty (bigdec "1")
+                              :unit_price (bigdec "2.00")
+                              :line_total (bigdec "2.00")}]})
+          after (count-table db :price_observations)
+          items (:items updated)
+          updated-item (first (filter #(= (:id item-1) (:id %)) items))
+          new-item (first (filter #(= "New" (:raw_label %)) items))]
+      (is updated)
+      (is (= 2 (count items)))
+      (is (nil? (some #(= (:id item-2) (:id %)) items)))
+      (is (= "Updated" (:raw_label updated-item)))
+      (is (== (bigdec "2") (:qty updated-item)))
+      (is (== (bigdec "2.50") (:unit_price updated-item)))
+      (is (== (bigdec "5.00") (:line_total updated-item)))
+      (is (some? new-item))
+      (is (= (:id article) (:article_id new-item)))
+      (is (== (bigdec "2.00") (:line_total new-item)))
+      (is (= (inc before) after)))))
+
 (deftest expenses-soft-delete-excluded-from-list
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "Pharmacy" {})

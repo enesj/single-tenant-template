@@ -214,6 +214,12 @@
    :normalize-fn expense->template-entity
    :log-prefix "[expenses] Syncing expenses to template:"})
 
+(adapters.core/register-upsert-event!
+  {:event-id ::upsert-expenses
+   :entity-key :expenses
+   :normalize-fn expense->template-entity
+   :log-prefix "[expenses] Upserting expenses to template:"})
+
 (adapters.core/register-sync-event!
   {:event-id ::sync-receipts
    :entity-key :receipts

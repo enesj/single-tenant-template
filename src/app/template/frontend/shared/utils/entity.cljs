@@ -121,3 +121,30 @@
         (-> db
           (assoc-in (paths/entity-data entity-key) entities-by-id)
           (assoc-in (paths/entity-ids entity-key) ids))))))
+
+(defn register-upsert-event!
+  "Register an upsert event that normalizes entities and merges them into the
+  existing template entity store (without replacing the full store)."
+  [{:keys [event-id entity-key normalize-fn log-prefix]}]
+  (rf/reg-event-db
+    event-id
+    (fn [db [_ entities]]
+      (let [normalized-pairs (into []
+                               (comp
+                                 (map normalize-fn)
+                                 (keep (fn [entity]
+                                         (when-let [id (:id entity)]
+                                           [(str id) entity]))))
+                               (or entities []))
+            ids (mapv first normalized-pairs)
+            entities-by-id (into {} normalized-pairs)
+            existing-by-id (or (get-in db (paths/entity-data entity-key)) {})
+            existing-ids (vec (or (get-in db (paths/entity-ids entity-key)) []))
+            existing-id-set (set existing-ids)
+            merged-ids (into existing-ids (remove existing-id-set ids))
+            message (or log-prefix
+                      (str "Upserting " (name entity-key) " to template system:"))]
+        (log/debug message (count normalized-pairs) "entities")
+        (-> db
+          (assoc-in (paths/entity-data entity-key) (merge existing-by-id entities-by-id))
+          (assoc-in (paths/entity-ids entity-key) merged-ids))))))

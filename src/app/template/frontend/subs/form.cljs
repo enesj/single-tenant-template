@@ -44,6 +44,7 @@
   (fn [db [_ entity-name entity-spec editing values]]
     (let [fields (map #(keyword (:id %)) entity-spec)
           required-fields (map #(keyword (:id %)) (filter :required entity-spec))
+          required-fields-set (set required-fields)
           entity-dirty-fields (get-in db (paths/form-dirty-fields entity-name) #{})
           fields-to-check (if editing
                             (filter #(contains? entity-dirty-fields %) fields)
@@ -57,8 +58,11 @@
                                           result (try
                                                    (validation-core/validation-result validation-spec value)
                                                    (catch :default _
+                                                     ;; IMPORTANT: always return a boolean; (seq ...) returns a truthy seq.
                                                      {:valid? (if (string? value)
-                                                                (seq value)
+                                                                (or (boolean (seq value))
+                                                                  ;; Optional string fields are valid when blank (no validator exists).
+                                                                  (not (contains? required-fields-set field-key)))
                                                                 (some? value))}))]
                                       (:valid? result)))
                                fields-to-check)]

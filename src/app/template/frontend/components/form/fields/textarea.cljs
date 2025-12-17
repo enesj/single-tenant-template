@@ -28,13 +28,13 @@
       ($ :div {:class (when inline "flex-1 w-full text-left")}
         ($ common/text-area
           (merge
+            (clean-props props)
             {:id field-id
              :value value
              :placeholder placeholder
              :class base-class
              :disabled disabled?
-             {:on-change #(handle-change (.. % -target -value))}
-             (clean-props props)}))
+             :on-change #(handle-change (.. % -target -value))}))
         (when errors
           ($ :div {:class error-class
                    :id error-id}

@@ -67,5 +67,7 @@
 (def normalize-entity entity-utils/normalize-entity)
 (def register-entity-spec-sub! entity-utils/register-entity-spec-sub!)
 (def register-sync-event! entity-utils/register-sync-event!)
+
+(def register-upsert-event! entity-utils/register-upsert-event!)
 (def assoc-paths db-utils/assoc-paths)
 (def maybe-fetch-config db-utils/maybe-fetch-config)

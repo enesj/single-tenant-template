@@ -7,7 +7,8 @@
                                                                        user-expense-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
-    [app.template.frontend.components.icons :refer [delete-icon view-icon]]
+    [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.icons :refer [delete-icon edit-icon view-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
@@ -35,35 +36,62 @@
        :on-success on-success
        :on-cancel on-cancel})))
 
-(defn- custom-actions
-  "Extra row actions rendered alongside the standard edit button.
+(defn- render-actions
+  "Row action dropdown (admin-style) for user expenses.
 
-  NOTE: We do not use the template delete button here because it is wired to
-  template CRUD events; user delete uses user-scoped events."
+  Uses list-view's modal edit handler when available, and user-scoped delete."
   [item]
-  (let [expense-id (id-utils/extract-entity-id item)]
-    ($ :<>
-      ;; View details
-      ($ button
-        {:btn-type :ghost
-         :shape "circle"
-         :on-click (fn [e]
-                     (.stopPropagation e)
-                     (rf/dispatch [:navigate-to (str "/expenses/" expense-id)]))}
-        ($ view-icon {:title "View"}))
+  (let [expense-id (id-utils/extract-entity-id item)
+        on-edit-click (:on-edit-click item)
+        show-edit? (not (false? (:show-edit? item)))
+        show-delete? (not (false? (:show-delete? item)))
+        item-data (dissoc item :show-edit? :show-delete? :on-edit-click)
+        deleted? (some? (or (:deleted-at item-data)
+                          (:deleted_at item-data)
+                          (:expenses/deleted-at item-data)
+                          (:expenses/deleted_at item-data)))]
+    ($ :div {:class "flex items-center justify-center gap-2"}
+      (when show-edit?
+        ($ button
+          {:id (str "btn-edit-expenses-" expense-id)
+           :btn-type :primary
+           :shape "circle"
+           :disabled deleted?
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (when-not deleted?
+                         (if on-edit-click
+                           (on-edit-click item-data)
+                           (rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")]))))}
+          ($ edit-icon)))
 
-      ;; Delete
-      ($ button
-        {:btn-type :danger
-         :shape "circle"
-         :on-click (fn [e]
-                     (.stopPropagation e)
-                     (confirm-dialog/show-confirm
-                       {:title "Delete expense"
-                        :message "Do you want to delete this expense?"
-                        :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
-                        :on-cancel nil}))}
-        ($ delete-icon)))))
+      (when show-delete?
+        ($ button
+          {:id (str "btn-delete-expenses-" expense-id)
+           :btn-type :danger
+           :shape "circle"
+           :disabled deleted?
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (when-not deleted?
+                         (confirm-dialog/show-confirm
+                           {:title "Delete expense"
+                            :message "Do you want to delete this expense?"
+                            :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
+                            :on-cancel nil})))}
+          ($ delete-icon)))
+
+      ($ dropdown/action-dropdown
+        {:entity-id expense-id
+         :trigger-label "⋯"
+         :position :portal
+         :actions
+         [{:group-title "View"
+           :items [{:id "view"
+                    :icon ($ view-icon {:title "View"})
+                    :label "View Details"
+                    :on-click (fn [_e]
+                                (rf/dispatch [:navigate-to (str "/expenses/" expense-id)]))}]}]}))))
 
 ;; =============================================================================
 ;; Main Page
@@ -103,10 +131,6 @@
               ($ :p {:class "text-sm text-base-content/70"}
                 "View and manage your expense history"))
             ($ :div {:class "flex gap-2"}
-              ;; Keep the dedicated page for now; modal add is available in the table.
-              ($ button {:btn-type :primary
-                         :on-click #(rf/dispatch [:navigate-to "/expenses/new"])}
-                "+ New Expense")
               ($ button {:btn-type :ghost
                          :on-click #(rf/dispatch [:navigate-to "/expenses"])}
                 "Dashboard")))))
@@ -128,4 +152,4 @@
            :render-edit-form render-edit-form
            :on-add-success refresh-list
            :on-edit-success refresh-list
-           :custom-actions custom-actions})))))
+           :render-actions render-actions})))))

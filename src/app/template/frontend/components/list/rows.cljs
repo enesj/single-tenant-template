@@ -235,7 +235,10 @@
                             :actions (if-let [override (:actions-override props)]
                                        (override (assoc item-clj
                                                    :show-edit? (:show-edit? props)
-                                                   :show-delete? (:show-delete? props)))
+                                                   :show-delete? (:show-delete? props)
+                                                   ;; Allow action overrides to trigger modal edit when list-view
+                                                   ;; is in :form-display :modal mode (list-view passes :on-edit-click).
+                                                   :on-edit-click (:on-edit-click props)))
                                        ($ cells/action-buttons
                                          {:item item-clj
                                           :entity-name (:entity-name props)
