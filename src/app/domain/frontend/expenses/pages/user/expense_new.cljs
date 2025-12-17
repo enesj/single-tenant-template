@@ -135,7 +135,7 @@
         [notes set-notes!] (use-state "")
         [line-items set-line-items!] (use-state [(new-line-item)])
         [validation-error set-validation-error!] (use-state nil)]
-    
+
     ;; Load suppliers and payers on mount
     (use-effect
       (fn []
@@ -143,7 +143,7 @@
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100}])
         js/undefined)
       [])
-    
+
     ;; Set default selections
     (use-effect
       (fn []
@@ -152,18 +152,14 @@
         (when (and (seq payers) (not payer-id))
           (set-payer-id! (:id (first payers)))))
       [supplier-id payer-id suppliers payers])
-    
+
     (let [prepared-items (prepare-line-items line-items)
           computed-total (line-items-total prepared-items)
           parsed-total (safe-parse-number total-amount)
           total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
                        (js/Math.abs (- parsed-total computed-total)))
           total-mismatch? (and total-diff (> total-diff amount-tolerance))
-          
-          handle-line-change (fn [item-id key]
-                               (fn [_e value]
-                                 (set-line-items! (update-line-item line-items item-id key value))))
-          
+
           handle-submit (fn []
                           (let [effective-total (or parsed-total (when (pos? computed-total) computed-total))
                                 has-items? (seq prepared-items)]
@@ -172,18 +168,18 @@
                                 (str/blank? (str payer-id))
                                 (str/blank? purchased-at))
                               (set-validation-error! "Supplier, payer, and date are required.")
-                              
+
                               (not has-items?)
                               (set-validation-error! "Add at least one line item with a label and total.")
-                              
+
                               (or (nil? effective-total) (<= effective-total 0))
                               (set-validation-error! "Enter a total amount greater than 0.")
-                              
+
                               (and (pos? computed-total) (> (or total-diff 0) amount-tolerance))
                               (set-validation-error!
                                 (str "Total (" (format-decimal effective-total)
                                   ") must match line items (" (format-decimal computed-total) ")."))
-                              
+
                               :else
                               (do
                                 (set-validation-error! nil)
@@ -195,7 +191,7 @@
                                                :notes notes
                                                :total_amount effective-total
                                                :items (vec prepared-items)}])))))]
-      
+
       ($ :div {:class "min-h-screen bg-base-100"}
         ;; Header
         ($ :header {:class "bg-white border-b border-base-200"}
@@ -215,13 +211,13 @@
                            :loading? loading?
                            :on-click handle-submit}
                   "Save Expense")))))
-        
+
         ;; Errors
         (when (or validation-error form-error)
           ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
             ($ :div {:class "ds-alert ds-alert-error"}
               ($ :span (or validation-error form-error)))))
-        
+
         ;; Form
         ($ :main {:class "max-w-4xl mx-auto px-4 py-6"}
           ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6 space-y-6"}
@@ -238,7 +234,7 @@
                   (for [s suppliers]
                     ($ :option {:key (:id s) :value (:id s)}
                       (:display_name s)))))
-              
+
               ;; Payer
               ($ :div
                 ($ :label {:class "ds-label"}
@@ -250,7 +246,7 @@
                   (for [p payers]
                     ($ :option {:key (:id p) :value (:id p)}
                       (:label p)))))
-              
+
               ;; Date
               ($ :div
                 ($ :label {:class "ds-label"}
@@ -259,7 +255,7 @@
                            :class "ds-input ds-input-bordered w-full"
                            :value purchased-at
                            :on-change #(set-purchased-at! (.. % -target -value))}))
-              
+
               ;; Currency
               ($ :div
                 ($ :label {:class "ds-label"}
@@ -269,7 +265,7 @@
                             :on-change #(set-currency! (.. % -target -value))}
                   (for [{:keys [label value]} currency-options]
                     ($ :option {:key value :value value} label)))))
-            
+
             ;; Line items section
             ($ :div {:class "border-t pt-6"}
               ($ :div {:class "flex items-center justify-between mb-4"}
@@ -278,7 +274,7 @@
                             :class "ds-btn ds-btn-ghost ds-btn-sm"
                             :on-click #(set-line-items! (conj line-items (new-line-item)))}
                   "+ Add Item"))
-              
+
               ;; Column headers
               ($ :div {:class "grid grid-cols-12 gap-2 text-xs text-base-content/70 font-medium mb-2"}
                 ($ :span {:class "col-span-5"} "Description")
@@ -286,7 +282,7 @@
                 ($ :span {:class "col-span-2"} "Unit Price")
                 ($ :span {:class "col-span-2"} "Total")
                 ($ :span {:class "col-span-1"}))
-              
+
               ;; Items
               ($ :div {:class "space-y-2"}
                 (for [item line-items]
@@ -298,7 +294,7 @@
                                     :on-remove (fn [item-id]
                                                  (set-line-items!
                                                    (remove-line-item line-items item-id)))})))
-              
+
               ;; Computed total
               (when (pos? computed-total)
                 ($ :div {:class "flex justify-end mt-4 text-sm"}
@@ -306,7 +302,7 @@
                   ($ :span {:class (str "font-mono font-medium "
                                      (when total-mismatch? "text-warning"))}
                     (format-decimal computed-total) " " currency))))
-            
+
             ;; Total amount
             ($ :div {:class "border-t pt-6 grid grid-cols-1 md:grid-cols-2 gap-4"}
               ($ :div
@@ -319,7 +315,7 @@
                            :value total-amount
                            :placeholder (when (pos? computed-total) (str "Auto: " (format-decimal computed-total)))
                            :on-change #(set-total-amount! (.. % -target -value))}))
-              
+
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Notes"))

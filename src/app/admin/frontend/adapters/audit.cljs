@@ -85,7 +85,7 @@
         (update-in data-path (fn [m] (dissoc m id-str)))
         (update-in ids-path #(filterv (fn [id] (not= (str id) id-str)) %))))))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   ::audit-log-delete-failed
   (fn [db [_ error]]
     (log/error "Failed to delete audit log:" error)

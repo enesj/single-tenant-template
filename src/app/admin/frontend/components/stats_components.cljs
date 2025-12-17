@@ -17,60 +17,57 @@
    - Template formatting utilities available"
   (:require
     [app.admin.frontend.components.alerts :as alerts] ;; Import template components for re-export
-    [app.template.frontend.components.cards :as cards]
     [app.template.frontend.components.states :as states]
     [app.admin.frontend.components.tables :as tables]
-    [app.template.frontend.components.stats :as template-stats]
-    [app.template.frontend.utils.formatting :as formatting]
-    [app.template.frontend.components.table-headers :refer [table-header]]))
+    [app.template.frontend.components.stats :as template-stats]))
 
 ;; ============================================================================
 ;; Re-export Template Components (Enhanced with Template Integration)
 ;; ============================================================================
 
 (def stats-card template-stats/stats-card)
-(def trend-indicator template-stats/trend-indicator)
+#_(def trend-indicator template-stats/trend-indicator)
 (def page-header template-stats/page-header)
 
 ;; ============================================================================
 ;; Re-export Template Utilities
 ;; ============================================================================
 
-(def format-currency formatting/format-currency)
-(def format-percentage formatting/format-percentage)
-(def format-date-month-year formatting/format-date-month-year)
-(def get-status-color formatting/get-status-color)
+#_(def format-currency formatting/format-currency)
+#_(def format-percentage formatting/format-percentage)
+#_(def format-date-month-year formatting/format-date-month-year)
+#_(def get-status-color formatting/get-status-color)
 
 ;; ============================================================================
 ;; Re-export Card Components
 ;; ============================================================================
 
-(def glassmorphism-wrapper cards/glassmorphism-wrapper)
-(def quick-actions-card cards/quick-actions-card)
-(def overview-metrics-card cards/overview-metrics-card)
-(def chart-list-card cards/chart-list-card)
-(def performance-trends-card cards/performance-trends-card)
+#_(def glassmorphism-wrapper cards/glassmorphism-wrapper)
+#_(def quick-actions-card cards/quick-actions-card)
+#_(def overview-metrics-card cards/overview-metrics-card)
+#_(def chart-list-card cards/chart-list-card)
+#_(def performance-trends-card cards/performance-trends-card)
 
 ;; ============================================================================
 ;; Re-export Table Components
 ;; ============================================================================
 
-(def table-header-alias table-header)
-(def activity-list-item tables/activity-list-item)
+#_(def table-header-alias table-header)
+#_(def activity-list-item tables/activity-list-item)
 (def recent-activity-table tables/recent-activity-table)
 
 ;; ============================================================================
 ;; Re-export State Components (Enhanced with DaisyUI Integration)
 ;; ============================================================================
 
-(def enhanced-loading-state states/enhanced-loading-state)
-(def activity-loading-state states/activity-loading-state)
-(def activity-empty-state states/activity-empty-state)
+#_(def enhanced-loading-state states/enhanced-loading-state)
+#_(def activity-loading-state states/activity-loading-state)
+#_(def activity-empty-state states/activity-empty-state)
 
 ;; New generic helpers added during refactoring
 (def generic-loading-state states/generic-loading-state)
-(def generic-empty-state states/generic-empty-state)
-(def error-state states/error-state)
+#_(def generic-empty-state states/generic-empty-state)
+#_(def error-state states/error-state)
 
 ;; ============================================================================
 ;; Re-export Alert Components (Enhanced with Template Integration)
@@ -78,10 +75,10 @@
 
 (def simple-page-header alerts/simple-page-header)
 (def alert-section alerts/alert-section)
-(def status-section alerts/status-section)
+#_(def status-section alerts/status-section)
 
 ;; New notification helpers added during refactoring
-(def notification-banner alerts/notification-banner)
+#_(def notification-banner alerts/notification-banner)
 (def toast-notification alerts/toast-notification)
 
 ;; ============================================================================

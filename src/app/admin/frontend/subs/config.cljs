@@ -26,7 +26,7 @@
       [])))
 
 ;; Check if a specific column is visible
-(rf/reg-sub
+#_(rf/reg-sub
   ::column-visible?
   (fn [[_ entity-name _column-name]]
     (rf/subscribe [::visible-columns entity-name]))
@@ -56,7 +56,7 @@
     (get-in db [:admin :config :table-columns entity-name :column-metadata column-name])))
 
 ;; Get formatted column label
-(rf/reg-sub
+#_(rf/reg-sub
   ::column-label
   (fn [[_ entity-name column-name]]
     (rf/subscribe [::column-metadata entity-name column-name]))
@@ -69,7 +69,7 @@
         str/capitalize))))
 
 ;; Check if column visibility has been customized
-(rf/reg-sub
+#_(rf/reg-sub
   ::columns-customized?
   (fn [[_ entity-name]]
     [(rf/subscribe [::visible-columns entity-name])
@@ -118,7 +118,7 @@
 ;; =============================================================================
 
 ;; Count visible columns
-(rf/reg-sub
+#_(rf/reg-sub
   ::visible-column-count
   (fn [[_ entity-name]]
     (rf/subscribe [::visible-columns entity-name]))
@@ -126,7 +126,7 @@
     (count visible-columns)))
 
 ;; Count hidden columns
-(rf/reg-sub
+#_(rf/reg-sub
   ::hidden-column-count
   (fn [[_ entity-name]]
     [(rf/subscribe [::all-columns entity-name])
@@ -153,7 +153,7 @@
 ;; =============================================================================
 
 ;; Generate entity specs dynamically from column config
-(rf/reg-sub
+#_(rf/reg-sub
   ::entity-spec
   (fn [[_ entity-name]]
     [(rf/subscribe [::all-columns entity-name])
@@ -192,7 +192,7 @@
     (:sortable-columns config [])))
 
 ;; Backward compatibility
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/filterable-columns
   (fn [[_ entity-keyword]]
     (rf/subscribe [::filterable-columns entity-keyword]))

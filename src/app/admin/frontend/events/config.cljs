@@ -31,14 +31,14 @@
 ;; =============================================================================
 
 ;; Load all config from EDN files
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::load-config
   (fn [{:keys [db]} _]
     (let [configs (config-loader/load-all-configs)]
       {:db (assoc-in db [:admin :config] configs)})))
 
 ;; Load saved config from localStorage (unified prefs first, then legacy)
-(rf/reg-event-db
+#_(rf/reg-event-db
   ::load-saved-column-config
   (fn [db [_ entity-name]]
     (let [entity-key (keyword entity-name)
@@ -126,7 +126,7 @@
                  (assoc-in [:ui :entity-prefs entity-key :columns :visible] visibility-map))})))))
 
 ;; Reorder columns
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::reorder-columns
   [persistence/persist-entity-prefs]
   (fn [{:keys [db]} [_ entity-name from-index to-index]]
@@ -145,7 +145,7 @@
              (assoc-in [:ui :entity-prefs entity-key :columns :visible] visibility-map))})))
 
 ;; Reset to default columns
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::reset-columns-to-default
   [persistence/persist-entity-prefs]
   (fn [{:keys [db]} [_ entity-name]]
@@ -165,14 +165,14 @@
 ;; by the main toggle/reorder/reset events.
 
 ;; Save column config to localStorage (DEPRECATED)
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::save-column-config
   (fn [_ [_ entity-name visible-columns]]
     {::save-to-local-storage {:key (str "column-visibility-" entity-name)
                               :value visible-columns}}))
 
 ;; Clear saved config (DEPRECATED)
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::clear-saved-column-config
   (fn [_ [_ entity-name]]
     {::remove-from-local-storage {:key (str "column-visibility-" entity-name)}}))

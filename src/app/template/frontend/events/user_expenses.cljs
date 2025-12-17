@@ -547,7 +547,7 @@
     {:db (assoc-in db [:user-expenses :upload :loading?] false)
      :dispatch [:navigate-to "/expenses/list"]}))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :user-expenses/upload-receipt-failure
   common-interceptors
   (fn [db [error]]

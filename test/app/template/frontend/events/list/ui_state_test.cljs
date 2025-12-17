@@ -86,25 +86,26 @@
     (testing "Nil entity leaves db unchanged"
       (let [before @rf-db/app-db]
         (rf/dispatch-sync [::ui-state-events/set-sort-field nil :any])
-        (is (= before @rf-db/app-db)))))
+        (is (= before @rf-db/app-db))))))
 
-  (deftest toggle-flags-test
-    (testing "Toggling entity-specific flags respects defaults"
-      (reset! rf-db/app-db {})
-      (rf/dispatch-sync [::test-initialize-db])
+(deftest toggle-flags-test
+  (testing "Toggling entity-specific flags respects defaults"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
 
     ;; Global defaults true for show-edit?, false for show-select?
-      (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
-      (rf/dispatch-sync [::ui-state-events/toggle-select :items])
-      (let [db @rf-db/app-db]
-        (is (false? (get-in db [:ui :entity-configs :items :show-edit?])) "Should toggle entity override from default true to false")
-        (is (true? (get-in db [:ui :entity-configs :items :show-select?])) "Should toggle entity override from default false to true"))
+    (rf/dispatch-sync [::ui-state-events/toggle-edit :items])
+    (rf/dispatch-sync [::ui-state-events/toggle-select :items])
+    (let [db @rf-db/app-db]
+      ;; toggle-entity-flag writes to new path [:ui :entity-prefs entity :display ...]
+      (is (false? (get-in db [:ui :entity-prefs :items :display :show-edit?])) "Should toggle entity override from default true to false")
+      (is (true? (get-in db [:ui :entity-prefs :items :display :show-select?])) "Should toggle entity override from default false to true"))
 
-      (testing "Global toggles mutate ui root when entity nil"
-        (rf/dispatch-sync [::ui-state-events/toggle-highlights nil])
-        (rf/dispatch-sync [::ui-state-events/toggle-timestamps nil])
-        (rf/dispatch-sync [::ui-state-events/toggle-delete nil])
-        (let [db @rf-db/app-db]
-          (is (false? (get-in db [:ui :show-highlights?])) "Global highlight toggle flips existing true → false")
-          (is (true? (get-in db [:ui :show-timestamps?])) "Global timestamps toggle flips existing false → true")
-          (is (false? (get-in db [:ui :show-delete?])) "Global delete toggle flips existing true → false"))))))
+    (testing "Global toggles mutate ui root when entity nil"
+      (rf/dispatch-sync [::ui-state-events/toggle-highlights nil])
+      (rf/dispatch-sync [::ui-state-events/toggle-timestamps nil])
+      (rf/dispatch-sync [::ui-state-events/toggle-delete nil])
+      (let [db @rf-db/app-db]
+        (is (false? (get-in db [:ui :show-highlights?])) "Global highlight toggle flips existing true → false")
+        (is (true? (get-in db [:ui :show-timestamps?])) "Global timestamps toggle flips existing false → true")
+        (is (false? (get-in db [:ui :show-delete?])) "Global delete toggle flips existing true → false")))))

@@ -19,7 +19,7 @@
 
 (def logout-handler
   "Handle logout by clearing the session"
-  (fn [req]
+  (fn [_req]
     (log/info "Processing logout request")
     (-> (response/response (json/generate-string {:success true}))
       (response/content-type "application/json")
@@ -50,7 +50,6 @@
         :else x))
     obj))
 
-
 (defn register-handler
   "Handler for user registration"
   [auth-service]
@@ -61,17 +60,16 @@
         ;; Note: We log the keys of the request, but be careful not to log the password!
         (log/info "Request keys:" (keys req))
         (log/info "Body params keys:" (keys (:body-params req)))
-        
+
         ;; Use a more robust check for password presence
         (when (or (empty? email) (empty? password))
-           (log/warn "Missing email or password in registration request")
-            (http/bad-request-response "Email and password are required"))
-           
-        (let [;; Since we pull email/password from body-params, we can just pass them to the service
-            ;; But let's verify specific params if we need to debug
-            _ (log/debug "Email present:" (not (empty? email)))
-            _ (log/debug "Password present:" (not (empty? password)))]
-        
+          (log/warn "Missing email or password in registration request")
+          (http/bad-request-response "Email and password are required"))
+
+        ;; Debug params if needed
+        (log/debug "Email present:" (not (empty? email)))
+        (log/debug "Password present:" (not (empty? password)))
+
         ;; Call registration service (handles validation, email verification and email sending)
         (let [result (auth-service/register-user-with-password!
                        auth-service
@@ -87,14 +85,14 @@
                   {:success true
                    :verification-required true
                    :message "Registration successful. Please check your email for verification."})
-                ;; Store only EDN-serializable data in Ring session cookie
-                (assoc-in [:session :auth-session] {:user sanitized-user}))
+              ;; Store only EDN-serializable data in Ring session cookie
+              (assoc-in [:session :auth-session] {:user sanitized-user}))
 
             ;; User registered successfully without verification requirement
             (-> (json-response {:success true
                                 :verification-required false
                                 :user sanitized-user})
-                (assoc-in [:session :auth-session] {:user sanitized-user})))))))))
+              (assoc-in [:session :auth-session] {:user sanitized-user}))))))))
 
 ;; NEW: Email/password login endpoint
 (defn login-handler
@@ -133,7 +131,7 @@
             (-> (json-response {:success true :user user-safe})
               ;; Store only serializable user data in session (Ring cookie store requirement)
               (assoc-in [:session :auth-session] {:user user-safe})))
-          
+
           (catch clojure.lang.ExceptionInfo e
             ;; Handle authentication failure
             (let [ex-data (ex-data e)]
@@ -144,15 +142,13 @@
                  :reason "invalid_credentials"
                  :ip ip
                  :user-agent ua})
-              
+
               ;; Return appropriate error based on exception type
               (case (:type ex-data)
                 :validation-error (http/unauthorized-response "Invalid email or password")
                 :forbidden (http/forbidden-response "Account is not active")
                 ;; Default error
                 (http/unauthorized-response "Invalid email or password")))))))))
-
-
 
 (defn auth-status-handler
   "Handle authentication status check"

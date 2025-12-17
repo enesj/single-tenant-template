@@ -38,14 +38,23 @@
    :show-filtering? true}},
  :audit-logs
  {:display-locks
-  {:show-edit? false, :show-select? true, :show-add-button? true}},
+  {:show-edit? false,
+   :show-select? true,
+   :show-add-button? false,
+   :show-batch-edit? false},
+  :display-defaults {:show-batch-delete? true}},
  :receipts
  {:display-locks
   {:show-select? true,
    :show-edit? false,
    :show-pagination? true,
    :show-filtering? true}},
- :login-events {:display-locks {:show-highlights? true}},
+ :login-events
+ {:display-locks
+  {:show-add-button? false,
+   :show-edit? false,
+   :show-batch-edit? false},
+  :display-defaults {:show-batch-delete? false}},
  :article-aliases
  {:display-locks
   {:show-select? true,

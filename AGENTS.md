@@ -4,6 +4,26 @@
 - Single-tenant SaaS template built with Clojure/ClojureScript and PostgreSQL.
 - Core structure: Admin (admin panel), Template (shared SaaS infrastructure), Domain (feature modules), Shared (cross-platform utilities).
 
+## 🚨 SCRIPTING POLICY: NO PYTHON - Babashka/Bash Only
+
+**NEVER create or run Python scripts in this repository.** This is a Clojure-focused codebase.
+
+**Use Babashka (.bb files) as the preferred scripting language** - it provides:
+- Native Clojure syntax and ecosystem access
+- Fast startup times with GraalVM
+- Seamless integration with existing Clojure code and tools
+- Rich library support for common tasks
+
+**Use Bash scripts (.sh) only when**:
+- Babashka cannot handle the specific requirement
+- Interacting with system-level tools that require shell commands
+- Simple wrapper scripts for existing tools
+
+**Why not Python?**
+- This repository uses Clojure/ClojureScript exclusively
+- Python introduces unnecessary dependencies and complexity
+- Babashka provides better integration with the existing Clojure ecosystem
+
 ## Project Structure (Quick Map)
 ```
 src/app/        # admin, template, domain, shared (plus a small frontend/ folder for global assets)

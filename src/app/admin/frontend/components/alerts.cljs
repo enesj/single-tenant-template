@@ -11,7 +11,6 @@
 ;; Page Header Components (Enhanced with Template Integration)
 ;; ============================================================================
 
-
 (defui simple-page-header
   "Simple page header with title and description.
    Enhanced to optionally use template page-header for consistency.
@@ -105,8 +104,8 @@
 ;; Status Section Components
 ;; ============================================================================
 
-(defui status-section
-  "Status section with success rates, recent events, and failures.
+#_(defui status-section
+    "Status section with success rates, recent events, and failures.
    Uses chart-list-card for consistent styling.
 
    Props:
@@ -117,97 +116,97 @@
    - :failures - Vector of failure items with :key, :title, :subtitle, :value, :date
    - :use-template-alerts? - Whether to use template alerts for events and failures
    - :container-class - Additional classes for the container"
-  [{:keys [title subtitle success-rate recent-events failures use-template-alerts? container-class]
-    :or {use-template-alerts? false
-         container-class ""}}]
-  ($ chart-list-card
-    {:title title
-     :subtitle subtitle
-     :container-class container-class
-     :children
-     ($ :div {:class "space-y-4"}
-       ;; Success Rate Summary (if provided)
-       (when success-rate
-         (let [total (:total success-rate 0)
-               successful (:successful success-rate 0)
-               rate (if (pos? total) (* 100 (/ successful total)) 100)
-               threshold (:success-threshold success-rate 90)
-               label (:label success-rate "Success Rate")]
-           ($ :div {:class "bg-gray-50 p-4 rounded-lg"}
-             ($ :div {:class "flex items-center justify-between"}
-               ($ :div
-                 ($ :div {:class "text-lg font-semibold text-gray-900"} label)
-                 ($ :div {:class "text-sm text-gray-600"}
-                   (str total " total attempts")))
-               ($ :div {:class "text-right"}
-                 ($ :div {:class (str "text-2xl font-bold "
-                                   (if (>= rate threshold) "text-green-600" "text-yellow-600"))}
-                   (str (.toFixed rate 1) "%"))
-                 ($ :div {:class "text-sm text-gray-500"}
-                   (str successful " successful")))))))
+    [{:keys [title subtitle success-rate recent-events failures use-template-alerts? container-class]
+      :or {use-template-alerts? false
+           container-class ""}}]
+    ($ chart-list-card
+      {:title title
+       :subtitle subtitle
+       :container-class container-class
+       :children
+       ($ :div {:class "space-y-4"}
+         ;; Success Rate Summary (if provided)
+         (when success-rate
+           (let [total (:total success-rate 0)
+                 successful (:successful success-rate 0)
+                 rate (if (pos? total) (* 100 (/ successful total)) 100)
+                 threshold (:success-threshold success-rate 90)
+                 label (:label success-rate "Success Rate")]
+             ($ :div {:class "bg-gray-50 p-4 rounded-lg"}
+               ($ :div {:class "flex items-center justify-between"}
+                 ($ :div
+                   ($ :div {:class "text-lg font-semibold text-gray-900"} label)
+                   ($ :div {:class "text-sm text-gray-600"}
+                     (str total " total attempts")))
+                 ($ :div {:class "text-right"}
+                   ($ :div {:class (str "text-2xl font-bold "
+                                     (if (>= rate threshold) "text-green-600" "text-yellow-600"))}
+                     (str (.toFixed rate 1) "%"))
+                   ($ :div {:class "text-sm text-gray-500"}
+                     (str successful " successful")))))))
 
-       ;; Recent Events Section (if provided)
-       (when (seq recent-events)
-         ($ :div
-           ($ :h4 {:class "font-medium text-gray-900 mb-2"} "Recent Events")
-           (if use-template-alerts?
-             ;; Use template success alerts for events
-             ($ :div {:class "space-y-2"}
-               (for [event recent-events]
-                 ($ success-alert {:key (:key event)
-                                   :message (str (:title event)
-                                              (when (:subtitle event) (str " - " (:subtitle event))))})))
-             ;; Original implementation
-             ($ :div {:class "space-y-2"}
-               (for [event recent-events]
-                 ($ :div {:key (:key event)
-                          :class (str "p-3 " (:bg-color event "bg-blue-50")
-                                   " border-l-4 " (:border-color event "border-blue-400")
-                                   " rounded")}
-                   ($ :div {:class "flex justify-between items-start"}
-                     ($ :div
-                       ($ :div {:class "font-medium text-blue-900"} (:title event))
-                       (when (:subtitle event)
-                         ($ :div {:class "text-sm text-blue-600"} (:subtitle event))))
-                     (when (:date event)
+         ;; Recent Events Section (if provided)
+         (when (seq recent-events)
+           ($ :div
+             ($ :h4 {:class "font-medium text-gray-900 mb-2"} "Recent Events")
+             (if use-template-alerts?
+               ;; Use template success alerts for events
+               ($ :div {:class "space-y-2"}
+                 (for [event recent-events]
+                   ($ success-alert {:key (:key event)
+                                     :message (str (:title event)
+                                                (when (:subtitle event) (str " - " (:subtitle event))))})))
+               ;; Original implementation
+               ($ :div {:class "space-y-2"}
+                 (for [event recent-events]
+                   ($ :div {:key (:key event)
+                            :class (str "p-3 " (:bg-color event "bg-blue-50")
+                                     " border-l-4 " (:border-color event "border-blue-400")
+                                     " rounded")}
+                     ($ :div {:class "flex justify-between items-start"}
+                       ($ :div
+                         ($ :div {:class "font-medium text-blue-900"} (:title event))
+                         (when (:subtitle event)
+                           ($ :div {:class "text-sm text-blue-600"} (:subtitle event))))
+                       (when (:date event)
+                         ($ :div {:class "text-right"}
+                           ($ :div {:class "text-xs text-gray-500"} (:date event)))))))))))
+
+         ;; Failures Section (if provided)
+         (when (seq failures)
+           ($ :div
+             ($ :h4 {:class "font-medium text-gray-900 mb-2"} "Failures")
+             (if use-template-alerts?
+               ;; Use template error alerts for failures
+               ($ :div {:class "space-y-2"}
+                 (for [failure failures]
+                   ($ error-alert {:key (:key failure)
+                                   :error {:message (:title failure)
+                                           :details {:message (:subtitle failure)
+                                                     :value (:value failure)
+                                                     :date (:date failure)}}
+                                   :entity-name "status-section"})))
+               ;; Original implementation
+               ($ :div {:class "space-y-2"}
+                 (for [failure failures]
+                   ($ :div {:key (:key failure) :class "p-3 bg-red-50 border-l-4 border-red-400 rounded"}
+                     ($ :div {:class "flex justify-between"}
+                       ($ :div
+                         ($ :div {:class "font-medium text-red-900"} (:title failure))
+                         (when (:subtitle failure)
+                           ($ :div {:class "text-sm text-red-600"} (:subtitle failure))))
                        ($ :div {:class "text-right"}
-                         ($ :div {:class "text-xs text-gray-500"} (:date event)))))))))))
-
-       ;; Failures Section (if provided)
-       (when (seq failures)
-         ($ :div
-           ($ :h4 {:class "font-medium text-gray-900 mb-2"} "Failures")
-           (if use-template-alerts?
-             ;; Use template error alerts for failures
-             ($ :div {:class "space-y-2"}
-               (for [failure failures]
-                 ($ error-alert {:key (:key failure)
-                                 :error {:message (:title failure)
-                                         :details {:message (:subtitle failure)
-                                                   :value (:value failure)
-                                                   :date (:date failure)}}
-                                 :entity-name "status-section"})))
-             ;; Original implementation
-             ($ :div {:class "space-y-2"}
-               (for [failure failures]
-                 ($ :div {:key (:key failure) :class "p-3 bg-red-50 border-l-4 border-red-400 rounded"}
-                   ($ :div {:class "flex justify-between"}
-                     ($ :div
-                       ($ :div {:class "font-medium text-red-900"} (:title failure))
-                       (when (:subtitle failure)
-                         ($ :div {:class "text-sm text-red-600"} (:subtitle failure))))
-                     ($ :div {:class "text-right"}
-                       (when (:value failure)
-                         ($ :div {:class "font-bold text-red-600"} (:value failure)))
-                       (when (:date failure)
-                         ($ :div {:class "text-xs text-gray-500"} (:date failure))))))))))))}))
+                         (when (:value failure)
+                           ($ :div {:class "font-bold text-red-600"} (:value failure)))
+                         (when (:date failure)
+                           ($ :div {:class "text-xs text-gray-500"} (:date failure))))))))))))}))
 
 ;; ============================================================================
 ;; Notification Helper Components
 ;; ============================================================================
 
 ;; Re-export notification-banner from template namespace for backward compatibility
-(def notification-banner notification-banner)
+#_(def notification-banner notification-banner)
 
 ;; Re-export toast-notification from template namespace for backward compatibility
-(def toast-notification toast-notification)
+#_(def toast-notification toast-notification)

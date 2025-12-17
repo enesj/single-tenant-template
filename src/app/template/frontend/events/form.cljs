@@ -139,7 +139,7 @@
 ;; template success handlers above.
 ;; --------------------------------------------------------------------------
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :app.template.frontend.events.form/default-create-success
   common-interceptors
   (fn [{:keys [db]} [entity-type response]]
@@ -148,7 +148,7 @@
        :fx (when (and entity-type (keyword? entity-type))
              [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :app.template.frontend.events.form/default-update-success
   common-interceptors
   (fn [{:keys [db]} [entity-type provided-id response]]

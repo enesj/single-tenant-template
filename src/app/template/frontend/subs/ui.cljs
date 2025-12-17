@@ -123,7 +123,7 @@
 
 ;; Returns the full resolved settings including :effective, :locked, and :defaults.
 ;; This is the primary subscription for components that need lock information.
-(rf/reg-sub
+#_(rf/reg-sub
   ::resolved-display-settings
   (fn [db [_ entity-name]]
     (if entity-name

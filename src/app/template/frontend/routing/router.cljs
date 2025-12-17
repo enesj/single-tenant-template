@@ -3,7 +3,8 @@
   directly depending on the router construction site.
 
   `app.template.frontend.routes/init-routes!` sets the router at startup.
-  Other namespaces (e.g. routing events) can then call `match-by-path`.")
+  Other namespaces (e.g. routing events) can then call `match-by-path`."
+  (:require [reitit.frontend :as rf]))
 
 (defonce ^:private !router (atom nil))
 
@@ -24,4 +25,4 @@
   Returns a reitit match map or nil if no router is registered or no match exists."
   [path]
   (when-let [router (get-router)]
-    (reitit.frontend/match-by-path router path)))
+    (rf/match-by-path router path)))

@@ -11,7 +11,7 @@
 ;; Bulk Update User Status Events
 ;; ============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/bulk-update-user-status
   (fn [{:keys [db]} [_ user-ids new-status]]
     (utils/log-user-operation "Bulk updating user status" (count user-ids) "users to" new-status)
@@ -47,7 +47,7 @@
 ;; Bulk Update User Role Events
 ;; ============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/bulk-update-user-role
   (fn [{:keys [db]} [_ user-ids new-role]]
     (utils/log-user-operation "Bulk updating user role" (count user-ids) "users to" new-role)
@@ -83,7 +83,7 @@
 ;; Export Users Events
 ;; ============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/export-users
   (fn [{:keys [db]} [_ user-ids]]
     (utils/log-user-operation "Exporting users" (count user-ids) "users")

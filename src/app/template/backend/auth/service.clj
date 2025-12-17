@@ -269,9 +269,9 @@
 
 (defrecord AuthenticationService [db metadata oauth-providers session-manager password-manager email-service]
   core-protocols/BusinessService
-  (initialize [this]
-    (log/info "Initializing authentication service")
-    this)
+  #_(initialize [this]
+      (log/info "Initializing authentication service")
+      this)
 
   (cleanup [this]
     (log/info "Cleaning up authentication service")

@@ -7,7 +7,7 @@
     [app.template.frontend.api :as api]
     [re-frame.db :as rf-db]
     [clojure.string :as str]
-    [taoensso.timbre :as log]))
+    #_[taoensso.timbre :as log]))
 
 ;;; -------------------------
 ;;; Request Formats
@@ -21,13 +21,13 @@
   "Standard JSON response format with keyword keys"
   (ajax/json-response-format {:keywords? true}))
 
-(def transit-request-format
-  "Transit request format for rich data types"
-  (ajax/transit-request-format))
+#_(def transit-request-format
+    "Transit request format for rich data types"
+    (ajax/transit-request-format))
 
-(def transit-response-format
-  "Transit response format with keyword keys"
-  (ajax/transit-response-format {:keywords? true}))
+#_(def transit-response-format
+    "Transit response format with keyword keys"
+    (ajax/transit-response-format {:keywords? true}))
 
 ;;; -------------------------
 ;;; Core Request Builder
@@ -52,7 +52,7 @@
     headers (assoc :headers headers)))
 
 ;; Alias for backwards compatibility
-(def build-request api-request)
+#_(def build-request api-request)
 
 ;;; -------------------------
 ;;; HTTP Method Helpers
@@ -78,10 +78,10 @@
   [{:keys [_uri _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :delete)))
 
-(defn patch-request
-  "Create a PATCH request configuration"
-  [{:keys [_uri params _on-success _on-failure] :as opts}]
-  (api-request (assoc opts :method :patch :params params)))
+#_(defn patch-request
+    "Create a PATCH request configuration"
+    [{:keys [_uri params _on-success _on-failure] :as opts}]
+    (api-request (assoc opts :method :patch :params params)))
 
 ;;; -------------------------
 ;;; Entity CRUD Operations
@@ -105,9 +105,9 @@
 
 (defn- get-admin-token []
   (or (try (:admin/token @rf-db/app-db) (catch :default _ nil))
-      (try (when (exists? js/localStorage)
-             (.getItem js/localStorage "admin-token"))
-        (catch :default _ nil))))
+    (try (when (exists? js/localStorage)
+           (.getItem js/localStorage "admin-token"))
+      (catch :default _ nil))))
 
 (defn- admin-context?
   "Best-effort detection that we are inside the admin bundle.  We rely on
@@ -120,8 +120,8 @@
         hostname (when (exists? js/window)
                    (some-> js/window .-location .-hostname))]
     (boolean (or token
-                 (and pathname (str/includes? pathname "/admin"))
-                 (and hostname (str/includes? (str/lower-case hostname) "admin"))))))
+               (and pathname (str/includes? pathname "/admin"))
+               (and hostname (str/includes? (str/lower-case hostname) "admin"))))))
 
 (defn create-entity
   "Create a new entity"
@@ -179,12 +179,12 @@
        :on-failure on-failure})))
 
 ;; Legacy function names for compatibility
-(def entity-get-all get-entities)
-(def entity-get-by-id get-entity)
-(def entity-create create-entity)
-(def entity-update update-entity)
-(def entity-delete delete-entity)
-(def entity-batch-update batch-update-entities)
+#_(def entity-get-all get-entities)
+#_(def entity-get-by-id get-entity)
+#_(def entity-create create-entity)
+#_(def entity-update update-entity)
+#_(def entity-delete delete-entity)
+#_(def entity-batch-update batch-update-entities)
 
 ;;; -------------------------
 ;;; Error Handling
@@ -195,42 +195,42 @@
   [response]
   (http/extract-error-message response))
 
-(defn log-request-error
-  "Log request errors with context"
-  [context response]
-  (log/error (str "Request failed - " context ": ")
-    (extract-error-message response)))
+#_(defn log-request-error
+    "Log request errors with context"
+    [context response]
+    (log/error (str "Request failed - " context ": ")
+      (extract-error-message response)))
 
 ;;; -------------------------
 ;;; Request Interceptors
 ;;; -------------------------
 
-(defn with-loading-state
-  "Add loading state management to request - Loading is now handled by fetch events"
-  [_entity-type config]
+#_(defn with-loading-state
+    "Add loading state management to request - Loading is now handled by fetch events"
+    [_entity-type config]
   ;; Loading state is now managed by fetch-entities/fetch-success/fetch-failure events
   ;; This function is kept for backwards compatibility but is effectively a no-op
-  config)
+    config)
 
-(defn with-error-handling
-  "Add error handling to request"
-  [entity-type config]
-  (update config :on-failure
-    #(vec (concat [:app.template.frontend.events.list.crud/fetch-failure entity-type]
-            (if (vector? %) % [%])))))
+#_(defn with-error-handling
+    "Add error handling to request"
+    [entity-type config]
+    (update config :on-failure
+      #(vec (concat [:app.template.frontend.events.list.crud/fetch-failure entity-type]
+              (if (vector? %) % [%])))))
 
-(defn with-error-state
-  "Add error state management to request"
-  [request error-path]
-  (-> request
-    (update :on-failure #(into [[:db/assoc-in error-path (extract-error-message %)]] %))))
+#_(defn with-error-state
+    "Add error state management to request"
+    [request error-path]
+    (-> request
+      (update :on-failure #(into [[:db/assoc-in error-path (extract-error-message %)]] %))))
 
-(defn add-auth-header
-  "Add authorization header to request"
-  [request token]
-  (assoc-in request [:headers "Authorization"] (str "Bearer " token)))
+#_(defn add-auth-header
+    "Add authorization header to request"
+    [request token]
+    (assoc-in request [:headers "Authorization"] (str "Bearer " token)))
 
-(defn add-csrf-token
-  "Add CSRF token to request headers"
-  [request token]
-  (assoc-in request [:headers "X-CSRF-Token"] token))
+#_(defn add-csrf-token
+    "Add CSRF token to request headers"
+    [request token]
+    (assoc-in request [:headers "X-CSRF-Token"] token))

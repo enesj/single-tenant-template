@@ -97,7 +97,7 @@
                  (and (= mode :edit) (nil? selected-entity))
                  (assoc-in [:admin :unified-settings :selected-entity] default-entity)))})))
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::toggle-mode
   (fn [{:keys [db]} _]
     (let [current-mode (get-in db [:admin :unified-settings :mode] :view)
@@ -257,7 +257,7 @@
     (get-in db [:admin :user-settings :draft :view-options] {})))
 
 ;; All configs for overview mode
-(rf/reg-sub
+#_(rf/reg-sub
   ::overview-configs
   :<- [::admin-view-options]
   :<- [::user-view-options]

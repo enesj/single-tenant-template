@@ -1,8 +1,12 @@
 (ns app.shared.events.core
-  (:require [re-frame.core :as rf]))
+  "Generic re-frame event handlers.
+   
+   NOTE: Reader-discarded - handlers not used. Project uses http interceptors
+   for success/error handling instead of these generic dispatchers."
+  #_(:require [re-frame.core :as rf]))
 
-(defn success-handler [_db event-vec response]
-  (rf/dispatch (conj event-vec response)))
+#_(defn success-handler [_db event-vec response]
+    (rf/dispatch (conj event-vec response)))
 
-(defn error-handler [_db event-vec error]
-  (rf/dispatch (conj event-vec error)))
+#_(defn error-handler [_db event-vec error]
+    (rf/dispatch (conj event-vec error)))

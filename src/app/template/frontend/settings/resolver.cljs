@@ -127,7 +127,7 @@
    {:effective {...}  ; final values for UI
     :locked    {...}  ; keys that are locked (and their locked values)
     :defaults  {...}} ; resolved defaults for 'reset' UX"
-  [entity-key {:keys [view-options entity-config user-prefs legacy-prefs]}]
+  [_entity-key {:keys [view-options entity-config user-prefs legacy-prefs]}]
   (let [;; 1. Parse view-options (locks + defaults)
         {:keys [defaults locks]} (parse-view-options view-options)
         view-options-defaults defaults

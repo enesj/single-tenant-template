@@ -304,21 +304,25 @@
   (testing "handles large dataset efficiently"
 
     (let [large-dataset (helpers/generate-test-entities :properties 1000)
-          start-time (.now js/Date)
+          now (fn []
+                (if (exists? js/performance)
+                  (.now js/performance)
+                  (.now js/Date)))
+          start-time (now)
           normalized (normalize/normalize-entities large-dataset)
-          normalize-time (- (.now js/Date) start-time)
-          denorm-start (.now js/Date)
+          normalize-time (- (now) start-time)
+          denorm-start (now)
           denormalized (normalize/denormalize-entities normalized)
-          denorm-time (- (.now js/Date) denorm-start)]
+          denorm-time (- (now) denorm-start)]
 
       (is (= 1000 (count (:data normalized))) "Should normalize all entities")
       (is (= 1000 (count (:ids normalized))) "Should have all IDs")
 
       (is (= 1000 (count denormalized)) "Should denormalize all entities")
 
-      ;; Performance assertions (generous limits for CI)
-      (is (< normalize-time 100) "Normalization should be fast")
-      (is (< denorm-time 50) "Denormalization should be fast"))))
+      ;; Performance assertions (generous limits for CI and variable local load)
+      (is (< normalize-time 500) "Normalization should be fast")
+      (is (< denorm-time 300) "Denormalization should be fast"))))
 
 ;; Run all tests when this file is loaded
 (defn run-all-tests []

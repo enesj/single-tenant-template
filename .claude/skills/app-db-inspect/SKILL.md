@@ -1,203 +1,68 @@
 ---
-description: Inspect ClojureScript re-frame app-db state safely when debugging frontend state issues, authentication problems, data loading status, route inconsistencies, or UI state. Use when user mentions app-db, re-frame state, frontend debugging, or asks about current application state.
+description: Inspect re-frame app-db state safely in ClojureScript when debugging frontend state (auth/session, routing, data loading, UI state).
 allowed-tools:
   - clojure-mcp:clojurescript_eval
 ---
 
-# App-DB Inspect Skill
+# app-db-inspect
 
-Safely inspects re-frame app-db state in ClojureScript applications without encountering `IDeref` protocol errors.
+Use this when someone asks “what’s in app-db?” or you need quick, safe snapshots of frontend state.
 
-## When to Use This Skill
+## Use when
+- Auth/session looks wrong (logged out, missing user/tenant)
+- Route/navigation mismatch (wrong page, redirect loop)
+- Data not loading (entity stores stuck loading, errors)
+- UI state/config questions (theme, sidebar, settings)
 
-Trigger when user asks about:
-- Current frontend state or re-frame app-db
-- Authentication issues (login, session, user info, tenant context)
-- Data loading status or entity stores
-- Route/navigation state inconsistencies
-- UI state, theme, or interface configuration
-- Errors, warnings, or state inconsistencies
-- Keywords: "app-db", "re-frame state", "frontend state", "application state"
-
-## Core Inspection Pattern
-
-Always wrap inspection code with proper error handling:
+## Fast check (copy/paste)
 
 ```clojure
 (try
   (if (exists? re-frame.db/app-db)
-    (let [app-db @re-frame.db/app-db]
-      ;; Replace this map with focused inspection per request
-      {:success true
-       :data {:session (select-keys (get app-db :session {})
-                                   [:authenticated? :session-valid? :user :tenant-id])
-              :current-route (select-keys (get app-db :current-route {})
-                                          [:template :name :parameters])
-              :ui (get app-db :ui)
-              :entities (keys (get app-db :entities {}))}})
-    {:success false
-     :error "app-db not found - ensure re-frame is initialized"})
+    (let [db @re-frame.db/app-db]
+      {:ok? true
+       :auth (select-keys (get db :session {})
+                          [:authenticated? :session-valid? :tenant-id :tenant-name])
+       :user (select-keys (get-in db [:session :user] {})
+                          [:id :email :name])
+       :route (select-keys (get db :current-route {})
+                           [:template :name :parameters])
+       :entities (->> (keys (get db :entities {})) sort vec)})
+    {:ok? false
+     :error "re-frame.db/app-db not found (app not initialized / build not connected yet)"})
   (catch js/Error e
-    {:success false
-     :error (str "Inspection failed: " (.-message e))}))
+    {:ok? false :error (.-message e)}))
 ```
 
-## Focus-Based Inspection
+## Focused snippets
 
-Determine what to inspect based on user keywords:
-
-| Keywords | Focus | Code Section |
-|----------|-------|--------------|
-| Auth, login, session, authenticated | `:session` | Auth summary below |
-| Entity, data, loading, fetch | `:entities` | Entities overview below |
-| Route, navigation, page, url | `:current-route` | Route info below |
-| Error, warning, bug, problem, issue | Error metadata | Error detection below |
-| UI, theme, interface, display | `:ui` | UI state below |
-
-## Common Code Snippets
-
-### Authentication Summary
-
+### Auth/session summary
 ```clojure
-(let [app-db @re-frame.db/app-db]
-  {:auth-summary
-   {:authenticated? (get-in app-db [:session :authenticated?])
-    :session-valid? (get-in app-db [:session :session-valid?])
-    :user-email (get-in app-db [:session :user :email])
-    :tenant-id (get-in app-db [:session :tenant-id])
-    :tenant-name (get-in app-db [:session :tenant-name])}})
+(let [db @re-frame.db/app-db]
+  (select-keys (get db :session {})
+               [:authenticated? :session-valid? :user :tenant-id :tenant-name]))
 ```
 
-### Route Info
-
+### Current route
 ```clojure
-(let [app-db @re-frame.db/app-db]
-  {:route-info
-   (select-keys (get app-db :current-route {})
-                [:template :name :parameters])})
+(let [db @re-frame.db/app-db]
+  (select-keys (get db :current-route {})
+               [:template :name :parameters]))
 ```
 
-### Entities Overview
-
+### Entity store health (loading/errors/counts)
 ```clojure
-(let [app-db @re-frame.db/app-db]
-  {:entities-overview
-   (->> (get app-db :entities {})
-        (map (fn [[entity-type data]]
-               [entity-type
-                {:total-items (get-in data [:metadata :total-items] 0)
-                 :loading? (get-in data [:metadata :loading?] false)
-                 :has-data? (boolean (seq (get data :data {})))
-                 :error (get-in data [:metadata :error])}]))
-        (into {}))})
+(let [db @re-frame.db/app-db]
+  (->> (get db :entities {})
+       (map (fn [[entity-type store]]
+              [entity-type
+               {:loading? (get-in store [:metadata :loading?] false)
+                :total-items (get-in store [:metadata :total-items] 0)
+                :error (get-in store [:metadata :error])
+                :item-count (count (get store :data {}))}]))
+       (into {})))
 ```
-
-### UI State
-
-```clojure
-(let [app-db @re-frame.db/app-db]
-  {:ui-state
-   {:theme (get-in app-db [:ui :theme])
-    :sidebar-open? (get-in app-db [:ui :sidebar-open?])
-    :pagination (get-in app-db [:ui :pagination])}})
-```
-
-### Error Detection
-
-```clojure
-(let [app-db @re-frame.db/app-db]
-  {:errors-and-warnings
-   {:validation-errors (get app-db :validation-errors)
-    :api-errors (->> (get app-db :entities {})
-                     (filter (fn [[_ data]] (get-in data [:metadata :error])))
-                     (map (fn [[k v]] [k (get-in v [:metadata :error])]))
-                     (into {}))
-    :route-auth-mismatch? (and (not (get-in app-db [:session :authenticated?]))
-                               (not= (get-in app-db [:current-route :template]) "/login"))}})
-```
-
-## Debugging Scenarios
-
-### "Not Logged In" Issue
-
-```clojure
-(let [app-db @re-frame.db/app-db
-      authenticated? (get-in app-db [:session :authenticated?])
-      session-valid? (get-in app-db [:session :session-valid?])
-      has-user? (boolean (get-in app-db [:session :user]))
-      current-route (get-in app-db [:current-route :template])]
-  {:debug-auth
-   {:authenticated? authenticated?
-    :session-valid? session-valid?
-    :has-user? has-user?
-    :current-route current-route
-    :diagnosis (cond
-                 (not authenticated?) "User is not authenticated"
-                 (not session-valid?) "Session expired or invalid"
-                 (not has-user?) "Missing user data - possible API failure"
-                 :else "Authentication state appears valid")}})
-```
-
-### Data Not Loading
-
-```clojure
-(let [app-db @re-frame.db/app-db]
-  {:debug-loading
-   (->> (get app-db :entities {})
-        (map (fn [[entity-type store]]
-               [entity-type
-                {:loading? (get-in store [:metadata :loading?])
-                 :has-data? (boolean (seq (get store :data {})))
-                 :error (get-in store [:metadata :error])
-                 :item-count (count (get store :data {}))}]))
-        (into {}))})
-```
-
-### Route/Auth Mismatch
-
-```clojure
-(let [app-db @re-frame.db/app-db
-      authenticated? (get-in app-db [:session :authenticated?])
-      current-route (get-in app-db [:current-route :template])
-      protected-routes #{"admin" "/dashboard" "/properties"}
-      is-protected? (some #(clojure.string/starts-with? current-route %)
-                          protected-routes)]
-  {:route-auth-check
-   {:authenticated? authenticated?
-    :current-route current-route
-    :is-protected? is-protected?
-    :should-redirect? (and is-protected? (not authenticated?))
-    :diagnosis (if (and is-protected? (not authenticated?))
-                 "User on protected route without authentication - should redirect to /login"
-                 "Route/auth state is consistent")}})
-```
-
-## Best Practices
-
-1. **Always check existence**: Use `(exists? re-frame.db/app-db)` before deref
-2. **Use safe access**: Prefer `get-in` with defaults over direct nested access
-3. **Handle empty data**: Assume keys may be missing; provide sensible defaults
-4. **Structure output**: Return well-organized maps with clear keys
-5. **Include metadata**: Add `:success` flag and `:error` on failure
-6. **Detect inconsistencies**: Look for auth-route mismatches, loading without data, API errors
-7. **Provide context**: Explain what state means in brief natural language after showing the map
-
-## Example Output
-
-```clojure
-{:auth-summary
- {:authenticated? false,
-  :session-valid? true,
-  :user-email nil,
-  :tenant-id nil,
-  :tenant-name nil}}
-```
-
-Interpretation: Session is valid but user is not authenticated. This is normal for unauthenticated visitors or after logout.
 
 ## Troubleshooting
-
-- **app-db not found** → Ensure re-frame is initialized in the application (check browser console)
-- **Errors during eval** → Verify the ClojureScript build is running and browser is connected
-- **Missing data paths** → Not all keys exist in all states; use `get-in` with defaults gracefully
-- **stale data** → Re-frame may not have loaded entities yet; check `:loading?` flag in metadata
+- `app-db not found`: open the app in the browser and ensure the CLJS build is connected/initialized.
+- Missing keys: not every screen populates the same paths; use `get-in` with defaults.

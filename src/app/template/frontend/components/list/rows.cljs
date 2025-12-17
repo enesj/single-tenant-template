@@ -4,31 +4,31 @@
    This module uses reactive cell components from the cells module for selection
    and actions. Components are re-exported for backward compatibility."
   (:require
-   [app.template.frontend.utils.id :as id-utils]
-   [app.shared.keywords :as kw]
-   [app.template.frontend.components.form :refer [form]]
-   [app.template.frontend.components.list.cells :as cells]
-   [app.template.frontend.components.list.fields :refer [get-field-display-value]] ;; Import reactive cell components from the cells module
-   [app.template.frontend.events.form :as form-events]
-   [app.template.frontend.events.list.crud :as crud-events]
-   [re-frame.core :as rf]
-   [uix.core :as uix :refer [$]]))
+    [app.template.frontend.utils.id :as id-utils]
+    [app.shared.keywords :as kw]
+    [app.template.frontend.components.form :refer [form]]
+    [app.template.frontend.components.list.cells :as cells]
+    [app.template.frontend.components.list.fields :refer [get-field-display-value]] ;; Import reactive cell components from the cells module
+    [app.template.frontend.events.form :as form-events]
+    [app.template.frontend.events.list.crud :as crud-events]
+    [re-frame.core :as rf]
+    [uix.core :as uix :refer [$]]))
 
 ;; =============================================================================
 ;; Re-exports from cells module for backward compatibility
 ;; =============================================================================
 
 ;; Re-export select-checkbox for existing code that imports from rows
-(def select-checkbox cells/select-checkbox)
+#_(def select-checkbox cells/select-checkbox)
 
 ;; Re-export select-all-checkbox for existing code that imports from rows
-(def select-all-checkbox cells/select-all-checkbox)
+#_(def select-all-checkbox cells/select-all-checkbox)
 
 ;; Re-export reactive-selection-cell for existing code that imports from rows
-(def reactive-selection-cell cells/reactive-selection-cell)
+#_(def reactive-selection-cell cells/reactive-selection-cell)
 
 ;; Re-export action-buttons for existing code that imports from rows
-(def action-buttons cells/action-buttons)
+#_(def action-buttons cells/action-buttons)
 
 ;; =============================================================================
 ;; Row Content Generation

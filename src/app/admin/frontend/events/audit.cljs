@@ -298,7 +298,7 @@
 
       {:db (assoc-in db [:admin :success-message] "Audit log exported successfully")})))
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/export-selected-audit-logs
   (fn [{:keys [db]} [_ audit-ids format]]
     (let [token (or (get-in db [:admin :token])
@@ -363,7 +363,7 @@
 ;; Pagination
 ;; ============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/audit-change-page
   (fn [_ [_ page]]
     (log/info "Changing audit logs page to:" page)
@@ -371,7 +371,7 @@
       {:dispatch-n [[::ui-events/set-current-page :audit-logs safe-page]
                     [:admin/load-audit-logs]]})))
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/audit-change-page-size
   (fn [_ [_ page-size]]
     (log/info "Changing audit logs page size to:" page-size)
@@ -387,7 +387,7 @@
 ;; Sorting
 ;; ============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/audit-sort-by
   (fn [_ [_ field direction]]
     (log/info "Sorting audit logs by:" field direction)

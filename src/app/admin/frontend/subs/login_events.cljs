@@ -15,13 +15,13 @@
 
 ;; Template compatibility aliases so use-entity-state can use :login-events
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/login-events-logs-loading?
   :<- [:admin/login-events-loading?]
   (fn [loading? _]
     loading?))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/login-events-logs-error
   :<- [:admin/login-events-error]
   (fn [error _]

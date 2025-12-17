@@ -7,7 +7,7 @@
   (fn [db _]
     (get-in db [:ui :entity-name])))
 
-(rf/reg-sub
+#_(rf/reg-sub
   ::editing-id
   (fn [db _]
     (get-in db [:ui :editing-id])))
@@ -17,7 +17,7 @@
   (fn [db _]
     (get-in db [:ui :show-add-form])))
 
-(rf/reg-sub
+#_(rf/reg-sub
   ::get-db
   (fn [db _]
     db))
@@ -80,7 +80,7 @@
   (fn [db _]
     (get-in db [:session :permissions] #{})))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :user-can?
   :<- [:user-permissions]
   (fn [permissions [_ permission]]
@@ -135,7 +135,7 @@
   (fn [db _]
     (get-in db [:password-reset :error])))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :password-reset/message
   (fn [db _]
     (get-in db [:password-reset :message])))
@@ -169,7 +169,7 @@
   (fn [db _]
     (get-in db [:change-password :error])))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :change-password/message
   (fn [db _]
     (get-in db [:change-password :message])))
@@ -178,7 +178,7 @@
 ;; Role-Based Access Subscriptions
 ;; ========================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :user/has-expenses-access?
   :<- [:user-role]
   (fn [role _]
@@ -186,7 +186,7 @@
     ;; unassigned and viewer roles do not have access
     (contains? #{"member" "admin" "owner"} role)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :user/is-unassigned?
   :<- [:user-role]
   (fn [role _]

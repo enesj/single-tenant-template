@@ -269,7 +269,7 @@
             fields-to-show))))))
 
 ;; Admin form entity specs subscription - uses form-fields.edn when available
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/form-entity-specs-by-name
   (fn [db [_ entity-name editing?]]
     (or (generate-admin-form-entity-spec-from-db db entity-name editing?)

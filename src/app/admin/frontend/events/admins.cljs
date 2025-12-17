@@ -96,7 +96,7 @@
     (let [db' (handle-admin-api-error db error :admin/loading-admin-details :admin/admin-details-error "load admin details")]
       (assoc db' :admin/admin-details-modal-open? true))))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :admin/hide-admin-details
   (fn [db _]
     (-> (clear-loading-db-state db :admin/loading-admin-details)
@@ -256,7 +256,7 @@
 ;; Fetch Entities Integration (for template system)
 ;; ============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/fetch-admins-entities
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/entity-loading? :admins) true)

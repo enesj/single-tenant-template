@@ -4,14 +4,13 @@
    Provides common string manipulation functions that work consistently
    across Clojure and ClojureScript environments."
   (:require
-    [clojure.set]
     [clojure.string]))
 
 ;; ========================================
 ;; String Case Conversion
 ;; ========================================
 
-(defn kebab-case
+#_(defn kebab-case
   "Convert string to kebab-case (e.g., 'Hello World' -> 'hello-world')"
   [s]
   (when s
@@ -21,7 +20,7 @@
       (clojure.string/replace #"[^a-zA-Z0-9]+" "-")
       (clojure.string/replace #"^-|-$" ""))))
 
-(defn snake-case
+#_(defn snake-case
   "Convert string to snake_case (e.g., 'Hello World' -> 'hello_world')"
   [s]
   (when s
@@ -42,7 +41,7 @@
           (clojure.string/join ""
             (map clojure.string/capitalize (rest words))))))))
 
-(defn pascal-case
+#_(defn pascal-case
   "Convert string to PascalCase (e.g., 'hello-world' -> 'HelloWorld')"
   [s]
   (when s
@@ -53,7 +52,7 @@
 ;; String Cleaning and Normalization
 ;; ========================================
 
-(defn slugify
+#_(defn slugify
   "Convert string to URL-friendly slug"
   [s]
   (when s
@@ -64,7 +63,7 @@
       (clojure.string/replace #"[\s_-]+" "-")
       (clojure.string/replace #"^-|-$" ""))))
 
-(defn clean-whitespace
+#_(defn clean-whitespace
   "Clean up whitespace in string (trim and normalize internal whitespace)"
   [s]
   (when s
@@ -73,13 +72,13 @@
       clojure.string/trim
       (clojure.string/replace #"\s+" " "))))
 
-(defn remove-non-alphanumeric
+#_(defn remove-non-alphanumeric
   "Remove all non-alphanumeric characters except spaces"
   [s]
   (when s
     (clojure.string/replace (str s) #"[^a-zA-Z0-9\s]" "")))
 
-(defn normalize-phone
+#_(defn normalize-phone
   "Normalize phone number to digits only"
   [phone]
   (when phone
@@ -89,7 +88,7 @@
 ;; String Truncation and Ellipsis
 ;; ========================================
 
-(defn truncate
+#_(defn truncate
   "Truncate string to max-length, optionally adding suffix"
   ([s max-length]
    (truncate s max-length "..."))
@@ -100,7 +99,7 @@
          s-str
          (str (subs s-str 0 (- max-length (count suffix))) suffix))))))
 
-(defn truncate-words
+#_(defn truncate-words
   "Truncate string to max number of words"
   ([s max-words]
    (truncate-words s max-words "..."))
@@ -111,7 +110,7 @@
          (clojure.string/join " " words)
          (str (clojure.string/join " " (take max-words words)) suffix))))))
 
-(defn ellipsis-middle
+#_(defn ellipsis-middle
   "Add ellipsis in middle of string if too long"
   [s max-length]
   (when s
@@ -127,7 +126,7 @@
 ;; String Interpolation and Templates
 ;; ========================================
 
-(defn interpolate
+#_(defn interpolate
   "Safe string interpolation using a map of replacements.
 
    Example: (interpolate 'Hello {{name}}!' {:name 'World'})
@@ -140,7 +139,7 @@
       (str template)
       (or replacements {}))))
 
-(defn template-vars
+#_(defn template-vars
   "Extract template variable names from a string.
 
    Example: (template-vars 'Hello {{name}} {{surname}}!')
@@ -154,35 +153,35 @@
 ;; String Validation Helpers
 ;; ========================================
 
-(defn blank?
+#_(defn blank?
   "Check if string is nil, empty, or contains only whitespace"
   [s]
   (or (nil? s)
     (and (string? s) (clojure.string/blank? s))))
 
-(defn not-blank?
+#_(defn not-blank?
   "Check if string is not blank"
   [s]
   (not (blank? s)))
 
-(defn non-empty-string?
+#_(defn non-empty-string?
   "Check if value is a non-empty string"
   [s]
   (and (string? s) (not (clojure.string/blank? s))))
 
-(defn starts-with-any?
+#_(defn starts-with-any?
   "Check if string starts with any of the given prefixes"
   [s prefixes]
   (when (and s (seq prefixes))
     (some #(clojure.string/starts-with? (str s) (str %)) prefixes)))
 
-(defn ends-with-any?
+#_(defn ends-with-any?
   "Check if string ends with any of the given suffixes"
   [s suffixes]
   (when (and s (seq suffixes))
     (some #(clojure.string/ends-with? (str s) (str %)) suffixes)))
 
-(defn contains-any?
+#_(defn contains-any?
   "Check if string contains any of the given substrings"
   [s substrings]
   (when (and s (seq substrings))
@@ -192,7 +191,7 @@
 ;; String Comparison Utilities
 ;; ========================================
 
-(defn similarity-score
+#_(defn similarity-score
   "Calculate similarity score between two strings (0.0 to 1.0)
    Using simple character overlap ratio"
   [s1 s2]
@@ -207,7 +206,7 @@
         1.0
         (double (/ (count intersection) (count union)))))))
 
-(defn fuzzy-match?
+#_(defn fuzzy-match?
   "Check if strings are similar within threshold (0.0 to 1.0)"
   [s1 s2 threshold]
   (>= (similarity-score s1 s2) threshold))
@@ -216,7 +215,7 @@
 ;; Number and Currency Formatting
 ;; ========================================
 
-(defn format-currency
+#_(defn format-currency
   "Format number as currency string"
   ([amount] (format-currency amount "$"))
   ([amount symbol]
@@ -224,14 +223,14 @@
      #?(:clj (format "%s%.2f" symbol (double amount))
         :cljs (str symbol (.toFixed (js/Number amount) 2))))))
 
-(defn format-number
+#_(defn format-number
   "Format number with thousands separators"
   [n]
   (when n
     #?(:clj (format "%,d" (long n))
        :cljs (.toLocaleString (js/Number n)))))
 
-(defn format-percentage
+#_(defn format-percentage
   "Format number as percentage"
   ([ratio] (format-percentage ratio 1))
   ([ratio decimals]
@@ -243,7 +242,7 @@
 ;; Platform-specific String Operations
 ;; ========================================
 
-(defn safe-parse-int
+#_(defn safe-parse-int
   "Safely parse string to integer, returning nil on failure"
   [s]
   (when (and s (string? s))

@@ -45,7 +45,8 @@
                     :field field
                     :value v})))))))
 
-(defn- parse-boolean
+(defn- parse-bool
+  "Parse boolean value. Named parse-bool to avoid shadowing clojure.core/parse-boolean."
   [v]
   (let [v (blank->nil v)]
     (cond
@@ -134,7 +135,7 @@
     (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
     (update-if-present :purchased_at #(parse-instant! :purchased_at %))
     (update-if-present :total_amount #(parse-bigdec! :total_amount %))
-    (update-if-present :is_posted parse-boolean)))
+    (update-if-present :is_posted parse-bool)))
 
 ;; ============================================================================
 ;; Core

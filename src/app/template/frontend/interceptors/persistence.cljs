@@ -183,7 +183,7 @@
 ;; Call this during app initialization.
 (rf/reg-event-fx
   ::migrate-all-legacy-column-visibility
-  (fn [{:keys [db]} [_ entity-names]]
+  (fn [_cofx [_ entity-names]]
     (let [entities-to-migrate (or entity-names
                                   ;; Default admin entities
                                 [:users :admins :audit-logs :login-events])]

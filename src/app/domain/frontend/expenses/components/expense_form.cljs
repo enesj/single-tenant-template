@@ -86,12 +86,12 @@
 ;; =============================================================================
 
 (defui expense-form-body
-  [{:keys [mode initial-data on-submit on-cancel loading?]}]
+  [{:keys [mode initial-data on-submit on-cancel _loading?]}]
   (let [suppliers (use-subscribe [:expenses/suppliers])
         payers (use-subscribe [:expenses/payers])
         ;; Generate spec with current options
         entity-spec (get-expense-form-spec suppliers payers)
-        
+
         ;; Prepare initial values
         default-values {:currency "BAM"
                         :purchased_at (current-datetime-local)

@@ -194,7 +194,7 @@
   (fn [db _]
     (assoc-in db [:auth :verification-email-sent-modal] false)))
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :auth/fetch-verification-status
   (fn [_ _]
     {:http-xhrio {:method :get
@@ -232,7 +232,7 @@
   (fn [db _]
     (get-in db [:auth :verification-email-sent-modal] false)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :auth/verification-error
   (fn [db _]
     (get-in db [:auth :verification-error])))

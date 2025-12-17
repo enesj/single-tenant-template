@@ -6,7 +6,7 @@
 ;; Most subscriptions are already defined in app.admin.frontend.events.admins
 ;; This file provides any additional computed subscriptions
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/admins-count
   :<- [:admin/admins]
   (fn [admins _]
@@ -18,13 +18,13 @@
   (fn [admins _]
     (count (filter #(= (or (:role %) (:admins/role %)) "owner") admins))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/active-admins
   :<- [:admin/admins]
   (fn [admins _]
     (filter #(= (or (:status %) (:admins/status %)) "active") admins)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/can-delete-admin?
   :<- [:admin/current-admin]
   :<- [:admin/owners-count]
@@ -38,7 +38,7 @@
         ;; Cannot delete last owner
         (not (and (= target-role "owner") (= owners-count 1)))))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/can-change-role?
   :<- [:admin/current-admin]
   :<- [:admin/owners-count]

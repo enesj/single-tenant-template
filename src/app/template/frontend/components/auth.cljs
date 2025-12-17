@@ -148,7 +148,7 @@
          container-class ""}}]
   (when error
     ($ :div {:class (str "flex items-start gap-3 p-3 mb-4 text-sm "
-                      "bg-error/10 text-error border border-error/20 rounded-lg " 
+                      "bg-error/10 text-error border border-error/20 rounded-lg "
                       container-class)}
       ($ :svg {:class "w-5 h-5 flex-shrink-0 mt-0.5" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
         ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2" :d icon-path}))
@@ -177,20 +177,20 @@
       (when required
         ($ :span {:class "text-error text-sm font-bold"} "*")))
     ($ :input {:type type
-              :placeholder placeholder
-              :class (str "w-full px-4 py-2.5 "
-                       "text-base text-base-content "
-                       "bg-white "
-                       "border border-base-300 rounded-lg "
-                       "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary "
-                       "hover:border-base-400 "
-                       "transition-all duration-200 "
-                       "placeholder:text-base-content/40 " 
-                       input-class)
-              :value value
-              :required required
-              :id field-id
-              :on-change on-change})))
+               :placeholder placeholder
+               :class (str "w-full px-4 py-2.5 "
+                        "text-base text-base-content "
+                        "bg-white "
+                        "border border-base-300 rounded-lg "
+                        "focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary "
+                        "hover:border-base-400 "
+                        "transition-all duration-200 "
+                        "placeholder:text-base-content/40 "
+                        input-class)
+               :value value
+               :required required
+               :id field-id
+               :on-change on-change})))
 
 (defui auth-submit-button
   "Auth form submit button with loading state.
@@ -258,8 +258,8 @@
                       :d "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"}))
           ($ :span {:class "text-xs lg:text-sm 2xl:text-base"} security-badge-text))))))
 
-(defui login-form
-  "Complete login form using auth template components.
+#_(defui login-form
+    "Complete login form using auth template components.
 
    Props:
    - :title - Form title (default: 'Admin Panel')
@@ -270,49 +270,49 @@
    - :email-placeholder - Email field placeholder (default: 'admin@company.com')
    - :password-placeholder - Password field placeholder (default: 'Enter your password')
    - :submit-text - Submit button text (default: 'Sign In')"
-  [{:keys [title subtitle on-submit loading? error email-placeholder password-placeholder submit-text]
-    :or {email-placeholder "admin@company.com"
-         password-placeholder "Enter your password"
-         submit-text "Sign In"}}]
-  (let [[email set-email!] (use-state "")
-        [password set-password!] (use-state "")]
+    [{:keys [title subtitle on-submit loading? error email-placeholder password-placeholder submit-text]
+      :or {email-placeholder "admin@company.com"
+           password-placeholder "Enter your password"
+           submit-text "Sign In"}}]
+    (let [[email set-email!] (use-state "")
+          [password set-password!] (use-state "")]
 
-    ($ auth-form-container
-      ;; Form header
-      ($ auth-form-header {:title title :subtitle subtitle})
+      ($ auth-form-container
+        ;; Form header
+        ($ auth-form-header {:title title :subtitle subtitle})
 
-      ;; Error alert
-      ($ auth-error-alert {:error error})
+        ;; Error alert
+        ($ auth-error-alert {:error error})
 
-      ;; Login form
-      ($ :form {:id "admin-login-form"
-                :on-submit (fn [e]
-                             (.preventDefault e)
-                             (when on-submit
-                               (on-submit email password)))}
+        ;; Login form
+        ($ :form {:id "admin-login-form"
+                  :on-submit (fn [e]
+                               (.preventDefault e)
+                               (when on-submit
+                                 (on-submit email password)))}
 
-        ;; Email field
-        ($ auth-form-field {:label "Email Address"
-                            :type "email"
-                            :placeholder email-placeholder
-                            :value email
-                            :field-id "admin-login-email"
-                            :container-class "mb-4 lg:mb-6 2xl:mb-10"
-                            :on-change #(set-email! (.. % -target -value))})
+          ;; Email field
+          ($ auth-form-field {:label "Email Address"
+                              :type "email"
+                              :placeholder email-placeholder
+                              :value email
+                              :field-id "admin-login-email"
+                              :container-class "mb-4 lg:mb-6 2xl:mb-10"
+                              :on-change #(set-email! (.. % -target -value))})
 
-        ;; Password field
-        ($ auth-form-field {:label "Password"
-                            :type "password"
-                            :placeholder password-placeholder
-                            :value password
-                            :field-id "admin-login-password"
-                            :container-class "mb-6 lg:mb-8 2xl:mb-12"
-                            :on-change #(set-password! (.. % -target -value))})
+          ;; Password field
+          ($ auth-form-field {:label "Password"
+                              :type "password"
+                              :placeholder password-placeholder
+                              :value password
+                              :field-id "admin-login-password"
+                              :container-class "mb-6 lg:mb-8 2xl:mb-12"
+                              :on-change #(set-password! (.. % -target -value))})
 
-        ;; Submit button
-        ($ auth-submit-button {:loading? loading?
-                               :text submit-text
-                               :button-id "admin-login-submit-btn"}))
+          ;; Submit button
+          ($ auth-submit-button {:loading? loading?
+                                 :text submit-text
+                                 :button-id "admin-login-submit-btn"}))
 
-      ;; Footer
-      ($ auth-form-footer))))
+        ;; Footer
+        ($ auth-form-footer))))

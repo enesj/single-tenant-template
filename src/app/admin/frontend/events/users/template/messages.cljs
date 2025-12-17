@@ -19,7 +19,7 @@
   (fn [db _]
     (dissoc db :admin/success-message)))
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/hide-form-modal
   (fn [{:keys [db]} _]
     (let [entity-type (or (get-in db [:ui :entity-name]) :users)]
@@ -36,7 +36,7 @@
   (fn [db _]
     (:admin/success-message db nil)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/has-success-message?
   (fn [db _]
     (some? (:admin/success-message db))))
@@ -60,7 +60,7 @@
   (fn [db _]
     (:admin/error-message db nil)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/has-error-message?
   (fn [db _]
     (some? (:admin/error-message db))))

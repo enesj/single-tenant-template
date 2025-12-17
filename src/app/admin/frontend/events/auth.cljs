@@ -176,7 +176,7 @@
      :admin/navigate "/admin/login"}))
 
 ;; Navigation event
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   :admin/navigated
   (fn [{:keys [db]} [_ route]]
     {:db (assoc db :admin/current-route route)}))
@@ -254,12 +254,12 @@
   (fn [db _]
     (dissoc db :admin/error-message)))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :admin/set-success-message
   (fn [db [_ message]]
     (assoc db :admin/success-message message)))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :admin/set-error-message
   (fn [db [_ message]]
     (assoc db :admin/error-message message)))

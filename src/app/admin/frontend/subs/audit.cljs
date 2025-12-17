@@ -42,7 +42,7 @@
 ;; Filtering Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-filters
   (fn [db _]
     (get-in db [:admin :audit :filters] {})))
@@ -59,12 +59,12 @@
 ;; Pagination Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-pagination
   (fn [db _]
     (get-in db [:admin :audit :pagination] {:page 1 :per-page 50})))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-current-page
   (fn [db _]
     (get-in db [:admin :audit :pagination :page] 1)))
@@ -74,7 +74,7 @@
   (fn [db _]
     (get-in db [:admin :audit :pagination :per-page] 50)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-total-pages
   :<- [:admin/audit-total-count]
   :<- [:admin/audit-page-size]
@@ -110,12 +110,12 @@
 ;; Batch Operations Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/batch-audit-actions-visible?
   (fn [db _]
     (get-in db [:admin :audit :batch-actions :visible?] false)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/batch-selected-audit-ids
   (fn [db _]
     (get-in db [:admin :audit :batch-actions :selected-ids] [])))
@@ -124,17 +124,17 @@
 ;; Operation Status Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-deleting?
   (fn [db _]
     (get-in db [:admin :audit :deleting?] false)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-bulk-deleting?
   (fn [db _]
     (get-in db [:admin :audit :bulk-deleting?] false)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-exporting?
   (fn [db _]
     (get-in db [:admin :audit :exporting?] false)))
@@ -144,7 +144,7 @@
 ;; ============================================================================
 
 ;; Derived subscription for filtered and formatted logs (legacy)
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-logs-formatted
   :<- [:admin/audit-logs]
   (fn [logs _]
@@ -159,7 +159,7 @@
       logs)))
 
 ;; Get unique entity types for filter dropdown (legacy)
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-entity-types
   :<- [:admin/audit-logs]
   (fn [logs _]
@@ -171,7 +171,7 @@
       vec)))
 
 ;; Get unique actions for filter dropdown (legacy)
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-actions
   :<- [:admin/audit-logs]
   (fn [logs _]
@@ -186,7 +186,7 @@
 ;; Derived Data Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-stats
   :<- [:admin/audit-data]
   (fn [audit-logs _]
@@ -200,7 +200,7 @@
          :entities (into {} (map (fn [[k v]] [k (count v)]) grouped-by-entity))
          :latest-entry (first (sort-by :created-at #(compare %2 %1) audit-logs))}))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/audit-filtered-count
   :<- [:admin/audit-data]
   :<- [:admin/audit-active-filters]
@@ -222,14 +222,14 @@
 ;; Security and Permission Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/can-delete-audit-logs?
   (fn [db _]
     ;; For now, all authenticated admins can delete audit logs
     ;; In production, this should check specific permissions
     (boolean (get-in db [:admin :token]))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/can-export-audit-logs?
   (fn [db _]
     ;; For now, all authenticated admins can export audit logs

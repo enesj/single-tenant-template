@@ -23,7 +23,7 @@
   (fn [db [_ entity-key]]
     (assoc-in db [:admin :batch-operations entity-key :visible?] false)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/batch-actions-visible?
   (fn [db [_ entity-key]]
     (get-in db [:admin :batch-operations entity-key :visible?] false)))

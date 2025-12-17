@@ -423,7 +423,7 @@
         :verification-required?))))
 
 ;; Event to set authentication error (for form validation)
-(rf/reg-event-db
+#_(rf/reg-event-db
   ::set-auth-error
   common-interceptors
   (fn [db [_ error-message]]
@@ -702,14 +702,14 @@
               error-message]]]})))
 
 ;; Event to clear change password state
-(rf/reg-event-db
+#_(rf/reg-event-db
   ::clear-change-password-state
   common-interceptors
   (fn [db _]
     (update db :change-password dissoc :loading? :error :success? :message)))
 
 ;; Event to clear password reset state
-(rf/reg-event-db
+#_(rf/reg-event-db
   ::clear-password-reset-state
   common-interceptors
   (fn [db _]

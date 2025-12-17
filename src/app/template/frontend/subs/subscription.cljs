@@ -50,7 +50,7 @@
   (fn [status _]
     (= :past-due (:subscription-status status))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :subscription/available-tiers
   (fn [db _]
     (get-in db [:subscription :tiers])))

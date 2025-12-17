@@ -13,7 +13,7 @@
 (def max-page-size 100)
 
 ;; Common page size options
-(def page-size-options [5 10 20 50 100])
+#_(def page-size-options [5 10 20 50 100])
 
 ;; -------------------------
 ;; Core Pagination Functions
@@ -36,10 +36,10 @@
         size (or page-size default-page-size)]
     (* (dec page) size)))
 
-(defn calculate-limit
-  "Calculate limit (number of items) for pagination queries"
-  [page-size]
-  (or page-size default-page-size))
+#_(defn calculate-limit
+    "Calculate limit (number of items) for pagination queries"
+    [page-size]
+    (or page-size default-page-size))
 
 (defn calculate-start-end
   "Calculate start and end indices for pagination"
@@ -152,29 +152,29 @@
     (let [normalized-page (normalize-page-number page-number (:total-pages pagination-state))]
       (update-pagination-state pagination-state {:current-page normalized-page}))))
 
-(defn go-to-previous-page
-  "Navigate to previous page"
-  [pagination-state]
-  (when (and pagination-state (can-go-previous? pagination-state))
-    (go-to-page pagination-state (dec (:current-page pagination-state)))))
+#_(defn go-to-previous-page
+    "Navigate to previous page"
+    [pagination-state]
+    (when (and pagination-state (can-go-previous? pagination-state))
+      (go-to-page pagination-state (dec (:current-page pagination-state)))))
 
-(defn go-to-next-page
-  "Navigate to next page"
-  [pagination-state]
-  (when (and pagination-state (can-go-next? pagination-state))
-    (go-to-page pagination-state (inc (:current-page pagination-state)))))
+#_(defn go-to-next-page
+    "Navigate to next page"
+    [pagination-state]
+    (when (and pagination-state (can-go-next? pagination-state))
+      (go-to-page pagination-state (inc (:current-page pagination-state)))))
 
-(defn go-to-first-page
-  "Navigate to first page"
-  [pagination-state]
-  (when pagination-state
-    (go-to-page pagination-state min-page-number)))
+#_(defn go-to-first-page
+    "Navigate to first page"
+    [pagination-state]
+    (when pagination-state
+      (go-to-page pagination-state min-page-number)))
 
-(defn go-to-last-page
-  "Navigate to last page"
-  [pagination-state]
-  (when pagination-state
-    (go-to-page pagination-state (:total-pages pagination-state))))
+#_(defn go-to-last-page
+    "Navigate to last page"
+    [pagination-state]
+    (when pagination-state
+      (go-to-page pagination-state (:total-pages pagination-state))))
 
 ;; -------------------------
 ;; Data Slicing Functions
@@ -222,36 +222,36 @@
 ;; Pagination Info Functions
 ;; -------------------------
 
-(defn get-pagination-info
-  "Get pagination information for display"
-  [pagination-state]
-  (when pagination-state
-    (let [{:keys [current-page page-size total-items total-pages offset]} pagination-state
-          start-item (if (pos? total-items) (inc offset) 0)
-          end-item (min (+ offset page-size) total-items)]
-      {:current-page current-page
-       :total-pages total-pages
-       :page-size page-size
-       :total-items total-items
-       :start-item start-item
-       :end-item end-item
-       :showing-count (- end-item start-item -1)
-       :has-previous? (can-go-previous? pagination-state)
-       :has-next? (can-go-next? pagination-state)})))
+#_(defn get-pagination-info
+    "Get pagination information for display"
+    [pagination-state]
+    (when pagination-state
+      (let [{:keys [current-page page-size total-items total-pages offset]} pagination-state
+            start-item (if (pos? total-items) (inc offset) 0)
+            end-item (min (+ offset page-size) total-items)]
+        {:current-page current-page
+         :total-pages total-pages
+         :page-size page-size
+         :total-items total-items
+         :start-item start-item
+         :end-item end-item
+         :showing-count (- end-item start-item -1)
+         :has-previous? (can-go-previous? pagination-state)
+         :has-next? (can-go-next? pagination-state)})))
 
-(defn get-page-range
-  "Get range of page numbers for pagination display"
-  [pagination-state & {:keys [max-visible-pages] :or {max-visible-pages 5}}]
-  (when pagination-state
-    (let [{:keys [current-page total-pages]} pagination-state
-          half-visible (quot max-visible-pages 2)
-          _start-page (max min-page-number (- current-page half-visible))
-          end-page (min total-pages (+ current-page half-visible))
+#_(defn get-page-range
+    "Get range of page numbers for pagination display"
+    [pagination-state & {:keys [max-visible-pages] :or {max-visible-pages 5}}]
+    (when pagination-state
+      (let [{:keys [current-page total-pages]} pagination-state
+            half-visible (quot max-visible-pages 2)
+            _start-page (max min-page-number (- current-page half-visible))
+            end-page (min total-pages (+ current-page half-visible))
           ;; Adjust start if we're near the end
-          adjusted-start (max min-page-number (- end-page max-visible-pages -1))
+            adjusted-start (max min-page-number (- end-page max-visible-pages -1))
           ;; Adjust end if we're near the beginning
-          adjusted-end (min total-pages (+ adjusted-start max-visible-pages -1))]
-      (range adjusted-start (inc adjusted-end)))))
+            adjusted-end (min total-pages (+ adjusted-start max-visible-pages -1))]
+        (range adjusted-start (inc adjusted-end)))))
 
 ;; -------------------------
 ;; Backend Query Helpers
@@ -264,40 +264,41 @@
     {:limit (:page-size pagination-state)
      :offset (:offset pagination-state)}))
 
-(defn pagination-params-with-sort
-  "Generate pagination and sort parameters for database queries"
-  [pagination-state sort-field sort-direction]
-  (when pagination-state
-    (merge (pagination-params pagination-state)
-      (when sort-field
-        {:order-by sort-field
-         :order-direction (or sort-direction :asc)}))))
+#_(defn pagination-params-with-sort
+    "Generate pagination and sort parameters for database queries"
+    [pagination-state sort-field sort-direction]
+    (when pagination-state
+      (merge (pagination-params pagination-state)
+        (when sort-field
+          {:order-by sort-field
+           :order-direction (or sort-direction :asc)}))))
 
 ;; -------------------------
 ;; Frontend UI Helpers
 ;; -------------------------
 
-#?(:cljs
-   (defn handle-page-input-change
-     "Handle page number input change with validation"
-     [pagination-state input-value on-change]
-     (let [page-num (js/parseInt input-value)]
-       (when (and (not (js/isNaN page-num))
-               (valid-page-number? page-num (:total-pages pagination-state)))
-         (when on-change
-           (on-change (go-to-page pagination-state page-num)))))))
+;; Reader-discarded: unused CLJS-only functions
+;; #?(:cljs
+;;    (defn handle-page-input-change
+;;      "Handle page number input change with validation"
+;;      [pagination-state input-value on-change]
+;;      (let [page-num (js/parseInt input-value)]
+;;        (when (and (not (js/isNaN page-num))
+;;                (valid-page-number? page-num (:total-pages pagination-state)))
+;;          (when on-change
+;;            (on-change (go-to-page pagination-state page-num)))))))
 
-#?(:cljs
-   (defn handle-page-size-change
-     "Handle page size change"
-     [pagination-state new-page-size on-change]
-     (let [new-size (js/parseInt new-page-size)]
-       (when (and (not (js/isNaN new-size))
-               (valid-page-size? new-size))
-         (when on-change
-           (on-change (update-pagination-state pagination-state
-                        {:page-size new-size
-                         :current-page 1})))))))
+;; #?(:cljs
+;;    (defn handle-page-size-change
+;;      "Handle page size change"
+;;      [pagination-state new-page-size on-change]
+;;      (let [new-size (js/parseInt new-page-size)]
+;;        (when (and (not (js/isNaN new-size))
+;;                (valid-page-size? new-size))
+;;          (when on-change
+;;            (on-change (update-pagination-state pagination-state
+;;                         {:page-size new-size
+;;                          :current-page 1})))))))
 
 ;; -------------------------
 ;; Backward Compatibility

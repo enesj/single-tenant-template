@@ -202,7 +202,7 @@
 ;; Batch Actions UI
 ;; =============================================================================
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :admin/show-batch-login-event-actions
   (fn [db [_ selected-ids]]
     (log/info "Showing batch login event actions for:" (count selected-ids) "events")

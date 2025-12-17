@@ -328,7 +328,7 @@
 ;; Update Single View Option Setting
 ;; =============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::update-entity-setting
   (fn [{:keys [db]} [_ entity-name setting-key new-value]]
     (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
@@ -382,7 +382,7 @@
 ;; Remove Setting (make user-configurable)
 ;; =============================================================================
 
-(rf/reg-event-fx
+#_(rf/reg-event-fx
   ::remove-entity-setting
   (fn [{:keys [db]} [_ entity-name setting-key]]
     (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))

@@ -109,7 +109,7 @@
         (js/console.error "Error in ::selected-ids subscription for entity-type:" entity-type "error:" e)
         #{}))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   ::filter-modal
   (fn [db _]
     (get-in db [:ui :filter-modal])))
@@ -193,7 +193,7 @@
     (get-in db [:entities :config entity-type])))
 
 ;; Batch Edit Popup Subscription
-(rf/reg-sub
+#_(rf/reg-sub
   ::batch-edit-popup
   (fn [db _]
     (get-in db [:ui :batch-edit-popup] {:open? false})))

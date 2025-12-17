@@ -297,7 +297,7 @@
     (when (and entity-spec record)
       (filter-and-enhance-fields-for-record entity-spec record admin-role))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   :admin/visible-fields-for-record
   (fn [[_ entity-name record-id]]
     (rf/subscribe [:admin/enhanced-entity-spec entity-name record-id]))

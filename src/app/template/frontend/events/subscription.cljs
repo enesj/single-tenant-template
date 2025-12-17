@@ -189,7 +189,7 @@
   (fn [_ [_ _]]
     {:dispatch [:subscription/set-error "Failed to check usage limits"]}))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :subscription/update-usage
   (fn [db [_ usage-data]]
     (assoc-in db [:subscription :usage] usage-data)))

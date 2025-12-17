@@ -496,7 +496,7 @@
   (fn [db _]
     (draft-config db)))
 
-(rf/reg-sub
+#_(rf/reg-sub
   ::saved
   (fn [db _]
     (saved-config db)))
@@ -561,7 +561,7 @@
 ;; Draft editing: form-fields config
 ;; =============================================================================
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   ::set-form-field-list-draft
   (fn [db [_ entity field-type fields]]
     (let [entity-kw (normalize-kw entity)
@@ -628,12 +628,12 @@
 ;; Additional subscriptions for config editing
 ;; =============================================================================
 
-(rf/reg-sub
+#_(rf/reg-sub
   ::entities-config
   (fn [db _]
     (safe-map (get-in db [:admin :user-settings :draft :entities]))))
 
-(rf/reg-sub
+#_(rf/reg-sub
   ::form-fields-config
   (fn [db _]
     (safe-map (get-in db [:admin :user-settings :draft :form-fields]))))

@@ -160,7 +160,7 @@
       :admin/password-reset-success?
       :admin/password-reset-token-verified?)))
 
-(rf/reg-event-db
+#_(rf/reg-event-db
   :admin/init-reset-password
   (fn [db _]
     (dissoc db

@@ -8,7 +8,6 @@
     [app.template.backend.routes.oauth :as oauth]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.template.backend.routes.email-verification :as email-verification]
-    [app.template.backend.routes.oauth :as template-oauth]
     [app.template.backend.routes.onboarding :as onboarding]
     [clojure.stacktrace :as stacktrace]
     [clojure.string :as str]
@@ -106,7 +105,7 @@
          ["/oauth/google/callback" {:get {:handler (fn [req]
                                                      (let [auth-service (get service-container :auth-service)
                                                            req-with-container (assoc req :service-container service-container)
-                                                           handler (template-oauth/oauth-callback-handler auth-service)
+                                                           handler (oauth/oauth-callback-handler auth-service)
                                                            resp (handler req-with-container)
                                                            user (get-in resp [:session :auth-session :user])
                                                            user-id (:id user)]
@@ -123,7 +122,7 @@
          ["/oauth2/github/callback" {:get {:handler (fn [req]
                                                       (let [auth-service (get service-container :auth-service)
                                                             req-with-container (assoc req :service-container service-container)]
-                                                        ((template-oauth/oauth-callback-handler auth-service) req-with-container)))}}]
+                                                        ((oauth/oauth-callback-handler auth-service) req-with-container)))}}]
 
          ;; Auth status route (as JSON for client)
          ["/auth/status" {:get {:handler auth/auth-status-handler}}]

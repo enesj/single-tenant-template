@@ -123,16 +123,16 @@
 ;; Scope Definitions
 ;; =============================================================================
 
-(def scopes
-  "Available settings scopes with metadata."
-  {:admin {:title "Admin Settings"
-           :description "System-wide settings for admin panel entities"
-           :domain-groups admin-domain-groups
-           :icon "⚙️"}
-   :user  {:title "User Settings"
-           :description "Domain-owned defaults for user-facing pages"
-           :domain-groups user-domain-groups
-           :icon "👤"}})
+#_(def scopes
+    "Available settings scopes with metadata."
+    {:admin {:title "Admin Settings"
+             :description "System-wide settings for admin panel entities"
+             :domain-groups admin-domain-groups
+             :icon "⚙️"}
+     :user  {:title "User Settings"
+             :description "Domain-owned defaults for user-facing pages"
+             :domain-groups user-domain-groups
+             :icon "👤"}})
 
 ;; =============================================================================
 ;; Helper Functions
@@ -154,10 +154,10 @@
   [setting-key]
   (get-in setting-definitions [setting-key :help]))
 
-(defn setting-default
-  "Get default value for a setting key."
-  [setting-key]
-  (get-in setting-definitions [setting-key :default] true))
+#_(defn setting-default
+    "Get default value for a setting key."
+    [setting-key]
+    (get-in setting-definitions [setting-key :default] true))
 
 (defn entity-title
   "Get human-readable title for an entity keyword."
@@ -177,14 +177,14 @@
             domain-key))
     all-domain-groups))
 
-(defn get-entity-scope
-  "Get the scope (:admin or :user) for an entity.
+#_(defn get-entity-scope
+    "Get the scope (:admin or :user) for an entity.
    Returns nil if entity is not found in any domain."
-  [entity-kw]
-  (some (fn [[domain-key domain-config]]
-          (when (contains? (:entities domain-config) entity-kw)
-            (:scope domain-config)))
-    all-domain-groups))
+    [entity-kw]
+    (some (fn [[_domain-key domain-config]]
+            (when (contains? (:entities domain-config) entity-kw)
+              (:scope domain-config)))
+      all-domain-groups))
 
 (defn group-entities-by-domain
   "Group a collection of entity entries by their domain.

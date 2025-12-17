@@ -83,15 +83,15 @@
   (let [uploading? (boolean (use-subscribe [:user-expenses/upload-loading?]))
         upload-error (use-subscribe [:user-expenses/upload-error])
         recent-receipts (or (use-subscribe [:user-expenses/recent-receipts]) [])
-        [selected-file set-selected-file!] (use-state nil)
-        
+        [_selected-file set-selected-file!] (use-state nil)
+
         handle-file-select (fn [file]
                              (set-selected-file! file)
                              (rf/dispatch [:user-expenses/upload-receipt file]))
-        
+
         handle-manual (fn []
                         (rf/dispatch [:navigate-to "/expenses/new"]))]
-    
+
     ($ :div {:class "min-h-screen bg-base-100"}
       ;; Header
       ($ :header {:class "bg-white border-b border-base-200"}
@@ -110,13 +110,13 @@
               ($ button {:btn-type :outline
                          :on-click handle-manual}
                 "Manual Entry")))))
-      
+
       ;; Error
       (when upload-error
         ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
           ($ :div {:class "ds-alert ds-alert-error"}
             ($ :span upload-error))))
-      
+
       ;; Content
       ($ :main {:class "max-w-4xl mx-auto px-4 py-6"}
         ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6"}
@@ -125,11 +125,11 @@
             ($ :p {:class "text-base-content/80"}
               "Upload a photo of your receipt and we'll extract the expense details automatically. "
               "You can review and edit the extracted information before saving."))
-          
+
           ;; Upload zone
           ($ file-drop-zone {:on-file-select handle-file-select
                              :uploading? uploading?})
-          
+
           ;; Tips
           ($ :div {:class "mt-6 bg-base-200 rounded-lg p-4"}
             ($ :h4 {:class "font-medium text-sm mb-2"} "📌 Tips for best results:")
@@ -138,10 +138,10 @@
               ($ :li "Include the entire receipt in the frame")
               ($ :li "Avoid wrinkled or damaged receipts when possible")
               ($ :li "PDF receipts from email work great too!")))
-          
+
           ;; Recent uploads
           ($ recent-uploads {:receipts recent-receipts}))
-        
+
         ;; Alternative action
         ($ :div {:class "mt-6 text-center"}
           ($ :p {:class "text-sm text-base-content/60"}
