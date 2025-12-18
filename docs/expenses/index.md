@@ -84,6 +84,20 @@ Admin forms (the `/admin/...` pages) are configured per entity in `src/app/admin
 
 User-facing forms (the `/expenses/...` pages) use the domain-owned UI config under `src/app/domain/frontend/expenses/config/` (editable via `/admin/user-settings`).
 
+#### Master/Detail Edit Forms (Expense + Line Items)
+
+Expense edit modals need a **detail fetch** to populate line items (`:items`). To avoid duplicated orchestration code (requested flags, detail fetch, memoization to prevent Fork resets), the template provides a reusable wrapper:
+
+- `app.template.frontend.components.form.master-detail/master-detail-form`
+- Doc: `docs/frontend/master-detail-form.md`
+
+Current integrations:
+
+- Admin: `src/app/domain/frontend/expenses/components/expense_form.cljs`
+- User: `src/app/domain/frontend/expenses/components/user_expense_form.cljs`
+
+**Admin detail response key note:** the admin expenses detail endpoint returns `{ :expense ... }` (singular). The generic events factory supports this via `:detail-response-key` in `src/app/domain/frontend/expenses/events/entity_configs.cljs` so `::load-detail` stores the correct entity under `[:admin :expenses :entries :by-id <id>]`.
+
 ## User Expenses Interface
 
 In addition to the admin panel, the expenses domain provides a user-facing interface for personal expense management.

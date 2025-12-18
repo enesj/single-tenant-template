@@ -85,6 +85,15 @@ Theme selector (DaisyUI).
 ($ change-theme)
 ```
 
+### `form` and `master-detail-form`
+
+- `form` (template dynamic form): `app.template.frontend.components.form/form`
+- `master-detail-form` (edit flows that require a detail fetch): `app.template.frontend.components.form.master-detail/master-detail-form`
+
+Use `master-detail-form` for modal edit flows where the list row doesn’t include all fields (e.g. `:items` line items). It handles detail loading + stable initial values, and lets the domain provide normalization/validation/payload preparation.
+
+Guide: `docs/frontend/master-detail-form.md`
+
 ## Adapter Pattern (Users/Audit/Login Events)
 
 Adapters normalize backend data (namespaced keys → plain), register entity specs, and sync into template list storage.

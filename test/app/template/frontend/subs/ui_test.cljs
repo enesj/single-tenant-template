@@ -41,15 +41,15 @@
                      :expenses
                      {:view-options view-options
                       :entity-config (or (expenses-config/entity-config :expenses) {})
-                      :user-prefs {:show-delete? true
-                                   :show-select? true}
+                      :user-prefs {:show-batch-edit? true
+                                   :show-batch-delete? true}
                       :legacy-prefs {}})]
-        (is (false? (get-in result [:effective :show-select?]))
-          "Locked select should override user preference")
-        (is (false? (get-in result [:effective :show-delete?]))
-          "Locked delete should override user preference")
-        (is (contains? (:locked result) :show-select?) "Select should be recorded as locked")
-        (is (contains? (:locked result) :show-delete?) "Delete should be recorded as locked")))))
+        (is (false? (get-in result [:effective :show-batch-edit?]))
+          "Locked batch-edit should override user preference")
+        (is (false? (get-in result [:effective :show-batch-delete?]))
+          "Locked batch-delete should override user preference")
+        (is (contains? (:locked result) :show-batch-edit?) "Batch-edit should be recorded as locked")
+        (is (contains? (:locked result) :show-batch-delete?) "Batch-delete should be recorded as locked")))))
 
 (deftest entity-display-settings-precedence-test
   (testing "Resolver with entity config display-settings"

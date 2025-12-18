@@ -28,6 +28,8 @@ namespaces:
   app.template.backend.migrations.simple-repl:
     - docs/migrations/migration-overview.md
     - docs/migrations/complete-guide.md
+  app.template.frontend.components.form.master-detail:
+    - docs/frontend/master-detail-form.md
 
 frontend:
   app-structure:
@@ -37,6 +39,7 @@ frontend:
     - docs/frontend/component-library.md
     - docs/frontend/template-component-integration.md
     - docs/frontend/list-view-controls-configuration.md
+    - docs/frontend/master-detail-form.md
   http-usage:
     - docs/frontend/http-standards.md
   auth-flow:

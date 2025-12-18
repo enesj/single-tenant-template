@@ -34,7 +34,8 @@
           #?(:clj (Long/parseLong trimmed)
              :cljs (js/parseInt trimmed 10))
           #?(:clj (Double/parseDouble trimmed)
-             :cljs (js/parseFloat trimmed))))
+             :cljs (let [n (js/parseFloat trimmed)]
+                     (if (js/isNaN n) nil n)))))
       (catch #?(:clj Exception :cljs js/Error) _
         nil))))
 

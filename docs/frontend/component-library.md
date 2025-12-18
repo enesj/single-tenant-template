@@ -87,6 +87,21 @@ Dynamic forms for creating/editing users.
 
 Field types: `:text`, `:email`, `:number`, `:textarea`, `:select`, `:checkbox`, `:array-input`, `:json-editor`.
 
+#### Master/Detail Form Wrapper (`app.template.frontend.components.form.master-detail`)
+
+For edit flows that need a **detail fetch** (e.g. header + line items), use the reusable wrapper:
+
+- `master-detail-form` (source: `src/app/template/frontend/components/form/master_detail.cljs`)
+
+It standardizes:
+
+- Detail load orchestration for `:edit` mode
+- Fallback to list-row data while loading
+- Stable Fork initialization (memoized spec + initial values)
+- Hooks for domain-specific normalization/validation/payload preparation
+
+Guide: `docs/frontend/master-detail-form.md`
+
 ### List (`app.template.frontend.components.list`)
 
 Backed by template list adapters; used for audit logs and login events.

@@ -23,6 +23,7 @@ npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
 - `docs/backend/http-api.md` – admin API surface
 - `docs/backend/services.md` – backend services map
 - `docs/frontend/app-shell.md` – admin UI shell/routing
+- `docs/frontend/master-detail-form.md` – reusable wrapper for edit forms needing detail fetch
 - `docs/migrations/migration-overview.md` – models/migrations flow
 - `docs/operations/dev-environment.md` – dev flow/tasks
 - `docs/reference/api-reference.md` – stable admin API reference
