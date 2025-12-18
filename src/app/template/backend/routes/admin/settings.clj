@@ -1,26 +1,9 @@
 (ns app.template.backend.routes.admin.settings
-  "Admin settings API - read/write view-options.edn"
+  "Admin settings API - HTTP handlers"
   (:require
-    [app.shared.specs.entities :as entities-spec]
-    [app.shared.specs.form-fields :as form-fields-spec]
-    [app.shared.specs.table-columns :as table-columns-spec]
-    [app.shared.specs.view-options :as view-options-spec]
+    [app.template.backend.routes.admin.settings-io :as settings-io]
     [app.template.backend.routes.admin.utils :as utils]
-    [clojure.edn :as edn]
-    [clojure.java.io :as io]
-    [clojure.pprint :as pprint]
     [taoensso.timbre :as log]))
-
-(def ^:private view-options-path "src/app/admin/frontend/config/view-options.edn")
-(def ^:private form-fields-path "src/app/admin/frontend/config/form-fields.edn")
-(def ^:private table-columns-path "src/app/admin/frontend/config/table-columns.edn")
-
-;; User-facing (domain-owned) UI config for expenses.
-;; This is edited via /admin/user-settings and stored alongside the domain.
-(def ^:private user-entities-path "src/app/domain/frontend/expenses/config/entities.edn")
-(def ^:private user-view-options-path "src/app/domain/frontend/expenses/config/view-options.edn")
-(def ^:private user-form-fields-path "src/app/domain/frontend/expenses/config/form-fields.edn")
-(def ^:private user-table-columns-path "src/app/domain/frontend/expenses/config/table-columns.edn")
 
 (defn- display-setting-key?
   "True when the key represents one of the list-view display toggles.
@@ -31,139 +14,12 @@
   (and (keyword? k)
     (re-matches #"show-.*\?" (name k))))
 
-(defn- read-view-options
-  "Read view-options.edn file and parse it.
-   Validates the file content against the Malli spec."
-  []
-  (try
-    (let [file (io/file view-options-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (view-options-spec/validate-view-options-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "view-options.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read view-options.edn")
-      (throw (ex-info "Failed to read settings file" {:status 500})))))
-
-(defn- write-view-options!
-  "Write view-options map to EDN file with pretty printing.
-   Validates the data before writing and throws on invalid data."
-  [view-options]
-  ;; Validate before writing - throw on invalid data
-  (let [{:keys [valid? errors nested-locks-errors]}
-        (view-options-spec/validate-view-options-strict view-options)]
-    (when-not valid?
-      (log/error "Attempted to write invalid view-options data"
-        {:errors errors :nested-locks-errors nested-locks-errors})
-      (throw (ex-info "Invalid view-options data"
-               {:status 400
-                :errors errors
-                :nested-locks-errors nested-locks-errors}))))
-  (try
-    (let [file (io/file view-options-path)]
-      ;; Ensure parent directory exists
-      (io/make-parents file)
-      ;; Write with pretty printing for readability
-      (spit file (with-out-str (pprint/pprint view-options))))
-    (catch Exception e
-      (log/error e "Failed to write view-options.edn")
-      (throw (ex-info "Failed to write settings file" {:status 500})))))
-
-;; =============================================================================
-;; Form Fields Config Read/Write
-;; =============================================================================
-
-(defn- read-form-fields
-  "Read form-fields.edn file and parse it"
-  []
-  (try
-    (let [file (io/file form-fields-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (form-fields-spec/validate-form-fields-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "form-fields.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read form-fields.edn")
-      (throw (ex-info "Failed to read form fields file" {:status 500})))))
-
-(defn- write-form-fields!
-  "Write form-fields map to EDN file with pretty printing"
-  [form-fields]
-  (let [{:keys [valid? errors warnings]}
-        (form-fields-spec/validate-form-fields-strict form-fields)]
-    (when-not valid?
-      (log/error "Attempted to write invalid form-fields data"
-        {:errors errors :warnings warnings})
-      (throw (ex-info "Invalid form-fields data"
-               {:status 400
-                :errors errors
-                :warnings warnings}))))
-  (try
-    (let [file (io/file form-fields-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint form-fields))))
-    (catch Exception e
-      (log/error e "Failed to write form-fields.edn")
-      (throw (ex-info "Failed to write form fields file" {:status 500})))))
-
-;; =============================================================================
-;; Table Columns Config Read/Write
-;; =============================================================================
-
-(defn- read-table-columns
-  "Read table-columns.edn file and parse it"
-  []
-  (try
-    (let [file (io/file table-columns-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (table-columns-spec/validate-table-columns-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "table-columns.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read table-columns.edn")
-      (throw (ex-info "Failed to read table columns file" {:status 500})))))
-
-(defn- write-table-columns!
-  "Write table-columns map to EDN file with pretty printing"
-  [table-columns]
-  (let [{:keys [valid? errors warnings]}
-        (table-columns-spec/validate-table-columns-strict table-columns)]
-    (when-not valid?
-      (log/error "Attempted to write invalid table-columns data"
-        {:errors errors :warnings warnings})
-      (throw (ex-info "Invalid table-columns data"
-               {:status 400
-                :errors errors
-                :warnings warnings}))))
-  (try
-    (let [file (io/file table-columns-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint table-columns))))
-    (catch Exception e
-      (log/error e "Failed to write table-columns.edn")
-      (throw (ex-info "Failed to write table columns file" {:status 500})))))
-
 (defn get-view-options-handler
   "GET handler - return all view options"
   [_db]
   (utils/with-error-handling
     (fn [_request]
-      (let [view-options (read-view-options)]
+      (let [view-options (settings-io/read-view-options)]
         (utils/json-response {:view-options view-options})))
     "Failed to read view options"))
 
@@ -188,7 +44,7 @@
               (:ip-address context)
               (:user-agent context))
             ;; Write to file
-            (write-view-options! new-view-options)
+            (settings-io/write-view-options! new-view-options)
             (utils/success-response {:message "View options updated successfully"
                                      :view-options new-view-options}))
           (utils/error-response "Missing view-options in request body" :status 400))))
@@ -207,15 +63,15 @@
             setting-value (if (contains? body :setting-value)
                             (:setting-value body)
                             (if (contains? body :setting_value)
-                              (:setting_value body)
-                              ::not-found))
+                               (:setting_value body)
+                               ::not-found))
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)
             _ (log/info "Parsed values:" {:entity-name entity-name
                                           :setting-key setting-key
                                           :setting-value setting-value})]
         (if (and entity-name setting-key (not= setting-value ::not-found))
-          (let [current-options (read-view-options)
+          (let [current-options (settings-io/read-view-options)
                 updated-options (if (display-setting-key? setting-key)
                                   (assoc-in current-options [entity-name :display-locks setting-key] setting-value)
                                   (assoc-in current-options [entity-name setting-key] setting-value))]
@@ -228,13 +84,13 @@
               {:entity entity-name
                :setting setting-key
                :old-value (if (display-setting-key? setting-key)
-                            (get-in current-options [entity-name :display-locks setting-key])
-                            (get-in current-options [entity-name setting-key]))
+                             (get-in current-options [entity-name :display-locks setting-key])
+                             (get-in current-options [entity-name setting-key]))
                :new-value setting-value}
               (:ip-address context)
               (:user-agent context))
             ;; Write to file
-            (write-view-options! updated-options)
+            (settings-io/write-view-options! updated-options)
             (utils/success-response {:message "Setting updated successfully"
                                      :entity entity-name
                                      :setting setting-key
@@ -254,7 +110,7 @@
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
         (if (and entity-name setting-key)
-          (let [current-options (read-view-options)
+          (let [current-options (settings-io/read-view-options)
                 display? (display-setting-key? setting-key)
                 old-value (if display?
                             (get-in current-options [entity-name :display-locks setting-key])
@@ -274,7 +130,7 @@
               (:ip-address context)
               (:user-agent context))
             ;; Write to file
-            (write-view-options! updated-options)
+            (settings-io/write-view-options! updated-options)
             (utils/success-response {:message "Setting removed successfully"
                                      :entity entity-name
                                      :setting setting-key}))
@@ -290,7 +146,7 @@
   [_db]
   (utils/with-error-handling
     (fn [_request]
-      (let [form-fields (read-form-fields)]
+      (let [form-fields (settings-io/read-form-fields)]
         (utils/json-response {:form-fields form-fields})))
     "Failed to read form fields"))
 
@@ -306,7 +162,7 @@
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
         (if (and entity-name entity-config)
-          (let [current-config (read-form-fields)
+          (let [current-config (settings-io/read-form-fields)
                 ;; Merge with existing config or replace entirely
                 updated-config (assoc current-config entity-name entity-config)]
             (utils/log-admin-action-with-context
@@ -319,7 +175,7 @@
                :new-config entity-config}
               (:ip-address context)
               (:user-agent context))
-            (write-form-fields! updated-config)
+            (settings-io/write-form-fields! updated-config)
             (utils/success-response {:message "Form fields updated successfully"
                                      :entity entity-name
                                      :config entity-config}))
@@ -335,7 +191,7 @@
   [_db]
   (utils/with-error-handling
     (fn [_request]
-      (let [table-columns (read-table-columns)]
+      (let [table-columns (settings-io/read-table-columns)]
         (utils/json-response {:table-columns table-columns})))
     "Failed to read table columns"))
 
@@ -351,7 +207,7 @@
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
         (if (and entity-name entity-config)
-          (let [current-config (read-table-columns)
+          (let [current-config (settings-io/read-table-columns)
                 updated-config (assoc current-config entity-name entity-config)]
             (utils/log-admin-action-with-context
               "update-table-columns"
@@ -363,7 +219,7 @@
                :new-config entity-config}
               (:ip-address context)
               (:user-agent context))
-            (write-table-columns! updated-config)
+            (settings-io/write-table-columns! updated-config)
             (utils/success-response {:message "Table columns updated successfully"
                                      :entity entity-name
                                      :config entity-config}))
@@ -374,162 +230,16 @@
 ;; User UI Config (Domain-Owned) Handlers
 ;; =============================================================================
 
-(defn- read-user-entities
-  []
-  (try
-    (let [file (io/file user-entities-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (entities-spec/validate-user-entities data)]
-          (when-not (:valid? validation)
-            (log/warn "user entities.edn validation issues:"
-              {:errors (:errors validation)}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read user entities.edn")
-      (throw (ex-info "Failed to read user entities file" {:status 500})))))
-
-(defn- write-user-entities!
-  [entities]
-  (let [{:keys [valid? errors]}
-        (entities-spec/validate-user-entities entities)]
-    (when-not valid?
-      (log/error "Attempted to write invalid user entities data" {:errors errors})
-      (throw (ex-info "Invalid user entities data"
-               {:status 400
-                :errors errors}))))
-  (try
-    (let [file (io/file user-entities-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint entities))))
-    (catch Exception e
-      (log/error e "Failed to write user entities.edn")
-      (throw (ex-info "Failed to write user entities file" {:status 500})))))
-
-(defn- read-user-view-options
-  "Read user view-options.edn file and parse it.
-   Validates the data and logs warnings if issues found."
-  []
-  (try
-    (let [file (io/file user-view-options-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              {:keys [valid? errors nested-locks-errors]}
-              (view-options-spec/validate-view-options-strict data)]
-          (when-not valid?
-            (log/warn "user view-options.edn validation issues:"
-              {:errors errors :nested-locks-errors nested-locks-errors}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read user view-options.edn")
-      (throw (ex-info "Failed to read user view options file" {:status 500})))))
-
-(defn- write-user-view-options!
-  "Write user view-options.edn file with pretty printing.
-   Validates the data before writing and throws on invalid data."
-  [view-options]
-  ;; Validate before writing - throw on invalid data
-  (let [{:keys [valid? errors nested-locks-errors]}
-        (view-options-spec/validate-view-options-strict view-options)]
-    (when-not valid?
-      (log/error "Attempted to write invalid user view-options data"
-        {:errors errors :nested-locks-errors nested-locks-errors})
-      (throw (ex-info "Invalid user view-options data"
-               {:status 400
-                :errors errors
-                :nested-locks-errors nested-locks-errors}))))
-  (try
-    (let [file (io/file user-view-options-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint view-options))))
-    (catch Exception e
-      (log/error e "Failed to write user view-options.edn")
-      (throw (ex-info "Failed to write user view options file" {:status 500})))))
-
-(defn- read-user-form-fields
-  []
-  (try
-    (let [file (io/file user-form-fields-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (form-fields-spec/validate-form-fields-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "user form-fields.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read user form-fields.edn")
-      (throw (ex-info "Failed to read user form fields file" {:status 500})))))
-
-(defn- write-user-form-fields!
-  [form-fields]
-  (let [{:keys [valid? errors warnings]}
-        (form-fields-spec/validate-form-fields-strict form-fields)]
-    (when-not valid?
-      (log/error "Attempted to write invalid user form-fields data"
-        {:errors errors :warnings warnings})
-      (throw (ex-info "Invalid user form-fields data"
-               {:status 400
-                :errors errors
-                :warnings warnings}))))
-  (try
-    (let [file (io/file user-form-fields-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint form-fields))))
-    (catch Exception e
-      (log/error e "Failed to write user form-fields.edn")
-      (throw (ex-info "Failed to write user form fields file" {:status 500})))))
-
-(defn- read-user-table-columns
-  []
-  (try
-    (let [file (io/file user-table-columns-path)]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (table-columns-spec/validate-table-columns-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "user table-columns.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
-    (catch Exception e
-      (log/error e "Failed to read user table-columns.edn")
-      (throw (ex-info "Failed to read user table columns file" {:status 500})))))
-
-(defn- write-user-table-columns!
-  [table-columns]
-  (let [{:keys [valid? errors warnings]}
-        (table-columns-spec/validate-table-columns-strict table-columns)]
-    (when-not valid?
-      (log/error "Attempted to write invalid user table-columns data"
-        {:errors errors :warnings warnings})
-      (throw (ex-info "Invalid user table-columns data"
-               {:status 400
-                :errors errors
-                :warnings warnings}))))
-  (try
-    (let [file (io/file user-table-columns-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint table-columns))))
-    (catch Exception e
-      (log/error e "Failed to write user table-columns.edn")
-      (throw (ex-info "Failed to write user table columns file" {:status 500})))))
-
 (defn get-user-ui-config-handler
   "GET handler - return all user-facing (domain-owned) UI config"
   [_db]
   (utils/with-error-handling
     (fn [_request]
       (utils/json-response
-        {:entities (read-user-entities)
-         :view-options (read-user-view-options)
-         :form-fields (read-user-form-fields)
-         :table-columns (read-user-table-columns)}))
+        {:entities (settings-io/read-user-entities)
+         :view-options (settings-io/read-user-view-options)
+         :form-fields (settings-io/read-user-form-fields)
+         :table-columns (settings-io/read-user-table-columns)}))
     "Failed to read user UI config"))
 
 (defn update-user-ui-config-handler
@@ -568,17 +278,17 @@
           (:ip-address context)
           (:user-agent context))
 
-        (when entities (write-user-entities! entities))
-        (when view-options (write-user-view-options! view-options))
-        (when form-fields (write-user-form-fields! form-fields))
-        (when table-columns (write-user-table-columns! table-columns))
+        (when entities (settings-io/write-user-entities! entities))
+        (when view-options (settings-io/write-user-view-options! view-options))
+        (when form-fields (settings-io/write-user-form-fields! form-fields))
+        (when table-columns (settings-io/write-user-table-columns! table-columns))
 
         (utils/success-response
           {:message "User UI config updated successfully"
-           :entities (or entities (read-user-entities))
-           :view-options (or view-options (read-user-view-options))
-           :form-fields (or form-fields (read-user-form-fields))
-           :table-columns (or table-columns (read-user-table-columns))})))
+           :entities (or entities (settings-io/read-user-entities))
+           :view-options (or view-options (settings-io/read-user-view-options))
+           :form-fields (or form-fields (settings-io/read-user-form-fields))
+           :table-columns (or table-columns (settings-io/read-user-table-columns))})))
     "Failed to update user UI config"))
 
 ;; Route definitions

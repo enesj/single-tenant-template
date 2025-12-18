@@ -3,11 +3,11 @@
    
    Tests metrics, config, and health endpoints."
   (:require
-   [app.template.backend.services.monitoring.login-events :as login-monitoring]
-   [app.backend.test-helpers :as h]
+    [app.template.backend.services.monitoring.login-events :as login-monitoring]
+    [app.backend.test-helpers :as h]
     [clojure.string :as str]
-   [clojure.test :refer [deftest is testing]]
-   [ring.mock.request :as mock]))
+    [clojure.test :refer [deftest is testing]]
+    [ring.mock.request :as mock]))
 
 ;; ============================================================================
 ;; Metrics Endpoint Tests
@@ -24,12 +24,11 @@
         (is (contains? body :login-metrics)))))
 
   (testing "metrics endpoint includes login metrics"
-    (with-redefs [login-monitoring/count-recent-login-events 
-                  (fn [_ _] 42)]
-      (let [handler (h/build-handler)
-            resp (handler (mock/request :get "/api/v1/metrics"))
-            body (h/parse-json-body resp)]
-        (is (= 42 (get-in body [:login-metrics :last-24h :total])))))))
+    (let [handler (h/build-handler (h/stub-service-container)
+                    {:count-recent-login-events (fn [_ _] 42)})
+          resp (handler (mock/request :get "/api/v1/metrics"))
+          body (h/parse-json-body resp)]
+      (is (= 42 (get-in body [:login-metrics :last-24h :total]))))))
 
 ;; ============================================================================
 ;; Config Endpoint Tests
@@ -42,7 +41,7 @@
       (is (h/ok? resp))))
 
   (testing "config endpoint returns models data"
-    (let [service-container (h/stub-service-container 
+    (let [service-container (h/stub-service-container
                               {:models-data {:items {:fields {:id :uuid
                                                               :name :string}}}})
           handler (h/build-handler service-container)
@@ -66,7 +65,7 @@
     (let [handler (h/build-handler)
           resp (handler (mock/request :get "/"))
           body (h/slurp-body resp)]
-          (is (or (str/includes? body "<!DOCTYPE")
+      (is (or (str/includes? body "<!DOCTYPE")
             (str/includes? body "<html")
             (str/includes? body "<")
             (str/includes? body "Test route works"))))))
@@ -78,9 +77,9 @@
 (deftest auth-login-endpoint-test
   (testing "login endpoint accepts POST"
     (let [handler (h/build-handler)
-          resp (handler (h/json-request :post "/api/v1/auth/login" 
-                                        {:email "test@example.com"
-                                         :password "password123"}))]
+          resp (handler (h/json-request :post "/api/v1/auth/login"
+                          {:email "test@example.com"
+                           :password "password123"}))]
       (is (h/ok? resp))))
 
   (testing "login endpoint uses stub handler"

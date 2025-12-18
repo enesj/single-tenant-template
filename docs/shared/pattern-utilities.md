@@ -4,7 +4,7 @@
 
 Regex patterns and validation helpers shared across the single-tenant admin app.
 
-- **Location**: `src/app/shared/patterns.cljc`
+- **Location**: `src/app/shared/patterns.cljc` (entrypoint) + split implementation in `src/app/shared/patterns/*.cljc`
 - **Contents**: email/slug/url patterns, phone/date formats, lightweight validators used by both backend validation and admin UI forms.
 
 ## Notes

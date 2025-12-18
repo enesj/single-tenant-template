@@ -1,15 +1,15 @@
 (ns automigrate.schema.diffing
   "Schema comparison and migration action generation"
   (:require
-   [automigrate.actions :as actions]
-   [automigrate.fields :as fields]
-   [automigrate.util.model :as model-util]
-   [automigrate.util.spec :as spec-util]
-   [clojure.set :as set]
-   [clojure.spec.alpha :as s]
-   [clojure.string :as str]
-   [differ.core :as differ]
-   [weavejester.dependency :as dep]))
+    [automigrate.actions :as actions]
+    [automigrate.fields :as fields]
+    [automigrate.util.model :as model-util]
+    [automigrate.util.spec :as spec-util]
+    [clojure.set :as set]
+    [clojure.spec.alpha :as s]
+    [clojure.string :as str]
+    [differ.core :as differ]
+    [weavejester.dependency :as dep]))
 
 (def ^:private DROPPED-ENTITY-VALUE 0)
 (def ^:private DEFAULT-ROOT-NODE :root)
@@ -178,7 +178,6 @@
   "Return type's migrations for model."
   [{:keys [model-diff model-removals old-model new-model model-name
            type-from-dropped-model?]}]
-  ; TODO: try to abstract this function for types/indexes/fields
   (let [types-diff (:types model-diff)
         types-removals (if (or (= DROPPED-ENTITY-VALUE (:types model-removals))
                              type-from-dropped-model?)
@@ -264,7 +263,7 @@
              actions/ALTER-INDEX-ACTION} (mapv (fn [field]
                                                  {:model-name (:model-name action)
                                                   :field-name field})
-                                           (get-in action [:options :fields]))
+                                            (get-in action [:options :fields]))
            #{actions/DROP-TYPE-ACTION} [{:type-name (:type-name action)}]
            [])
       (remove nil?))))
@@ -283,7 +282,6 @@
                                          #(and (= (:model-name action) (:model-name %))
                                             (= (:field-name action) (:field-name %)))
                                          deps)
-        ; First, drop enum column, then drop enum.
         #{actions/DROP-COLUMN-ACTION} (let [field-type (get-in old-schema
                                                          [(:model-name action)
                                                           :fields
@@ -291,7 +289,6 @@
                                                           :type])]
                                         (and (s/valid? ::fields/enum-type field-type)
                                           (contains? type-names (last field-type))))
-        ; First, drop table with enum column, then drop enum.
         #{actions/DROP-TABLE-ACTION} (let [fields (get-in old-schema
                                                     [(:model-name action) :fields])
                                            field-types (mapv :type (vals fields))]
@@ -308,7 +305,6 @@
                                            #(and (s/valid? ::fields/enum-type %)
                                               (contains? type-names (last %)))
                                            field-types)))
-        ; First, create/alter enum type, then add/alter column/table
         #{actions/CREATE-TYPE-ACTION
           actions/ALTER-TYPE-ACTION} (contains? type-names (:type-name action))
         false))))
@@ -335,28 +331,20 @@
   (->> actions
     (reduce (partial assoc-action-deps old-schema actions) (dep/graph))
     (dep/topo-sort compare-actions)
-       ; drop first default root node `:root`
     (drop 1)))
 
 (defn make-migration*
   [old-schema new-schema]
   (let [[alterations removals] (differ/diff old-schema new-schema)
-        _ (println "DEBUG make-migration*:")
-        _ (println "  old-schema keys:" (keys old-schema))
-        _ (println "  new-schema keys:" (keys new-schema))
-        _ (println "  alterations keys:" (keys alterations))
-        _ (println "  removals keys:" (keys removals))
         changed-models (-> (set (keys alterations))
                          (set/union (set (keys removals))))
-        _ (println "  changed-models:" changed-models)
         actions (for [model-name changed-models
                       :let [old-model (get old-schema model-name)
                             new-model (get new-schema model-name)
                             model-diff (get alterations model-name)
                             model-removals (get removals model-name)
                             new-model?* (new-model? alterations old-schema model-name)
-                            drop-model?* (drop-model? removals model-name)
-                            _ (println "  Processing model:" model-name "new-model?:" new-model?* "drop-model?:" drop-model?*)]]
+                            drop-model?* (drop-model? removals model-name)]]
                   (concat
                     (cond
                       new-model?* [{:action actions/CREATE-TABLE-ACTION
@@ -386,167 +374,3 @@
   "Resolve action dependencies for proper ordering"
   [actions old-schema]
   (sort-actions old-schema actions))
-
-;; Migration->Actions Multimethod (moved from migrations.clj)
-(defmulti migration->actions (juxt :migration-type :direction))
-
-;; Define constants for extensions and directions
-(def ^:private AUTO-MIGRATION-EXT :edn)
-(def ^:private SQL-MIGRATION-EXT :sql)
-(def ^:private FORWARD-DIRECTION :forward)
-(def ^:private BACKWARD-DIRECTION :backward)
-(def ^:private function-migration-ext :fn)
-(def ^:private trigger-migration-ext :trg)
-(def ^:private policy-migration-ext :pol)
-(def ^:private view-migration-ext :view)
-(def ^:private FORWARD-MIGRATION-DELIMITER "-- FORWARD")
-(def ^:private BACKWARD-MIGRATION-DELIMITER "-- BACKWARD")
-
-;; Import required dependencies
-(require '[automigrate.util.file :as file-util])
-(require '[automigrate.schema :as schema])
-(require '[clojure.java.io :as io])
-(require '[clojure.string :as str])
-
-(defn- ->file
-  [file-name migrations-dir]
-  (file-util/join-path migrations-dir file-name))
-
-(defn- get-forward-sql-migration
-  [migration]
-  (-> (str/split migration (re-pattern BACKWARD-MIGRATION-DELIMITER))
-    (first)
-    (str/replace (re-pattern FORWARD-MIGRATION-DELIMITER) "")
-    (vector)))
-
-(defn- get-backward-sql-migration
-  [migration]
-  (-> (str/split migration (re-pattern BACKWARD-MIGRATION-DELIMITER))
-    (last)
-    (vector)))
-
-;; EDN migrations
-(defmethod migration->actions [AUTO-MIGRATION-EXT FORWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (let [migration-file-path (file-util/join-path migrations-dir file-name)]
-    (-> migration-file-path (io/resource) (file-util/read-edn))))
-
-(defmethod migration->actions [AUTO-MIGRATION-EXT BACKWARD-DIRECTION]
-  [{:keys [migrations-dir number-int all-migrations]}]
-  (println "🐛 DEBUG MIGRATION->ACTIONS 1: BACKWARD migration called")
-  (println "  migrations-dir:" migrations-dir)
-  (println "  number-int:" number-int)
-  (println "  all-migrations count:" (count all-migrations))
-  (println "Migration to:" number-int)
-  (try
-    (let [_ (println "🐛 DEBUG MIGRATION->ACTIONS 2: filtering migrations-from")
-          migrations-from (->> all-migrations
-                            (take-while #(<= (:number-int %) number-int))
-                            (filterv #(= AUTO-MIGRATION-EXT (:migration-type %)))
-                            (mapv #(-> % :file-name (->file migrations-dir))))
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 3: migrations-from count:" (count migrations-from))
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 4: getting schema-from")
-          schema-from (schema/current-db-schema migrations-from)
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 5: schema-from keys:" (keys schema-from))
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 6: getting migrations-to")
-          migrations-to (butlast migrations-from)
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 7: migrations-to count:" (count migrations-to))
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 8: getting schema-to")
-          schema-to (schema/current-db-schema migrations-to)
-          _ (println "🐛 DEBUG MIGRATION->ACTIONS 9: schema-to keys:" (keys schema-to))]
-      (println "Schema from:" schema-from "Schema to:" schema-to "Migrations from:" migrations-from "Migrations to:" migrations-to)
-      (println "🐛 DEBUG MIGRATION->ACTIONS 10: calling make-migration*")
-      (try
-        (let [result (make-migration* schema-from schema-to)]
-          (println "🐛 DEBUG MIGRATION->ACTIONS 11: make-migration* completed successfully")
-          (println "  result count:" (count result))
-          result)
-        (catch Exception e
-          (println "🐛 DEBUG MIGRATION->ACTIONS 12: Exception in make-migration*:")
-          (println "  Exception type:" (type e))
-          (println "  Exception message:" (.getMessage e))
-          (println "  Stack trace:")
-          (.printStackTrace e)
-          (throw e))))
-    (catch Exception e
-      (println "🐛 DEBUG MIGRATION->ACTIONS 13: Exception in migration->actions:")
-      (println "  Exception type:" (type e))
-      (println "  Exception message:" (.getMessage e))
-      (println "  Stack trace:")
-      (.printStackTrace e)
-      (throw e))))
-
-;; SQL migrations
-(defmethod migration->actions [SQL-MIGRATION-EXT FORWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-forward-sql-migration)))
-
-(defmethod migration->actions [SQL-MIGRATION-EXT BACKWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-backward-sql-migration)))
-
-;; Function migrations
-(defmethod migration->actions [function-migration-ext FORWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-forward-sql-migration)))
-
-(defmethod migration->actions [function-migration-ext BACKWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-backward-sql-migration)))
-
-;; Trigger migrations
-(defmethod migration->actions [trigger-migration-ext FORWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-forward-sql-migration)))
-
-(defmethod migration->actions [trigger-migration-ext BACKWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-backward-sql-migration)))
-
-;; Policy migrations
-(defmethod migration->actions [policy-migration-ext FORWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-forward-sql-migration)))
-
-(defmethod migration->actions [policy-migration-ext BACKWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-backward-sql-migration)))
-
-;; View migrations
-(defmethod migration->actions [view-migration-ext FORWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-forward-sql-migration)))
-
-(defmethod migration->actions [view-migration-ext BACKWARD-DIRECTION]
-  [{:keys [file-name migrations-dir]}]
-  (-> (file-util/join-path migrations-dir file-name)
-    (io/resource)
-    (slurp)
-    (get-backward-sql-migration)))

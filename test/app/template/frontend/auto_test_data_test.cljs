@@ -26,7 +26,7 @@
     (testing "transactions entity with foreign key"
       ;; First create a transaction type for foreign key
       (auto-test-data/reset-id-counter!)
-      (let [test-data (auto-test-data/generate-comprehensive-test-data {:seed-count 1})
+      (let [test-data (auto-test-data/get-auto-generated-data {:seed-count 1})
             transaction (get-in test-data [:transactions :new-data])]
         (is (map? transaction) "Should return a map")
         (is (string? (:description transaction)) "Should have description")

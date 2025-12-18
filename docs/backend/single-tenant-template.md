@@ -71,7 +71,7 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 | Backend entry | `src/app/template/backend/core.clj`, `src/app/template/backend/webserver.clj` |
 | DI container | `src/app/template/di/config.clj` |
 | Admin pages | `src/app/admin/frontend/pages/*` |
-| Frontend shell | `src/app/template/frontend/core.cljs`, `src/app/template/frontend/routes.cljs` |
+| Frontend shell | `src/app/template/frontend/core.cljs`, `src/app/template/frontend/routes.cljs` (entrypoint) + `src/app/template/frontend/routes/` (implementation) |
 | Template UI | `src/app/template/frontend/components/*` |
 | Shared libs | `src/app/shared/*` |
 | Migrations | `resources/db/models.edn`, `docs/migrations/migration-overview.md` |

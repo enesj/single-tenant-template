@@ -8,6 +8,7 @@
    - Removing entity settings"
   (:require
     [app.template.backend.routes.admin.settings :as settings]
+    [app.template.backend.routes.admin.settings-io :as settings-io]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -69,7 +70,7 @@
     (let [db (h/mock-db)
           handler (settings/get-view-options-handler db)
           request (h/mock-admin-request :get "/admin/api/settings/view-options" mock-admin {})]
-      (with-redefs [settings/read-view-options (constantly mock-view-options)]
+      (with-redefs [settings-io/read-view-options (constantly mock-view-options)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -79,7 +80,7 @@
     (let [db (h/mock-db)
           handler (settings/get-view-options-handler db)
           request (h/mock-admin-request :get "/admin/api/settings/view-options" mock-admin {})]
-      (with-redefs [settings/read-view-options (constantly {})]
+      (with-redefs [settings-io/read-view-options (constantly {})]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -96,9 +97,9 @@
           new-options {:users {:default-sort :name}}
           request (h/mock-admin-request :put "/admin/api/settings/view-options" mock-admin
                     {:body {:view-options new-options}})]
-      (with-redefs [settings/write-view-options! (fn [opts] 
-                                                    (is (= new-options opts))
-                                                    nil)]
+      (with-redefs [settings-io/write-view-options! (fn [opts] 
+                                                        (is (= new-options opts))
+                                                        nil)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -124,10 +125,10 @@
                     {:body {:entity-name "users"
                             :setting-key "default-sort"
                             :setting-value :email}})]
-      (with-redefs [settings/read-view-options (constantly mock-view-options)
-                    settings/write-view-options! (fn [opts]
-                                                    (is (= :email (get-in opts [:users :default-sort])))
-                                                    nil)]
+      (with-redefs [settings-io/read-view-options (constantly mock-view-options)
+                    settings-io/write-view-options! (fn [opts]
+                                                        (is (= :email (get-in opts [:users :default-sort])))
+                                                        nil)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -141,8 +142,8 @@
                     {:body {:entity_name "admins"
                             :setting_key "columns-visible"
                             :setting_value [:email :role :status]}})]
-      (with-redefs [settings/read-view-options (constantly mock-view-options)
-                    settings/write-view-options! (fn [_] nil)]
+      (with-redefs [settings-io/read-view-options (constantly mock-view-options)
+                    settings-io/write-view-options! (fn [_] nil)]
         (let [response (handler request)]
           (is (= 200 (:status response)))))))
   
@@ -165,10 +166,10 @@
           request (h/mock-admin-request :delete "/admin/api/settings/entity" mock-admin
                     {:body {:entity-name "users"
                             :setting-key "default-sort"}})]
-      (with-redefs [settings/read-view-options (constantly mock-view-options)
-                    settings/write-view-options! (fn [opts]
-                                                    (is (nil? (get-in opts [:users :default-sort])))
-                                                    nil)]
+      (with-redefs [settings-io/read-view-options (constantly mock-view-options)
+                    settings-io/write-view-options! (fn [opts]
+                                                        (is (nil? (get-in opts [:users :default-sort])))
+                                                        nil)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))

@@ -1,0 +1,1227 @@
+]0;🧪 Backend Tests2025-12-18T12:58:11.010Z Eness-MacBook-Pro.local DEBUG [app.template.backend.utils.json-config:29] - Configuring JSON encoders for Java types...
+2025-12-18T12:58:11.032Z Eness-MacBook-Pro.local INFO [app.template.backend.utils.json-config:100] - JSON encoders configured successfully
+✓ Registered service for table: receipts
+✓ Registered service for table: suppliers
+✓ Registered service for table: reports
+✓ Registered service for table: expenses
+✓ Registered service for table: articles
+✓ Registered service for table: price_observations
+✓ Registered service for table: payers
+✓ Registered service for table: article_aliases
+✓ Registered service for table: price_observations
+✓ Registered service for table: payers
+✓ Registered service for table: suppliers
+2025-12-18T12:58:12.075Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:49] - 🧪 Starting test system (reusing dev infrastructure)...
+2025-12-18T12:58:12.276Z Eness-MacBook-Pro.local INFO [app.template.backend.core:143] - Creating service container using DI container...
+2025-12-18T12:58:12.277Z Eness-MacBook-Pro.local INFO [app.template.di.config:118] - Creating service container with DI...
+2025-12-18T12:58:12.278Z Eness-MacBook-Pro.local DEBUG [app.template.di.registry:23] - Registering template services with db-connection: com.zaxxer.hikari.HikariDataSource
+2025-12-18T12:58:12.281Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :type-casting-service
+2025-12-18T12:58:12.281Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :query-builder
+2025-12-18T12:58:12.281Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :metadata-service
+2025-12-18T12:58:12.282Z Eness-MacBook-Pro.local INFO [app.template.backend.email.service:42] - Creating Gmail SMTP email service with from-email: enes.jakic@gmail.com
+2025-12-18T12:58:12.282Z Eness-MacBook-Pro.local INFO [app.template.backend.services.gmail-smtp:205] - Creating Gmail SMTP email service with from email: enes.jakic@gmail.com and base-url: http://localhost:8086
+2025-12-18T12:58:12.283Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :email-service
+2025-12-18T12:58:12.283Z Eness-MacBook-Pro.local DEBUG [app.template.di.registry:32] - Creating database adapter with connection: com.zaxxer.hikari.HikariDataSource
+2025-12-18T12:58:12.283Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :db-adapter
+2025-12-18T12:58:12.283Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :validation-service
+2025-12-18T12:58:12.285Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :password-routes
+2025-12-18T12:58:12.285Z Eness-MacBook-Pro.local DEBUG [app.template.di.registry:85] - Creating auth service...
+2025-12-18T12:58:12.285Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :auth-service
+2025-12-18T12:58:12.286Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :auth-routes
+2025-12-18T12:58:12.288Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :oauth-routes
+2025-12-18T12:58:12.288Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :crud-service
+2025-12-18T12:58:12.290Z Eness-MacBook-Pro.local INFO [app.template.di.container:151] - Initialized service :crud-routes
+2025-12-18T12:58:12.291Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :type-casting-service
+2025-12-18T12:58:12.291Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :crud-routes
+2025-12-18T12:58:12.291Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :auth-routes
+2025-12-18T12:58:12.291Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :oauth-routes
+2025-12-18T12:58:12.292Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :query-builder
+2025-12-18T12:58:12.292Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :crud-service
+2025-12-18T12:58:12.292Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :validation-service
+2025-12-18T12:58:12.292Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :metadata-service
+2025-12-18T12:58:12.292Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :password-routes
+2025-12-18T12:58:12.292Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :auth-service
+2025-12-18T12:58:12.293Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :email-service
+2025-12-18T12:58:12.293Z Eness-MacBook-Pro.local INFO [app.template.di.container:206] - Started service :db-adapter
+2025-12-18T12:58:12.300Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: (:email_verification_tokens :suppliers :admins :articles :expenses :password_reset_tokens :login_events :payers :price_observations :audit_logs :expense_items :receipts :article_aliases :users)
+2025-12-18T12:58:12.301Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:12.301Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: (:email_verification_tokens :suppliers :admins :articles :expenses :password_reset_tokens :login_events :payers :price_observations :audit_logs :expense_items :receipts :article_aliases :users)
+2025-12-18T12:58:12.499Z Eness-MacBook-Pro.local INFO [app.template.backend.webserver:50] - Server started on port 8086
+2025-12-18T12:58:12.500Z Eness-MacBook-Pro.local INFO [app.template.backend.core:163] - 🚀 Starting system - host: localhost , port: 8086 - Auto-restart works!
+2025-12-18T12:58:12.501Z Eness-MacBook-Pro.local DEBUG [app.template.backend.utils.json-config:29] - Configuring JSON encoders for Java types...
+2025-12-18T12:58:12.501Z Eness-MacBook-Pro.local INFO [app.template.backend.utils.json-config:100] - JSON encoders configured successfully
+2025-12-18T12:58:12.590Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:77] - ✅ Test system ready {:database true, :service-container true, :config true}
+[(........................)(.......2025-12-18T12:58:12.686Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.transactions:14] - 📊 Getting transaction overview
+.......)(2025-12-18T12:58:12.694Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:12.694Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:12.695Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+...2025-12-18T12:58:12.732Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:12.733Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:12.733Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:12.756Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :post, :uri "/api/v1/auth/login", :admin-token-present false, :content-type nil}
+...2025-12-18T12:58:12.760Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:12.761Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:12.761Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:12.779Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/metrics", :admin-token-present false, :content-type nil}
+....)(......2025-12-18T12:58:12.792Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.auth:211] - Failed to count active admin sessions
+                                                              ...
+                                           clojure.run.exec/-main            exec.clj: 191
+                                           clojure.run.exec/-main            exec.clj: 223
+                                        clojure.run.exec/-main/fn            exec.clj: 227
+                                            clojure.run.exec/exec            exec.clj:  88
+                                                              ...
+                                            kaocha.runner/exec-fn          runner.clj: 203
+                                         kaocha.runner/exec-fn/fn          runner.clj: 205
+                                                   kaocha.api/run             api.clj: 110
+                                                kaocha.api/run/fn             api.clj: 132
+                                            kaocha.api/run/fn{x2}             api.clj: 133
+                                      clojure.core/with-redefs-fn            core.clj:7706
+                                            kaocha.api/run/fn{x3}             api.clj: 159
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                            kaocha.type.clojure.test/eval43499/fn            test.clj:  18
+                                            kaocha.test-suite/run      test_suite.clj:   7
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                                      kaocha.type.ns/eval42997/fn              ns.clj:  61
+                                         kaocha.type.ns/run-tests              ns.clj:  21
+                                                              ...
+                                      kaocha.type.ns/run-tests/fn              ns.clj:  21
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                                     kaocha.type.var/eval46923/fn             var.clj:  38
+                        kaocha.type.var/eval46923/fn/wrapped-test             var.clj:  36
+                                         kaocha.type.var/test-var             var.clj:  24
+                       app.backend.routes.admin.dashboard-test/fn  dashboard_test.clj:  31
+   app.admin.backend.services.admin.dashboard/get-dashboard-stats       dashboard.clj:  40
+app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn       dashboard.clj:  41
+      app.admin.backend.services.admin.auth/count-active-sessions            auth.clj: 205
+                                           next.jdbc/execute-one!            jdbc.clj: 289
+                               next.jdbc.protocols/eval16864/fn/G       protocols.clj:  34
+                                  clojure.core/-cache-protocol-fn    core_deftype.clj: 585
+java.lang.IllegalArgumentException: No implementation of method: :-execute-one of protocol: #'next.jdbc.protocols/Executable found for class: nil
+
+
+2025-12-18T12:58:12.829Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:52] - Failed to compute recent audit activity count
+                                                              ...
+                                           clojure.run.exec/-main            exec.clj: 191
+                                           clojure.run.exec/-main            exec.clj: 223
+                                        clojure.run.exec/-main/fn            exec.clj: 227
+                                            clojure.run.exec/exec            exec.clj:  88
+                                                              ...
+                                            kaocha.runner/exec-fn          runner.clj: 203
+                                         kaocha.runner/exec-fn/fn          runner.clj: 205
+                                                   kaocha.api/run             api.clj: 110
+                                                kaocha.api/run/fn             api.clj: 132
+                                            kaocha.api/run/fn{x2}             api.clj: 133
+                                      clojure.core/with-redefs-fn            core.clj:7706
+                                            kaocha.api/run/fn{x3}             api.clj: 159
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                            kaocha.type.clojure.test/eval43499/fn            test.clj:  18
+                                            kaocha.test-suite/run      test_suite.clj:   7
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                                      kaocha.type.ns/eval42997/fn              ns.clj:  61
+                                         kaocha.type.ns/run-tests              ns.clj:  21
+                                                              ...
+                                      kaocha.type.ns/run-tests/fn              ns.clj:  21
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                                     kaocha.type.var/eval46923/fn             var.clj:  38
+                        kaocha.type.var/eval46923/fn/wrapped-test             var.clj:  36
+                                         kaocha.type.var/test-var             var.clj:  24
+                       app.backend.routes.admin.dashboard-test/fn  dashboard_test.clj:  31
+   app.admin.backend.services.admin.dashboard/get-dashboard-stats       dashboard.clj:  45
+app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn       dashboard.clj:  46
+                                           next.jdbc/execute-one!            jdbc.clj: 289
+                               next.jdbc.protocols/eval16864/fn/G       protocols.clj:  34
+                                  clojure.core/-cache-protocol-fn    core_deftype.clj: 585
+java.lang.IllegalArgumentException: No implementation of method: :-execute-one of protocol: #'next.jdbc.protocols/Executable found for class: nil
+
+
+2025-12-18T12:58:12.839Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:65] - Failed to load recent audit events
+                                                              ...
+                                           clojure.run.exec/-main            exec.clj: 191
+                                           clojure.run.exec/-main            exec.clj: 223
+                                        clojure.run.exec/-main/fn            exec.clj: 227
+                                            clojure.run.exec/exec            exec.clj:  88
+                                                              ...
+                                            kaocha.runner/exec-fn          runner.clj: 203
+                                         kaocha.runner/exec-fn/fn          runner.clj: 205
+                                                   kaocha.api/run             api.clj: 110
+                                                kaocha.api/run/fn             api.clj: 132
+                                            kaocha.api/run/fn{x2}             api.clj: 133
+                                      clojure.core/with-redefs-fn            core.clj:7706
+                                            kaocha.api/run/fn{x3}             api.clj: 159
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                            kaocha.type.clojure.test/eval43499/fn            test.clj:  18
+                                            kaocha.test-suite/run      test_suite.clj:   7
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                                      kaocha.type.ns/eval42997/fn              ns.clj:  61
+                                         kaocha.type.ns/run-tests              ns.clj:  21
+                                                              ...
+                                      kaocha.type.ns/run-tests/fn              ns.clj:  21
+                                    kaocha.testable/run-testables        testable.clj: 224
+                                     kaocha.testable/run-testable        testable.clj: 211
+                                              kaocha.testable/run        testable.clj: 129
+                                                              ...
+                                     kaocha.type.var/eval46923/fn             var.clj:  38
+                        kaocha.type.var/eval46923/fn/wrapped-test             var.clj:  36
+                                         kaocha.type.var/test-var             var.clj:  24
+                       app.backend.routes.admin.dashboard-test/fn  dashboard_test.clj:  31
+   app.admin.backend.services.admin.dashboard/get-dashboard-stats       dashboard.clj:  56
+app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn       dashboard.clj:  57
+                                               next.jdbc/execute!            jdbc.clj: 268
+                               next.jdbc.protocols/eval16864/fn/G       protocols.clj:  34
+                                  clojure.core/-cache-protocol-fn    core_deftype.clj: 585
+java.lang.IllegalArgumentException: No implementation of method: :-execute-all of protocol: #'next.jdbc.protocols/Executable found for class: nil
+
+
+......................)(..2025-12-18T12:58:12.853Z Eness-MacBook-Pro.local INFO [app.template.backend.email.service:29] - Creating Postmark email service with from-email: test@example.com
+2025-12-18T12:58:12.854Z Eness-MacBook-Pro.local INFO [app.template.backend.services.postmark-email:117] - Creating Postmark email service with from email: test@example.com and base-url: http://localhost:8085
+...........................2025-12-18T12:58:12.863Z Eness-MacBook-Pro.local INFO [app.template.backend.email.service:29] - Creating Postmark email service with from-email: test@example.com
+2025-12-18T12:58:12.864Z Eness-MacBook-Pro.local INFO [app.template.backend.services.postmark-email:117] - Creating Postmark email service with from email: test@example.com and base-url: http://localhost:8085
+.2025-12-18T12:58:12.865Z Eness-MacBook-Pro.local INFO [app.template.backend.email.service:29] - Creating Postmark email service with from-email: test@example.com
+2025-12-18T12:58:12.865Z Eness-MacBook-Pro.local INFO [app.template.backend.services.postmark-email:117] - Creating Postmark email service with from email: test@example.com and base-url: http://localhost:8085
+.........2025-12-18T12:58:12.867Z Eness-MacBook-Pro.local INFO [app.template.backend.email.service:29] - Creating Postmark email service with from-email: test@example.com
+2025-12-18T12:58:12.868Z Eness-MacBook-Pro.local INFO [app.template.backend.services.postmark-email:117] - Creating Postmark email service with from email: test@example.com and base-url: http://localhost:8085
+....)(2025-12-18T12:58:12.870Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:29] - Admin admin@example.com attempting to delete users with id eddecee5-5452-45cb-852b-b91d08b26c31 {:force-delete false, :dry-run true, :source-flags {:body {:dry-run true}}, :query {}}
+..2025-12-18T12:58:12.871Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:77] - Dry-run deletion analysis completed for users eddecee5-5452-45cb-852b-b91d08b26c31 {:impact {:related-records 5}}
+...2025-12-18T12:58:12.872Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:29] - Admin admin@example.com attempting to delete users with id eddecee5-5452-45cb-852b-b91d08b26c31 {:force-delete false, :dry-run false, :source-flags {:body {}}, :query {}}
+.2025-12-18T12:58:12.873Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:98] - Successfully deleted users eddecee5-5452-45cb-852b-b91d08b26c31 by admin admin@example.com
+..2025-12-18T12:58:12.874Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:29] - Admin admin@example.com attempting to delete users with id eddecee5-5452-45cb-852b-b91d08b26c31 {:force-delete true, :dry-run false, :source-flags {:body {:force-delete true}}, :query {}}
+.2025-12-18T12:58:12.875Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:98] - Successfully deleted users eddecee5-5452-45cb-852b-b91d08b26c31 by admin admin@example.com
+.2025-12-18T12:58:12.875Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:29] - Admin admin@example.com attempting to delete unknown with id 123 {:force-delete false, :dry-run false, :source-flags {:body {}}, :query {}}
+.2025-12-18T12:58:12.876Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:29] - Admin admin@example.com attempting to delete users with id eddecee5-5452-45cb-852b-b91d08b26c31 {:force-delete false, :dry-run false, :source-flags {:body {}}, :query {}}
+2025-12-18T12:58:12.877Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.entities:50] - User deletion constraint violation: reason: :has-active-subscriptions message: Cannot delete user with active subscriptions
+...2025-12-18T12:58:12.878Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:134] - Admin admin@example.com creating users with data: {:email "newuser@example.com", :name "New User", :password "SecurePass123!"}
+.2025-12-18T12:58:12.879Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:154] - Successfully created users by admin admin@example.com
+2025-12-18T12:58:12.880Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:223] - Admin action with context: {:action "create_entity", :admin-id #uuid "70578b97-cdec-43c1-8e41-c5931d680b01", :entity-type "users", :entity-id #uuid "edc89f36-77f7-4ed9-b7c8-30b4f657649f", :details {:entity-type "users", :data {:email "newuser@example.com", :name "New User", :password "SecurePass123!"}, :result {:id #uuid "edc89f36-77f7-4ed9-b7c8-30b4f657649f", :email "newuser@example.com", :name "New User"}}, :ip-address "unknown", :user-agent nil}
+..2025-12-18T12:58:12.881Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.entities:134] - Admin admin@example.com creating users with data: {:email "invalid-email"}
+2025-12-18T12:58:12.881Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.utils:124] - Validation error: {:status 400, :validation-errors [{:field :email, :message "Invalid format"}]}
+.)(....2025-12-18T12:58:12.886Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.login-events:23] - ADMIN LOGIN EVENTS: fetched events {:count 2}
+....2025-12-18T12:58:12.889Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.login-events:23] - ADMIN LOGIN EVENTS: fetched events {:count 1}
+...2025-12-18T12:58:12.890Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.login-events:23] - ADMIN LOGIN EVENTS: fetched events {:count 2}
+...2025-12-18T12:58:12.891Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.login-events:23] - ADMIN LOGIN EVENTS: fetched events {:count 0}
+....)(2025-12-18T12:58:12.894Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "delete_admin", :admin-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :entity-type "admin", :entity-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :details nil}
+..2025-12-18T12:58:12.895Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "delete_admin", :admin-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :entity-type "admin", :entity-id #uuid "16e2f3be-742e-46a0-ab44-e2806198ac52", :details nil}
+....2025-12-18T12:58:12.898Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "update_admin", :admin-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :entity-type "admin", :entity-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :details {:full_name "Updated Name"}}
+..2025-12-18T12:58:12.900Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.admins:34] - 👥 Admin list-admins returned 2 admins {:filters {:search nil, :status nil, :role nil}, :pagination {:limit 50, :offset 0}}
+.....2025-12-18T12:58:12.902Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.admins:34] - 👥 Admin list-admins returned 2 admins {:filters {:search nil, :status nil, :role nil}, :pagination {:limit 10, :offset 0}}
+..2025-12-18T12:58:12.905Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.admins:34] - 👥 Admin list-admins returned 1 admins {:filters {:search "admin1", :status nil, :role nil}, :pagination {:limit 50, :offset 0}}
+..2025-12-18T12:58:12.908Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "update_admin_status", :admin-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :entity-type "admin", :entity-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :details {:new-status "suspended"}}
+..2025-12-18T12:58:12.909Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.utils:124] - Validation error: {:status 400, :field :status, :allowed ["active" "suspended"]}
+.2025-12-18T12:58:12.910Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "update_admin_role", :admin-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :entity-type "admin", :entity-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :details {:new-role "support"}}
+..2025-12-18T12:58:12.912Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.utils:124] - Validation error: {:status 400, :field :role, :allowed ["admin" "support" "owner"]}
+.2025-12-18T12:58:12.914Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.utils:124] - Validation error: {:status 400, :field :role}
+.2025-12-18T12:58:12.915Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.admins:74] - Admin create request: {:email "new@example.com", :role "admin"}
+2025-12-18T12:58:12.916Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "create_admin", :admin-id #uuid "4b39095e-5567-4688-9cad-7c66fc2b480e", :entity-type "admin", :entity-id #uuid "84b4eea3-cdcf-4567-b703-01548f7ecb9b", :details {:email "new@example.com", :full_name "New Admin", :role "admin"}}
+..2025-12-18T12:58:12.917Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.admins:74] - Admin create request: {:email nil, :role nil}
+2025-12-18T12:58:12.917Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.utils:124] - Validation error: {:status 400, :field :email}
+.2025-12-18T12:58:12.918Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.admins:74] - Admin create request: {:email "new@example.com", :role nil}
+2025-12-18T12:58:12.918Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.admin.utils:124] - Validation error: {:status 400, :field :password}
+.)(..........)(................)(...........................)(..........................)(2025-12-18T12:58:23.476Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.481Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.481Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.499Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/config", :admin-token-present false, :content-type nil}
+.2025-12-18T12:58:23.540Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: (:items)
+2025-12-18T12:58:23.541Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.541Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: (:items)
+2025-12-18T12:58:23.556Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/config", :admin-token-present false, :content-type nil}
+..2025-12-18T12:58:23.564Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.564Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.565Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+..2025-12-18T12:58:23.575Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.576Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.576Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+.2025-12-18T12:58:23.584Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.585Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.585Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.593Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/unknown-endpoint", :admin-token-present false, :content-type nil}
+.2025-12-18T12:58:23.594Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.594Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.594Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.601Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v999/metrics", :admin-token-present false, :content-type nil}
+.2025-12-18T12:58:23.602Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.602Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.602Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.609Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/metrics", :admin-token-present false, :content-type nil}
+2025-12-18T12:58:23.612Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.auth:211] - Failed to count active admin sessions
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  17
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj:  19
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  40
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  41
+            app.admin.backend.services.admin.auth/count-active-sessions              auth.clj: 205
+                                                 next.jdbc/execute-one!              jdbc.clj: 289
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.642Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:52] - Failed to compute recent audit activity count
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  17
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj:  19
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  45
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  46
+                                                 next.jdbc/execute-one!              jdbc.clj: 289
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.655Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:65] - Failed to load recent audit events
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  17
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj:  19
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  56
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  57
+                                                     next.jdbc/execute!              jdbc.clj: 268
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1033
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.668Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.api:131] - Failed to compute total login events for /metrics
+                                                                            ...
+                                                         clojure.run.exec/-main              exec.clj: 191
+                                                         clojure.run.exec/-main              exec.clj: 223
+                                                      clojure.run.exec/-main/fn              exec.clj: 227
+                                                          clojure.run.exec/exec              exec.clj:  88
+                                                                            ...
+                                                          kaocha.runner/exec-fn            runner.clj: 203
+                                                       kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                                 kaocha.api/run               api.clj: 110
+                                                              kaocha.api/run/fn               api.clj: 132
+                                                          kaocha.api/run/fn{x2}               api.clj: 133
+                                                    clojure.core/with-redefs-fn              core.clj:7706
+                                                          kaocha.api/run/fn{x3}               api.clj: 159
+                                                  kaocha.testable/run-testables          testable.clj: 224
+                                                   kaocha.testable/run-testable          testable.clj: 211
+                                                            kaocha.testable/run          testable.clj: 129
+                                                                            ...
+                                          kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                          kaocha.test-suite/run        test_suite.clj:   7
+                                                  kaocha.testable/run-testables          testable.clj: 224
+                                                   kaocha.testable/run-testable          testable.clj: 211
+                                                            kaocha.testable/run          testable.clj: 129
+                                                                            ...
+                                                    kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                                       kaocha.type.ns/run-tests                ns.clj:  21
+                                                                            ...
+                                                    kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                                  kaocha.testable/run-testables          testable.clj: 224
+                                                   kaocha.testable/run-testable          testable.clj: 211
+                                                            kaocha.testable/run          testable.clj: 129
+                                                                            ...
+                                                   kaocha.type.var/eval46923/fn               var.clj:  38
+                                      kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                                       kaocha.type.var/test-var               var.clj:  24
+                                                 app.backend.routes.api-test/fn          api_test.clj:  17
+                                             app.backend.routes.api-test/fn{x2}          api_test.clj:  19
+                       app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                                     ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                          ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                              ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                        ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                              ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+                     ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                        ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                          ring.middleware.params/wrap-params/fn            params.clj:  75
+                      ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+                     ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+              ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                            ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                          ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                        ring.middleware.session/wrap-session/fn           session.clj: 113
+                                            ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                           ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                              ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+                     ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+             app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+            app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+        app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+              app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                            ...
+                                                    reitit.ring/ring-handler/fn             ring.cljc: 386
+                                          ring.middleware.params/wrap-params/fn            params.clj:  75
+                                   muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                                    muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                                     muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+                     app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+                  app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+                 app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+                     app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 127
+                  app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 128
+app.template.backend.services.monitoring.login-events/count-recent-login-events      login_events.clj:  81
+                                                         next.jdbc/execute-one!              jdbc.clj: 289
+                                             next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                              next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                             next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                              next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                             next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+....2025-12-18T12:58:23.683Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.683Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.683Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.694Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/metrics", :admin-token-present false, :content-type nil}
+2025-12-18T12:58:23.695Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.auth:211] - Failed to count active admin sessions
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  27
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj:  30
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  40
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  41
+            app.admin.backend.services.admin.auth/count-active-sessions              auth.clj: 205
+                                                 next.jdbc/execute-one!              jdbc.clj: 289
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.706Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:52] - Failed to compute recent audit activity count
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  27
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj:  30
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  45
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  46
+                                                 next.jdbc/execute-one!              jdbc.clj: 289
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.735Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:65] - Failed to load recent audit events
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  27
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj:  30
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  56
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  57
+                                                     next.jdbc/execute!              jdbc.clj: 268
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1033
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+.2025-12-18T12:58:23.746Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.746Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.747Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.762Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :post, :uri "/api/v1/auth/login", :admin-token-present false, :content-type "application/json"}
+.2025-12-18T12:58:23.770Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.770Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.770Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.778Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :post, :uri "/api/v1/auth/login", :admin-token-present false, :content-type "application/json"}
+..2025-12-18T12:58:23.780Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.781Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.781Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.788Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/metrics", :admin-token-present false, :content-type nil}
+2025-12-18T12:58:23.788Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.auth:211] - Failed to count active admin sessions
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  98
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj: 100
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  40
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  41
+            app.admin.backend.services.admin.auth/count-active-sessions              auth.clj: 205
+                                                 next.jdbc/execute-one!              jdbc.clj: 289
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.797Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:52] - Failed to compute recent audit activity count
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  98
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj: 100
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  45
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  46
+                                                 next.jdbc/execute-one!              jdbc.clj: 289
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.803Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.dashboard:65] - Failed to load recent audit events
+                                                                    ...
+                                                 clojure.run.exec/-main              exec.clj: 191
+                                                 clojure.run.exec/-main              exec.clj: 223
+                                              clojure.run.exec/-main/fn              exec.clj: 227
+                                                  clojure.run.exec/exec              exec.clj:  88
+                                                                    ...
+                                                  kaocha.runner/exec-fn            runner.clj: 203
+                                               kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                         kaocha.api/run               api.clj: 110
+                                                      kaocha.api/run/fn               api.clj: 132
+                                                  kaocha.api/run/fn{x2}               api.clj: 133
+                                            clojure.core/with-redefs-fn              core.clj:7706
+                                                  kaocha.api/run/fn{x3}               api.clj: 159
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                  kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                  kaocha.test-suite/run        test_suite.clj:   7
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                            kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                               kaocha.type.ns/run-tests                ns.clj:  21
+                                                                    ...
+                                            kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                          kaocha.testable/run-testables          testable.clj: 224
+                                           kaocha.testable/run-testable          testable.clj: 211
+                                                    kaocha.testable/run          testable.clj: 129
+                                                                    ...
+                                           kaocha.type.var/eval46923/fn               var.clj:  38
+                              kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                               kaocha.type.var/test-var               var.clj:  24
+                                         app.backend.routes.api-test/fn          api_test.clj:  98
+                                     app.backend.routes.api-test/fn{x2}          api_test.clj: 100
+               app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                             ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                  ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                      ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+              ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+             ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+      ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                    ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                  ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                ring.middleware.session/wrap-session/fn           session.clj: 113
+                                    ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                   ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                      ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+             ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+     app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+    app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+      app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                    ...
+                                            reitit.ring/ring-handler/fn             ring.cljc: 386
+                                  ring.middleware.params/wrap-params/fn            params.clj:  75
+                           muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                            muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                             muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+             app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+          app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+         app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+             app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 118
+          app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 119
+         app.admin.backend.services.admin.dashboard/get-dashboard-stats         dashboard.clj:  56
+      app.admin.backend.services.admin.dashboard/get-dashboard-stats/fn         dashboard.clj:  57
+                                                     next.jdbc/execute!              jdbc.clj: 268
+                                     next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                      next.jdbc.result-set/eval17878/fn        result_set.clj:1033
+                                     next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                      next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                     next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+2025-12-18T12:58:23.809Z Eness-MacBook-Pro.local WARN [app.template.backend.routes.api:131] - Failed to compute total login events for /metrics
+                                                                            ...
+                                                         clojure.run.exec/-main              exec.clj: 191
+                                                         clojure.run.exec/-main              exec.clj: 223
+                                                      clojure.run.exec/-main/fn              exec.clj: 227
+                                                          clojure.run.exec/exec              exec.clj:  88
+                                                                            ...
+                                                          kaocha.runner/exec-fn            runner.clj: 203
+                                                       kaocha.runner/exec-fn/fn            runner.clj: 205
+                                                                 kaocha.api/run               api.clj: 110
+                                                              kaocha.api/run/fn               api.clj: 132
+                                                          kaocha.api/run/fn{x2}               api.clj: 133
+                                                    clojure.core/with-redefs-fn              core.clj:7706
+                                                          kaocha.api/run/fn{x3}               api.clj: 159
+                                                  kaocha.testable/run-testables          testable.clj: 224
+                                                   kaocha.testable/run-testable          testable.clj: 211
+                                                            kaocha.testable/run          testable.clj: 129
+                                                                            ...
+                                          kaocha.type.clojure.test/eval43499/fn              test.clj:  18
+                                                          kaocha.test-suite/run        test_suite.clj:   7
+                                                  kaocha.testable/run-testables          testable.clj: 224
+                                                   kaocha.testable/run-testable          testable.clj: 211
+                                                            kaocha.testable/run          testable.clj: 129
+                                                                            ...
+                                                    kaocha.type.ns/eval42997/fn                ns.clj:  61
+                                                       kaocha.type.ns/run-tests                ns.clj:  21
+                                                                            ...
+                                                    kaocha.type.ns/run-tests/fn                ns.clj:  21
+                                                  kaocha.testable/run-testables          testable.clj: 224
+                                                   kaocha.testable/run-testable          testable.clj: 211
+                                                            kaocha.testable/run          testable.clj: 129
+                                                                            ...
+                                                   kaocha.type.var/eval46923/fn               var.clj:  38
+                                      kaocha.type.var/eval46923/fn/wrapped-test               var.clj:  36
+                                                       kaocha.type.var/test-var               var.clj:  24
+                                                 app.backend.routes.api-test/fn          api_test.clj:  98
+                                             app.backend.routes.api-test/fn{x2}          api_test.clj: 100
+                       app.template.backend.webserver/wrap-service-container/fn         webserver.clj:  11
+                                     ring.middleware.x-headers/wrap-x-header/fn         x_headers.clj:  22 ─ (repeats 2 times)
+                          ring.middleware.content-length/wrap-content-length/fn    content_length.clj:  50
+                              ring.middleware.not-modified/wrap-not-modified/fn      not_modified.clj:  66
+                        ring.middleware.default-charset/wrap-default-charset/fn   default_charset.clj:  31
+                              ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+                     ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+                                        ring.middleware.cookies/wrap-cookies/fn           cookies.clj: 198
+                                          ring.middleware.params/wrap-params/fn            params.clj:  75
+                      ring.middleware.multipart-params/wrap-multipart-params/fn  multipart_params.clj: 192
+                     ring.middleware.multipart-params/handle-request-and-errors  multipart_params.clj: 138
+              ring.middleware.multipart-params/handle-request-and-errors/fn{x2}  multipart_params.clj: 140
+                            ring.middleware.nested-params/wrap-nested-params/fn     nested_params.clj:  89
+                          ring.middleware.keyword-params/wrap-keyword-params/fn    keyword_params.clj:  53
+                                        ring.middleware.session/wrap-session/fn           session.clj: 113
+                                            ring.middleware.flash/wrap-flash/fn             flash.clj:  39
+                           ring.websocket.keepalive/wrap-websocket-keepalive/fn         keepalive.clj:  56
+                              ring.middleware.content-type/wrap-content-type/fn      content_type.clj:  39
+                     ring.middleware.resource/wrap-resource-prefer-resources/fn          resource.clj:  25
+             app.template.backend.middleware.security/force-https-middleware/fn          security.clj:  64
+            app.template.backend.middleware.rate-limiting/wrap-rate-limiting/fn     rate_limiting.clj: 209
+        app.template.backend.middleware.security/security-headers-middleware/fn          security.clj:  77
+              app.template.backend.routes/app-routes/global-debug-middleware/fn            routes.clj:  75
+                                                                            ...
+                                                    reitit.ring/ring-handler/fn             ring.cljc: 386
+                                          ring.middleware.params/wrap-params/fn            params.clj:  75
+                                   muuntaja.middleware/wrap-format-negotiate/fn        middleware.clj:  96
+                                    muuntaja.middleware/wrap-format-response/fn        middleware.clj: 132
+                                     muuntaja.middleware/wrap-format-request/fn        middleware.clj: 114
+                     app.template.backend.routes.api/wrap-exception-handling/fn               api.clj:  95
+                  app.template.backend.routes.api/api-version-middleware/fn{x2}               api.clj: 107
+                 app.template.backend.routes.api/create-versioned-api-routes/fn               api.clj: 198
+                     app.template.backend.routes.api/get-simple-metrics-summary               api.clj: 127
+                  app.template.backend.routes.api/get-simple-metrics-summary/fn               api.clj: 128
+app.template.backend.services.monitoring.login-events/count-recent-login-events      login_events.clj:  81
+                                                         next.jdbc/execute-one!              jdbc.clj: 289
+                                             next.jdbc.protocols/eval16864/fn/G         protocols.clj:  34
+                                              next.jdbc.result-set/eval17878/fn        result_set.clj:1031
+                                             next.jdbc.protocols/eval16802/fn/G         protocols.clj:  14
+                                              next.jdbc.connection/eval17118/fn        connection.clj: 478
+                                             next.jdbc.connection/spec->url+etc        connection.clj: 202
+clojure.lang.ExceptionInfo: Unknown dbtype: , and :classname not provided.
+
+
+.2025-12-18T12:58:23.816Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:24] - Generating entities routes for keys: nil
+2025-12-18T12:58:23.816Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:42] - 🔧 Using modern template CRUD routes from DI container
+2025-12-18T12:58:23.816Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.entities:43] - 🔧 Available entities: nil
+2025-12-18T12:58:23.822Z Eness-MacBook-Pro.local INFO [app.template.backend.routes:70] - 🌐 GLOBAL REQUEST DEBUG: {:method :get, :uri "/api/v1/config", :admin-token-present false, :content-type nil}
+.)(...)(...............................)(.2025-12-18T12:58:23.988Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "reset_user_password", :admin-id #uuid "dbb3e924-71c5-41b9-966d-e8fb8f22e095", :entity-type "user", :entity-id #uuid "b7df2c9c-0f10-4ac6-a2f4-6b5f8c2cf087", :details {}}
+..2025-12-18T12:58:23.989Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "reset_user_password", :admin-id #uuid "dbb3e924-71c5-41b9-966d-e8fb8f22e095", :entity-type "user", :entity-id #uuid "b7df2c9c-0f10-4ac6-a2f4-6b5f8c2cf087", :details {}}
+..................2025-12-18T12:58:23.996Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "force_verify_email", :admin-id #uuid "dbb3e924-71c5-41b9-966d-e8fb8f22e095", :entity-type "user", :entity-id #uuid "b7df2c9c-0f10-4ac6-a2f4-6b5f8c2cf087", :details {}}
+....2025-12-18T12:58:23.998Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "update_user_role", :admin-id #uuid "dbb3e924-71c5-41b9-966d-e8fb8f22e095", :entity-type "user", :entity-id #uuid "b7df2c9c-0f10-4ac6-a2f4-6b5f8c2cf087", :details {:role "premium"}}
+.....)(......................................)(.........2025-12-18T12:58:24.968Z Eness-MacBook-Pro.local INFO [app.admin.backend.services.admin.audit:216] - 📋 AUDIT SERVICE: Query built successfully
+2025-12-18T12:58:24.975Z Eness-MacBook-Pro.local INFO [app.admin.backend.services.admin.audit:223] - 📊 AUDIT SERVICE: Query executed successfully, found 0 logs
+...2025-12-18T12:58:25.875Z Eness-MacBook-Pro.local INFO [app.admin.backend.services.admin.auth:123] - Admin authentication successful {:email "auth-86f2321b-8c0b-42ca-b404-934990c365b1@example.com"}
+..2025-12-18T12:58:26.469Z Eness-MacBook-Pro.local WARN [app.admin.backend.services.admin.auth:136] - Admin authentication failed - invalid password {:email "wrongpw-15044952-67a9-4dbb-8c93-6261ed74c393@example.com"}
+..............)(...............................)(2025-12-18T12:58:28.713Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.user-bulk:84] - Admin admin@example.com performing batch user update {:item-count 2}
+2025-12-18T12:58:28.714Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.user-bulk:94] - Batch updating user #uuid "9aeb1fd5-b507-49df-92c8-3a41d01c2021" with {:name "Updated Name 1"}
+.2025-12-18T12:58:28.714Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.user-bulk:94] - Batch updating user #uuid "7efd6bd0-4e1d-4355-88fe-4a4990a418c8" with {:name "Updated Name 2"}
+.2025-12-18T12:58:28.714Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.user-bulk:101] - Batch update completed: {:successful 2, :failed 0}
+...2025-12-18T12:58:28.715Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.user-bulk:84] - Admin admin@example.com performing batch user update {:item-count 0}
+...2025-12-18T12:58:28.717Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "bulk_update_user_role", :admin-id #uuid "02f246fa-da81-4ebd-af45-1ec6284d4a22", :entity-type "users", :entity-id ["9aeb1fd5-b507-49df-92c8-3a41d01c2021" "7efd6bd0-4e1d-4355-88fe-4a4990a418c8"], :details {:role "premium"}}
+.......2025-12-18T12:58:28.718Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "bulk_update_user_status", :admin-id #uuid "02f246fa-da81-4ebd-af45-1ec6284d4a22", :entity-type "users", :entity-id ["9aeb1fd5-b507-49df-92c8-3a41d01c2021" "7efd6bd0-4e1d-4355-88fe-4a4990a418c8"], :details {:status "inactive"}}
+.......2025-12-18T12:58:28.720Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "export_users", :admin-id #uuid "02f246fa-da81-4ebd-af45-1ec6284d4a22", :entity-type "users", :entity-id ["9aeb1fd5-b507-49df-92c8-3a41d01c2021"], :details {}}
+..2025-12-18T12:58:28.721Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:188] - Admin action: {:action "export_users", :admin-id #uuid "02f246fa-da81-4ebd-af45-1ec6284d4a22", :entity-type "users", :entity-id ["9aeb1fd5-b507-49df-92c8-3a41d01c2021"], :details {}}
+.)(.................................)(2025-12-18T12:58:28.733Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:223] - Admin action with context: {:action "remove-entity-setting", :admin-id #uuid "660f097e-32b6-4250-b332-d8310d979dd1", :entity-type "settings", :entity-id nil, :details {:entity :users, :setting :default-sort, :old-value :email}, :ip-address nil, :user-agent nil}
+....2025-12-18T12:58:28.734Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:223] - Admin action with context: {:action "update-view-options", :admin-id #uuid "660f097e-32b6-4250-b332-d8310d979dd1", :entity-type "settings", :entity-id nil, :details {:changes {:users {:default-sort :name}}}, :ip-address nil, :user-agent nil}
+............2025-12-18T12:58:28.737Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.settings:59] - PATCH request body: {:entity-name "users", :setting-key "default-sort", :setting-value :email}
+2025-12-18T12:58:28.737Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.settings:70] - Parsed values: {:entity-name :users, :setting-key :default-sort, :setting-value :email}
+2025-12-18T12:58:28.737Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:223] - Admin action with context: {:action "update-entity-setting", :admin-id #uuid "660f097e-32b6-4250-b332-d8310d979dd1", :entity-type "settings", :entity-id nil, :details {:entity :users, :setting :default-sort, :old-value :email, :new-value :email}, :ip-address nil, :user-agent nil}
+....2025-12-18T12:58:28.738Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.settings:59] - PATCH request body: {:entity_name "admins", :setting_key "columns-visible", :setting_value [:email :role :status]}
+2025-12-18T12:58:28.738Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.settings:70] - Parsed values: {:entity-name :admins, :setting-key :columns-visible, :setting-value [:email :role :status]}
+2025-12-18T12:58:28.738Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.utils:223] - Admin action with context: {:action "update-entity-setting", :admin-id #uuid "660f097e-32b6-4250-b332-d8310d979dd1", :entity-type "settings", :entity-id nil, :details {:entity :admins, :setting :columns-visible, :old-value [:email :role], :new-value [:email :role :status]}, :ip-address nil, :user-agent nil}
+.2025-12-18T12:58:28.739Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.settings:59] - PATCH request body: {:entity-name "users"}
+2025-12-18T12:58:28.739Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.settings:70] - Parsed values: {:entity-name :users, :setting-key nil, :setting-value :app.template.backend.routes.admin.settings/not-found}
+.)(..........2025-12-18T12:58:28.743Z Eness-MacBook-Pro.local INFO [app.template.backend.routes.admin.integrations:14] - 🔗 Getting integration overview
+....)]2025-12-18T12:58:28.746Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:89] - 🧹 Stopping test system...
+2025-12-18T12:58:28.746Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:57] - Test system interrupted
+2025-12-18T12:58:28.746Z Eness-MacBook-Pro.local INFO [app.backend.fixtures:99] - ✅ Test system stopped
+
+2025-12-18T12:58:28.750Z Eness-MacBook-Pro.local INFO [app.template.backend.webserver:55] - Server stopped
+[32m130 tests, 535 assertions, 0 failures.[m

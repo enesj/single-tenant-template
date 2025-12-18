@@ -4,7 +4,7 @@
 
 Centralized casts/coercions used by the single-tenant admin backend and UI.
 
-- **Location**: `src/app/shared/type_conversion.cljc`
+- **Location**: `src/app/shared/type_conversion.cljc` (entrypoint) + split implementation in `src/app/shared/type_conversion_db.cljc`
 - **Purpose**: Provide HoneySQL-friendly casts and safe value coercion so inserts/updates and JSON responses stay consistent.
 
 ## Core helpers

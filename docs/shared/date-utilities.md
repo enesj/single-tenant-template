@@ -4,7 +4,7 @@
 
 Shared date/time helpers for the single-tenant admin app.
 
-- **Location**: `src/app/shared/date.cljc`
+- **Location**: `src/app/shared/date.cljc` (entrypoint) + split implementation in `src/app/shared/date_{core,arithmetic,range}.cljc`
 - **Capabilities**: instant/ISO parsing, formatting helpers, timezone-safe utilities for analytics timestamps, and human-readable displays in the admin UI.
 
 ## Usage notes

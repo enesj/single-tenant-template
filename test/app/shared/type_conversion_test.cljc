@@ -55,6 +55,25 @@
                         :cljs (js->clj converted :keywordize-keys true))]
       (is (= {:foo true} normalized)))))
 
+(deftest parse-number-test
+  (testing "Valid numbers"
+    (is (= 42 (type-conv/parse-number "42")))
+    (is (= -42 (type-conv/parse-number "-42")))
+    (is (= 3.14 (type-conv/parse-number "3.14"))))
+  (testing "Invalid numbers return nil instead of NaN"
+    (is (nil? (type-conv/parse-number "abc")))
+    (is (nil? (type-conv/parse-number "")))
+    (is (nil? (type-conv/parse-number " ")))
+    (is (nil? (type-conv/parse-number "123.45.67")))))
+
+(deftest convert-to-type-edge-cases-test
+  (testing "Decimal conversion with invalid strings throws instead of NaN"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+          (type-conv/convert-to-type "abc" :decimal))))
+  (testing "Integer conversion with invalid strings throws"
+    (is (thrown? #?(:clj Exception :cljs js/Error)
+          (type-conv/convert-to-type "abc" :integer)))))
+
 (deftest detect-field-type-test
   (is (= :integer (type-conv/detect-field-type "42")))
   (is (= :decimal (type-conv/detect-field-type "3.14")))

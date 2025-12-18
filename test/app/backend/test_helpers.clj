@@ -77,31 +77,37 @@
 (defn build-handler
   "Build a test handler with stubbed dependencies.
    
-   This creates a full Ring handler stack with:
-   - Routes from app.backend.routes/app-routes
-   - Service container middleware
-   - Mocked admin API and dashboard services
+   This creates a full Ring handler stack that wraps its execution in with-redefs
+   to ensure that database-hitting functions are always stubbed.
+   
+   Optional `overrides` map allows replacing default stubs:
+   {:get-dashboard-stats (fn [db] ...)
+    :count-recent-login-events (fn [db opts] ...)}
    
    Usage:
    (let [handler (build-handler)]
      (handler (mock/request :get \"/\")))"
   ([]
-   (build-handler (stub-service-container)))
+   (build-handler (stub-service-container) {}))
   ([service-container]
-   ;; Use with-redefs to stub out functions that would hit the database
-   (with-redefs [admin-api/admin-api-routes
-                 (fn [_ _] ["/admin/api" {:get {:handler (constantly {:status 200})}}])
+   (build-handler service-container {}))
+  ([service-container overrides]
+   (let [actual-handler (with-redefs [admin-api/admin-api-routes
+                                      (fn [_ _] ["/admin/api" {:get {:handler (constantly {:status 200})}}])]
+                          (-> (routes/app-routes {} service-container)
+                            (webserver/wrap-service-container service-container)))]
+     (fn [request]
+       (with-redefs [admin-dashboard/get-dashboard-stats
+                     (get overrides :get-dashboard-stats
+                       (fn [_] {:total-admins 0
+                                :active-sessions 0
+                                :recent-activity 0
+                                :recent-events []}))
 
-                 admin-dashboard/get-dashboard-stats
-                 (fn [_] {:total-admins 0
-                          :active-sessions 0
-                          :recent-activity 0
-                          :recent-events []})
-
-                 login-monitoring/count-recent-login-events
-                 (fn [_ _] 0)]
-     (-> (routes/app-routes {} service-container)
-       (webserver/wrap-service-container service-container)))))
+                     login-monitoring/count-recent-login-events
+                     (get overrides :count-recent-login-events
+                       (fn [_ _] 0))]
+         (actual-handler request))))))
 
 (defn build-handler-with-db
   "Build a handler using the real test database.
