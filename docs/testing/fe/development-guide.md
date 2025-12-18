@@ -118,6 +118,43 @@ Ran 212 tests containing 1251 assertions.
                     :show-edit? false
                     :show-delete? false})]
       (is (not (str/includes? markup "btn-delete"))))))
+
+### DOM-based Component Tests (Karma)
+
+While static markup tests are fast and sufficient for most UI logic, some features (like CSS class toggling for highlights or active states) are better verified in a real DOM environment using Karma.
+
+#### Example: Testing Row Highlights
+
+```clojure
+(ns app.template.frontend.components.list-highlight-dom-test
+  (:require
+    ["react-dom/client" :as rdom]
+    ["react-dom/test-utils" :as test-utils]
+    [app.template.frontend.components.table :as table]
+    [cljs.test :refer-macros [deftest is testing]]
+    [uix.core :refer [$]]))
+
+;; Use this helper to mount components in Karma's browser environment
+(defn- mount-component! [component assertions]
+  (let [container (.createElement js/document "div")
+        root (rdom/createRoot container)]
+    (.appendChild (.-body js/document) container)
+    (try
+      (test-utils/act (fn [] (.render root component)))
+      (assertions container)
+      (finally
+        (.unmount root)
+        (.removeChild (.-body js/document) container)))))
+
+(deftest row-highlight-classes-test
+  (testing "Row applies bg-green-200/50 when recently-updated? is true"
+    (mount-component!
+      ($ table/table {:rows [{:id "1"}] :show-highlights? true 
+                       :render-row (fn [_ _] {:recently-updated? true})})
+      (fn [container]
+        (let [tr (.querySelector container "tbody tr")]
+          (is (.contains (.-classList tr) "bg-green-200/50")))))))
+```
 ```
 
 ### Event Tests

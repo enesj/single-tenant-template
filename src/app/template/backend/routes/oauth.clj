@@ -1,5 +1,6 @@
 (ns app.template.backend.routes.oauth
   (:require
+    [app.domain.backend.registry :as domain-registry]
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.routes.utils :as route-utils :refer [get-oauth-configs]]
     [clj-http.client :as http]
@@ -222,9 +223,10 @@
                       ;; Use auth service to process OAuth callback (single-tenant)
                       (try
                         (let [session-data (auth-service/process-oauth-callback auth-service user-info provider)
-                          user-email (get-in session-data [:user :email])
-                          sanitized-user (sanitize-for-serialization (:user session-data))
-                          redirect-url "/expenses"]
+                              user-email (get-in session-data [:user :email])
+                              sanitized-user (sanitize-for-serialization (:user session-data))
+                              ;; Get post-login redirect path from domain registry
+                              redirect-url (domain-registry/get-post-login-path)]
 
                           (log/info "Authentication successful for:" user-email)
                           (log/info "Redirecting user" user-email "to:" redirect-url)

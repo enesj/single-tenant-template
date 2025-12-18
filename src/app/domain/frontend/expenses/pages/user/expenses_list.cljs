@@ -15,7 +15,7 @@
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
     ;; Ensure subs are registered
-    [app.template.frontend.subs.user-expenses]))
+    app.domain.frontend.expenses.subs.user-expenses))
 
 ;; =============================================================================
 ;; Modal form renderers

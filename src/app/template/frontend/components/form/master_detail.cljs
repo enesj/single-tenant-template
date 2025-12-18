@@ -45,13 +45,20 @@
 
 (defn- entity-id-matches?
   "Check if the loaded entity matches the requested entity-id.
-   Handles various key formats from different sources."
-  [entity entity-id]
+   Handles various key formats from different sources.
+   
+   The entity-name is used to check for namespaced keys like :expense/id."
+  [entity entity-id entity-name]
   (when (and entity entity-id)
     (let [entity-id-str (str entity-id)
+          ;; Build potential namespaced keys based on entity-name
+          singular-ns-key (when entity-name
+                            (keyword (name entity-name) "id"))
+          plural-ns-key (when entity-name
+                          (keyword (str (name entity-name) "s") "id"))
           loaded-id (or (:id entity)
-                      (:expense/id entity)
-                      (:expenses/id entity))]
+                      (get entity singular-ns-key)
+                      (get entity plural-ns-key))]
       (and loaded-id (= (str loaded-id) entity-id-str)))))
 
 ;; =============================================================================
@@ -103,7 +110,7 @@
         detail-loaded? (and editing?
                          entity-id-str
                          select-detail
-                         (entity-id-matches? select-detail entity-id-str))
+                         (entity-id-matches? select-detail entity-id-str entity-name))
 
         ;; Compute effective entity data:
         ;; - For edit: use loaded detail if available, else fall back to initial-row-data

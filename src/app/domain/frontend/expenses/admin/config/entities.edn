@@ -1,0 +1,126 @@
+{;; =============================================================================
+ ;; Expenses Domain - Admin Entity Configurations
+ ;; =============================================================================
+ ;; These entity configs are domain-owned and registered via the domain registry.
+ ;; They contain page metadata, display settings, and feature flags for admin UI.
+
+ :expenses
+ {:entity-key :expenses
+  :page-title "Expenses"
+  :page-description "Expense history and posting status"
+  ;; Note: :adapter-init-fn is provided by domain registry, not here
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 25}
+  :features {:read-only? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :receipts
+ {:entity-key :receipts
+  :page-title "Receipts"
+  :page-description "Receipt inbox and parsing statuses"
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 25}
+  :features {:read-only? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :suppliers
+ {:entity-key :suppliers
+  :page-title "Suppliers"
+  :page-description "Manage expense suppliers"
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 50}
+  :features {:read-only? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :payers
+ {:entity-key :payers
+  :page-title "Payers"
+  :page-description "Payment sources and defaults"
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 50}
+  :features {:read-only? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :articles
+ {:entity-key :articles
+  :page-title "Articles"
+  :page-description "Canonical expense items"
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :per-page 50}
+  :features {:read-only? false
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :article-aliases
+ {:entity-key :article-aliases
+  :page-title "Article Aliases"
+  :page-description "Supplier-specific aliases mapped to articles"
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :per-page 50}
+  :features {:read-only? false
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
+ :price-observations
+ {:entity-key :price-observations
+  :page-title "Price Observations"
+  :page-description "Observed prices across suppliers"
+  :display-settings {:show-select? true
+                     :show-edit? false
+                     :show-delete? false
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? false
+                     :per-page 50}
+  :features {:read-only? true
+             :batch-operations? false
+             :deletion-constraints? false
+             :security-wrapper? false}}}

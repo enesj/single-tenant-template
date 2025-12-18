@@ -1,6 +1,8 @@
 (ns app.admin.frontend.pages.settings.constants
   (:require
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    ;; Domain registry for domain-specific groups
+    [app.domain.frontend.registry :as domain-registry]))
 
 ;; Display settings that can be hardcoded in view-options.edn
 (def display-setting-keys
@@ -22,26 +24,25 @@
 
 ;; Domain organization for entities
 (def domain-groups
-  {:user-management
-   {:title "User Management"
-    :description "Manage users and administrators"
-    :icon "👥"
-    :entities #{:users :admins}
-    :color "primary"}
+  "Domain organization for entities.
+   Template/admin groups are defined here; domain-specific groups are merged from registry."
+  (merge
+    ;; Template/admin groups (core infrastructure)
+    {:user-management
+     {:title "User Management"
+      :description "Manage users and administrators"
+      :icon "👥"
+      :entities #{:users :admins}
+      :color "primary"}
 
-   :security-audit
-   {:title "Security & Audit"
-    :description "System audit trail and security monitoring"
-    :icon "🔒"
-    :entities #{:audit-logs :login-events}
-    :color "secondary"}
-
-   :expenses
-   {:title "Expenses Management"
-    :description "Track expenses, receipts, and suppliers"
-    :icon "💰"
-    :entities #{:expenses :receipts :suppliers :payers :articles :article-aliases :price-observations}
-    :color "accent"}})
+     :security-audit
+     {:title "Security & Audit"
+      :description "System audit trail and security monitoring"
+      :icon "🔒"
+      :entities #{:audit-logs :login-events}
+      :color "secondary"}}
+    ;; Domain-specific groups from registry
+    (domain-registry/all-admin-domain-groups)))
 
 (defn setting-label
   "Convert a setting key to a human-readable label"

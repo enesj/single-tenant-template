@@ -1,27 +1,28 @@
 (ns app.template.backend.routes.admin-api
   "Refactored admin API routes - now composed from focused namespaces"
   (:require
-   [app.template.backend.middleware.admin :as admin-middleware] ;; Focused admin route namespaces
-   [app.template.backend.routes.admin.admins :as admin-admins]
-   [app.template.backend.routes.admin.audit :as admin-audit]
-   [app.template.backend.routes.admin.auth :as admin-auth]
-   [app.template.backend.routes.admin.dashboard :as admin-dashboard]
-   [app.template.backend.routes.admin.entities :as admin-entities]
-   [app.template.backend.routes.admin.login-events :as admin-login-events]
-   [app.template.backend.routes.admin.password :as admin-password]
-   [app.template.backend.routes.admin.settings :as admin-settings]
-   [app.template.backend.routes.admin.user-bulk :as admin-user-bulk]
-   [app.template.backend.routes.admin.user-operations :as admin-user-ops]
-   [app.template.backend.routes.admin.users :as admin-users]
-   [app.template.backend.routes.admin.utils :as admin-utils]
-   [app.domain.backend.expenses.routes.core :as expenses-routes]))
-
+    [app.template.backend.middleware.admin :as admin-middleware]
+    [app.template.backend.routes.admin.admins :as admin-admins]
+    [app.template.backend.routes.admin.audit :as admin-audit]
+    [app.template.backend.routes.admin.auth :as admin-auth]
+    [app.template.backend.routes.admin.dashboard :as admin-dashboard]
+    [app.template.backend.routes.admin.entities :as admin-entities]
+    [app.template.backend.routes.admin.login-events :as admin-login-events]
+    [app.template.backend.routes.admin.password :as admin-password]
+    [app.template.backend.routes.admin.settings :as admin-settings]
+    [app.template.backend.routes.admin.user-bulk :as admin-user-bulk]
+    [app.template.backend.routes.admin.user-operations :as admin-user-ops]
+    [app.template.backend.routes.admin.users :as admin-users]
+    [app.template.backend.routes.admin.utils :as admin-utils]
+    [app.domain.backend.registry :as domain-registry]))
 
 (defn admin-api-routes
   "Admin API routes"
   [db service-container]
   (let [email-service (get service-container :email-service)
-        base-url (get-in service-container [:config :base-url] "http://localhost:8085")]
+        base-url (get-in service-container [:config :base-url] "http://localhost:8085")
+        ;; Collect domain routes from registry
+        domain-routes (domain-registry/all-admin-api-routes db service-container)]
     ["/admin/api"
      ;; Shared middleware for all admin routes
      {:middleware [admin-utils/wrap-json-body-parsing]}
@@ -53,8 +54,9 @@
       ;; Protected password routes
       ["/auth" (admin-password/protected-routes db email-service base-url)]
 
-      ;; Home Expenses domain
-      (expenses-routes/routes db)
+      ;; Domain routes (from registry)
+      ;; Each domain provides routes under its own path prefix (e.g., /expenses)
+      (into [] (filter some? domain-routes))
 
       ;; Admin management (owner operations)
       (admin-admins/routes db)

@@ -64,7 +64,29 @@ clj -M:test -m kaocha.runner --focus-meta :integration
 
 ### Testing with Mocked Dependencies
 
-Use `with-redefs` to mock service functions:
+#### Using `build-handler` (Recommended)
+
+For full API endpoint tests, prefer `h/build-handler`. It creates a standard application handler but wraps its execution in `with-redefs`. This ensures that stubs persist even if the handler is called multiple times or asynchronously.
+
+```clojure
+(deftest metrics-endpoint-test
+  (testing "metrics endpoint returns JSON with expected structure"
+    (let [handler (h/build-handler) ; Applies default stubs for DB/Services
+          resp (handler (mock/request :get "/api/v1/metrics"))]
+      (is (h/ok? resp))
+      (is (= "application/json; charset=utf-8" (get-in resp [:headers "Content-Type"]))))))
+
+;; With custom overrides
+(deftest custom-stub-test
+  (let [handler (h/build-handler 
+                  (h/stub-service-container) 
+                  {:count-recent-login-events (fn [_ _] 42)})]
+    (handler (mock/request :get "/api/v1/metrics"))))
+```
+
+#### Using `with-redefs` Directly
+
+For simple unit tests or internal functions, you can still use `with-redefs`:
 
 ```clojure
 (deftest dashboard-stats-test

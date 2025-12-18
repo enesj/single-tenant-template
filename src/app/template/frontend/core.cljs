@@ -9,13 +9,8 @@
     [app.template.frontend.pages.entities :refer [entities-page]]
     [app.template.frontend.pages.home :refer [home-page]]
     [app.template.frontend.pages.waiting-room :refer [waiting-room-page]]
-    [app.domain.frontend.expenses.pages.user.expenses-dashboard :refer [expenses-dashboard-page]]
-    [app.domain.frontend.expenses.pages.user.expenses-list :refer [expenses-list-page]]
-    [app.domain.frontend.expenses.pages.user.expense-new :refer [expense-new-page]]
-    [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
-    [app.domain.frontend.expenses.pages.user.expense-upload :refer [expense-upload-page]]
-    [app.domain.frontend.expenses.pages.user.expense-reports :refer [expense-reports-page]]
-    [app.domain.frontend.expenses.pages.user.expense-settings :refer [expense-settings-page]]
+    ;; Domain pages via aggregator (not registry - to avoid circular deps)
+    [app.domain.frontend.pages :as domain-pages]
     [app.template.frontend.routes :as routes]
     [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.confirm-dialog :refer [confirm-dialog]]
@@ -117,6 +112,8 @@
 
 (defui current-page []
   (let [current-route (use-subscribe [:current-route])
+;; Domain pages map - loaded from aggregator
+        all-domain-pages domain-pages/all-pages
         effective-route (cond
                           (map? current-route)
                           (do
@@ -148,7 +145,9 @@
         ;; Reitit `match` may expose `:name` and `:view` at top-level or under `:data`
         route-name (or (:name (:data effective-route)) (:name effective-route))
         route-view (or (:view (:data effective-route)) (:view effective-route))
-        is-admin-route? (and route-name (str/starts-with? (name route-name) "admin"))]
+        is-admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        ;; Get view keyword for domain page lookup
+        view-key (get-in effective-route [:data :view])]
 
     (when ^boolean goog.DEBUG
       (log/info "current-page route"
@@ -213,32 +212,28 @@
             :admin-users ($ admin-users/admin-users-page)
             :admin-audit ($ admin-audit/admin-audit-page)
             nil))
-        ;; For regular routes, use the existing case statement
-        (case (:view (:data effective-route))
-          :home ($ :div {:class "ds-container p-4"} ($ home-page))
-          :about ($ :div {:class "ds-container p-4"} ($ about-page))
-          :entities ($ :div {:class "ds-container p-4"} ($ entities-page))
-          :entity-detail ($ :div {:class "ds-container p-4"} ($ entities-page))
-          :login ($ login-page)
-          :register ($ registration-page)
-          :verify-email-success ($ verify-email-success-page)
-          :email-verified ($ email-verified-page)
-          :logout ($ logout-page)
-          :forgot-password ($ forgot-password-page)
-          :reset-password ($ reset-password-page)
-          :change-password ($ change-password-page)
-          :subscription ($ :div {:class "ds-container p-4"} ($ subscription-page))
-          ;; User expense tracking pages
-          :waiting-room ($ waiting-room-page)
-          :expenses-dashboard ($ expenses-dashboard-page)
-          :expenses-list ($ expenses-list-page)
-          :expense-upload ($ expense-upload-page)
-          :expense-new ($ expense-new-page)
-          :expense-detail ($ expense-detail-page)
-          :expense-reports ($ expense-reports-page)
-          :expense-settings ($ expense-settings-page)
-          ;; If no matching route, default to home page instead of showing 'not found'
-          ($ :div {:class "ds-container p-4"} ($ home-page))))
+        ;; For regular routes, check domain pages first, then template pages
+        (if-let [domain-page-component (get all-domain-pages view-key)]
+          ;; Domain page found - render it
+          ($ domain-page-component)
+          ;; Template pages (core infrastructure)
+          (case view-key
+            :home ($ :div {:class "ds-container p-4"} ($ home-page))
+            :about ($ :div {:class "ds-container p-4"} ($ about-page))
+            :entities ($ :div {:class "ds-container p-4"} ($ entities-page))
+            :entity-detail ($ :div {:class "ds-container p-4"} ($ entities-page))
+            :login ($ login-page)
+            :register ($ registration-page)
+            :verify-email-success ($ verify-email-success-page)
+            :email-verified ($ email-verified-page)
+            :logout ($ logout-page)
+            :forgot-password ($ forgot-password-page)
+            :reset-password ($ reset-password-page)
+            :change-password ($ change-password-page)
+            :subscription ($ :div {:class "ds-container p-4"} ($ subscription-page))
+            :waiting-room ($ waiting-room-page)
+            ;; If no matching route, default to home page instead of showing 'not found'
+            ($ :div {:class "ds-container p-4"} ($ home-page)))))
 
       ;; Add the confirm dialog component to the layout
       ($ confirm-dialog))))
@@ -269,11 +264,11 @@
     (let [current-path (str (.-pathname js/window.location) (.-search js/window.location))
           last-path (.getItem js/localStorage "last-admin-path")]
       (when (and last-path
-                 (str/starts-with? last-path "/admin/")
-                 (not= last-path current-path)
-                 (or (= current-path "/admin")
-                   (= current-path "/admin/")
-                   (= current-path "/admin/dashboard")))
+              (str/starts-with? last-path "/admin/")
+              (not= last-path current-path)
+              (or (= current-path "/admin")
+                (= current-path "/admin/")
+                (= current-path "/admin/dashboard")))
         ;; Defer until after router is started.
         ;; NOTE: rtfe/push-state expects a route-name keyword, not a string path.
         ;; Use the shared routing event which supports string paths.

@@ -4,11 +4,16 @@
    NOTE: We intentionally do NOT inline mutable admin settings files (view-options.edn,
    form-fields.edn, table-columns.edn). Those are edited at runtime via /admin/admin-settings;
    inlining them makes shadow-cljs treat them as build inputs, which triggers full
-   page reloads on save."
+   page reloads on save.
+   
+   Domain entity configs are loaded via domain config preloaders
+   (e.g., app.domain.frontend.expenses.admin.config.preload)."
   (:require
     [app.admin.frontend.system.entity-registry :as entity-registry]
     [cljs.reader :as reader]
-    [shadow.resource :as resource]))
+    [shadow.resource :as resource]
+    ;; Load domain entity configs - they self-register during namespace load
+    app.domain.frontend.expenses.admin.config.preload))
 
 (defonce ^:private preloaded-entities
   (let [resource-content (resource/inline "app/admin/frontend/config/entities.edn")]

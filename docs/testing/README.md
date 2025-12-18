@@ -43,6 +43,9 @@ bb validate-frontend-config
 # Audit config keys vs usage (CI uses this in `npm run test:cljs:ci`)
 bb config-audit --strict
 
+# Guard against re-introducing concrete domain coupling in template/admin/shared
+bb guard-no-concrete-domain
+
 # Run browser tests (Karma/Chrome)
 npm run test:cljs:karma
 
@@ -108,13 +111,14 @@ test/
 │   │   ├── components/         # UI component tests
 │   │   ├── events/             # Re-frame event tests
 │   │   └── security/           # Security wrapper tests
-│   └── template/frontend/      # Shared template tests
+│   ├── template/frontend/      # Shared template tests
 │       ├── api/                # HTTP client tests
 │       ├── components/         # Shared component tests
 │       ├── events/             # Event handler tests
 │       ├── pages/              # Page component tests
 │       ├── subs/               # Subscription tests
 │       └── utils/              # Utility tests
+│   └── domain/frontend/        # Concrete domain tests (e.g. expenses)
 └── karma-adapter.js            # Karma integration
 ```
 
@@ -133,10 +137,11 @@ test/
 - **Mock Fallback**: When DOM rendering fails, mock renderer generates expected HTML from props
 - **HTTP Stubbing**: Capture and simulate HTTP requests for isolated testing
 - **Subscription Testing**: Test re-frame subscriptions with registered handlers
+- **DOM-based Browser Testing**: Use `react-dom/client` and `test-utils` in Karma for deep component verification (e.g. highlights, active states)
 
 ## Test Statistics
 
 | Suite | Tests | Assertions |
 |-------|-------|------------|
-| Backend | 121 | 498 |
-| Frontend | Varies | Varies |
+| Backend | 132 | 544 |
+| Frontend | 253 (Karma) | ~1300 (Node) |

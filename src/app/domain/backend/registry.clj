@@ -1,0 +1,94 @@
+(ns app.domain.backend.registry
+  "Backend domain registry - provides domain manifests to template/admin.
+   
+   Each domain manifest contains:
+   - :id - domain keyword identifier
+   - :routes
+     - :admin-api - fn (fn [db] reitit-routes) for admin API
+     - :user-api - fn (fn [db wrap-auth-mw] reitit-routes) for user API
+   - :ui-config
+     - :user - map with paths to domain-owned UI config EDN files
+   - :redirects
+     - :post-login-path - default redirect after OAuth login
+   - :spa-routes - vector of SPA paths to serve index.html
+   
+   Template/admin import this registry to dynamically compose routes."
+  (:require
+    [app.domain.backend.expenses.routes.core :as expenses-admin-routes]
+    [app.domain.backend.expenses.routes.user-api :as expenses-user-routes]))
+
+(def ^:private expenses-manifest
+  {:id :expenses
+   :routes
+   {:admin-api (fn [db _service-container]
+                 (expenses-admin-routes/routes db))
+    :user-api (fn [db wrap-user-auth]
+                (expenses-user-routes/routes db wrap-user-auth))}
+   :ui-config
+   {:user {:root-dir "src/app/domain/frontend/expenses/config"
+           :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
+                   :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
+                   :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
+                   :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
+   :redirects
+   {:post-login-path "/expenses"}
+   :spa-routes
+   ["/waiting-room"
+    "/dashboard"
+    "/expenses"
+    "/expenses/list"
+    "/expenses/upload"
+    "/expenses/new"
+    "/expenses/reports"
+    "/expenses/settings"
+    "/expenses/:expense-id"]})
+
+(def enabled-domains
+  "Vector of enabled domain manifests.
+   To add a new domain, add its manifest here."
+  [expenses-manifest])
+
+(defn get-domain
+  "Get a domain manifest by id."
+  [domain-id]
+  (first (filter #(= domain-id (:id %)) enabled-domains)))
+
+(defn all-admin-api-routes
+  "Collect admin API routes from all enabled domains.
+   Returns a vector of reitit route vectors."
+  [db service-container]
+  (mapv (fn [manifest]
+          (when-let [route-fn (get-in manifest [:routes :admin-api])]
+            (route-fn db service-container)))
+    enabled-domains))
+
+(defn all-user-api-routes
+  "Collect user API routes from all enabled domains.
+   Returns a vector of reitit route vectors."
+  [db wrap-user-auth]
+  (mapv (fn [manifest]
+          (when-let [route-fn (get-in manifest [:routes :user-api])]
+            (route-fn db wrap-user-auth)))
+    enabled-domains))
+
+(defn get-ui-config-paths
+  "Get the UI config paths for all enabled domains.
+   Returns a merged map of domain-id -> paths."
+  []
+  (into {}
+    (map (fn [manifest]
+           [(:id manifest) (get-in manifest [:ui-config :user :paths])]))
+    enabled-domains))
+
+(defn get-post-login-path
+  "Get the post-login redirect path from the first domain with one defined.
+   Returns \"/\" if no domain specifies a path."
+  []
+  (or (some #(get-in % [:redirects :post-login-path]) enabled-domains)
+    "/"))
+
+(defn all-spa-routes
+  "Collect all SPA routes from enabled domains.
+   These paths should serve index.html for client-side routing."
+  []
+  (mapcat :spa-routes enabled-domains))

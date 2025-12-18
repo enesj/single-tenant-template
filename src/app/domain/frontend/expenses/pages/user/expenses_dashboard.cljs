@@ -6,7 +6,7 @@
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]
     [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.subs.user-expenses])) ;; side-effect load for subscriptions
+    app.domain.frontend.expenses.subs.user-expenses)) ;; side-effect load for subscriptions
 
 ;; ========================================================================
 ;; Formatting helpers

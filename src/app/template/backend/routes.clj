@@ -1,5 +1,6 @@
 (ns app.template.backend.routes
   (:require
+    [app.domain.backend.registry :as domain-registry]
     [app.template.backend.middleware.security :as security]
     [app.template.backend.routes.admin-api :as admin-api]
     [app.template.backend.routes.api :as api]
@@ -187,23 +188,18 @@
          ;; catch-all for any other admin SPA paths (e.g., /admin/expenses, /admin/suppliers)
          ["/*path" {:get {:handler admin-render-page}}]]
 
-        ;; Additional frontend routes
+;; Additional frontend routes - base template routes + domain SPA routes
         frontend-routes
-        [["/about" {:get {:handler render-page}}]
-         ["/about/" {:get {:handler render-page}}]
-         ["/subscription" {:get {:handler render-page}}]
-         ["/entities" {:get {:handler render-page}}]
-         ["/entities/" {:get {:handler render-page}}]
-         ;; User expense tracking frontend routes
-         ["/waiting-room" {:get {:handler render-page}}]
-         ["/dashboard" {:get {:handler render-page}}]
-         ["/expenses" {:get {:handler render-page}}]
-         ["/expenses/list" {:get {:handler render-page}}]
-         ["/expenses/upload" {:get {:handler render-page}}]
-         ["/expenses/new" {:get {:handler render-page}}]
-         ["/expenses/reports" {:get {:handler render-page}}]
-         ["/expenses/settings" {:get {:handler render-page}}]
-         ["/expenses/:expense-id" {:get {:handler render-page}}]]
+        (into
+          [["/about" {:get {:handler render-page}}]
+           ["/about/" {:get {:handler render-page}}]
+           ["/subscription" {:get {:handler render-page}}]
+           ["/entities" {:get {:handler render-page}}]
+           ["/entities/" {:get {:handler render-page}}]]
+          ;; Domain SPA routes from registry
+          (map (fn [path]
+                 [path {:get {:handler render-page}}])
+            (domain-registry/all-spa-routes)))
 
 ;; Combine all routes with proper precedence: API routes FIRST, then frontend
         all-routes (concat static-routes

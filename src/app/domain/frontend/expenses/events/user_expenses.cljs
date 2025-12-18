@@ -1,0 +1,20 @@
+(ns app.domain.frontend.expenses.events.user-expenses
+  "User expenses events - aggregator namespace.
+   
+   This namespace requires all user-expenses sub-namespaces to ensure
+   their events are registered with re-frame."
+  (:require
+    ;; All sub-namespaces - order doesn't matter for registration
+    app.domain.frontend.expenses.events.user-expenses.by-month
+    app.domain.frontend.expenses.events.user-expenses.by-supplier
+    app.domain.frontend.expenses.events.user-expenses.crud
+    app.domain.frontend.expenses.events.user-expenses.dashboard
+    app.domain.frontend.expenses.events.user-expenses.detail
+    app.domain.frontend.expenses.events.user-expenses.export
+    app.domain.frontend.expenses.events.user-expenses.lookups
+    app.domain.frontend.expenses.events.user-expenses.recent
+    app.domain.frontend.expenses.events.user-expenses.settings
+    app.domain.frontend.expenses.events.user-expenses.summary))
+
+;; This namespace exists purely to aggregate requires.
+;; All events are registered in the sub-namespaces.

@@ -7,7 +7,9 @@
    - Domain groupings for entities (System, Domain, Other)
    - Helper functions for setting labels and entity titles"
   (:require
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    ;; Domain registry for domain-specific groups
+    [app.domain.frontend.registry :as domain-registry]))
 
 ;; =============================================================================
 ;; Setting Keys - the full set of supported settings
@@ -78,42 +80,31 @@
 
 (def admin-domain-groups
   "Domain groupings for ADMIN settings scope.
-   These control admin pages showing data from these entities."
-  {:user-management
-   {:title "User Management"
-    :description "Manage users and administrators"
-    :icon "👥"
-    :entities #{:users :admins}
-    :color "primary"
-    :scope :admin}
+   Template/admin groups are defined here; domain-specific groups are merged from registry."
+  (merge
+    ;; Template/admin groups (core infrastructure)
+    {:user-management
+     {:title "User Management"
+      :description "Manage users and administrators"
+      :icon "👥"
+      :entities #{:users :admins}
+      :color "primary"
+      :scope :admin}
 
-   :security-audit
-   {:title "Security & Audit"
-    :description "System audit trail and security monitoring"
-    :icon "🔒"
-    :entities #{:audit-logs :login-events}
-    :color "secondary"
-    :scope :admin}
-
-   :expenses-admin
-   {:title "Expenses Admin"
-    :description "Admin management of expenses, suppliers, and related data"
-    :icon "💼"
-    :entities #{:expenses :receipts :suppliers :payers :articles :article-aliases :price-observations}
-    :color "accent"
-    :scope :admin}})
+     :security-audit
+     {:title "Security & Audit"
+      :description "System audit trail and security monitoring"
+      :icon "🔒"
+      :entities #{:audit-logs :login-events}
+      :color "secondary"
+      :scope :admin}}
+    ;; Domain-specific admin groups from registry
+    (domain-registry/all-admin-domain-groups)))
 
 (def user-domain-groups
   "Domain groupings for USER settings scope.
-   These control user-facing pages showing data from these entities.
-   Currently only :expenses is configured for user pages."
-  {:expenses-user
-   {:title "User Expenses"
-    :description "User-facing expense tracking and management"
-    :icon "💰"
-    :entities #{:expenses}
-    :color "accent"
-    :scope :user}})
+   Domain-specific user groups are loaded from registry."
+  (domain-registry/all-user-domain-groups))
 
 (def all-domain-groups
   "Combined domain groups for both scopes."

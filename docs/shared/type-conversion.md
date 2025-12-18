@@ -10,6 +10,7 @@ Centralized casts/coercions used by the single-tenant admin backend and UI.
 ## Core helpers
 - `cast-field-value` – wrap values with the correct SQL cast (uuid, timestamptz, jsonb, etc.).
 - `prepare-data-for-db` – apply casts to a data map before insert/update; optional flags to include nils or preserve unknown fields.
+- `parse-number` – robust parsing of numeric strings to integer or decimal types. It uses regex validation to ensure consistent behavior across CLJ and CLJS (e.g. preventing `js/parseFloat` from incorrectly parsing "123.45.67").
 - `convert-to-type` / `detect-field-type` – convenience coercions for common types (string/number/boolean/json/uuid/inst).
 
 ## Usage notes

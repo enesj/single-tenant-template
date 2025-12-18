@@ -1,7 +1,6 @@
 (ns app.admin.frontend.core
   "Core namespace for admin frontend - single-tenant setup"
   (:require
-    [app.admin.frontend.adapters.expenses]
     [app.admin.frontend.adapters.users]
     [app.admin.frontend.config.preload]
     [app.admin.frontend.events.config]
@@ -22,8 +21,8 @@
     [app.admin.frontend.subs.audit]
     [app.admin.frontend.subs.login-events]
     [app.admin.frontend.subs.users]
-    [app.admin.frontend.subs.expenses]
-    [app.domain.frontend.expenses.core :as expenses-domain]
+    ;; Domain registry - loads all domain events/subs/adapters via side effects
+    [app.domain.frontend.registry :as domain-registry]
     [app.template.frontend.events.core]
     [app.template.frontend.events.form]
     [app.template.frontend.events.list.batch]
@@ -107,5 +106,5 @@
     (rf/dispatch [:app.template.frontend.events.config/fetch-config])
     ;; Load admin UI configurations (hits /admin/api/*)
     (rf/dispatch [:admin/load-ui-configs])
-    ;; Ensure expenses domain front-end namespaces are loaded
-    (expenses-domain/init!)))
+    ;; Initialize all enabled domains (loads events/subs)
+    (domain-registry/init-all-domains!)))

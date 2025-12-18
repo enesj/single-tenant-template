@@ -4,10 +4,10 @@
         org.clojure/data.json {:mvn/version "2.4.0"}
         com.taoensso/timbre {:mvn/version "6.3.1"}
         com.github.seancorfield/next.jdbc {:mvn/version "1.3.981"}
-  org.postgresql/postgresql {:mvn/version "42.7.4"}
-  metosin/malli {:mvn/version "0.20.0"
-           :exclusions [metosin/spec-tools]}
-  aero/aero {:mvn/version "1.1.6"}}
+        org.postgresql/postgresql {:mvn/version "42.7.4"}
+        metosin/malli {:mvn/version "0.20.0"
+                       :exclusions [metosin/spec-tools]}
+        aero/aero {:mvn/version "1.1.6"}}
  :tasks
  {;; iTerm2 session renaming helper
   iterm-rename
@@ -18,7 +18,7 @@
                (println "Example: bb iterm-rename \"Development Session\"")
                (println "Supported terminals: iTerm2, Terminal.app, most modern terminal emulators"))
              (do (when (and (not= "dumb" (System/getenv "TERM"))
-                           (not= "unknown" (System/getenv "TERM")))
+                         (not= "unknown" (System/getenv "TERM")))
                    (printf "\033]0;%s\007" name)
                    (flush))
                (println (str "📝 Session renamed to: " name)))))},
@@ -40,9 +40,8 @@
              (when (and term (not= "dumb" term) (not= "unknown" term))
                (printf "\033]0;🏠 Hosting Development\007")
                (flush)))
-           (println "📝 Session reset to default: Hosting Development"))},
+           (println "📝 Session reset to default: Hosting Development"))}
 
-  
   check-deps
   {:doc "Check for available dependency upgrades without making any changes",
    :task (shell "neil dep upgrade --dry-run")},
@@ -102,6 +101,10 @@
   {:doc "Validate frontend config EDN files against Malli specs. Usage: bb validate-frontend-config",
    :task (apply shell "bb" "scripts/bb/validate_frontend_config.clj" *command-line-args*)},
 
+  guard-no-concrete-domain
+  {:doc "Fail if template/admin/shared contain concrete domain coupling. Usage: bb guard-no-concrete-domain [--strict]",
+   :task (apply shell "bb" "scripts/bb/guard_no_concrete_domain.clj" *command-line-args*)},
+
   commit
   {:doc "Auto-commit all staged changes with a generated commit message. Use --test to run tests before commit.",
    :task (let [args *command-line-args*
@@ -150,8 +153,8 @@
   {:doc "Start the application server (add --clean to clear caches first)",
    :task (let [args *command-line-args*
                clean? (some #{"--clean"} args)]
-             (printf "\033]0;🚀 Hosting App Server\007")
-             (flush)
+           (printf "\033]0;🚀 Hosting App Server\007")
+           (flush)
            (when clean? (shell "bash" "./scripts/sh/build/clean-cljs-cache.sh"))
            (shell "./scripts/sh/development/run-app.sh"))},
 
