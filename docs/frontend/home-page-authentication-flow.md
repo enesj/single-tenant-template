@@ -68,4 +68,4 @@ For end-user authentication (non-admin), see the `/api/v1/auth/*` endpoints in t
 - **Password Reset**: `/forgot-password` → email with reset link → `/reset-password?token=...`
 - **Session**: Ring session cookie (not localStorage tokens like admin)
 
-User frontend events are in `app.template.frontend.events.auth`.
+User frontend events are in `app.template.frontend.events.auth` (`src/app/template/frontend/events/auth.cljs` entrypoint; implementation split under `src/app/template/frontend/events/auth/`).

@@ -45,12 +45,16 @@ These domain files are edited via `/admin/user-settings` and persisted via the b
 
 ```
 src/app/admin/frontend/
-├── pages/unified_settings.cljs        # Admin settings + user settings pages (scope switching)
+├── pages/unified_settings.cljs        # Settings UI entrypoint (thin wrapper)
+├── pages/unified_settings/            # Settings UI implementation (split namespaces)
 ├── components/settings_shell.cljs     # Layout wrapper + save/discard UX
-├── components/settings_views.cljs     # Reusable cards/editors (tri-state controls, bulk rows)
-├── events/settings.cljs               # Admin scope load/save + patch helpers
+├── components/settings_views.cljs     # Settings view entrypoint (thin wrapper)
+├── components/settings_views/         # Reusable cards/editors (split namespaces)
+├── events/settings.cljs               # Admin scope entrypoint (thin wrapper)
+├── events/settings/                   # Admin scope handlers/subs/helpers (split namespaces)
 ├── events/unified_settings.cljs       # Unified orchestration for the settings UI
-└── events/user_settings.cljs          # User UI config editor (domain-owned)
+├── events/user_settings.cljs          # User UI config editor entrypoint (thin wrapper)
+└── events/user_settings/              # User UI config handlers/subs/helpers (split namespaces)
 ```
 
 ### Backend Integration

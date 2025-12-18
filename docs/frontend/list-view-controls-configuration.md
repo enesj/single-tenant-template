@@ -105,8 +105,8 @@ In those cases the button is disabled and explains why via a tooltip/title.
 - Resolver (display toggles): `src/app/template/frontend/settings/resolver.cljs`
 - List view settings panel UI: `src/app/template/frontend/components/settings/list_view_settings.cljs`
 - Per-user preference events: `src/app/template/frontend/events/list/settings.cljs`
-- Admin settings editors (tri-state UI, table-columns editor, toggle-all): `src/app/admin/frontend/pages/unified_settings.cljs`
-- Settings view components (tri-state rows, bulk rows): `src/app/admin/frontend/components/settings_views.cljs`
+- Admin settings editors (tri-state UI, table-columns editor, toggle-all): `src/app/admin/frontend/pages/unified_settings.cljs` (entrypoint) + `src/app/admin/frontend/pages/unified_settings/` (implementation)
+- Settings view components (tri-state rows, bulk rows): `src/app/admin/frontend/components/settings_views.cljs` (entrypoint) + `src/app/admin/frontend/components/settings_views/` (implementation)
 
 ## Verification (fast checks)
 
