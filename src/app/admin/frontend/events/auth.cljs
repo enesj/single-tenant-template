@@ -2,6 +2,8 @@
   (:require
     [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.utils.http :as admin-http]
+    ;; For side effects: registers :routing/push-state and related routing handlers.
+    [app.template.frontend.events.routing]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [reitit.frontend.easy :as rtfe]
@@ -76,8 +78,9 @@
                :admin/current-user-role role)
              (dissoc :admin/login-loading? :admin/login-error))
        :admin/store-token (:token response)
-       ;; Navigate to admin dashboard (full reload to ensure admin shell loads)
-       :admin/navigate "/admin/dashboard"})))
+       ;; Use router-aware SPA navigation so the route match updates immediately
+       ;; (avoids rendering the public home page until a manual refresh).
+       :dispatch [:admin/navigate-client "/admin/dashboard"]})))
 
 (rf/reg-event-db
   :admin/login-failure
@@ -239,13 +242,12 @@
 ;; Client-side navigation effect (doesn't cause page reload)
 (rf/reg-event-fx
   :admin/navigate-client
-  (fn [_ [_ path]]
-    ;; Use rtfe/push-state directly for proper navigation
-    (cond
-      (= path "/admin/dashboard") (rtfe/push-state :admin-dashboard)
-      (= path "/admin/login") (rtfe/push-state :admin-login)
-      :else (rtfe/push-state path))
-    {}))
+  (fn [_ [_ to]]
+    ;; Delegate to the shared router-aware navigation effect.
+    ;; It supports:
+    ;; - keywords/vectors (route-name navigation)
+    ;; - string paths ("/admin/dashboard") via router match
+    {:routing/push-state to}))
 
 ;; Message management moved to app.admin.frontend.events.users.template.messages
 

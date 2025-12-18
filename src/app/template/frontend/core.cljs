@@ -269,13 +269,15 @@
     (let [current-path (str (.-pathname js/window.location) (.-search js/window.location))
           last-path (.getItem js/localStorage "last-admin-path")]
       (when (and last-path
-              (str/starts-with? last-path "/admin/")
-              (not= last-path current-path)
-              (or (= current-path "/admin")
-                (= current-path "/admin/")
-                (= current-path "/admin/dashboard")))
+                 (str/starts-with? last-path "/admin/")
+                 (not= last-path current-path)
+                 (or (= current-path "/admin")
+                   (= current-path "/admin/")
+                   (= current-path "/admin/dashboard")))
         ;; Defer until after router is started.
-        (js/setTimeout #(rtfe/push-state last-path) 50)))))
+        ;; NOTE: rtfe/push-state expects a route-name keyword, not a string path.
+        ;; Use the shared routing event which supports string paths.
+        (js/setTimeout #(rf/dispatch [:navigate-to last-path]) 50)))))
 
 (defn init-app! []
   ;; Set up logging first so early logs are filtered appropriately
