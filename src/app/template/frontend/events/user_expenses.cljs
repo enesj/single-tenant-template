@@ -8,6 +8,7 @@
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
+    [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -283,6 +284,8 @@
                     [:navigate-to (str "/expenses/" expense-id)]]})))
 
 (rf/reg-event-db
+
+
   :user-expenses/create-expense-failure
   common-interceptors
   (fn [db [error]]
@@ -314,13 +317,18 @@
   :user-expenses/create-expense-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    {:db (-> db
-           (assoc-in [:user-expenses :form :loading?] false)
-           (assoc-in [:user-expenses :form :error] nil))
-     :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]]
-     :fx [(when on-success
-            [:dispatch-later {:ms 100
-                              :dispatch [:user-expenses/call-modal-callback on-success]}])]}))
+    (let [expense-id (or (get-in response [:data :id])
+                         (get-in response [:expense :id]))
+          highlight-id (some-> expense-id str)]
+      {:db (-> db
+               (assoc-in [:user-expenses :form :loading?] false)
+               (assoc-in [:user-expenses :form :error] nil)
+               (cond-> highlight-id
+                 (crud-success/track-recently-created :expenses highlight-id)))
+       :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]]
+       :fx [(when on-success
+              [:dispatch-later {:ms 100
+                                :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
 
 (rf/reg-event-db
   :user-expenses/create-expense-modal-failure
@@ -394,10 +402,13 @@
   :user-expenses/update-expense-modal-success
   common-interceptors
   (fn [{:keys [db]} [expense-id on-success response]]
-    (let [expense (or (:data response) (:expense response))]
+    (let [expense (or (:data response) (:expense response))
+          highlight-id (some-> expense-id str)]
       (cond-> {:db (-> db
                      (assoc-in [:user-expenses :form :loading?] false)
-                     (assoc-in [:user-expenses :form :error] nil))
+                     (assoc-in [:user-expenses :form :error] nil)
+                     (cond-> highlight-id
+                       (crud-success/track-recently-updated :expenses highlight-id)))
                :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
                             [:user-expenses/fetch-expense expense-id]]
                :fx [(when on-success

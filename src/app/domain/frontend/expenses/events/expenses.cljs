@@ -7,6 +7,7 @@
     [app.admin.frontend.utils.http :as admin-http]
     [app.domain.frontend.expenses.events.entity-configs :as configs]
     [app.domain.frontend.expenses.events.events-factory :as factory]
+    [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]))
 
 ;; Register standard CRUD events for expenses using the factory
@@ -38,11 +39,14 @@
 (rf/reg-event-fx
   ::create-entry-modal-success
   (fn [{:keys [db]} [_ on-success response]]
-    (let [entity (get response :expense)]  ;; singular response key
+    (let [entity (get response :expense)   ;; singular response key
+          highlight-id (some-> (crud-success/extract-entity-id entity) str)]
       {:db (-> db
              (assoc-in (conj form-path :loading?) false)
              (assoc-in (conj form-path :error) nil)
-             (assoc-in (conj form-path :last-created) (:id entity)))
+             (assoc-in (conj form-path :last-created) (:id entity))
+             (cond-> highlight-id
+               (crud-success/track-recently-created :expenses highlight-id)))
        :dispatch-n [[:admin/refresh-entity :expenses entity]
                     ;; Reload the list to show the new expense
                     [::load-list {}]]
@@ -67,16 +71,19 @@
                    {:uri (str "/admin/api/expenses/entries/" expense-id)
                     :params form-data
                     :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::update-entry-modal-success on-success]
+                    :on-success [::update-entry-modal-success expense-id on-success]
                     :on-failure [::update-entry-modal-failed]})}))
 
 (rf/reg-event-fx
   ::update-entry-modal-success
-  (fn [{:keys [db]} [_ on-success response]]
-    (let [entity (get response :expense)]  ;; singular response key
+  (fn [{:keys [db]} [_ expense-id on-success response]]
+    (let [entity (get response :expense)   ;; singular response key
+          highlight-id (some-> (or (crud-success/extract-entity-id entity) expense-id) str)]
       {:db (-> db
              (assoc-in (conj form-path :loading?) false)
-             (assoc-in (conj form-path :error) nil))
+             (assoc-in (conj form-path :error) nil)
+             (cond-> highlight-id
+               (crud-success/track-recently-updated :expenses highlight-id)))
        :dispatch-n [[:admin/refresh-entity :expenses entity]
                     ;; Reload the list to show updated expense
                     [::load-list {}]]
