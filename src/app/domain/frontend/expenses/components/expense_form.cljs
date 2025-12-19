@@ -338,9 +338,13 @@
                       [suppliers payers])
 
         ;; Default values for expense form
-        default-values {:currency "BAM"
-                        :purchased_at (current-datetime-local)
-                        :items [(new-line-item)]}]
+        ;; Memoized to keep identity stable across renders (prevents fork resets).
+        default-values (use-memo
+                         (fn []
+                           {:currency "BAM"
+                            :purchased_at (current-datetime-local)
+                            :items [(new-line-item)]})
+                         [])]
 
     ;; Load dependencies (suppliers/payers)
     (use-effect

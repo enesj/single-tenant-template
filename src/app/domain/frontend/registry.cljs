@@ -1,6 +1,6 @@
 (ns app.domain.frontend.registry
   "Frontend domain registry - provides domain manifests to template/admin.
-   
+
    Each domain manifest contains:
    - :id - domain keyword identifier
    - :routes

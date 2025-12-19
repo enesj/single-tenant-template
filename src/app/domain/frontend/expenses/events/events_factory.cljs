@@ -164,14 +164,21 @@
     (rf/reg-event-fx
       (keyword event-ns "load-detail")
       (fn [{:keys [db]} [_ entity-id]]
-        {:db (-> db
-               (assoc-in (conj base-path :detail-loading?) true)
-               (assoc-in (conj base-path :error) nil))
-         :http-xhrio (admin-http/admin-get
-                       {:uri (str api-endpoint "/" entity-id)
-                        :response-format (ajax/json-response-format {:keywords? true})
-                        :on-success [(keyword event-ns "detail-loaded") entity-id]
-                        :on-failure [(keyword event-ns "load-failed")]})}))
+        (let [loading? (true? (get-in db (conj base-path :detail-loading?)))
+              loading-id (get-in db (conj base-path :detail-loading-id))]
+          ;; Prevent duplicate requests for the same entity while a request is in-flight.
+          ;; This guards against StrictMode double-effects and modal remount flicker.
+          (if (and loading? (= loading-id entity-id))
+            {:db db}
+            {:db (-> db
+                   (assoc-in (conj base-path :detail-loading?) true)
+                   (assoc-in (conj base-path :detail-loading-id) entity-id)
+                   (assoc-in (conj base-path :error) nil))
+             :http-xhrio (admin-http/admin-get
+                           {:uri (str api-endpoint "/" entity-id)
+                            :response-format (ajax/json-response-format {:keywords? true})
+                            :on-success [(keyword event-ns "detail-loaded") entity-id]
+                            :on-failure [(keyword event-ns "detail-load-failed") entity-id]})}))))
 
     ;; detail-loaded event
     (rf/reg-event-db
@@ -180,8 +187,19 @@
         (let [entity (get response response-key)]
           (-> db
             (assoc-in (conj base-path :detail-loading?) false)
+            (assoc-in (conj base-path :detail-loading-id) nil)
             (assoc-in (conj base-path :error) nil)
-            (assoc-in (conj base-path :by-id entity-id) entity)))))))
+            (assoc-in (conj base-path :by-id entity-id) entity)))))
+
+    ;; detail-load-failed event
+    (rf/reg-event-db
+      (keyword event-ns "detail-load-failed")
+      (fn [db [_ _entity-id error]]
+        (let [msg (admin-http/extract-error-message error)]
+          (-> db
+            (assoc-in (conj base-path :detail-loading?) false)
+            (assoc-in (conj base-path :detail-loading-id) nil)
+            (assoc-in (conj base-path :error) msg)))))))
 
 (defn generate-form-events
   "Generates create-entry, create-success, and create-failed events for entities with forms."
