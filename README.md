@@ -34,8 +34,9 @@ cd hosting
 # Install Node.js dependencies
 npm install
 
-# Run database migrations
-clojure -X:migrations-dev
+# Run database migrations via REPL
+# (require '[app.template.backend.migrations.simple-repl :as mig])
+# (mig/migrate!)
 ```
 
 ### 3. Start Your Application Stack
@@ -187,7 +188,7 @@ bb clean-restore-db --dev <backup-file.sql>
 
 # Or clean and reinitialize
 bb clean-db --dev
-clojure -X:migrations-dev
+# Then run migrations via REPL: (mig/migrate!)
 ```
 
 ### Configuration

@@ -135,20 +135,12 @@ bb create-new-app my-invoice-app --title "Invoice Management System"
 
 ### Database Migration System
 ```clojure
-;; In REPL
-(require '[app.migrations.simple-repl :as mig])
-
-;; Generate migrations from models
-(mig/make-all-migrations!)
-
-;; Apply migrations
+;; Apply migrations via REPL
+(require '[app.template.backend.migrations.simple-repl :as mig])
 (mig/migrate!)
 
-;; Check migration status
-(mig/status)
-
-;; Apply to test environment
-(mig/migrate! :test)
+;; Run the server
+bb run-app
 ```
 
 ### Application APIs
@@ -291,8 +283,9 @@ git clone <repository>
 cd single-tenant-template
 npm install
 
-# 3. Run database migrations
-clojure -X:migrations-dev
+# 3. Run database migrations via REPL
+# (require '[app.template.backend.migrations.simple-repl :as mig])
+# (mig/migrate!)
 
 # 4. Start development stack
 bb run-app    # Starts backend + frontend + opens browser to localhost:8080
@@ -308,7 +301,7 @@ bb run-app    # Starts backend + frontend + opens browser to localhost:8080
 ### Database Development Workflow
 ```bash
 # Generate new migrations after model changes
-bb clean-db --dev && clojure -X:migrations-dev
+bb clean-db --dev && # Run migrations via REPL: (mig/migrate!)
 
 # Create seed data for testing
 bb seed-admin
@@ -376,9 +369,8 @@ src/app/your-domain/
   [[:idx_your_entity_created_at :btree {:fields [:created_at]}]}}
 
 ;; Then regenerate migrations
-clojure -X:migrations-dev
-(mig/make-all-migrations!)
-(mig/migrate!)
+;; (mig/make-all-migrations!)
+;; (mig/migrate!)
 ```
 
 ### Admin Panel Extensions
@@ -421,7 +413,7 @@ bb fe-test              # Frontend tests
 bb lint                 # Code quality check
 
 # Database
-clojure -X:migrations-dev   # Migration REPL
+# Run migrations via REPL (mig/migrate!)
 bb backup-db --dev       # Backup dev database
 bb clean-db --dev         # Clear all tables
 

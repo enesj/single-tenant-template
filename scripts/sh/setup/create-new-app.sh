@@ -410,8 +410,8 @@ Make sure you have the following installed:
 - \`bb cljfmt-fix\` - Fix code formatting
 
 ### Database Management
-- \`clj -X:migrations-dev\` - Run database migrations (development)
-- \`clj -X:migrations-test\` - Run database migrations (test)
+- `(mig/migrate!)` - Run database migrations via REPL
+- `(mig/migrate! :test)` - Run database migrations for test environment
 
 ### Useful Development Tools
 - \`bb upgrade-deps\` - Upgrade all dependencies
@@ -470,6 +470,14 @@ bb be-test
 \`\`\`bash
 bb fe-test
 \`\`\`
+
+### Database Migrations
+Database migrations are run via the REPL for safety and visibility.
+
+```clojure
+(require '[app.template.backend.migrations.simple-repl :as mig])
+(mig/migrate!)
+```
 
 ### Browser Automation Tests
 \`\`\`bash
@@ -667,6 +675,7 @@ echo "  bb run-app     - Start the application"
 echo "  bb be-test     - Run backend tests"
 echo "  bb fe-test     - Run frontend tests"
 echo "  bb build-prod  - Build for production"
+echo "  bb deploy-prod - Deploy to production"
 echo "  bb scripts     - List test scripts"
 echo ""
 echo "📖 For more information, see README.md in the project directory"

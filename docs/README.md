@@ -14,7 +14,7 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 | **Backend** | `docs/backend/http-api.md`, `docs/backend/services.md` | `bb run-app`, `bb be-test` |
 | **Frontend** | `docs/frontend/app-shell.md`, `docs/frontend/template-component-integration.md` | `npm run watch`, `bb fe-test` |
 | **Admin UI** | `docs/frontend/admin-panel-single-tenant.md` | Open `http://localhost:8085/admin/users` |
-| **Migrations/DB** | `docs/migrations/migration-overview.md` | `clj -X:migrations-dev`, `bb backup-db` |
+| **Migrations/DB** | `docs/migrations/migration-overview.md` | REPL-based migrations, `bb backup-db` |
 
 ## Scope
 
@@ -34,10 +34,11 @@ This repository is the **single-tenant template** extracted from the Hosting mul
   - `docs/frontend/template-component-integration.md` — using template UI components
   - `docs/frontend/admin-panel-single-tenant.md` — single-tenant admin flow and extension points
 - **Migrations & DB**
-  - `docs/migrations/migration-overview.md` — models/migrations workflow
+  - [Migrations](docs/migrations/migration-overview.md) - Hierarchical migration system (REPL-based)
   - `docs/reference/database-schema.md` — schema reference for template models
 - **Operations**
   - `docs/operations/dev-environment.md` — commands, env, local workflow
+  - [Deployment](docs/operations/hosting-overview.md) - Cloud hosting guide
 
 ## Getting Started (Template)
 

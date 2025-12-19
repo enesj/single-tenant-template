@@ -65,4 +65,4 @@ else
 fi
 
 # Run the app with monitoring
-./scripts/sh/monitoring/monitor_terminal.sh "clojure -M:dev:migrations-dev"
+./scripts/sh/monitoring/monitor_terminal.sh "clojure -M:dev"

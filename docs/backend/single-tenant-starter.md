@@ -86,8 +86,7 @@ The starter intentionally ships with **no business domain**. To add one:
    - Extend this file with additional entities (e.g. `:accounts`, `:projects`).
    - Reuse patterns from `resources/db/models.edn` in the Hosting repo as a reference.
 2. **Generate migrations**:
-   - Use the `:migrations-dev` alias in `deps.edn` with the starter’s `models.edn`.
-   - Alternatively, from a REPL, use `app.template.backend.migrations.simple-repl`:
+   - Use the REPL-based migration system with the starter's `models.edn`:
      - `(require '[app.template.backend.migrations.simple-repl :as mig])`
      - `(mig/make-schema-migration!)`
      - `(mig/migrate!)`

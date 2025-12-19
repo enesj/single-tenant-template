@@ -34,14 +34,6 @@
      :type :edn
      :updates [{:path [:database-name] :key :db-name}
                {:path [:test-database-name] :key :test-db-name}]}
-    {:file "deps.edn"
-     :type :edn
-     :updates [{:path [:aliases :migrations-dev :exec-args :jdbc-url]
-                :transform (fn [v db-name]
-                             (str/replace v "bookkeeping" db-name))}
-               {:path [:aliases :migrations-test :exec-args :jdbc-url]
-                :transform (fn [v test-db-name]
-                             (str/replace v "bookkeeping-test" test-db-name))}]}
     {:file "src/app/backend/db/init.clj"
      :type :text
      :patterns [{:pattern #"\"bookkeeping\""
@@ -144,8 +136,9 @@
                          "```bash\n"
                          "# Install dependencies\n"
                          "npm install\n\n"
-                         "# Run database migrations\n"
-                         "clj -X:migrations-dev\n\n"
+                         "# Run database migrations via REPL\n"
+                         "# (require '[app.template.backend.migrations.simple-repl :as mig])\n"
+                         "# (mig/migrate!)\n\n"
                          "# Start the application\n"
                          "./scripts/run-app.sh\n\n"
                          "# In another terminal, start CSS compilation\n"
@@ -262,7 +255,7 @@
     (println "  cd" target-dir)
     (println "  npm install")
     (println "  # Update .secrets.edn with your database credentials")
-    (println "  clj -X:migrations-dev")
+    (println "  # Run migrations via REPL (mig/migrate!)")
     (println "  ./scripts/run-app.sh")))
 
 (defn prompt-for-value [prompt current-value]

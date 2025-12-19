@@ -68,7 +68,7 @@
 (defn main []
   (println "🚀 Clean and seed development database...")
   (println "⚠️  This will TRUNCATE ALL DATA in the bookkeeping database (schema preserved)!")
-  (println "⚠️  Make sure you have already applied migrations with: clj -X:migrations-dev")
+  (println "⚠️  Make sure you have already applied migrations via REPL (mig/migrate!)")
 
   (print "Are you sure you want to continue? (y/N): ")
   (flush)

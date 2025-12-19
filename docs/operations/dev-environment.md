@@ -5,7 +5,7 @@
 Quick reference for the hot-reload stack (backend + Shadow CLJS + watchers) on port **8085**.
 
 ## Entry Points
-- `bb run-app` *(recommended)*: wraps `scripts/sh/development/run-app.sh`, checks port **8085**, and runs `clojure -M:dev:migrations-dev` under `monitor_terminal.sh` (auto-restart + logging).
+- `bb run-app` *(recommended)*: wraps `scripts/sh/development/run-app.sh`, checks port **8085**, and runs `clojure -M:dev` under `monitor_terminal.sh` (auto-restart + logging).
 - `scripts/sh/development/run-app.sh`: same as above without Babashka.
 - `clj -M:nrepl` (default 7888): attach to the dev runtime; `(user/start)` boots the system manually if you prefer REPL-driven startup.
 

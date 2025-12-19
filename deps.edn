@@ -72,13 +72,6 @@
    ;;djblue/portal {:mvn/version "0.58.1"}},
    :main-opts ["-e" "(start)"]}
 
-  :migrations-dev
-  {:ns-default automigrate.core
-   :exec-fn automigrate.core/-main
-   :exec-args {:models-file "resources/db/models.edn"
-               :migrations-dir "resources/db/migrations"
-               :jdbc-url-env-var "DATABASE_URL"}}
-
   :nrepl
   {:extra-paths ["test"]
    :extra-deps {nrepl/nrepl {:mvn/version "1.5.1"}
@@ -86,12 +79,6 @@
    :jvm-opts ["-Djdk.attach.allowAttachSelf"]
    :main-opts ["-m" "nrepl.cmdline" "--port" "7888"]}
 
-  :migrations-test
-  {:ns-default automigrate.core
-   :exec-fn automigrate.core/-main
-   :exec-args {:models-file "resources/db/models.edn"
-               :migrations-dir "resources/db/migrations"
-               :jdbc-url-env-var "TEST_DATABASE_URL"}}
   :test
   {;;:command "clj -X:test"
    :extra-paths ["test"]
@@ -121,4 +108,4 @@
    :ns-default build}}}
 
 ;;:portal
-;;{:extra-deps {djblue/portal {:mvn/version "0.58.1"}}}}}
+;;{:extra-deps {djblue/portal {:mvn/version "0.58.1"}}}}
