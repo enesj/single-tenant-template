@@ -385,6 +385,11 @@
                (println "  --dev   Clean development database")
                (println "  --test  Clean test database"))))},
 
+  check-migrations
+  {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
+   :task (let [env (or (first *command-line-args*) "dev")]
+           (shell "clj" "-M" "-e" (format "(do (require '[app.template.backend.migrations.alignment :as al]) (System/exit (al/exit-code-for-profile :%s)))" env)))},
+
   seed-admin
   {:doc "Seed or refresh the admin user (default env: dev). Usage: bb seed-admin [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]

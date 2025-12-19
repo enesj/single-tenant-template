@@ -19,6 +19,7 @@
    See the comment block at the bottom for scenarios."
   (:require
     [aero.core :as aero]
+    [app.template.backend.migrations.alignment :as alignment]
     [app.template.backend.migrations.hierarchical-models :as hierarchical-models]
     [app.template.backend.utils.model-customizations :as model-cust]
     [automigrate.core :as am]
@@ -41,13 +42,13 @@
          env-url (System/getenv "DATABASE_URL")
          db-cfg  (:database cfg)]
      (or env-url
-         (:jdbc-url db-cfg)
-         (when (and db-cfg (every? db-cfg [:host :port :dbname :user]))
-           (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
-             (:host db-cfg) (:port db-cfg) (:dbname db-cfg) (:user db-cfg)
-             (if-let [pwd (:password db-cfg)] (str "&password=" pwd) "")))
-         (throw (ex-info "DATABASE_URL or database config (jdbc-url/host/port/dbname/user) is required"
-                  {:config db-cfg}))))))
+       (:jdbc-url db-cfg)
+       (when (and db-cfg (every? db-cfg [:host :port :dbname :user]))
+         (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
+           (:host db-cfg) (:port db-cfg) (:dbname db-cfg) (:user db-cfg)
+           (if-let [pwd (:password db-cfg)] (str "&password=" pwd) "")))
+       (throw (ex-info "DATABASE_URL or database config (jdbc-url/host/port/dbname/user) is required"
+                {:config db-cfg}))))))
 
 (def ^:private resources-dir "resources")
 (def ^:private migrations-dir "db/migrations")
@@ -192,11 +193,74 @@
       (println (format "  %-10s %3d" (name type) (count files))))
     (println (format "  %-10s %3d" "TOTAL" (count files)))))
 
-(defn migrate!
-  "Run all pending migrations for the given profile (default :dev)."
-  ([] (migrate! :dev))
+(defn alignment-report
+  "Return an alignment report for the given profile (default :dev).
+
+  This checks:
+  - migration files vs automigrate_migrations
+  - basic schema diff (hierarchical models.edn vs DB)
+  - extended objects existence (functions/triggers/views/policies)
+
+  Returns the report map (see `app.template.backend.migrations.alignment/report`)."
+  ([] (alignment-report :dev))
   ([profile]
-   (am/migrate {:jdbc-url (get-jdbc-url profile)})))
+   (alignment/report {:jdbc-url (get-jdbc-url profile)})))
+
+(defn check-migrations-alignment!
+  "Print an alignment report and return it.
+
+  Does not exit the process; callers can decide whether to throw/exit based on
+  (alignment/diff? report)."
+  ([] (check-migrations-alignment! :dev))
+  ([profile]
+   (let [r (alignment-report profile)]
+     (alignment/print-report! r)
+     r)))
+
+(defn assert-migrations-aligned!
+  "Throw if alignment checks find differences.
+
+  Returns the report when aligned."
+  ([] (assert-migrations-aligned! :dev))
+  ([profile]
+   (let [r (alignment-report profile)]
+     (when (alignment/diff? r)
+       (throw (ex-info "DB is not aligned with migrations/models" {:profile profile
+                                                                   :report r})))
+     r)))
+
+(defn migrate!
+  "Run all pending migrations for the given profile (default :dev).
+
+  After a successful migration, this runs the alignment check as a double-check
+  (migration files vs DB tracking, models vs DB schema, extended objects).
+
+  Options:
+  - :verify? (default true)  Run alignment verification after migrating.
+  - :print-report? (default false) Print the alignment report even when aligned.
+
+  Notes:
+  - If verification finds differences, it prints the report and throws.
+  - Use `check-migrations-alignment!` / `assert-migrations-aligned!` directly if
+    you want to run verification without migrating."
+  ([] (migrate! :dev))
+  ([profile] (migrate! profile {:verify? true}))
+  ([profile {:keys [verify? print-report?]
+             :or {verify? true
+                  print-report? false}}]
+   (let [res (am/migrate {:jdbc-url (get-jdbc-url profile)})]
+     (when verify?
+       (let [r (alignment-report profile)]
+         (cond
+           (alignment/diff? r)
+           (do
+             (alignment/print-report! r)
+             (throw (ex-info "DB is not aligned after migrate!" {:profile profile
+                                                                 :report r})))
+
+           print-report?
+           (alignment/print-report! r))))
+     res)))
 
 (defn status
   "Show migration status for the given profile (default :dev)."

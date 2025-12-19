@@ -72,7 +72,7 @@ docker-compose up -d
 # Launch a REPL (e.g., clj -M:nrepl) and run:
 # (require '[app.template.backend.migrations.simple-repl :as mig])
 # (mig/make-all-migrations!)  ;; merge models -> schema -> extended
-# (mig/migrate!)              ;; apply pending migrations to :dev
+# (mig/migrate!)              ;; apply pending migrations + verify alignment (default :dev)
 # (mig/status)                ;; inspect status
 ```
 
@@ -147,6 +147,15 @@ docker-compose up -d
 
 ;; Explain SQL for a migration number
 (mig/explain 42)
+
+;; Check that the DB is aligned with:
+;; - files in resources/db/migrations
+;; - hierarchical models/extended EDNs under resources/db/{template,domain,shared}
+;; Prints a report and returns it.
+(mig/check-migrations-alignment! :dev)
+
+;; Same check, but throws if there are any differences.
+(mig/assert-migrations-aligned! :dev)
 ```
 
 #### Optional BB helpers
@@ -157,6 +166,9 @@ bb clean-db --dev
 
 # Start app (will pick up already-applied migrations)
 bb run-app
+
+# Check migrations + schema alignment (prints report, exit 0/1/2)
+bb check-migrations dev
 ```
 
 ## Migration File Format

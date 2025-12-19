@@ -118,7 +118,7 @@ The system uses centralized field type handling (`app.shared.field-casting`):
 ;; Merge hierarchical models -> schema migration -> extended migrations
 (mig/make-all-migrations!)
 
-;; Apply pending migrations (default :dev)
+;; Apply pending migrations + verify alignment (default :dev)
 (mig/migrate!)
 (mig/status)
 ```
@@ -215,11 +215,26 @@ bb run-app  # runs scripts/sh/development/run-app.sh and starts the live-reload 
 # Compare database with models
 bb scripts/bb/database/compare_with_models.clj
 
+# Check migrations + schema alignment (prints report, exit 0/1/2)
+bb check-migrations dev
+
 # Compare different environments
 bb scripts/bb/database/compare_db_schemas.clj dev test
 
 # Backup before major changes
 bb backup-db --dev
+```
+
+You can also run the same alignment check from a JVM REPL:
+
+```clojure
+(require '[app.template.backend.migrations.simple-repl :as mig])
+
+;; Prints a report, returns the structured report map
+(mig/check-migrations-alignment! :dev)
+
+;; Throws if any differences are found
+(mig/assert-migrations-aligned! :dev)
 ```
 
 ## 📈 Performance Considerations
