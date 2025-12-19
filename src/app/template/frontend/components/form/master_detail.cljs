@@ -37,7 +37,7 @@
       })"
   (:require
     [app.template.frontend.components.form :refer [form]]
-    [uix.core :refer [$ defui use-effect use-memo use-state]]))
+    [uix.core :refer [$ defui use-effect use-memo use-ref use-state]]))
 
 ;; =============================================================================
 ;; Helper Functions
@@ -103,7 +103,10 @@
 
   (let [editing? (= mode :edit)
         entity-id-str (some-> entity-id str)
-        [requested? set-requested!] (use-state false)
+      ;; Track which entity-id we requested detail for.
+      ;; This avoids stale `requested?` when `entity-id` changes.
+        [requested-entity-id set-requested-entity-id!] (use-state nil)
+        requested? (= requested-entity-id entity-id-str)
         [validation-error set-validation-error!] (use-state nil)
 
         ;; Determine if detail is loaded for the current entity
@@ -153,16 +156,24 @@
                               (let [prepared (if prepare-submit-values
                                                (prepare-submit-values values)
                                                values)]
-                                (on-submit prepared))))))]
+                                (on-submit prepared))))))
+
+        ;; NOTE: `load-detail!` is often passed as an inline fn.
+        ;; Depending on it (or a callback derived from it) causes the load effect
+        ;; to rerun on every render => repeated GETs + modal flicker.
+        load-detail-ref (use-ref load-detail!)
+        _ (reset! load-detail-ref load-detail!)]
 
     ;; Effect: Load detail when in edit mode
     (use-effect
       (fn []
-        (when (and editing? entity-id-str load-detail!)
-          (load-detail! entity-id-str))
-        (set-requested! true)
+        (when (and editing? entity-id-str)
+          (when-let [f @load-detail-ref]
+            ;; Mark requested before dispatching so errors can render deterministically.
+            (set-requested-entity-id! entity-id-str)
+            (f entity-id-str)))
         js/undefined)
-      [entity-id-str editing? load-detail!])
+      [entity-id-str editing?])
 
     ;; Render
     ($ :div {:class "space-y-2"}
@@ -176,8 +187,10 @@
           ($ :span validation-error)))
 
       (cond
-        ;; Edit mode: show loading state while fetching detail
-        (and editing? (or (not requested?) detail-loading?))
+        ;; Edit mode: if we have no fallback row data, wait until the detail entity is loaded.
+        ;; If `initial-row-data` is present, keep the form visible while detail loads to
+        ;; avoid flicker (loading -> form -> loading -> form).
+        (and editing? (not detail-loaded?) (nil? initial-row-data))
         ($ :div {:class "text-sm text-base-content/60"}
           "Loading...")
 
