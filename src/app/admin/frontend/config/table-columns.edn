@@ -95,4 +95,4 @@
    :last-login-at {:width "160px", :formatter "date"},
    :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
-   :created-at {:width "140px", :formatter "date"}}}}
+   :created-at {:width "140px", :formatter "date"}} :removed-fields {:available-columns ["preferred-name"]}}}

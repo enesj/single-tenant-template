@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :preferred-name,
+  :model-name :users,
+  :options {:type [:varchar 255]}})

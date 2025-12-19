@@ -1,0 +1,3 @@
+({:action :drop-column,
+  :field-name :preferred-name,
+  :model-name :users})

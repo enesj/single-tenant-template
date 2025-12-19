@@ -105,7 +105,7 @@
   [& {:keys [name]}]
   (let [models-file-path (str resources-dir "/db/models.edn")
         temp-models-file (str resources-dir "/db/models_processed.edn")
-        preprocessor (requiring-resolve 'app.migrations.function-defaults/load-and-preprocess-models)]
+        preprocessor (requiring-resolve 'app.template.backend.migrations.function-defaults/load-and-preprocess-models)]
     (try
       (let [processed (preprocessor models-file-path)]
         (spit temp-models-file (with-out-str (pprint/pprint processed))))
