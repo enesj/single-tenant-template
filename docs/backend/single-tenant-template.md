@@ -59,6 +59,9 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 - Do **not** edit `resources/db/models.edn` directly (it is generated).
 - Edit source files under `resources/db/{template,shared,domain}/**` (e.g. `resources/db/domain/models.edn`).
 - Generate/apply migrations via the REPL helper (`app.template.backend.migrations.simple-repl`) or via the bb/clj tasks documented in `docs/migrations/*`.
+- Frontend-config alignment (migration-adjacent):
+  - REPL opt-in: `(mig/migrate! :dev {:sync-frontend-config? true})`
+  - One-shot command: `bb migrate-and-sync-frontend-config`
 - Use `bb backup-db`, `bb restore-db` for safety.
 - RLS: this template runs single-tenant by default. If you add tenant-aware features, follow the Hosting docs for RLS patterns.
 

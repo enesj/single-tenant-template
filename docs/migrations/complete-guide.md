@@ -158,6 +158,40 @@ docker-compose up -d
 (mig/assert-migrations-aligned! :dev)
 ```
 
+### 4. Frontend-config alignment (migration-adjacent)
+
+After schema changes (or UI config edits), validate and optionally sync frontend config EDNs with the consolidated schema:
+
+```bash
+# Validate config shape + schema alignment
+bb validate-frontend-config
+
+# Preview sync changes (dry-run, fails on mismatches)
+bb sync-frontend-config
+
+# Apply sync changes (explicit)
+bb sync-frontend-config --apply
+```
+
+You can also do this directly from the REPL after migrations:
+
+```clojure
+;; Apply sync + validate via migrate! (opt-in)
+(mig/migrate! :dev {:sync-frontend-config? true})
+
+;; Forward args to the bb tasks (e.g., limit to a domain)
+(mig/migrate! :dev {:sync-frontend-config? true
+                    :frontend-config-args ["--only" "expenses"]})
+```
+
+Or run a one-shot command outside the REPL:
+
+```bash
+bb migrate-and-sync-frontend-config
+```
+
+Note: these commands **do not** modify the database. They keep UI config aligned with `resources/db/models.edn`.
+
 #### Optional BB helpers
 
 ```bash

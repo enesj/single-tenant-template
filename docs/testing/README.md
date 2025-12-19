@@ -40,6 +40,12 @@ npm run test:cljs
 # Validate frontend config EDNs (fast, recommended when changing config)
 bb validate-frontend-config
 
+# Sync frontend config EDNs with DB schema (dry-run by default)
+bb sync-frontend-config
+
+# Apply sync changes explicitly
+bb sync-frontend-config --apply
+
 # Audit config keys vs usage (CI uses this in `npm run test:cljs:ci`)
 bb config-audit --strict
 

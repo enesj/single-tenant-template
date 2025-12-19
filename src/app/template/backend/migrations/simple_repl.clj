@@ -19,6 +19,7 @@
    See the comment block at the bottom for scenarios."
   (:require
     [aero.core :as aero]
+    [app.shared.frontend-config.core :as fc]
     [app.template.backend.migrations.alignment :as alignment]
     [app.template.backend.migrations.hierarchical-models :as hierarchical-models]
     [app.template.backend.utils.model-customizations :as model-cust]
@@ -26,6 +27,7 @@
     [automigrate.generation.extended :as gen-ext]
     [automigrate.util.db :as db-util]
     [clojure.java.io :as io]
+    [clojure.java.shell :as shell]
     [clojure.pprint :as pprint]
     [clojure.string :as str]))
 
@@ -229,38 +231,162 @@
                                                                    :report r})))
      r)))
 
+(defn- frontend-config-label
+  [{:keys [scope domain kind]}]
+  (str (name scope)
+    (when domain (str "/" domain))
+    " "
+    (name kind)
+    ".edn"))
+
+(defn- print-frontend-config-validation!
+  [results]
+  (println "=== Frontend config validation (dry-run) ===")
+  (doseq [res results]
+    (let [label (frontend-config-label res)
+          path (:path res)]
+      (if (:valid? res)
+        (println "OK" label "valid" (str "(" path ")"))
+        (do
+          (println "ERROR" label "INVALID" (str "(" path ")"))
+          (when (seq (:errors res))
+            (println "  errors:" (pr-str (:errors res))))
+          (when (seq (:warnings res))
+            (println "  warnings:" (pr-str (:warnings res))))))
+      (let [semantic (:semantic res)]
+        (when (seq (:unknown-entities semantic))
+          (println "  unknown entities:" (pr-str (:unknown-entities semantic))))
+        (when (seq (:unknown-fields semantic))
+          (println "  unknown fields:" (pr-str (:unknown-fields semantic))))
+        (when (seq (:missing-fields semantic))
+          (println "  missing DB fields (info):" (pr-str (:missing-fields semantic))))))))
+
+(defn- print-frontend-config-sync!
+  [patches]
+  (println "=== Frontend config sync plan (dry-run) ===")
+  (doseq [patch patches]
+    (let [label (frontend-config-label patch)
+          path (:path patch)]
+      (if (:has-changes? patch)
+        (println "ERROR" label (str "(" path ")"))
+        (println "OK" label "no changes" (str "(" path ")")))
+      (when (seq (:unknown-entities patch))
+        (println "  unknown entities:" (pr-str (:unknown-entities patch))))
+      (doseq [[entity info] (sort-by (comp str key) (:summary patch))]
+        (println "  entity" (pr-str entity))
+        (when (seq (:add-available info))
+          (println "    add to :available-columns:" (pr-str (:add-available info))))
+        (when (seq (:removed info))
+          (println "    quarantine fields:" (pr-str (:removed info))))))))
+
+(defn- run-frontend-config-dry-run!
+  "Validate + plan-sync frontend config against the consolidated schema.
+
+  Returns a summary map and prints a human-readable report to the REPL."
+  []
+  (let [bundles (fc/config-bundles {})]
+    (if (empty? bundles)
+      (do
+        (println "=== Frontend config validation (dry-run) ===")
+        (println "WARNING: No frontend config bundles found. Skipping.")
+        {:status :skipped})
+      (let [schema (fc/models-index "resources/db/models.edn")
+            bundles* (fc/load-bundles bundles)
+            results (fc/validate-bundles bundles* schema nil)
+            patches (fc/plan-sync bundles* schema nil)
+            invalid (filter (comp not :valid?) results)
+            changes? (some :has-changes? patches)
+            unknown-entities (->> patches (mapcat :unknown-entities) vec)]
+        (print-frontend-config-validation! results)
+        (print-frontend-config-sync! patches)
+        {:status :ok
+         :validation {:valid? (empty? invalid)
+                      :invalid-count (count invalid)
+                      :results results}
+         :sync {:has-changes? (boolean changes?)
+                :unknown-entities unknown-entities
+                :patches patches}}))))
+
+(defn- run-bb!
+  [& args]
+  (let [result (apply shell/sh "bb" args)
+        command (str/join " " (cons "bb" args))]
+    (when (seq (:out result))
+      (print (:out result)))
+    (when (seq (:err result))
+      (binding [*out* *err*]
+        (print (:err result))))
+    (when-not (zero? (:exit result))
+      (throw (ex-info "Command failed" {:command command
+                                        :result result})))
+    result))
+
+(defn- run-frontend-config-apply!
+  "Apply sync changes and validate frontend config using bb scripts.
+
+  Returns a summary map and prints script output to the REPL."
+  [frontend-config-args]
+  (let [args (vec (or frontend-config-args []))]
+    (println "=== Frontend config sync (apply) ===")
+    (let [sync-res (apply run-bb! "sync-frontend-config" "--apply" args)]
+      (println "=== Frontend config validation (post-apply) ===")
+      (let [validate-res (apply run-bb! "validate-frontend-config" args)]
+        {:status :ok
+         :sync sync-res
+         :validate validate-res}))))
+
 (defn migrate!
   "Run all pending migrations for the given profile (default :dev).
 
   After a successful migration, this runs the alignment check as a double-check
   (migration files vs DB tracking, models vs DB schema, extended objects).
 
+  It also runs frontend-config validation + sync planning (dry-run only) to
+  surface UI/schema alignment issues alongside migration output.
+
   Options:
   - :verify? (default true)  Run alignment verification after migrating.
   - :print-report? (default false) Print the alignment report even when aligned.
+  - :sync-frontend-config? (default false) Apply frontend-config sync and
+    re-validate using bb tasks.
+  - :frontend-config-args (default []) Extra args forwarded to the bb tasks
+    (e.g., [--only expenses]).
 
   Notes:
   - If verification finds differences, it prints the report and throws.
   - Use `check-migrations-alignment!` / `assert-migrations-aligned!` directly if
-    you want to run verification without migrating."
+    you want to run verification without migrating.
+  - Frontend-config checks do not modify the database."
   ([] (migrate! :dev))
   ([profile] (migrate! profile {:verify? true}))
-  ([profile {:keys [verify? print-report?]
+  ([profile {:keys [verify? print-report? sync-frontend-config? frontend-config-args]
              :or {verify? true
-                  print-report? false}}]
-   (let [res (am/migrate {:jdbc-url (get-jdbc-url profile)})]
+                  print-report? false
+                  sync-frontend-config? false
+                  frontend-config-args []}}]
+   (let [migration-res (am/migrate {:jdbc-url (get-jdbc-url profile)})
+         report (when verify?
+                  (alignment-report profile))
+         diff? (when verify?
+                 (alignment/diff? report))]
      (when verify?
-       (let [r (alignment-report profile)]
-         (cond
-           (alignment/diff? r)
-           (do
-             (alignment/print-report! r)
-             (throw (ex-info "DB is not aligned after migrate!" {:profile profile
-                                                                 :report r})))
-
-           print-report?
-           (alignment/print-report! r))))
-     res)))
+       (when diff?
+         (alignment/print-report! report))
+       (when (and (not diff?) print-report?)
+         (alignment/print-report! report)))
+     (let [frontend-dry (run-frontend-config-dry-run!)
+           frontend-base {:dry-run frontend-dry}]
+       (when (and verify? diff?)
+         (throw (ex-info "DB is not aligned after migrate!" {:profile profile
+                                                             :report report
+                                                             :frontend-config frontend-base})))
+       (let [frontend-apply (when sync-frontend-config?
+                              (run-frontend-config-apply! frontend-config-args))
+             frontend-result (cond-> frontend-base
+                               frontend-apply (assoc :apply frontend-apply))]
+         {:migration migration-res
+          :alignment report
+          :frontend-config frontend-result})))))
 
 (defn status
   "Show migration status for the given profile (default :dev)."

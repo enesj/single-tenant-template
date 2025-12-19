@@ -18,6 +18,9 @@ The single-tenant app still reuses the template/shared stack, but without RLS/te
 
 ## Extending Safely
 - Add schema to source EDN under `resources/db/{template,shared,domain}/**`, then regenerate migrations via `app.template.backend.migrations.simple-repl`.
+- After migrations, keep frontend config aligned with schema:
+  - REPL opt-in: `(mig/migrate! :dev {:sync-frontend-config? true})`
+  - One-shot: `bb migrate-and-sync-frontend-config`
 - Register new services in the DI container (or pass them explicitly) and mount routes in `admin-api-routes`.
 - Keep response shapes consistent with template UI (flat keys, keywordized JSON).
 - Reuse shared helpers before adding new plumbing.

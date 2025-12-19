@@ -90,6 +90,8 @@ The starter intentionally ships with **no business domain**. To add one:
      - `(require '[app.template.backend.migrations.simple-repl :as mig])`
      - `(mig/make-schema-migration!)`
      - `(mig/migrate!)`
+   - (Optional) Align frontend config with schema if you have admin UI config:
+     - `(mig/migrate! :dev {:sync-frontend-config? true})` or `bb migrate-and-sync-frontend-config`
 3. **Add backend domain code**:
   - Create `src/app/domain/backend/<your-domain>/*` for services, routes, and DB helpers.
   - Integrate with the existing `app.template.backend.routes` / `app.template.backend.routes.admin-api` or add new route namespaces.

@@ -8,6 +8,7 @@ Fast pointers for AI agents (and humans) to the current single-tenant docs. Use 
 - By namespace: `rg -n "<!-- ai: .*app\.template\.backend\.routes" docs`
 - By task keyword: `rg -n "\brun-app\b|\bbe-test\b|\bfe-test\b|\blint\b|\bcljfmt\b" docs/operations`
 - Migrations/workflow: `rg -n "migrate|models.edn|mig/" docs/migrations`
+- Frontend-config alignment: `bb validate-frontend-config` then `bb sync-frontend-config` (dry-run) / `--apply`
 
 ## 🚨 Critical Testing Workflow
 ALWAYS save test output before analysis - never re-run tests:
@@ -33,6 +34,7 @@ npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
 - Admin shell: `docs/frontend/admin-panel-single-tenant.md`
 - HTTP/API: `docs/backend/http-api.md`, `docs/frontend/http-standards.md`
 - DB/migrations: `resources/db/models.edn`, `docs/migrations/*`
+- Frontend config alignment: `bb validate-frontend-config`, `bb sync-frontend-config [--apply]`
 - Monitoring: audit/login events in `docs/backend/http-api.md` and `docs/reference/api-reference.md`
 - Home Expenses domain: endpoints in `docs/backend/http-api.md` (`/admin/api/expenses/**`), implementation plan `app-specs/home-expenses-tracker-plan.md`
 - **Component IDs (browser testing)**: `INTERACTIVE-COMPONENTS-ID-AUDIT.md`, `docs/frontend/component-library.md#component-id-requirements`

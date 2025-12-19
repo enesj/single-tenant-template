@@ -6,42 +6,26 @@
 
  :users
  {:create-fields
-  ["email" "first-name" "last-name" "status" "full-name"],
-  :edit-fields ["first-name" "last-name" "role" "status"],
-  :required-fields ["email" "first-name" "last-name"],
+  ["email" "status" "full-name"],
+  :edit-fields ["role" "status"],
+  :required-fields ["email"],
   :field-config
   {:email {:type "email", :validation "email"},
-   :first-name {:type "text", :max-length 50},
-   :last-name {:type "text", :max-length 50},
    :role {:type "select", :options ["member" "admin" "owner"]},
    :status
    {:type "select", :options ["active" "inactive" "suspended"]}}}
 
  :admins
- {:create-fields [:email :full-name :password :role :status],
+ {:create-fields [:email :full-name :role :status],
   :edit-fields [:email :full-name :role :status],
-  :required-fields [:email :password],
+  :required-fields [:email],
   :field-config
   {:email
    {:type :email,
     :validation :email,
     :placeholder "admin@example.com"},
    :full-name {:type :text, :max-length 255, :placeholder "Full Name"},
-   :password
-   {:type :password,
-    :min-length 8,
-    :placeholder "Enter password (min 8 characters)"},
    :role
    {:type :select, :options [:admin :support :owner], :default :admin},
    :status
-   {:type :select, :options [:active :suspended], :default :active}}}
-
- :tenants
- {:create-fields [:name :domain :plan :status],
-  :edit-fields [:name :plan :status],
-  :required-fields [:name :domain],
-  :field-config
-  {:name {:type :text, :max-length 100},
-   :domain {:type :text, :validation :domain},
-   :plan {:type :select, :options [:free :basic :premium :enterprise]},
-   :status {:type :select, :options [:active :inactive :trial]}}}}
+   {:type :select, :options [:active :suspended], :default :active}}}}

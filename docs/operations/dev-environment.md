@@ -33,6 +33,10 @@ bb run-app
 - Connect to `localhost:7888` if you need inline eval.
 - Edit backend/edn → backend auto-restarts.
 - Edit CLJS → Shadow hot-reloads in browser.
+- After schema changes or UI config edits:
+  - `bb validate-frontend-config`
+  - `bb sync-frontend-config` (dry-run) / `bb sync-frontend-config --apply`
+  - or `bb migrate-and-sync-frontend-config` (migrate + apply + validate)
 - Manual restart: `(system.core/restart-system)` from the REPL.
 
 ## Troubleshooting

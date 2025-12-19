@@ -1,12 +1,6 @@
 {:expenses
  {:available-columns
-  ["purchased_at"
-   "supplier_id"
-   "payer_id"
-   "currency"
-   "total_amount"
-   "notes"
-   "is_posted"],
+  ["purchased_at" "supplier_id" "payer_id" "currency" "total_amount" "notes" "is_posted" "id" "user_id" "receipt_id" "deleted_at" "created_at" "updated_at"],
   :default-visible-columns
   ["purchased_at"
    "supplier_id"

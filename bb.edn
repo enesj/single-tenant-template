@@ -7,6 +7,7 @@
         org.postgresql/postgresql {:mvn/version "42.7.4"}
         metosin/malli {:mvn/version "0.20.0"
                        :exclusions [metosin/spec-tools]}
+        rewrite-clj/rewrite-clj {:mvn/version "1.1.47"}
         aero/aero {:mvn/version "1.1.6"}}
  :tasks
  {;; iTerm2 session renaming helper
@@ -100,6 +101,14 @@
   validate-frontend-config
   {:doc "Validate frontend config EDN files against Malli specs. Usage: bb validate-frontend-config",
    :task (apply shell "bb" "scripts/bb/validate_frontend_config.clj" *command-line-args*)},
+
+  sync-frontend-config
+  {:doc "Sync frontend config EDNs with DB schema (dry-run by default). Usage: bb sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>]",
+   :task (apply shell "bb" "scripts/bb/sync_frontend_config.clj" *command-line-args*)},
+
+  migrate-and-sync-frontend-config
+  {:doc "Run migrations, apply frontend config sync, then validate. Usage: bb migrate-and-sync-frontend-config [--profile <profile>] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
+   :task (apply shell "bb" "scripts/bb/migrate_and_sync_frontend_config.clj" *command-line-args*)},
 
   guard-no-concrete-domain
   {:doc "Fail if template/admin/shared contain concrete domain coupling. Usage: bb guard-no-concrete-domain [--strict]",

@@ -27,6 +27,19 @@ Single schema, no RLS. Core tables: `admins`, `users`, `audit_events`, `login_ev
 (mig/migrate!)             ; apply
 (mig/status)               ; inspect
 ```
++
++Frontend config alignment (migration-adjacent):
++
++```clojure
++;; Apply sync + validate via migrate! (opt-in)
++(mig/migrate! :dev {:sync-frontend-config? true})
++```
++
++```bash
++# One-shot command outside the REPL
++bb migrate-and-sync-frontend-config
++```
++
 Use `:test` profile when running against test DB: `(mig/migrate! :test)`.
 
 ## Performance/Indexes

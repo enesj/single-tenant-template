@@ -152,6 +152,46 @@ All endpoints below are under the admin API namespace:
 
 Settings writes are validated against Malli specs under `src/app/shared/specs/*`. Invalid payloads fail with HTTP `400` and include validation details in the response body/logs.
 
+## Schema Alignment (DB ↔ UI Config)
+
+Frontend config EDNs are also validated against the consolidated DB schema in `resources/db/models.edn`.
+
+- `bb validate-frontend-config` checks both **shape** (Malli) and **schema alignment** (entities/fields exist).
+- `bb sync-frontend-config` computes a patch plan to align configs with the DB schema.
+  - Default is **dry-run** + **fail-on-mismatch** (no files written).
+  - Use `--apply` to write changes.
+  - Use `--only <domain>` / `--skip <domain>` to scope domain configs.
+
+### Normalization rules
+
+- **Entities**: normalized by name with `_` and `-` treated as equivalent (e.g., `:audit_logs` ↔ `:audit-logs`).
+- **Fields**: normalized by name with `_` and `-` treated as equivalent (e.g., `full_name` ↔ `full-name`).
+- Validation is tolerant for matching, but `--apply` preserves each file's existing style.
+
+### Computed / UI-only fields
+
+Computed fields belong in UI config only (never in `models.edn`). A field is treated as computed/UI-only if it is:
+
+- listed under the entity's `:computed-fields` in `table-columns.edn`, **or**
+- allowlisted in a UI allowlist EDN passed to the validator/sync (`--allowlist <path>`).
+
+Allowlist format (EDN):
+
+```clojure
+{:audit-logs ["entity-name" "admin-email"]
+ :users ["full-name"]}
+```
+
+Form-fields validation treats fields as DB-backed unless they are explicitly allowlisted.
+
+### Domain discovery
+
+Domain configs are discovered automatically from:
+
+- `src/app/domain/frontend/*/config/`
+
+Any domain folder containing `config/` is included; the validator/sync only checks the standard files when present.
+
 ## Troubleshooting
 
 **Settings not applying**

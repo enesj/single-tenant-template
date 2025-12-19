@@ -26,6 +26,7 @@ Admin SPA (8085) → /admin/api/** (Ring/Reitit)
 - **Middleware**: `app.template.backend.middleware.security` (HTTPS/headers/[optional rate limit]), `app.template.backend.middleware.admin/wrap-admin-authentication`, JSON parsing/helpers in `app.template.backend.routes.admin.utils`.
 - **Services**: `app.admin.backend.services.admin.*` (users, audit, facade, monitoring helpers), `app.template.backend.services.monitoring.login-events` (login history).
 - **Data**: Source EDN in `resources/db/{template,shared,domain}/**` merged into `resources/db/models.edn`; migrations generated/applied via `app.template.backend.migrations.simple-repl`.
+  - Frontend config alignment (migration-adjacent): `(mig/migrate! :dev {:sync-frontend-config? true})` or `bb migrate-and-sync-frontend-config`.
 
 ## Development Basics
 - Run stack: `bb run-app` → http://localhost:8085/admin

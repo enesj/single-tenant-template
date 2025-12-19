@@ -2,11 +2,7 @@
 
 (ns validate-frontend-config
   (:require
-    [clojure.edn :as edn]
-    [app.shared.specs.entities :as entities-spec]
-    [app.shared.specs.form-fields :as form-fields-spec]
-    [app.shared.specs.table-columns :as table-columns-spec]
-    [app.shared.specs.view-options :as view-options-spec]))
+    [app.shared.frontend-config.core :as fc]))
 
 (defn- die!
   [msg]
@@ -14,73 +10,82 @@
     (println msg))
   (System/exit 2))
 
-(defn- read-edn!
-  [path]
-  (try
-    (edn/read-string (slurp path))
-    (catch Exception e
-      (die! (str "Failed to read EDN: " path "\n" (.getMessage e))))))
+(defn- parse-args
+  [args]
+  (loop [args args
+         opts {:only []
+               :skip []
+               :allowlist-path nil
+               :schema-path nil}]
+    (if (empty? args)
+      opts
+      (let [[a & more] args]
+        (case a
+          "--only" (let [[d & more2] more]
+                     (when-not d
+                       (die! "--only requires a domain name"))
+                     (recur more2 (update opts :only conj d)))
+          "--skip" (let [[d & more2] more]
+                     (when-not d
+                       (die! "--skip requires a domain name"))
+                     (recur more2 (update opts :skip conj d)))
+          "--allowlist" (let [[p & more2] more]
+                          (when-not p
+                            (die! "--allowlist requires a path"))
+                          (recur more2 (assoc opts :allowlist-path p)))
+          "--schema" (let [[p & more2] more]
+                       (when-not p
+                         (die! "--schema requires a path"))
+                       (recur more2 (assoc opts :schema-path p)))
+          (die! (str "Unknown arg: " a)))))))
+
+(defn- result-label
+  [{:keys [scope domain kind]}]
+  (str (name scope)
+    (when domain (str "/" domain))
+    " "
+    (name kind)
+    ".edn"))
+
+(defn- print-semantic!
+  [{:keys [semantic]}]
+  (when (seq (:unknown-entities semantic))
+    (println "  unknown entities:" (pr-str (:unknown-entities semantic))))
+  (when (seq (:unknown-fields semantic))
+    (println "  unknown fields:" (pr-str (:unknown-fields semantic))))
+  (when (seq (:missing-fields semantic))
+    (println "  missing DB fields (info):" (pr-str (:missing-fields semantic)))))
 
 (defn- print-result!
-  [{:keys [label path valid? errors warnings]}]
-  (if valid?
-    (println "✓" label "valid" (str "(" path ")"))
-    (do
-      (println "✗" label "INVALID" (str "(" path ")"))
-      (when (seq errors)
-        (println "  errors:" (pr-str errors)))
-      (when (seq warnings)
-        (println "  warnings:" (pr-str warnings))))))
-
-(def ^:private checks
-  [{:label "admin entities.edn"
-    :path "src/app/admin/frontend/config/entities.edn"
-    :validate entities-spec/validate-admin-entities-strict}
-
-   {:label "admin view-options.edn"
-    :path "src/app/admin/frontend/config/view-options.edn"
-    :validate view-options-spec/validate-view-options-strict}
-
-   {:label "admin form-fields.edn"
-    :path "src/app/admin/frontend/config/form-fields.edn"
-    :validate form-fields-spec/validate-form-fields-strict}
-
-   {:label "admin table-columns.edn"
-    :path "src/app/admin/frontend/config/table-columns.edn"
-    :validate table-columns-spec/validate-table-columns-strict}
-
-   ;; Domain-owned (user-facing)
-   {:label "domain entities.edn"
-    :path "src/app/domain/frontend/expenses/config/entities.edn"
-    :validate entities-spec/validate-user-entities}
-
-   {:label "domain view-options.edn"
-    :path "src/app/domain/frontend/expenses/config/view-options.edn"
-    :validate view-options-spec/validate-view-options-strict}
-
-   {:label "domain form-fields.edn"
-    :path "src/app/domain/frontend/expenses/config/form-fields.edn"
-    :validate form-fields-spec/validate-form-fields-strict}
-
-   {:label "domain table-columns.edn"
-    :path "src/app/domain/frontend/expenses/config/table-columns.edn"
-    :validate table-columns-spec/validate-table-columns-strict}])
+  [{:keys [label path valid? errors warnings semantic] :as result}]
+  (let [label* (or label (result-label result))]
+    (if valid?
+      (println "✓" label* "valid" (str "(" path ")"))
+      (do
+        (println "✗" label* "INVALID" (str "(" path ")"))
+        (when (seq errors)
+          (println "  errors:" (pr-str errors)))
+        (when (seq warnings)
+          (println "  warnings:" (pr-str warnings)))))
+    (print-semantic! {:semantic semantic})))
 
 (defn -main
-  [& _args]
+  [& args]
   (println "=== Validating frontend config EDNs ===")
-  (let [results
-        (for [{:keys [label path validate]} checks
-              :let [data (read-edn! path)
-                    res (validate data)
-                    res' (merge {:label label :path path} res)]]
-          (do
-            (print-result! res')
-            res'))
-        invalid (filter (comp not :valid?) results)]
-    (if (seq invalid)
-      (die! (str "\nConfig validation failed (" (count invalid) " invalid file(s))."))
-      (println "\n✅ All frontend config EDNs are valid."))))
+  (let [{:keys [only skip allowlist-path schema-path]} (parse-args args)
+        schema (fc/models-index (or schema-path "resources/db/models.edn"))
+        bundles (fc/config-bundles {:only only :skip skip})]
+    (when (empty? bundles)
+      (die! "No frontend config bundles found"))
+    (let [bundles* (fc/load-bundles bundles)
+          allowlist (when allowlist-path (fc/read-edn-file allowlist-path))
+          results (fc/validate-bundles bundles* schema allowlist)
+          _ (doseq [res results]
+              (print-result! (assoc res :label (result-label res))))
+          invalid (filter (comp not :valid?) results)]
+      (if (seq invalid)
+        (die! (str "\nConfig validation failed (" (count invalid) " invalid file(s))."))
+        (println "\n✅ All frontend config EDNs are valid.")))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (apply -main *command-line-args*))
