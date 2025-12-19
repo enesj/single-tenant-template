@@ -2,10 +2,7 @@
   "Single source of truth for type conversions.
    Consolidates generic type parsing and validation logic."
   (:require
-    #?@(:clj [[taoensso.timbre :as log]
-              [cheshire.core :as json]])
-    #?@(:cljs [[taoensso.timbre :as log]
-               [goog.date.DateTime]])
+    #?@(:clj [[cheshire.core :as json]])
     [app.shared.type-conversion-db :as db]
     [clojure.string :as str]))
 

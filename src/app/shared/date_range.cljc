@@ -2,7 +2,6 @@
   "Date range utilities and sequence generation."
   (:require
     [app.shared.date-core :as core]
-    [app.shared.date-arithmetic :as arithmetic]
     #?(:cljs [goog.object :as gobj])))
 
 (defn date-in-range?

@@ -95,7 +95,7 @@ npm run build:admin
   (rf/dispatch [:admin/load-ui-configs]))
 ```
 
-Admin UI configuration lives under `src/app/admin/frontend/config/*.edn` (table-columns, view-options, form-fields). These are inlined at build time via `preload.cljs` and refreshed at runtime through the authenticated settings API (`/admin/api/settings*`), so there is no longer a public `/admin/ui-config` asset path.
+Admin UI configuration is stored as EDN under `src/app/admin/frontend/config/*.edn` (system scope) and `src/app/domain/**/admin/config/*.edn` (domain scope, currently Expenses). Only the **entity registry metadata** (`entities.edn`) is inlined at build time via preload namespaces; runtime-editable settings (`view-options.edn`, `form-fields.edn`, `table-columns.edn`) are loaded and saved via the authenticated settings API (`/admin/api/settings*`).
 
 ### Public Shell (`app.template.frontend.core`)
 
@@ -232,7 +232,7 @@ All admin API calls are under `/admin/api/*` and include the bearer token:
 
 - CLJS tests via `npm run test:cljs`, `bb fe-test-node`.
 - Prefer REPL-driven checks for admin events/subs; `shadow-cljs watch :admin` enables hot reload.
-- When adding list pages, cover the adapter transforms (e.g., login events normalization) with cljs tests under `test/app/admin/frontend`.
+- When adding list pages, cover adapter transforms with cljs tests. For concrete domains, put domain-specific tests under `test/app/domain/frontend/**`.
 
 ## Security
 

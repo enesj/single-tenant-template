@@ -3,8 +3,7 @@
     [app.template.frontend.utils.test.env :as env]
     [clojure.string :as str]
     [goog.object :as gobj]
-    [re-frame.db :as rf-db]
-    [uix.dom :as uix.dom]))
+    [re-frame.db :as rf-db]))
 
 ;; Load react-dom for flushSync in tests
 (def ^:private react-dom
@@ -25,16 +24,23 @@
       :else nil)
     (catch :default _ nil)))
 
-(defn- loading-spinner
-  "Small loading spinner for individual actions (mock)"
-  [{:keys [size class]}]
-  (let [size-class (case size
-                     :xs "ds-loading-xs"
-                     :sm "ds-loading-sm"
-                     :md "ds-loading-md"
-                     :lg "ds-loading-lg"
-                     "ds-loading-xs")]
-    (str "<span class=\"ds-loading ds-loading-spinner " size-class " " (or class "") "\"></span>")))
+(def ^:private react-dom-client
+  (try
+    (cond
+      ;; Node.js environment with require
+      (exists? js/require)
+      (js/require "react-dom/client")
+
+      ;; Browser environment - try global ReactDOMClient
+      (exists? js/ReactDOMClient)
+      js/ReactDOMClient
+
+      ;; Try window.ReactDOMClient
+      (and (exists? js/window) (.-ReactDOMClient js/window))
+      (.-ReactDOMClient js/window)
+
+      :else nil)
+    (catch :default _ nil)))
 
 (defn- extract-props-data
   "Extract props data from a React element for mock rendering."
@@ -282,19 +288,31 @@
   (if (exists? js/document)
     (let [container (.createElement js/document "div")
           _ (when js/document.body (.appendChild js/document.body container))
-          root (uix.dom/create-root container)]
+          root (when (and react-dom-client (gobj/get react-dom-client "createRoot"))
+                 (.createRoot ^js react-dom-client container))
+          render! (fn []
+                    (cond
+                      root (.render root element)
+                      (and react-dom (gobj/get react-dom "render"))
+                      (.render ^js react-dom element container)
+                      :else nil))]
       (try
         (if (and react-dom (gobj/get react-dom "flushSync"))
-          (.flushSync ^js react-dom (fn [] (uix.dom/render-root element root)))
-          (uix.dom/render-root element root))
+          (.flushSync ^js react-dom render!)
+          (render!))
         (let [html (.-innerHTML container)]
           (if (and html (not (str/blank? html)))
             html
             (render-mock-fallback element)))
-        (catch :default e
+        (catch :default _e
           (render-mock-fallback element))
         (finally
-          (try (when (.-unmount root) (.unmount root)) (catch :default _))
+          (try
+            (cond
+              root (.unmount root)
+              (and react-dom (gobj/get react-dom "unmountComponentAtNode"))
+              (.unmountComponentAtNode ^js react-dom container))
+            (catch :default _))
           (try (when (.-remove container) (.remove container)) (catch :default _)))))
     (render-mock-fallback element)))
 

@@ -4,8 +4,7 @@
   (:require
     [app.template.frontend.auto-test-generators :as generators]
     [app.template.frontend.auto-test-models :as models]
-    [app.template.frontend.auto-test-utils :as utils]
-    [clojure.string :as str]))
+    [app.template.frontend.auto-test-utils :as utils]))
 
 ;; =============================================================================
 ;; Re-exports for Backward Compatibility
@@ -14,9 +13,9 @@
 (def models models/models)
 
 (def generate-unique-id generators/generate-unique-id)
-(def *data-context* generators/*data-context*)
-(def *id-counter* generators/*id-counter*)
-(def *random* generators/*random*)
+(def ^:dynamic *data-context* generators/*data-context*)
+(def ^:dynamic *id-counter* generators/*id-counter*)
+(def ^:dynamic *random* generators/*random*)
 
 (def build-dependency-graph utils/build-dependency-graph)
 (def topological-sort utils/topological-sort)

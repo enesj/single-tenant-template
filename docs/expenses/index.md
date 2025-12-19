@@ -76,7 +76,14 @@ Each entity supports configurable list view controls:
 
 #### Form Configuration
 
-Admin forms (the `/admin/...` pages) are configured per entity in `src/app/admin/frontend/config/form-fields.edn`:
+Admin forms (the `/admin/...` pages) are configured per entity via the **Admin scope** settings, merged from:
+
+- **System/admin-owned** config: `src/app/admin/frontend/config/*.edn`
+- **Domain-owned** admin config: `src/app/domain/**/admin/config/*.edn` (for Expenses: `src/app/domain/frontend/expenses/admin/config/*`)
+
+These are edited via `/admin/admin-settings`.
+
+The form fields configuration lives in `form-fields.edn` and defines:
 - Create field lists
 - Edit field lists
 - Required field validation
@@ -251,7 +258,9 @@ Key services in `src/app/domain/backend/expenses/services/`:
 This domain has two related configuration locations:
 
 **Admin UI (admin list pages)**
-- Stored in `src/app/admin/frontend/config/`
+- Merged from:
+  - system config in `src/app/admin/frontend/config/`
+  - domain config in `src/app/domain/**/admin/config/` (for Expenses: `src/app/domain/frontend/expenses/admin/config/`)
 - Edited via `/admin/admin-settings`
 
 **User UI config (domain-owned, user-facing defaults/locks)**
@@ -267,12 +276,15 @@ Both use the same EDN file types:
 ### Example Configuration
 
 ```clojure
-;; entities.edn
-{:articles {:display-name "Articles"
-            :plural-name "Articles"
-            :adapter-init-fn app.admin.frontend.adapters.expenses/init-articles
-            :icon-style "fas fa-box"
-            :color-class "text-blue-600"}}
+;; entities.edn (admin scope)
+;; For domain entities, the EDN is *metadata only*; the effective :adapter-init-fn
+;; is injected at preload time from the domain registry.
+{:articles {:entity-key :articles
+            :page-title "Articles"
+            :page-description "Canonical expense items"
+            ;; see `app.domain.frontend.expenses.admin.config.preload`
+            :display-settings {:show-add-button? true
+                               :per-page 50}}}
 
 ;; table-columns.edn
 {:articles {:available-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at :id]

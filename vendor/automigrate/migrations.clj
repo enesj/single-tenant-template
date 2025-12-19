@@ -6,7 +6,8 @@
    [automigrate.files.management :as files]
    [automigrate.generation.core :as core]
    [automigrate.generation.extended :as gen-ext]
-   [automigrate.schema.diffing :as diffing]
+  [automigrate.schema.actions :as schema-actions]
+  [automigrate.schema.diffing :as diffing]
    [automigrate.status.tracking :as status]))
 
 ;; Print deprecation notice
@@ -176,5 +177,5 @@
 (def ^{:deprecated "Use automigrate.generation.core instead"}
   BACKWARD-DIRECTION :backward)
 
-;; Delegate migration->actions to the new diffing namespace
-(def migration->actions diffing/migration->actions)
+;; Delegate migration->actions to the schema actions namespace
+(def migration->actions schema-actions/migration->actions)

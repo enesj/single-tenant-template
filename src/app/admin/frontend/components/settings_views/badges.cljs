@@ -29,7 +29,7 @@
         handle-click (fn [_e]
                        (when (and editing? on-change)
                          (on-change entity-name setting-key next-value)))]
-    ($ :div {:class (str "ds-tooltip ds-tooltip-top w-full")
+    ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
              :data-tip help-text}
       ($ :div {:class (str "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full "
                         (when editing? "cursor-pointer hover:bg-base-300 transition-colors"))
@@ -52,4 +52,3 @@
               is-true? "→ Disabled"
               is-false? "→ Remove"
               :else "→ Enabled")))))))
-

@@ -18,7 +18,7 @@ This app runs a single-tenant admin backend. Multi-tenant domain services (hosti
 - **Expenses** (`app.domain.backend.expenses.services.expenses`) — create/update with line items, soft delete, listing filters; records price observations.
 - **Articles/Aliases/Price history** (`app.domain.backend.expenses.services.articles`, `price-history`) — canonical articles, alias mapping, price observation queries.
 - **Reports** (`app.domain.backend.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
-- **Routes** mounted under `/admin/api/expenses` via `app.domain.backend.expenses.routes.core` (see `docs/backend/http-api.md` for endpoint map).
+- **Routes** are mounted under `/admin/api/expenses` via the backend domain registry (`app.domain.backend.registry`). The concrete implementation lives in `app.domain.backend.expenses.routes.*` (see `docs/backend/http-api.md` for endpoint map).
 
 ## How Routes Bind to Services
 - `app.template.backend.routes.admin.users` → basic user CRUD.

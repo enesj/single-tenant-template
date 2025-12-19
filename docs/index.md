@@ -22,6 +22,7 @@ Common tasks:
 - Start stack: `bb run-app` (serves app + admin UI)
 - Admin UI: `http://localhost:8085/admin/users` (admin auth simplified for template)
 - Tests: `bb be-test`, `bb fe-test`
+- Guard against concrete-domain coupling: `bb guard-no-concrete-domain` (CI also runs this via `npm run test:config-audit`)
 
 ## Documentation by Role
 
@@ -60,10 +61,10 @@ Common tasks:
 ## Architecture Snapshot (template)
 
 ```
-Browser → app.template.frontend.core → admin/template routes → services/DI → PostgreSQL (single-tenant)
+Browser → (app.template.frontend.core | app.admin.frontend.core) → routes (template + domains) → services/DI → PostgreSQL (single-tenant)
 ```
 
-- Frontend: Re-frame + UIX, routes in `app.template.frontend.routes`, admin bootstrap in `app.admin.frontend.core`.
+- Frontend: Re-frame + UIx; template routes in `app.template.frontend.routes` and domain user routes contributed via `app.domain.frontend.registry`.
 - Backend: `app.template.backend.core` with DI container `app.template.di.config`.
 - DB: migrations are generated from source files in `resources/db/{template,shared,domain}/**` (merged into `resources/db/models.edn`).
 

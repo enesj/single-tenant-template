@@ -6,7 +6,7 @@
                                                     github-icon google-icon]]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui auth-component

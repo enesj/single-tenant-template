@@ -2,8 +2,7 @@
   (:require
     [app.shared.field-specs :as field-specs]
     [app.shared.model-naming :as model-naming]
-    [app.template.backend.crud.protocols :as crud-protocols]
-    [clojure.string :as str]))
+    [app.template.backend.crud.protocols :as crud-protocols]))
 
 (defn entity-definition*
   [models entity-key]

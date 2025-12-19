@@ -2,13 +2,9 @@
   (:require
     ["react-dom/client" :as rdom]
     ["react-dom/test-utils" :as test-utils]
-    [app.template.frontend.components.list :as list]
-    [app.template.frontend.components.list.rows :as list-rows]
     [app.template.frontend.components.table :as table]
-    [cljs.test :refer-macros [async deftest is testing]]
-    [re-frame.core :as rf]
-    [uix.core :refer [$]]
-    [uix.re-frame :as uix-rf]))
+    [cljs.test :refer-macros [deftest is testing]]
+    [uix.core :refer [$]]))
 
 (defn- mount-component! [component assertions]
   (let [container (.createElement js/document "div")

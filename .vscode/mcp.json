@@ -23,7 +23,7 @@
       "command": "/bin/sh",
       "args": [
         "-c",
-        "set -a; [ -f /Users/enes/Projects/single-tenant-template/.postgres.env ] && source /Users/enes/Projects/single-tenant-template/.postgres.env; set +a; exec /Users/enes/Projects/toolbox --prebuilt postgres --stdio"
+        "cd /Users/enes/Projects/single-tenant-template && docker compose up -d db && set -a; [ -f /Users/enes/Projects/single-tenant-template/.postgres.env ] && source /Users/enes/Projects/single-tenant-template/.postgres.env; set +a; exec /Users/enes/Projects/toolbox --prebuilt postgres --stdio"
       ]
     },
     "morph-mcp": {

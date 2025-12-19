@@ -1,6 +1,5 @@
 (ns app.admin.frontend.events.settings-test
   (:require
-    [app.admin.frontend.events.settings :as settings]
     [app.admin.frontend.test-setup :as setup]
     [cljs.test :refer [deftest is testing]]
     [re-frame.core :as rf]

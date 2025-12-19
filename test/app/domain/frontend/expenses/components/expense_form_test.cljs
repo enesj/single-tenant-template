@@ -59,10 +59,10 @@
   (testing "Total Mismatch Validation - EXCEEDS TOLERANCE (0.02)"
     (let [values {:supplier_id "s1" :payer_id "p1" :purchased_at "2023-10-01T12:00"
                   :total_amount "100.02"
-                  :items [{:raw_label "Item 1" :line_total "100.00"}]}]
-      (let [result (sut/validate-expense-values values)]
-        (is (false? (:ok? result)))
-        (is (re-find #"must match line items" (:error result))))))
+                  :items [{:raw_label "Item 1" :line_total "100.00"}]}
+          result (sut/validate-expense-values values)]
+      (is (false? (:ok? result)))
+      (is (re-find #"must match line items" (:error result)))))
 
   (testing "Passes if total_amount is blank but items sum up to positive value"
     (let [values {:supplier_id "s1" :payer_id "p1" :purchased_at "2023-10-01T12:00"

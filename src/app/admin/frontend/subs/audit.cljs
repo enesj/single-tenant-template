@@ -1,7 +1,6 @@
 (ns app.admin.frontend.subs.audit
   "Enhanced admin audit logs subscriptions"
   (:require
-    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 ;; ============================================================================

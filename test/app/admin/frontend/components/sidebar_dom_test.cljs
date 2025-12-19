@@ -3,8 +3,7 @@
     ["react-dom/client" :as rdom]
     ["react-dom/test-utils" :as test-utils]
     [app.admin.frontend.components.layout :as layout]
-    [cljs.test :refer-macros [async deftest is testing]]
-    [re-frame.core :as rf]
+    [cljs.test :refer-macros [deftest is testing]]
     [uix.core :refer [$]]
     [uix.re-frame :as uix-rf]))
 

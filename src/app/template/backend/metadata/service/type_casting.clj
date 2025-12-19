@@ -3,9 +3,7 @@
     [app.shared.field-metadata :as field-meta]
     [app.shared.type-conversion :as type-conv]
     [app.template.backend.crud.protocols :as crud-protocols]
-    [app.template.backend.metadata.service.metadata-service :as ms])
-  (:import
-    (java.time LocalDateTime)))
+    [app.template.backend.metadata.service.metadata-service :as ms]))
 
 (defrecord TemplateTypeCastingService [models]
   crud-protocols/TypeCastingService

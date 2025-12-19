@@ -2,9 +2,7 @@
   "Database-specific type casting and formatting logic.
    Handles HoneySQL formatting and PostgreSQL type preparations."
   (:require
-    #?@(:clj [[taoensso.timbre :as log]
-              [cheshire.core :as json]])
-    #?@(:cljs [[taoensso.timbre :as log]])
+    #?@(:clj [[cheshire.core :as json]])
     [app.shared.field-metadata :as field-meta]
     [clojure.string :as str]))
 

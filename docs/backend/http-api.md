@@ -21,17 +21,23 @@ All paths are relative to `/admin/api`.
 
 ### Settings (protected, `app.template.backend.routes.admin.settings`)
 **View Options**
-- `GET /admin/api/settings` – return `{:view-options {...}}` from `src/app/admin/frontend/config/view-options.edn`.
+- `GET /admin/api/settings` – return `{:view-options {...}}` from the merged admin settings config:
+	- system file: `src/app/admin/frontend/config/view-options.edn`
+	- domain admin additions: `src/app/domain/**/admin/config/view-options.edn` (currently Expenses)
 - `PUT /admin/api/settings` – replace the entire `view-options` map.
 - `PATCH /admin/api/settings/entity` – upsert a single entity setting (`entity-name`, `setting-key`, `setting-value`).
 - `DELETE /admin/api/settings/entity` – remove a hardcoded setting so it becomes user-configurable again.
 
 **Form Fields Configuration**
-- `GET /admin/api/settings/form-fields` – return all form-fields config from `src/app/admin/frontend/config/form-fields.edn`.
+- `GET /admin/api/settings/form-fields` – return merged form-fields config from:
+	- system file: `src/app/admin/frontend/config/form-fields.edn`
+	- domain admin additions: `src/app/domain/**/admin/config/form-fields.edn` (currently Expenses)
 - `PATCH /admin/api/settings/form-fields/entity` – update entity form configuration (create-fields, edit-fields, required-fields).
 
 **Table Columns Configuration**
-- `GET /admin/api/settings/table-columns` – return all table-columns config from `src/app/admin/frontend/config/table-columns.edn`.
+- `GET /admin/api/settings/table-columns` – return merged table-columns config from:
+	- system file: `src/app/admin/frontend/config/table-columns.edn`
+	- domain admin additions: `src/app/domain/**/admin/config/table-columns.edn` (currently Expenses)
 - `PATCH /admin/api/settings/table-columns/entity` – update entity table configuration (default-hidden, always-visible, column widths).
 
 ### Users (protected)

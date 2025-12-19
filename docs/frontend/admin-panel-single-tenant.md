@@ -39,13 +39,16 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/admin-settings` (`app.admin.frontend.pages.unified-settings/admin-settings-page`)
   - `/admin/user-settings` (`app.admin.frontend.pages.unified-settings/user-settings-page`)
 - Data sources:
-  - Admin scope: `src/app/admin/frontend/config/{view-options,form-fields,table-columns,entities}.edn`
+  - Admin scope (merged):
+    - system config: `src/app/admin/frontend/config/{view-options,form-fields,table-columns,entities}.edn`
+    - domain admin config: `src/app/domain/**/admin/config/*.edn` (currently `src/app/domain/frontend/expenses/admin/config/*`)
   - User UI config: `src/app/domain/**/config/*.edn` (currently `src/app/domain/frontend/expenses/config/*`)
 - Use it to set defaults/locks per-entity; locked display toggles are hidden in list-view controls while remaining effective.
 
 ## Extension Points
 
 - **New admin pages**: add a page under `src/app/admin/frontend/pages`, wire a route in `app.admin.frontend.routes`, and add events/subs as needed.  
+- **New domains**: add a domain manifest under `src/app/domain/**` and enable it via `app.domain.frontend.registry` (frontend) / `app.domain.backend.registry` (backend) without adding concrete-domain requires in template/admin/shared.  
 - **Configs/specs**: extend entity specs/columns alongside your adapters so list toggles/export match rendered fields.  
 - **Auth**: keep auth logic in `app.admin.frontend.events.auth`; avoid storing tokens in app-db beyond what UI needs.  
 - **HTTP**: use `app.admin.frontend.utils.http` helpers for all admin requests.

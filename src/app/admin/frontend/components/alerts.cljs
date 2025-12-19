@@ -1,9 +1,9 @@
 (ns app.admin.frontend.components.alerts
   "Alert and notification components for admin interface"
   (:require
-    [app.template.frontend.components.cards :refer [chart-list-card]]
     [app.template.frontend.components.messages :refer [error-alert
                                                        success-alert]]
+    [app.template.frontend.components.notifications :as notifications]
     [app.template.frontend.components.stats :as template-stats]
     [uix.core :refer [$ defui]]))
 
@@ -205,8 +205,4 @@
 ;; Notification Helper Components
 ;; ============================================================================
 
-;; Re-export notification-banner from template namespace for backward compatibility
-#_(def notification-banner notification-banner)
-
-;; Re-export toast-notification from template namespace for backward compatibility
-#_(def toast-notification toast-notification)
+(def toast-notification notifications/toast-notification)

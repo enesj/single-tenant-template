@@ -3,7 +3,6 @@
     [app.admin.frontend.core :as admin-core]
     [app.template.frontend.events.bootstrap :as bootstrap-events]
     [app.template.frontend.routing.router :as router-util]
-    [app.template.frontend.routes.controllers :as controllers]
     [app.template.frontend.routes.data :as routes-data]
     [clojure.string :as str]
     [re-frame.core :as rf]

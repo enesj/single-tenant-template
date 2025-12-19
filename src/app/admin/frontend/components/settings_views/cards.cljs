@@ -171,7 +171,7 @@
                       :when col]
                   (let [label (or (get-in col-metadata [col :label])
                                 (-> col name (str/replace #"[_-]" " ") str/capitalize))
-                        tip (str "This column is always visible (enforced by table-columns.edn).")]
+                        tip "This column is always visible (enforced by table-columns.edn)."]
                     ($ :div {:key (str (name entity-name) "-col-enforced-" (name col))
                              :class "ds-tooltip ds-tooltip-top w-full"
                              :data-tip tip}
@@ -373,7 +373,7 @@
                       :when col]
                   (let [label (or (get-in col-metadata [col :label])
                                 (-> col name (str/replace #"[_-]" " ") str/capitalize))
-                        tip (str "This column is always visible (enforced by table-columns.edn).")]
+                        tip "This column is always visible (enforced by table-columns.edn)."]
                     ($ :div {:key (str (name entity-kw) "-col-enforced-" (name col))
                              :class "ds-tooltip ds-tooltip-top w-full"
                              :data-tip tip}
@@ -400,4 +400,3 @@
                      :editing? editing?
                      :help-text tip
                      :on-change on-column-change}))))))))))
-

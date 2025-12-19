@@ -18,8 +18,7 @@
     [app.template.frontend.events.config :as config-events]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
-    [app.template.frontend.hooks.display-settings :refer [use-display-settings
-                                                          use-action-visibility]]
+    [app.template.frontend.hooks.display-settings :refer [use-display-settings]]
     [re-frame.core :as rf]
     [uix.core :as uix :refer [$ defui]]))
 

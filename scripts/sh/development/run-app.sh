@@ -48,5 +48,21 @@ check_app_running
 echo "Bringing up Docker services..."
 docker compose up -d
 
+# Wait for Postgres to be ready
+echo "Waiting for Postgres to be ready..."
+MAX_RETRIES=30
+COUNT=0
+until pg_isready -h localhost -p 55432 -U app_user -d single_tenant_pos > /dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+  echo -n "."
+  sleep 1
+  ((COUNT++))
+done
+
+if [ $COUNT -eq $MAX_RETRIES ]; then
+  echo "❌ Postgres failed to become ready in time."
+else
+  echo " ✅ Postgres is ready!"
+fi
+
 # Run the app with monitoring
 ./scripts/sh/monitoring/monitor_terminal.sh "clojure -M:dev:migrations-dev"

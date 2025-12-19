@@ -3,6 +3,7 @@
   (:require [automigrate.db.introspection :as db-intro]
     [automigrate.files.management :as files]
     [automigrate.generation.extended :as gen-ext]
+    [automigrate.schema.actions :as schema-actions]
     [automigrate.schema.diffing :as diffing]
     [automigrate.execution.core :as exec]
     [automigrate.status.tracking :as status]
@@ -17,6 +18,7 @@
     [clojure.spec.alpha :as s]
     [next.jdbc :as jdbc]
     [slingshot.slingshot :refer [throw+ try+]]))
+
 
 (def ^:private RESOURCES-DIR "resources")
 (def ^:private MODELS-FILE "db/models.edn")
@@ -294,12 +296,12 @@
             FORWARD-DIRECTION (println (str "Applying " migration-name "..."))
             BACKWARD-DIRECTION (println (str "Reverting " migration-name "...")))
           (jdbc/with-transaction [tx db]
-            (let [actions (diffing/migration->actions {:file-name file-name
-                                                       :migrations-dir migrations-dir
-                                                       :migration-type migration-type
-                                                       :number-int number-int
-                                                       :direction direction
-                                                       :all-migrations all-migrations-detailed})]
+            (let [actions (schema-actions/migration->actions {:file-name file-name
+                                                              :migrations-dir migrations-dir
+                                                              :migration-type migration-type
+                                                              :number-int number-int
+                                                              :direction direction
+                                                              :all-migrations all-migrations-detailed})]
               (exec/exec-actions! {:db tx
                                    :actions actions
                                    :migration-type migration-type})

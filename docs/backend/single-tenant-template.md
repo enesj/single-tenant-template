@@ -9,12 +9,12 @@ This document explains what the **single-tenant template** includes, how it diff
 - **Backend entrypoint**: `app.template.backend.core`
   - Loads config via Aero (`config/base.edn`), builds HikariCP pool, wires DI with `app.template.di.config/create-service-container`.
   - Webserver setup in `app.template.backend.webserver`.
-- **Frontend entrypoint**: `app.template.frontend.core`
-  - Boots template routes and components, calls `app.admin.frontend.core/init-admin!`, mounts `current-page`.
-  - Admin routes: `/admin/login`, `/admin`, `/admin/users`, `/admin/audit`, `/admin/login-events`.
+- **Frontend entrypoints**:
+  - Public/app shell: `app.template.frontend.core` (Shadow build `:app`)
+  - Admin console: `app.admin.frontend.core` (Shadow build `:admin`, served at `/admin/*`)
 - **Domain sample (new)**: Home Expenses Tracker domain lives under:
   - Backend: `src/app/domain/backend/expenses` (services + routes mounted at `/admin/api/expenses`)
-  - Frontend: `src/app/domain/frontend/expenses` (admin-facing pages/components wired into the admin SPA)
+  - Frontend: `src/app/domain/frontend/expenses` (user routes/pages, admin adapters/subs, and domain-owned config)
 - **Admin UI**: `src/app/admin/frontend/*` with list/form patterns and templates.
 - **Template/shared libs**: `src/app/template/*`, `src/app/shared/*` (components, validation, schemas, HTTP, CRUD helpers).
 - **Database models**: source EDN under `resources/db/{template,shared,domain}/**` merged into `resources/db/models.edn` (single-tenant; includes audit/login event tables + domain tables).
@@ -43,13 +43,17 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 - Template backend/runtime concerns: add routes/middleware/webserver glue under `src/app/template/backend`.
 - Admin-only backend services live under `src/app/admin/backend`.
 - Domain backend code lives under `src/app/domain/backend/<your-domain>`.
-- Wire new routes in `app.template.backend.routes` / `app.template.backend.routes.admin-api` and register services in the DI container (`app.template.di.config`).
+- Prefer wiring new domain APIs via the backend domain registry (`app.domain.backend.registry`) so template/admin remain domain-agnostic.
+- Register new backend services in the DI container (`app.template.di.config`) as needed.
 - Reuse shared response/HTTP utilities in `src/app/shared`.
 
 ### Frontend
-- Add pages under `src/app/admin/frontend/pages` (admin) or `src/app/template/frontend/pages` (public).
+- Add admin-only pages under `src/app/admin/frontend/pages` (infrastructure/admin shell).
+- Add concrete domain pages/events/subs under `src/app/domain/frontend/<your-domain>`.
 - Use list/form templates and components from `src/app/template/frontend/components` and `src/app/admin/frontend/components`.
-- Routing: update `app.template.frontend.routes` and include your page/view in `current-page`.
+- Routing:
+  - User routes are contributed via `app.domain.frontend.registry` (see `all-user-routes`).
+  - Domain page components are aggregated via `app.domain.frontend.pages` to avoid circular deps.
 
 ### Database & Migrations
 - Do **not** edit `resources/db/models.edn` directly (it is generated).
@@ -72,6 +76,7 @@ Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless
 | DI container | `src/app/template/di/config.clj` |
 | Admin pages | `src/app/admin/frontend/pages/*` |
 | Frontend shell | `src/app/template/frontend/core.cljs`, `src/app/template/frontend/routes.cljs` (entrypoint) + `src/app/template/frontend/routes/` (implementation) |
+| Domain registries | `src/app/domain/backend/registry.clj`, `src/app/domain/frontend/registry.cljs`, `src/app/domain/frontend/pages.cljs` |
 | Template UI | `src/app/template/frontend/components/*` |
 | Shared libs | `src/app/shared/*` |
 | Migrations | `resources/db/models.edn`, `docs/migrations/migration-overview.md` |

@@ -19,7 +19,6 @@
    See the comment block at the bottom for scenarios."
   (:require
     [aero.core :as aero]
-    [app.admin.backend.setup :as setup]
     [app.template.backend.migrations.hierarchical-models :as hierarchical-models]
     [app.template.backend.utils.model-customizations :as model-cust]
     [automigrate.core :as am]
@@ -224,6 +223,9 @@
 (def make! make-all-migrations!)
 
 (comment
+  ;; Optional helpers
+  (require '[app.admin.backend.setup :as setup])
+
   ;; Scenarios
   ;; =========
   ;; 1) Fresh start with empty DB (dev)

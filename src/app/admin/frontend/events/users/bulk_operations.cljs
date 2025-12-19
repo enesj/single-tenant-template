@@ -2,7 +2,6 @@
   "Bulk user operations and data export functionality"
   (:require
     [app.admin.frontend.events.users.utils :as utils]
-    [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.utils.state :as state-utils]
     [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]))

@@ -25,12 +25,19 @@ The “User UI Config” scope is **domain-owned configuration** (currently the 
 
 ### Configuration Files
 
-Admin settings are stored in EDN files under `src/app/admin/frontend/config/`:
+Admin settings are stored as EDN and loaded as a merge of:
+
+- **System/admin-owned** config under `src/app/admin/frontend/config/`
+- **Domain-owned** admin config under `src/app/domain/**/admin/config/` (for Expenses: `src/app/domain/frontend/expenses/admin/config/`)
+
+Both scopes use the same EDN file types:
 
 - **`entities.edn`**: Registry of known admin entities and their metadata.
 - **`view-options.edn`**: Policy defaults/locks for display toggles and per-column visibility policy.
 - **`form-fields.edn`**: Create/edit field lists and required fields per entity.
 - **`table-columns.edn`**: Structural column configuration (available columns, filterable/sortable, always-visible).
+
+Only `entities.edn` is inlined at build time (via preload namespaces) so routes and adapters can be available early; the other files are edited at runtime and loaded via the settings API.
 
 User-facing (domain-owned) UI config is stored alongside the domain (currently Expenses):
 

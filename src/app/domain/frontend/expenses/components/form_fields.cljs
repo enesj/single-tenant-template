@@ -64,7 +64,6 @@
   [item]
   (let [qty-num (safe-parse-number (:qty item))
         unit-num (safe-parse-number (:unit_price item))
-        line-str (:line_total item)
         auto? (if (contains? item :line_total_auto?)
                 (true? (:line_total_auto? item))
                 true)]
@@ -118,7 +117,7 @@
                       (string? id) id
                       :else "items"))
         input-id (fn [item-id col-id]
-                   (str field-key "-" (str item-id) "-" (name col-id)))
+                   (str field-key "-" item-id "-" (name col-id)))
 
         add-item (fn []
                    (on-change (conj items (new-line-item))))
@@ -171,7 +170,7 @@
                         step (assoc :step step)
                         min-val (assoc :min min-val)))))
                 ($ :td
-                  ($ :button {:id (str "btn-remove-" field-key "-line-item-" (str item-id))
+                  ($ :button {:id (str "btn-remove-" field-key "-line-item-" item-id)
                               :class "text-xs text-error"
                               :type "button"
                               :on-click #(remove-item item-id)}

@@ -3,7 +3,6 @@
   (:require
     [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.system.entity-registry :as entity-registry]
-    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 ;; =============================================================================
