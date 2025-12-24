@@ -1,12 +1,16 @@
 (ns app.domain.frontend.expenses.components.form-fields
   "Custom form fields for expense form"
   (:require
-
-    [app.template.frontend.components.common :as common]
-
+    [app.domain.frontend.expenses.events.articles :as articles-events]
+    [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
+    [app.domain.frontend.expenses.ui.select-options :as select-options]
     [app.shared.type-conversion :as type-conv]
+    [app.template.frontend.components.common :as common]
+    [app.template.frontend.components.form.fields.select :refer [select-input]]
     [clojure.string :as str]
-    [uix.core :refer [$ defui use-effect use-state]]))
+    [re-frame.core :as rf]
+    [uix.core :refer [$ defui use-effect use-state]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 ;; =============================================================================
 ;; Helper Functions
@@ -228,3 +232,63 @@
         ($ :div {:id (str input-id "-error")
                  :class "text-error text-sm mt-1"}
           error)))))
+
+;; =============================================================================
+;; Admin Select Components (Suppliers / Articles)
+;; =============================================================================
+
+(defn- options-from-items
+  [items label-fn]
+  (->> (or items [])
+    (map (fn [item]
+           {:value (:id item)
+            :label (label-fn item)}))
+    (remove (fn [opt] (nil? (:value opt))))
+    (sort-by :label)
+    vec))
+
+(defui supplier-select-input
+  [{:keys [id label error required inline class on-change value form-id formId]}]
+  (let [suppliers (use-subscribe [:expenses/suppliers])
+        form-id* (or form-id formId)
+        field-id (or id (when form-id* (str form-id* "-select")))
+        options (options-from-items suppliers select-options/supplier-label)]
+    (use-effect
+      (fn []
+        (rf/dispatch [::suppliers-events/load-list {:limit 200 :offset 0}])
+        js/undefined)
+      [])
+    ($ select-input
+      {:id field-id
+       :formId form-id*
+       :label label
+       :error error
+       :required required
+       :inline inline
+       :class class
+       :value value
+       :options options
+       :on-change on-change})))
+
+(defui article-select-input
+  [{:keys [id label error required inline class on-change value form-id formId]}]
+  (let [articles (use-subscribe [:expenses/articles])
+        form-id* (or form-id formId)
+        field-id (or id (when form-id* (str form-id* "-select")))
+        options (options-from-items articles select-options/article-label)]
+    (use-effect
+      (fn []
+        (rf/dispatch [::articles-events/load-list {:limit 200 :offset 0}])
+        js/undefined)
+      [])
+    ($ select-input
+      {:id field-id
+       :formId form-id*
+       :label label
+       :error error
+       :required required
+       :inline inline
+       :class class
+       :value value
+       :options options
+       :on-change on-change})))

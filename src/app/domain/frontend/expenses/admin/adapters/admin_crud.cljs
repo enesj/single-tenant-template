@@ -37,7 +37,7 @@
              :on-success (fn [_cofx _entity-type _id default-effect]
                            ;; Reuse default DB updates but refresh via expenses domain loader
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -49,7 +49,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _response default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -62,7 +62,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _id _response default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}}})
 
 (defn- expenses-request
   "Create HTTP request config for expenses admin API."
@@ -199,7 +199,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _id default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.payers/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.payers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -211,7 +211,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _response default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.payers/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.payers/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -224,7 +224,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _id _response default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.payers/load {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.payers/load-list {}]))}}})
 
 (defn- articles-request
   "Create HTTP request config for articles admin API."
@@ -253,7 +253,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.articles/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -265,7 +265,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.articles/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -278,7 +278,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.articles/load {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}}})
 
 (defn- article-aliases-request
   "Create HTTP request config for article aliases admin API."
@@ -307,7 +307,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -319,7 +319,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -332,7 +332,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load-list {}]))}}})
 
 (defn- price-observations-request
   "Create HTTP request config for price observations admin API."
@@ -361,7 +361,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -373,7 +373,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -386,4 +386,4 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}}})

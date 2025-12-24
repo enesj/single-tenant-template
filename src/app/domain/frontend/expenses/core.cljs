@@ -5,10 +5,16 @@
     [app.domain.frontend.expenses.events.payers]
     [app.domain.frontend.expenses.events.receipts]
     [app.domain.frontend.expenses.events.suppliers]
+    [app.domain.frontend.expenses.events.articles]
+    [app.domain.frontend.expenses.events.article-aliases]
+    [app.domain.frontend.expenses.events.price-observations]
     [app.domain.frontend.expenses.subs.expenses]
     [app.domain.frontend.expenses.subs.payers]
     [app.domain.frontend.expenses.subs.receipts]
-    [app.domain.frontend.expenses.subs.suppliers]))
+    [app.domain.frontend.expenses.subs.suppliers]
+    [app.domain.frontend.expenses.subs.articles]
+    [app.domain.frontend.expenses.subs.article-aliases]
+    [app.domain.frontend.expenses.subs.price-observations]))
 
 (defn init!
   "Ensure expenses domain events/subs are loaded."

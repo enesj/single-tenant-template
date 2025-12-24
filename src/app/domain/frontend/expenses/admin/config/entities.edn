@@ -32,7 +32,7 @@
                      :show-delete? false
                      :show-filtering? true
                      :show-pagination? true
-                     :show-add-button? true
+                     :show-add-button? false
                      :show-batch-edit? true
                      :show-batch-delete? true
                      :per-page 25}

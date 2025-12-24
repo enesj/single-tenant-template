@@ -116,6 +116,29 @@ Backed by template list adapters; used for audit logs and login events.
 
 Features: dynamic columns, filtering, pagination, sorting, selection, batch actions. Use `:entity-spec` that matches rendered fields (e.g., `:principal_email`, `:action`).
 
+### Row Actions (Admin Lists)
+
+Rule: only **Edit** and **Delete** are rendered as buttons. All other actions (e.g., **View Details**) live inside the actions dropdown.
+
+Dropdown actions should open modals for their output (details, previews, etc.) so the list page remains in place. Avoid route navigation from dropdown actions.
+
+```clojure
+(defn render-row-actions [entity-segment item]
+  (let [item-id (id-utils/extract-entity-id item)]
+    ($ dropdown/action-dropdown
+      {:entity-id item-id
+       :actions [{:group-title "View"
+                  :items [{:id "view-details"
+                           :icon ($ view-details-icon)
+                           :label "View Details"
+                           :on-click (fn [e]
+                                       (.stopPropagation e)
+                                       (rf/dispatch [:navigate-to (str "/admin/" entity-segment "/" item-id)]))}]}]
+       :position :portal})))
+```
+
+This keeps row layouts consistent and preserves `actions-btn-<id>` hooks for browser tests.
+
 ### Filter (`app.template.frontend.components.filter`)
 
 ```clojure

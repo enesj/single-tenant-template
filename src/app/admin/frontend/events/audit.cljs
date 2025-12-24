@@ -14,7 +14,7 @@
     [app.admin.frontend.adapters.core :as adapters.core]
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.list.ui-state :as ui-events]
+
     [clojure.string :as str]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
@@ -299,22 +299,22 @@
       {:db (assoc-in db [:admin :success-message] "Audit log exported successfully")})))
 
 #_(rf/reg-event-fx
-  :admin/export-selected-audit-logs
-  (fn [{:keys [db]} [_ audit-ids format]]
-    (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))]
-      (log/info "Exporting selected audit logs, count:" (count audit-ids) "format:" format)
+    :admin/export-selected-audit-logs
+    (fn [{:keys [db]} [_ audit-ids format]]
+      (let [token (or (get-in db [:admin :token])
+                    (.getItem js/localStorage "admin-token"))]
+        (log/info "Exporting selected audit logs, count:" (count audit-ids) "format:" format)
 
-      (if token
-        {:db (assoc-in db [:admin :audit :exporting?] true)
-         :http-xhrio {:method          :post
-                      :uri             "/admin/api/audit/export"
-                      :params          {:ids audit-ids :format format}
-                      :headers         (when token {"x-admin-token" token})
-                      :response-format (ajax/json-response-format {:keywords? true})
-                      :on-success      [:admin/audit-logs-exported format (count audit-ids)]
-                      :on-failure      [:admin/audit-logs-export-failed]}}
-        {:db (assoc-in db [:admin :audit :error] "Authentication required")}))))
+        (if token
+          {:db (assoc-in db [:admin :audit :exporting?] true)
+           :http-xhrio {:method          :post
+                        :uri             "/admin/api/audit/export"
+                        :params          {:ids audit-ids :format format}
+                        :headers         (when token {"x-admin-token" token})
+                        :response-format (ajax/json-response-format {:keywords? true})
+                        :on-success      [:admin/audit-logs-exported format (count audit-ids)]
+                        :on-failure      [:admin/audit-logs-export-failed]}}
+          {:db (assoc-in db [:admin :audit :error] "Authentication required")}))))
 
 (rf/reg-event-fx
   :admin/export-all-audit-logs
@@ -362,34 +362,13 @@
 ;; ============================================================================
 ;; Pagination
 ;; ============================================================================
-
-#_(rf/reg-event-fx
-  :admin/audit-change-page
-  (fn [_ [_ page]]
-    (log/info "Changing audit logs page to:" page)
-    (let [safe-page (max 1 (or page 1))]
-      {:dispatch-n [[::ui-events/set-current-page :audit-logs safe-page]
-                    [:admin/load-audit-logs]]})))
-
-#_(rf/reg-event-fx
-  :admin/audit-change-page-size
-  (fn [_ [_ page-size]]
-    (log/info "Changing audit logs page size to:" page-size)
-    (let [parsed (cond
-                   (number? page-size) page-size
-                   (string? page-size) (js/parseInt page-size 10)
-                   :else page-size)
-          clamped (if (and parsed (pos? parsed)) parsed 10)]
-      {:dispatch-n [[::ui-events/set-per-page :audit-logs clamped]
-                    [:admin/load-audit-logs]]})))
-
 ;; ============================================================================
 ;; Sorting
 ;; ============================================================================
 
 #_(rf/reg-event-fx
-  :admin/audit-sort-by
-  (fn [_ [_ field direction]]
-    (log/info "Sorting audit logs by:" field direction)
-    (let [new-sort {:field field :direction direction}]
-      {:dispatch [:admin/load-audit-logs {:sort new-sort}]})))
+    :admin/audit-sort-by
+    (fn [_ [_ field direction]]
+      (log/info "Sorting audit logs by:" field direction)
+      (let [new-sort {:field field :direction direction}]
+        {:dispatch [:admin/load-audit-logs {:sort new-sort}]})))

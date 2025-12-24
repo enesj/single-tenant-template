@@ -29,6 +29,7 @@
 
 (def article-alias-config
   {:table-name "article_aliases"
+   :table-alias :aa
    :primary-key :aa/id
    :required-fields [:supplier_id :raw_label]
    :allowed-order-by {:created-at :aa/created_at
@@ -49,18 +50,19 @@
 
 (def price-observation-config
   {:table-name "price_observations"
+   :table-alias :po
    :primary-key :po/id
    :required-fields [:article_id :supplier_id :observed_at :qty :unit_price]
-   :allowed-order-by {:article-canonical-name :articles.canonical_name
-                      :supplier-display-name :suppliers.display_name
-                      :observed-at :po.observed_at
-                      :created-at :po.created_at
-                      :unit-price :po.unit_price
-                      :line-total :po.line_total
-                      :qty :po.qty
-                      :currency :po.currency}
-   :default-order-by :po.observed_at
-   :search-fields [:articles.canonical_name :suppliers.display_name]
+   :allowed-order-by {:article-canonical-name :a/canonical_name
+                      :supplier-display-name :s/display_name
+                      :observed-at :po/observed_at
+                      :created-at :po/created_at
+                      :unit-price :po/unit_price
+                      :line-total :po/line_total
+                      :qty :po/qty
+                      :currency :po/currency}
+   :default-order-by :po/observed_at
+   :search-fields [:a/canonical_name :s/display_name]
    :joins [[:articles :a] [:= :a/id :po/article_id]
            [:suppliers :s] [:= :s/id :po/supplier_id]]
    :select-fields [[:po.*]
@@ -197,6 +199,7 @@
 
 (def price-history-config
   {:table-name "price_observations"
+   :table-alias :po
    :primary-key :id
    :required-fields [:article_id :supplier_id :observed_at :line_total]
    :allowed-order-by {:observed-at :observed_at

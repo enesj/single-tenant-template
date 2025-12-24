@@ -8,59 +8,60 @@
 
 (def expenses-entity-spec
   {:id :expenses
-   :fields [{:id :supplier-display-name :label "Supplier"}
-            {:id :supplier-normalized-key :label "Supplier key"}
-            {:id :payer-label :label "Payer"}
-            {:id :payer-type :label "Payer type"}
-            {:id :total-amount :label "Total"}
-            {:id :currency :label "Currency"}
-            {:id :purchased-at :label "Purchased at"}
-            {:id :status :label "Status"}]})
+   :fields [{:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :supplier-normalized-key :label "Supplier key" :type :text}
+            {:id :payer-label :label "Payer" :type :text}
+            {:id :payer-type :label "Payer type" :type :text}
+            {:id :total-amount :label "Total" :type :number}
+            {:id :currency :label "Currency" :type :text}
+            {:id :purchased-at :label "Purchased at" :type :datetime}
+            {:id :status :label "Status" :type :text}]})
 
 (def receipts-entity-spec
   {:id :receipts
-   :fields [{:id :original-filename :label "File"}
-            {:id :status :label "Status"}
-            {:id :supplier-guess :label "Supplier guess"}
-            {:id :created-at :label "Created at"}]})
+   :fields [{:id :original-filename :label "File" :type :text}
+            {:id :status :label "Status" :type :text}
+            {:id :supplier-guess :label "Supplier guess" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}]})
 
 (def suppliers-entity-spec
   {:id :suppliers
-   :fields [{:id :display-name :label "Name"}
-            {:id :normalized-key :label "Normalized key"}
-            {:id :address :label "Address"}
-            {:id :tax-id :label "Tax ID"}
-            {:id :created-at :label "Created at"}]})
+   :fields [{:id :display-name :label "Name" :type :text}
+            {:id :normalized-key :label "Normalized key" :type :text}
+            {:id :address :label "Address" :type :text}
+            {:id :tax-id :label "Tax ID" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}]})
 
 (def payers-entity-spec
   {:id :payers
-   :fields [{:id :label :label "Label"}
-            {:id :type :label "Type"}
-            {:id :is-default :label "Default?"}]})
+   :fields [{:id :label :label "Label" :type :text}
+            {:id :type :label "Type" :type :text}
+            {:id :is-default :label "Default?" :type :boolean}]})
 
 (def articles-entity-spec
   {:id :articles
-   :fields [{:id :canonical-name :label "Name"}
-            {:id :barcode :label "Barcode"}
-            {:id :category :label "Category"}
-            {:id :created-at :label "Created at"}]})
+   :fields [{:id :canonical-name :label "Name" :type :text}
+            {:id :barcode :label "Barcode" :type :text}
+            {:id :category :label "Category" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}]})
 
 (def article-aliases-entity-spec
   {:id :article-aliases
-   :fields [{:id :supplier-display-name :label "Supplier"}
-            {:id :article-canonical-name :label "Article"}
-            {:id :raw-label-normalized :label "Alias"}
-            {:id :confidence :label "Confidence"}
-            {:id :created-at :label "Created at"}]})
+   :fields [{:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :article-canonical-name :label "Article" :type :text}
+            {:id :raw-label-normalized :label "Alias" :type :text}
+            {:id :confidence :label "Confidence" :type :number}
+            {:id :created-at :label "Created at" :type :datetime}]})
 
 (def price-observations-entity-spec
   {:id :price-observations
-   :fields [{:id :article-canonical-name :label "Article"}
-            {:id :supplier-display-name :label "Supplier"}
-            {:id :observed-at :label "Observed at"}
-            {:id :unit-price :label "Unit price"}
-            {:id :line-total :label "Line total"}
-            {:id :currency :label "Currency"}]})
+   :fields [{:id :article-canonical-name :label "Article" :type :text}
+            {:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :observed-at :label "Observed at" :type :datetime}
+            {:id :unit-price :label "Unit price" :type :number}
+            {:id :line-total :label "Line total" :type :number}
+            {:id :currency :label "Currency" :type :text}
+            {:id :qty :label "Qty" :type :number}]})
 
 ;; Register entity spec subscriptions with fallback values
 (adapters.core/register-entity-spec-sub!

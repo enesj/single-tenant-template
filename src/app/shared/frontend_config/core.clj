@@ -234,24 +234,6 @@
     (remove nil?)
     set))
 
-(defn- collect-field-ids
-  [cfg list-keys extra-keys]
-  (let [list-ids (mapcat #(get cfg % []) list-keys)
-        extra-ids (mapcat #(keys (get cfg %)) extra-keys)]
-    (concat list-ids extra-ids)))
-
-(defn- table-column-ids
-  [cfg]
-  (collect-field-ids cfg table-columns-list-keys [:column-config]))
-
-(defn- form-field-ids
-  [cfg]
-  (collect-field-ids cfg form-fields-list-keys [:field-config]))
-
-(defn- view-option-column-ids
-  [cfg]
-  (concat (keys (:column-defaults cfg)) (keys (:column-locks cfg))))
-
 (defn- computed-fields-by-entity
   [table-columns]
   (into {}

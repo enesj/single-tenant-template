@@ -100,6 +100,27 @@
       (assoc-in (conj (paths/list-ui-state entity-key) :pagination) {:current-page page :per-page per-page})
       (assoc-in (conj (paths/entity-metadata entity-key) :pagination) {:page page :per-page per-page}))))
 
+(defn- extra-query-params
+  "Extract non-pagination params for list requests.
+
+   Removes pagination keys (limit/offset/page/per-page) and nil values,
+   forwarding everything else to the backend for filtering."
+  [params {:keys [param-keys]}]
+  (let [{:keys [limit-key offset-key page-key per-page-key]}
+        (or param-keys
+          {:limit-key :limit
+           :offset-key :offset
+           :page-key :page
+           :per-page-key :per-page})
+        reserved #{limit-key offset-key page-key per-page-key}
+        reserved-strings (set (map name reserved))]
+    (into {}
+      (remove (fn [[k v]]
+                (or (nil? v)
+                  (contains? reserved k)
+                  (and (string? k) (contains? reserved-strings k)))))
+      (or params {}))))
+
 ;; =============================================================================
 ;; Event Generator Functions
 ;; =============================================================================
@@ -116,18 +137,20 @@
     (rf/reg-event-fx
       (keyword event-ns "load-list")
       (fn [{:keys [db]} [_ params]]
-        (let [{:keys [limit offset] :as pagination} (resolve-pagination entity-key db params pag-opts)]
+        (let [{:keys [limit offset] :as pagination} (resolve-pagination entity-key db params pag-opts)
+              extra-params (extra-query-params params pag-opts)
+              request-params (merge {:limit limit :offset offset} extra-params)]
           {:db (-> db
                  (begin-load entity-key base-path)
                  (update-pagination-state entity-key pagination))
            :http-xhrio (admin-http/admin-get
                          {:uri api-endpoint
-                          :params {:limit limit :offset offset}
+                          :params request-params
                           :response-format (ajax/json-response-format {:keywords? true})
                           :on-success [(keyword event-ns "list-loaded") pagination]
                           :on-failure [(keyword event-ns "load-failed")]})})))
 
-    ;; list-loaded event  
+    ;; list-loaded event
     (rf/reg-event-fx
       (keyword event-ns "list-loaded")
       (fn [{:keys [db]} [_ pagination response]]
@@ -201,6 +224,28 @@
             (assoc-in (conj base-path :detail-loading-id) nil)
             (assoc-in (conj base-path :error) msg)))))))
 
+(defn generate-detail-modal-events
+  "Generates open/close detail modal events for an entity."
+  [{:keys [entity-key base-path] :as config}]
+  (validate-entity-config config)
+  (let [event-ns (str "app.domain.frontend.expenses.events." (name entity-key))
+        modal-path (conj base-path :detail-modal)]
+    (rf/reg-event-fx
+      (keyword event-ns "open-detail-modal")
+      (fn [{:keys [db]} [_ entity-id]]
+        (cond-> {:db (-> db
+                       (assoc-in (conj modal-path :open?) true)
+                       (assoc-in (conj modal-path :entity-id) entity-id))}
+          entity-id
+          (assoc :dispatch [(keyword event-ns "load-detail") entity-id]))))
+
+    (rf/reg-event-db
+      (keyword event-ns "close-detail-modal")
+      (fn [db _]
+        (-> db
+          (assoc-in (conj modal-path :open?) false)
+          (assoc-in (conj modal-path :entity-id) nil))))))
+
 (defn generate-form-events
   "Generates create-entry, create-success, and create-failed events for entities with forms."
   [{:keys [entity-key _base-path api-endpoint form-path] :as config}]
@@ -260,9 +305,10 @@
   [{:keys [entity-key has-forms?] :as config}]
   (validate-entity-config config)
 
-  ;; Always register list and detail events
+  ;; Always register list, detail, and modal events
   (generate-list-events config)
   (generate-detail-events config)
+  (generate-detail-modal-events config)
 
   ;; Conditionally register form events
   (when has-forms?

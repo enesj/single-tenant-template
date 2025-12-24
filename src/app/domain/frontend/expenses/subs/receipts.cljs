@@ -8,22 +8,37 @@
   (fn [db _]
     (get-in db (conj base-path :items))))
 
-#_(rf/reg-sub
+(rf/reg-sub
   :expenses/receipts-loading?
   (fn [db _]
     (true? (get-in db (conj base-path :loading?)))))
 
-#_(rf/reg-sub
+(rf/reg-sub
   :expenses/receipts-error
   (fn [db _]
     (get-in db (conj base-path :error))))
 
-#_(rf/reg-sub
+(rf/reg-sub
   :expenses/receipt
   (fn [db [_ receipt-id]]
     (get-in db (conj base-path :by-id receipt-id))))
 
-#_(rf/reg-sub
+(rf/reg-sub
   :expenses/receipt-detail-loading?
   (fn [db _]
     (true? (get-in db (conj base-path :detail-loading?)))))
+
+(rf/reg-sub
+  :expenses/receipt-action-loading?
+  (fn [db _]
+    (true? (get-in db (conj base-path :action-loading?)))))
+
+(rf/reg-sub
+  :expenses/receipt-detail-modal-open?
+  (fn [db _]
+    (true? (get-in db (conj base-path :detail-modal :open?)))))
+
+(rf/reg-sub
+  :expenses/receipt-detail-modal-id
+  (fn [db _]
+    (get-in db (conj base-path :detail-modal :entity-id))))

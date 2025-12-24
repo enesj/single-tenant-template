@@ -13,6 +13,7 @@
   {:entity-key :suppliers
    :base-path [:admin :expenses :suppliers]
    :api-endpoint "/admin/api/expenses/suppliers"
+   :detail-response-key :supplier
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
@@ -20,6 +21,7 @@
   {:entity-key :payers
    :base-path [:admin :expenses :payers]
    :api-endpoint "/admin/api/expenses/payers"
+   :detail-response-key :payer
    :has-forms? false
    :pagination-opts {:default-per-page 25
                      :param-keys {:limit-key :limit
@@ -31,6 +33,7 @@
   {:entity-key :articles
    :base-path [:admin :expenses :articles]
    :api-endpoint "/admin/api/expenses/articles"
+   :detail-response-key :article
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
@@ -38,6 +41,7 @@
   {:entity-key :receipts
    :base-path [:admin :expenses :receipts]
    :api-endpoint "/admin/api/expenses/receipts"
+   :detail-response-key :receipt
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
@@ -54,6 +58,7 @@
   {:entity-key :price-observations
    :base-path [:admin :expenses :price-observations]
    :api-endpoint "/admin/api/expenses/price-observations"
+   :detail-response-key :price-observation
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
@@ -61,6 +66,7 @@
   {:entity-key :article-aliases
    :base-path [:admin :expenses :article-aliases]
    :api-endpoint "/admin/api/expenses/article-aliases"
+   :detail-response-key :article-alias
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 

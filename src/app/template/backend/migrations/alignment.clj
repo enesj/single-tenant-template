@@ -84,7 +84,8 @@
           domain-subdirs)]
     (merge
       (read-edn-file template-path)
-      (merge (read-edn-file domain-direct-path) domain-subdir-data)
+      (read-edn-file domain-direct-path)
+      domain-subdir-data
       (read-edn-file shared-path))))
 
 (defn- q

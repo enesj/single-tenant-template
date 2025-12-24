@@ -43,13 +43,16 @@
     :placeholder "Category (optional)"}}}
 
  :article-aliases
- {:create-fields [:supplier-id :article-id :raw-label :confidence],
-  :edit-fields [:article-id :raw-label :confidence],
-  :required-fields [:supplier-id :article-id :raw-label],
+ {:create-fields [:supplier-id :article-id :raw-label-normalized :confidence],
+  :edit-fields [:article-id :raw-label-normalized :confidence],
+  :required-fields [:supplier-id :article-id :raw-label-normalized],
   :field-config
-  {:supplier-id {:type :uuid},
-   :article-id {:type :uuid},
-   :raw-label {:type :text, :max-length 255, :placeholder "Raw label"},
+  {:supplier-id {:type :select},
+   :article-id {:type :select},
+   :raw-label-normalized {:type :text,
+                          :label "Raw label",
+                          :max-length 255,
+                          :placeholder "Raw label"},
    :confidence {:type :number, :min 0, :max 100, :default 100}}}
 
  :price-observations
@@ -71,8 +74,8 @@
    :currency],
   :required-fields [:article-id :supplier-id :line-total],
   :field-config
-  {:article-id {:type :uuid},
-   :supplier-id {:type :uuid},
+  {:article-id {:type :select},
+   :supplier-id {:type :select},
    :observed-at {:type :datetime},
    :qty {:type :number, :step 0.001},
    :unit-price {:type :number, :step 0.01},

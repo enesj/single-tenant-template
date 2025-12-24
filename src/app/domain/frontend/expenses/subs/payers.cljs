@@ -9,11 +9,36 @@
     (get-in db (conj base-path :items))))
 
 #_(rf/reg-sub
-  :expenses/payers-loading?
-  (fn [db _]
-    (true? (get-in db (conj base-path :loading?)))))
+    :expenses/payers-loading?
+    (fn [db _]
+      (true? (get-in db (conj base-path :loading?)))))
 
 #_(rf/reg-sub
+    :expenses/payers-error
+    (fn [db _]
+      (get-in db (conj base-path :error))))
+
+(rf/reg-sub
+  :expenses/payer
+  (fn [db [_ payer-id]]
+    (get-in db (conj base-path :by-id payer-id))))
+
+(rf/reg-sub
+  :expenses/payer-detail-loading?
+  (fn [db _]
+    (true? (get-in db (conj base-path :detail-loading?)))))
+
+(rf/reg-sub
   :expenses/payers-error
   (fn [db _]
     (get-in db (conj base-path :error))))
+
+(rf/reg-sub
+  :expenses/payer-detail-modal-open?
+  (fn [db _]
+    (true? (get-in db (conj base-path :detail-modal :open?)))))
+
+(rf/reg-sub
+  :expenses/payer-detail-modal-id
+  (fn [db _]
+    (get-in db (conj base-path :detail-modal :entity-id))))

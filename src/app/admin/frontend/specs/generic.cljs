@@ -11,6 +11,7 @@
    - Maintainable: Configuration-driven approach eliminates hardcoded customizations"
   (:require
     [app.admin.frontend.config.loader :as config-loader]
+    [app.admin.frontend.specs.form-components :as form-components]
     [app.admin.frontend.utils.vector-config :as vector-config]
     [app.shared.field-specs :as field-specs]
     [clojure.string :as str]
@@ -199,10 +200,16 @@
     :email "email"
     :password "password"
     :text "text"
+    :string "text"
     :textarea "textarea"
     :select "select"
     :number "number"
     :checkbox "checkbox"
+    :boolean "checkbox"
+    :date "date"
+    :datetime "datetime-local"
+    :datetime-local "datetime-local"
+    :uuid "text"
     "text"))
 
 (defn- normalize-select-options
@@ -223,8 +230,9 @@
   "Build a field spec from form-fields.edn field configuration.
    Supports keys: :type, :label, :options, :placeholder, :default,
    :min-length, :max-length, :validation, :min, :max, :step"
-  [field-key field-config _editing?]
-  (let [base {:id field-key
+  [entity-key field-key field-config _editing?]
+  (let [component (form-components/get-form-field-component entity-key field-key)
+        base {:id field-key
               :label (or (:label field-config)
                        (-> (name field-key)
                          (str/replace "-" " ")
@@ -248,8 +256,12 @@
                           (:max field-config) (assoc :max (:max field-config))
                           (:step field-config) (assoc :step (:step field-config))
                           ;; Default value for field initialization
-                          (:default field-config) (assoc :default (:default field-config)))]
-    with-validation))
+                          (:default field-config) (assoc :default (:default field-config)
+                                                    :default-value (:default field-config)))
+        with-component (if component
+                         (assoc with-validation :component component)
+                         with-validation)]
+    with-component))
 
 (defn- generate-admin-form-entity-spec-from-db
   "Generate admin form entity spec from form-fields.edn configuration"
@@ -262,7 +274,7 @@
         (when (seq fields-to-show)
           (mapv (fn [field-key]
                   (let [config (get field-config field-key {})
-                        spec (build-field-spec-from-config field-key config editing?)]
+                        spec (build-field-spec-from-config entity-keyword field-key config editing?)]
                     (if (contains? required-set field-key)
                       (assoc spec :required true)
                       spec)))
@@ -270,12 +282,12 @@
 
 ;; Admin form entity specs subscription - uses form-fields.edn when available
 #_(rf/reg-sub
-  :admin/form-entity-specs-by-name
-  (fn [db [_ entity-name editing?]]
-    (or (generate-admin-form-entity-spec-from-db db entity-name editing?)
+    :admin/form-entity-specs-by-name
+    (fn [db [_ entity-name editing?]]
+      (or (generate-admin-form-entity-spec-from-db db entity-name editing?)
       ;; Fallback to standard form entity specs from models-data
-      (when-let [md (:models-data db)]
-        (get (field-specs/form-entity-specs md) entity-name)))))
+        (when-let [md (:models-data db)]
+          (get (field-specs/form-entity-specs md) entity-name)))))
 
 ;; Override the template :form-entity-specs/by-name subscription for admin module
 ;; This subscription is used by the form component to get field specs

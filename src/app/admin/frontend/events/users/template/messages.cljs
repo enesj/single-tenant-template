@@ -1,9 +1,8 @@
 (ns app.admin.frontend.events.users.template.messages
   "Admin message management - success/error messages and UI feedback"
   (:require
-    [app.template.frontend.events.form :as form-events]
-    [re-frame.core :as rf]
-    [taoensso.timbre :as log]))
+
+    [re-frame.core :as rf]))
 
 ;; ============================================================================
 ;; Success Message Management
@@ -19,14 +18,6 @@
   (fn [db _]
     (dissoc db :admin/success-message)))
 
-#_(rf/reg-event-fx
-  :admin/hide-form-modal
-  (fn [{:keys [db]} _]
-    (let [entity-type (or (get-in db [:ui :entity-name]) :users)]
-      (log/info "admin/hide-form-modal" {:entity-type entity-type
-                                         :ui-entity-name (get-in db [:ui :entity-name])})
-      {:dispatch [::form-events/cancel-form entity-type]})))
-
 ;; ============================================================================
 ;; Message Subscriptions
 ;; ============================================================================
@@ -37,9 +28,9 @@
     (:admin/success-message db nil)))
 
 #_(rf/reg-sub
-  :admin/has-success-message?
-  (fn [db _]
-    (some? (:admin/success-message db))))
+    :admin/has-success-message?
+    (fn [db _]
+      (some? (:admin/success-message db))))
 
 ;; ============================================================================
 ;; Error Message Management
@@ -61,6 +52,6 @@
     (:admin/error-message db nil)))
 
 #_(rf/reg-sub
-  :admin/has-error-message?
-  (fn [db _]
-    (some? (:admin/error-message db))))
+    :admin/has-error-message?
+    (fn [db _]
+      (some? (:admin/error-message db))))

@@ -18,6 +18,8 @@
     [app.domain.frontend.expenses.routes.user :as expenses-user-routes]
     ;; Domain adapters - admin (loads all adapter modules)
     [app.domain.frontend.expenses.adapters :as expenses-adapter]
+    [app.domain.frontend.expenses.admin.components.detail-modals :as detail-modals]
+    [app.domain.frontend.expenses.admin.components.entity-actions :as entity-actions]
     ;; Domain admin subs (expenses-specific loading/error subs)
     app.domain.frontend.expenses.admin.subs
     ;; Load admin events/subs for side effects (safe to require)
@@ -32,6 +34,9 @@
     app.domain.frontend.expenses.subs.payers
     app.domain.frontend.expenses.subs.suppliers
     app.domain.frontend.expenses.subs.receipts
+    app.domain.frontend.expenses.subs.articles
+    app.domain.frontend.expenses.subs.article-aliases
+    app.domain.frontend.expenses.subs.price-observations
     ;; User-expenses events and subs (domain-owned)
     app.domain.frontend.expenses.events.user-expenses
     app.domain.frontend.expenses.subs.user-expenses))
@@ -48,12 +53,24 @@
             nil)
    :admin-entities
    {:expenses {:init-fn expenses-adapter/init-expenses-adapter!}
-    :receipts {:init-fn expenses-adapter/init-receipts-adapter!}
-    :suppliers {:init-fn expenses-adapter/init-suppliers-adapter!}
-    :payers {:init-fn expenses-adapter/init-payers-adapter!}
-    :articles {:init-fn expenses-adapter/init-articles-adapter!}
-    :article-aliases {:init-fn expenses-adapter/init-article-aliases-adapter!}
-    :price-observations {:init-fn expenses-adapter/init-price-observations-adapter!}}
+    :receipts {:init-fn expenses-adapter/init-receipts-adapter!
+               :custom-actions entity-actions/admin-receipts-actions
+               :modals [detail-modals/admin-receipt-detail-modal]}
+    :suppliers {:init-fn expenses-adapter/init-suppliers-adapter!
+                :custom-actions entity-actions/admin-suppliers-actions
+                :modals [detail-modals/admin-supplier-detail-modal]}
+    :payers {:init-fn expenses-adapter/init-payers-adapter!
+             :custom-actions entity-actions/admin-payers-actions
+             :modals [detail-modals/admin-payer-detail-modal]}
+    :articles {:init-fn expenses-adapter/init-articles-adapter!
+               :custom-actions entity-actions/admin-articles-actions
+               :modals [detail-modals/admin-article-detail-modal]}
+    :article-aliases {:init-fn expenses-adapter/init-article-aliases-adapter!
+                      :custom-actions entity-actions/admin-article-aliases-actions
+                      :modals [detail-modals/admin-article-alias-detail-modal]}
+    :price-observations {:init-fn expenses-adapter/init-price-observations-adapter!
+                         :custom-actions entity-actions/admin-price-observations-actions
+                         :modals [detail-modals/admin-price-observation-detail-modal]}}
    :admin-domain-groups
    {:expenses-admin
     {:title "Expenses Admin"

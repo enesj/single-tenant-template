@@ -6,3 +6,11 @@
     (:display_name supplier)
     (:id supplier)
     ""))
+
+(defn article-label
+  [article]
+  (or (:canonical-name article)
+    (:canonical_name article)
+    (:name article)
+    (:id article)
+    ""))

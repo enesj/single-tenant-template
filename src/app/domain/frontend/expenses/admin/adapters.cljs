@@ -6,6 +6,7 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
+    app.domain.frontend.expenses.admin.form-components
     [app.domain.frontend.expenses.admin.adapters.ui-state :as ui-state]))
 
 ;; Re-export adapter init functions

@@ -95,7 +95,7 @@
    - :button-text - submit button text
    - :form-body-component - custom UIX component to render form body"
   [{:keys [mode entity-name entity-spec entity-id
-           load-detail! select-detail detail-loading? detail-error
+           load-detail! select-detail detail-error
            normalize-initial-data validate-values prepare-submit-values
            on-submit on-cancel
            initial-row-data default-values button-text
