@@ -1,4 +1,5 @@
 ---
+name: system-logs
 description: "Read backend + shadow-cljs logs from the dev monitoring output"
 tags: ["logs", "debugging", "server", "shadow-cljs", "development"]
 ---

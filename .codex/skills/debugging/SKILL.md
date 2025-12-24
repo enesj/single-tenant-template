@@ -1,4 +1,5 @@
 ---
+name: debugging
 description: "Short, evidence-based debugging playbook for Clojure/ClojureScript"
 tags: ["debugging", "troubleshooting", "testing", "clojure", "clojurescript", "re-frame", "backend", "frontend"]
 ---

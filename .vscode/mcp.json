@@ -38,6 +38,24 @@
         "WARPGREP_EXCLUDES": ".git,node_modules,target,.shadow-cljs,.clj-kondo,.cpcache,dist,build,out,.next,.idea,.vscode,.DS_Store,npm-debug.log*,yarn-debug.log*,yarn-error.log*",
         "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
       }
+    },
+    "web-search-prime": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {
+        "Authorization": "6189b03087e74486bff8234fcab6d678.JOWIHK3u9TANnRhO",
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json"
+      }
+    },
+    "web-reader": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
+      "headers": {
+        "Authorization": "6189b03087e74486bff8234fcab6d678.JOWIHK3u9TANnRhO",
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json"
+      }
     }
   }
 }

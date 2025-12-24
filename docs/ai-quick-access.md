@@ -18,6 +18,13 @@ npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
 # Then grep saved files repeatedly
 ```
 
+## 💡 REPL Troubleshooting
+If you get a `FileNotFoundException` when requiring `.cljs` files in the REPL, switch to the ClojureScript runtime:
+```clojure
+(shadow.cljs.devtools.api/nrepl-select :app)
+```
+(Use `:admin` if working on the admin panel).
+
 ## Canonical entry points
 - `docs/index.md` – doc IA
 - `docs/architecture/overview.md` – system overview

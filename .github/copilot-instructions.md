@@ -19,8 +19,8 @@
 ### Debugging & Testing
 
 - Prefer evaluation tools over speculation:
-  - **Clojure (backend `.clj`)**: Use `clj-nrepl-eval -p <port> "<code>"` to run code and verify behavior.
-  - **ClojureScript (frontend `.cljs`)**: Use the `mcp_clojure-mcp_clojurescript_eval` MCP tool. ⚠️ `clj-nrepl-eval` does NOT work with ClojureScript!
+  - **Clojure (backend `.clj`)**: Use the `mcp__clojure-mcp__clojure_eval` MCP tool to run code and verify behavior.
+  - **ClojureScript (frontend `.cljs`)**: Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool.
 - Use the project’s debugging skills when relevant:
   - Frontend state/auth/UI issues → **app-db-inspect**.
   - Frontend event flow or performance issues → **reframe-events-analysis**.
@@ -40,8 +40,8 @@
 
 - For any bigger task, start with a concrete multi-phase plan before coding.
 - Implement strictly phase-by-phase and test each phase before moving on:
-  - **Backend**: Use `clj-nrepl-eval` for Clojure.
-  - **Frontend**: Use `mcp_clojure-mcp_clojurescript_eval` for ClojureScript.
+  - **Backend**: Use `mcp__clojure-mcp__clojure_eval` for Clojure.
+  - **Frontend**: Use `mcp__clojure-mcp__clojurescript_eval` for ClojureScript.
 - If a phase cannot be fully fixed after testing, record the problem in the Clojure MCP scratch pad (phase, what was attempted, what failed, current hypothesis) and then continue with the next phase.
 - For really big tasks, create a markdown plan file in the repo root (e.g. `PLAN-<short-name>.md`) and use it to track phases and progress; otherwise, use the Clojure MCP scratch pad to store the plan, progress, and open issues.
 

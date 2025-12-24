@@ -181,7 +181,6 @@
       "mcp__postgres__list_tables",
       "WebFetch(domain:docs.github.com)",
       "Bash(github-copilot --version)",
-      "Bash(clj-nrepl-eval:*)",
       "Bash(env)",
       "Bash(exec)",
       "Bash(/Users/enes/Projects/toolbox --prebuilt postgres --help)",

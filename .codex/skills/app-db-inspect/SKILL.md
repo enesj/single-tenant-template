@@ -1,4 +1,5 @@
 ---
+name: app-db-inspect
 description: Inspect re-frame app-db state safely in ClojureScript when debugging frontend state (auth/session, routing, data loading, UI state).
 allowed-tools:
   - clojure-mcp:clojurescript_eval
@@ -49,13 +50,6 @@ Use this when someone asks “what’s in app-db?” or you need quick, safe sna
   (select-keys (get db :current-route {})
                [:template :name :parameters]))
 ```
-
-## Troubleshooting
-- **FileNotFoundException**: If you get this when evaluating, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:
-  ```clojure
-  (shadow.cljs.devtools.api/nrepl-select :app)
-  ```
-  (Use `:admin` if working on the admin panel).
 
 ### Entity store health (loading/errors/counts)
 ```clojure

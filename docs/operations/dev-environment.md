@@ -40,6 +40,11 @@ bb run-app
 - Manual restart: `(system.core/restart-system)` from the REPL.
 
 ## Troubleshooting
+- **FileNotFoundException in REPL**: If you get this when requiring `.cljs` files, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:
+  ```clojure
+  (shadow.cljs.devtools.api/nrepl-select :app)
+  ```
+  (Use `:admin` if working on the admin panel).
 - Port in use: script prints owner; free 8085 or adjust `run-app.sh`.
 - Watcher thrash: check `system.watchers` logs; extend debounce or fix generators.
 - nREPL conflicts: change port in `dev/core.clj` if 7888 is occupied.

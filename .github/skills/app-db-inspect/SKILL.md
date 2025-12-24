@@ -50,13 +50,6 @@ Use this when someone asks “what’s in app-db?” or you need quick, safe sna
                [:template :name :parameters]))
 ```
 
-## Troubleshooting
-- **FileNotFoundException**: If you get this when evaluating, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:
-  ```clojure
-  (shadow.cljs.devtools.api/nrepl-select :app)
-  ```
-  (Use `:admin` if working on the admin panel).
-
 ### Entity store health (loading/errors/counts)
 ```clojure
 (let [db @re-frame.db/app-db]

@@ -31,13 +31,8 @@ Use this to answer “what events happened?”, “why did state change?”, and
 ```
 
 ## Troubleshooting
-- **FileNotFoundException**: If you get this when evaluating, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:
-  ```clojure
-  (shadow.cljs.devtools.api/nrepl-select :app)
-  ```
-  (Use `:admin` if working on the admin panel).
-- **No traces**: confirm dev build has `re-frame.trace.trace-enabled?` enabled (see `shadow-cljs.edn`) and reload the page.
-- **Too noisy**: run `(repl-trace/clear)`, reproduce once, then re-run queries.
+- No traces: confirm dev build has `re-frame.trace.trace-enabled?` enabled (see `shadow-cljs.edn`) and reload the page.
+- Too noisy: run `(repl-trace/clear)`, reproduce once, then re-run queries.
 
 ## Where it lives
 - `src/app/template/frontend/dev/tracing.cljs` (capture + ring buffer)

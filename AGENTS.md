@@ -63,8 +63,8 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 ## Agent Debugging & Testing Workflow
 
 - Prefer evaluation tools over speculation:
-	- **Clojure (backend)**: Use `clj-nrepl-eval` to run code and verify behavior.
-	- **ClojureScript (frontend)**: Use the `mcp_clojure-mcp_clojurescript_eval` MCP tool (NOT `clj-nrepl-eval` - it only works with Clojure).
+	- **Clojure (backend)**: Use the `mcp__clojure-mcp__clojure_eval` MCP tool to run code and verify behavior.
+	- **ClojureScript (frontend)**: Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool.
 - Run automated tests to verify changes:
 		- **Frontend tests**: `npm run test:cljs` (Node.js, fast) or `npm run test:cljs:karma` (browser)
 		- **Frontend config checks (fast)**: `bb validate-frontend-config`, `bb config-audit --strict` (CI uses `npm run test:config-audit`)
@@ -89,7 +89,7 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 - Add or improve logging when debugging:
 	- Prefer adding structured logs around the failing path instead of large refactors; keep them if they provide long‑term value.
 - After backend changes, ensure the system is running cleanly:
-	- Use the `system-logs` skill to restart the system via `clj-nrepl-eval` and re-attach to logs; verify there are no startup or runtime errors.
+	- Use the `system-logs` skill to restart the system via `mcp__clojure-mcp__clojure_eval` and re-attach to logs; verify there are no startup or runtime errors.
 - After frontend or shared FE/BE build changes, verify compilation:
 	- Ensure shadow-cljs compiles successfully for relevant builds (e.g. `app`, `admin`); use `system-logs` to inspect compile output and fix all errors/warnings that break builds.
 - Always confirm the fix:
@@ -100,8 +100,8 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 - For any bigger task, start with a concrete multi-phase plan before coding.
 - Implement strictly phase-by-phase:
 	- For each phase, implement only that phase, then test it before moving on.
-	- **Backend code**: Use `clj-nrepl-eval` for Clojure evaluation.
-	- **Frontend code**: Use `mcp_clojure-mcp_clojurescript_eval` for ClojureScript evaluation.
+	- **Backend code**: Use `mcp__clojure-mcp__clojure_eval` for Clojure evaluation.
+	- **Frontend code**: Use `mcp__clojure-mcp__clojurescript_eval` for ClojureScript evaluation.
 - If testing for a phase fails:
 	- First, try to diagnose and fix the issue.
 	- If you cannot resolve it, record the problem in the Clojure MCP scratch pad (phase, what was attempted, what failed, current hypothesis), then continue to the next phase using the same rules.
@@ -183,46 +183,22 @@ bb be-test 2>&1 | tee /tmp/be-test.txt
 
 **🚨 NEW RULE:** When working on a concrete problem, do NOT run the entire test suite — run only the relevant test(s) (single test file, focused suite, or tagged tests). This reduces turnaround time and avoids noisy output; save the full output before analysis as above.
 
-# Clojure REPL Evaluation 
+# Clojure REPL Evaluation
 
-The command `clj-nrepl-eval` is installed on your path for evaluating **Clojure code only** (backend `.clj` files).
+Use the **clojure-mcp** MCP server tools for evaluating code:
 
-⚠️ **IMPORTANT**: `clj-nrepl-eval` works with both Clojure and ClojureScript. To switch to ClojureScript mode:
+- **Backend (Clojure `.clj`)**: Use `mcp__clojure-mcp__clojure_eval` to run code and verify behavior.
+- **Frontend (ClojureScript `.cljs`)**: Use `mcp__clojure-mcp__clojurescript_eval` for frontend evaluation.
 
-1. **Connect to a running nREPL server** (typically port 8777 for shadow-cljs):
-   ```bash
-   clj-nrepl-eval --discover-ports  # Find available ports
-   clj-nrepl-eval -p 8777  # Connect to shadow-cljs nREPL
-   ```
-
-2. **Switch to ClojureScript REPL mode**:
-   ```clojure
-   (require '[shadow.cljs.devtools.api :as shadow])
-   (shadow/repl :app)  ; or :admin for admin frontend
-   ```
-
-3. **You're now in ClojureScript mode** - evaluate `.cljs` code directly:
-   ```clojure
-   @re-frame.db/app-db  ; Inspect app-db
-   (js/alert "Hello")   ; Call JavaScript interop
-   ```
-
-4. **To return to Clojure mode**: Type `:cljs/exit` in the REPL
-
-**Discover nREPL servers:**
-
-`clj-nrepl-eval --discover-ports`
-
-**Evaluate Clojure code:**
-
-`clj-nrepl-eval -p <port> "<clojure-code>"`
-
-With timeout (milliseconds)
-
-`clj-nrepl-eval -p <port> --timeout 5000 "<clojure-code>"`
-
-The REPL session persists between evaluations - namespaces and state are maintained.
+The MCP tools provide persistent REPL sessions - namespaces and state are maintained between evaluations.
 Always use `:reload` when requiring namespaces to pick up changes.
+
+**Troubleshooting ClojureScript REPL**:
+If you get a `FileNotFoundException` when requiring `.cljs` files, it means the REPL is in Clojure (JVM) mode. Switch to the ClojureScript runtime by evaluating:
+```clojure
+(shadow.cljs.devtools.api/nrepl-select :app)
+```
+(Replace `:app` with `:admin` if working on the admin panel).
 
 # Clojure Parenthesis Repair
 

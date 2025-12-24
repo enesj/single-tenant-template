@@ -357,6 +357,16 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 
 ### Common Issues & Solutions
 
+#### Issue: `FileNotFoundException` when requiring `.cljs` files in REPL
+
+**Cause**: The REPL is in Clojure (JVM) mode instead of ClojureScript mode.
+
+**Solution**: Switch to the ClojureScript runtime by evaluating:
+```clojure
+(shadow.cljs.devtools.api/nrepl-select :app)
+```
+(Replace `:app` with `:admin` if working on the admin panel).
+
 #### Issue: Test passes in Node.js but fails in Karma
 
 **Cause**: Browser environment handles props differently (UIx argv structure)

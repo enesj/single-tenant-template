@@ -97,22 +97,20 @@ Use **Morph MCP (Warp Grep)** as the standard way to search project documentatio
 
 # Clojure REPL Evaluation
 
-The command `clj-nrepl-eval` is installed on your path for evaluating Clojure code via nREPL.
+Use the **clojure-mcp** MCP server tools for evaluating code:
 
-**Discover nREPL servers:**
+- **Backend (Clojure `.clj`)**: Use `mcp__clojure-mcp__clojure_eval` to run code and verify behavior.
+- **Frontend (ClojureScript `.cljs`)**: Use `mcp__clojure-mcp__clojurescript_eval` for frontend evaluation.
 
-`clj-nrepl-eval --discover-ports`
-
-**Evaluate code:**
-
-`clj-nrepl-eval -p <port> "<clojure-code>"`
-
-With timeout (milliseconds)
-
-`clj-nrepl-eval -p <port> --timeout 5000 "<clojure-code>"`
-
-The REPL session persists between evaluations - namespaces and state are maintained.
+The MCP tools provide persistent REPL sessions - namespaces and state are maintained between evaluations.
 Always use `:reload` when requiring namespaces to pick up changes.
+
+**Troubleshooting ClojureScript REPL**:
+If you get a `FileNotFoundException` when requiring `.cljs` files, it means the REPL is in Clojure (JVM) mode. Switch to the ClojureScript runtime by evaluating:
+```clojure
+(shadow.cljs.devtools.api/nrepl-select :app)
+```
+(Replace `:app` with `:admin` if working on the admin panel).
 
 # Clojure Parenthesis Repair
 
