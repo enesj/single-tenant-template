@@ -279,8 +279,6 @@
   (setup-logging!)
   (suppress-re-frame-noise!)
   (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
-  ;; Fetch shared app config/models for all users (does not require admin)
-  (rf/dispatch [:app.template.frontend.events.config/fetch-config])
   ;; Only initialize admin module when we're on an admin route; on-demand in router for later navigations
   (when (str/starts-with? (.-pathname js/window.location) "/admin")
     (admin-core/init-admin!))

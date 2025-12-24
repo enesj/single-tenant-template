@@ -4,7 +4,7 @@
     [app.admin.frontend.subs.dashboard]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
-    [app.template.frontend.components.icons :refer [dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon expenses-icon receipts-icon suppliers-icon payers-icon articles-icon article-aliases-icon price-observations-icon settings-icon]]
+    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon expenses-icon receipts-icon suppliers-icon payers-icon articles-icon article-aliases-icon price-observations-icon settings-icon]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -57,7 +57,11 @@
 (defui admin-settings-panel
   "Simple settings dropdown with theme selector"
   []
-  (let [[expanded? set-expanded!] (use-state false)]
+  (let [[expanded? set-expanded!] (use-state false)
+        reload-everything! (fn []
+                             (rf/dispatch [:app.template.frontend.events.config/fetch-config {:force? true}])
+                             (rf/dispatch [:admin/load-ui-configs {:force? true}])
+                             (set-expanded! false))]
     ($ :div {:class "relative"}
       ;; Gear icon button
       ($ button {:btn-type :ghost
@@ -72,7 +76,16 @@
         ($ :div {:class "absolute right-0 mt-2 w-48 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-3"}
           ($ :div {:class "flex items-center justify-between gap-3"}
             ($ :span {:class "text-sm font-medium text-base-content"} "Theme")
-            ($ change-theme)))))))
+            ($ change-theme))
+
+          ($ :div {:class "flex items-center justify-between gap-3 mt-3 pt-3 border-t border-base-200"}
+            ($ :span {:class "text-sm font-medium text-base-content"} "Reload")
+            ($ button {:btn-type :ghost
+                       :class "ds-btn-circle ds-btn-xs"
+                       :id "btn-admin-reload-everything"
+                       :title "Reload everything"
+                       :on-click reload-everything!}
+              ($ arrow-path {:class "w-4 h-4"}))))))))
 
 (defui admin-header []
   (let [current-user (use-subscribe [:admin/current-user])

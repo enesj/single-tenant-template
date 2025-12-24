@@ -17,12 +17,20 @@
 (rf/reg-event-fx
   ::fetch-config
   common-interceptors
-  (fn [_ _]
-    {:http-xhrio (http/api-request
-                   {:method :get
-                    :uri (:config api/endpoints)
-                    :on-success [::fetch-config-success]
-                    :on-failure [::fetch-config-failure]})}))
+  (fn [{:keys [db]} [opts]]
+    (let [force? (boolean (:force? opts))
+          loading? (boolean (:template/config-loading? db))
+          loaded? (boolean (:template/config-loaded? db))]
+      (if (and (not force?) (or loading? loaded?))
+        {}
+        {:db (-> db
+               (assoc :template/config-loading? true)
+               (dissoc :template/config-load-error))
+         :http-xhrio (http/api-request
+                      {:method :get
+                       :uri (:config api/endpoints)
+                       :on-success [::fetch-config-success]
+                       :on-failure [::fetch-config-failure]})}))))
 
 (rf/reg-event-fx
   ::fetch-config-success
@@ -73,15 +81,20 @@
                      validation-specs (assoc :validation-specs validation-specs)
                      domain-ui-config (update-in [:domain :config] (fnil merge {}) domain-ui-config))]
 
-      {:db final-db
+      {:db (-> final-db
+             (assoc :template/config-loading? false
+                    :template/config-loaded? true)
+             (dissoc :template/config-load-error))
        :dispatch [::entity-specs/initialize-entity-specs]})))
 
 (rf/reg-event-db
   ::fetch-config-failure
   common-interceptors
-  (fn [db [_]]
+  (fn [db [error]]
     (log/error "Failed to fetch UI configuration")
-    db))
+    (-> db
+      (assoc :template/config-loading? false)
+      (assoc :template/config-load-error error))))
 
 ;; ========================================================================
 ;; UI State Management Events

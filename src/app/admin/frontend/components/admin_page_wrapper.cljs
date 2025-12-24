@@ -48,8 +48,6 @@
     (let [init-fn (use-callback
                     (fn []
                       (log/info "Initializing admin page for" (or (kw/ensure-name entity-name) entity-name))
-                      ;; Ensure admin UI configs are loaded
-                      (dispatch [:admin/load-ui-configs])
                       ;; Initialize adapter only when callable to avoid runtime arity errors.
                       (let [effective-adapter-init-fn (cond
                                                         (fn? adapter-init-fn) adapter-init-fn

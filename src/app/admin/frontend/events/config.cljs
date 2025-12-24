@@ -194,8 +194,9 @@
 
 (rf/reg-event-fx
   :admin/load-ui-configs
-  (fn [{:keys [db]} _]
+  (fn [{:keys [db]} [_ opts]]
     (let [admin-path? (str/starts-with? (or (.-pathname js/window.location) "") "/admin")
+          force? (boolean (:force? opts))
           preloaded-configs (config-loader/load-all-configs)
           bootstrap (get-in db [:admin :config :bootstrap])
           last-started (:last-started-at bootstrap 0)
@@ -204,24 +205,26 @@
           within-window? (< (- now-ts last-started) bootstrap-throttle-ms)]
       (if-not admin-path?
         {:db db}
-        (if (and inflight? within-window?)
-          {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
-          {:db (-> db
-                 (assoc-in [:admin :config] preloaded-configs)
-                 ;; Only mark config as loaded when we actually have config data.
-                 ;; This flag is used to switch list/table rendering into vector-config mode.
-                 (assoc :admin/config-loaded? (boolean (seq (get preloaded-configs :table-columns))))
-                 (assoc :admin/config-loading? true)
-                 (assoc-in [:admin :config :bootstrap]
-                   (-> bootstrap
-                     (assoc :in-flight? true)
-                     (assoc :last-started-at now-ts)
-                     (assoc :last-requested-at now-ts)
-                     (dissoc :last-error))))
-           :fx [[:dispatch [::async-load-configs]]
-                [:dispatch [::load-entity-configs]]
-                ;; Trigger migration of legacy column visibility settings
-                [:dispatch [::persistence/migrate-all-legacy-column-visibility]]]})))))
+        (if (and (not force?) (boolean (:admin/config-loaded? db)))
+          {:db db}
+          (if (and inflight? within-window?)
+            {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
+            {:db (-> db
+                   (assoc-in [:admin :config] preloaded-configs)
+                   ;; Only mark config as loaded when we actually have config data.
+                   ;; This flag is used to switch list/table rendering into vector-config mode.
+                   (assoc :admin/config-loaded? (boolean (seq (get preloaded-configs :table-columns))))
+                   (assoc :admin/config-loading? true)
+                   (assoc-in [:admin :config :bootstrap]
+                     (-> bootstrap
+                       (assoc :in-flight? true)
+                       (assoc :last-started-at now-ts)
+                       (assoc :last-requested-at now-ts)
+                       (dissoc :last-error))))
+             :fx [[:dispatch [::async-load-configs]]
+                  [:dispatch [::load-entity-configs]]
+                  ;; Trigger migration of legacy column visibility settings
+                  [:dispatch [::persistence/migrate-all-legacy-column-visibility]]]}))))))
 
 (rf/reg-event-fx
   ::load-entity-configs

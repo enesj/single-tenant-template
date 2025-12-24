@@ -13,7 +13,11 @@
     path-value-pairs))
 
 (defn maybe-fetch-config
-  "Return the config fetch dispatch when models data is missing."
+  "Return the config fetch dispatch when config is not yet loaded/in-flight.
+
+  This helps prevent a dispatch stampede when multiple adapters initialize
+  before the initial /api/v1/config request completes."
   [db]
-  (when-not (:models-data db)
+  (when (and (not (:template/config-loaded? db))
+          (not (:template/config-loading? db)))
     [:app.template.frontend.events.config/fetch-config]))
