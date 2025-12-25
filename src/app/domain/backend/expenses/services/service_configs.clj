@@ -1,10 +1,10 @@
 (ns app.domain.backend.expenses.services.service-configs
   "Service configuration maps for expenses domain entities."
   (:require
-    [clojure.string :as str]
-    [app.domain.backend.expenses.services.services-factory :as factory]
     [app.domain.backend.expenses.services.articles :as articles]
-    [app.domain.backend.expenses.services.price-history :as price-history])
+    [app.domain.backend.expenses.services.price-history :as price-history]
+    [app.domain.backend.expenses.services.services-factory :as factory]
+    [clojure.string :as str])
   (:import
     [java.util UUID]))
 
@@ -178,6 +178,35 @@
                       (assoc :updated_at [:now])))
    :has-count? true})
 
+(def expense-item-config
+  {:table-name "expense_items"
+   :table-alias :ei
+   :primary-key :ei/id
+   :required-fields [:expense_id :raw_label :line_total]
+   :allowed-order-by {:expense-id :ei/expense_id
+                      :raw-label :ei/raw_label
+                      :created-at :ei/created_at
+                      :qty :ei/qty
+                      :unit-price :ei/unit_price
+                      :line-total :ei/line_total
+                      :expense-purchased-at :e/purchased_at
+                      :supplier-display-name :s/display_name
+                      :payer-label :p/label
+                      :article-canonical-name :a/canonical_name}
+   :default-order-by :ei/created_at
+   :search-fields [:ei/raw_label :a/canonical_name :s/display_name :p/label]
+   :joins [[:expenses :e] [:= :e/id :ei/expense_id]
+           [:suppliers :s] [:= :s/id :e/supplier_id]
+           [:payers :p] [:= :p/id :e/payer_id]
+           [:articles :a] [:= :a/id :ei/article_id]]
+   :select-fields [[:ei.*]
+                   [:e/purchased_at :expense_purchased_at]
+                   [:s/display_name :supplier_display_name]
+                   [:p/label :payer_label]
+                   [:a/canonical_name :article_canonical_name]]
+   :has-search? true
+   :has-count? true})
+
 (def receipt-config
   {:table-name "receipts"
    :primary-key :id
@@ -233,9 +262,9 @@
                       :created_at [:now]))
    :has-count? true})
 
-;; ============================================================================
+;; ==========================================================================
 ;; Registry
-;; ============================================================================
+;; ==========================================================================
 
 (def ^:private entity-configs
   {:article-alias article-alias-config
@@ -244,6 +273,7 @@
    :payer payer-config
    :article article-config
    :expense expense-config
+   :expense-item expense-item-config
    :receipt receipt-config
    :price-history price-history-config
    :report report-config})
@@ -259,9 +289,9 @@
   []
   (keys entity-configs))
 
-;; ============================================================================
+;; ==========================================================================
 ;; Service Registration
-;; ============================================================================
+;; ==========================================================================
 
 (defn register-all-entity-services!
   "Register all entity services with the factory."

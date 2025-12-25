@@ -1,8 +1,9 @@
 (ns app.domain.backend.expenses.routes.core
   (:require
     [app.domain.backend.expenses.routes.articles :as articles]
-    [app.domain.backend.expenses.routes.expenses :as expenses]
     [app.domain.backend.expenses.routes.article-aliases :as article-aliases]
+    [app.domain.backend.expenses.routes.expense-items :as expense-items]
+    [app.domain.backend.expenses.routes.expenses :as expenses]
     [app.domain.backend.expenses.routes.payers :as payers]
     [app.domain.backend.expenses.routes.price-observations :as price-observations]
     [app.domain.backend.expenses.routes.receipts :as receipts]
@@ -19,5 +20,6 @@
    (article-aliases/routes db)
    (price-observations/routes db)
    (expenses/routes db)
+   (expense-items/routes db)
    (articles/routes db)
    (reports/routes db)])

@@ -14,3 +14,4 @@
 (def init-articles-adapter! domain-adapters/init-articles-adapter!)
 (def init-article-aliases-adapter! domain-adapters/init-article-aliases-adapter!)
 (def init-price-observations-adapter! domain-adapters/init-price-observations-adapter!)
+(def init-expense-items-adapter! domain-adapters/init-expense-items-adapter!)

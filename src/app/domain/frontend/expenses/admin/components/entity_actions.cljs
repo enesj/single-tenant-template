@@ -60,3 +60,8 @@
   [{:keys [price-observations]}]
   (when price-observations
     (render-actions-dropdown "price-observations" price-observations)))
+
+(defui admin-expense-items-actions
+  [{:keys [expense-items]}]
+  (when expense-items
+    (render-actions-dropdown "expense-items" expense-items)))

@@ -366,38 +366,62 @@
         loading?
         ($ :div {:class "ds-loading ds-loading-spinner text-primary"})
 
-        (nil? receipt)
-        ($ :div {:class "ds-alert"} ($ :span "Receipt not found."))
+        (not receipt)
+        ($ :div {:class "text-center p-12 text-base-content/70"}
+          "Receipt not found.")
 
         :else
-        ($ :div {:class "space-y-4"}
-          ($ :div {:class "flex flex-wrap items-center gap-2"}
-            ($ :button {:id (str "btn-refresh-receipts-" receipt-id)
-                        :class "ds-btn ds-btn-outline ds-btn-sm"
-                        :on-click #(when receipt-id
-                                     (rf/dispatch [::receipts-events/load-detail receipt-id]))}
-              "Refresh")
-            ($ :button {:id (str "btn-retry-receipts-" receipt-id)
-                        :class "ds-btn ds-btn-primary ds-btn-sm"
-                        :disabled action-loading?
-                        :on-click #(when receipt-id
-                                     (rf/dispatch [::receipts-events/retry-extraction receipt-id]))}
-              (if action-loading? "Retrying..." "Retry extraction"))
-            ($ :div {:class "flex items-center gap-2"}
-              ($ :select {:id (str "select-receipt-status-" receipt-id)
-                          :class "ds-select ds-select-bordered ds-select-sm"
-                          :value (or next-status "")
-                          :on-change #(set-next-status! (.. % -target -value))}
-                ($ :option {:value "" :disabled true} "Select status")
-                (for [status receipt-status-options]
-                  ($ :option {:key status :value status} status)))
-              ($ :button {:id (str "btn-update-receipt-status-" receipt-id)
-                          :class "ds-btn ds-btn-outline ds-btn-sm"
-                          :disabled (or action-loading?
-                                      (nil? receipt-id)
-                                      (nil? next-status)
-                                      (= next-status (:status receipt)))
-                          :on-click #(when (and receipt-id next-status)
-                                       (rf/dispatch [::receipts-events/update-status receipt-id next-status]))}
-                (if action-loading? "Updating..." "Update status"))))
-          ($ receipt-viewer {:receipt receipt}))))))
+        ($ :div {:class "space-y-6"}
+          ;; Core Info
+          ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-4"}
+            (label-value "Original Filename" (:original-filename receipt))
+            (label-value "Status" (:status receipt))
+            (label-value "Content Type" (:content-type receipt))
+            (label-value "File Size" (str (:file-size receipt) " bytes"))
+            (label-value "Created At" (:created-at receipt))
+            (label-value "Updated At" (:updated-at receipt)))
+
+          ;; Receipt Viewer
+          ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
+            ($ :div {:class "ds-card-body p-0"}
+              ($ receipt-viewer {:receipt-id receipt-id}))))))))
+
+(defui expense-item-detail-body
+  [{:keys [expense-item-id]}]
+  (let [expense-item (use-subscribe [:expenses/expense-item expense-item-id])
+        loading? (use-subscribe [:expenses/expense-item-detail-loading?])
+        error (use-subscribe [:expenses/expense-items-error])]
+    (use-effect
+      (fn []
+        (when expense-item-id
+          (rf/dispatch [:app.domain.frontend.expenses.events.expense-items/load-detail expense-item-id]))
+        js/undefined)
+      [expense-item-id])
+
+    ($ :div {:class "space-y-6"}
+      (when error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span (str error))))
+
+      (cond
+        loading?
+        ($ :div {:class "flex justify-center p-12"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"}))
+
+        (not expense-item)
+        ($ :div {:class "text-center p-12 text-base-content/70"}
+          "Expense item not found.")
+
+        :else
+        ($ :div {:class "space-y-6"}
+          ;; Core Info
+          ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-4"}
+            (label-value "Raw Label" (:raw-label expense-item))
+            (label-value "Normalized Label" (:raw-label-normalized expense-item))
+            (label-value "Quantity" (:qty expense-item))
+            (label-value "Unit Price" (:unit-price expense-item))
+            (label-value "Line Total" (:line-total expense-item))
+            (label-value "Expense ID" (:expense-id expense-item))
+            (label-value "Article ID" (:article-id expense-item))
+            (label-value "Created At" (:created-at expense-item))
+            (label-value "Updated At" (:updated-at expense-item))))))))

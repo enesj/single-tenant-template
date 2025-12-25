@@ -17,6 +17,20 @@
             {:id :purchased-at :label "Purchased at" :type :datetime}
             {:id :status :label "Status" :type :text}]})
 
+(def expense-items-entity-spec
+  {:id :expense-items
+   :fields [{:id :expense-purchased-at :label "Expense purchased at" :type :datetime}
+            {:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :payer-label :label "Payer" :type :text}
+            {:id :article-canonical-name :label "Article" :type :text}
+            {:id :raw-label :label "Raw label" :type :text}
+            {:id :qty :label "Qty" :type :number}
+            {:id :unit-price :label "Unit price" :type :number}
+            {:id :line-total :label "Line total" :type :number}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :expense-id :label "Expense ID" :type :text}
+            {:id :article-id :label "Article ID" :type :text}]})
+
 (def receipts-entity-spec
   {:id :receipts
    :fields [{:id :original-filename :label "File" :type :text}
@@ -67,6 +81,10 @@
 (adapters.core/register-entity-spec-sub!
   {:entity-key :expenses
    :value-fn (fn [spec _] (or spec expenses-entity-spec))})
+
+(adapters.core/register-entity-spec-sub!
+  {:entity-key :expense-items
+   :value-fn (fn [spec _] (or spec expense-items-entity-spec))})
 
 (adapters.core/register-entity-spec-sub!
   {:entity-key :receipts

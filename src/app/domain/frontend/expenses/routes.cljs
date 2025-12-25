@@ -6,10 +6,12 @@
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
+    [app.domain.frontend.expenses.events.expense-items :as expense-items-events]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
     [app.domain.frontend.expenses.pages.admin.expense-detail :as expense-detail]
     [app.domain.frontend.expenses.pages.admin.expense-list :as expense-list]
+    [app.domain.frontend.expenses.pages.admin.expense-items :as expense-items]
     [app.domain.frontend.expenses.pages.admin.payers :as payers]
     [app.domain.frontend.expenses.pages.admin.payer-detail :as payer-detail]
     [app.domain.frontend.expenses.pages.admin.receipts :as receipts]
@@ -88,6 +90,13 @@
      :controllers [(guarded-start (fn [params]
                                     (when-let [entry-id (get-in params [:path-params :id])]
                                       [[::expenses-events/load-detail entry-id]])))]}]
+   ;; Expense items
+   ["/expense-items"
+    {:name :admin-expense-items
+     :view expense-items/admin-expense-items-page
+     :controllers [(guarded-start (fn [{:keys [query]}]
+                                    (let [params (list-params query)]
+                                      [[::expense-items-events/load-list params]])))]}]
    ;; Receipts inbox
    ["/receipts"
     {:name :admin-receipts

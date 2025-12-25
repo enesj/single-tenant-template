@@ -14,3 +14,10 @@
     (:name article)
     (:id article)
     ""))
+
+(defn expense-label
+  [expense]
+  (str (or (:date expense) "No date")
+    " - "
+    (or (:supplier-name expense) (:supplier_name expense) "Unknown Supplier")
+    " (" (or (:total-amount expense) (:total_amount expense) "0.00") ")"))

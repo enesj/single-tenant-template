@@ -42,6 +42,25 @@
     :max-length 100,
     :placeholder "Category (optional)"}}}
 
+ :expense-items
+ {:create-fields [:expense-id :raw-label :article-id :qty :unit-price :line-total],
+  :edit-fields [:expense-id :raw-label :article-id :qty :unit-price :line-total],
+  :required-fields [:expense-id :raw-label :line-total],
+  :field-config
+  {:expense-id {:type :text,
+                :label "Expense ID",
+                :placeholder "Expense ID (UUID)"},
+   :raw-label {:type :text,
+               :label "Raw label",
+               :max-length 255,
+               :placeholder "Line item label"},
+   :article-id {:type :text,
+                :label "Article ID",
+                :placeholder "Article ID (UUID, optional)"},
+   :qty {:type :number, :step 0.001},
+   :unit-price {:type :number, :step 0.01},
+   :line-total {:type :number, :step 0.01}}}
+
  :article-aliases
  {:create-fields [:supplier-id :article-id :raw-label-normalized :confidence],
   :edit-fields [:article-id :raw-label-normalized :confidence],

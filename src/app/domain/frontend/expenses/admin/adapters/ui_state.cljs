@@ -70,3 +70,9 @@
   (rf/dispatch [::initialize-entity
                 :price-observations
                 {:sort-field :observed-at :sort-direction :desc}]))
+
+(defn init-expense-items-adapter!
+  []
+  (rf/dispatch [::initialize-entity
+                :expense-items
+                {:sort-field :created-at :sort-direction :desc}]))

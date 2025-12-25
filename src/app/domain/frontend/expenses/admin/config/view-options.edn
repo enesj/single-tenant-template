@@ -26,6 +26,14 @@
    :show-filtering? true,
    :show-batch-edit? true}}
 
+ :expense-items
+ {:display-locks
+  {:show-delete? true,
+   :show-edit? true,
+   :show-select? true,
+   :show-pagination? true,
+   :show-filtering? true}}
+
  :price-observations
  {:display-locks
   {:show-delete? false,

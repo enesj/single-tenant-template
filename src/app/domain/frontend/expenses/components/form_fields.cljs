@@ -292,3 +292,26 @@
        :value value
        :options options
        :on-change on-change})))
+
+(defui expense-select-input
+  [{:keys [id label error required inline class on-change value form-id formId]}]
+  (let [expenses (use-subscribe [:expenses/expenses])
+        form-id* (or form-id formId)
+        field-id (or id (when form-id* (str form-id* "-select")))
+        options (options-from-items expenses select-options/expense-label)]
+    (use-effect
+      (fn []
+        (rf/dispatch [:app.domain.frontend.expenses.events.expenses/load-list {:limit 200 :offset 0}])
+        js/undefined)
+      [])
+    ($ select-input
+      {:id field-id
+       :formId form-id*
+       :label label
+       :error error
+       :required required
+       :inline inline
+       :class class
+       :value value
+       :options options
+       :on-change on-change})))

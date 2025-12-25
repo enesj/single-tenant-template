@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.admin.adapters.normalize
   "Normalization helpers for expenses entities.
-   
+
    These functions convert raw API responses to normalized entities
    for the template entity store."
   (:require
@@ -39,6 +39,27 @@
      :post-transform (fn [m]
                        (let [posted? (get m :is-posted)]
                          (assoc m :status (if (true? posted?) "posted" "draft"))))}))
+
+(defn expense-item->template-entity
+  [item]
+  (adapters.core/normalize-entity
+    item
+    {:entity-ns :expense-items
+     :id-keys [:id]
+     :stringify-keys [:expense_id :article_id]
+     :alias-keys {:expense_id [:expense-id]
+                  :article_id [:article-id]
+                  :raw_label [:raw-label]
+                  :raw_label_normalized [:raw-label-normalized]
+                  :qty [:qty]
+                  :unit_price [:unit-price]
+                  :line_total [:line-total]
+                  :expense_purchased_at [:expense-purchased-at]
+                  :supplier_display_name [:supplier-display-name]
+                  :payer_label [:payer-label]
+                  :article_canonical_name [:article-canonical-name]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
 
 (defn receipt->template-entity
   [receipt]

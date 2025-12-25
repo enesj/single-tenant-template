@@ -28,6 +28,7 @@
     app.domain.frontend.expenses.events.receipts
     app.domain.frontend.expenses.events.suppliers
     app.domain.frontend.expenses.events.articles
+    app.domain.frontend.expenses.events.expense-items
     app.domain.frontend.expenses.events.article-aliases
     app.domain.frontend.expenses.events.price-observations
     app.domain.frontend.expenses.subs.expenses
@@ -35,6 +36,7 @@
     app.domain.frontend.expenses.subs.suppliers
     app.domain.frontend.expenses.subs.receipts
     app.domain.frontend.expenses.subs.articles
+    app.domain.frontend.expenses.subs.expense-items
     app.domain.frontend.expenses.subs.article-aliases
     app.domain.frontend.expenses.subs.price-observations
     ;; User-expenses events and subs (domain-owned)
@@ -65,6 +67,9 @@
     :articles {:init-fn expenses-adapter/init-articles-adapter!
                :custom-actions entity-actions/admin-articles-actions
                :modals [detail-modals/admin-article-detail-modal]}
+    :expense-items {:init-fn expenses-adapter/init-expense-items-adapter!
+                    :custom-actions entity-actions/admin-expense-items-actions
+                    :modals [detail-modals/admin-expense-item-detail-modal]}
     :article-aliases {:init-fn expenses-adapter/init-article-aliases-adapter!
                       :custom-actions entity-actions/admin-article-aliases-actions
                       :modals [detail-modals/admin-article-alias-detail-modal]}
@@ -76,7 +81,7 @@
     {:title "Expenses Admin"
      :description "Admin management of expenses, suppliers, and related data"
      :icon "💼"
-     :entities #{:expenses :receipts :suppliers :payers :articles :article-aliases :price-observations}
+    :entities #{:expenses :receipts :suppliers :payers :articles :expense-items :article-aliases :price-observations}
      :color "accent"
      :scope :admin}}
    :user-domain-groups

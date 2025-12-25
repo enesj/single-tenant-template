@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.admin.adapters.admin-crud
   "CRUD bridge registrations for expenses domain entities.
-   
+
    These bridges customize how template CRUD operations work for
    expenses-related entities (suppliers, expenses, receipts, payers,
    articles, article-aliases, price-observations)."
@@ -117,6 +117,60 @@
              :on-success (fn [_cofx _entity-type _id _response default-effect]
                            (assoc default-effect
                              :dispatch [:app.domain.frontend.expenses.events.expenses/load-list {}]))}}})
+
+(defn- expense-items-request
+  "Create HTTP request config for expense items admin API."
+  [{:keys [method id params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/expense-items"
+        uri (if id (str base-uri "/" id) base-uri)]
+    (log/info "🧾 expense-items-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :expense-items
+   :context-pred (fn [_] true)
+   :operations
+   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (expense-items-request
+                                          {:method :delete
+                                           :id id
+                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_cofx _entity-type _id default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.expense-items/load-list {}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (expense-items-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_cofx _entity-type _response default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.expense-items/load-list {}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (expense-items-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_cofx _entity-type _id _response default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.expense-items/load-list {}]))}}})
 
 (defn- receipts-request
   "Create HTTP request config for receipts admin API."

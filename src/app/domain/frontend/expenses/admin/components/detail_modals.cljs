@@ -110,6 +110,25 @@
        :on-close #(rf/dispatch [::receipts-events/close-detail-modal])
        :body ($ detail-views/receipt-detail-body {:receipt-id receipt-id})})))
 
+(defui admin-expense-item-detail-modal []
+  (let [open? (use-subscribe [:expenses/expense-item-detail-modal-open?])
+        expense-item-id (use-subscribe [:expenses/expense-item-detail-modal-id])
+        expense-item (use-subscribe [:expenses/expense-item expense-item-id])
+        loading? (use-subscribe [:expenses/expense-item-detail-loading?])
+        subtitle (or (:raw-label expense-item)
+                   (when expense-item-id (str "Expense Item " expense-item-id))
+                   "Expense item details")
+        header (detail-header {:title "Expense Item Details"
+                               :subtitle subtitle
+                               :icon "EI"})]
+    (render-modal
+      {:id "admin-expense-item-detail-modal"
+       :open? open?
+       :loading? loading?
+       :header header
+       :on-close #(rf/dispatch [:app.domain.frontend.expenses.events.expense-items/close-detail-modal])
+       :body ($ detail-views/expense-item-detail-body {:expense-item-id expense-item-id})})))
+
 (defui admin-article-alias-detail-modal []
   (let [open? (use-subscribe [:expenses/article-alias-detail-modal-open?])
         alias-id (use-subscribe [:expenses/article-alias-detail-modal-id])

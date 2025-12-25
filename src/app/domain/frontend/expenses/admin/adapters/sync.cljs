@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.admin.adapters.sync
   "Template sync events for expenses entities.
-   
+
    These events sync data between admin/user contexts and the shared
    template entity store."
   (:require
@@ -24,6 +24,12 @@
    :entity-key :expenses
    :normalize-fn normalize/expense->template-entity
    :log-prefix "[expenses] Upserting expenses to template:"})
+
+(adapters.core/register-sync-event!
+  {:event-id ::sync-expense-items
+   :entity-key :expense-items
+   :normalize-fn normalize/expense-item->template-entity
+   :log-prefix "[expenses] Syncing expense items to template:"})
 
 (adapters.core/register-sync-event!
   {:event-id ::sync-receipts
@@ -68,6 +74,8 @@
 
 (entity-sync/register-sync-handler! :expenses
   {:sync-event-id ::sync-expenses})
+(entity-sync/register-sync-handler! :expense-items
+  {:sync-event-id ::sync-expense-items})
 (entity-sync/register-sync-handler! :receipts
   {:sync-event-id ::sync-receipts})
 (entity-sync/register-sync-handler! :suppliers
@@ -88,6 +96,7 @@
 
 (form-interceptors/register-bridge-entity! :suppliers)
 (form-interceptors/register-bridge-entity! :expenses)
+(form-interceptors/register-bridge-entity! :expense-items)
 (form-interceptors/register-bridge-entity! :receipts)
 (form-interceptors/register-bridge-entity! :payers)
 (form-interceptors/register-bridge-entity! :articles)

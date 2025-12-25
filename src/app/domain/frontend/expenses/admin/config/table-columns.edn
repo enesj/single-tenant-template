@@ -107,6 +107,67 @@
    :purchased-at {:width "160px", :formatter :date},
    :status {:width "120px"}}}
 
+ :expense-items
+ {:available-columns
+  [:expense-purchased-at
+   :supplier-display-name
+   :payer-label
+   :article-canonical-name
+   :raw-label
+   :qty
+   :unit-price
+   :line-total
+   :created-at
+   :expense-id
+   :article-id
+   :id],
+  :default-visible-columns
+  [:expense-purchased-at
+   :supplier-display-name
+   :payer-label
+   :article-canonical-name
+   :raw-label
+   :qty
+   :unit-price
+   :line-total
+   :created-at],
+  :filterable-columns
+  [:expense-purchased-at
+   :supplier-display-name
+   :payer-label
+   :article-canonical-name
+   :raw-label
+   :qty
+   :unit-price
+   :line-total
+   :created-at
+   :expense-id
+   :article-id],
+  :sortable-columns
+  [:expense-purchased-at
+   :supplier-display-name
+   :payer-label
+   :article-canonical-name
+   :raw-label
+   :qty
+   :unit-price
+   :line-total
+   :created-at],
+  :always-visible [:raw-label],
+  :computed-fields {},
+  :column-config
+  {:expense-purchased-at {:width "160px", :formatter :date},
+   :supplier-display-name {:width "200px"},
+   :payer-label {:width "180px"},
+   :article-canonical-name {:width "220px"},
+   :raw-label {:width "240px"},
+   :qty {:width "120px"},
+   :unit-price {:width "140px"},
+   :line-total {:width "140px"},
+   :created-at {:width "170px", :formatter :date},
+   :expense-id {:width "220px"},
+   :article-id {:width "220px"}}}
+
  :price-observations
  {:available-columns
   [:article-canonical-name

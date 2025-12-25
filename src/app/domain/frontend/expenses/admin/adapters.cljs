@@ -17,3 +17,4 @@
 (def init-articles-adapter! ui-state/init-articles-adapter!)
 (def init-article-aliases-adapter! ui-state/init-article-aliases-adapter!)
 (def init-price-observations-adapter! ui-state/init-price-observations-adapter!)
+(def init-expense-items-adapter! ui-state/init-expense-items-adapter!)

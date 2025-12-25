@@ -21,6 +21,14 @@
   (form-components/register-form-field-component!
     {:entity-key :price-observations
      :field-key :article-id
+     :component form-fields/article-select-input})
+  (form-components/register-form-field-component!
+    {:entity-key :expense-items
+     :field-key :expense-id
+     :component form-fields/expense-select-input})
+  (form-components/register-form-field-component!
+    {:entity-key :expense-items
+     :field-key :article-id
      :component form-fields/article-select-input}))
 
 (defonce ^:private _register

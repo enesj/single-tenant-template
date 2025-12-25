@@ -68,6 +68,19 @@
                            :is-posted? (utils/parse-boolean-param qp :is_posted)
                            :order-dir (keyword (or (:order-dir qp) "desc"))})})
 
+(def expense-item-config
+  {:entity-key :expense-item
+   :entity-plural :expense-items
+   :route-segment "expense-items"
+   :service 'app.domain.backend.expenses.services.expense-items
+   :default-limit 100
+   :default-order-by "created_at"
+   :required-fields [:expense_id :raw_label :line_total]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})})
+
 (def receipt-config
   {:entity-key :receipt
    :entity-plural :receipts
@@ -124,6 +137,7 @@
    :payers payer-config
    :articles article-config
    :expenses expense-config
+   :expense-items expense-item-config
    :receipts receipt-config
    :price-observations price-observation-config
    :article-aliases article-alias-config})

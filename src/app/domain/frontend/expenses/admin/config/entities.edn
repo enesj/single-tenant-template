@@ -23,6 +23,24 @@
              :deletion-constraints? false
              :security-wrapper? false}}
 
+ :expense-items
+ {:entity-key :expense-items
+  :page-title "Expense Items"
+  :page-description "Standalone line items attached to expenses"
+  :display-settings {:show-select? true
+                     :show-edit? true
+                     :show-delete? true
+                     :show-filtering? true
+                     :show-pagination? true
+                     :show-add-button? true
+                     :show-batch-edit? true
+                     :show-batch-delete? true
+                     :per-page 50}
+  :features {:read-only? false
+             :batch-operations? true
+             :deletion-constraints? false
+             :security-wrapper? false}}
+
  :receipts
  {:entity-key :receipts
   :page-title "Receipts"

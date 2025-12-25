@@ -4,7 +4,7 @@
     [app.admin.frontend.subs.dashboard]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
-    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon expenses-icon receipts-icon suppliers-icon payers-icon articles-icon article-aliases-icon price-observations-icon settings-icon]]
+    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon expenses-icon receipts-icon suppliers-icon payers-icon articles-icon expense-items-icon article-aliases-icon price-observations-icon settings-icon]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -34,6 +34,7 @@
                       {:label "Suppliers" :href "/admin/suppliers" :icon ($ suppliers-icon {:class "w-6 h-6"}) :active? (= route-name :admin-suppliers)}
                       {:label "Payers" :href "/admin/payers" :icon ($ payers-icon {:class "w-6 h-6"}) :active? (= route-name :admin-payers)}
                       {:label "Articles" :href "/admin/articles" :icon ($ articles-icon {:class "w-6 h-6"}) :active? (= route-name :admin-articles)}
+                      {:label "Expense Items" :href "/admin/expense-items" :icon ($ expense-items-icon {:class "w-6 h-6"}) :active? (= route-name :admin-expense-items)}
                       {:label "Article Aliases" :href "/admin/article-aliases" :icon ($ article-aliases-icon {:class "w-6 h-6"}) :active? (= route-name :admin-article-aliases)}
                       {:label "Price Observations" :href "/admin/price-observations" :icon ($ price-observations-icon {:class "w-6 h-6"}) :active? (= route-name :admin-price-observations)}]
 
