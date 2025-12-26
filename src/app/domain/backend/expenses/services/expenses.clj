@@ -155,6 +155,10 @@
   ([db expense-data items]
    (let [expense-data (normalize-expense-data expense-data)
          items (mapv normalize-expense-item (or items []))]
+     (when (empty? items)
+       (throw (ex-info "At least one line item is required"
+                {:status 400
+                 :field :items})))
      (require-keys! expense-data [:supplier_id :payer_id :purchased_at :total_amount])
      (jdbc/with-transaction [tx db]
        (let [expense-id (UUID/randomUUID)
@@ -230,6 +234,10 @@
                                (map :id)
                                (into #{}))
                 items* (mapv normalize-expense-item (or items []))
+                _ (when (empty? items*)
+                    (throw (ex-info "At least one line item is required"
+                             {:status 400
+                              :field :items})))
                 update-items (filterv (fn [{item-id :id}]
                                         (and item-id (contains? existing-ids item-id)))
                                items*)

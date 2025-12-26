@@ -19,7 +19,7 @@
   :edit-fields [:type :label :last4 :is-default],
   :required-fields [:type :label],
   :field-config
-  {:type {:type :select, :options [:cash :card :bank-account :person]},
+  {:type {:type :select, :options [:cash :card :account :person]},
    :label
    {:type :text, :max-length 255, :placeholder "Payment method name"},
    :last4

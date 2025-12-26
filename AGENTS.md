@@ -62,6 +62,7 @@ See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implem
 
 ## Agent Debugging & Testing Workflow
 
+- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
 - Prefer evaluation tools over speculation:
 	- **Clojure (backend)**: Use the `mcp__clojure-mcp__clojure_eval` MCP tool to run code and verify behavior.
 	- **ClojureScript (frontend)**: Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool.

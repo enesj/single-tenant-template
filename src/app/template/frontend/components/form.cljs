@@ -195,12 +195,13 @@
    :editing {:type :boolean :required false}
    :initial-values {:type :map :required false}
    :on-submit {:type :function :required false}
+   :save-disabled? {:type :function :required false}
    :set-editing! {:type :function :required false}})
 
 (defui form
   "Renders a form with fields based on entity specification"
   {:prop-types form-props}
-  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing! on-submit] :as _props}]
+  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing! on-submit save-disabled?] :as _props}]
   (let [form-success? (urf/use-subscribe [::form-subs/form-success entity-name])
         submitted? (urf/use-subscribe [::form-subs/submitted? entity-name])
         form-errors (urf/use-subscribe [::form-subs/form-errors entity-name])]
@@ -226,7 +227,9 @@
                     (let [subscription-valid? (urf/use-subscribe [::form-subs/all-fields-valid? entity-name entity-spec editing values])
                           all-fields-valid? (if (some? errors)
                                               (empty? errors)
-                                              subscription-valid?)]
+                                              subscription-valid?)
+                          save-disabled?* (boolean (when (fn? save-disabled?)
+                                                     (save-disabled? values)))]
                       ($ :form {:id form-id
                                 :on-submit handle-submit}
                         (when-let [form-error (get-in form-errors [:form])]
@@ -273,7 +276,8 @@
                                            (nil? dirty)
                                            (and (map? dirty) (empty? dirty))
                                            (and (set? dirty) (empty? dirty))
-                                           (not all-fields-valid?))
+                                           (not all-fields-valid?)
+                                           save-disabled?*)
                                :children [(or button-text (if editing "Update" "Save")) ($ save-icon)]}))
                           (when on-submit-server-message
                             ($ :div {:class (str "message "

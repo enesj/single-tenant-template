@@ -217,14 +217,85 @@
   [options]
   (when (seq options)
     (mapv (fn [opt]
-            (if (map? opt)
-              opt  ; Already in correct format
-              {:value (name opt)
-               :label (-> (name opt)
-                        (str/replace "-" " ")
-                        (str/replace "_" " ")
-                        str/capitalize)}))
+            (cond
+              ;; Already in correct format
+              (map? opt)
+              (let [v (:value opt)
+                    v-str (cond
+                            (keyword? v) (name v)
+                            (symbol? v) (name v)
+                            (string? v) v
+                            (nil? v) ""
+                            :else (str v))
+                    l (:label opt)
+                    l-str (cond
+                            (string? l) l
+                            (keyword? l) (name l)
+                            (symbol? l) (name l)
+                            (nil? l) (-> v-str
+                                       (str/replace "-" " ")
+                                       (str/replace "_" " ")
+                                       str/capitalize)
+                            :else (str l))]
+                (assoc opt :value v-str :label l-str))
+
+              :else
+              (let [v-str (cond
+                            (keyword? opt) (name opt)
+                            (symbol? opt) (name opt)
+                            (string? opt) opt
+                            (nil? opt) ""
+                            :else (str opt))]
+                {:value v-str
+                 :label (-> v-str
+                          (str/replace "-" " ")
+                          (str/replace "_" " ")
+                          str/capitalize)})))
       options)))
+
+(defn- ->kw
+  "Coerce a field identifier into a keyword.
+
+  Admin UI config is transported over JSON, so collections like
+  :create-fields / :edit-fields often arrive as strings."
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    (symbol? x) (keyword (name x))
+    :else x))
+
+(defn- normalize-field-type
+  "Normalize a form-fields.edn :type value that may arrive as a string from JSON."
+  [t]
+  (cond
+    (keyword? t) t
+    (string? t) (keyword t)
+    (symbol? t) (keyword (name t))
+    :else t))
+
+(defn- cfg-get
+  "Get a value from a config map that may have keyword keys (EDN) or string keys
+  (JSON). Also supports underscore variants (e.g. \"min_length\")."
+  [m k]
+  (when (map? m)
+    (cond
+      (keyword? k)
+      (let [k-name (name k)
+            k-us (str/replace k-name "-" "_")]
+        (or (get m k)
+          (get m k-name)
+          (get m k-us)))
+
+      (string? k)
+      (let [k-kw (keyword k)
+            k-kebab (keyword (str/replace k "_" "-"))]
+        (or (get m k)
+          (get m k-kw)
+          (get m k-kebab)))
+
+      :else
+      (get m k))))
 
 (defn- build-field-spec-from-config
   "Build a field spec from form-fields.edn field configuration.
@@ -232,32 +303,36 @@
    :min-length, :max-length, :validation, :min, :max, :step"
   [entity-key field-key field-config _editing?]
   (let [component (form-components/get-form-field-component entity-key field-key)
+        field-type (normalize-field-type (or (cfg-get field-config :type) :text))
         base {:id field-key
-              :label (or (:label field-config)
+              :label (or (cfg-get field-config :label)
                        (-> (name field-key)
                          (str/replace "-" " ")
                          (str/replace "_" " ")
                          str/capitalize))
-              :type (or (:type field-config) :text)
-              :input-type (field-type->input-type (or (:type field-config) :text))}
-        with-options (if (:options field-config)
-                       (assoc base :options (normalize-select-options (:options field-config)))
+              :type field-type
+              :input-type (field-type->input-type field-type)}
+        options (cfg-get field-config :options)
+        with-options (if options
+                       (assoc base :options (normalize-select-options options))
                        base)
-        with-placeholder (if (:placeholder field-config)
-                           (assoc with-options :placeholder (:placeholder field-config))
+        placeholder (cfg-get field-config :placeholder)
+        with-placeholder (if placeholder
+                           (assoc with-options :placeholder placeholder)
                            with-options)
-        ;; Add all validation and constraint keys
         with-validation (cond-> with-placeholder
-                          (:min-length field-config) (assoc :min-length (:min-length field-config))
-                          (:max-length field-config) (assoc :max-length (:max-length field-config))
-                          (:validation field-config) (assoc :validation (:validation field-config))
+                          (cfg-get field-config :min-length) (assoc :min-length (cfg-get field-config :min-length))
+                          (cfg-get field-config :max-length) (assoc :max-length (cfg-get field-config :max-length))
+                          (cfg-get field-config :validation) (assoc :validation (cfg-get field-config :validation))
+
                           ;; Numeric field constraints
-                          (:min field-config) (assoc :min (:min field-config))
-                          (:max field-config) (assoc :max (:max field-config))
-                          (:step field-config) (assoc :step (:step field-config))
+                          (cfg-get field-config :min) (assoc :min (cfg-get field-config :min))
+                          (cfg-get field-config :max) (assoc :max (cfg-get field-config :max))
+                          (cfg-get field-config :step) (assoc :step (cfg-get field-config :step))
+
                           ;; Default value for field initialization
-                          (:default field-config) (assoc :default (:default field-config)
-                                                    :default-value (:default field-config)))
+                          (cfg-get field-config :default) (assoc :default (cfg-get field-config :default)
+                                                            :default-value (cfg-get field-config :default)))
         with-component (if component
                          (assoc with-validation :component component)
                          with-validation)]
@@ -269,11 +344,18 @@
   (let [form-config (get-in db [:admin :config :form-fields entity-keyword])]
     (when form-config
       (let [{:keys [create-fields edit-fields required-fields field-config]} form-config
-            fields-to-show (if editing? edit-fields create-fields)
-            required-set (set required-fields)]
+            ;; Config files are read server-side as EDN, but delivered client-side via JSON.
+            ;; JSON arrays preserve values as strings, so we normalize identifiers here.
+            fields-to-show (mapv ->kw (if editing? edit-fields create-fields))
+            required-set (set (map ->kw required-fields))]
         (when (seq fields-to-show)
           (mapv (fn [field-key]
-                  (let [config (get field-config field-key {})
+                  (let [field-key (->kw field-key)
+                        ;; field-config keys may be keywords (EDN) or strings (JSON).
+                        config (or (get field-config field-key)
+                                 (get field-config (name field-key))
+                                 (get field-config (str/replace (name field-key) "-" "_"))
+                                 {})
                         spec (build-field-spec-from-config entity-keyword field-key config editing?)]
                     (if (contains? required-set field-key)
                       (assoc spec :required true)

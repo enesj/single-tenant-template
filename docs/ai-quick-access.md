@@ -3,7 +3,8 @@
 # AI Quick Access to Project Docs (Single-Tenant)
 
 Fast pointers for AI agents (and humans) to the current single-tenant docs. Use these before broad searches.
-
+## 🚨 AI Agent Behavior
+- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
 ## Quick recipes
 - By namespace: `rg -n "<!-- ai: .*app\.template\.backend\.routes" docs`
 - By task keyword: `rg -n "\brun-app\b|\bbe-test\b|\bfe-test\b|\blint\b|\bcljfmt\b" docs/operations`

@@ -1,6 +1,7 @@
 ## Repo Instructions for Copilot Chat
 
 - Treat this file and `AGENTS.md` as your primary instructions for this repo.
+- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
 
 ### Documentation-First Approach
 

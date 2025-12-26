@@ -186,6 +186,33 @@
             {:receipt-id receipt-id :stage :parse :result :failed :error (.getMessage e)}))
         {:receipt-id receipt-id :stage :parse :result :skipped :reason :not-claimed}))))
 
+(defn- persist-extract-result!
+  [db receipt-id extract-result opts]
+  (let [extraction (:extraction extract-result)
+        valid-shape? (and (map? extraction) (m/validate ReceiptExtraction extraction))
+        guesses (when (map? extraction) (extraction->guesses extraction opts))
+        status (if (and valid-shape? guesses (not (review-required? guesses)))
+                 "extracted"
+                 "review_required")
+        raw-extract-json {:provider "mistral"
+                          :received_at (:received-at extract-result)
+                          :model (:model extract-result)
+                          :response (:raw extract-result)
+                          :extraction extraction
+                          :valid_shape? valid-shape?}]
+    (receipts/store-extraction-results!
+      db
+      receipt-id
+      (merge {:raw_extract_json raw-extract-json
+              :parsed_markdown (:parsed-markdown extract-result)}
+        (select-keys guesses [:supplier_guess
+                              :total_amount_guess
+                              :currency_guess
+                              :purchased_at_guess
+                              :payment_hints])))
+    (receipts/update-status! db receipt-id status {:error_message nil :error_details nil})
+    {:receipt-id receipt-id :stage :extract :result :ok :status status}))
+
 (defn- process-extract!
   [db ocr-cfg receipt opts]
   (let [receipt-id (:id receipt)]
@@ -197,31 +224,8 @@
         (try
           (let [{:keys [bytes]} (read-receipt-bytes! receipt opts)
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
-                                                                  :content-type (:content_type receipt)})
-                extraction (:extraction extract-result)
-                valid-shape? (and (map? extraction) (m/validate ReceiptExtraction extraction))
-                guesses (when (map? extraction) (extraction->guesses extraction opts))
-                status (if (and valid-shape? guesses (not (review-required? guesses)))
-                         "extracted"
-                         "review_required")
-                raw-extract-json {:provider "mistral"
-                                  :received_at (:received-at extract-result)
-                                  :model (:model extract-result)
-                                  :response (:raw extract-result)
-                                  :extraction extraction
-                                  :valid_shape? valid-shape?}]
-            (receipts/store-extraction-results!
-              db
-              receipt-id
-              (merge {:raw_extract_json raw-extract-json
-                      :parsed_markdown (:parsed-markdown extract-result)}
-                (select-keys guesses [:supplier_guess
-                                      :total_amount_guess
-                                      :currency_guess
-                                      :purchased_at_guess
-                                      :payment_hints])))
-            (receipts/update-status! db receipt-id status {:error_message nil :error_details nil})
-            {:receipt-id receipt-id :stage :extract :result :ok :status status})
+                                                                  :content-type (:content_type receipt)})]
+            (persist-extract-result! db receipt-id extract-result opts))
           (catch Exception e
             (receipts/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (safe-ex-data e))
             {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
@@ -289,6 +293,77 @@
           :summary summary
           :results results})))))
 
+(defn- process-receipts-by-ids-batch!
+  [db ocr-cfg receipt-ids reset? opts]
+  (let [prepared
+        (mapv
+          (fn [rid]
+            (try
+              (when reset?
+                (receipts/reset-for-ocr! db rid))
+              (let [receipt (receipts/get-receipt db rid)]
+                (cond
+                  (nil? receipt)
+                  {:receipt-id rid :stage :extract :result :skipped :reason :not-found}
+
+                  (not (seq (:api-key ocr-cfg)))
+                  {:receipt-id rid :stage :extract :result :skipped :reason :missing-api-key}
+
+                  :else
+                  (if-let [_claimed (receipts/claim-for-extracting! db rid {:lease-seconds (:lease-seconds opts)})]
+                    (try
+                      (let [{:keys [bytes]} (read-receipt-bytes! receipt opts)]
+                        {:receipt-id rid
+                         :receipt receipt
+                         :request {:custom-id (str rid)
+                                   :bytes bytes
+                                   :content-type (:content_type receipt)}})
+                      (catch Exception e
+                        (receipts/mark-failed! db rid (or (.getMessage e) "Extraction preparation failed") (safe-ex-data e))
+                        {:receipt-id rid :stage :extract :result :failed :error (.getMessage e)}))
+                    {:receipt-id rid :stage :extract :result :skipped :reason :not-claimed})))
+              (catch Exception e
+                (log/error e "Failed to prepare receipt for batch OCR" {:receipt-id rid})
+                {:receipt-id rid :stage :extract :result :failed :error (.getMessage e)})))
+          receipt-ids)
+        batch-reqs (->> prepared (keep :request) vec)
+        batch-ids (set (map :custom-id batch-reqs))]
+    (if (empty? batch-reqs)
+      (mapv (fn [m] (dissoc m :receipt :request)) prepared)
+      (let [batch-res (try
+                        (mistral-ocr/ocr-extract-batch! ocr-cfg batch-reqs)
+                        (catch Exception e
+                          {:exception e}))]
+        (if-let [e (:exception batch-res)]
+          (do
+            (doseq [cid batch-ids]
+              (let [rid (try (java.util.UUID/fromString cid) (catch Exception _ nil))]
+                (when rid
+                  (receipts/mark-failed! db rid (or (.getMessage e) "Batch extraction failed") (safe-ex-data e)))))
+            (mapv
+              (fn [{:keys [receipt-id request] :as m}]
+                (if (seq (some-> request :custom-id))
+                  {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Batch extraction failed")}
+                  (dissoc m :receipt :request)))
+              prepared))
+          (mapv
+            (fn [{:keys [receipt-id request] :as m}]
+              (let [cid (some-> request :custom-id)
+                    extract-result (when (seq cid) (get-in batch-res [:results cid]))
+                    err (when (seq cid) (get-in batch-res [:errors cid]))]
+                (cond
+                  (nil? cid)
+                  (dissoc m :receipt :request)
+
+                  extract-result
+                  (persist-extract-result! db receipt-id extract-result opts)
+
+                  :else
+                  (do
+                    (receipts/mark-failed! db receipt-id "Batch extraction failed" (or err {:type :mistral/batch-unknown-error}))
+                    {:receipt-id receipt-id :stage :extract :result :failed :error "Batch extraction failed"}))))
+            prepared))))))
+
 (defn process-receipts-by-ids!
   "Process receipts by explicit IDs (for UI-triggered OCR).
 
@@ -307,6 +382,7 @@
    (process-receipts-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
    (let [ocr-cfg (mistral-ocr/build-config app-config)
+         use-batch? (and reset? (:batch-enabled? ocr-cfg) (> (count receipt-ids) 1))
          opts (merge {:lease-seconds 900
                       :storage-base-dir "upload/stripes"
                       :default-currency "BAM"}
@@ -325,25 +401,30 @@
             :processed 0
             :receipt-ids receipt-ids})
          (let [results
-               (mapv
-                 (fn [rid]
-                   (try
-                     (let [;; Optionally reset the receipt first
-                           _ (when reset?
-                               (receipts/reset-for-ocr! db rid))
-                           receipt (receipts/get-receipt db rid)]
-                       (if receipt
-                         (process-receipt! db ocr-cfg receipt opts)
-                         {:receipt-id rid :result :skipped :reason :not-found}))
-                     (catch Exception e
-                       (log/error e "Failed to process receipt" {:receipt-id rid})
-                       {:receipt-id rid :result :failed :error (.getMessage e)})))
-                 receipt-ids)
+               (if use-batch?
+                 (do
+                   (log/info "Receipt OCR by-ids using Mistral Batch API" {:receipt-ids receipt-ids})
+                   (process-receipts-by-ids-batch! db ocr-cfg receipt-ids reset? opts))
+                 (mapv
+                   (fn [rid]
+                     (try
+                       (let [;; Optionally reset the receipt first
+                             _ (when reset?
+                                 (receipts/reset-for-ocr! db rid))
+                             receipt (receipts/get-receipt db rid)]
+                         (if receipt
+                           (process-receipt! db ocr-cfg receipt opts)
+                           {:receipt-id rid :result :skipped :reason :not-found}))
+                       (catch Exception e
+                         (log/error e "Failed to process receipt" {:receipt-id rid})
+                         {:receipt-id rid :result :failed :error (.getMessage e)})))
+                   receipt-ids))
                summary (->> results
                          (map :result)
                          (frequencies))]
            (log/info "Receipt OCR by-ids complete" {:receipt-ids receipt-ids
-                                                    :summary summary})
+                                                    :summary summary
+                                                    :batch? use-batch?})
            {:enabled? true
             :processed (count results)
             :summary summary

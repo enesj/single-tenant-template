@@ -416,6 +416,10 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 
 ## AI Agent Guidelines
 
+### General Behavior
+
+- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
+
 ### When Investigating Test Failures
 
 1. **Save test output first** - Don't re-run tests repeatedly:

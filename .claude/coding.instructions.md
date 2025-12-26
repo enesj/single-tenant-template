@@ -1,5 +1,7 @@
 # Coding & Development Instructions
 
+- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
+
 ## Coding Style & Patterns
 - Naming: DB tables/columns use `snake_case`; code uses kebab-case (`:user-settings`). Namespaces dotted (e.g., `app.template.frontend.events`).
 

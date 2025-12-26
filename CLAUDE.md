@@ -43,6 +43,8 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 
 ## Debugging & Development Tools
 
+- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
+
 This project includes specialized AI skills that activate automatically:
 
 - **app-db-inspect** - Inspect re-frame app-db state safely (mention: app-db, re-frame state, frontend state)

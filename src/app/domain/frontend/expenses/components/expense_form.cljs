@@ -450,6 +450,8 @@
          :initial-values form-initial-values
          :on-cancel on-cancel
          :on-submit handle-submit
+         :save-disabled? (fn [values]
+                           (empty? (prepare-line-items (:items values))))
          :button-text (if (= mode :edit) "Update Expense" "Save Expense")}))))
 
 ;; =============================================================================
