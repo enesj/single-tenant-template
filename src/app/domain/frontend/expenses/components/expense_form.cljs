@@ -9,6 +9,7 @@
                                                                  line-items-total
                                                                  new-line-item
                                                                  safe-parse-number
+                                                                 supplier-select-with-inline-create
                                                                  total-amount-input]]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
     [app.domain.frontend.expenses.events.payers :as payers-events]
@@ -55,41 +56,45 @@
     :width "w-32"}])
 
 (defn get-expense-form-spec
-  [suppliers payers]
-  [{:id :supplier_id
-    :type :select
-    :label "Supplier"
-    :required true
-    :placeholder "Select supplier"
-    :options (map (fn [s] {:value (:id s) :label (select-options/supplier-label s)}) suppliers)}
-   {:id :payer_id
-    :type :select
-    :label "Payer"
-    :required true
-    :placeholder "Select payer"
-    :options (map (fn [p] {:value (:id p) :label (str (:label p) (when (:type p) (str " (" (:type p) ")")))}) payers)}
-   {:id :purchased_at
-    :type :datetime-local ;; standard input type
-    :label "Purchased at"
-    :required true}
-   {:id :total_amount
-    :component total-amount-input ;; Custom component
-    :label "Total amount"
-    :required true}
-   {:id :currency
-    :type :select
-    :label "Currency"
-    :required true
-    :options currency-options}
-   {:id :notes
-    :type :textarea
-    :label "Notes"
-    :required false
-    :placeholder "Optional notes"}
-   {:id :items
-    :component line-items-input ;; Custom component
-    :label "Line Items"
-    :columns line-item-columns}])
+  ([suppliers payers]
+   (get-expense-form-spec suppliers payers nil))
+  ([suppliers payers {:keys [new-supplier-default-display-name]}]
+   [{:id :supplier_id
+     :type :select
+     :component supplier-select-with-inline-create
+     :label "Supplier"
+     :required true
+     :placeholder "Select supplier"
+     :create-default-display-name new-supplier-default-display-name
+     :options (map (fn [s] {:value (:id s) :label (select-options/supplier-label s)}) suppliers)}
+    {:id :payer_id
+     :type :select
+     :label "Payer"
+     :required true
+     :placeholder "Select payer"
+     :options (map (fn [p] {:value (:id p) :label (str (:label p) (when (:type p) (str " (" (:type p) ")")))}) payers)}
+    {:id :purchased_at
+     :type :datetime-local ;; standard input type
+     :label "Purchased at"
+     :required true}
+    {:id :total_amount
+     :component total-amount-input ;; Custom component
+     :label "Total amount"
+     :required true}
+    {:id :currency
+     :type :select
+     :label "Currency"
+     :required true
+     :options currency-options}
+    {:id :notes
+     :type :textarea
+     :label "Notes"
+     :required false
+     :placeholder "Optional notes"}
+    {:id :items
+     :component line-items-input ;; Custom component
+     :label "Line Items"
+     :columns line-item-columns}]))
 
 ;; =============================================================================
 ;; Normalization & Validation Helpers
@@ -130,6 +135,139 @@
                ":" (pad-two (.getMinutes d)))))
          (catch :default _
            (when fallback? (current-datetime-local))))))))
+
+(defn normalize-receipt-data
+  "Normalize extracted receipt data into form initial values."
+  [receipt]
+  (let [debug? (and (exists? js/window)
+                 (boolean (.-__DEBUG_RECEIPT_PREFILL__ js/window)))
+        extract0 (or (:raw-extract-json receipt)
+                   (:raw_extract_json receipt)
+                   (:receipts/raw-extract-json receipt)
+                   (:receipts/raw_extract_json receipt))
+        raw-extract (cond
+                      (map? extract0) extract0
+                      (nil? extract0) {}
+                      (string? extract0) (try
+                                           (js->clj (js/JSON.parse extract0) :keywordize-keys true)
+                                           (catch :default _ {}))
+                      :else (js->clj extract0 :keywordize-keys true))
+
+        ;; Worker persists a wrapper map like:
+        ;; {:provider ... :response ... :extraction {:merchant ... :totals ... :items ...}}
+        extraction (or (:extraction raw-extract)
+                     (:receipt-extraction raw-extract))
+        extract (if (map? extraction) extraction raw-extract)
+
+        _ (when debug?
+            (js/console.log "[receipt->expense] normalize"
+              (clj->js {:wrapper-keys (map str (keys raw-extract))
+                        :extraction-keys (map str (keys extract))})))
+
+        totals (let [t (or (:totals extract)
+                         (:totals_extract extract)
+                         (:totals-extract extract)
+                         {})]
+                 (if (map? t) t {}))
+
+        items0 (or (:items extract)
+                 (:line_items extract)
+                 (:line-items extract)
+                 (:receipt_items extract)
+                 (:receipt-items extract))
+        items (when (sequential? items0) items0)
+
+        purchased-at (or (:purchased_at extract)
+                       (:purchased-at extract)
+                       (:date extract)
+                       (:purchased_at_guess receipt)
+                       (:purchased-at-guess receipt)
+                       (:receipts/purchased_at_guess receipt)
+                       (:receipts/purchased-at-guess receipt))
+
+        total-amount0 (or (:total_amount totals)
+                        (:total-amount totals)
+                        (:total totals)
+                        (:total_amount extract)
+                        (:total-amount extract)
+                        (:total_amount_guess receipt)
+                        (:total-amount-guess receipt)
+                        (:receipts/total_amount_guess receipt)
+                        (:receipts/total-amount-guess receipt))
+        total-amount (safe-parse-number total-amount0)
+
+        currency0 (or (:currency totals)
+                    (:currency extract)
+                    (:currency_guess receipt)
+                    (:currency-guess receipt)
+                    (:receipts/currency_guess receipt)
+                    (:receipts/currency-guess receipt)
+                    "BAM")
+        currency (cond
+                   (keyword? currency0) (name currency0)
+                   (string? currency0) currency0
+                   (some? currency0) (str currency0)
+                   :else "BAM")
+
+        normalize-item (fn [item]
+                         (let [id (random-uuid)
+                               raw-label (or (:raw_label item)
+                                           (:raw-label item)
+                                           (:label item)
+                                           (:name item))
+                               qty (safe-parse-number (:qty item))
+                               unit-price (safe-parse-number (or (:unit_price item) (:unit-price item)))
+                               line-total (safe-parse-number (or (:line_total item) (:line-total item)))]
+                           {:id (str id)
+                            :raw_label (or (some-> raw-label str) "")
+                            :qty (if (number? qty) (str qty) "")
+                            :unit_price (if (number? unit-price) (format-decimal unit-price) "")
+                            :line_total (if (number? line-total) (format-decimal line-total) "")
+                            :line_total_auto? true}))
+        filename (or (:original-filename receipt)
+                   (:original_filename receipt)
+                   (:storage-key receipt)
+                   (:storage_key receipt)
+                   "(unknown)")]
+    {:supplier_id nil ;; User must select supplier, but we could try to match by name later
+     :payer_id nil    ;; User must select payer
+     :purchased_at (datetime-local purchased-at true)
+     :total_amount (if (number? total-amount) (format-decimal total-amount) "")
+     :currency currency
+     :notes (str "Extracted from receipt: " filename)
+     :items (if (seq items)
+              (mapv normalize-item items)
+              [(new-line-item)])}))
+
+(defn- receipt-merchant-name
+  [receipt]
+  (let [extract0 (or (:raw-extract-json receipt)
+                   (:raw_extract_json receipt)
+                   (:receipts/raw-extract-json receipt)
+                   (:receipts/raw_extract_json receipt))
+        raw-extract (cond
+                      (map? extract0) extract0
+                      (nil? extract0) {}
+                      (string? extract0) (try
+                                           (js->clj (js/JSON.parse extract0) :keywordize-keys true)
+                                           (catch :default _ {}))
+                      :else (js->clj extract0 :keywordize-keys true))
+        extraction (or (:extraction raw-extract)
+                     (:receipt-extraction raw-extract))
+        extract (if (map? extraction) extraction raw-extract)
+        merchant (or (:merchant extract)
+                   (:merchant_info extract)
+                   (:merchant-info extract))
+        merchant-name0 (cond
+                         (map? merchant) (:name merchant)
+                         (string? merchant) merchant
+                         :else nil)
+        merchant-name (some-> merchant-name0 str str/trim not-empty)
+        supplier-guess (or (:supplier_guess receipt)
+                         (:supplier-guess receipt)
+                         (:receipts/supplier_guess receipt)
+                         (:receipts/supplier-guess receipt))]
+    (or merchant-name (some-> supplier-guess str str/trim not-empty))))
 
 (defn- prepare-line-items
   "Prepare/validate raw line items from the UI.
@@ -257,7 +395,8 @@
 
 (defui expense-form-body
   "Internal form body component. Used by both add and edit modals."
-  [{:keys [mode initial-data on-submit on-cancel _loading?]}]
+  [{:keys [mode initial-data on-submit on-cancel _loading?
+           new-supplier-default-display-name]}]
   (let [suppliers (use-subscribe [:expenses/suppliers])
         payers (use-subscribe [:expenses/payers])
         form-error (use-subscribe [:expenses/entries-error])
@@ -265,8 +404,9 @@
 
         ;; Memoize entity-spec to avoid recreating on every render
         entity-spec (use-memo
-                      #(get-expense-form-spec suppliers payers)
-                      [suppliers payers])
+                      #(get-expense-form-spec suppliers payers
+                         {:new-supplier-default-display-name new-supplier-default-display-name})
+                      [suppliers payers new-supplier-default-display-name])
 
         ;; Memoize initial values so fork/form doesn't reset on every render
         form-initial-values (use-memo
@@ -312,14 +452,32 @@
 ;; =============================================================================
 
 (defui expense-add-form-modal
-  [{:keys [on-success on-cancel]}]
-  (let [loading? (use-subscribe [:expenses/form-loading?])]
+  [{:keys [receipt-id initial-data on-success on-cancel]}]
+  (let [loading? (use-subscribe [:expenses/form-loading?])
+        receipt (use-subscribe (when receipt-id [:expenses/receipt receipt-id]))
+        default-supplier-display-name (use-memo
+                                        #(when receipt (receipt-merchant-name receipt))
+                                        [receipt])
+
+        ;; If we have a receipt, normalize its data as initial values
+        receipt-initial-data (use-memo
+                               #(when receipt (normalize-receipt-data receipt))
+                               [receipt])
+
+        ;; Merge provided initial-data with receipt data
+        merged-initial-data (use-memo
+                              #(merge receipt-initial-data initial-data)
+                              [receipt-initial-data initial-data])]
     ($ expense-form-body
       {:mode :create
        :loading? loading?
+       :initial-data merged-initial-data
+       :new-supplier-default-display-name default-supplier-display-name
        :on-cancel on-cancel
        :on-submit (fn [form-data]
-                    (rf/dispatch [::expenses-events/create-entry-modal form-data on-success]))})))
+                    (if receipt-id
+                      (rf/dispatch [:app.domain.frontend.expenses.events.receipts/approve-receipt receipt-id form-data on-success])
+                      (rf/dispatch [::expenses-events/create-entry-modal form-data on-success])))})))
 
 (defui expense-edit-form-modal
   "Edit expense modal using master-detail-form wrapper for detail orchestration."

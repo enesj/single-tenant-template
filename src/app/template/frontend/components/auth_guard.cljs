@@ -61,7 +61,7 @@
                           :tenant "You must be logged in to access your tenant dashboard."
                           :customer "Please sign in to continue."))
         on-redirect (or on-redirect
-                      #(dispatch [:redirect-to login-redirect-path]))
+                #(dispatch [:navigate-to login-redirect-path]))
         show-message? (or show-message? true)
         class (or class "")]
 

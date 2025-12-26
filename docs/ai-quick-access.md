@@ -9,6 +9,7 @@ Fast pointers for AI agents (and humans) to the current single-tenant docs. Use 
 - By task keyword: `rg -n "\brun-app\b|\bbe-test\b|\bfe-test\b|\blint\b|\bcljfmt\b" docs/operations`
 - Migrations/workflow: `rg -n "migrate|models.edn|mig/" docs/migrations`
 - Frontend-config alignment: `bb validate-frontend-config` then `bb sync-frontend-config` (dry-run) / `--apply`
+- **AI Skills lookup**: Skills are available in `.claude/skills/`, `.codex/skills/`, and `.github/skills/` for multi-editor support
 
 ## 🚨 Critical Testing Workflow
 ALWAYS save test output before analysis - never re-run tests:
@@ -45,6 +46,28 @@ If you get a `FileNotFoundException` when requiring `.cljs` files in the REPL, s
 - Monitoring: audit/login events in `docs/backend/http-api.md` and `docs/reference/api-reference.md`
 - Home Expenses domain: endpoints in `docs/backend/http-api.md` (`/admin/api/expenses/**`), implementation plan `app-specs/home-expenses-tracker-plan.md`
 - **Component IDs (browser testing)**: `INTERACTIVE-COMPONENTS-ID-AUDIT.md`, `docs/frontend/component-library.md#component-id-requirements`
+
+## AI Skills & Debugging Tools
+
+### Available Skills (2025-12-24 consolidated)
+
+All skills are available in `.claude/skills/`, `.codex/skills/`, and `.github/skills/`:
+
+| Skill | Purpose | Trigger Keywords |
+|-------|---------|------------------|
+| **app-db-inspect** | Inspect re-frame app-db state safely | `app-db`, `re-frame state`, `frontend state` |
+| **debugging** | Short, evidence-based debugging playbook | `debug`, `debugging`, `error`, `failure` |
+| **reframe-events-analysis** | Analyze re-frame event history and performance | `events`, `event history`, `tracing`, `re-frame` |
+| **system-logs** | Monitor backend + shadow-cljs logs from dev output | `logs`, `build output`, `compilation errors` |
+| **fe-tests** | Automated frontend test failure analysis | `test failure`, `frontend test`, `test error` |
+| **new-prompt** | Research repo docs and draft next-session prompt | `new prompt`, `session summary` |
+
+### Using Skills
+
+Skills activate automatically when relevant keywords are mentioned in your request. For example:
+- "Check the app-db for user state" → activates `app-db-inspect`
+- "Analyze recent events for the admin page" → activates `reframe-events-analysis`
+- "The frontend tests are failing" → activates `fe-tests`
 
 ## Metadata for RAG
 All docs should start with:

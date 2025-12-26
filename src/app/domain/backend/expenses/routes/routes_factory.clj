@@ -7,7 +7,9 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.utils.adapters.database :as db-adapter]
-    [clojure.string :as str]))
+    [cheshire.core :as json]
+    [clojure.string :as str]
+    [taoensso.timbre :as log]))
 
 ;; =============================================================================
 ;; Data Transformation Utilities
@@ -32,6 +34,30 @@
       (throw (ex-info (str "Could not resolve " target-sym " in namespace " ns-sym)
                {:ns ns-sym :sym sym :target target-sym})))
     resolved))
+
+(defn- read-json-body
+  "Return a parsed request body map.
+
+  Domain admin routes under /admin/api/expenses do not currently run the same JSON
+  middleware as the template admin routes, so `:body` may be a raw InputStream.
+
+  This helper supports all of:
+  - pre-parsed maps under `:body`
+  - Ring JSON middleware under `:body-params`
+  - reitit coercion under `:parameters :body`
+  - raw JSON request bodies (InputStream/String)"
+  [request]
+  (let [body (:body request)]
+    (cond
+      (map? body) body
+      (map? (:body-params request)) (:body-params request)
+      (map? (get-in request [:parameters :body])) (get-in request [:parameters :body])
+      (nil? body) {}
+      :else (try
+              (json/parse-string (slurp body) true)
+              (catch Exception e
+                (log/warn e "Failed to parse JSON request body" {:uri (:uri request)})
+                {})))))
 
 ;; =============================================================================
 ;; Generic Handler Builders
@@ -82,14 +108,20 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [body (-> (:body request)
+        (let [body (-> (read-json-body request)
                      (cond-> transform-request transform-request))
               validation-errors (when custom-validation
                                   (custom-validation body))]
           (if validation-errors
             (utils/error-response validation-errors :status 400)
             (if (some #(empty? (get body %)) required-fields)
-              (utils/error-response (str (clojure.string/join ", " required-fields) " are required") :status 400)
+              (do
+                (log/warn "Missing required fields for create"
+                  {:entity entity-key
+                   :required-fields required-fields
+                   :body-keys (when (map? body) (keys body))
+                   :required-values (when (map? body) (select-keys body required-fields))})
+                (utils/error-response (str (str/join ", " required-fields) " are required") :status 400))
               (let [create-fn (resolve-fn service (symbol (str "create-" (name entity-key) "!")))
                     entity (create-fn db body)
                     response-key (or (:response-key transform-response) entity-key)
@@ -126,7 +158,7 @@
     (utils/with-error-handling
       (fn [request]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [body (-> (:body request)
+          (let [body (-> (read-json-body request)
                        (cond-> transform-request transform-request))
                 update-fn (resolve-fn service (symbol (str "update-" (name entity-key) "!")))
                 updated (update-fn db id body)]

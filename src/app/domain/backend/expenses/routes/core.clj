@@ -1,5 +1,6 @@
 (ns app.domain.backend.expenses.routes.core
   (:require
+    [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.routes.articles :as articles]
     [app.domain.backend.expenses.routes.article-aliases :as article-aliases]
     [app.domain.backend.expenses.routes.expense-items :as expense-items]
@@ -14,6 +15,7 @@
   "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses."
   [db]
   ["/expenses"
+   ["/upload" {:post {:handler (receipt-upload/admin-upload-handler db)}}]
    (suppliers/routes db)
    (payers/routes db)
    (receipts/routes db)

@@ -33,7 +33,12 @@
           ($ button {:id (or close-button-id "btn-close-modal")
                      :btn-type :ghost
                      :class "ds-btn-sm ds-btn-circle"
-                     :on-click #(dispatch on-close)}
+                     :on-click (fn []
+                                 (cond
+                                   (fn? on-close) (on-close)
+                                   (vector? on-close) (dispatch on-close)
+                                   (and (sequential? on-close) (seq on-close)) (dispatch (vec on-close))
+                                   :else nil))}
             "✕"))
 
         ;; Modal content

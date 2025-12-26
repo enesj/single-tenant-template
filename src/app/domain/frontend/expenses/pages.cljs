@@ -1,9 +1,9 @@
 (ns app.domain.frontend.expenses.pages
   "Domain pages aggregator - provides page component mapping for routes.
-   
-   This namespace centralizes the mapping of route :view keywords to
-   their corresponding page components, allowing the template to
-   dynamically render domain pages without hardcoded imports."
+
+  This namespace centralizes the mapping of route :view keywords to
+  their corresponding page components, allowing the template to
+  dynamically render domain pages without hardcoded imports."
   (:require
     [app.domain.frontend.expenses.pages.user.expenses-dashboard :refer [expenses-dashboard-page]]
     [app.domain.frontend.expenses.pages.user.expenses-list :refer [expenses-list-page]]
@@ -11,17 +11,25 @@
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.domain.frontend.expenses.pages.user.expense-upload :refer [expense-upload-page]]
     [app.domain.frontend.expenses.pages.user.expense-reports :refer [expense-reports-page]]
-    [app.domain.frontend.expenses.pages.user.expense-settings :refer [expense-settings-page]]))
+    [app.domain.frontend.expenses.pages.user.expense-settings :refer [expense-settings-page]]
+    [app.domain.frontend.expenses.pages.user.suppliers :refer [suppliers-page]]
+    [app.domain.frontend.expenses.pages.user.payers :refer [payers-page]]
+    [app.domain.frontend.expenses.pages.user.receipts-list :refer [receipts-list-page]]
+    [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]))
 
 (def pages
   "Map of route :view keywords to page components.
-   
-   The keys must match the :view values in the domain routes (user.cljs).
-   The template's current-page component uses this map to render domain pages."
+
+  The keys must match the :view values in the domain routes (user.cljs).
+  The template's current-page component uses this map to render domain pages."
   {:expenses-dashboard expenses-dashboard-page
    :expenses-list expenses-list-page
    :expense-upload expense-upload-page
+   :receipts-list receipts-list-page
    :expense-new expense-new-page
    :expense-detail expense-detail-page
+   :receipt-detail receipt-detail-page
    :expense-reports expense-reports-page
-   :expense-settings expense-settings-page})
+   :expense-settings expense-settings-page
+   :expense-suppliers suppliers-page
+   :expense-payers payers-page})

@@ -362,4 +362,4 @@ Favor small cljs tests for adapters/formatters that feed components (e.g., login
 - `docs/frontend/http-standards.md` — API integration
 - `docs/shared/validation.md` — validation helpers
 
-*Last Updated: 2025-11-26*
+*Last Updated: 2025-12-25*

@@ -47,7 +47,6 @@
      ;; Remove fetch-entities dispatch - the entities component handles this
      ;; based on route parameters, not UI state
 
-
 (rf/reg-event-fx
   :page/init-entity-detail
   common-interceptors
@@ -120,6 +119,19 @@
     {:db (assoc-in db (paths/current-page) :expense-upload)}))
 
 (rf/reg-event-fx
+  :page/init-receipts-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :receipts-list)
+     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]}))
+
+(rf/reg-event-fx
+  :page/init-receipt-detail
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :receipt-detail)}))
+
+(rf/reg-event-fx
   :page/init-expense-new
   common-interceptors
   (fn [{:keys [db]} _]
@@ -152,6 +164,36 @@
     {:db (assoc-in db (paths/current-page) :expense-settings)
      :dispatch-n [[:user-expenses/fetch-settings]
                   [:user-expenses/fetch-payers {:limit 100}]]}))
+
+(rf/reg-event-fx
+  :page/init-expense-suppliers
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (let [role (get-in db [:session :user :role])
+          role-str (if (keyword? role) (name role) role)
+          unassigned? (= role-str "unassigned")]
+      (if unassigned?
+        {:db (assoc-in db (paths/current-page) :waiting-room)
+         :dispatch [:navigate-to "/waiting-room"]}
+        {:db (assoc-in db (paths/current-page) :expense-suppliers)
+         :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
+                      [:app.template.frontend.events.config/set-editing nil]
+                      [:user-expenses/fetch-suppliers]]}))))
+
+(rf/reg-event-fx
+  :page/init-expense-payers
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (let [role (get-in db [:session :user :role])
+          role-str (if (keyword? role) (name role) role)
+          unassigned? (= role-str "unassigned")]
+      (if unassigned?
+        {:db (assoc-in db (paths/current-page) :waiting-room)
+         :dispatch [:navigate-to "/waiting-room"]}
+        {:db (assoc-in db (paths/current-page) :expense-payers)
+         :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
+                      [:app.template.frontend.events.config/set-editing nil]
+                      [:user-expenses/fetch-payers]]}))))
 
 (rf/reg-event-db
   :navigated

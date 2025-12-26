@@ -116,10 +116,12 @@
 
           ;; Tabs for different views
           ($ :div {:class "ds-tabs ds-tabs-boxed mb-4"}
-            (tabs/tab-link {:label "Audit Logs"
+            (tabs/tab-link {:id (str "tab-user-activity-audit-" (or user-id "unknown"))
+                            :label "Audit Logs"
                             :active? (= active-tab :audit)
                             :on-select #(set-active-tab! :audit)})
-            (tabs/tab-link {:label "Login History"
+            (tabs/tab-link {:id (str "tab-user-activity-login-" (or user-id "unknown"))
+                            :label "Login History"
                             :active? (= active-tab :login)
                             :on-select #(set-active-tab! :login)}))
 

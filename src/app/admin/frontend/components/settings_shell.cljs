@@ -24,8 +24,8 @@
     ($ :button
       {:type "button"
        :class (str "ds-btn ds-btn-sm "
-                   (if (= scope :admin) "ds-btn-active" "ds-btn-ghost")
-                   (when disabled? " ds-btn-disabled"))
+                (if (= scope :admin) "ds-btn-active" "ds-btn-ghost")
+                (when disabled? " ds-btn-disabled"))
        :disabled disabled?
        :on-click (fn [e]
                    (.preventDefault e)
@@ -35,8 +35,8 @@
     ($ :button
       {:type "button"
        :class (str "ds-btn ds-btn-sm "
-                   (if (= scope :user) "ds-btn-active" "ds-btn-ghost")
-                   (when disabled? " ds-btn-disabled"))
+                (if (= scope :user) "ds-btn-active" "ds-btn-ghost")
+                (when disabled? " ds-btn-disabled"))
        :disabled disabled?
        :on-click (fn [e]
                    (.preventDefault e)
@@ -79,8 +79,8 @@
     ($ :button
       {:type "button"
        :class (str "ds-btn ds-btn-sm "
-                   (if is-view? "ds-btn-primary" "ds-btn-warning")
-                   (when disabled? " ds-btn-disabled"))
+                (if is-view? "ds-btn-primary" "ds-btn-warning")
+                (when disabled? " ds-btn-disabled"))
        :disabled disabled?
        :on-click (fn [e]
                    (.preventDefault e)
@@ -99,7 +99,7 @@
     ($ :button
       {:type "button"
        :class (str "ds-btn ds-btn-sm ds-btn-ghost"
-                   (when (or (not dirty?) saving? loading?) " ds-btn-disabled"))
+                (when (or (not dirty?) saving? loading?) " ds-btn-disabled"))
        :disabled (or (not dirty?) saving? loading?)
        :on-click (fn [e]
                    (.preventDefault e)
@@ -108,7 +108,7 @@
     ($ :button
       {:type "button"
        :class (str "ds-btn ds-btn-sm ds-btn-primary"
-                   (when (or (not dirty?) saving? loading?) " ds-btn-disabled"))
+                (when (or (not dirty?) saving? loading?) " ds-btn-disabled"))
        :disabled (or (not dirty?) saving? loading?)
        :on-click (fn [e]
                    (.preventDefault e)
@@ -143,8 +143,10 @@
   "Tabs for different config sections."
   [{:keys [tab on-tab-change tabs]}]
   ($ :div {:class "ds-tabs ds-tabs-boxed"}
-    (for [{:keys [key label]} tabs]
-      (tabs/tab-link {:key key
+    (for [{:keys [key label]} tabs
+          :let [key-str (if (keyword? key) (name key) (str key))]]
+      (tabs/tab-link {:id (str "tab-settings-config-" key-str)
+                      :key key
                       :label label
                       :active? (= tab key)
                       :on-select #(when on-tab-change (on-tab-change key))}))))
@@ -198,10 +200,10 @@
            tab on-tab-change tabs
            dirty? saving? loading? error
            on-save on-discard
-         show-scope-switcher?
+           show-scope-switcher?
            children]}]
-    (let [is-edit? (= mode :edit)
-      show-scope-switcher? (if (some? show-scope-switcher?) show-scope-switcher? true)]
+  (let [is-edit? (= mode :edit)
+        show-scope-switcher? (if (some? show-scope-switcher?) show-scope-switcher? true)]
     ($ :div {:class "py-6 min-h-screen bg-gradient-to-br from-base-100 via-base-200 to-base-300"}
       ;; Page header
       ($ :div {:class "px-4 sm:px-6 lg:px-8 mb-6"}

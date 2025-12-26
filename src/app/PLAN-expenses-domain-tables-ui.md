@@ -1,6 +1,6 @@
 # Expenses Domain — Admin + User Tables UI Plan
 
-Last updated: 2025-12-24
+Last updated: 2025-12-25
 
 This plan upgrades the “stub” admin pages for Expenses-domain reference entities (suppliers, articles, payers, etc.) into a drill-down friendly admin experience, and defines an incremental path for user-facing reference data.
 
@@ -158,25 +158,134 @@ Definition of done:
 
 ### Phase 4 — User-Facing Reference Data (Incremental)
 
-Reality check:
-- User API currently exposes *read-only* suppliers and payers lists.
-- There is no user API for managing (create/update/delete) suppliers/payers/articles.
+**Use Case Context**: Family expense tracking app with few users. Reference data (suppliers, payers, articles) represents shared household entities—"Amazon" or "Whole Foods" should be defined once and reused by all family members.
 
-Phase 4.1 (no backend changes): user read-only pages
-- Add `/suppliers` and `/payers` user pages backed by the existing user endpoints.
-- Use these pages primarily for transparency and search (and to validate the endpoints).
+**Ownership Model Decision**: ✅ **Global reference data** (shared catalog)
+- All users see the same suppliers/payers/articles
+- Any member or admin can add to the shared catalog
+- Viewers have read-only access
+- No per-user isolation needed; reference tables have no `user_id` column
 
-Phase 4.2 (requires backend work): user-managed reference data
-- Decide ownership model:
-  - Admin-owned global reference data vs user-owned per-user data vs hybrid.
-- If user-managed:
-  - Add user API CRUD routes under `src/app/domain/backend/expenses/routes/user_api.clj`
-  - Add RLS/authorization rules and audit logging as needed
-  - Add user pages + “quick add” flows from the expense form
+#### Role Permissions for Reference Data
 
-Definition of done:
-- 4.1: users can view suppliers/payers lists without errors.
-- 4.2: only after a backend decision, users can create/edit/delete reference data safely.
+| Role | Dashboard | View Reference Data | Add/Edit Reference Data | Manage Users |
+|------|-----------|:-------------------:|:-----------------------:|:------------:|
+| `unassigned` | ⚠️ "Wait for role assignment" screen | ❌ | ❌ | ❌ |
+| `viewer` | ✅ Normal | ✅ Read-only (all data) | ❌ | ❌ |
+| `member` | ✅ Normal | ✅ Read-only (all data) | ✅ Can modify shared catalog | ❌ |
+| `admin` | ✅ Normal | ✅ Read-only (all data) | ✅ Can modify shared catalog | ✅ Add/remove users, change roles |
+
+**Key distinction**: Admin vs Member difference is **user management**, not reference data access. Both can equally contribute to the shared supplier/payer/article catalog.
+
+---
+
+#### Current State (Reality Check)
+
+The user API currently exposes *read-only* suppliers and payers lists:
+- `GET /api/v1/expenses/suppliers` — Returns all suppliers (no user filtering)
+- `GET /api/v1/expenses/payers` — Returns all payers (no user filtering)
+- No user endpoints for articles/article-aliases/price-observations/receipts
+- No write endpoints (POST/PUT/DELETE) for any reference data
+
+**No backend API changes needed for Phase 4.1** — read-only endpoints already exist.
+
+Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers` deep-links
+(see `src/app/domain/backend/registry.clj` → `:spa-routes`).
+
+---
+
+#### Phase 4.1: User Read-Only Pages (No Backend Changes)
+
+**Status**: ✅ Implemented (2025-12-25)
+
+**Goal**: Expose existing read-only user endpoints through user-facing UI pages.
+
+**Deliverables**:
+1. Create user pages under `src/app/domain/frontend/expenses/pages/user/`:
+   - `suppliers.cljs` — Display all suppliers in a read-only table
+   - `payers.cljs` — Display all payers in a read-only table
+2. Add user routes in `src/app/domain/frontend/expenses/routes/user.cljs`:
+   - `/suppliers` — Suppliers list page
+   - `/payers` — Payers list page
+3. Reuse or adapt admin table components:
+   - Table rendering, pagination, column toggles
+   - Hide "Add/Edit/Delete" actions for `viewer` role
+   - Show "Add" buttons for `member`/`admin` roles (non-functional until Phase 4.2)
+4. Role-based access:
+   - `unassigned` → Redirect to pending assignment screen
+   - `viewer`/`member`/`admin` → Can view pages
+
+**Definition of done**:
+- Users can visit `/suppliers` and `/payers` and see the full shared catalog
+- Viewers see read-only tables (no add/edit buttons)
+- Members/admins see tables with placeholder "Add" buttons (disabled or showing "coming soon")
+
+---
+
+#### Phase 4.2: User Write Permissions (Requires Backend Work)
+
+**Goal**: Allow `member` and `admin` roles to create, edit, and delete reference data in the shared catalog.
+
+**Status**: ✅ Implemented (2025-12-25)
+
+**Backend changes** (`src/app/domain/backend/expenses/routes/user_api.clj`):
+
+1. **Add CRUD endpoints for each reference entity**:
+   ```clojure
+   ;; Suppliers
+   POST   /api/v1/expenses/suppliers           ; Create
+   PUT    /api/v1/expenses/suppliers/:id       ; Update
+   DELETE /api/v1/expenses/suppliers/:id       ; Delete
+
+   ;; Payers
+   POST   /api/v1/expenses/payers
+   PUT    /api/v1/expenses/payers/:id
+   DELETE /api/v1/expenses/payers/:id
+
+   ;; Articles (if needed for users)
+   POST   /api/v1/expenses/articles
+   PUT    /api/v1/expenses/articles/:id
+   DELETE /api/v1/expenses/articles/:id
+   ```
+
+2. **Add authorization middleware**:
+   ```clojure
+   (defn wrap-user-authz [{:keys [require-role]}]
+     (fn [handler]
+       (fn [request]
+         (let [user (:user request)]
+           (if (contains? require-role (:role user))
+             (handler request)
+             {:status 403 :body "Forbidden"})))))
+
+   ;; Apply to write endpoints
+   (POST "/api/v1/expenses/suppliers" []
+     (wrap-user-authz {:require-role #{:member :admin}})
+     create-supplier-handler)
+   ```
+
+3. **No RLS policies needed** — data is shared globally; only role-based write permissions
+
+**Frontend changes**:
+
+1. **Add/edit forms** (`src/app/domain/frontend/expenses/pages/user/`):
+   - Create modal or form component for adding suppliers/payers
+   - Reuse form field definitions from admin config where possible
+   - Add validation (normalized_key, display_name)
+
+2. **Wire up "Add" buttons**:
+   - Members/admins can click "Add Supplier" → opens form
+   - Viewers: no add/edit actions visible
+
+3. **Optional: Quick-add from expense form**:
+   - When entering an expense, type "Amaz" → auto-suggest existing suppliers
+   - Option to "Create new supplier" if no match (members/admins only)
+
+**Definition of done**:
+- Members and admins can create/edit/delete suppliers and payers
+- Changes are immediately visible to all users (shared catalog)
+- Viewers can view but not modify reference data
+- Unassigned users cannot access reference data pages
 
 ### Phase 5 — Enhancements (optional, after core drill-down works)
 
@@ -217,4 +326,3 @@ Backend:
   - list → view → detail navigation
   - status/actions on receipts (Phase 2)
   - selectors work without manual UUID typing
-

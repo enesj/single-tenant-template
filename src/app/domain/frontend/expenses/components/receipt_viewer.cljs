@@ -41,7 +41,7 @@
       (shared/format-value value "—" false))))
 
 (defui receipt-viewer
-  [{:keys [receipt]}]
+  [{:keys [receipt show-summary?] :or {show-summary? true}}]
   (let [{:keys [status original-filename content-type file-size storage-key
                 supplier-guess total-amount-guess currency-guess purchased-at-guess
                 payment-hints error-message error-details raw-parse-json raw-extract-json
@@ -49,33 +49,32 @@
         status-label (shared/format-value status "—" false)]
     ($ :div {:class "grid gap-6 lg:grid-cols-2"}
       ($ :div {:class "space-y-4"}
-        ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-          ($ :div {:class "ds-card-body space-y-3"}
-            ($ :div {:class "flex items-center gap-2"}
-              ($ :span {:class (status-class status)} status-label)
-              (when (seq error-message)
-                ($ :span {:class "text-xs text-error"} error-message)))
-            ($ :div {:class "grid gap-3 md:grid-cols-2"}
-              (label-value "Original File" original-filename)
-              (label-value "Storage Key" storage-key)
-              (label-value "Content Type" content-type)
-              (label-value "File Size" (format-bytes file-size))
-              (label-value "Supplier Guess" supplier-guess)
-              (label-value "Total Guess" total-amount-guess)
-              (label-value "Currency" currency-guess)
-              (label-value "Purchased At" (shared/format-date purchased-at-guess))
-              (label-value "Retry Count" retry-count)
-              (label-value "Expense ID" expense-id)
-              (label-value "Created At" (shared/format-date created-at))
-              (label-value "Updated At" (shared/format-date updated-at)))))
+        (when show-summary?
+          ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
+            ($ :div {:class "ds-card-body space-y-3"}
+              ($ :div {:class "flex items-center gap-2"}
+                ($ :span {:class (status-class status)} status-label)
+                (when (seq error-message)
+                  ($ :span {:class "text-xs text-error"} error-message)))
+              ($ :div {:class "grid gap-3 md:grid-cols-2"}
+                (label-value "Original File" original-filename)
+                (label-value "Storage Key" storage-key)
+                (label-value "Content Type" content-type)
+                (label-value "File Size" (format-bytes file-size))
+                (label-value "Supplier Guess" supplier-guess)
+                (label-value "Total Guess" total-amount-guess)
+                (label-value "Currency" currency-guess)
+                (label-value "Purchased At" (shared/format-date purchased-at-guess))
+                (label-value "Retry Count" retry-count)
+                (label-value "Expense ID" expense-id)
+                (label-value "Created At" (shared/format-date created-at))
+                (label-value "Updated At" (shared/format-date updated-at))))))
 
         ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
           ($ :div {:class "ds-card-body"}
             ($ :h3 {:class "text-sm font-semibold"} "Preview")
             ($ :p {:class "text-xs text-base-content/60"}
-              "Receipt preview is not available without a download URL."
-              (when storage-key
-                (str " Storage key: " storage-key)))))
+              "Receipt preview is not available without a download URL.")))
 
         (when (seq parsed-markdown)
           ($ :div {:class "ds-card ds-card-bordered bg-base-100"}

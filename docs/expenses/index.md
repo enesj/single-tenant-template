@@ -13,12 +13,13 @@ The expenses domain provides comprehensive financial management functionality fo
 The expenses domain consists of several interconnected entities:
 
 1. **Expenses** (`expense_entries`) - Main expense records with line items
-2. **Receipts** (`receipts`) - Digital receipt storage and OCR processing
-3. **Suppliers** (`suppliers`) - Vendor/supplier management
-4. **Payers** (`payers`) - Payment method management
-5. **Articles** (`articles`) - Product/item catalog with pricing
-6. **Article Aliases** (`article_aliases`) - Alternative names for articles
-7. **Price Observations** (`price_observations`) - Historical price tracking
+2. **Expense Items** (`expense_items`) - Individual line items within expenses (2025-12-25: Now with standalone admin CRUD support)
+3. **Receipts** (`receipts`) - Digital receipt storage and OCR processing
+4. **Suppliers** (`suppliers`) - Vendor/supplier management
+5. **Payers** (`payers`) - Payment method management
+6. **Articles** (`articles`) - Product/item catalog with pricing
+7. **Article Aliases** (`article_aliases`) - Alternative names for articles
+8. **Price Observations** (`price_observations`) - Historical price tracking
 
 ### Entity Relationships
 
@@ -29,7 +30,9 @@ Payers ───────┘                │
                                │
 Articles ───► Article Aliases   │
     │                         │
-    └───► Price Observations ──┘
+    └──► Price Observations ──┘
+    │
+    └──► Expense Items (expense_items)
 ```
 
 ## Frontend Implementation
@@ -41,6 +44,9 @@ All expense domain pages are accessible under `/admin` with the following routes
 - `/expenses` - List and manage expenses
 - `/expenses/new` - Create new expense
 - `/expenses/:id` - Edit existing expense
+- `/expense-items` - List and manage individual expense line items (new 2025-12-25)
+- `/expense-items/new` - Create standalone expense item
+- `/expense-items/:id` - Edit existing expense item
 - `/receipts` - View and process receipts
 - `/suppliers` - Manage suppliers
 - `/payers` - Manage payment methods

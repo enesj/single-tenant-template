@@ -8,8 +8,8 @@
 
 (defn- to-app [data]
   (-> data
-      db-adapter/convert-pg-objects
-      db-adapter/convert-db-keys->app-keys))
+    db-adapter/convert-pg-objects
+    db-adapter/convert-db-keys->app-keys))
 
 (defn- parse-status-param [status-param]
   (cond
@@ -54,7 +54,7 @@
           (let [result (receipts/upload-receipt! db body)]
             (utils/success-response
               (-> result
-                  (update :receipt to-app)))))))
+                (update :receipt to-app)))))))
     "Failed to upload receipt"))
 
 (defn get-receipt-handler [db]
@@ -67,11 +67,23 @@
         (utils/error-response "Invalid id" :status 400)))
     "Failed to fetch receipt"))
 
+(defn delete-receipt-handler [db]
+  (utils/with-error-handling
+    (fn [request]
+      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+        (if-let [deleted (receipts/delete-receipt! db id)]
+          ;; Return JSON to keep the frontend XHR pipeline happy (empty bodies can fail JSON parsing).
+          (utils/success-response {:deleted true
+                                   :receipt (to-app deleted)})
+          (utils/error-response "Receipt not found" :status 404))
+        (utils/error-response "Invalid id" :status 400)))
+    "Failed to delete receipt"))
+
 (defn update-status-handler [db]
   (utils/with-error-handling
     (fn [request]
       (let [new-status (or (get-in request [:body :status])
-                           (get-in request [:body :new_status]))]
+                         (get-in request [:body :new_status]))]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (if-not new-status
             (utils/error-response "status is required" :status 400)
@@ -118,8 +130,10 @@
     (fn [request]
       (let [body (:body request)]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [expense (receipts/approve-and-post! db id body)]
-            (utils/success-response {:expense (to-app expense)}))
+          (let [expense (receipts/approve-and-post! db id body)
+                receipt (receipts/get-receipt db id)]
+            (utils/success-response {:expense (to-app expense)
+                                     :receipt (to-app receipt)}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to approve receipt"))
 
@@ -128,7 +142,8 @@
    ["" {:get (list-receipts-handler db)
         :post (upload-receipt-handler db)}]
    ["/pending" {:get (list-pending-handler db)}]
-   ["/:id" {:get (get-receipt-handler db)}]
+   ["/:id" {:get (get-receipt-handler db)
+            :delete (delete-receipt-handler db)}]
    ["/:id/status" {:post (update-status-handler db)}]
    ["/:id/retry" {:post (retry-receipt-handler db)}]
    ["/:id/fail" {:post (fail-receipt-handler db)}]

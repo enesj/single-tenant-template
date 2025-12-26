@@ -1,6 +1,8 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
+    [app.admin.frontend.components.tabs :as tabs]
+    [app.domain.frontend.expenses.components.expense-form :as expense-form]
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-viewer]]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
@@ -342,9 +344,11 @@
         loading? (use-subscribe [:expenses/receipt-detail-loading?])
         action-loading? (use-subscribe [:expenses/receipt-action-loading?])
         error (use-subscribe [:expenses/receipts-error])
+        [active-tab set-active-tab!] (use-state :details)
         [next-status set-next-status!] (use-state nil)]
     (use-effect
       (fn []
+        (set-active-tab! :details)
         (when receipt-id
           (rf/dispatch [::receipts-events/load-detail receipt-id]))
         js/undefined)
@@ -371,20 +375,102 @@
           "Receipt not found.")
 
         :else
-        ($ :div {:class "space-y-6"}
-          ;; Core Info
-          ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-4"}
-            (label-value "Original Filename" (:original-filename receipt))
-            (label-value "Status" (:status receipt))
-            (label-value "Content Type" (:content-type receipt))
-            (label-value "File Size" (str (:file-size receipt) " bytes"))
-            (label-value "Created At" (:created-at receipt))
-            (label-value "Updated At" (:updated-at receipt)))
+        (let [rid (or receipt-id (id-utils/extract-entity-id receipt))
+              rid-str (if rid (str rid) "unknown")
+              status (:status receipt)
+              approve-allowed? (contains? #{"extracted" "review_required"} status)]
+          ($ :div {:class "space-y-4"}
+            ($ :div {:class "ds-tabs ds-tabs-boxed"}
+              (tabs/tab-link {:id (str "tab-receipt-details-" rid-str)
+                              :label "Details"
+                              :active? (= active-tab :details)
+                              :on-select #(set-active-tab! :details)})
+              (tabs/tab-link {:id (str "tab-receipt-viewer-" rid-str)
+                              :label "Receipt"
+                              :active? (= active-tab :receipt)
+                              :on-select #(set-active-tab! :receipt)})
+              (tabs/tab-link {:id (str "tab-receipt-approve-" rid-str)
+                              :label "Approve & Post"
+                              :active? (= active-tab :approve)
+                              :on-select #(set-active-tab! :approve)}))
 
-          ;; Receipt Viewer
-          ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-            ($ :div {:class "ds-card-body p-0"}
-              ($ receipt-viewer {:receipt-id receipt-id}))))))))
+            (case active-tab
+              :receipt
+              ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
+                ($ :div {:class "ds-card-body p-0"}
+                  ($ receipt-viewer {:receipt receipt
+                                     :show-summary? false})))
+
+              :approve
+              (if approve-allowed?
+                ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
+                  ($ :div {:class "ds-card-body"}
+                    ($ :h2 {:class "text-lg font-semibold"}
+                      "Approve Receipt & Create Expense")
+                    ($ expense-form/expense-add-form-modal
+                      {:receipt-id receipt-id
+                       :on-success (fn []
+                                     (set-active-tab! :details)
+                                     (rf/dispatch [::receipts-events/load-detail receipt-id]))
+                       :on-cancel #(set-active-tab! :details)})))
+
+                ($ :div {:class "ds-alert ds-alert-info"}
+                  ($ :span
+                    (str "Approval is available when status is extracted or review_required. Current status: "
+                      (or status "unknown")
+                      "."))))
+
+              ;; default: :details
+              ($ :div {:class "space-y-6"}
+                ;; Core Info
+                ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-4"}
+                  (label-value "Original Filename" (:original-filename receipt))
+                  (label-value "Status" status)
+                  (label-value "Content Type" (:content-type receipt))
+                  (label-value "File Size" (str (:file-size receipt) " bytes"))
+                  (label-value "Storage Key" (:storage-key receipt))
+                  (label-value "Supplier Guess" (:supplier-guess receipt))
+                  (label-value "Total Guess" (:total-amount-guess receipt))
+                  (label-value "Currency" (:currency-guess receipt))
+                  (label-value "Purchased At" (:purchased-at-guess receipt))
+                  (label-value "Retry Count" (:retry-count receipt))
+                  (label-value "Expense ID" (:expense-id receipt))
+                  (label-value "Created At" (:created-at receipt))
+                  (label-value "Updated At" (:updated-at receipt)))
+
+                ;; Actions
+                ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
+                  ($ :div {:class "ds-card-body space-y-3"}
+                    ($ :h2 {:class "text-lg font-semibold"} "Actions")
+                    ($ :div {:class "flex flex-wrap items-center gap-2"}
+                      (when approve-allowed?
+                        ($ :button {:id (str "btn-approve-receipt-" rid-str)
+                                    :class "ds-btn ds-btn-success ds-btn-sm"
+                                    :disabled action-loading?
+                                    :on-click #(set-active-tab! :approve)}
+                          "Approve & Post"))
+
+                      ($ :button {:id (str "btn-retry-receipt-" rid-str)
+                                  :class "ds-btn ds-btn-outline ds-btn-sm"
+                                  :disabled action-loading?
+                                  :on-click #(rf/dispatch [::receipts-events/retry-extraction receipt-id])}
+                        (if action-loading? "Working..." "Retry OCR"))
+
+                      ($ :div {:class "flex items-center gap-2"}
+                        ($ :select {:id (str "select-receipt-status-" rid-str)
+                                    :class "ds-select ds-select-bordered ds-select-sm"
+                                    :value (or next-status "")
+                                    :on-change (fn [e]
+                                                 (set-next-status! (.. e -target -value)))}
+                          (for [s receipt-status-options]
+                            ($ :option {:key s :value s} s)))
+                        ($ :button {:id (str "btn-set-receipt-status-" rid-str)
+                                    :class "ds-btn ds-btn-primary ds-btn-sm"
+                                    :disabled (or action-loading?
+                                                (not (seq next-status))
+                                                (= next-status status))
+                                    :on-click #(rf/dispatch [::receipts-events/update-status receipt-id next-status])}
+                          "Set status")))))))))))))
 
 (defui expense-item-detail-body
   [{:keys [expense-item-id]}]

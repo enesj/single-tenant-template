@@ -102,6 +102,14 @@ All paths are relative to `/admin/api`.
 - `PUT /admin/api/expenses/entries/:id` – update expense fields.
 - `DELETE /admin/api/expenses/entries/:id` – soft delete.
 
+**Expense Items** (new 2025-12-25)
+- `GET /admin/api/expenses/expense-items` – list expense items with pagination and filters.
+- `POST /admin/api/expenses/expense-items` – create standalone expense item.
+- `GET /admin/api/expenses/expense-items/count` – total count with optional search.
+- `GET /admin/api/expenses/expense-items/:id` – fetch single expense item.
+- `PUT /admin/api/expenses/expense-items/:id` – update expense item.
+- `DELETE /admin/api/expenses/expense-items/:id` – delete expense item.
+
 **Articles / Price history**
 - `GET /admin/api/expenses/articles` – list/search.
 - `POST /admin/api/expenses/articles` – create; requires `canonical_name`.

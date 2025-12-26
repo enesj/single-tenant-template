@@ -4,10 +4,15 @@
     [app.domain.backend.expenses.services.expenses :as expenses]
     [buddy.core.codecs :as codecs]
     [buddy.core.hash :as hash]
+    [cheshire.core :as json]
+    [clojure.java.io :as io]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
+    [next.jdbc.result-set :as rs]
+    [taoensso.timbre :as log])
   (:import
+    [java.nio.file Files StandardCopyOption]
     [java.util UUID]))
 
 (def ^:private approvable-status? #{"extracted" "review_required"})
@@ -33,6 +38,110 @@
                    :limit 1})
       {:builder-fn rs/as-unqualified-lower-maps})))
 
+(defn- jsonb-value
+  "Convert a Clojure value into a HoneySQL expression that writes JSONB.
+
+  Accepts either a Clojure value (map/vector/etc) or a pre-encoded JSON string."
+  [x]
+  (cond
+    (nil? x) nil
+    ;; Already a HoneySQL expression
+    (and (vector? x) (= :cast (first x))) x
+    (string? x) [:cast x :jsonb]
+    :else [:cast (json/generate-string x) :jsonb]))
+
+(defn- receipt-status-cast [status]
+  (when status
+    [:cast status :receipt_status]))
+
+(def ^:private local-receipt-storage-base-dir
+  (io/file "upload" "stripes"))
+
+(def ^:private exported-subdir "exported")
+
+(defn- uri-storage-key?
+  [storage-key]
+  (boolean
+    (when (string? storage-key)
+      (re-find #"(?i)^[a-z][a-z0-9+.-]*://" (str/trim storage-key)))))
+
+(defn- safe-resolve-under!
+  "Resolve `relative-path` under `base-dir` and ensure it does not escape."
+  [^java.io.File base-dir relative-path]
+  (let [base-path (.toPath base-dir)
+        resolved (.normalize (.resolve base-path (str relative-path)))]
+    (when-not (.startsWith resolved base-path)
+      (throw (ex-info "Unsafe storage_key path" {:storage_key relative-path})))
+    (.toFile resolved)))
+
+(defn- finalize-local-receipt-file!
+  "Move a local receipt file from `upload/stripes/<storage_key>` to
+  `upload/stripes/exported/<storage_key>`.
+
+  Returns the updated storage key (prefixed with \"exported/\") when successful.
+  Returns nil for non-local storage keys (e.g. s3://) or when the file does not exist.
+
+  Any failures are logged and ignored so expense posting can still succeed."
+  [{:keys [id storage_key]}]
+  (let [k (some-> storage_key str/trim not-empty)]
+    (cond
+      (not k) nil
+      (uri-storage-key? k) nil
+
+      (str/starts-with? k (str exported-subdir "/"))
+      (let [export-file (safe-resolve-under! local-receipt-storage-base-dir k)]
+        (if (.exists export-file)
+          k
+          (do
+            (log/warn "Receipt exported file not found" {:receipt-id id
+                                                         :storage_key k
+                                                         :path (.getPath export-file)})
+            nil)))
+
+      :else
+      (let [src-file (safe-resolve-under! local-receipt-storage-base-dir k)
+            dest-key (str exported-subdir "/" k)
+            dest-file (safe-resolve-under! local-receipt-storage-base-dir dest-key)]
+        (try
+          (when-let [parent (.getParentFile dest-file)]
+            (when-not (.exists parent)
+              (.mkdirs parent)))
+          (cond
+            (.exists dest-file)
+            (do
+              (when (.exists src-file)
+                (try
+                  (Files/deleteIfExists (.toPath src-file))
+                  (catch Exception e
+                    (log/warn e "Failed to delete duplicate receipt file" {:receipt-id id
+                                                                           :path (.getPath src-file)}))))
+              dest-key)
+
+            (.exists src-file)
+            (do
+              (try
+                (Files/move (.toPath src-file) (.toPath dest-file)
+                  (into-array java.nio.file.CopyOption [StandardCopyOption/ATOMIC_MOVE]))
+                (catch Exception _e
+                  (Files/move (.toPath src-file) (.toPath dest-file)
+                    (into-array java.nio.file.CopyOption [StandardCopyOption/REPLACE_EXISTING]))))
+              (try
+                (Files/deleteIfExists (.toPath src-file))
+                (catch Exception e
+                  (log/warn e "Failed to delete receipt source file after move" {:receipt-id id
+                                                                                 :path (.getPath src-file)})))
+              dest-key)
+
+            :else
+            (do
+              (log/warn "Receipt file not found for export" {:receipt-id id
+                                                             :storage_key k
+                                                             :path (.getPath src-file)})
+              nil))
+          (catch Exception e
+            (log/warn e "Failed to finalize receipt file" {:receipt-id id :storage_key k})
+            nil))))))
+
 ;; ============================================================================
 ;; CRUD / status management
 ;; ============================================================================
@@ -40,7 +149,7 @@
 (defn upload-receipt!
   "Insert a new receipt record. Expects at least :storage_key and either
    :file_hash or :bytes to hash. Returns {:duplicate? bool :receipt {...}}."
-  [db {:keys [storage_key file_hash bytes original_filename content_type file_size] :as data}]
+  [db {:keys [user_id storage_key file_hash bytes original_filename content_type file_size] :as data}]
   (let [hash (or file_hash (compute-file-hash bytes))]
     (when-not storage_key
       (throw (ex-info "storage_key is required" {:data data})))
@@ -50,6 +159,7 @@
     (if-let [existing (check-duplicate db hash)]
       {:duplicate? true :receipt existing}
       (let [row {:id (UUID/randomUUID)
+                 :user_id user_id
                  :storage_key storage_key
                  :file_hash hash
                  :original_filename original_filename
@@ -70,18 +180,57 @@
     (sql/format {:update :receipts
                  :set (merge {:status [:cast new-status :receipt_status]
                               :updated_at [:now]}
-                             extra)
+                        extra)
                  :where [:= :id receipt-id]
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn claim-status!
+  "Atomically transition receipt from one status to another.
+  If `from-status` is a collection, it will match any of them.
+  this also reclaims receipts already in to-status when their `updated_at` is
+  older than the lease.
+
+  Returns the updated receipt row, or nil when not claimed."
+  ([db receipt-id from-status to-status]
+   (claim-status! db receipt-id from-status to-status nil))
+  ([db receipt-id from-status to-status {:keys [lease-seconds] :or {lease-seconds 900}}]
+   (let [from-coll (if (coll? from-status) from-status [from-status])
+         from* (map receipt-status-cast from-coll)
+         to* (receipt-status-cast to-status)]
+     (jdbc/execute-one!
+       db
+       (sql/format
+         {:update :receipts
+          :set {:status to*
+                :updated_at [:now]}
+          :where [:and
+                  [:= :id receipt-id]
+                  [:or
+                   [:in :status from*]
+                   [:and
+                    [:= :status to*]
+                    [:< :updated_at [:raw (format "NOW() - INTERVAL '%s seconds'" (long lease-seconds))]]]]]
+          :returning [:*]})
+       {:builder-fn rs/as-unqualified-lower-maps}))))
+
+(defn claim-for-parsing!
+  "Claim a receipt for parsing (uploaded → parsing)."
+  [db receipt-id & [opts]]
+  (claim-status! db receipt-id "uploaded" "parsing" opts))
+
+(defn claim-for-extracting!
+  "Claim a receipt for extraction (parsed or uploaded → extracting)."
+  [db receipt-id & [opts]]
+  (claim-status! db receipt-id ["parsed" "uploaded"] "extracting" opts))
 
 (defn mark-failed!
   "Mark receipt as failed with message/details."
   [db receipt-id message & [details]]
   (update-status! db receipt-id "failed"
-                  (merge {:error_message message}
-                         (when details {:error_details details})
-                         {:retry_count [:+ :retry_count 1]})))
+    (merge {:error_message message
+            :retry_count [:+ :retry_count 1]}
+      (when details {:error_details (jsonb-value details)}))))
 
 (defn retry-extraction!
   "Reset receipt for re-processing and increment retry_count."
@@ -89,24 +238,29 @@
   (update-status! db receipt-id "uploaded" {:retry_count [:+ :retry_count 1]}))
 
 (defn store-extraction-results!
-  "Persist extraction/parse payloads and guesses."
+  "Persist extraction/parse payloads and guesses.
+
+  Updates only fields present in the input map (so callers can PATCH-like update
+  without wiping other columns)."
   [db receipt-id {:keys [raw_parse_json raw_extract_json parsed_markdown supplier_guess
-                        total_amount_guess currency_guess purchased_at_guess payment_hints]}]
-  (jdbc/execute-one!
-    db
-    (sql/format {:update :receipts
-                 :set {:raw_parse_json raw_parse_json
-                       :raw_extract_json raw_extract_json
-                       :parsed_markdown parsed_markdown
-                       :supplier_guess supplier_guess
-                       :total_amount_guess total_amount_guess
-                       :currency_guess currency_guess
-                       :purchased_at_guess purchased_at_guess
-                       :payment_hints payment_hints
-                       :updated_at [:now]}
-                 :where [:= :id receipt-id]
-                 :returning [:*]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
+                         total_amount_guess currency_guess purchased_at_guess payment_hints]
+                  :as data}]
+  (let [set-map (cond-> {:updated_at [:now]}
+                  (contains? data :raw_parse_json) (assoc :raw_parse_json (jsonb-value raw_parse_json))
+                  (contains? data :raw_extract_json) (assoc :raw_extract_json (jsonb-value raw_extract_json))
+                  (contains? data :parsed_markdown) (assoc :parsed_markdown parsed_markdown)
+                  (contains? data :supplier_guess) (assoc :supplier_guess supplier_guess)
+                  (contains? data :total_amount_guess) (assoc :total_amount_guess total_amount_guess)
+                  (contains? data :currency_guess) (assoc :currency_guess (when currency_guess [:cast currency_guess :currency]))
+                  (contains? data :purchased_at_guess) (assoc :purchased_at_guess purchased_at_guess)
+                  (contains? data :payment_hints) (assoc :payment_hints (jsonb-value payment_hints)))]
+    (jdbc/execute-one!
+      db
+      (sql/format {:update :receipts
+                   :set set-map
+                   :where [:= :id receipt-id]
+                   :returning [:*]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn get-receipt
   [db receipt-id]
@@ -117,12 +271,39 @@
                  :where [:= :id receipt-id]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
+(defn delete-receipt!
+  "Hard-delete a receipt and return the deleted row.
+
+  Safety rules:
+  - Disallow deleting receipts that have already been posted / linked to an expense.
+
+  Returns the deleted receipt row (map) or nil if the receipt did not exist."
+  [db receipt-id]
+  (jdbc/with-transaction [tx db]
+    (when-let [receipt (get-receipt tx receipt-id)]
+      (when (= "posted" (:status receipt))
+        (throw (ex-info "Cannot delete a posted receipt"
+                 {:status 409
+                  :id receipt-id
+                  :current-status (:status receipt)})))
+      (when (:expense_id receipt)
+        (throw (ex-info "Cannot delete a receipt linked to an expense"
+                 {:status 409
+                  :id receipt-id
+                  :expense-id (:expense_id receipt)})))
+      (jdbc/execute-one!
+        tx
+        (sql/format {:delete-from :receipts
+                     :where [:= :id receipt-id]
+                     :returning [:*]})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
+
 (defn list-receipts
   "List receipts with optional status filter."
   [db {:keys [status limit offset order-dir] :or {limit 50 offset 0 order-dir :desc}}]
   (let [status-clause (cond
-                        (string? status) [:= :status status]
-                        (seq status) [:in :status status]
+                        (string? status) [:= :status (receipt-status-cast status)]
+                        (sequential? status) [:in :status (mapv receipt-status-cast status)]
                         :else nil)
         query (cond-> {:select [:*]
                        :from [:receipts]
@@ -132,16 +313,135 @@
                 status-clause (assoc :where status-clause))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
+(defn list-user-receipts
+  "List receipts visible to a specific user.
+
+  Visibility rules:
+  - receipts owned by `user-id`
+  - receipts with no `user_id` (unassigned/admin-uploaded)
+
+  Supports optional status filter."
+  [db user-id {:keys [status limit offset order-dir]
+               :or {limit 50 offset 0 order-dir :desc}}]
+  (when-not user-id
+    (throw (ex-info "user-id is required" {:status 400})))
+  (let [status-clause (cond
+                        (string? status) [:= :status (receipt-status-cast status)]
+                        (sequential? status) [:in :status (mapv receipt-status-cast status)]
+                        :else nil)
+        visibility-clause [:or
+                           [:= :user_id user-id]
+                           [:is :user_id nil]]
+        where-clause (if status-clause
+                       [:and visibility-clause status-clause]
+                       visibility-clause)
+        query {:select [:*]
+               :from [:receipts]
+               :where where-clause
+               :order-by [[:created_at order-dir]]
+               :limit limit
+               :offset offset}]
+    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn get-user-receipt
+  "Fetch a single receipt visible to `user-id`.
+
+  Visibility rules:
+  - receipts owned by `user-id`
+  - receipts with no `user_id` (unassigned/admin-uploaded)
+
+  Returns nil when not found or not visible."
+  [db user-id receipt-id]
+  (when-not user-id
+    (throw (ex-info "user-id is required" {:status 400})))
+  (let [receipt (get-receipt db receipt-id)]
+    (when (and receipt
+            (or (= user-id (:user_id receipt))
+              (nil? (:user_id receipt))))
+      receipt)))
+
+(defn approve-and-post-for-user!
+  "Create an expense from a receipt for a specific user and update status → posted.
+
+  Receipt must be visible to the user:
+  - owned by user-id, OR
+  - unassigned (user_id is NULL)
+
+  If the receipt is unassigned, it is claimed by setting :user_id to user-id.
+
+  review-data expects keys for expenses/create-expense! including :supplier_id,
+  :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
+  [db user-id receipt-id review-data]
+  (jdbc/with-transaction [tx db]
+    (let [receipt (get-user-receipt tx user-id receipt-id)]
+      (when-not receipt
+        ;; Use 404 to avoid leaking existence of other users' receipts.
+        (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
+      (when-not (approvable-status? (:status receipt))
+        (throw (ex-info "Receipt not in approvable status"
+                 {:status 409 :id receipt-id :current-status (:status receipt)})))
+
+      (let [expense (expenses/create-expense!
+                      tx
+                      (merge {:receipt_id receipt-id
+                              :user_id user-id
+                              :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                        review-data)
+                      (:items review-data))
+            exported-storage-key (finalize-local-receipt-file! receipt)
+            claim? (nil? (:user_id receipt))
+            extra (cond-> {:expense_id (:id expense)}
+                    claim? (assoc :user_id user-id)
+                    exported-storage-key (assoc :storage_key exported-storage-key))]
+        (update-status! tx receipt-id "posted" extra)
+        expense))))
+
+(defn approve-and-post-for-user-any!
+  "Create an expense from a receipt as a user, without enforcing receipt ownership.
+
+  Intended for user-role admins in the user UI who can process any receipt.
+
+  If the receipt is unassigned (`user_id` is NULL), it is claimed by setting :user_id to user-id.
+
+  review-data expects keys for expenses/create-expense! including :supplier_id,
+  :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
+  [db user-id receipt-id review-data]
+  (when-not user-id
+    (throw (ex-info "user-id is required" {:status 400})))
+  (jdbc/with-transaction [tx db]
+    (let [receipt (get-receipt tx receipt-id)]
+      (when-not receipt
+        (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
+      (when-not (approvable-status? (:status receipt))
+        (throw (ex-info "Receipt not in approvable status"
+                 {:status 409 :id receipt-id :current-status (:status receipt)})))
+
+      (let [expense (expenses/create-expense!
+                      tx
+                      (merge {:receipt_id receipt-id
+                              :user_id user-id
+                              :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                        review-data)
+                      (:items review-data))
+            exported-storage-key (finalize-local-receipt-file! receipt)
+            claim? (nil? (:user_id receipt))
+            extra (cond-> {:expense_id (:id expense)}
+                    claim? (assoc :user_id user-id)
+                    exported-storage-key (assoc :storage_key exported-storage-key))]
+        (update-status! tx receipt-id "posted" extra)
+        expense))))
+
 (defn list-pending-for-processing
   "Receipts that are ready to process (uploaded or failed-but-retry)."
   [db]
-  (jdbc/execute!
-    db
-    (sql/format {:select [:*]
-                 :from [:receipts]
-                 :where [:in :status ["uploaded" "parsing" "parsed" "extracting"]]
-                 :order-by [[:created_at :asc]]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  (let [statuses (mapv receipt-status-cast ["uploaded" "parsing" "parsed" "extracting"])]
+    (jdbc/execute!
+      db
+      (sql/format {:select [:*]
+                   :from [:receipts]
+                   :where [:in :status statuses]
+                   :order-by [[:created_at :asc]]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
 
 ;; ============================================================================
 ;; Approval / posting
@@ -164,7 +464,10 @@
                       tx
                       (merge {:receipt_id receipt-id
                               :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                             review-data)
-                      (:items review-data))]
-        (update-status! tx receipt-id "posted" {:expense_id (:id expense)})
+                        review-data)
+                      (:items review-data))
+            exported-storage-key (finalize-local-receipt-file! receipt)
+            extra (cond-> {:expense_id (:id expense)}
+                    exported-storage-key (assoc :storage_key exported-storage-key))]
+        (update-status! tx receipt-id "posted" extra)
         expense))))

@@ -43,6 +43,18 @@
      :view :expense-upload
      :controllers (controllers/make-simple-controller :page/init-expense-upload)}]
 
+   ;; Receipts inbox (review + approve)
+   ["/receipts"
+    {:name :receipts
+     :view :receipts-list
+     :controllers (controllers/make-simple-controller :page/init-receipts-list)}]
+
+   ["/receipts/:receipt-id"
+    {:name :receipt-detail
+     :view :receipt-detail
+     :parameters {:path {:receipt-id string?}}
+     :controllers (controllers/make-simple-controller :page/init-receipt-detail)}]
+
    ;; New expense (manual entry)
    ["/expenses/new"
     {:name :expense-new
@@ -60,6 +72,17 @@
     {:name :expense-settings
      :view :expense-settings
      :controllers (controllers/make-simple-controller :page/init-expense-settings)}]
+
+   ;; Reference data (read-only for now)
+   ["/suppliers"
+    {:name :expense-suppliers
+     :view :expense-suppliers
+     :controllers (controllers/make-simple-controller :page/init-expense-suppliers)}]
+
+   ["/payers"
+    {:name :expense-payers
+     :view :expense-payers
+     :controllers (controllers/make-simple-controller :page/init-expense-payers)}]
 
    ;; Expense detail (kept after literal routes to avoid catching static paths)
    ["/expenses/:expense-id"

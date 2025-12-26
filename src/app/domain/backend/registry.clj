@@ -38,10 +38,14 @@
     "/expenses"
     "/expenses/list"
     "/expenses/upload"
+    "/receipts"
+    "/receipts/:receipt-id"
     "/expenses/new"
     "/expenses/reports"
     "/expenses/settings"
-    "/expenses/:expense-id"]})
+    "/expenses/:expense-id"
+    "/suppliers"
+    "/payers"]})
 
 (def enabled-domains
   "Vector of enabled domain manifests.

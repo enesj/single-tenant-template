@@ -4,6 +4,7 @@
     [app.admin.frontend.utils.http :as admin-http]
     [app.domain.frontend.expenses.events.events-factory :as factory]
     [app.domain.frontend.expenses.events.entity-configs :as configs]
+    [app.domain.frontend.expenses.events.expenses :as expenses-events]
     [re-frame.core :as rf]))
 
 (def ^:private base-path [:admin :expenses :receipts])
@@ -59,6 +60,36 @@
 
 (rf/reg-event-db
   ::update-status-failure
+  (fn [db [_ _ error]]
+    (-> db
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (admin-http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  ::approve-receipt
+  (fn [{:keys [db]} [_ receipt-id form-data on-success]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (admin-http/admin-post
+                   {:uri (str "/admin/api/expenses/receipts/" receipt-id "/approve")
+                    :params form-data
+                    :on-success [::approve-receipt-success receipt-id on-success]
+                    :on-failure [::approve-receipt-failure receipt-id]})}))
+
+(rf/reg-event-fx
+  ::approve-receipt-success
+  (fn [{:keys [db]} [_ receipt-id on-success response]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) false)
+           (assoc-in (conj base-path :error) nil))
+     :dispatch-n [[:admin/refresh-entity :receipts (:receipt response)]
+                  [:admin/refresh-entity :expenses (:expense response)]
+                  [::load-detail receipt-id]]
+     :fx [(when on-success [:dispatch [::expenses-events/call-modal-callback on-success]])]}))
+
+(rf/reg-event-db
+  ::approve-receipt-failure
   (fn [db [_ _ error]]
     (-> db
       (assoc-in (conj base-path :action-loading?) false)

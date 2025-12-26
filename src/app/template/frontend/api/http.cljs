@@ -36,7 +36,7 @@
 (defn api-request
   "Build a standard API request configuration.
    Provides sensible defaults for format, response-format, and timeout."
-  [{:keys [method uri params format response-format on-success on-failure timeout headers]
+  [{:keys [method uri params body format response-format on-success on-failure timeout headers]
     :or {format json-request-format
          response-format json-response-format
          timeout 8000}
@@ -48,7 +48,8 @@
            :on-success on-success
            :on-failure on-failure
            :timeout timeout}
-    params (assoc :params params)
+    (some? params) (assoc :params params)
+    (some? body) (assoc :body body)
     headers (assoc :headers headers)))
 
 ;; Alias for backwards compatibility

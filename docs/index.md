@@ -10,6 +10,8 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 
 **New (2025-12-10):** Admin Settings UI expansion with comprehensive configuration management for view options, form fields, and table columns. See `docs/frontend/admin-settings.md` for the complete guide.
 
+**New (2025-12-25):** Expense Items sub-entity added with full CRUD support for managing individual expense line items. See `docs/expenses/index.md` for details.
+
 ## Quick Start
 
 1. **Dev setup** → `docs/operations/README.md#initial-setup`

@@ -15,8 +15,12 @@
 (def settings-endpoint (api/versioned-endpoint "/expenses/settings"))
 (def upload-endpoint (api/versioned-endpoint "/expenses/upload"))
 
+;; Receipts (user inbox)
+(def receipts-endpoint (api/versioned-endpoint "/expenses/receipts"))
+
 ;; Admin endpoints for acting on behalf of a user
 (def admin-expenses-endpoint "/admin/api/expenses/entries")
+(def admin-receipts-endpoint "/admin/api/expenses/receipts")
 (def admin-suppliers-endpoint "/admin/api/expenses/suppliers")
 (def admin-payers-endpoint "/admin/api/expenses/payers")
 (def admin-settings-endpoint "/admin/api/expenses/settings")

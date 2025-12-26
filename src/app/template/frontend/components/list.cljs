@@ -41,10 +41,13 @@
    - :render-add-form - fn that receives props and returns add form UI
    - :render-edit-form - fn that receives (item props) and returns edit form UI
    
+   Permissions:
+   - :allow-add? - When false, hides the add (+) button (useful for role-gating)
+   
    Modal callbacks:
    - :on-add-success - Called after successful add (closes modal, can trigger refresh)
    - :on-edit-success - Called after successful edit (closes modal, can trigger refresh)"
-  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page
+  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page allow-add?
            ;; New props for custom forms and modal support
            render-add-form render-edit-form form-display on-add-success on-edit-success]
     :as props}]
@@ -195,15 +198,16 @@
 
           ;; Modal handlers for custom forms
           handle-add-click (fn []
-                             (rf/dispatch [::crud-events/clear-error entity-kw])
-                             (rf/dispatch [::form-events/clear-form-errors entity-kw])
-                             (if (and use-modal-forms? has-custom-add-form?)
-                               ;; Open add modal
-                               (set-add-modal-open! true)
-                               ;; Fall back to inline behavior
-                               (do
-                                 (rf/dispatch [::config-events/set-show-add-form true])
-                                 (rf/dispatch [::config-events/set-editing nil]))))
+                             (when (not (false? allow-add?))
+                               (rf/dispatch [::crud-events/clear-error entity-kw])
+                               (rf/dispatch [::form-events/clear-form-errors entity-kw])
+                               (if (and use-modal-forms? has-custom-add-form?)
+                                 ;; Open add modal
+                                 (set-add-modal-open! true)
+                                 ;; Fall back to inline behavior
+                                 (do
+                                   (rf/dispatch [::config-events/set-show-add-form true])
+                                   (rf/dispatch [::config-events/set-editing nil])))))
 
           handle-add-modal-close (fn []
                                    (set-add-modal-open! false))
@@ -293,18 +297,12 @@
               {:visible? true
                :title (str "Add " title)
                :size :large
-               :on-close [::config-events/noop] ;; Use local handler instead
+               :on-close handle-add-modal-close
                :close-button-id (str "btn-close-add-modal-" (kw/ensure-name entity-name))}
-              ;; Override close via custom handler
-              ($ :div {:class "relative"}
-                ;; Close button override (since modal-wrapper dispatches events)
-                ($ :button {:class "ds-btn ds-btn-sm ds-btn-circle ds-btn-ghost absolute right-0 top-0"
-                            :on-click handle-add-modal-close}
-                  "✕")
-                (render-add-form {:entity-name entity-name
-                                  :entity-spec entity-spec
-                                  :on-success handle-add-modal-success
-                                  :on-cancel handle-add-modal-close}))))
+              (render-add-form {:entity-name entity-name
+                                :entity-spec entity-spec
+                                :on-success handle-add-modal-success
+                                :on-cancel handle-add-modal-close})))
 
           ;; Modal for custom edit form
           (when (and edit-modal-open? has-custom-edit-form? edit-modal-item)
@@ -312,17 +310,13 @@
               {:visible? true
                :title (str "Edit " title)
                :size :large
-               :on-close [::config-events/noop]
+               :on-close handle-edit-modal-close
                :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
-              ($ :div {:class "relative"}
-                ($ :button {:class "ds-btn ds-btn-sm ds-btn-circle ds-btn-ghost absolute right-0 top-0"
-                            :on-click handle-edit-modal-close}
-                  "✕")
-                (render-edit-form edit-modal-item
-                  {:entity-name entity-name
-                   :entity-spec entity-spec
-                   :on-success handle-edit-modal-success
-                   :on-cancel handle-edit-modal-close}))))
+              (render-edit-form edit-modal-item
+                {:entity-name entity-name
+                 :entity-spec entity-spec
+                 :on-success handle-edit-modal-success
+                 :on-cancel handle-edit-modal-close})))
 
           ;; Remove the old modal filter form rendering
           nil
@@ -388,10 +382,13 @@
                        :set-show-add-form! #(rf/dispatch [::config-events/set-show-add-form %])
                        :set-editing! #(rf/dispatch [::config-events/set-editing %])
                        :entity-name entity-name
-                       :show-add-button? (:show-add-button? merged-display-settings)
-                       ;; Pass custom add click handler for modal mode
-                       :on-add-click (when (and use-modal-forms? has-custom-add-form?)
-                                       handle-add-click)})
+                       :show-add-button? (and (not (false? allow-add?))
+                                           (:show-add-button? merged-display-settings))
+                       ;; Allow callers to provide a direct add click handler (e.g., navigate to upload),
+                       ;; otherwise fall back to the modal-mode handler when using custom add forms.
+                       :on-add-click (or (:on-add-click props)
+                                       (when (and use-modal-forms? has-custom-add-form?)
+                                         handle-add-click))}) 
 
                     ($ :div {:class "ds-divider"})                    ;; Divider after header
                     ($ table

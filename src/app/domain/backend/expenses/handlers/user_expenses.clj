@@ -231,22 +231,54 @@
 ;; Reference Data Handlers (Suppliers, Payers)
 ;; ============================================================================
 
+(defn- normalize-role
+  [role]
+  (cond
+    (keyword? role) (name role)
+    (string? role) role
+    :else nil))
+
+(defn- get-user-role
+  [request]
+  (normalize-role
+    (or (get-in request [:session :auth-session :user :role])
+      (get-in request [:session :user :role]))))
+
+(def ^:private reference-data-read-roles
+  #{"viewer" "member" "admin" "owner"})
+
+(def ^:private reference-data-write-roles
+  #{"member" "admin" "owner"})
+
+(defn- forbidden-response
+  ([] (forbidden-response "Forbidden"))
+  ([message]
+   (json-response {:error message} 403)))
+
+(defn- ensure-role
+  [request allowed-roles message]
+  (let [role (get-user-role request)]
+    (when-not (contains? allowed-roles role)
+      (forbidden-response (or message "Forbidden")))))
+
 (defn list-suppliers-handler
   "Handler factory for listing suppliers available to users."
   [db]
   (fn [request]
     (if-let [_user-id (get-user-id request)]
-      (try
-        (let [params (:query-params request)
-              limit (or (some-> (:limit params) parse-long) 100)
-              offset (or (some-> (:offset params) parse-long) 0)
-              ;; Use the suppliers service
-              suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
-              suppliers (suppliers-svc db {:limit limit :offset offset})]
-          (json-response {:data suppliers}))
-        (catch Exception e
-          (log/error e "Error listing suppliers")
-          (json-response {:error "Failed to list suppliers"} 500)))
+      (if-let [forbidden (ensure-role request reference-data-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                limit (or (some-> (:limit params) parse-long) 100)
+                offset (or (some-> (:offset params) parse-long) 0)
+                ;; Use the suppliers service
+                suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
+                suppliers (suppliers-svc db {:limit limit :offset offset})]
+            (json-response {:data suppliers}))
+          (catch Exception e
+            (log/error e "Error listing suppliers")
+            (json-response {:error "Failed to list suppliers"} 500))))
       (unauthorized-response))))
 
 (defn list-payers-handler
@@ -254,15 +286,178 @@
   [db]
   (fn [request]
     (if-let [_user-id (get-user-id request)]
-      (try
-        (let [params (:query-params request)
-              limit (or (some-> (:limit params) parse-long) 100)
-              offset (or (some-> (:offset params) parse-long) 0)
-              ;; Use the payers service
-              payers-svc (requiring-resolve 'app.domain.backend.expenses.services.payers/list-payers)
-              payers (payers-svc db {:limit limit :offset offset})]
-          (json-response {:data payers}))
-        (catch Exception e
-          (log/error e "Error listing payers")
-          (json-response {:error "Failed to list payers"} 500)))
+      (if-let [forbidden (ensure-role request reference-data-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                limit (or (some-> (:limit params) parse-long) 100)
+                offset (or (some-> (:offset params) parse-long) 0)
+                ;; Use the payers service
+                payers-svc (requiring-resolve 'app.domain.backend.expenses.services.payers/list-payers)
+                payers (payers-svc db {:limit limit :offset offset})]
+            (json-response {:data payers}))
+          (catch Exception e
+            (log/error e "Error listing payers")
+            (json-response {:error "Failed to list payers"} 500))))
+      (unauthorized-response))))
+
+(defn- read-json-body
+  [request]
+  (or (:body-params request)
+    (json/parse-string (slurp (:body request)) true)))
+
+(defn create-supplier-handler
+  "Handler factory for creating a supplier (shared catalog).
+
+  Allowed roles: member/admin."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (if-let [forbidden (ensure-role request reference-data-write-roles "Only members and admins can modify suppliers")]
+        forbidden
+        (try
+          (let [body (read-json-body request)
+                supplier-data (select-keys body [:display_name :address :tax_id])
+                create-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/create-supplier!)
+                supplier (create-supplier! db supplier-data)]
+            (json-response {:data supplier} 201))
+          (catch clojure.lang.ExceptionInfo e
+            (log/warn "Validation error creating supplier" {:error (ex-message e) :data (ex-data e)})
+            (json-response {:error (ex-message e)} 400))
+          (catch Exception e
+            (log/error e "Error creating supplier")
+            (json-response {:error "Failed to create supplier"} 500))))
+      (unauthorized-response))))
+
+(defn update-supplier-handler
+  "Handler factory for updating a supplier (shared catalog).
+
+  Allowed roles: member/admin."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (if-let [forbidden (ensure-role request reference-data-write-roles "Only members and admins can modify suppliers")]
+        forbidden
+        (let [supplier-id (or (try-parse-uuid (get-in request [:path-params :id]))
+                            (try-parse-uuid (get-in request [:parameters :path :id])))]
+          (if supplier-id
+            (try
+              (let [body (read-json-body request)
+                    updates (select-keys body [:display_name :address :tax_id])
+                    update-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/update-supplier!)
+                    supplier (update-supplier! db supplier-id updates)]
+                (if supplier
+                  (json-response {:data supplier})
+                  (not-found-response "Supplier not found")))
+              (catch clojure.lang.ExceptionInfo e
+                (log/warn "Validation error updating supplier" {:error (ex-message e) :data (ex-data e)})
+                (json-response {:error (ex-message e)} 400))
+              (catch Exception e
+                (log/error e "Error updating supplier" {:supplier-id supplier-id})
+                (json-response {:error "Failed to update supplier"} 500)))
+            (json-response {:error "Invalid supplier ID"} 400))))
+      (unauthorized-response))))
+
+(defn delete-supplier-handler
+  "Handler factory for deleting a supplier (shared catalog).
+
+  Allowed roles: member/admin."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (if-let [forbidden (ensure-role request reference-data-write-roles "Only members and admins can modify suppliers")]
+        forbidden
+        (let [supplier-id (or (try-parse-uuid (get-in request [:path-params :id]))
+                            (try-parse-uuid (get-in request [:parameters :path :id])))]
+          (if supplier-id
+            (try
+              (let [delete-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/delete-supplier!)
+                    deleted? (boolean (delete-supplier! db supplier-id))]
+                (if deleted?
+                  (json-response {:success true})
+                  (not-found-response "Supplier not found")))
+              (catch Exception e
+                (log/error e "Error deleting supplier" {:supplier-id supplier-id})
+                (json-response {:error "Failed to delete supplier"} 500)))
+            (json-response {:error "Invalid supplier ID"} 400))))
+      (unauthorized-response))))
+
+(defn create-payer-handler
+  "Handler factory for creating a payer (shared catalog).
+
+  Allowed roles: member/admin."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (if-let [forbidden (ensure-role request reference-data-write-roles "Only members and admins can modify payers")]
+        forbidden
+        (try
+          (let [body (read-json-body request)
+                payer-data (-> (select-keys body [:label :type :is_default])
+                             (cond-> (contains? body :is_default)
+                               (update :is_default boolean)))
+                create-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/create-payer!)
+                payer (create-payer! db payer-data)]
+            (json-response {:data payer} 201))
+          (catch clojure.lang.ExceptionInfo e
+            (log/warn "Validation error creating payer" {:error (ex-message e) :data (ex-data e)})
+            (json-response {:error (ex-message e)} 400))
+          (catch Exception e
+            (log/error e "Error creating payer")
+            (json-response {:error "Failed to create payer"} 500))))
+      (unauthorized-response))))
+
+(defn update-payer-handler
+  "Handler factory for updating a payer (shared catalog).
+
+  Allowed roles: member/admin."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (if-let [forbidden (ensure-role request reference-data-write-roles "Only members and admins can modify payers")]
+        forbidden
+        (let [payer-id (or (try-parse-uuid (get-in request [:path-params :id]))
+                         (try-parse-uuid (get-in request [:parameters :path :id])))]
+          (if payer-id
+            (try
+              (let [body (read-json-body request)
+                    updates (-> (select-keys body [:label :type :is_default])
+                              (cond-> (contains? body :is_default)
+                                (update :is_default boolean)))
+                    update-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/update-payer!)
+                    payer (update-payer! db payer-id updates)]
+                (if payer
+                  (json-response {:data payer})
+                  (not-found-response "Payer not found")))
+              (catch clojure.lang.ExceptionInfo e
+                (log/warn "Validation error updating payer" {:error (ex-message e) :data (ex-data e)})
+                (json-response {:error (ex-message e)} 400))
+              (catch Exception e
+                (log/error e "Error updating payer" {:payer-id payer-id})
+                (json-response {:error "Failed to update payer"} 500)))
+            (json-response {:error "Invalid payer ID"} 400))))
+      (unauthorized-response))))
+
+(defn delete-payer-handler
+  "Handler factory for deleting a payer (shared catalog).
+
+  Allowed roles: member/admin."
+  [db]
+  (fn [request]
+    (if-let [_user-id (get-user-id request)]
+      (if-let [forbidden (ensure-role request reference-data-write-roles "Only members and admins can modify payers")]
+        forbidden
+        (let [payer-id (or (try-parse-uuid (get-in request [:path-params :id]))
+                         (try-parse-uuid (get-in request [:parameters :path :id])))]
+          (if payer-id
+            (try
+              (let [delete-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/delete-payer!)
+                    deleted? (boolean (delete-payer! db payer-id))]
+                (if deleted?
+                  (json-response {:success true})
+                  (not-found-response "Payer not found")))
+              (catch Exception e
+                (log/error e "Error deleting payer" {:payer-id payer-id})
+                (json-response {:error "Failed to delete payer"} 500)))
+            (json-response {:error "Invalid payer ID"} 400))))
       (unauthorized-response))))

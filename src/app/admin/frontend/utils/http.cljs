@@ -31,17 +31,25 @@
    - method: HTTP method (:get, :post, :put, :delete, :patch)
    - uri: Request URI (should start with /admin/api/)
    - params: Request parameters (for POST/PUT body or GET query params)
+   - body: Raw request body (e.g. FormData for multipart uploads)
+   - format: cljs-ajax request format (defaults to JSON)
+   - response-format: cljs-ajax response format (defaults to JSON)
    - headers: Additional headers (merged with defaults)
    - timeout: Custom timeout in milliseconds (default: 10000ms)
    - on-success: Success event vector
    - on-failure: Failure event vector
    - token: Override token (otherwise fetched automatically)"
-  [{:keys [method uri params headers timeout on-success on-failure token]
+  [{:keys [method uri params body format response-format headers timeout on-success on-failure token]
     :or {headers {}
          timeout default-timeout}}]
   (let [admin-token (or token
                       (.getItem js/localStorage "admin-token"))
-        final-headers (cond-> (merge default-headers headers)
+        format (or format (ajax/json-request-format))
+        response-format (or response-format (ajax/json-response-format {:keywords? true}))
+        use-default-headers? (and (nil? body)
+                               (not (false? (:content-type format)))
+                               (not (contains? headers "Content-Type")))
+        final-headers (cond-> (merge (when use-default-headers? default-headers) headers)
                         admin-token (assoc "x-admin-token" admin-token))]
 
     (when-not admin-token
@@ -50,12 +58,13 @@
     (cond-> {:method method
              :uri uri
              :headers final-headers
-             :format (ajax/json-request-format)
-             :response-format (ajax/json-response-format {:keywords? true})
+             :format format
+             :response-format response-format
              :timeout timeout
              :on-success on-success
              :on-failure on-failure}
-      params (assoc :params params))))
+      (some? params) (assoc :params params)
+      (some? body) (assoc :body body))))
 
 ;; ============================================================================
 ;; HTTP Method Helpers

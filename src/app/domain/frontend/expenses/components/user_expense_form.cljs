@@ -139,6 +139,96 @@
          (catch :default _
            (when fallback? (current-datetime-local))))))))
 
+(defn normalize-receipt-data
+  "Normalize extracted receipt data into form initial values."
+  [receipt]
+  (let [extract0 (or (:raw-extract-json receipt)
+                   (:raw_extract_json receipt)
+                   (:receipts/raw-extract-json receipt)
+                   (:receipts/raw_extract_json receipt))
+        extract (cond
+                  (map? extract0) extract0
+                  (nil? extract0) {}
+                  (string? extract0) (try
+                                       (js->clj (js/JSON.parse extract0) :keywordize-keys true)
+                                       (catch :default _ {}))
+                  :else (js->clj extract0 :keywordize-keys true))
+
+        totals (let [t (or (:totals extract)
+                         (:totals_extract extract)
+                         (:totals-extract extract)
+                         {})]
+                 (if (map? t) t {}))
+
+        items (or (:items extract)
+                (:line_items extract)
+                (:line-items extract)
+                (:receipt_items extract)
+                (:receipt-items extract))
+
+        purchased-at (or (:purchased_at extract)
+                       (:purchased-at extract)
+                       (:date extract)
+                       (:purchased_at_guess receipt)
+                       (:purchased-at-guess receipt)
+                       (:receipts/purchased_at_guess receipt)
+                       (:receipts/purchased-at-guess receipt))
+
+        total-amount0 (or (:total_amount totals)
+                        (:total-amount totals)
+                        (:total totals)
+                        (:total_amount extract)
+                        (:total-amount extract)
+                        (:total_amount_guess receipt)
+                        (:total-amount-guess receipt)
+                        (:receipts/total_amount_guess receipt)
+                        (:receipts/total-amount-guess receipt))
+        total-amount (safe-parse-number total-amount0)
+
+        currency0 (or (:currency totals)
+                    (:currency extract)
+                    (:currency_guess receipt)
+                    (:currency-guess receipt)
+                    (:receipts/currency_guess receipt)
+                    (:receipts/currency-guess receipt)
+                    "BAM")
+        currency (cond
+                   (keyword? currency0) (name currency0)
+                   (string? currency0) currency0
+                   (some? currency0) (str currency0)
+                   :else "BAM")
+
+        normalize-item (fn [item]
+                         (let [id (random-uuid)
+                               raw-label (or (:raw_label item)
+                                           (:raw-label item)
+                                           (:label item)
+                                           (:name item))
+                               qty (safe-parse-number (:qty item))
+                               unit-price (safe-parse-number (or (:unit_price item) (:unit-price item)))
+                               line-total (safe-parse-number (or (:line_total item) (:line-total item)))]
+                           {:id (str id)
+                            :raw_label (or (some-> raw-label str) "")
+                            :qty (if (number? qty) (str qty) "")
+                            :unit_price (if (number? unit-price) (format-decimal unit-price) "")
+                            :line_total (if (number? line-total) (format-decimal line-total) "")
+                            :line_total_auto? true}))
+
+        filename (or (:original-filename receipt)
+                   (:original_filename receipt)
+                   (:storage-key receipt)
+                   (:storage_key receipt)
+                   "(unknown)")]
+    {:supplier_id nil
+     :payer_id nil
+     :purchased_at (datetime-local purchased-at true)
+     :total_amount (if (number? total-amount) (format-decimal total-amount) "")
+     :currency currency
+     :notes (str "Extracted from receipt: " filename)
+     :items (if (seq items)
+              (mapv normalize-item items)
+              [(new-line-item)])}))
+
 (defn- prepare-line-items
   "Prepare/validate raw line items from the UI.
 
@@ -321,14 +411,23 @@
 ;; =============================================================================
 
 (defui user-expense-add-form-modal
-  [{:keys [on-success on-cancel]}]
-  ($ user-expense-form-body
-    {:mode :create
-     :initial-data {:purchased_at (current-datetime-local)
-                    :items [(new-line-item)]}
-     :on-cancel on-cancel
-     :on-submit (fn [form-data]
-                  (rf/dispatch [:user-expenses/create-expense-modal form-data on-success]))}))
+  [{:keys [receipt-id receipt on-success on-cancel]}]
+  (let [receipt-initial-data (use-memo
+                               #(when receipt (normalize-receipt-data receipt))
+                               [receipt])
+        merged-initial-data (use-memo
+                              #(merge {:purchased_at (current-datetime-local)
+                                       :items [(new-line-item)]}
+                                 receipt-initial-data)
+                              [receipt-initial-data])]
+    ($ user-expense-form-body
+      {:mode :create
+       :initial-data merged-initial-data
+       :on-cancel on-cancel
+       :on-submit (fn [form-data]
+                    (if receipt-id
+                      (rf/dispatch [:user-expenses/approve-receipt receipt-id form-data on-success])
+                      (rf/dispatch [:user-expenses/create-expense-modal form-data on-success])))})))
 
 (defui user-expense-edit-form-modal
   "Edit user expense modal using master-detail-form wrapper for detail orchestration."

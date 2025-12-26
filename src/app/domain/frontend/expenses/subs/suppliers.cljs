@@ -2,6 +2,7 @@
   (:require [re-frame.core :as rf]))
 
 (def ^:private base-path [:admin :expenses :suppliers])
+(def ^:private inline-create-path (conj base-path :inline-create))
 
 (rf/reg-sub
   :expenses/suppliers
@@ -17,6 +18,21 @@
     :expenses/suppliers-error
     (fn [db _]
       (get-in db (conj base-path :error))))
+
+(rf/reg-sub
+  :expenses/supplier-inline-create-loading?
+  (fn [db _]
+    (true? (get-in db (conj inline-create-path :loading?)))))
+
+(rf/reg-sub
+  :expenses/supplier-inline-create-error
+  (fn [db _]
+    (get-in db (conj inline-create-path :error))))
+
+(rf/reg-sub
+  :expenses/supplier-inline-create-last-created
+  (fn [db _]
+    (get-in db (conj inline-create-path :last-created))))
 
 (rf/reg-sub
   :expenses/supplier

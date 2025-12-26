@@ -110,6 +110,47 @@
   (fn [db _]
     (get-in db [:user-expenses :receipts :items])))
 
+;; Receipts inbox
+(rf/reg-sub
+  :user-expenses/receipts
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :items])))
+
+(rf/reg-sub
+  :user-expenses/receipts-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :loading?])))
+
+(rf/reg-sub
+  :user-expenses/receipts-error
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :error])))
+
+(rf/reg-sub
+  :user-expenses/receipt
+  (fn [db [_ receipt-id]]
+    (get-in db [:user-expenses :receipts :by-id receipt-id])))
+
+(rf/reg-sub
+  :user-expenses/receipt-detail-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :detail-loading?])))
+
+(rf/reg-sub
+  :user-expenses/receipt-action-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :action-loading?])))
+
+(rf/reg-sub
+  :user-expenses/receipt-detail-modal-open?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :receipts :detail-modal :open?]))))
+
+(rf/reg-sub
+  :user-expenses/receipt-detail-modal-id
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :detail-modal :entity-id])))
+
 ;; Settings
 (rf/reg-sub
   :user-expenses/settings

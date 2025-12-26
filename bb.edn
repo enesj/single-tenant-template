@@ -295,6 +295,10 @@
                    (shell "bash" "-c" (str "rm -rf " (.getPath sub)))))))
            (println "✅ Selected temporary folders cleared."))}
 
+  receipt-ocr-worker
+  {:doc "Process pending receipts through OCR (one-shot by default). Usage: bb receipt-ocr-worker [dev|test] [--max-receipts N] [--loop]",
+   :task (apply shell "scripts/bb/expenses/receipt_ocr_worker.sh" *command-line-args*)},
+
   backup-db
   {:doc "Create a backup of dev or test database. Usage: bb backup-db --dev or bb backup-db --test",
    :task (let [args *command-line-args*

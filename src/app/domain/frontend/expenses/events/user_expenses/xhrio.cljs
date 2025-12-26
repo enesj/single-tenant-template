@@ -7,16 +7,22 @@
 
 (defn admin-context?
   [db]
-  (some? (admin-core/admin-token db)))
+  (admin-core/admin-context? db))
 
 (defn xhrio
-  "Build an :http-xhrio config that uses admin endpoints when an admin token exists."
-  [db {:keys [method uri admin-uri params on-success on-failure]}]
-  (let [req {:method method
-             :uri uri
-             :params params
-             :on-success on-success
-             :on-failure on-failure}]
+  "Build an :http-xhrio config that uses admin endpoints when the runtime indicates
+  an admin UI context (typically /admin routes)."
+  [db {:keys [method uri admin-uri params body format response-format headers timeout on-success on-failure]}]
+  (let [req (cond-> {:method method
+                     :uri uri
+                     :on-success on-success
+                     :on-failure on-failure}
+              (some? params) (assoc :params params)
+              (some? body) (assoc :body body)
+              format (assoc :format format)
+              response-format (assoc :response-format response-format)
+              headers (assoc :headers headers)
+              timeout (assoc :timeout timeout))]
     (if (admin-context? db)
       (admin-http/admin-request (assoc req :uri admin-uri))
       (http/api-request req))))
