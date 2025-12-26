@@ -269,9 +269,9 @@
 
   (testing "complex workflow with multiple operations"
 
-    (let [entities (helpers/generate-test-entities :properties 3)
+    (let [entities (helpers/generate-test-entities :suppliers 3)
           normalized (normalize/normalize-entities entities)
-          new-entity (helpers/generate-test-entity :properties {:name "Added Entity"})
+          new-entity (helpers/generate-test-entity :suppliers {:name "Added Entity"})
           with-added (normalize/add-entity normalized new-entity)]
 
       (is (= 4 (count (:data with-added))) "Should have 4 entities after add")
@@ -303,7 +303,7 @@
 
   (testing "handles large dataset efficiently"
 
-    (let [large-dataset (helpers/generate-test-entities :properties 1000)
+    (let [large-dataset (helpers/generate-test-entities :suppliers 1000)
           now (fn []
                 (if (exists? js/performance)
                   (.now js/performance)

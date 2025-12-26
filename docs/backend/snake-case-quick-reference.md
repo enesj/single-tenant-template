@@ -6,7 +6,7 @@
 
 ```bash
 # Find snake_case violations in frontend
-rg --type cljs ":[a-z_]+_[a-z_]+" src/ | grep -v "_v2\|/full_name\|/subscription_tier"
+rg --type cljs ":[a-z_]+_[a-z_]+" src/ | grep -v "/full_name"
 
 # Find snake_case violations in backend return maps
 rg --type clj ":[a-z_]+_[a-z_]+" src/app/{template,admin}/backend/services/ | grep -v "sql\|jdbc\|db"
@@ -46,7 +46,7 @@ rg --type cljs ":.*_.*overview\|:.*_.*status\|:.*_.*data" src/
 
 ;; Keep database columns unchanged
 (:users/full_name user)     → (:users/full_name user)     ; No change
-(:transactions_v2/id tx)    → (:transactions_v2/id tx)    ; No change
+(:login_events/created_at e) → (:login_events/created_at e) ; No change
 ```
 
 ## ✅ Testing Commands

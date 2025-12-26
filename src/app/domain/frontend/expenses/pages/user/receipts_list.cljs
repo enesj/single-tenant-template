@@ -6,10 +6,13 @@
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-viewer]]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
     [app.template.frontend.components.action-components :refer [view-details-icon]]
+    [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.dropdown :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -35,9 +38,59 @@
       ($ :div {:class "text-xs text-base-content/60"} label)
       ($ :div {:class "text-sm font-medium break-words"} (or (some-> value str) "—")))))
 
+(defn- review-required-issues
+  "Return a vector of human-readable reasons why a receipt is in review_required.
+
+  Mirrors backend logic in `receipt-ocr/review-required?`, plus surfaces invalid
+  extraction shape from :raw-extract-json when available."
+  [receipt]
+  (let [status (:status receipt)
+        raw-extract (:raw-extract-json receipt)
+        valid-shape? (:valid-shape? raw-extract)
+        items (get-in raw-extract [:extraction :items])
+        items-count (when (sequential? items) (count items))
+        missing-supplier? (str/blank? (:supplier-guess receipt))
+        missing-total? (nil? (:total-amount-guess receipt))
+        missing-currency? (str/blank? (:currency-guess receipt))
+        missing-items? (or (nil? items-count) (zero? (long items-count)))]
+    (when (= "review_required" status)
+      (cond-> []
+        (false? valid-shape?) (conj "OCR extraction response did not match the expected format.")
+        missing-supplier? (conj "Missing supplier guess.")
+        missing-total? (conj "Missing total amount guess.")
+        missing-currency? (conj "Missing currency guess.")
+        missing-items? (conj "No line items were extracted.")))))
+
+(defui receipt-problem-alert
+  [{:keys [receipt]}]
+  (let [status (:status receipt)
+        review-issues (review-required-issues receipt)
+        error-message (:error-message receipt)
+        error-details (:error-details receipt)
+        failed? (= "failed" status)
+        show? (or (seq review-issues) (some? error-message) (some? error-details))
+        details-summary (when (map? error-details)
+                          (select-keys error-details [:type :status :message :error :body-snippet]))]
+    (when show?
+      ($ :div {:class (str "ds-alert " (if failed? "ds-alert-error" "ds-alert-warning"))}
+        ($ :div {:class "space-y-1"}
+          ($ :div {:class "font-semibold"}
+            (if failed?
+              "Receipt processing failed"
+              "Receipt needs review"))
+          (when (some? error-message)
+            ($ :div {:class "text-sm"} (str error-message)))
+          (when (seq review-issues)
+            ($ :ul {:class "list-disc pl-5 text-sm"}
+              (for [issue review-issues]
+                ($ :li {:key issue} issue))))
+          (when (some? error-details)
+            ($ :pre {:class "text-xs opacity-80 whitespace-pre-wrap break-words"}
+              (pr-str (or (not-empty details-summary) error-details)))))))))
+
 (defui receipt-detail-body
   [{:keys [receipt-id]}]
-  (let [receipt (use-subscribe (when receipt-id [:user-expenses/receipt receipt-id]))
+  (let [receipt (use-subscribe [:user-expenses/receipt receipt-id])
         loading? (boolean (use-subscribe [:user-expenses/receipt-detail-loading?]))
         action-loading? (boolean (use-subscribe [:user-expenses/receipt-action-loading?]))
         error (use-subscribe [:user-expenses/receipts-error])
@@ -71,6 +124,8 @@
               status (:status receipt)
               approve-allowed? (contains? #{"extracted" "review_required"} status)]
           ($ :div {:class "space-y-4"}
+            ($ receipt-problem-alert {:receipt receipt})
+
             ($ :div {:class "ds-tabs ds-tabs-boxed"}
               (tabs/tab-link {:id (str "tab-receipt-details-" rid-str)
                               :label "Details"
@@ -131,7 +186,7 @@
   []
   (let [open? (use-subscribe [:user-expenses/receipt-detail-modal-open?])
         receipt-id (use-subscribe [:user-expenses/receipt-detail-modal-id])
-        receipt (use-subscribe (when receipt-id [:user-expenses/receipt receipt-id]))
+        receipt (use-subscribe [:user-expenses/receipt receipt-id])
         loading? (boolean (use-subscribe [:user-expenses/receipt-detail-loading?]))
         subtitle (or (:original-filename receipt)
                    (when receipt-id (str "Receipt " receipt-id))
@@ -150,22 +205,65 @@
         ($ :div {:class "flex-1 overflow-y-auto p-4"}
           ($ receipt-detail-body {:receipt-id receipt-id}))))))
 
+(defn- receipt-ocr-allowed?
+  "Check if OCR action should be shown for a receipt.
+  Returns true for statuses where OCR makes sense."
+  [receipt]
+  (let [status (or (:status receipt) (:receipts/status receipt))]
+    (contains? #{"uploaded" "failed" "review_required" "extracted" "parsing" "parsed" "extracting"}
+      status)))
+
 (defn- receipt-actions
   [receipt]
-  (let [receipt-id (id-utils/extract-entity-id receipt)]
+  (let [receipt-id (id-utils/extract-entity-id receipt)
+        ocr-allowed? (receipt-ocr-allowed? receipt)
+        action-groups (cond-> [{:group-title "View"
+                                :items [{:id "view-details"
+                                         :icon ($ view-details-icon)
+                                         :label "View Details"
+                                         :on-click (fn [e]
+                                                     (.stopPropagation e)
+                                                     (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id]))}]}]
+                        ;; Add OCR group when allowed
+                        ocr-allowed?
+                        (conj {:group-title "OCR"
+                               :items [{:id "parse-ocr"
+                                        :icon "🔍"
+                                        :label "Parse (OCR)"
+                                        :tooltip "Run OCR to extract receipt data. Status will update asynchronously."
+                                        :on-click (fn [e]
+                                                    (.stopPropagation e)
+                                                    (rf/dispatch [:user-expenses/ocr-receipt receipt-id]))}]}))]
     ($ dropdown/action-dropdown
       {:entity-id receipt-id
-       :actions [{:group-title "View"
-                  :items [{:id "view-details"
-                           :icon ($ view-details-icon)
-                           :label "View Details"
-                           :on-click (fn [e]
-                                       (.stopPropagation e)
-                                       (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id]))}]}]
+       :actions action-groups
        :position :portal})))
+
+(defui batch-parse-button
+  "Batch parse button shown when receipts are selected."
+  []
+  (let [selected-ids (use-subscribe [::list-subs/selected-ids :receipts])
+        action-loading? (boolean (use-subscribe [:user-expenses/receipt-action-loading?]))
+        has-selection? (and (seq selected-ids) (pos? (count selected-ids)))]
+    (when has-selection?
+      ($ button
+        {:id "btn-batch-parse-user-receipts"
+         :btn-type :primary
+         :class "ds-btn-sm"
+         :disabled action-loading?
+         :on-click (fn [e]
+                     (.stopPropagation e)
+                     (rf/dispatch [:user-expenses/ocr-selected selected-ids]))}
+        (if action-loading?
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+          "🔍 Batch Parse (OCR)")
+        (when-not action-loading?
+          ($ :span {:class "ds-badge ds-badge-sm ml-1"}
+            (count selected-ids)))))))
 
 (defui receipts-list-page []
   (let [title "Receipts"
+        error (use-subscribe [:user-expenses/receipts-error])
         display-settings {:show-select? true
                           :show-edit? false
                           :show-delete? false
@@ -181,6 +279,13 @@
       ($ :div {:class "p-6 min-h-screen bg-base-100"}
         ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
           ($ :div {:class "ds-card-body p-0"}
+            (when error
+              ($ :div {:class "px-4 pt-4"}
+                ($ :div {:class "ds-alert ds-alert-error"}
+                  ($ :span (str error)))))
+            ;; Batch parse button above the list
+            ($ :div {:class "flex justify-end px-4 pt-4"}
+              ($ batch-parse-button))
             ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
               ($ list-view
                 {:entity-name :receipts

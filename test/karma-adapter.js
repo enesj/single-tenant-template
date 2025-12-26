@@ -51,7 +51,7 @@
           window.shadow.test.karma.start();
         } else {
           safeLog('error', 'shadow.test.karma.start not found!');
-          console.log('Available shadow properties:', window.shadow);
+          console.log('Available shadow keys:', window.shadow);
           console.log('shadow.test exists:', !!(window.shadow && window.shadow.test));
           console.log('shadow.test.karma exists:', !!(window.shadow && window.shadow.test && window.shadow.test.karma));
         }

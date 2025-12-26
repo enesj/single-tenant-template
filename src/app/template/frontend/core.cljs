@@ -12,9 +12,8 @@
     ;; Domain pages via aggregator (not registry - to avoid circular deps)
     [app.domain.frontend.pages :as domain-pages]
     [app.template.frontend.routes :as routes]
-    [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.confirm-dialog :refer [confirm-dialog]]
-    [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
+    [app.template.frontend.components.layout :refer [user-layout]]
     [app.template.frontend.components.change-password :refer [change-password-page]]
     [app.template.frontend.pages.login :refer [login-page]]
     [app.template.frontend.pages.register :refer [registration-page]]
@@ -112,7 +111,7 @@
 
 (defui current-page []
   (let [current-route (use-subscribe [:current-route])
-;; Domain pages map - loaded from aggregator
+        ;; Domain pages map - loaded from aggregator
         all-domain-pages domain-pages/all-pages
         effective-route (cond
                           (map? current-route)
@@ -141,13 +140,52 @@
 
                               :else
                               nil)))
-        entity-name (get-in effective-route [:parameters :path :entity-name])
         ;; Reitit `match` may expose `:name` and `:view` at top-level or under `:data`
         route-name (or (:name (:data effective-route)) (:name effective-route))
         route-view (or (:view (:data effective-route)) (:view effective-route))
         is-admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
         ;; Get view keyword for domain page lookup
-        view-key (get-in effective-route [:data :view])]
+        view-key (get-in effective-route [:data :view])
+        auth-view? (contains? #{:login
+                                :register
+                                :verify-email
+                                :verify-email-success
+                                :email-verified
+                                :forgot-password
+                                :reset-password
+                                :waiting-room}
+                     view-key)
+        page-el (if is-admin-route?
+                  ;; For admin routes, render the view when it's a function; otherwise fallback by route-name
+                  (if (fn? route-view)
+                    ($ route-view)
+                    (case route-name
+                      :admin-login ($ admin-login/admin-login-page)
+                      :admin-users ($ admin-users/admin-users-page)
+                      :admin-audit ($ admin-audit/admin-audit-page)
+                      nil))
+                  ;; For regular routes, check domain pages first, then template pages
+                  (if-let [domain-page-component (get all-domain-pages view-key)]
+                    ;; Domain page found - render it
+                    ($ domain-page-component)
+                    ;; Template pages (core infrastructure)
+                    (case view-key
+                      :home ($ :div {:class "ds-container p-4"} ($ home-page))
+                      :about ($ :div {:class "ds-container p-4"} ($ about-page))
+                      :entities ($ :div {:class "ds-container p-4"} ($ entities-page))
+                      :entity-detail ($ :div {:class "ds-container p-4"} ($ entities-page))
+                      :login ($ login-page)
+                      :register ($ registration-page)
+                      :verify-email-success ($ verify-email-success-page)
+                      :email-verified ($ email-verified-page)
+                      :logout ($ logout-page)
+                      :forgot-password ($ forgot-password-page)
+                      :reset-password ($ reset-password-page)
+                      :change-password ($ change-password-page)
+                      :subscription ($ :div {:class "ds-container p-4"} ($ subscription-page))
+                      :waiting-room ($ waiting-room-page)
+                      ;; If no matching route, default to home page instead of showing 'not found'
+                      ($ :div {:class "ds-container p-4"} ($ home-page)))))]
 
     (when ^boolean goog.DEBUG
       (log/info "current-page route"
@@ -156,86 +194,10 @@
          :raw-name (or (get-in effective-route [:data :name]) (:name effective-route))
          :path-params (get-in effective-route [:parameters :path])}))
 
-    ;; Effect to initialize entity data when navigating directly to an entity page
-    ;; NOTE: Entity initialization is now handled by route controllers in routes.cljs
-    ;; This effect was causing duplicate dispatches and nil entity-name issues
-    ;; Removed to prevent conflicts with the route controller system
-
-    ($ :div
-      ;; Only show the main navigation bar for non-admin routes
-      (when-not is-admin-route?
-        ($ :nav {:class "bg-gray-800 text-white p-4"}
-          ($ :div {:class "container flex justify-between items-center"}
-            ($ :div {:class "flex space-x-4"}
-              ($ :a {:id "nav-link-home"
-                     :href "/"
-                     :on-click (fn [e]
-                                 (.preventDefault e)
-                                 (rtfe/push-state :home))
-                     :class "cursor-pointer text-white hover:text-gray-300"} "Home")
-              ($ :a {:id "nav-link-about"
-                     :href "/about"
-                     :on-click (fn [e]
-                                 (.preventDefault e)
-                                 (rtfe/push-state :about))
-                     :class "cursor-pointer text-white hover:text-gray-300"} "About")
-              ($ :a {:id "nav-link-entities"
-                     :href "/entities"
-                     :on-click (fn [e]
-                                 (.preventDefault e)
-                                 (rtfe/push-state :entities))
-                     :class "cursor-pointer text-white hover:text-gray-300"} "Entities")
-              ($ :a {:id "nav-link-subscription"
-                     :href "/subscription"
-                     :on-click (fn [e]
-                                 (.preventDefault e)
-                                 (rtfe/push-state :subscription))
-                     :class "cursor-pointer text-white hover:text-gray-300"} "Subscription"))
-
-            ;; Auth status with sign-in/sign-out buttons, followed by settings
-            ($ :div {:class "flex items-center space-x-4"}
-              ;; Auth component with multi-tenant support
-              ($ auth-component)
-
-              ;; Global settings control - positioned after auth
-              ($ :div {:class "text-white ml-4 px-2 py-1 hover:bg-gray-700 rounded-md transition-colors duration-200"}
-                ($ settings-panel {:entity-name entity-name
-                                   :global-settings? true}))))))
-
-      ;; Render the appropriate page based on route
-      (if is-admin-route?
-        ;; For admin routes, render the view when it's a function; otherwise fallback by route-name
-        (if (fn? route-view)
-          ($ route-view)
-          (case route-name
-            :admin-login ($ admin-login/admin-login-page)
-            :admin-users ($ admin-users/admin-users-page)
-            :admin-audit ($ admin-audit/admin-audit-page)
-            nil))
-        ;; For regular routes, check domain pages first, then template pages
-        (if-let [domain-page-component (get all-domain-pages view-key)]
-          ;; Domain page found - render it
-          ($ domain-page-component)
-          ;; Template pages (core infrastructure)
-          (case view-key
-            :home ($ :div {:class "ds-container p-4"} ($ home-page))
-            :about ($ :div {:class "ds-container p-4"} ($ about-page))
-            :entities ($ :div {:class "ds-container p-4"} ($ entities-page))
-            :entity-detail ($ :div {:class "ds-container p-4"} ($ entities-page))
-            :login ($ login-page)
-            :register ($ registration-page)
-            :verify-email-success ($ verify-email-success-page)
-            :email-verified ($ email-verified-page)
-            :logout ($ logout-page)
-            :forgot-password ($ forgot-password-page)
-            :reset-password ($ reset-password-page)
-            :change-password ($ change-password-page)
-            :subscription ($ :div {:class "ds-container p-4"} ($ subscription-page))
-            :waiting-room ($ waiting-room-page)
-            ;; If no matching route, default to home page instead of showing 'not found'
-            ($ :div {:class "ds-container p-4"} ($ home-page)))))
-
-      ;; Add the confirm dialog component to the layout
+    ($ :<>
+      (if (and (not is-admin-route?) (not auth-view?))
+        ($ user-layout page-el)
+        page-el)
       ($ confirm-dialog))))
 
 #_{:clj-kondo/ignore [:inline-def :uninitialized-var]}

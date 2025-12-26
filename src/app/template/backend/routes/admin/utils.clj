@@ -105,10 +105,19 @@
     (try
       (handler-fn request)
       (catch Exception e
-        (log/error e error-message {:message (.getMessage e) :data (ex-data e)})
-        (let [data (ex-data e)]
-          (if (= 400 (:status data))
-            (error-response (.getMessage e) :status 400)
+        (let [data (ex-data e)
+              status (:status data)]
+          (log/error e error-message {:message (.getMessage e) :data data})
+          (cond
+            ;; Pass through explicit client errors (e.g. 404, 409) with their message.
+            (and (integer? status) (<= 400 status 499))
+            (error-response (.getMessage e) :status status)
+
+            ;; If callers explicitly mark a server error, still avoid leaking details.
+            (and (integer? status) (<= 500 status 599))
+            (error-response error-message :status status)
+
+            :else
             (error-response error-message :status 500)))))))
 
 (defn with-validation-error-handling

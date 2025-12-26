@@ -454,7 +454,7 @@
 (defui expense-add-form-modal
   [{:keys [receipt-id initial-data on-success on-cancel]}]
   (let [loading? (use-subscribe [:expenses/form-loading?])
-        receipt (use-subscribe (when receipt-id [:expenses/receipt receipt-id]))
+        receipt (use-subscribe [:expenses/receipt receipt-id])
         default-supplier-display-name (use-memo
                                         #(when receipt (receipt-merchant-name receipt))
                                         [receipt])

@@ -39,12 +39,16 @@ bb run-app
   - or `bb migrate-and-sync-frontend-config` (migrate + apply + validate)
 - Manual restart: `(system.core/restart-system)` from the REPL.
 
+## Optional Workers
+- Receipt OCR (process receipts uploaded via `/expenses/upload`): `MISTRAL_API_KEY=... bb receipt-ocr-worker dev --loop`
+
 ## Troubleshooting
 - **FileNotFoundException in REPL**: If you get this when requiring `.cljs` files, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:
   ```clojure
   (shadow.cljs.devtools.api/nrepl-select :app)
   ```
   (Use `:admin` if working on the admin panel).
+- **Re-frame trace queries in CLJS REPL**: `reframe-events-analysis` uses `app.template.frontend.dev.repl-tracing` (helpers on top of the dev trace buffer). It’s included in the `:app` dev build via `shadow-cljs.edn` under `:builds :app :dev :modules :app :preloads`; after changing preloads, reload `http://localhost:8085`.
 - Port in use: script prints owner; free 8085 or adjust `run-app.sh`.
 - Watcher thrash: check `system.watchers` logs; extend debounce or fix generators.
 - nREPL conflicts: change port in `dev/core.clj` if 7888 is occupied.

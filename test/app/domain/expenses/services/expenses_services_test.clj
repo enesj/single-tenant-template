@@ -91,6 +91,31 @@
       (is (= (:id expense) (:expense_id stored)))
       (is (= 1 (count (:items expense)))))))
 
+(deftest receipts-soft-delete-expense-reverts-receipt
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          upload (receipts/upload-receipt! db {:storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
+                                               :bytes (.getBytes (str "del-" (UUID/randomUUID)))})
+          receipt-id (:id (:receipt upload))
+          _ (receipts/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "10.00")
+                  :currency "BAM"
+                  :items [{:raw_label "Item" :line_total (bigdec "10.00")}]}
+          expense (receipts/approve-and-post! db receipt-id review)
+          posted (receipts/get-receipt db receipt-id)]
+      (is (= "posted" (:status posted)))
+      (is (= (:id expense) (:expense_id posted)))
+
+      (expenses/soft-delete-expense! db (:id expense))
+
+      (let [after (receipts/get-receipt db receipt-id)]
+        (is (= "extracted" (:status after)))
+        (is (nil? (:expense_id after)))))))
+
 (deftest receipts-approve-moves-local-receipt-file-to-exported
   (when-let [db fixtures/*test-db*]
     (let [base-dir (io/file "upload" "stripes")

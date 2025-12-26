@@ -132,10 +132,14 @@
                           ;; Check for various invalid conditions
                           (or (and (:null constraints) (= false (:null constraints))
                                 (nil? value))
-                            (and (= :decimal (second field-def))
-                              (< value 0))
-                            (and (string? value)
-                              (= "" value)))))
+                            (let [field-type (second field-def)
+                                  base-type (if (vector? field-type) (first field-type) field-type)]
+                              (or (and (= :decimal base-type)
+                                    (number? value)
+                                    (< value 0))
+                                (and (string? value)
+                                  (or (= "" value)
+                                    (re-find #"^invalid-" value))))))))
                   fields)]
             (is has-invalid-field?
               (str entity-type " should have at least one invalid field"))))))))

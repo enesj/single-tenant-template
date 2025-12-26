@@ -26,7 +26,7 @@
 
    Args:
      models: The models data (passed as parameter)
-     entity: The entity name (e.g., :properties, :users)
+     entity: The entity name (e.g., :expenses, :users)
      data: Map of field-name -> value pairs
 
    Returns:

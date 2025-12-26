@@ -10,7 +10,6 @@
    - users: User management and operations
    - users.bulk: Bulk user operations and export
    - admins: Admin management (owner-only operations)
-   - monitoring.transactions: Transaction monitoring
    - monitoring.integrations: Integration monitoring
 
    All functions maintain the same signature for backward compatibility."
@@ -20,7 +19,6 @@
     [app.admin.backend.services.admin.auth :as auth]
     [app.admin.backend.services.admin.dashboard :as dashboard]
     [app.admin.backend.services.admin.monitoring.integrations :as monitoring-integrations]
-    [app.admin.backend.services.admin.monitoring.transactions :as monitoring-transactions]
     [app.admin.backend.services.admin.users :as users]
     [app.admin.backend.services.admin.users.bulk :as users-bulk]))
 
@@ -148,20 +146,6 @@
 
 (defn create-user-impersonation-session! [db user-id admin-id ip-address user-agent]
   (users-bulk/create-user-impersonation-session! db user-id admin-id ip-address user-agent))
-
-
-;; ============================================================================
-;; Transaction Monitoring (monitoring.transactions namespace)
-;; ============================================================================
-
-(defn get-transaction-overview [db]
-  (monitoring-transactions/get-transaction-overview db))
-
-(defn get-transaction-trends [db filters]
-  (monitoring-transactions/get-transaction-trends db filters))
-
-(defn get-suspicious-transactions [db filters]
-  (monitoring-transactions/get-suspicious-transactions db filters))
 
 ;; ============================================================================
 ;; Integration Monitoring (monitoring.integrations namespace)

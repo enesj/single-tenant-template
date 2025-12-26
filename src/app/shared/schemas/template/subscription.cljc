@@ -51,9 +51,7 @@
    [:features [:vector string?]]
    [:limits
     [:map
-     [:properties prim/positive-int]
      [:users prim/positive-int]
-     [:transactions prim/positive-int]
      [:storage_gb prim/positive-int]]]
    [:pricing
     [:map

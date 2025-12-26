@@ -32,7 +32,7 @@
                 :ui {:lists {:items {:sort {:field :amount :direction :desc}
                                      :per-page 2
                                      :pagination {:current-page 1 :per-page 2}}
-                             :transactions {}}}})
+                             :expenses {}}}})
     (let [visible @(rf/subscribe [::list-subs/visible-items :items])]
       (is (= [200 150] (map :amount visible)) "Should sort descending and limit to per-page count"))
 

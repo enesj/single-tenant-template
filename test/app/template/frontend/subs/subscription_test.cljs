@@ -14,19 +14,19 @@
 (deftest status-derived-subs-test
   (testing "Status and tier derived from db"
     (reset-db! {:subscription {:status {:subscription-tier :pro
-                                        :limits {:properties 100}
+                                        :limits {:users 100}
                                         :subscription-status :active
                                         :trial-ends-at "2024-12-01"}
-                               :usage {:properties 80}}})
+                               :usage {:users 80}}})
     (is (= {:subscription-tier :pro
-            :limits {:properties 100}
+            :limits {:users 100}
             :subscription-status :active
             :trial-ends-at "2024-12-01"}
           @(rf/subscribe [:subscription/status])))
     (is (= :pro @(rf/subscribe [:subscription/tier])))
-    (is (= {:properties 100}
+    (is (= {:users 100}
           @(rf/subscribe [:subscription/limits])))
-    (is (= {:properties 80}
+    (is (= {:users 80}
           @(rf/subscribe [:subscription/usage])))
     (is (= "2024-12-01"
           @(rf/subscribe [:subscription/trial-ends-at])))))
@@ -42,14 +42,14 @@
 
 (deftest usage-metrics-test
   (testing "Usage percentage and warnings"
-    (reset-db! {:subscription {:limits {:properties 100}
-                               :usage {:properties 85}}})
-    (is (= 85.0 @(rf/subscribe [:subscription/usage-percentage :properties])))
-    (is (true? @(rf/subscribe [:subscription/usage-warning? :properties])))
-    (is (false? @(rf/subscribe [:subscription/is-usage-limit-exceeded? :properties])))
-    (swap! rf-db/app-db assoc-in [:subscription :usage :properties] 120)
+    (reset-db! {:subscription {:limits {:users 100}
+                               :usage {:users 85}}})
+    (is (= 85.0 @(rf/subscribe [:subscription/usage-percentage :users])))
+    (is (true? @(rf/subscribe [:subscription/usage-warning? :users])))
+    (is (false? @(rf/subscribe [:subscription/is-usage-limit-exceeded? :users])))
+    (swap! rf-db/app-db assoc-in [:subscription :usage :users] 120)
     (rf/clear-subscription-cache!)
-    (is (true? @(rf/subscribe [:subscription/is-usage-limit-exceeded? :properties])))))
+    (is (true? @(rf/subscribe [:subscription/is-usage-limit-exceeded? :users])))))
 
 (deftest ui-flags-test
   (testing "Loading and error defaults"

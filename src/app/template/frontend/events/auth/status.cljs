@@ -36,6 +36,12 @@
           user (get response :user)
           tenant (get response :tenant)
           permissions (get response :permissions)
+          permissions* (cond
+                         (nil? permissions) nil
+                         (set? permissions) permissions
+                         (sequential? permissions) (set permissions)
+                         (coll? permissions) (set permissions)
+                         :else #{permissions})
           current-page (get-in db [:ui :current-page])
           user-role (:role user)]
 
@@ -65,7 +71,7 @@
                          (assoc-in [:session :tenant] tenant)
 
                          ;; Set user permissions (new for multi-tenant)
-                         (assoc-in [:session :permissions] permissions)
+                         (assoc-in [:session :permissions] permissions*)
 
                          ;; Clear any previous errors
                          (update :session dissoc :error))

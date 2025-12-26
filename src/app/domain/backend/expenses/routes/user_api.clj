@@ -11,8 +11,9 @@
 (defn routes
   "User expense routes (requires authenticated user).
 
-  `wrap-user-authentication` is injected by the template to avoid domain -> template coupling."
-  [db wrap-user-authentication]
+  `wrap-user-authentication` is injected by the template to avoid domain -> template coupling.
+  `app-config` is optional and used for OCR routes."
+  [db wrap-user-authentication & [app-config]]
   ["/expenses"
    {:middleware [wrap-user-authentication]}
 
@@ -41,10 +42,12 @@
    ;; Receipt upload (creates a receipts row)
    ["/upload" {:post {:handler (receipt-upload/user-upload-handler db)}}]
 
-   ;; Receipts inbox (review + approve)
+   ;; Receipts inbox (review + approve + OCR)
    ["/receipts" {:get {:handler (user-receipts/list-receipts-handler db)}}]
+   ["/receipts/ocr" {:post {:handler (user-receipts/ocr-batch-receipts-handler db app-config)}}]
    ["/receipts/:id" {:get {:handler (user-receipts/get-receipt-handler db)}}]
    ["/receipts/:id/approve" {:post {:handler (user-receipts/approve-receipt-handler db)}}]
+   ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
 
    ;; Expenses CRUD
    ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}

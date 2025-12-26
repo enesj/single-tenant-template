@@ -40,7 +40,7 @@
                  :input-type "number"}
           form-props {:set-handle-change (fn [{:keys [value path]}]
                                            {:value value :path path})
-                      :entity-name :transactions
+                      :entity-name :expenses
                       :state (atom {:initial-values {:amount 100}})
                       :editing true}
           handler (validation/set-handle-value-change field form-props nil)]
@@ -124,8 +124,8 @@
       (reset! rf-db/app-db {:entities {}
                             :forms {}
                             :ui {:current-page nil
-                                 :lists {:transaction-types {}
-                                         :transactions {}
+                                 :lists {:receipts {}
+                                         :expenses {}
                                          :items {}}
                                  :recently-updated {}
                                  :recently-created {}
@@ -140,7 +140,7 @@
             set-handle-change-calls (atom [])
             form-props {:set-handle-change (fn [params]
                                              (swap! set-handle-change-calls conj params))
-                        :entity-name :transactions
+                        :entity-name :expenses
                         :state (atom {:initial-values {:amount 0}})
                         :editing true
                         :server-validation? false}
@@ -203,8 +203,8 @@
       (reset! rf-db/app-db {:entities {}
                             :forms {}
                             :ui {:current-page nil
-                                 :lists {:transaction-types {}
-                                         :transactions {}
+                                 :lists {:receipts {}
+                                         :expenses {}
                                          :items {}}
                                  :recently-updated {}
                                  :recently-created {}

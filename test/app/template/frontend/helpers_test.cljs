@@ -37,15 +37,15 @@
 
 ;; Entity-specific helpers for common test scenarios
 
-(defn generate-test-transactions
-  "Generate test transactions with proper structure"
-  ([count] (generate-test-entities :transactions count))
-  ([count overrides] (generate-test-entities :transactions count overrides)))
+(defn generate-test-expenses
+  "Generate test expenses with proper structure"
+  ([count] (generate-test-entities :expenses count))
+  ([count overrides] (generate-test-entities :expenses count overrides)))
 
-(defn generate-test-transaction-types
-  "Generate test transaction types with proper structure"
-  ([count] (generate-test-entities :transaction_types count))
-  ([count overrides] (generate-test-entities :transaction_types count overrides)))
+(defn generate-test-receipts
+  "Generate test receipts with proper structure"
+  ([count] (generate-test-entities :receipts count))
+  ([count overrides] (generate-test-entities :receipts count overrides)))
 
 ;; Generic entity test helpers
 (defn get-all-entity-types

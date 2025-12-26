@@ -1,10 +1,13 @@
 (ns app.domain.backend.expenses.routes.receipts
   "Admin API routes for receipt ingestion and approval."
   (:require
-    [app.template.backend.routes.admin.utils :as utils]
+    [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
+    [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.utils.adapters.database :as db-adapter]
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [taoensso.timbre :as log]))
 
 (defn- to-app [data]
   (-> data
@@ -137,15 +140,103 @@
           (utils/error-response "Invalid id" :status 400))))
     "Failed to approve receipt"))
 
-(defn routes [db]
+;; ---------------------------------------------------------------------------
+;; OCR Handlers (UI-triggered)
+;; ---------------------------------------------------------------------------
+
+(defn ocr-single-receipt-handler
+  "Trigger OCR for a single receipt (POST /:id/ocr).
+  Resets the receipt and processes it asynchronously."
+  [db app-config]
+  (utils/with-error-handling
+    (fn [request]
+      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+        (if-let [_receipt (receipts/get-receipt db id)]
+          (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
+            (cond
+              (not enabled?)
+              (utils/error-response "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)" :status 409)
+
+              (not (seq api-key))
+              (utils/error-response "Receipt OCR is not configured (missing MISTRAL_API_KEY)" :status 409)
+
+              :else
+              (do
+                ;; Run OCR asynchronously
+                (future
+                  (try
+                    (log/info "Starting OCR for receipt" {:receipt-id id :source :admin-ui})
+                    (receipt-ocr/process-receipts-by-ids! db app-config [id])
+                    (log/info "Completed OCR for receipt" {:receipt-id id :source :admin-ui})
+                    (catch Exception e
+                      (log/error e "OCR failed for receipt" {:receipt-id id}))))
+                ;; Return immediately with 202 Accepted
+                (utils/json-response {:success true
+                                      :data {:queued true
+                                             :receipt_ids [(str id)]}}
+                  :status 202))))
+          (utils/error-response "Receipt not found" :status 404))
+        (utils/error-response "Invalid id" :status 400)))
+    "Failed to trigger OCR"))
+
+(defn- parse-receipt-ids
+  "Parse receipt_ids from request body. Accepts :receipt_ids or :receipt-ids."
+  [body]
+  (let [ids (or (:receipt_ids body) (:receipt-ids body))]
+    (when (sequential? ids)
+      (->> ids
+        (map utils/parse-uuid-custom)
+        (filter some?)
+        vec))))
+
+(defn ocr-batch-receipts-handler
+  "Trigger OCR for multiple receipts (POST /ocr).
+  Body: {:receipt_ids [...]}"
+  [db app-config]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            receipt-ids (parse-receipt-ids body)]
+        (if (empty? receipt-ids)
+          (utils/error-response "receipt_ids is required and must be a non-empty array" :status 400)
+          (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
+            (cond
+              (not enabled?)
+              (utils/error-response "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)" :status 409)
+
+              (not (seq api-key))
+              (utils/error-response "Receipt OCR is not configured (missing MISTRAL_API_KEY)" :status 409)
+
+              :else
+              (do
+                ;; Run OCR asynchronously
+                (future
+                  (try
+                    (log/info "Starting batch OCR" {:receipt-ids receipt-ids :source :admin-ui})
+                    (receipt-ocr/process-receipts-by-ids! db app-config receipt-ids)
+                    (log/info "Completed batch OCR" {:receipt-ids receipt-ids :source :admin-ui})
+                    (catch Exception e
+                      (log/error e "Batch OCR failed" {:receipt-ids receipt-ids}))))
+                ;; Return immediately with 202 Accepted
+                (utils/json-response {:success true
+                                      :data {:queued true
+                                             :receipt_ids (mapv str receipt-ids)}}
+                  :status 202)))))))
+    "Failed to trigger batch OCR"))
+
+(defn routes
+  "Admin receipts routes. Mounted under /admin/api/expenses/receipts."
+  [db & [app-config]]
   ["/receipts"
    ["" {:get (list-receipts-handler db)
         :post (upload-receipt-handler db)}]
    ["/pending" {:get (list-pending-handler db)}]
+   ["/ocr" {:post (ocr-batch-receipts-handler db app-config)}]
    ["/:id" {:get (get-receipt-handler db)
             :delete (delete-receipt-handler db)}]
    ["/:id/status" {:post (update-status-handler db)}]
    ["/:id/retry" {:post (retry-receipt-handler db)}]
    ["/:id/fail" {:post (fail-receipt-handler db)}]
    ["/:id/extraction" {:post (save-extraction-handler db)}]
-   ["/:id/approve" {:post (approve-and-post-handler db)}]])
+   ["/:id/approve" {:post (approve-and-post-handler db)}]
+   ["/:id/ocr" {:post (ocr-single-receipt-handler db app-config)}]])

@@ -283,16 +283,49 @@
                         :observed_at (:purchased_at expense)}))))))
         (get-expense-with-items tx id)))))
 
+(defn- revert-linked-receipt-after-expense-delete!
+  "If the deleted expense was created from a receipt, revert the receipt so it can be
+  deleted or approved+posted again.
+
+  Rules:
+  - Only applies when the receipt is currently linked to this expense.
+  - Only reverts receipts in status \"posted\".
+
+  NOTE: We revert to \"extracted\" (approvable); there is no \"exported\" receipt status
+  (\"exported\" refers to the local file storage subdir used during posting)."
+  [tx {:keys [id receipt_id]}]
+  (when (and id receipt_id)
+    (jdbc/execute-one!
+      tx
+      (sql/format {:update :receipts
+                   :set {:expense_id nil
+                         :status [:cast "extracted" :receipt_status]
+                         :updated_at [:now]}
+                   :where [:and
+                           [:= :id receipt_id]
+                           [:= :expense_id id]
+                           [:= :status [:cast "posted" :receipt_status]]]
+                   :returning [:*]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
 (defn soft-delete-expense!
-  "Soft delete expense."
+  "Soft delete expense.
+
+  If the expense is linked to a receipt (via :receipt_id and the receipt's :expense_id),
+  the receipt is reverted to an approvable status so it can be deleted or processed again."
   [db id]
-  (jdbc/execute-one!
-    db
-    (sql/format {:update :expenses
-                 :set {:deleted_at [:now]}
-                 :where [:= :id id]
-                 :returning [:*]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  (jdbc/with-transaction [tx db]
+    (when-let [deleted (jdbc/execute-one!
+                         tx
+                         (sql/format {:update :expenses
+                                      :set {:deleted_at [:now]}
+                                      :where [:and
+                                              [:= :id id]
+                                              [:is :deleted_at nil]]
+                                      :returning [:*]})
+                         {:builder-fn rs/as-unqualified-lower-maps})]
+      (revert-linked-receipt-after-expense-delete! tx deleted)
+      deleted)))
 
 (defn get-expense-with-items
   [db id]

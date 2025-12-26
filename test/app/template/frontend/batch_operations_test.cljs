@@ -324,35 +324,35 @@
 
     ;; Test batch edit state persistence across different entity types
     (rf/dispatch-sync [::batch-events/show-batch-edit-inline :items [1 2]])
-    (rf/dispatch-sync [::batch-events/show-batch-edit-inline :transactions [3 4]])
+    (rf/dispatch-sync [::batch-events/show-batch-edit-inline :expenses [3 4]])
 
     (let [items-batch-sub (rf/subscribe [::list-subs/batch-edit-inline :items])
-          transactions-batch-sub (rf/subscribe [::list-subs/batch-edit-inline :transactions])]
-      (when (and items-batch-sub transactions-batch-sub)
+          expenses-batch-sub (rf/subscribe [::list-subs/batch-edit-inline :expenses])]
+      (when (and items-batch-sub expenses-batch-sub)
         (let [items-batch-state @items-batch-sub
-              transactions-batch-state @transactions-batch-sub]
-          (when (and items-batch-state transactions-batch-state)
+              expenses-batch-state @expenses-batch-sub]
+          (when (and items-batch-state expenses-batch-state)
             (is (true? (:open? items-batch-state))
               "Should maintain items batch edit state")
-            (is (true? (:open? transactions-batch-state))
-              "Should maintain transactions batch edit state")
+            (is (true? (:open? expenses-batch-state))
+              "Should maintain expenses batch edit state")
             (is (= [1 2] (:selected-ids items-batch-state))
               "Should maintain items selection")
-            (is (= [3 4] (:selected-ids transactions-batch-state))
-              "Should maintain transactions selection")))))
+            (is (= [3 4] (:selected-ids expenses-batch-state))
+              "Should maintain expenses selection")))))
 
     ;; Test cleanup of specific entity batch state
     (rf/dispatch-sync [::batch-events/hide-batch-edit-inline :items])
     (let [items-batch-sub (rf/subscribe [::list-subs/batch-edit-inline :items])
-          transactions-batch-sub (rf/subscribe [::list-subs/batch-edit-inline :transactions])]
-      (when (and items-batch-sub transactions-batch-sub)
+          expenses-batch-sub (rf/subscribe [::list-subs/batch-edit-inline :expenses])]
+      (when (and items-batch-sub expenses-batch-sub)
         (let [items-batch-state @items-batch-sub
-              transactions-batch-state @transactions-batch-sub]
+              expenses-batch-state @expenses-batch-sub]
           (is (false? (:open? items-batch-state))
             "Should close items batch edit")
-          (when transactions-batch-state
-            (is (true? (:open? transactions-batch-state))
-              "Should keep transactions batch edit open")))))))
+          (when expenses-batch-state
+            (is (true? (:open? expenses-batch-state))
+              "Should keep expenses batch edit open")))))))
 
 (deftest batch-operations-error-scenarios-test
   (testing "Batch operations error handling scenarios"

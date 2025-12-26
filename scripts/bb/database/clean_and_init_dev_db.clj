@@ -37,33 +37,35 @@
 
   ;; Delete all data from tables in dependency order (preserving schema)
   (run-sql "
-    DELETE FROM transactions_v2;
-    DELETE FROM transaction_types_v2;
-    DELETE FROM cohost_balances;
-    DELETE FROM property_cohosts;
-    DELETE FROM invitations;
-    DELETE FROM properties;
-    DELETE FROM transaction_templates;
-    DELETE FROM billing_events;
-    DELETE FROM tenant_usage;
-    DELETE FROM tenant_limits;
+    DELETE FROM price_observations;
+    DELETE FROM article_aliases;
+    DELETE FROM expense_items;
+    DELETE FROM expenses;
+    DELETE FROM receipts;
+    DELETE FROM articles;
+    DELETE FROM payers;
+    DELETE FROM suppliers;
     DELETE FROM audit_logs;
+    DELETE FROM login_events;
+    DELETE FROM email_verification_tokens;
+    DELETE FROM password_reset_tokens;
+    DELETE FROM admin_sessions;
+    DELETE FROM admins;
     DELETE FROM users;
-    DELETE FROM tenants;
   " :as-superuser? true))
 
 (defn init-dev-data []
-  (println "\n🔧 Running development initialization...")
+  (println "\n🔧 Seeding minimum development data...")
   (let [result (process/shell {:out :string :err :string}
-                 "bb" "scripts/bb/database/init-dev-db.clj")]
+                 "bb" "scripts/bb/database/seed_admin.clj" "dev")]
     (if (zero? (:exit result))
       (do
-        (println "✅ Development initialization completed")
+        (println "✅ Development seeding completed")
         (println (:out result)))
       (do
-        (println "❌ Development initialization failed:")
+        (println "❌ Development seeding failed:")
         (println (:err result))
-        (throw (ex-info "Development initialization failed" {:result result}))))))
+        (throw (ex-info "Development seeding failed" {:result result}))))))
 
 (defn main []
   (println "🚀 Clean and seed development database...")

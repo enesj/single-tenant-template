@@ -237,6 +237,41 @@
   [db receipt-id]
   (update-status! db receipt-id "uploaded" {:retry_count [:+ :retry_count 1]}))
 
+(defn reset-for-ocr!
+  "Force-reset a receipt for OCR re-processing.
+
+  Unlike `retry-extraction!`, this also clears OCR-related fields so the
+  receipt can be cleanly re-parsed/extracted. Use when the user explicitly
+  requests a fresh OCR pass.
+
+  Clears: error_message, error_details, raw_parse_json, raw_extract_json,
+          parsed_markdown, supplier_guess, total_amount_guess, currency_guess,
+          purchased_at_guess, payment_hints
+
+  Increments: retry_count
+
+  Returns the updated receipt row."
+  [db receipt-id]
+  (jdbc/execute-one!
+    db
+    (sql/format {:update :receipts
+                 :set {:status (receipt-status-cast "uploaded")
+                       :error_message nil
+                       :error_details nil
+                       :raw_parse_json nil
+                       :raw_extract_json nil
+                       :parsed_markdown nil
+                       :supplier_guess nil
+                       :total_amount_guess nil
+                       :currency_guess nil
+                       :purchased_at_guess nil
+                       :payment_hints nil
+                       :retry_count [:+ :retry_count 1]
+                       :updated_at [:now]}
+                 :where [:= :id receipt-id]
+                 :returning [:*]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
 (defn store-extraction-results!
   "Persist extraction/parse payloads and guesses.
 

@@ -18,6 +18,7 @@ Use this to answer “what events happened?”, “why did state change?”, and
 ```clojure
 (require '[app.template.frontend.dev.repl-tracing :as repl-trace])
 ```
+Note: the helper namespace must be included in the active shadow build. In this repo it’s wired into the `:app` dev build via `shadow-cljs.edn` → `:builds :app :dev :modules :app :preloads`.
 
 ## Common queries (copy/paste)
 ```clojure
@@ -37,6 +38,7 @@ Use this to answer “what events happened?”, “why did state change?”, and
   ```
   (Use `:admin` if working on the admin panel).
 - **No traces**: confirm dev build has `re-frame.trace.trace-enabled?` enabled (see `shadow-cljs.edn`) and reload the page.
+- **Can’t `require` `app.template.frontend.dev.repl-tracing`**: verify it’s included in the build (see `shadow-cljs.edn` `:builds :app :dev :modules :app :preloads`) and reload.
 - **Too noisy**: run `(repl-trace/clear)`, reproduce once, then re-run queries.
 
 ## Where it lives

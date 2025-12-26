@@ -50,7 +50,7 @@
   "Check if an entity is allowed through generic CRUD endpoints.
 
    Args:
-   - entity-key: Keyword representing the entity (e.g., :users, :properties)
+   - entity-key: Keyword representing the entity (e.g., :users, :expenses)
    - is-admin?: Boolean indicating if this is an admin request
 
    Returns:
@@ -159,7 +159,7 @@
 
 (comment
   ;; Example usage:
-  (entity-allowed-for-generic-crud? :properties false)  ; => true
+  (entity-allowed-for-generic-crud? :expenses false)    ; => false (unknown entity blocked)
   (entity-allowed-for-generic-crud? :admins false)      ; => false
 
   (get-allowed-entities-for-user)

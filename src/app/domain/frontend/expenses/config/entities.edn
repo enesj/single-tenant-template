@@ -1,2 +1,1 @@
-{:expenses {:title "My Expenses"}
- :receipts {:title "Receipts"}}
+{:expenses {:title "My Expenses"}, :receipts {:title "Receipts"}}

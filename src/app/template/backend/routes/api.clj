@@ -168,9 +168,11 @@
   "Create versioned API routes with the given database, models-data, and
    version prefix like \"/v1\"."
   [db md service-container version]
-  (let [;; Collect user API routes from all enabled domains
+  (let [;; Extract app-config for domain routes that need it
+        app-config (:config service-container)
+        ;; Collect user API routes from all enabled domains
         domain-user-routes (domain-registry/all-user-api-routes
-                             db user-middleware/wrap-user-authentication)]
+                             db user-middleware/wrap-user-authentication app-config)]
     [""
      {:coercion custom-malli-coercion
       :muuntaja m/instance

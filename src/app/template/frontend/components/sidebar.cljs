@@ -1,11 +1,13 @@
 (ns app.template.frontend.components.sidebar
   (:require [uix.core :refer [$ defui]]))
 
-(defui sidebar-item [{:keys [label href icon active? on-click className]}]
+(defui sidebar-item [{:keys [id label href icon active? on-click className]}]
   ($ :li {:class "mb-1"}
-    ($ :a {:href href
+    ($ :a {:id id
+           :href href
            :on-click on-click
-           :class (str (if active? "ds-active" "") " " className)}
+           :class (str (when active? "ds-active")
+                    (when className (str " " className)))}
       (when icon
         icon)
       label)))
@@ -27,12 +29,12 @@
         ($ :div {:class "flex-1 flex flex-col pt-5 pb-4 overflow-y-auto"}
           ($ :div {:class "flex items-center flex-shrink-0 px-4 mb-2"}
             ($ :h1 {:class "text-xl font-bold"} title))
-          
+
           ;; Navigation Menu using DaisyUI menu component
           ($ :ul {:class "ds-menu ds-menu-md w-full px-2"}
             (for [{:keys [title] :as section} sections]
               ($ sidebar-section (assoc section :key (or title "main"))))))
-        
+
         ;; Footer
         (when footer
           ($ :div {:class "flex-shrink-0 border-t border-base-300 p-4 bg-base-200"}

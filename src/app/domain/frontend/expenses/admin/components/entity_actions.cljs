@@ -1,5 +1,6 @@
 (ns app.domain.frontend.expenses.admin.components.entity-actions
   (:require
+    [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.template.frontend.components.action-components :refer [view-details-icon]]
     [app.template.frontend.components.dropdown :as dropdown]
     [app.template.frontend.utils.id :as id-utils]
@@ -46,10 +47,45 @@
   (when payers
     (render-actions-dropdown "payers" payers)))
 
+(defn- receipt-ocr-allowed?
+  "Check if OCR action should be shown for a receipt.
+  Returns true for statuses where OCR makes sense."
+  [receipt]
+  (let [status (or (:status receipt) (:receipts/status receipt))]
+    (contains? #{"uploaded" "failed" "review_required" "extracted" "parsing" "parsed" "extracting"}
+      status)))
+
+(defn- receipts-actions
+  "Action groups for receipts including View and OCR."
+  [receipt]
+  (let [item-id (id-utils/extract-entity-id receipt)
+        ocr-allowed? (receipt-ocr-allowed? receipt)]
+    (cond-> [{:group-title "View"
+              :items [{:id "view-details"
+                       :icon ($ view-details-icon)
+                       :label "View Details"
+                       :on-click (fn [e]
+                                   (.stopPropagation e)
+                                   (open-detail-modal! "receipts" item-id))}]}]
+      ;; Add OCR group when allowed
+      ocr-allowed?
+      (conj {:group-title "OCR"
+             :items [{:id "parse-ocr"
+                      :icon "🔍"
+                      :label "Parse (OCR)"
+                      :tooltip "Run OCR to extract receipt data. Status will update asynchronously."
+                      :on-click (fn [e]
+                                  (.stopPropagation e)
+                                  (rf/dispatch [::receipts-events/ocr-receipt item-id]))}]}))))
+
 (defui admin-receipts-actions
   [{:keys [receipts]}]
   (when receipts
-    (render-actions-dropdown "receipts" receipts)))
+    (let [item-id (id-utils/extract-entity-id receipts)]
+      ($ dropdown/action-dropdown
+        {:entity-id item-id
+         :actions (receipts-actions receipts)
+         :position :portal}))))
 
 (defui admin-article-aliases-actions
   [{:keys [article-aliases]}]

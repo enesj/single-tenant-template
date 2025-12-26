@@ -1,30 +1,72 @@
-{;; =============================================================================
- ;; Admin/Template Core View Options
- ;; =============================================================================
- ;; Runtime-editable view options for template/admin entities.
- ;; Domain-specific view options are in their respective domain config files.
-
+{:expense-items
+ {:display-locks
+  {:show-delete? true,
+   :show-edit? true,
+   :show-select? true,
+   :show-pagination? true,
+   :show-filtering? true}},
+ :suppliers
+ {:display-locks
+  {:show-delete? false,
+   :show-select? true,
+   :show-batch-edit? true,
+   :show-pagination? true,
+   :show-filtering? true}},
  :admins
  {:column-locks {},
   :display-locks
   {:show-select? true, :show-pagination? true, :show-filtering? true},
-  :column-defaults {:id true, :email false}}
-
+  :column-defaults {:id true, :email false}},
+ :articles
+ {:display-locks
+  {:show-delete? true,
+   :show-edit? true,
+   :show-select? true,
+   :show-pagination? true,
+   :show-filtering? true}},
+ :expenses
+ {:display-locks
+  {:show-select? true,
+   :show-pagination? true,
+   :show-filtering? true,
+   :show-batch-edit? true}},
+ :price-observations
+ {:display-locks
+  {:show-delete? false,
+   :show-edit? false,
+   :show-select? true,
+   :show-pagination? true,
+   :show-filtering? true}},
+ :payers
+ {:display-locks
+  {:show-delete? false,
+   :show-select? true,
+   :show-pagination? true,
+   :show-filtering? true}},
  :audit-logs
  {:display-locks
   {:show-edit? false,
    :show-select? true,
    :show-add-button? false,
    :show-batch-edit? false},
-  :display-defaults {:show-batch-delete? true}}
-
+  :display-defaults {:show-batch-delete? true}},
+ :receipts
+ {:display-locks
+  {:show-select? true, :show-pagination? true, :show-filtering? true},
+  :display-defaults {}},
  :login-events
  {:display-locks
   {:show-add-button? false,
    :show-edit? false,
    :show-batch-edit? false},
-  :display-defaults {:show-batch-delete? false}}
-
+  :display-defaults {:show-batch-delete? false}},
+ :article-aliases
+ {:display-locks
+  {:show-select? true,
+   :show-edit? true,
+   :show-delete? true,
+   :show-pagination? true,
+   :show-filtering? true}},
  :users
  {:display-defaults {:show-add-button? true, :show-edit? true},
   :display-locks {:show-batch-edit? true},

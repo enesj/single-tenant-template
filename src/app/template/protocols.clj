@@ -69,39 +69,6 @@
       "Validate entity data against metadata schema
       Returns: {:valid? boolean :errors [string] :validated-data map}"))
 
-#_(defprotocol UserService
-    "Template user management interface"
-    (create-user [this user-data tenant-id]
-      "Create new user within tenant
-      Returns: {:success? boolean :user map :error string}")
-    (get-user [this user-id]
-      "Retrieve user by ID
-      Returns: user map or nil")
-    (update-user [this user-id updates]
-      "Update user information
-      Returns: {:success? boolean :user map :error string}")
-    (list-users [this tenant-id filters pagination]
-      "List users within tenant
-      Returns: {:users [map] :total int :page int}")
-    (invite-user [this email tenant-id role]
-      "Send user invitation to tenant
-      Returns: {:success? boolean :invitation map :error string}"))
-
-#_(defprotocol InvitationService
-    "Template invitation management interface"
-    (create-invitation [this email tenant-id role]
-      "Create user invitation
-      Returns: {:success? boolean :invitation map :error string}")
-    (accept-invitation [this token user-data]
-      "Accept invitation and create user account
-      Returns: {:success? boolean :user map :error string}")
-    (revoke-invitation [this invitation-id]
-      "Revoke pending invitation
-      Returns: {:success? boolean :error string}")
-    (list-invitations [this tenant-id]
-      "List pending invitations for tenant
-      Returns: {:invitations [map]}"))
-
 (defprotocol ^:private ValidationService
   "Template validation service interface"
   (validate-entity [this entity-type data context]

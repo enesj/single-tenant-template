@@ -99,20 +99,10 @@
             ($ icons/chart-bar {:class "w-5 h-5 mr-2"})
             "Usage Metrics")
           ($ usage-meter
-            {:metric :properties
-             :current (:properties usage 0)
-             :limit (:properties limits)
-             :label "Properties"})
-          ($ usage-meter
             {:metric :users
              :current (:users usage 0)
              :limit (:users limits)
              :label "Users"})
-          ($ usage-meter
-            {:metric :transactions
-             :current (:transactions usage 0)
-             :limit (:transactions limits)
-             :label "Transactions"})
           ($ usage-meter
             {:metric :storage-gb
              :current (:storage-gb usage 0)

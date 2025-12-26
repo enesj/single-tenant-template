@@ -288,3 +288,64 @@
           :candidates (count candidates)
           :summary summary
           :results results})))))
+
+(defn process-receipts-by-ids!
+  "Process receipts by explicit IDs (for UI-triggered OCR).
+
+  Each receipt is first reset to 'uploaded' status (clearing OCR fields) and then
+  processed through the OCR pipeline.
+
+  opts:
+  - :lease-seconds (default 900)
+  - :storage-base-dir (optional, default upload/stripes)
+  - :max-file-size-bytes (default 10MB)
+  - :default-currency (default BAM)
+  - :reset? (default true) - whether to reset receipt before processing
+
+  Returns a summary map similar to process-pending!."
+  ([db app-config receipt-ids]
+   (process-receipts-by-ids! db app-config receipt-ids nil))
+  ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
+   (let [ocr-cfg (mistral-ocr/build-config app-config)
+         opts (merge {:lease-seconds 900
+                      :storage-base-dir "upload/stripes"
+                      :default-currency "BAM"}
+                (dissoc opts :reset?))]
+     (if-not (:enabled? ocr-cfg)
+       (do
+         (log/info "Receipt OCR disabled (by-ids)" {:receipt-ids receipt-ids})
+         {:enabled? false
+          :processed 0
+          :receipt-ids receipt-ids})
+       (if-not (:api-key ocr-cfg)
+         (do
+           (log/warn "Receipt OCR skipped: missing API key" {:receipt-ids receipt-ids})
+           {:enabled? true
+            :error :missing-api-key
+            :processed 0
+            :receipt-ids receipt-ids})
+         (let [results
+               (mapv
+                 (fn [rid]
+                   (try
+                     (let [;; Optionally reset the receipt first
+                           _ (when reset?
+                               (receipts/reset-for-ocr! db rid))
+                           receipt (receipts/get-receipt db rid)]
+                       (if receipt
+                         (process-receipt! db ocr-cfg receipt opts)
+                         {:receipt-id rid :result :skipped :reason :not-found}))
+                     (catch Exception e
+                       (log/error e "Failed to process receipt" {:receipt-id rid})
+                       {:receipt-id rid :result :failed :error (.getMessage e)})))
+                 receipt-ids)
+               summary (->> results
+                         (map :result)
+                         (frequencies))]
+           (log/info "Receipt OCR by-ids complete" {:receipt-ids receipt-ids
+                                                    :summary summary})
+           {:enabled? true
+            :processed (count results)
+            :summary summary
+            :results results
+            :receipt-ids receipt-ids}))))))

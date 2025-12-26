@@ -15,14 +15,16 @@
 
 ;; Raw models in DB (snake_case) format - mimics what's in models.edn
 (def raw-test-models
-  {:properties
+  {:expenses
    {:fields [[:id :uuid {:null false :primary-key true}]
-             [:tenant_id :uuid {:null false}]
-             [:name :varchar {:null false :max-length 255}]
-             [:address :text {:null true}]
+             [:user_id :uuid {:null true}]
+             [:supplier_id :uuid {:null false}]
+             [:payer_id :uuid {:null false}]
+             [:total_amount :decimal {:null false}]
+             [:notes :text {:null true}]
              [:created_at :timestamptz {:null false}]
              [:updated_at :timestamptz {:null false}]]
-    :constraints {:unique [[:tenant_id :name]]}}
+    :constraints {}}
 
    :users
    {:fields [[:id :uuid {:null false :primary-key true}]
@@ -175,24 +177,24 @@
       ;; (This is mostly a smoke test to ensure wiring works)
 
       ;; Test metadata service integration
-      (is (crud-protocols/validate-entity-exists metadata-service :properties))
+      (is (crud-protocols/validate-entity-exists metadata-service :expenses))
       (is (not (crud-protocols/validate-entity-exists metadata-service :nonexistent)))
 
       ;; Test type casting service integration
-      (let [cast-data (crud-protocols/cast-for-insert type-casting-service :properties
-                        {:name "Test Property"
-                         :address "123 Test St"})]
-        (is (contains? cast-data :name))
-        (is (contains? cast-data :address)))
+      (let [cast-data (crud-protocols/cast-for-insert type-casting-service :expenses
+                        {:total_amount 42.50
+                         :notes "Test expense"})]
+        (is (contains? cast-data :total_amount))
+        (is (contains? cast-data :notes)))
 
       ;; Test validation service integration
-      (let [validation-result (crud-protocols/validate-field validation-service :properties :name "Valid Name")]
+      (let [validation-result (crud-protocols/validate-field validation-service :expenses :total_amount 42.50)]
         (is (:valid? validation-result)))
 
       ;; Test query builder integration
-      (let [select-query (crud-protocols/build-select-query query-builder :properties {})]
+      (let [select-query (crud-protocols/build-select-query query-builder :expenses {})]
         (is (= [:*] (:select select-query)))
-        (is (= [:properties] (:from select-query)))))))
+        (is (= [:expenses] (:from select-query)))))))
 
 (deftest test-configuration-handling
   (testing "Configuration handling in service creation"

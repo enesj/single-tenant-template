@@ -52,6 +52,7 @@ tmp/
 /projectstmp/
 /test-screenshots/
 upload/
+slips/
 
 # API Credentials - never commit these
 .env

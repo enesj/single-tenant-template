@@ -8,37 +8,37 @@
 #?(:clj (set! *warn-on-reflection* true))
 
 (def sample-models
-  {:properties {:fields [[:name :text]
-                         [:settings :jsonb]
-                         [:created_at :timestamptz]
-                         [:tenant_id :uuid]
-                         [:status [:enum :property_status]]]
-                :types []}})
+  {:expenses {:fields [[:notes :text]
+                       [:metadata :jsonb]
+                       [:created_at :timestamptz]
+                       [:user_id :uuid]
+                       [:currency [:enum :currency]]]
+              :types []}})
 
 (deftest cast-field-value-jsonb-test
   (testing "JSONB casting wraps value in HoneySQL lift"
     (is (= [:cast [:lift {:foo "bar"}] :jsonb]
           (type-conv/cast-field-value :jsonb {:foo "bar"}))))
   (testing "Enum casting normalizes to raw type name"
-    (is (= [:raw "CAST('active' AS property_status)"]
-          (type-conv/cast-field-value [:enum :property-status] "active")))))
+    (is (= [:raw "CAST('BAM' AS currency)"]
+          (type-conv/cast-field-value [:enum :currency] "BAM")))))
 
 (deftest prepare-data-for-db-basic-test
   (testing "Nil values are dropped by default"
-    (let [prepared (type-conv/prepare-data-for-db sample-models :properties
-                     {:name "Test"
-                      :settings {:foo 1}
-                      :tenant_id nil})]
-      (is (= {:name "Test"
-              :settings [:cast [:lift {:foo 1}] :jsonb]}
+    (let [prepared (type-conv/prepare-data-for-db sample-models :expenses
+                     {:notes "Test"
+                      :metadata {:foo 1}
+                      :user_id nil})]
+      (is (= {:notes "Test"
+              :metadata [:cast [:lift {:foo 1}] :jsonb]}
             prepared))
-      (is (not (contains? prepared :tenant_id)))))
+      (is (not (contains? prepared :user_id)))))
   (testing "Including nils retains them explicitly"
-    (let [prepared (type-conv/prepare-data-for-db sample-models :properties
-                     {:tenant_id nil}
+    (let [prepared (type-conv/prepare-data-for-db sample-models :expenses
+                     {:user_id nil}
                      {:include-nils? true})]
-      (is (contains? prepared :tenant_id))
-      (is (nil? (:tenant_id prepared))))))
+      (is (contains? prepared :user_id))
+      (is (nil? (:user_id prepared))))))
 
 (deftest convert-to-type-test
   (testing "Boolean parsing supports strings"

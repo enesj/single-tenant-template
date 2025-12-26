@@ -8,7 +8,7 @@
   (testing "vector-config? delegates to loader"
     (with-redefs [admin-config/has-vector-config? (fn [entity] (= entity :items))]
       (is (true? (column-config/vector-config? :items)))
-      (is (false? (column-config/vector-config? :transactions))))))
+      (is (false? (column-config/vector-config? :expenses))))))
 
 (deftest get-visible-columns-test
   (testing "Vector mode converts vectors into boolean map and enforces always-visible"

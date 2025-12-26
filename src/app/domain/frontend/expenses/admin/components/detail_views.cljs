@@ -12,6 +12,7 @@
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
     [app.template.frontend.utils.id :as id-utils]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -338,6 +339,56 @@
           (label-value "Created At" (shared/format-date (:created-at obs)))
           (label-value "ID" (:id obs)))))))
 
+(defn- receipt-review-required-issues
+  "Return a vector of human-readable reasons why a receipt is in review_required.
+
+  Mirrors backend logic in `receipt-ocr/review-required?`, plus surfaces invalid
+  extraction shape from :raw-extract-json when available."
+  [receipt]
+  (let [status (:status receipt)
+        raw-extract (:raw-extract-json receipt)
+        valid-shape? (:valid-shape? raw-extract)
+        items (get-in raw-extract [:extraction :items])
+        items-count (when (sequential? items) (count items))
+        missing-supplier? (str/blank? (:supplier-guess receipt))
+        missing-total? (nil? (:total-amount-guess receipt))
+        missing-currency? (str/blank? (:currency-guess receipt))
+        missing-items? (or (nil? items-count) (zero? (long items-count)))]
+    (when (= "review_required" status)
+      (cond-> []
+        (false? valid-shape?) (conj "OCR extraction response did not match the expected format.")
+        missing-supplier? (conj "Missing supplier guess.")
+        missing-total? (conj "Missing total amount guess.")
+        missing-currency? (conj "Missing currency guess.")
+        missing-items? (conj "No line items were extracted.")))))
+
+(defui receipt-problem-alert
+  [{:keys [receipt]}]
+  (let [status (:status receipt)
+        review-issues (receipt-review-required-issues receipt)
+        error-message (:error-message receipt)
+        error-details (:error-details receipt)
+        failed? (= "failed" status)
+        show? (or (seq review-issues) (some? error-message) (some? error-details))
+        details-summary (when (map? error-details)
+                          (select-keys error-details [:type :status :message :error :body-snippet]))]
+    (when show?
+      ($ :div {:class (str "ds-alert " (if failed? "ds-alert-error" "ds-alert-warning"))}
+        ($ :div {:class "space-y-1"}
+          ($ :div {:class "font-semibold"}
+            (if failed?
+              "Receipt processing failed"
+              "Receipt needs review"))
+          (when (some? error-message)
+            ($ :div {:class "text-sm"} (str error-message)))
+          (when (seq review-issues)
+            ($ :ul {:class "list-disc pl-5 text-sm"}
+              (for [issue review-issues]
+                ($ :li {:key issue} issue))))
+          (when (some? error-details)
+            ($ :pre {:class "text-xs opacity-80 whitespace-pre-wrap break-words"}
+              (pr-str (or (not-empty details-summary) error-details)))))))))
+
 (defui receipt-detail-body
   [{:keys [receipt-id]}]
   (let [receipt (use-subscribe [:expenses/receipt receipt-id])
@@ -380,6 +431,8 @@
               status (:status receipt)
               approve-allowed? (contains? #{"extracted" "review_required"} status)]
           ($ :div {:class "space-y-4"}
+            ($ receipt-problem-alert {:receipt receipt})
+
             ($ :div {:class "ds-tabs ds-tabs-boxed"}
               (tabs/tab-link {:id (str "tab-receipt-details-" rid-str)
                               :label "Details"

@@ -12,6 +12,8 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 
 **New (2025-12-25):** Expense Items sub-entity added with full CRUD support for managing individual expense line items. See `docs/expenses/index.md` for details.
 
+**New (2025-12-26):** Mistral OCR integration for POS receipts with an async worker (`bb receipt-ocr-worker`) plus user receipt upload/inbox/approval endpoints. See `PLAN-mistral-ocr-pos-receipts.md` and `docs/expenses/index.md`.
+
 ## Quick Start
 
 1. **Dev setup** → `docs/operations/README.md#initial-setup`

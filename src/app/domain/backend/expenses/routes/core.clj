@@ -12,13 +12,15 @@
     [app.domain.backend.expenses.routes.suppliers :as suppliers]))
 
 (defn routes
-  "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses."
-  [db]
+  "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses.
+  
+  app-config is optional and is passed to routes that need it (e.g., receipts for OCR)."
+  [db & [app-config]]
   ["/expenses"
    ["/upload" {:post {:handler (receipt-upload/admin-upload-handler db)}}]
    (suppliers/routes db)
    (payers/routes db)
-   (receipts/routes db)
+   (receipts/routes db app-config)
    (article-aliases/routes db)
    (price-observations/routes db)
    (expenses/routes db)

@@ -108,14 +108,14 @@
     (let [captured (atom nil)]
       (with-redefs [http-api/api-request (fn [config] (reset! captured config) ::xhr)
                     http-fx/http-effect (fn [_])]
-        (rf/dispatch-sync [:subscription/check-usage-limit :properties 12])
-        (is (= "/api/v1/subscription/usage-check?metric=properties&current_value=12"
+        (rf/dispatch-sync [:subscription/check-usage-limit :users 12])
+        (is (= "/api/v1/subscription/usage-check?metric=users&current_value=12"
               (:uri @captured))))))
 
   (testing "Usage success updates metric data"
     (reset-db!)
-    (rf/dispatch-sync [:subscription/check-usage-limit-success :properties {:limit 10}])
-    (is (= {:limit 10} (get-in @rf-db/app-db [:subscription :usage-checks :properties]))))
+    (rf/dispatch-sync [:subscription/check-usage-limit-success :users {:limit 10}])
+    (is (= {:limit 10} (get-in @rf-db/app-db [:subscription :usage-checks :users]))))
 
   (testing "Usage failure triggers effect"
     (reset-db!)

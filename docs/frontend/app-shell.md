@@ -12,24 +12,33 @@ Single-tenant frontend built with Shadow CLJS, Re-frame, and UIx. The app shell 
 
 ```clojure
 {:nrepl {:port 8777 :init-ns shadow.user}
+ :devtools {:http-port 9650 :http-host "localhost"}
  :source-paths ["src" "resources/db"]
  :builds
- {:app   {:target :browser
-          :output-dir "resources/public/js/main"
-          :asset-path "/js/main"
-          :modules {:app {:init-fn app.template.frontend.core/init
-                         :preloads [app.template.frontend.preload.silence]}}}
+ {:app {:target :browser
+        :output-dir "resources/public/js/main"
+        :asset-path "/js/main"
+        :devtools {:reload-strategy :full
+                  :auto-refresh true
+                  :after-load app.template.frontend.core/after-load}
+        :dev {:compiler-options {:closure-defines {re-frame.trace.trace-enabled? true}}
+              :modules {:app {:preloads [app.template.frontend.dev.tracing
+                                         app.template.frontend.dev.repl-tracing]}}}
+        :modules {:app {:init-fn app.template.frontend.core/init
+                        :preloads [app.template.frontend.preload.silence]}}}
 
   :admin {:target :browser
           :output-dir "resources/public/js/admin"
           :asset-path "/js/admin"
+          :devtools {:reload-strategy :full
+                    :auto-refresh true}
           :modules {:app {:init-fn app.admin.frontend.core/init
-                         :preloads [app.template.frontend.preload.silence
-                                    app.template.frontend.dev.tracing]}}}
+                          :preloads [app.template.frontend.preload.silence
+                                     app.template.frontend.dev.tracing]}}}
 
-  :test  {:target :browser-test
-          :test-dir "target/test"
-          :ns-regexp "-test$"}
+  :test {:target :browser-test
+         :test-dir "target/test"
+         :ns-regexp "-test$"}
   :test-node {:target :node-test
               :output-to "target/test-node.cjs"
               :ns-regexp "-test$"}

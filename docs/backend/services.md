@@ -15,7 +15,9 @@ This app runs a single-tenant admin backend. Multi-tenant domain services (hosti
 - **Suppliers** (`app.domain.backend.expenses.services.suppliers`) — CRUD, normalization/dedupe by `normalized_key`, search/count helpers.
 - **Payers** (`app.domain.backend.expenses.services.payers`) — CRUD, default-per-type management, suggestions from payment hints.
 - **Receipts** (`app.domain.backend.expenses.services.receipts`) — upload with file-hash dedupe, status transitions, approve → post expense, extraction storage.
+- **Receipt OCR (Mistral)** (`app.domain.backend.expenses.integrations.mistral-ocr`, `app.domain.backend.expenses.workers.receipt-ocr`) — out-of-band worker that processes uploaded receipts and populates markdown + extraction results/guesses.
 - **Expenses** (`app.domain.backend.expenses.services.expenses`) — create/update with line items, soft delete, listing filters; records price observations.
+- **Expense Items** (`app.domain.backend.expenses.services.expense-items`) — standalone CRUD for `expense_items` line items (list/count/search; joins to expense/supplier/payer/article for admin tables).
 - **Articles/Aliases/Price history** (`app.domain.backend.expenses.services.articles`, `price-history`) — canonical articles, alias mapping, price observation queries.
 - **Reports** (`app.domain.backend.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
 - **Routes** are mounted under `/admin/api/expenses` via the backend domain registry (`app.domain.backend.registry`). The concrete implementation lives in `app.domain.backend.expenses.routes.*` (see `docs/backend/http-api.md` for endpoint map).

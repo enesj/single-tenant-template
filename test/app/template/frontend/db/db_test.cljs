@@ -13,11 +13,10 @@
                     [:full_name [:varchar 255]]
                     [:role [:enum :user-role]]]
            :types [[:user-role :enum {:choices ["admin" "member"]}]]}
-   :properties {:fields [[:id :uuid {:primary-key true}]
-                         [:tenant_id :uuid]
-                         [:name [:varchar 255]]
-                         [:status [:enum :property-status]]]
-                :types [[:property-status :enum {:choices ["active" "inactive"]}]]}})
+   :suppliers {:fields [[:id :uuid {:primary-key true}]
+                        [:display_name [:varchar 255]]
+                        [:normalized_key [:varchar 255]]]
+               :types []}})
 
 (def simple-models-data-vector
   (mapv (fn [[k v]] [(name k) v]) simple-models-data))
@@ -70,33 +69,31 @@
 
 (defn build-complex-db
   [models-data]
-  (let [txn-id (keyword "txn" "1")]
+  (let [expense-id (keyword "expense" "1")]
     (-> (template-db/make-db-with-models-data template-db/default-db models-data)
       (augment-with-sample-entity-state :users)
-      (update-in [:entities :properties]
+      (update-in [:entities :suppliers]
         (fn [store]
           (let [store (or store {:data {} :ids [] :metadata {}})]
             (-> store
-              (assoc :data {"prop-1" {:id "prop-1"
-                                      :tenant_id "tenant-123"
-                                      :name "Riverfront Condo"
-                                      :status "active"
-                                      :settings {}}})
-              (assoc :ids ["prop-1"])
+              (assoc :data {"sup-1" {:id "sup-1"
+                                     :display_name "Corner Store"
+                                     :normalized_key "corner-store"}})
+              (assoc :ids ["sup-1"])
               (assoc-in [:metadata :context] {:source :fixture})))))
-      (update-in [:entities :transactions]
+      (update-in [:entities :expenses]
         (fn [store]
           (let [store (or store {:data {} :ids [] :metadata {}})]
             (-> store
-              (assoc :data {txn-id {:id txn-id
-                                    :tenant_id "tenant-123"
-                                    :description "First rent payment"
-                                    :amount 1200.5
-                                    :tags []}})
-              (assoc :ids [txn-id])
+              (assoc :data {expense-id {:id expense-id
+                                        :supplier_id "sup-1"
+                                        :payer_id "payer-1"
+                                        :total_amount 42.50
+                                        :notes "Sample expense"}})
+              (assoc :ids [expense-id])
               (assoc-in [:metadata :stats] {:total 1})))))
-      (assoc-in [:ui :entity-configs :properties :visible-columns] {:name true :status true})
-      (assoc-in [:ui :lists :properties :selected-ids] #{"prop-1"}))))
+      (assoc-in [:ui :entity-configs :suppliers :visible-columns] {:display_name true :normalized_key true})
+      (assoc-in [:ui :lists :suppliers :selected-ids] #{"sup-1"}))))
 
 (defn throws-ex-info?
   [f]
@@ -112,13 +109,13 @@
 
   (testing "vector inputs are converted to a map of string keys"
     (let [vector-result (template-db/models-data->map simple-models-data-vector)]
-      (is (= #{"users" "properties"} (set (keys vector-result))))
+      (is (= #{"users" "suppliers"} (set (keys vector-result))))
       (is (= (:fields (:users simple-models-data))
             (:fields (get vector-result "users"))))))
 
   (testing "seq inputs are converted to a map"
     (let [seq-result (template-db/models-data->map (seq simple-models-data-vector))]
-      (is (= #{"users" "properties"} (set (keys seq-result)))))))
+      (is (= #{"users" "suppliers"} (set (keys seq-result)))))))
 
 (deftest validate-db-with-simple-models-test
   (testing "dynamic schema validates runtime state with keyword models-data"
@@ -172,159 +169,159 @@
 (deftest entity-paths-test
   (testing "entity-data path generation"
     (are [entity-type expected] (= expected (paths/entity-data entity-type))
-      :transactions [:entities :transactions :data]
-      :items [:entities :items :data]
-      :transaction-types [:entities :transaction-types :data]))
+      :expenses [:entities :expenses :data]
+      :suppliers [:entities :suppliers :data]
+      :receipts [:entities :receipts :data]))
 
   (testing "entity-ids path generation"
     (are [entity-type expected] (= expected (paths/entity-ids entity-type))
-      :transactions [:entities :transactions :ids]
-      :items [:entities :items :ids]
-      :transaction-types [:entities :transaction-types :ids]))
+      :expenses [:entities :expenses :ids]
+      :suppliers [:entities :suppliers :ids]
+      :receipts [:entities :receipts :ids]))
 
   (testing "entity-metadata path generation"
     (are [entity-type expected] (= expected (paths/entity-metadata entity-type))
-      :transactions [:entities :transactions :metadata]
-      :items [:entities :items :metadata]
-      :transaction-types [:entities :transaction-types :metadata]))
+      :expenses [:entities :expenses :metadata]
+      :suppliers [:entities :suppliers :metadata]
+      :receipts [:entities :receipts :metadata]))
 
   (testing "entity-loading? path generation"
     (are [entity-type expected] (= expected (paths/entity-loading? entity-type))
-      :transactions [:entities :transactions :metadata :loading?]
-      :items [:entities :items :metadata :loading?]
-      :transaction-types [:entities :transaction-types :metadata :loading?]))
+      :expenses [:entities :expenses :metadata :loading?]
+      :suppliers [:entities :suppliers :metadata :loading?]
+      :receipts [:entities :receipts :metadata :loading?]))
 
   (testing "entity-error path generation"
     (are [entity-type expected] (= expected (paths/entity-error entity-type))
-      :transactions [:entities :transactions :metadata :error]
-      :items [:entities :items :metadata :error]
-      :transaction-types [:entities :transaction-types :metadata :error]))
+      :expenses [:entities :expenses :metadata :error]
+      :suppliers [:entities :suppliers :metadata :error]
+      :receipts [:entities :receipts :metadata :error]))
 
   (testing "entity-last-updated path generation"
     (are [entity-type expected] (= expected (paths/entity-last-updated entity-type))
-      :transactions [:entities :transactions :metadata :last-updated]
-      :items [:entities :items :metadata :last-updated]
-      :transaction-types [:entities :transaction-types :metadata :last-updated]))
+      :expenses [:entities :expenses :metadata :last-updated]
+      :suppliers [:entities :suppliers :metadata :last-updated]
+      :receipts [:entities :receipts :metadata :last-updated]))
 
   (testing "entity-success path generation"
     (are [entity-type expected] (= expected (paths/entity-success entity-type))
-      :transactions [:entities :transactions :metadata :success]
-      :items [:entities :items :metadata :success]
-      :transaction-types [:entities :transaction-types :metadata :success])))
+      :expenses [:entities :expenses :metadata :success]
+      :suppliers [:entities :suppliers :metadata :success]
+      :receipts [:entities :receipts :metadata :success])))
 
 (deftest form-paths-test
   (testing "form-data path generation"
     (are [entity-type expected] (= expected (paths/form-data entity-type))
-      :transactions [:forms :transactions :data]
-      :items [:forms :items :data]
-      :transaction-types [:forms :transaction-types :data]))
+      :expenses [:forms :expenses :data]
+      :suppliers [:forms :suppliers :data]
+      :receipts [:forms :receipts :data]))
 
   (testing "form-field path generation"
     (are [entity-type field expected] (= expected (paths/form-field entity-type field))
-      :transactions :amount [:forms :transactions :data :amount]
-      :items :description [:forms :items :data :description]
-      :transaction-types :name [:forms :transaction-types :data :name]))
+      :expenses :total_amount [:forms :expenses :data :total_amount]
+      :suppliers :display_name [:forms :suppliers :data :display_name]
+      :receipts :status [:forms :receipts :data :status]))
 
   (testing "form-errors path generation"
     (are [entity-type expected] (= expected (paths/form-errors entity-type))
-      :transactions [:forms :transactions :errors]
-      :items [:forms :items :errors]
-      :transaction-types [:forms :transaction-types :errors]))
+      :expenses [:forms :expenses :errors]
+      :suppliers [:forms :suppliers :errors]
+      :receipts [:forms :receipts :errors]))
 
   (testing "form-field-error path generation"
     (are [entity-type field expected] (= expected (paths/form-field-error entity-type field))
-      :transactions :amount [:forms :transactions :errors :amount]
-      :items :description [:forms :items :errors :description]
-      :transaction-types :name [:forms :transaction-types :errors :name]))
+      :expenses :total_amount [:forms :expenses :errors :total_amount]
+      :suppliers :display_name [:forms :suppliers :errors :display_name]
+      :receipts :status [:forms :receipts :errors :status]))
 
   (testing "form-submitting? path generation"
     (are [entity-type expected] (= expected (paths/form-submitting? entity-type))
-      :transactions [:forms :transactions :submitting?]
-      :items [:forms :items :submitting?]
-      :transaction-types [:forms :transaction-types :submitting?]))
+      :expenses [:forms :expenses :submitting?]
+      :suppliers [:forms :suppliers :submitting?]
+      :receipts [:forms :receipts :submitting?]))
 
   (testing "form-submitted? path generation"
     (are [entity-type expected] (= expected (paths/form-submitted? entity-type))
-      :transactions [:forms :transactions :submitted?]
-      :items [:forms :items :submitted?]
-      :transaction-types [:forms :transaction-types :submitted?]))
+      :expenses [:forms :expenses :submitted?]
+      :suppliers [:forms :suppliers :submitted?]
+      :receipts [:forms :receipts :submitted?]))
 
   (testing "form-dirty-fields path generation"
     (are [entity-type expected] (= expected (paths/form-dirty-fields entity-type))
-      :transactions [:forms :transactions :dirty-fields]
-      :items [:forms :items :dirty-fields]
-      :transaction-types [:forms :transaction-types :dirty-fields]))
+      :expenses [:forms :expenses :dirty-fields]
+      :suppliers [:forms :suppliers :dirty-fields]
+      :receipts [:forms :receipts :dirty-fields]))
 
   (testing "form-server-errors paths"
     (are [entity-type expected] (= expected (paths/form-server-errors-all entity-type))
-      :transactions [:forms :transactions :server-errors]
-      :items [:forms :items :server-errors])
+      :expenses [:forms :expenses :server-errors]
+      :suppliers [:forms :suppliers :server-errors])
 
     (are [entity-type field expected] (= expected (paths/form-server-errors entity-type field))
-      :transactions :amount [:forms :transactions :server-errors :amount]
-      :items :description [:forms :items :server-errors :description]))
+      :expenses :total_amount [:forms :expenses :server-errors :total_amount]
+      :suppliers :display_name [:forms :suppliers :server-errors :display_name]))
 
   (testing "form-success paths"
     (are [entity-type expected] (= expected (paths/form-success-all entity-type))
-      :transactions [:forms :transactions :success]
-      :items [:forms :items :success])
+      :expenses [:forms :expenses :success]
+      :suppliers [:forms :suppliers :success])
 
     (are [entity-type field expected] (= expected (paths/form-success entity-type field))
-      :transactions :amount [:forms :transactions :success :amount]
-      :items :description [:forms :items :success :description]))
+      :expenses :total_amount [:forms :expenses :success :total_amount]
+      :suppliers :display_name [:forms :suppliers :success :display_name]))
 
   (testing "form-waiting path generation"
     (are [entity-type expected] (= expected (paths/form-waiting entity-type))
-      :transactions [:forms :transactions :waiting]
-      :items [:forms :items :waiting]
-      :transaction-types [:forms :transaction-types :waiting])))
+      :expenses [:forms :expenses :waiting]
+      :suppliers [:forms :suppliers :waiting]
+      :receipts [:forms :receipts :waiting])))
 
 (deftest list-ui-paths-test
   (testing "list-ui-state path generation"
     (are [entity-type expected] (= expected (paths/list-ui-state entity-type))
-      :transactions [:ui :lists :transactions]
-      :items [:ui :lists :items]
-      :transaction-types [:ui :lists :transaction-types]))
+      :expenses [:ui :lists :expenses]
+      :suppliers [:ui :lists :suppliers]
+      :receipts [:ui :lists :receipts]))
 
   (testing "list-sort-config path generation"
     (are [entity-type expected] (= expected (paths/list-sort-config entity-type))
-      :transactions [:ui :lists :transactions :sort]
-      :items [:ui :lists :items :sort]
-      :transaction-types [:ui :lists :transaction-types :sort]))
+      :expenses [:ui :lists :expenses :sort]
+      :suppliers [:ui :lists :suppliers :sort]
+      :receipts [:ui :lists :receipts :sort]))
 
   (testing "list-current-page path generation"
     (are [entity-type expected] (= expected (paths/list-current-page entity-type))
-      :transactions [:ui :lists :transactions :pagination :current-page]
-      :items [:ui :lists :items :pagination :current-page]
-      :transaction-types [:ui :lists :transaction-types :pagination :current-page]))
+      :expenses [:ui :lists :expenses :pagination :current-page]
+      :suppliers [:ui :lists :suppliers :pagination :current-page]
+      :receipts [:ui :lists :receipts :pagination :current-page]))
 
   (testing "list-total-items path generation"
     (are [entity-type expected] (= expected (paths/list-total-items entity-type))
-      :transactions [:ui :lists :transactions :total-items]
-      :items [:ui :lists :items :total-items]
-      :transaction-types [:ui :lists :transaction-types :total-items]))
+      :expenses [:ui :lists :expenses :total-items]
+      :suppliers [:ui :lists :suppliers :total-items]
+      :receipts [:ui :lists :receipts :total-items]))
 
   (testing "list-per-page path generation"
     (are [entity-type expected] (= expected (paths/list-per-page entity-type))
-      :transactions [:ui :lists :transactions :per-page]
-      :items [:ui :lists :items :per-page]
-      :transaction-types [:ui :lists :transaction-types :per-page]))
+      :expenses [:ui :lists :expenses :per-page]
+      :suppliers [:ui :lists :suppliers :per-page]
+      :receipts [:ui :lists :receipts :per-page]))
 
   (testing "entity-selected-ids path generation"
     (are [entity-type expected] (= expected (paths/entity-selected-ids entity-type))
-      :transactions [:ui :lists :transactions :selected-ids]
-      :items [:ui :lists :items :selected-ids]
-      :transaction-types [:ui :lists :transaction-types :selected-ids]))
+      :expenses [:ui :lists :expenses :selected-ids]
+      :suppliers [:ui :lists :suppliers :selected-ids]
+      :receipts [:ui :lists :receipts :selected-ids]))
 
   (testing "entity-display-settings path generation"
     (are [entity-name expected] (= expected (paths/entity-display-settings entity-name))
-      :transactions [:ui :entity-configs :transactions]
-      :items [:ui :entity-configs :items]
-      :transaction-types [:ui :entity-configs :transaction-types])))
+      :expenses [:ui :entity-configs :expenses]
+      :suppliers [:ui :entity-configs :suppliers]
+      :receipts [:ui :entity-configs :receipts])))
 
 (deftest path-consistency-test
   (testing "All paths follow consistent naming convention"
-    (let [entity-types [:transactions :items :transaction-types]]
+    (let [entity-types [:expenses :suppliers :receipts]]
       (doseq [entity-type entity-types]
         (testing (str "Paths for " entity-type " are consistent")
           ;; Entity paths
@@ -341,28 +338,28 @@
 
 (deftest path-usage-patterns-test
   (testing "Path functions can be composed with get-in"
-    (let [sample-db {:entities {:transactions {:data {1 {:id 1 :amount 100}
-                                                      2 {:id 2 :amount 200}}
-                                               :ids [1 2]
-                                               :metadata {:loading? false}}}
-                     :forms {:transactions {:data {:amount 150}
-                                            :errors {:amount "Must be positive"}}}
-                     :ui {:lists {:transactions {:pagination {:current-page 1}
-                                                 :per-page 10}}}}]
+    (let [sample-db {:entities {:expenses {:data {1 {:id 1 :total_amount 100}
+                                                  2 {:id 2 :total_amount 200}}
+                                           :ids [1 2]
+                                           :metadata {:loading? false}}}
+                     :forms {:expenses {:data {:total_amount 150}
+                                        :errors {:total_amount "Must be positive"}}}
+                     :ui {:lists {:expenses {:pagination {:current-page 1}
+                                             :per-page 10}}}}]
 
       ;; Test entity data access
-      (is (= {1 {:id 1 :amount 100}
-              2 {:id 2 :amount 200}}
-            (get-in sample-db (paths/entity-data :transactions))))
+      (is (= {1 {:id 1 :total_amount 100}
+              2 {:id 2 :total_amount 200}}
+            (get-in sample-db (paths/entity-data :expenses))))
 
       ;; Test form field access
-      (is (= 150 (get-in sample-db (paths/form-field :transactions :amount))))
+      (is (= 150 (get-in sample-db (paths/form-field :expenses :total_amount))))
 
       ;; Test error access
-      (is (= "Must be positive" (get-in sample-db (paths/form-field-error :transactions :amount))))
+      (is (= "Must be positive" (get-in sample-db (paths/form-field-error :expenses :total_amount))))
 
       ;; Test list UI access
-      (is (= 1 (get-in sample-db (paths/list-current-page :transactions)))))))
+      (is (= 1 (get-in sample-db (paths/list-current-page :expenses)))))))
 
 (defn run-all-tests []
   (helpers/log-test-start "DB Path Tests")

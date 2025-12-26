@@ -15,11 +15,7 @@
    :show-filtering? true,
    :show-highlights? true,
    :show-timestamps? true},
-  :display-locks
-  {:show-edit? false,
-   :show-delete? false,
-   :show-batch-edit? false,
-   :show-batch-delete? false}},
+  :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
  :suppliers
  {:display-locks
   {:show-select? false,

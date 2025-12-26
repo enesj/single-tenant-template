@@ -1,13 +1,19 @@
 <!-- ai: {:namespaces [app.template.backend.routes.admin-api] :tags [:backend :http :single-tenant] :kind :reference} -->
 
-# HTTP API (Single-Tenant Admin)
+# HTTP API (Single-Tenant)
 
-This is the current admin API surface for the single-tenant app. All routes live under `/admin/api` on **http://localhost:8085** and are secured by admin auth middleware.
+This is the current HTTP API surface for the single-tenant app.
+
+- **Admin routes** live under `/admin/api` on **http://localhost:8085** and are secured by admin auth middleware.
+- **User routes** live under `/api/v1` (e.g. `/api/v1/expenses/**`) and are secured by user auth middleware.
 
 ## Base Shape
-- **Auth**: `app.template.backend.middleware.admin/wrap-admin-authentication` expects an admin token (dev mode may relax). Pass `x-admin-token: <token>` or the token cookie set by the admin login flow.
-- **Content**: JSON request/response. Success responses use `{:success true :data ...}`; errors use `{:success false :error {:message ...}}`.
-- **Middleware**: JSON body parsing + security headers + admin auth (for protected routes). Rate-limiting hooks are available but may be disabled in dev.
+- **Admin auth**: `app.template.backend.middleware.admin/wrap-admin-authentication` expects an admin token (dev mode may relax). Pass `x-admin-token: <token>` or the token cookie set by the admin login flow.
+- **User auth**: mounted by the template with a `wrap-user-authentication` middleware (session/cookie-based in the template).
+- **Content**: JSON request/response.
+  - Admin endpoints typically return `{:success true :data ...}` / `{:success false :error {:message ...}}`.
+  - User endpoints typically return `{:data ...}` / `{:error ...}`.
+- **Middleware**: JSON parsing + security headers + auth. Rate-limiting hooks are available but may be disabled in dev.
 
 ## Route Map (Key Endpoints)
 All paths are relative to `/admin/api`.
@@ -87,8 +93,10 @@ All paths are relative to `/admin/api`.
 **Receipts**
 - `GET /admin/api/expenses/receipts` – list; filters `status`, `limit/offset`, `order-dir`.
 - `GET /admin/api/expenses/receipts/pending` – pending for processing.
-- `POST /admin/api/expenses/receipts` – upload; requires `storage_key` and `file_hash` or `bytes`.
+- `POST /admin/api/expenses/upload` – multipart upload (`file`); stores under `upload/stripes/` and creates a receipt (status `uploaded`).
+- `POST /admin/api/expenses/receipts` – upload (programmatic); requires `storage_key` and `file_hash` or `bytes`.
 - `GET /admin/api/expenses/receipts/:id` – fetch one.
+- `DELETE /admin/api/expenses/receipts/:id` – delete receipt.
 - `POST /admin/api/expenses/receipts/:id/status` – set status.
 - `POST /admin/api/expenses/receipts/:id/retry` – reset to uploaded + bump retry.
 - `POST /admin/api/expenses/receipts/:id/fail` – mark failed with message/details.
@@ -104,10 +112,10 @@ All paths are relative to `/admin/api`.
 
 **Expense Items** (new 2025-12-25)
 - `GET /admin/api/expenses/expense-items` – list expense items with pagination and filters.
-- `POST /admin/api/expenses/expense-items` – create standalone expense item.
+- `POST /admin/api/expenses/expense-items` – create standalone expense item; requires `expense_id`, `raw_label`, `line_total` (optional `qty`, `unit_price`, `article_id`).
 - `GET /admin/api/expenses/expense-items/count` – total count with optional search.
 - `GET /admin/api/expenses/expense-items/:id` – fetch single expense item.
-- `PUT /admin/api/expenses/expense-items/:id` – update expense item.
+- `PUT /admin/api/expenses/expense-items/:id` – update expense item (e.g. `raw_label`, `qty`, `unit_price`, `line_total`, `article_id`).
 - `DELETE /admin/api/expenses/expense-items/:id` – delete expense item.
 
 **Articles / Price history**
@@ -151,8 +159,23 @@ Mounted at `/api/v1/expenses` (defined in `app.domain.backend.expenses.routes.us
 - `GET /api/v1/expenses/summary` – Expense summary metrics.
 - `GET /api/v1/expenses/by-month` – Monthly spending breakdown.
 - `GET /api/v1/expenses/by-supplier` – Supplier spending breakdown.
-- `GET /api/v1/expenses/suppliers` – List active suppliers.
-- `GET /api/v1/expenses/payers` – List active payment methods.
+
+**Reference Data (shared catalog)**
+- `GET /api/v1/expenses/suppliers` – list suppliers.
+- `POST /api/v1/expenses/suppliers` – create supplier (role-gated to `member|admin`).
+- `PUT /api/v1/expenses/suppliers/:id` – update supplier (role-gated to `member|admin`).
+- `DELETE /api/v1/expenses/suppliers/:id` – delete supplier (role-gated to `member|admin`).
+
+- `GET /api/v1/expenses/payers` – list payers.
+- `POST /api/v1/expenses/payers` – create payer (role-gated to `member|admin`).
+- `PUT /api/v1/expenses/payers/:id` – update payer (role-gated to `member|admin`).
+- `DELETE /api/v1/expenses/payers/:id` – delete payer (role-gated to `member|admin`).
+
+**Receipts**
+- `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`).
+- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit/offset`, `order_dir`).
+- `GET /api/v1/expenses/receipts/:id` – fetch receipt.
+- `POST /api/v1/expenses/receipts/:id/approve` – approve receipt and create expense.
 
 **CRUD Operations**
 - `GET /api/v1/expenses` – List user expenses.

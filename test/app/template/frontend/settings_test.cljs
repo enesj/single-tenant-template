@@ -162,10 +162,10 @@
         "Should toggle entity-specific setting back to true"))
 
     ;; Test toggle for different entity
-    (rf/dispatch-sync [::ui-state-events/toggle-timestamps :transactions])
+    (rf/dispatch-sync [::ui-state-events/toggle-timestamps :expenses])
     (let [db @rf-db/app-db]
-      (is (true? (get-in db [:ui :entity-prefs :transactions :display :show-timestamps?]))
-        "Should create entity-specific override for transactions"))
+      (is (true? (get-in db [:ui :entity-prefs :expenses :display :show-timestamps?]))
+        "Should create entity-specific override for expenses"))
 
     ;; Test toggle highlights
     (rf/dispatch-sync [::ui-state-events/toggle-highlights :items])
@@ -221,16 +221,16 @@
     ;; Set up multiple entity configurations
     (rf/dispatch-sync [::test-set-entity-setting :items :show-edit? false])
     (rf/dispatch-sync [::test-set-entity-setting :items :show-timestamps? true])
-    (rf/dispatch-sync [::test-set-entity-setting :transactions :show-delete? false])
-    (rf/dispatch-sync [::test-set-entity-setting :transactions :show-highlights? false])
+    (rf/dispatch-sync [::test-set-entity-setting :expenses :show-delete? false])
+    (rf/dispatch-sync [::test-set-entity-setting :expenses :show-highlights? false])
 
     (let [db @rf-db/app-db]
       (is (= 2 (count (get-in db [:ui :entity-configs])))
         "Should have configurations for 2 entities")
       (is (contains? (get-in db [:ui :entity-configs]) :items)
         "Should have items configuration")
-      (is (contains? (get-in db [:ui :entity-configs]) :transactions)
-        "Should have transactions configuration"))
+      (is (contains? (get-in db [:ui :entity-configs]) :expenses)
+        "Should have expenses configuration"))
 
     ;; Clear specific entity configuration
     (rf/dispatch-sync [::test-clear-entity-config :items])
@@ -239,8 +239,8 @@
         "Should have 1 entity configuration after clearing items")
       (is (not (contains? (get-in db [:ui :entity-configs]) :items))
         "Should not have items configuration")
-      (is (contains? (get-in db [:ui :entity-configs]) :transactions)
-        "Should still have transactions configuration"))
+      (is (contains? (get-in db [:ui :entity-configs]) :expenses)
+        "Should still have expenses configuration"))
 
     ;; Clear all entity configurations
     (rf/dispatch-sync [::test-clear-all-entity-configs])
@@ -256,23 +256,23 @@
     ;; Test that settings work with different entity types
     ;; Set specific settings for each entity (only the ones that should be true)
     (rf/dispatch-sync [::test-set-entity-setting :items :show-edit? true])
-    (rf/dispatch-sync [::test-set-entity-setting :transactions :show-delete? true])
-    (rf/dispatch-sync [::test-set-entity-setting :transaction-types :show-timestamps? true])
+    (rf/dispatch-sync [::test-set-entity-setting :expenses :show-delete? true])
+    (rf/dispatch-sync [::test-set-entity-setting :receipts :show-timestamps? true])
 
     (let [db @rf-db/app-db]
       ;; Verify each entity has correct settings
       (is (true? (get-in db [:ui :entity-configs :items :show-edit?]))
         "Items should have show-edit enabled")
-      (is (true? (get-in db [:ui :entity-configs :transactions :show-delete?]))
-        "Transactions should have show-delete enabled")
-      (is (true? (get-in db [:ui :entity-configs :transaction-types :show-timestamps?]))
-        "Transaction-types should have show-timestamps enabled")
+      (is (true? (get-in db [:ui :entity-configs :expenses :show-delete?]))
+        "Expenses should have show-delete enabled")
+      (is (true? (get-in db [:ui :entity-configs :receipts :show-timestamps?]))
+        "Receipts should have show-timestamps enabled")
 
       ;; Verify other settings are not set for entities (should be nil since not set)
       (is (nil? (get-in db [:ui :entity-configs :items :show-delete?]))
         "Items should not have show-delete override")
-      (is (nil? (get-in db [:ui :entity-configs :transactions :show-edit?]))
-        "Transactions should not have show-edit override"))))
+      (is (nil? (get-in db [:ui :entity-configs :expenses :show-edit?]))
+        "Expenses should not have show-edit override"))))
 
 (deftest edge-cases-test
   (testing "Edge cases in settings management"

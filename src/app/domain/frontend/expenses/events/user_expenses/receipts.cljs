@@ -182,3 +182,75 @@
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error))
       (assoc-in (conj base-path :action-loading?) false)
       (assoc-in (conj base-path :error) (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; OCR Events (UI-triggered)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/ocr-receipt
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri (str endpoints/receipts-endpoint "/" receipt-id "/ocr")
+                    :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id "/ocr")
+                    :on-success [:user-expenses/ocr-receipt-success receipt-id]
+                    :on-failure [:user-expenses/ocr-receipt-failure receipt-id]})}))
+
+(rf/reg-event-fx
+  :user-expenses/ocr-receipt-success
+  common-interceptors
+  (fn [{:keys [db]} [_receipt-id _response]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) false)
+           (assoc-in (conj base-path :error) nil))
+     ;; Refresh the receipts list to show updated status
+     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]}))
+
+(rf/reg-event-db
+  :user-expenses/ocr-receipt-failure
+  common-interceptors
+  (fn [db [_receipt-id error]]
+    (log/warn "Failed to trigger OCR" {:error error})
+    (-> db
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/ocr-selected
+  common-interceptors
+  (fn [{:keys [db]} [receipt-ids]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri (str endpoints/receipts-endpoint "/ocr")
+                    :admin-uri (str endpoints/admin-receipts-endpoint "/ocr")
+                    :params {:receipt_ids (vec receipt-ids)}
+                    :on-success [:user-expenses/ocr-selected-success receipt-ids]
+                    :on-failure [:user-expenses/ocr-selected-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/ocr-selected-success
+  common-interceptors
+  (fn [{:keys [db]} [_receipt-ids _response]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) false)
+           (assoc-in (conj base-path :error) nil))
+     ;; Refresh the receipts list and clear selection
+     :dispatch-n [[:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+                  [:app.template.frontend.events.list/clear-selection :receipts]]}))
+
+(rf/reg-event-db
+  :user-expenses/ocr-selected-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to trigger batch OCR" {:error error})
+    (-> db
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (http/extract-error-message error)))))

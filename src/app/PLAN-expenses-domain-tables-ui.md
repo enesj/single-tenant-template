@@ -1,6 +1,6 @@
 # Expenses Domain — Admin + User Tables UI Plan
 
-Last updated: 2025-12-25
+Last updated: 2025-12-26
 
 This plan upgrades the “stub” admin pages for Expenses-domain reference entities (suppliers, articles, payers, etc.) into a drill-down friendly admin experience, and defines an incremental path for user-facing reference data.
 
@@ -31,11 +31,16 @@ These files already define most of what Phase 1 originally proposed to “add”
 - `src/app/domain/frontend/expenses/admin/config/table-columns.edn`
 - `src/app/domain/frontend/expenses/admin/config/view-options.edn`
 
-### Admin routes (list routes exist; detail routes missing)
+### Admin routes (list + detail routes exist)
 
-- Admin list routes already exist in `src/app/domain/frontend/expenses/routes.cljs` for:
-  `/expenses`, `/expenses/:id`, `/receipts`, `/suppliers`, `/articles`, `/payers`, `/article-aliases`, `/price-observations`.
-- There are currently **no admin detail routes** for suppliers/articles/payers/receipts/etc.
+- Admin routes exist in `src/app/domain/frontend/expenses/routes.cljs` for list + detail flows:
+  `/expenses`, `/expenses/:id`, `/expense-items`,
+  `/receipts`, `/receipts/:id`,
+  `/suppliers`, `/suppliers/:id`,
+  `/articles`, `/articles/:id`,
+  `/payers`, `/payers/:id`,
+  `/article-aliases`, `/article-aliases/:id`,
+  `/price-observations`, `/price-observations/:id`.
 
 ### Backend API (verified)
 
@@ -48,17 +53,18 @@ Important: the backend uses **plural keys for list** (e.g. `:suppliers`) and **s
 User API is mounted under `/api/v1/expenses`:
 - `src/app/domain/backend/expenses/routes/user_api.clj`
 
-Current user reference endpoints:
-- `GET /api/v1/expenses/suppliers` (list only)
-- `GET /api/v1/expenses/payers` (list only)
-- No user endpoints for articles/article-aliases/price-observations/receipts.
+Current user endpoints:
+- Suppliers: `GET/POST /api/v1/expenses/suppliers`, `PUT/DELETE /api/v1/expenses/suppliers/:id` (writes role-gated)
+- Payers: `GET/POST /api/v1/expenses/payers`, `PUT/DELETE /api/v1/expenses/payers/:id` (writes role-gated)
+- Receipt upload: `POST /api/v1/expenses/upload` (multipart `file`)
+- Receipts inbox: `GET /api/v1/expenses/receipts`, `GET /api/v1/expenses/receipts/:id`, `POST /api/v1/expenses/receipts/:id/approve`
 
 ### Frontend event generation (verified limitation)
 
 Admin list events are generated via the event factory configs:
 - `src/app/domain/frontend/expenses/events/entity_configs.cljs`
 
-Only `:expenses` currently declares a `:detail-response-key`. If we add detail pages for other entities, the frontend must be updated to expect the backend’s singular response keys (e.g. `:supplier`, `:article`, `:payer`, `:receipt`, etc.).
+Admin entity configs declare `:detail-response-key` in `src/app/domain/frontend/expenses/events/entity_configs.cljs` to match backend singular response keys (e.g. `:supplier`, `:article`, `:payer`, `:receipt`, etc.).
 
 ## 2) Constraints / Principles
 
@@ -139,22 +145,12 @@ Definition of done:
 - Receipts detail page supports at least retry + status change end-to-end.
 - Article aliases and price observations can be edited without manual UUID typing.
 
-### Phase 3 — Expense Items (Decision Point)
+### Phase 3 — Expense Items (Implemented)
 
 Current reality:
-- Expense items are stored in `expense_items` but are managed as nested `:items` within expense create/update.
-- There is no standalone admin CRUD route for `expense_items` today.
-
-Option A (recommended first): keep embedded, improve UX where it exists
-- Improve line-item UX in existing forms/components.
-- Add better “items” section on `admin-expense-detail` without adding a new entity.
-
-Option B: standalone expense items admin page (bigger scope)
-- Backend: add an admin endpoint (`/admin/api/expenses/expense-items`) + service + route config.
-- Frontend: add entity config + adapters + list page + (optional) detail page.
-
-Definition of done:
-- A chosen option is implemented and validated; avoid half-implementing both.
+- Expense items remain embedded on expense detail/edit flows (`:items`), but also have a standalone admin CRUD surface:
+  - Admin API: `/admin/api/expenses/expense-items`
+  - Admin page: `/admin/expense-items` (modal create/edit)
 
 ### Phase 4 — User-Facing Reference Data (Incremental)
 
@@ -181,20 +177,20 @@ Definition of done:
 
 #### Current State (Reality Check)
 
-The user API currently exposes *read-only* suppliers and payers lists:
-- `GET /api/v1/expenses/suppliers` — Returns all suppliers (no user filtering)
-- `GET /api/v1/expenses/payers` — Returns all payers (no user filtering)
-- No user endpoints for articles/article-aliases/price-observations/receipts
-- No write endpoints (POST/PUT/DELETE) for any reference data
+The user API exposes shared reference data + receipts flows:
+- `GET/POST /api/v1/expenses/suppliers` + `PUT/DELETE /api/v1/expenses/suppliers/:id` (writes role-gated to `member|admin`)
+- `GET/POST /api/v1/expenses/payers` + `PUT/DELETE /api/v1/expenses/payers/:id` (writes role-gated to `member|admin`)
+- `POST /api/v1/expenses/upload` (receipt upload, multipart `file`)
+- `GET /api/v1/expenses/receipts` + `GET /api/v1/expenses/receipts/:id` + `POST /api/v1/expenses/receipts/:id/approve`
 
-**No backend API changes needed for Phase 4.1** — read-only endpoints already exist.
+Write endpoints enforce role checks; viewers have read-only access.
 
 Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers` deep-links
 (see `src/app/domain/backend/registry.clj` → `:spa-routes`).
 
 ---
 
-#### Phase 4.1: User Read-Only Pages (No Backend Changes)
+#### Phase 4.1: User Reference Pages (Suppliers + Payers)
 
 **Status**: ✅ Implemented (2025-12-25)
 
@@ -210,7 +206,7 @@ Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers`
 3. Reuse or adapt admin table components:
    - Table rendering, pagination, column toggles
    - Hide "Add/Edit/Delete" actions for `viewer` role
-   - Show "Add" buttons for `member`/`admin` roles (non-functional until Phase 4.2)
+   - Enable add/edit/delete for `member`/`admin` roles (shared catalog)
 4. Role-based access:
    - `unassigned` → Redirect to pending assignment screen
    - `viewer`/`member`/`admin` → Can view pages
@@ -222,7 +218,7 @@ Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers`
 
 ---
 
-#### Phase 4.2: User Write Permissions (Requires Backend Work)
+#### Phase 4.2: User Write Permissions
 
 **Goal**: Allow `member` and `admin` roles to create, edit, and delete reference data in the shared catalog.
 
@@ -230,7 +226,7 @@ Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers`
 
 **Backend changes** (`src/app/domain/backend/expenses/routes/user_api.clj`):
 
-1. **Add CRUD endpoints for each reference entity**:
+1. **CRUD endpoints for reference entities**:
    ```clojure
    ;; Suppliers
    POST   /api/v1/expenses/suppliers           ; Create
@@ -241,11 +237,6 @@ Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers`
    POST   /api/v1/expenses/payers
    PUT    /api/v1/expenses/payers/:id
    DELETE /api/v1/expenses/payers/:id
-
-   ;; Articles (if needed for users)
-   POST   /api/v1/expenses/articles
-   PUT    /api/v1/expenses/articles/:id
-   DELETE /api/v1/expenses/articles/:id
    ```
 
 2. **Add authorization middleware**:

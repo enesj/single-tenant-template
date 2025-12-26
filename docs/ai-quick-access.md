@@ -26,10 +26,16 @@ If you get a `FileNotFoundException` when requiring `.cljs` files in the REPL, s
 ```
 (Use `:admin` if working on the admin panel).
 
+## 📊 Re-frame trace buffer (CLJS REPL)
+The `reframe-events-analysis` skill uses `app.template.frontend.dev.repl-tracing` (REPL query helpers) on top of the dev trace buffer.
+
+- It’s included in the `:app` dev build via `shadow-cljs.edn` under `:builds :app :dev :modules :app :preloads` (so `clojurescript_eval` can `require` it).
+- If `(require '[app.template.frontend.dev.repl-tracing :as repl-trace])` fails, verify that preload entry and reload the page.
+
 ## Canonical entry points
 - `docs/index.md` – doc IA
 - `docs/architecture/overview.md` – system overview
-- `docs/backend/http-api.md` – admin API surface
+- `docs/backend/http-api.md` – HTTP surfaces (admin + user)
 - `docs/backend/services.md` – backend services map
 - `docs/frontend/app-shell.md` – admin UI shell/routing
 - `docs/frontend/master-detail-form.md` – reusable wrapper for edit forms needing detail fetch
@@ -44,7 +50,7 @@ If you get a `FileNotFoundException` when requiring `.cljs` files in the REPL, s
 - DB/migrations: `resources/db/models.edn`, `docs/migrations/*`
 - Frontend config alignment: `bb validate-frontend-config`, `bb sync-frontend-config [--apply]`
 - Monitoring: audit/login events in `docs/backend/http-api.md` and `docs/reference/api-reference.md`
-- Home Expenses domain: endpoints in `docs/backend/http-api.md` (`/admin/api/expenses/**`), implementation plan `app-specs/home-expenses-tracker-plan.md`
+- Home Expenses domain: guide `docs/expenses/index.md`; endpoints in `docs/backend/http-api.md` (`/admin/api/expenses/**`, `/api/v1/expenses/**`); plans `app-specs/home-expenses-tracker-plan.md`, `PLAN-mistral-ocr-pos-receipts.md`; worker `bb receipt-ocr-worker` (set `MISTRAL_API_KEY`)
 - **Component IDs (browser testing)**: `INTERACTIVE-COMPONENTS-ID-AUDIT.md`, `docs/frontend/component-library.md#component-id-requirements`
 
 ## AI Skills & Debugging Tools

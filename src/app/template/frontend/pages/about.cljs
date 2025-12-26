@@ -11,13 +11,13 @@
       ($ :div {:class "ds-card-body"}
         ($ :h2 {:class "ds-card-title text-4xl"} "Our Application")
         ($ :p {:class "py-2"}
-          "A modern web application built with Clojure and ClojureScript for managing transactions and items efficiently.")
+          "A modern web application built with Clojure and ClojureScript for tracking expenses and receipts efficiently.")
         ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-6"}
           ($ :div
             ($ :h3 {:class "font-semibold text-2xl mb-3"} "Features")
             ($ :ul {:class "ds-menu ds-menu-lg bg-base-200 rounded-box"}
               ($ :li {:class "text-lg"} "Efficient item management")
-              ($ :li {:class "text-lg"} "Transaction tracking")
+              ($ :li {:class "text-lg"} "Expense tracking")
               ($ :li {:class "text-lg"} "Modern, responsive interface")
               ($ :li {:class "text-lg"} "Secure data handling")))
           ($ :div

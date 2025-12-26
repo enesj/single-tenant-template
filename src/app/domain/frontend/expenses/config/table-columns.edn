@@ -33,15 +33,31 @@
    "payer_id"
    "currency"
    "total_amount"
-   "is_posted"]}
-
+   "is_posted"]},
  :receipts
  {:available-columns
-  [:original-filename :status :supplier-guess :created-at :updated-at :id]
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"
+   "id"],
   :default-visible-columns
-  [:original-filename :status :supplier-guess :created-at :updated-at]
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"],
   :filterable-columns
-  [:original-filename :status :supplier-guess :created-at :updated-at]
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"],
   :sortable-columns
-  [:original-filename :status :supplier-guess :created-at :updated-at]
-  :always-visible [:original-filename :status]}}
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"],
+  :always-visible ["original-filename" "status"]}}

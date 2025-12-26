@@ -1,5 +1,28 @@
 #!/bin/bash
 
+# Load local environment variables (optional; never committed).
+# - `.env` supports KEY=VALUE lines (exported via `set -a`)
+# - `.api_credentials.sh` is a regular shell script with exports
+load_local_env() {
+    if [ -f ".env" ]; then
+        echo "🔐 Loading .env..."
+        set -a
+        # shellcheck disable=SC1091
+        if ! source .env; then
+            echo "⚠️  Failed to source .env (check syntax)"
+        fi
+        set +a
+    fi
+
+    if [ -f ".api_credentials.sh" ]; then
+        echo "🔐 Loading .api_credentials.sh..."
+        # shellcheck disable=SC1091
+        if ! source .api_credentials.sh; then
+            echo "⚠️  Failed to source .api_credentials.sh"
+        fi
+    fi
+}
+
 # Function to check if app is already running
 check_app_running() {
     echo "Checking if app is already running..."
@@ -43,6 +66,9 @@ printf "\033]0;🚀 Single-Tenant Template Server\007"
 
 # Check if app is already running before starting
 check_app_running
+
+# Load API keys / local config before starting services
+load_local_env
 
 # Ensure local dependencies are up
 echo "Bringing up Docker services..."

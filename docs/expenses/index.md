@@ -12,8 +12,8 @@ The expenses domain provides comprehensive financial management functionality fo
 
 The expenses domain consists of several interconnected entities:
 
-1. **Expenses** (`expense_entries`) - Main expense records with line items
-2. **Expense Items** (`expense_items`) - Individual line items within expenses (2025-12-25: Now with standalone admin CRUD support)
+1. **Expenses** (`expenses`) - Main expense records (header rows) with line items in `expense_items`
+2. **Expense Items** (`expense_items`) - Individual line items within an expense (2025-12-25: Now with standalone admin CRUD support)
 3. **Receipts** (`receipts`) - Digital receipt storage and OCR processing
 4. **Suppliers** (`suppliers`) - Vendor/supplier management
 5. **Payers** (`payers`) - Payment method management
@@ -39,20 +39,23 @@ Articles ───► Article Aliases   │
 
 ### Routes and Pages
 
-All expense domain pages are accessible under `/admin` with the following routes:
+The expenses domain contributes the following routes under `/admin` (see `src/app/domain/frontend/expenses/routes.cljs`):
 
 - `/expenses` - List and manage expenses
-- `/expenses/new` - Create new expense
-- `/expenses/:id` - Edit existing expense
-- `/expense-items` - List and manage individual expense line items (new 2025-12-25)
-- `/expense-items/new` - Create standalone expense item
-- `/expense-items/:id` - Edit existing expense item
-- `/receipts` - View and process receipts
-- `/suppliers` - Manage suppliers
-- `/payers` - Manage payment methods
-- `/articles` - Manage product catalog (new)
-- `/article-aliases` - Manage article aliases (new)
-- `/price-observations` - View price history (new)
+- `/expenses/:id` - Expense detail / edit view
+- `/expense-items` - List and manage individual expense line items (new 2025-12-25; create/edit via modal)
+- `/receipts` - Receipt inbox
+- `/receipts/:id` - Receipt detail / processing view
+- `/suppliers` - Supplier list
+- `/suppliers/:id` - Supplier detail / edit view
+- `/payers` - Payer list
+- `/payers/:id` - Payer detail / edit view
+- `/articles` - Article list
+- `/articles/:id` - Article detail / edit view
+- `/article-aliases` - Article alias list
+- `/article-aliases/:id` - Article alias detail / edit view
+- `/price-observations` - Price observations list
+- `/price-observations/:id` - Price observation detail / edit view
 
 ### Components and Features
 
@@ -99,7 +102,7 @@ User-facing forms (the `/expenses/...` pages) use the domain-owned UI config und
 
 #### Master/Detail Edit Forms (Expense + Line Items)
 
-Expense edit modals need a **detail fetch** to populate line items (`:items`). To avoid duplicated orchestration code (requested flags, detail fetch, memoization to prevent Fork resets), the template provides a reusable wrapper:
+Expense edit views/forms need a **detail fetch** to populate line items (`:items`). To avoid duplicated orchestration code (requested flags, detail fetch, memoization to prevent Fork resets), the template provides a reusable wrapper:
 
 - `app.template.frontend.components.form.master-detail/master-detail-form`
 - Doc: `docs/frontend/master-detail-form.md`
@@ -117,24 +120,33 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 
 ### Routes
 
-- `/expenses` - Personal expense dashboard and list
+- `/expenses` - Personal expense dashboard
+- `/expenses/list` - Expense list/history
 - `/expenses/new` - Quick expense entry
-- `/expenses/upload` - Receipt upload wizard
+- `/expenses/upload` - Receipt upload wizard (creates a `receipts` row)
+- `/receipts` - Receipts inbox (review + approve)
+- `/receipts/:receipt-id` - Receipt detail / approve flow
+- `/suppliers` - Suppliers reference data
+- `/payers` - Payers reference data
+- `/expenses/:expense-id` - Expense detail
 - `/expenses/reports` - Personal spending reports
 
 ### Key Features
 
 1. **Dashboard**: Overview of recent spending and monthly trends (`expenses_dashboard.cljs`)
-2. **Quick Entry**: Simplified form for rapid expense recording (`expense_new.cljs`)
-3. **Smart Upload**: Drag-and-drop receipt upload with OCR status tracking (`expense_upload.cljs`)
-4. **Detail View**: Interactive expense details with inline editing (`expense_detail.cljs`)
-5. **Reports**: Visual breakdown of expenses by category and supplier (`expense_reports.cljs`)
+2. **History**: Expense list with filtering/pagination (`expenses_list.cljs`)
+3. **Quick Entry**: Simplified form for rapid expense recording (`expense_new.cljs`)
+4. **Receipt Upload**: Multipart upload that creates a receipt for OCR processing (`expense_upload.cljs`)
+5. **Receipts Inbox**: Review receipts and approve into expenses (`receipts_list.cljs`, `receipt_detail.cljs`)
+6. **Reference Data**: Browse/manage suppliers and payers (`suppliers.cljs`, `payers.cljs`)
+7. **Reports**: Visual breakdown of expenses by category and supplier (`expense_reports.cljs`)
 
 ## Backend Implementation
 
 ### API Endpoints
 
-All expense domain APIs are mounted under `/admin/api/expenses`:
+Admin expense domain APIs are mounted under `/admin/api/expenses`.
+User-facing APIs are mounted under `/api/v1/expenses` (upload, receipts inbox, suppliers/payers reference data, expenses CRUD).
 
 #### Core Entity Operations
 
@@ -151,7 +163,7 @@ All expense domain APIs are mounted under `/admin/api/expenses`:
 **Receipts**
 - File upload and storage
 - OCR processing workflow
-- Status management (uploaded → processing → approved → posted)
+- Status management (uploaded → parsing → parsed → extracting → extracted|review_required → approved → posted|failed)
 - Retry mechanism for failed processing
 
 **Expenses**
@@ -159,6 +171,10 @@ All expense domain APIs are mounted under `/admin/api/expenses`:
 - Item-to-article mapping
 - Posting status management
 - Date-range filtering
+
+**Expense Items** (new 2025-12-25)
+- Standalone admin CRUD for `expense_items` line items (in addition to the items embedded in expense detail).
+- Search spans raw label, article name, and the parent expense’s supplier/payer.
 
 **Articles**
 - Product catalog management
@@ -183,24 +199,57 @@ All expense domain APIs are mounted under `/admin/api/expenses`:
 Key services in `src/app/domain/backend/expenses/services/`:
 
 - **articles.clj** - Article CRUD and alias management
-- **price_history.clj** - Price observation tracking
-- **receipt_processing.clj** - OCR and receipt workflow
+- **article_aliases.clj** - Supplier-specific aliases mapped to articles
+- **expenses.clj** - Expense CRUD and detail fetch (includes line items)
+- **expense_items.clj** - Expense item CRUD (standalone admin page + API)
+- **price_history.clj** - Price observation queries/helpers
+- **price_observations.clj** - Price observations CRUD (and linking to expense items)
+- **receipts.clj** - Receipt upload/status workflow and approval → expense creation
 - **suppliers.clj** - Supplier management
 - **payers.clj** - Payment method management
+- **reports.clj** - Summary and breakdown reports
 
 ## Data Models
 
 ### Core Tables
 
 ```clojure
-;; Expenses (expense_entries)
+;; Receipts (receipts)
 {:id :uuid
+ :user_id :uuid?
+ :storage_key :string
+ :file_hash :string
+ :original_filename :string?
+ :content_type :string?
+ :file_size :int?
+ :status :enum
+ :raw_parse_json :json?
+ :raw_extract_json :json?
+ :parsed_markdown :string?
+ :supplier_guess :string?
+ :total_amount_guess :decimal?
+ :currency_guess :enum?
+ :purchased_at_guess :timestamp?
+ :payment_hints :json?
+ :error_message :string?
+ :error_details :json?
+ :retry_count :int
+ :expense_id :uuid?
+ :created_at :timestamp
+ :updated_at :timestamp}
+
+;; Expenses (expenses)
+{:id :uuid
+ :user_id :uuid?
+ :receipt_id :uuid?
  :supplier_id :uuid
  :payer_id :uuid
+ :purchased_at :timestamp
  :total_amount :decimal
- :currency :string
- :date :date
- :is_posted? :boolean
+ :currency :enum
+ :notes :string?
+ :is_posted :boolean
+ :deleted_at :timestamp?
  :created_at :timestamp
  :updated_at :timestamp}
 
@@ -208,33 +257,39 @@ Key services in `src/app/domain/backend/expenses/services/`:
 {:id :uuid
  :expense_id :uuid
  :article_id :uuid?
- :description :string
- :quantity :decimal
+ :raw_label :string
+ :qty :decimal
  :unit_price :decimal
- :total_price :decimal}
+ :line_total :decimal
+ :created_at :timestamp}
 
 ;; Articles
 {:id :uuid
  :canonical_name :string
- :description :string?
+ :normalized_key :string
+ :barcode :string?
  :category :string?
- :active? :boolean
- :created_at :timestamp}
+ :created_at :timestamp
+ :updated_at :timestamp}
 
 ;; Article Aliases
 {:id :uuid
- :article_id :uuid
  :supplier_id :uuid
- :alias_name :string
+ :article_id :uuid
+ :raw_label_normalized :string
+ :confidence :int
  :created_at :timestamp}
 
 ;; Price Observations
 {:id :uuid
  :article_id :uuid
  :supplier_id :uuid
- :price :decimal
- :currency :string
- :observed_at :date
+ :expense_item_id :uuid?
+ :observed_at :timestamp
+ :unit_price :decimal?
+ :line_total :decimal
+ :qty :decimal?
+ :currency :enum
  :created_at :timestamp}
 ```
 
@@ -242,12 +297,18 @@ Key services in `src/app/domain/backend/expenses/services/`:
 
 ### Receipt Processing Flow
 
-1. **Upload**: User uploads receipt image/file
-2. **Processing**: OCR service extracts expense data
-3. **Review**: Admin reviews extracted data
+1. **Upload**: User uploads receipt image/file (creates a `receipts` row with status `uploaded`)
+2. **OCR (async)**: Receipt OCR worker processes pending receipts and stores markdown/extraction + guess fields (status transitions toward `extracted` / `review_required`)
+3. **Review**: User/admin reviews receipt detail and adjusts extracted data as needed
 4. **Mapping**: Map items to articles (create if needed)
 5. **Approval**: Approve receipt and create expense
-6. **Posting**: Mark expense as posted for accounting
+6. **Posting**: Receipt becomes `posted` after expense creation
+
+### Receipt OCR Worker (Mistral)
+
+- Run one-shot processing: `bb receipt-ocr-worker dev`
+- Run continuously: `bb receipt-ocr-worker dev --loop` (polls every 30s by default)
+- Requires `MISTRAL_API_KEY` (disable with `MISTRAL_OCR_ENABLED=false`); see `PLAN-mistral-ocr-pos-receipts.md` for details.
 
 ### Price Tracking Flow
 

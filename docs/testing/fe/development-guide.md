@@ -367,6 +367,12 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 ```
 (Replace `:app` with `:admin` if working on the admin panel).
 
+#### Issue: You can’t query re-frame trace history from the CLJS REPL
+
+**Cause**: The trace query helpers namespace isn’t loaded in the running app build.
+
+**Solution**: Ensure `app.template.frontend.dev.repl-tracing` is included in the `:app` dev preloads (`shadow-cljs.edn` → `:builds :app :dev :modules :app :preloads`), then reload the page so `clojurescript_eval` can `require` it.
+
 #### Issue: Test passes in Node.js but fails in Karma
 
 **Cause**: Browser environment handles props differently (UIx argv structure)

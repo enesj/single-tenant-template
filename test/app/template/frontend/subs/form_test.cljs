@@ -21,12 +21,12 @@
   (testing "field state subs read from db"
     (reset-db! {:forms {:items {:errors {:name "err"}
                                 :success {:name true}}
-                        :transactions {:server-errors {:amount {:message "invalid"}}
-                                       :success {:amount false}}}})
+                        :expenses {:server-errors {:total_amount {:message "invalid"}}
+                                   :success {:total_amount false}}}})
     (is (= "err"
           (:error @(rf/subscribe [::form-subs/field-validation-state :items :name]))))
     (is (= {:message "invalid"}
-          (:error @(rf/subscribe [::form-subs/field-server-validation-state :transactions :amount]))))))
+          (:error @(rf/subscribe [::form-subs/field-server-validation-state :expenses :total_amount]))))))
 
 (deftest all-fields-valid?-test
   (testing "Create mode validates required fields"

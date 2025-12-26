@@ -3,54 +3,10 @@
   (:require
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.auth-guard :refer [auth-guard]]
+    [app.template.frontend.components.file-drop-zone :refer [file-drop-zone]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
-
-;; ========================================================================
-;; Upload Component
-;; ========================================================================
-
-(defui file-drop-zone [{:keys [on-file-select uploading?]}]
-  (let [[drag-over? set-drag-over!] (use-state false)]
-    ($ :div {:id "dropzone-receipt-upload"
-             :class (str "border-2 border-dashed rounded-xl p-8 text-center transition-colors "
-                      (if drag-over?
-                        "border-primary bg-primary/5"
-                        "border-base-300 hover:border-primary/50"))
-             :on-drag-over (fn [e]
-                             (.preventDefault e)
-                             (set-drag-over! true))
-             :on-drag-leave #(set-drag-over! false)
-             :on-drop (fn [e]
-                        (.preventDefault e)
-                        (set-drag-over! false)
-                        (let [files (.. e -dataTransfer -files)]
-                          (when (pos? (.-length files))
-                            (on-file-select (aget files 0)))))}
-      (if uploading?
-        ($ :div {:class "flex flex-col items-center gap-4"}
-          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"})
-          ($ :p {:class "text-base-content/70"} "Processing receipt..."))
-        ($ :div {:class "flex flex-col items-center gap-4"}
-          ($ :div {:class "text-6xl"} "📷")
-          ($ :div
-            ($ :p {:class "font-semibold text-lg"} "Drop your receipt here")
-            ($ :p {:class "text-sm text-base-content/60 mt-1"}
-              "or click to browse"))
-          ($ :input {:type "file"
-                     :class "hidden"
-                     :id "receipt-upload"
-                     :accept "image/*,.pdf"
-                     :on-change (fn [e]
-                                  (let [file (.. e -target -files (item 0))]
-                                    (when file (on-file-select file))))})
-          ($ :label {:id "btn-choose-receipt-upload"
-                     :htmlFor "receipt-upload"
-                     :class "ds-btn ds-btn-primary ds-btn-sm cursor-pointer"}
-            "Choose File")
-          ($ :p {:class "text-xs text-base-content/50 mt-4"}
-            "Supports: JPG, PNG, PDF (max 10MB)"))))))
 
 (defui recent-uploads [{:keys [receipts]}]
   (when (seq receipts)
@@ -102,13 +58,21 @@
         auth-error (:error auth-status)
 
         uploading? (boolean (use-subscribe [:user-expenses/upload-loading?]))
+        upload-batch (use-subscribe [:user-expenses/upload-batch])
         upload-error (use-subscribe [:user-expenses/upload-error])
         recent-receipts (or (use-subscribe [:user-expenses/recent-receipts]) [])
-        [_selected-file set-selected-file!] (use-state nil)
+        uploading-label (when (and uploading? (map? upload-batch))
+                          (let [{:keys [total done failed current]} upload-batch
+                                processed (+ (or done 0) (or failed 0))
+                                idx (inc processed)]
+                                (when (and (number? total) (> total 1))
+                              (str "Uploading " idx " of " total
+                                (when current (str ": " current))
+                                "..."))))
 
-        handle-file-select (fn [file]
-                             (set-selected-file! file)
-                             (rf/dispatch [:user-expenses/upload-receipt file]))
+        handle-files-select (fn [files]
+                              (when (seq files)
+                                (rf/dispatch [:user-expenses/upload-receipts files])))
 
         handle-manual (fn []
                         (rf/dispatch [:navigate-to "/expenses/new"]))]
@@ -156,8 +120,19 @@
                  "You can review and edit the extracted information before saving."))
 
              ;; Upload zone
-             ($ file-drop-zone {:on-file-select handle-file-select
-                                :uploading? uploading?})
+             ($ file-drop-zone {:dropzone-id "dropzone-receipt-upload"
+                                :input-id "receipt-upload"
+                                :choose-button-id "btn-choose-receipt-upload"
+                                :on-files-select handle-files-select
+                                :uploading? uploading?
+                                :uploading-label (or uploading-label "Processing receipts...")
+                                :accept "image/*,.pdf"
+                                :multiple? true
+                                :title "Drop your receipts here"
+                                :subtitle "or click to browse"
+                                :choose-label "Choose Files"
+                                :icon "📷"
+                                :help-text "Supports: JPG, PNG, PDF (max 10MB)"})
 
              ;; Tips
              ($ :div {:class "mt-6 bg-base-200 rounded-lg p-4"}

@@ -25,7 +25,7 @@
 
      Args:
        tenant-id: The tenant context (required for multi-tenancy)
-       entity-key: The entity type (e.g., :properties, :users)
+       entity-key: The entity type (e.g., :expenses, :users)
        opts: Optional query parameters:
          - :filters - Map of field filters
          - :order-by - Ordering specification

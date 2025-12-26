@@ -106,6 +106,11 @@
     (get-in db [:user-expenses :upload :error])))
 
 (rf/reg-sub
+  :user-expenses/upload-batch
+  (fn [db _]
+    (get-in db [:user-expenses :upload :batch])))
+
+(rf/reg-sub
   :user-expenses/recent-receipts
   (fn [db _]
     (get-in db [:user-expenses :receipts :items])))

@@ -29,7 +29,8 @@
            :features-to-install
            [:formatters :hints]}}
 
-         :modules {:app {:preloads [app.template.frontend.dev.tracing]}}}
+         :modules {:app {:preloads [app.template.frontend.dev.tracing
+                                    app.template.frontend.dev.repl-tracing]}}}
 
    :modules
    {:app

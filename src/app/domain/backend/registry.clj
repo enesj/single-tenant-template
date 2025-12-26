@@ -4,8 +4,8 @@
    Each domain manifest contains:
    - :id - domain keyword identifier
    - :routes
-     - :admin-api - fn (fn [db] reitit-routes) for admin API
-     - :user-api - fn (fn [db wrap-auth-mw] reitit-routes) for user API
+     - :admin-api - fn (fn [db service-container] reitit-routes) for admin API
+     - :user-api - fn (fn [db wrap-auth-mw app-config] reitit-routes) for user API
    - :ui-config
      - :user - map with paths to domain-owned UI config EDN files
    - :redirects
@@ -20,10 +20,12 @@
 (def ^:private expenses-manifest
   {:id :expenses
    :routes
-   {:admin-api (fn [db _service-container]
-                 (expenses-admin-routes/routes db))
-    :user-api (fn [db wrap-user-auth]
-                (expenses-user-routes/routes db wrap-user-auth))}
+   {:admin-api (fn [db service-container]
+                 ;; Extract app-config from service-container for OCR routes
+                 (let [app-config (:config service-container)]
+                   (expenses-admin-routes/routes db app-config)))
+    :user-api (fn [db wrap-user-auth app-config]
+                (expenses-user-routes/routes db wrap-user-auth app-config))}
    :ui-config
    {:user {:root-dir "src/app/domain/frontend/expenses/config"
            :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
@@ -66,13 +68,46 @@
             (route-fn db service-container)))
     enabled-domains))
 
+(defn- fn-supports-arity?
+  "True if `f` has a declared invoke/doInvoke method for `arity`.
+
+  This is used to support both legacy (2-arity) and newer (3-arity) domain route fns."
+  [f arity]
+  (some (fn [^java.lang.reflect.Method m]
+          (and (#{"invoke" "doInvoke"} (.getName m))
+            (= arity (count (.getParameterTypes m)))))
+    (.getDeclaredMethods (class f))))
+
+(defn- call-user-api-route-fn
+  "Invoke a domain `:user-api` route function with the right arity.
+
+  Supported signatures:
+  - (fn [db wrap-user-auth] ...)
+  - (fn [db wrap-user-auth app-config] ...)
+  - (fn [db wrap-user-auth & [app-config]] ...)
+
+  Prefer passing `app-config` when supported."
+  [route-fn db wrap-user-auth app-config]
+  (cond
+    (fn-supports-arity? route-fn 3) (route-fn db wrap-user-auth app-config)
+    (fn-supports-arity? route-fn 2) (route-fn db wrap-user-auth)
+    ;; Fallback: preserve previous behavior.
+    :else (route-fn db wrap-user-auth app-config)))
+
 (defn all-user-api-routes
   "Collect user API routes from all enabled domains.
-   Returns a vector of reitit route vectors."
-  [db wrap-user-auth]
+   Returns a vector of reitit route vectors.
+
+   `app-config` is optional.
+
+   Domain `:user-api` fns support either 2 or 3 args:
+   - (fn [db wrap-user-auth] ...)
+   - (fn [db wrap-user-auth app-config] ...)
+   - (fn [db wrap-user-auth & [app-config]] ...)"
+  [db wrap-user-auth & [app-config]]
   (mapv (fn [manifest]
           (when-let [route-fn (get-in manifest [:routes :user-api])]
-            (route-fn db wrap-user-auth)))
+            (call-user-api-route-fn route-fn db wrap-user-auth app-config)))
     enabled-domains))
 
 (defn get-ui-config-paths

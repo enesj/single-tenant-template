@@ -4,7 +4,7 @@
 
 ## Overview
 
-This guide provides a systematic approach for converting snake_case naming violations to kebab-case throughout the codebase, based on our successful refactoring of the integrations and transactions monitoring systems.
+This guide provides a systematic approach for converting snake_case naming violations to kebab-case throughout the codebase, based on our successful refactoring of the integrations monitoring system.
 
 ## 🎯 Goals
 
@@ -147,7 +147,7 @@ rg --type cljs "get-in.*_" src/app/*/frontend/
 ```clojure
 ;; ✅ CORRECT - Database columns remain snake_case
 (:users/full_name user)      ; Keep as-is
-(:transactions_v2/id tx)     ; Keep as-is
+(:login_events/created_at e) ; Keep as-is
 (:total_amount item)         ; Keep as-is (from DB aggregation)
 
 ;; ✅ CORRECT - Only structure keys become kebab-case
@@ -201,10 +201,10 @@ bb lint && bb cljfmt-check
 ### Pitfall 1: Converting Database Column Names
 ```clojure
 ;; ❌ WRONG - Don't change database column names
-(:transactions-v2/id tx)     ; This will fail - DB uses snake_case
+(:login-events/id e)         ; This will fail - DB uses snake_case
 
 ;; ✅ CORRECT - Keep database columns as-is
-(:transactions_v2/id tx)     ; Matches actual DB column names
+(:login_events/id e)         ; Matches actual DB column names
 ```
 
 ### Pitfall 2: Inconsistent Key Conversion
