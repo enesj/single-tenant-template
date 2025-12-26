@@ -36,7 +36,13 @@
   ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
     ($ :div {:class "ds-card-body p-4"}
       ($ :div {:class "text-xs text-base-content/60"} label)
-      ($ :div {:class "text-sm font-medium break-words"} (or (some-> value str) "—")))))
+      ($ :div {:class "text-sm font-medium break-words"}
+        (shared/format-value value "—" false)))))
+
+(defn- format-money
+  [amount currency]
+  (when (some? amount)
+    (str amount (when currency (str " " currency)))))
 
 (defn- review-required-issues
   "Return a vector of human-readable reasons why a receipt is in review_required.
@@ -175,7 +181,26 @@
                   (label-value "Original Filename" (:original-filename receipt))
                   (label-value "Status" status)
                   (label-value "Supplier Guess" (:supplier-guess receipt))
+                  (label-value
+                    "Supplier Guess Match"
+                    (let [supplier (:supplier-guess-supplier receipt)]
+                      (if supplier
+                        ($ :div {:class "flex items-center gap-2"}
+                          ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
+                          ($ :a {:id (str "link-supplier-list-from-receipt-" rid-str)
+                                 :href "/suppliers"
+                                 :class "ds-link ds-link-primary"}
+                            (:display-name supplier)))
+                        ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"} "No"))))
                   (label-value "Total Guess" (:total-amount-guess receipt))
+                  (label-value "Lines Total Guess" (format-money (:lines-total-amount-guess receipt) (:currency-guess receipt)))
+                  (label-value
+                    "Total Guess = Lines Total?"
+                    (let [equal? (:total-guess-equals-lines-total-guess? receipt)]
+                      (cond
+                        (true? equal?) ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
+                        (false? equal?) ($ :span {:class "ds-badge ds-badge-error ds-badge-sm"} "No")
+                        :else nil)))
                   (label-value "Currency" (:currency-guess receipt))
                   (label-value "Purchased At" (:purchased-at-guess receipt))
                   (label-value "Expense ID" (:expense-id receipt))

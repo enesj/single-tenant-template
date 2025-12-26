@@ -483,7 +483,26 @@
                   (label-value "File Size" (str (:file-size receipt) " bytes"))
                   (label-value "Storage Key" (:storage-key receipt))
                   (label-value "Supplier Guess" (:supplier-guess receipt))
+                  (label-value
+                    "Supplier Guess Match"
+                    (let [supplier (:supplier-guess-supplier receipt)]
+                      (if supplier
+                        ($ :div {:class "flex items-center gap-2"}
+                          ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
+                          ($ :a {:id (str "link-supplier-from-receipt-" rid-str)
+                                 :href (str "/admin/suppliers/" (:id supplier))
+                                 :class "ds-link ds-link-primary"}
+                            (:display-name supplier)))
+                        ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"} "No"))))
                   (label-value "Total Guess" (:total-amount-guess receipt))
+                  (label-value "Lines Total Guess" (format-money (:lines-total-amount-guess receipt) (:currency-guess receipt)))
+                  (label-value
+                    "Total Guess = Lines Total?"
+                    (let [equal? (:total-guess-equals-lines-total-guess? receipt)]
+                      (cond
+                        (true? equal?) ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
+                        (false? equal?) ($ :span {:class "ds-badge ds-badge-error ds-badge-sm"} "No")
+                        :else nil)))
                   (label-value "Currency" (:currency-guess receipt))
                   (label-value "Purchased At" (:purchased-at-guess receipt))
                   (label-value "Retry Count" (:retry-count receipt))

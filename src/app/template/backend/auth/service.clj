@@ -281,7 +281,7 @@
 (defn process-oauth-callback
   "Single-tenant OAuth callback processing.
 
-   In the single-tenant template we don't create tenants or run an onboarding
+   In the single-tenant template we don't create tenants or run a tenant setup
    flow. We simply upsert a user in the :users table based on the provider
    email and return session data the frontend can use.
    
@@ -354,11 +354,7 @@
         {:user user-plain
          :authenticated true
          :provider provider
-         ;; Keep these keys for compatibility with template frontend, but
-         ;; they no longer drive any tenant-specific onboarding flow.
-         :is-new-signup new-user?
-         :onboarding-completed true
-         :onboarding-step nil}))
+         :is-new-signup new-user?}))
     (catch Exception e
       (log/error "Error processing OAuth callback (single-tenant):" (.getMessage e))
       (throw e))))

@@ -146,13 +146,19 @@
                    (:raw_extract_json receipt)
                    (:receipts/raw-extract-json receipt)
                    (:receipts/raw_extract_json receipt))
-        extract (cond
-                  (map? extract0) extract0
-                  (nil? extract0) {}
-                  (string? extract0) (try
-                                       (js->clj (js/JSON.parse extract0) :keywordize-keys true)
-                                       (catch :default _ {}))
-                  :else (js->clj extract0 :keywordize-keys true))
+        raw-extract (cond
+                      (map? extract0) extract0
+                      (nil? extract0) {}
+                      (string? extract0) (try
+                                           (js->clj (js/JSON.parse extract0) :keywordize-keys true)
+                                           (catch :default _ {}))
+                      :else (js->clj extract0 :keywordize-keys true))
+
+        ;; Worker persists a wrapper map like:
+        ;; {:provider ... :response ... :extraction {:merchant ... :totals ... :items ...}}
+        extraction (or (:extraction raw-extract)
+                     (:receipt-extraction raw-extract))
+        extract (if (map? extraction) extraction raw-extract)
 
         totals (let [t (or (:totals extract)
                          (:totals_extract extract)
@@ -160,11 +166,12 @@
                          {})]
                  (if (map? t) t {}))
 
-        items (or (:items extract)
-                (:line_items extract)
-                (:line-items extract)
-                (:receipt_items extract)
-                (:receipt-items extract))
+        items0 (or (:items extract)
+                 (:line_items extract)
+                 (:line-items extract)
+                 (:receipt_items extract)
+                 (:receipt-items extract))
+        items (when (sequential? items0) items0)
 
         purchased-at (or (:purchased_at extract)
                        (:purchased-at extract)
@@ -198,6 +205,11 @@
                    (some? currency0) (str currency0)
                    :else "BAM")
 
+        supplier (or (:supplier-guess-supplier receipt)
+                   (:supplier_guess_supplier receipt)
+                   (:receipts/supplier-guess-supplier receipt))
+        supplier-id (when (map? supplier) (:id supplier))
+
         normalize-item (fn [item]
                          (let [id (random-uuid)
                                raw-label (or (:raw_label item)
@@ -219,7 +231,7 @@
                    (:storage-key receipt)
                    (:storage_key receipt)
                    "(unknown)")]
-    {:supplier_id nil
+    {:supplier_id supplier-id
      :payer_id nil
      :purchased_at (datetime-local purchased-at true)
      :total_amount (if (number? total-amount) (format-decimal total-amount) "")

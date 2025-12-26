@@ -11,6 +11,7 @@
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [cheshire.core :as json]
@@ -87,6 +88,63 @@
         s))
     :else nil))
 
+(defn- parse-money
+  [v]
+  (cond
+    (nil? v) nil
+    (instance? java.math.BigDecimal v) v
+    (number? v) (bigdec v)
+    (string? v)
+    (let [s (-> v
+              str/trim
+              ;; keep digits/decimal separators/minus
+              (str/replace #"[^0-9,\.\-]" ""))
+          s (cond
+              ;; both separators present → treat commas as thousands
+              (and (str/includes? s ",") (str/includes? s ".")) (str/replace s "," "")
+              ;; only comma present → treat comma as decimal separator
+              (str/includes? s ",") (str/replace s "," ".")
+              :else s)]
+      (try
+        (bigdec s)
+        (catch Exception _ nil)))
+    :else nil))
+
+(defn- lines-total-amount-guess
+  "Sum extracted line totals (from raw_extract_json.extraction.items[].line_total).
+
+  Returns a BigDecimal or nil when no parseable line totals exist."
+  [receipt]
+  (let [items (get-in receipt [:raw-extract-json :extraction :items])]
+    (when (seq items)
+      (let [{:keys [sum count]}
+            (reduce
+              (fn [{:keys [sum count]} item]
+                (if-let [line-total (parse-money (:line-total item))]
+                  {:sum (+ sum line-total) :count (inc count)}
+                  {:sum sum :count count}))
+              {:sum 0M :count 0}
+              items)]
+        (when (pos? (long count))
+          sum)))))
+
+(defn- enrich-receipt-for-detail
+  [db receipt]
+  (let [supplier-guess (some-> (:supplier-guess receipt) str/trim not-empty)
+        normalized-key (when supplier-guess
+                         (suppliers/normalize-supplier-key supplier-guess))
+        supplier (when normalized-key
+                   (suppliers/find-by-normalized-key db normalized-key))
+        supplier-app (some-> supplier to-app (select-keys [:id :display-name :normalized-key]))
+        lines-total (lines-total-amount-guess receipt)
+        total (:total-amount-guess receipt)
+        total-equals-lines? (when (and (some? total) (some? lines-total))
+                              (zero? (compare total lines-total)))]
+    (cond-> (assoc receipt :supplier-guess-has-supplier? (boolean supplier))
+      supplier-app (assoc :supplier-guess-supplier supplier-app)
+      (some? lines-total) (assoc :lines-total-amount-guess lines-total)
+      (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))
+
 (defn- read-json-body
   [request]
   (or
@@ -154,7 +212,8 @@
             (if-let [receipt (if (= "admin" role)
                                (receipts/get-receipt db id)
                                (receipts/get-user-receipt db user-id id))]
-              (json-response {:data (to-app receipt)} 200)
+              (let [receipt-app (to-app receipt)]
+                (json-response {:data (enrich-receipt-for-detail db receipt-app)} 200))
               (json-response {:error "Receipt not found"} 404))
             (json-response {:error "Invalid id"} 400)))
         (unauthorized-response)))

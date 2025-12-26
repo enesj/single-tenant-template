@@ -1,7 +1,7 @@
 (ns app.admin.frontend.specs.conditional
   "Advanced field customizations with conditional visibility and dynamic behavior"
   (:require
-   [re-frame.core :as rf]))
+    [re-frame.core :as rf]))
 
 ;; ========================================================================
 ;; Conditional Visibility Engine
@@ -17,7 +17,7 @@
               (= (get record field) expected-value))
       condition)
 
-    ;; Set membership: {:subscription-tier #{"professional" "enterprise"}}
+    ;; Set membership: {:status #{"active" "suspended"}}
     (and (map? condition) (some #(set? (val %)) condition))
     (every? (fn [[field expected-values]]
               (if (set? expected-values)
@@ -80,11 +80,9 @@
   [role]
   (case role
     :support #{:view-basic :view-user-activity}
-    :admin #{:view-basic :view-user-activity :view-billing :modify-users}
-    :super-admin #{:view-basic :view-user-activity :view-billing :modify-users
-                   :view-sensitive :modify-billing :system-admin}
-    :platform-admin #{:view-basic :view-user-activity :view-billing :modify-users
-                      :view-sensitive :modify-billing :system-admin :platform-config}
+    :admin #{:view-basic :view-user-activity :modify-users}
+    :super-admin #{:view-basic :view-user-activity :modify-users :view-sensitive :system-admin}
+    :platform-admin #{:view-basic :view-user-activity :modify-users :view-sensitive :system-admin :platform-config}
     #{}))
 
 (defn get-admin-role
@@ -131,17 +129,13 @@
 (defmethod compute-field-value :tenant-health-score
   [_ record _all-records]
   (let [user-count (:user-count record 0)
-        subscription-status (:subscription-status record)
-        onboarding-completed (:onboarding-completed record false)
+
         last-activity-days (:days-since-last-activity record 0)]
     ;; Simple health scoring algorithm
     (+ (if (> user-count 0) 25 0)
-      (case subscription-status
-        "active" 25
-        "trialing" 15
-        "past_due" 10
-        0)
-      (if onboarding-completed 25 0)
+      25
+      ;; Single-tenant apps: keep score out of 100.
+      25
       (cond
         (<= last-activity-days 7) 25
         (<= last-activity-days 30) 15
@@ -298,15 +292,15 @@
       (filter-and-enhance-fields-for-record entity-spec record admin-role))))
 
 #_(rf/reg-sub
-  :admin/visible-fields-for-record
-  (fn [[_ entity-name record-id]]
-    (rf/subscribe [:admin/enhanced-entity-spec entity-name record-id]))
-  (fn [enhanced-spec [_ entity-name _]]
+    :admin/visible-fields-for-record
+    (fn [[_ entity-name record-id]]
+      (rf/subscribe [:admin/enhanced-entity-spec entity-name record-id]))
+    (fn [enhanced-spec [_ entity-name _]]
     ;; Use vector-based configuration for field visibility and ordering
-    (let [config @(rf/subscribe [:admin/visible-columns entity-name])
-          field-map enhanced-spec]
-      (if config
+      (let [config @(rf/subscribe [:admin/visible-columns entity-name])
+            field-map enhanced-spec]
+        (if config
         ;; Use the vector order from config
-        (keep #(get field-map %) config)
+          (keep #(get field-map %) config)
         ;; Fallback to all fields if no config
-        (vals enhanced-spec)))))
+          (vals enhanced-spec)))))

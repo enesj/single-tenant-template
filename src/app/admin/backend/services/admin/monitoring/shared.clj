@@ -130,11 +130,11 @@
    Returns top active tenants with normalized keys."
   [db time-threshold limit]
   (->> (jdbc/execute! db
-         (hsql/format {:select [:t.name :t.id :t.subscription_tier [[:count :al.id] :activity_count]]
+         (hsql/format {:select [:t.name :t.id [[:count :al.id] :activity_count]]
                        :from [[:tenants :t]]
                        :left-join [[:audit_logs :al] [:= :t.id :al.tenant_id]]
                        :where [:>= :al.created_at time-threshold]
-                       :group-by [:t.name :t.id :t.subscription_tier]
+                       :group-by [:t.name :t.id]
                        :having [:> [:count :al.id] 5]
                        :order-by [[[:count :al.id] :desc]]
                        :limit limit}))

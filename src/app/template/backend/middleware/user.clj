@@ -44,8 +44,7 @@
    ;; POST /entities/tenants – creation via generic API not allowed
     (= method :post)
     (do (log/warn "🚫 Tenant creation via generic API is not allowed")
-      (-> (response/response {:error "Tenant creation not allowed via this endpoint"
-                              :suggestion "Use onboarding flow for tenant creation"})
+      (-> (response/response {:error "Tenant creation not allowed via this endpoint"})
         (response/status 403)
         (response/content-type "application/json")))
 

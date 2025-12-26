@@ -456,7 +456,7 @@
 
 ;;
   ;; 4) One-time capture of existing DB objects to EDN
-  ;; - Useful when onboarding an existing DB:
+  ;; - Useful when setting up an existing DB:
   ;;     (sync-db-to-edn!)
   ;; - Then commit EDN and generate extended migrations as needed.
   ;;

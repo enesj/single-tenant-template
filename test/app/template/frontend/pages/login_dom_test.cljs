@@ -1,10 +1,10 @@
 (ns app.template.frontend.pages.login-dom-test
   (:require
-   ["react-dom/client" :as rdom]
-   [app.template.frontend.pages.login :as login]
-  [cljs.test :refer-macros [async deftest is]]
-   [uix.core :refer [$]]
-   [uix.re-frame :as uix-rf]))
+    ["react-dom/client" :as rdom]
+    [app.template.frontend.pages.login :as login]
+    [cljs.test :refer-macros [async deftest is]]
+    [uix.core :refer [$]]
+    [uix.re-frame :as uix-rf]))
 
 (defn- mount-component! [component assertions]
   (let [container (.createElement js/document "div")
@@ -25,7 +25,7 @@
     (with-redefs [uix-rf/use-subscribe (fn [sub]
                                          (case (first sub)
                                            :auth-status {:authenticated true :user {:full-name "User"}}
-                                           :current-tenant {:name "Acme" :subscription-tier :pro}
+                                           :current-tenant {:name "Acme"}
                                            nil))]
       (mount-component! ($ login/login-page)
         (fn [container]

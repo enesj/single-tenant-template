@@ -97,12 +97,7 @@
     (:view-details handlers)
     (assoc :view-details (fn [e]
                            (when (.-stopPropagation e) (.stopPropagation e))
-                           ((:view-details handlers) e)))
-
-    (:view-billing handlers)
-    (assoc :view-billing (fn [e]
-                           (when (.-stopPropagation e) (.stopPropagation e))
-                           ((:view-billing handlers) e)))))
+                           ((:view-details handlers) e)))))
 
 (defn create-update-handlers
   "Factory function to create update handlers for properties like role, tier, etc."

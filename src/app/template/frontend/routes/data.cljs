@@ -23,10 +23,10 @@
      :controllers (controllers/make-entity-controller :detail)}]
 
    ["/entities/:entity-name/update/:item-id"
-   {:name :entity-update
-    :view :entity-detail
-    :parameters {:path {:entity-name string? :item-id string?}}
-    :controllers (controllers/make-entity-controller :update)}]])
+    {:name :entity-update
+     :view :entity-detail
+     :parameters {:path {:entity-name string? :item-id string?}}
+     :controllers (controllers/make-entity-controller :update)}]])
 
 (def app-routes
   "Unified vector of all application routes"
@@ -76,16 +76,6 @@
         {:name :change-password
          :view :change-password
          :controllers (controllers/make-simple-controller :page/init-change-password)}]
-
-       ["/onboarding"
-        {:name :onboarding
-         :view :onboarding
-         :controllers (controllers/make-simple-controller :page/init-onboarding)}]
-
-       ["/subscription"
-        {:name :subscription
-         :view :subscription
-         :controllers (controllers/make-simple-controller :page/init-subscription)}]
 
        ["/about"
         {:name :about

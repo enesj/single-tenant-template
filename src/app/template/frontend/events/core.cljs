@@ -7,13 +7,13 @@
    This namespace acts as the entry point for the events system,
    ensuring all event handlers are properly registered through
    namespace requires."
-  (:require ;; Template event namespaces (loaded for side effects)
-           ;; These requires are essential for Re-frame event registration
+  (:require
+    ;; Template event namespaces (loaded for side effects)
+    ;; These requires are essential for Re-frame event registration
     app.template.frontend.events.auth
     app.template.frontend.events.bootstrap
     app.template.frontend.events.config
     app.template.frontend.events.messages
-    app.template.frontend.events.onboarding ;; Routing remains separate as already modular
     app.template.frontend.events.routing))
 
 ;; ========================================================================
@@ -27,7 +27,6 @@
 ;; - bootstrap: Application initialization, theme management, AJAX setup
 ;; - auth: Authentication flow, session management, logout functionality
 ;; - config: Configuration fetching, UI state management
-;; - onboarding: Complete onboarding workflow with step management
 ;; - routing: URL routing and navigation (already modular)
 ;;
 ;; By requiring all these namespaces, we ensure that their Re-frame
@@ -40,7 +39,6 @@
 ;; Future enhancement: If cross-domain events are needed, they would be
 ;; defined here. Examples might include:
 ;; - Authentication success triggering config fetch
-;; - Onboarding completion triggering dashboard initialization
 ;; - Theme changes affecting multiple domain UIs
 ;;
 ;; For now, cross-domain coordination is handled via :fx dispatches
@@ -60,5 +58,4 @@
 ;; - Bootstrap: ::bootstrap/* and infrastructure events
 ;; - Auth: ::auth/* and authentication-related page events
 ;; - Config: ::config/* and UI state management events
-;; - Onboarding: :onboarding/* and related workflow events
 ;; - Routing: Navigation and URL handling (unchanged)

@@ -97,11 +97,7 @@
                               :href "/entities"
                               :route :entities
                               :active? (active? #{:entities :entities-slash :entity-add :entity-detail :entity-update})})
-                   (nav-item {:id "user-sidebar-subscription"
-                              :label "Subscription"
-                              :href "/subscription"
-                              :route :subscription
-                              :active? (active? #{:subscription})})
+
                    (nav-item {:id "user-sidebar-about"
                               :label "About"
                               :href "/about"

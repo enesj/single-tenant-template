@@ -8,9 +8,9 @@
     (get-in db [:ui :entity-name])))
 
 #_(rf/reg-sub
-  ::editing-id
-  (fn [db _]
-    (get-in db [:ui :editing-id])))
+    ::editing-id
+    (fn [db _]
+      (get-in db [:ui :editing-id])))
 
 (rf/reg-sub
   ::show-add-form
@@ -18,9 +18,9 @@
     (get-in db [:ui :show-add-form])))
 
 #_(rf/reg-sub
-  ::get-db
-  (fn [db _]
-    db))
+    ::get-db
+    (fn [db _]
+      db))
 
 ;; Auth status subscription
 ;; Auth status subscription - updated for multi-tenant support
@@ -81,10 +81,10 @@
     (get-in db [:session :permissions] #{})))
 
 #_(rf/reg-sub
-  :user-can?
-  :<- [:user-permissions]
-  (fn [permissions [_ permission]]
-    (contains? permissions permission)))
+    :user-can?
+    :<- [:user-permissions]
+    (fn [permissions [_ permission]]
+      (contains? permissions permission)))
 
 (rf/reg-sub
   :user-role
@@ -103,12 +103,6 @@
   :<- [:current-tenant]
   (fn [tenant _]
     (:name tenant)))
-
-(rf/reg-sub
-  :tenant-subscription-tier
-  :<- [:current-tenant]
-  (fn [tenant _]
-    (:subscription-tier tenant)))
 
 ;; Models metadata
 (rf/reg-sub
@@ -136,9 +130,9 @@
     (get-in db [:password-reset :error])))
 
 #_(rf/reg-sub
-  :password-reset/message
-  (fn [db _]
-    (get-in db [:password-reset :message])))
+    :password-reset/message
+    (fn [db _]
+      (get-in db [:password-reset :message])))
 
 (rf/reg-sub
   :password-reset/token
@@ -170,24 +164,24 @@
     (get-in db [:change-password :error])))
 
 #_(rf/reg-sub
-  :change-password/message
-  (fn [db _]
-    (get-in db [:change-password :message])))
+    :change-password/message
+    (fn [db _]
+      (get-in db [:change-password :message])))
 
 ;; ========================================================================
 ;; Role-Based Access Subscriptions
 ;; ========================================================================
 
 #_(rf/reg-sub
-  :user/has-expenses-access?
-  :<- [:user-role]
-  (fn [role _]
+    :user/has-expenses-access?
+    :<- [:user-role]
+    (fn [role _]
     ;; Users with member role or higher have expense tracking access
     ;; unassigned and viewer roles do not have access
-    (contains? #{"member" "admin" "owner"} role)))
+      (contains? #{"member" "admin" "owner"} role)))
 
 #_(rf/reg-sub
-  :user/is-unassigned?
-  :<- [:user-role]
-  (fn [role _]
-    (= role "unassigned")))
+    :user/is-unassigned?
+    :<- [:user-role]
+    (fn [role _]
+      (= role "unassigned")))

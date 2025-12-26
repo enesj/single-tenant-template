@@ -99,7 +99,7 @@
   [{:keys [user error]}]
   (let [{:keys [email full-name id role status created-at updated-at
                 last-login _auth-provider email-verified email-verification-status
-                tenant-name tenant-slug tenant-subscription-tier]} user]
+                tenant-name tenant-slug]} user]
     ($ :div {:class "space-y-4"}
       (when error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -121,9 +121,7 @@
                     {:label "Last Updated" :value (date/format-display-date updated-at)}]}))
       ($ utils/detail-card
         {:title "Tenant"
-         :fields [{:label "Organization" :value (utils/tenant-label tenant-name tenant-slug)}
-                  {:label "Subscription"
-                   :value (utils/format-value tenant-subscription-tier)}]})
+         :fields [{:label "Organization" :value (utils/tenant-label tenant-name tenant-slug)}]})
       ($ user-actions-card {:user user}))))
 
 (defui user-details-modal

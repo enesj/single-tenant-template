@@ -182,7 +182,7 @@
 
 ;; Enhanced OAuth callback handler with tenant-aware authentication
 (defn oauth-callback-handler
-  "Create OAuth callback handler using authentication service with onboarding flow support"
+  "Create OAuth callback handler using authentication service"
   [auth-service]
   (fn [req]
     (route-utils/with-error-handling "oauth-callback"

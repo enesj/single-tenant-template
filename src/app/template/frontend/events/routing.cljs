@@ -33,13 +33,6 @@
     {:db (assoc-in db (paths/current-page) :about)}))
 
 (rf/reg-event-fx
-  :page/init-subscription
-  common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :subscription)
-     :dispatch [:subscription/initialize]}))
-
-(rf/reg-event-fx
   :page/init-entities
   common-interceptors
   (fn [{:keys [db]} _]

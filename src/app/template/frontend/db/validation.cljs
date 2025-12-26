@@ -45,8 +45,7 @@
     :app.template.frontend.events.config/fetch-config-success
     :page/init-entities
     :page/init-login
-    :page/init-logout
-    :page/init-onboarding})
+    :page/init-logout})
 
 (defn initialization-event?
   [event-id]

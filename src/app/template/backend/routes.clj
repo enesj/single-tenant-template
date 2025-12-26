@@ -9,7 +9,6 @@
     [app.template.backend.routes.oauth :as oauth]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.template.backend.routes.email-verification :as email-verification]
-    [app.template.backend.routes.onboarding :as onboarding]
     [clojure.stacktrace :as stacktrace]
     [clojure.string :as str]
     [reitit.ring :as ring]
@@ -90,12 +89,6 @@
          ["/forgot-password" {:get {:handler render-page}}]
          ["/reset-password" {:get {:handler render-page}}]
          ["/change-password" {:get {:handler render-page}}]
-         ["/onboarding" {:get {:handler render-page}}]
-         ["/onboarding/welcome" {:get {:handler render-page}}]
-         ["/onboarding/verify-email" {:get {:handler render-page}}]
-         ["/onboarding/profile" {:get {:handler render-page}}]
-         ["/onboarding/property" {:get {:handler render-page}}]
-         ["/onboarding/complete" {:get {:handler render-page}}]
 
          ;; OAuth routes (only included when OAuth is enabled)
          ;; (Launch URIs like /login/google are handled directly by wrap-oauth2)
@@ -140,24 +133,6 @@
                                               ((email-verification/verify-email-handler db-adapter email-service) req)))}}]
          ["/email-verified" {:get {:handler render-page}}]
 
-         ;; Onboarding API routes
-         ["/api/onboarding"
-          ["/complete" {:post {:handler (fn [req]
-                                          (let [db-adapter (get service-container :db-adapter)]
-                                            ((onboarding/complete-onboarding-handler db-adapter) req)))}}]
-          ["/status" {:get {:handler (fn [req]
-                                       (let [db-adapter (get service-container :db-adapter)]
-                                         ((onboarding/get-onboarding-status-handler db-adapter) req)))}}]
-          ["/step" {:post {:handler (fn [req]
-                                      (let [db-adapter (get service-container :db-adapter)]
-                                        ((onboarding/update-onboarding-step-handler db-adapter) req)))}}]]
-
-         ;; User profile API routes
-         ["/api/user"
-          ["/profile" {:post {:handler (fn [req]
-                                         (let [db-adapter (get service-container :db-adapter)]
-                                           ((onboarding/save-profile-handler db-adapter) req)))}}]]
-
          ;; API routes with versioning
          ["/api"
           ;; Version 1 API routes - now using service container
@@ -193,7 +168,7 @@
         (into
           [["/about" {:get {:handler render-page}}]
            ["/about/" {:get {:handler render-page}}]
-           ["/subscription" {:get {:handler render-page}}]
+
            ["/entities" {:get {:handler render-page}}]
            ["/entities/" {:get {:handler render-page}}]]
           ;; Domain SPA routes from registry

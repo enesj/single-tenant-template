@@ -100,7 +100,7 @@
       true)))
 
 (defn verify-email-token!
-  "Verify an email verification token and mark user as verified, progressing onboarding"
+  "Verify an email verification token and mark user as verified"
   [db token]
   (log/info "Attempting to verify email token" token)
 

@@ -209,6 +209,11 @@
                    (some? currency0) (str currency0)
                    :else "BAM")
 
+        supplier (or (:supplier-guess-supplier receipt)
+                   (:supplier_guess_supplier receipt)
+                   (:receipts/supplier-guess-supplier receipt))
+        supplier-id (when (map? supplier) (:id supplier))
+
         normalize-item (fn [item]
                          (let [id (random-uuid)
                                raw-label (or (:raw_label item)
@@ -229,8 +234,8 @@
                    (:storage-key receipt)
                    (:storage_key receipt)
                    "(unknown)")]
-    {:supplier_id nil ;; User must select supplier, but we could try to match by name later
-     :payer_id nil    ;; User must select payer
+    {:supplier_id supplier-id
+     :payer_id nil
      :purchased_at (datetime-local purchased-at true)
      :total_amount (if (number? total-amount) (format-decimal total-amount) "")
      :currency currency

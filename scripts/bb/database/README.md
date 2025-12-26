@@ -17,9 +17,6 @@ This folder contains scripts for managing PostgreSQL databases in the single-ten
 - **compare_db_schemas.clj** - Compares database schemas between environments
 - **compare_with_models.clj** - Compares database schema with application models
 
-### Tenant Management
-- **list_tenants.clj** - Hosting/multi-tenant legacy script (will fail in this repo; no `tenants` table)
-
 ## Usage Examples
 
 ```bash
@@ -31,10 +28,6 @@ bb database/clean_restore_db.clj dev backup_dev_2023-01-01_12-00-00.sql
 
 # Compare schemas
 bb database/compare_db_schemas.clj dev prod
-
-# List all tenants
-# (Hosting-only) List tenants
-bb database/list_tenants.clj dev
 ```
 
 ## Safety Notes

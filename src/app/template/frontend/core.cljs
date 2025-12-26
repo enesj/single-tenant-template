@@ -22,7 +22,7 @@
     [app.template.frontend.pages.logout :refer [logout-page]]
     [app.template.frontend.pages.forgot-password :refer [forgot-password-page]]
     [app.template.frontend.pages.reset-password :refer [reset-password-page]]
-    [app.template.frontend.pages.subscription :refer [subscription-page]]
+
     [app.template.frontend.utils.css-reload :as css-reload]
     [cljs.pprint :as pprint]
     [clojure.string :as str]
@@ -182,7 +182,7 @@
                       :forgot-password ($ forgot-password-page)
                       :reset-password ($ reset-password-page)
                       :change-password ($ change-password-page)
-                      :subscription ($ :div {:class "ds-container p-4"} ($ subscription-page))
+
                       :waiting-room ($ waiting-room-page)
                       ;; If no matching route, default to home page instead of showing 'not found'
                       ($ :div {:class "ds-container p-4"} ($ home-page)))))]

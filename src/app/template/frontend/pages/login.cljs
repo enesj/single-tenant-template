@@ -1,8 +1,8 @@
 (ns app.template.frontend.pages.login
   (:require
     [app.template.frontend.components.auth :refer [auth-error-alert
-                            auth-form-field
-                            auth-submit-button]]
+                                                   auth-form-field
+                                                   auth-submit-button]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [google-icon]]
     [app.template.frontend.events.auth :as auth-events]
@@ -74,11 +74,9 @@
               (when tenant
                 ($ :div {:class "bg-primary/10 rounded-lg p-4"}
                   ($ :h4 {:class "font-medium text-primary mb-1"} "Organization")
-                  ($ :p {:class "text-sm"} (:name tenant))
-                  ($ :p {:class "text-xs text-base-content/50"}
-                    (str "Plan: " (:subscription-tier tenant)))))
+                  ($ :p {:class "text-sm"} (:name tenant))))
 
-              ;; Action buttons
+;; Action buttons
               ($ :div {:class "flex space-x-3"}
                 ($ button {:btn-type :primary
                            :class "flex-1"
