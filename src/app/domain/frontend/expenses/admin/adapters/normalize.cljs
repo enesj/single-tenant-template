@@ -4,11 +4,48 @@
    These functions convert raw API responses to normalized entities
    for the template entity store."
   (:require
-    [app.admin.frontend.adapters.core :as adapters.core]))
+    [app.admin.frontend.adapters.core :as adapters.core]
+    [clojure.string :as str]))
 
 ;; =============================================================================
 ;; Normalization helpers
 ;; =============================================================================
+
+(defn- ->number
+  "Best-effort coercion to number for comparing amounts from API payloads.
+
+  Accepts numbers and strings (supports comma decimals). Returns nil when
+  coercion fails."
+  [value]
+  (cond
+    (number? value) value
+    (string? value) (let [n (js/parseFloat (str/replace value "," "."))]
+                      (when-not (js/isNaN n) n))
+    :else nil))
+
+(defn- fmt-amount
+  "Render an amount for table display.
+
+  Keeps trailing zeros with 2 decimals when the amount is numeric; otherwise
+  falls back to stringification."
+  [amount]
+  (cond
+    (nil? amount) nil
+    (number? amount) (.toFixed (js/Number. amount) 2)
+    (string? amount) (let [n (->number amount)]
+                       (if (some? n)
+                         (.toFixed (js/Number. n) 2)
+                         amount))
+    :else (str amount)))
+
+(defn- amounts-different?
+  "Compare amounts with a small tolerance to avoid float noise."
+  [a b]
+  (let [a* (->number a)
+        b* (->number b)]
+    (and (some? a*)
+      (some? b*)
+      (> (js/Math.abs (- a* b*)) 0.009))))
 
 (defn expense->template-entity
   [expense]
@@ -69,7 +106,29 @@
      :id-keys [:id]
      :alias-keys {:original_filename [:original-filename]
                   :supplier_guess [:supplier-guess]
-                  :created_at [:created-at]}}))
+                  :created_at [:created-at]
+                  ;; Guess fields used for list/table display.
+                  ;; Note: keep underscore sources for legacy payloads.
+                  :total_amount_guess [:total-amount-guess]
+                  :lines_total_amount_guess [:lines-total-amount-guess]
+                  :currency_guess [:currency-guess]}
+     :post-transform (fn [m]
+                       (let [total (or (:total-amount-guess m) (:total_amount_guess m))
+                             lines-total (or (:lines-total-amount-guess m) (:lines_total_amount_guess m))
+                             currency (or (:currency-guess m) (:currency_guess m))
+                             total-str (fmt-amount total)
+                             lines-str (fmt-amount lines-total)
+                             currency-str (when (and (string? currency) (not (str/blank? currency))) currency)
+                             suffix (when currency-str (str " " currency-str))
+                             total-display (cond
+                                             (nil? total-str) nil
+                                             (and (some? lines-str)
+                                               (amounts-different? total lines-total))
+                                             (str total-str suffix " (lines " lines-str ")")
+                                             :else
+                                             (str total-str suffix))]
+                         (cond-> m
+                           (some? total-display) (assoc :total-display total-display))))}))
 
 (defn supplier->template-entity
   [supplier]

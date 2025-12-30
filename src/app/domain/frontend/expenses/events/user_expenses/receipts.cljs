@@ -7,10 +7,44 @@
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.shared.bridges.crud :as crud-bridges]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
 (def ^:private base-path [:user-expenses :receipts])
+
+;; -----------------------------------------------------------------------------
+;; Template CRUD bridge overrides
+;;
+;; The template list-view delete button dispatches template CRUD events for the
+;; entity keyword (e.g. :receipts). For user pages (/receipts), we need delete to
+;; hit the user receipts API (/api/v1/expenses/receipts/:id) instead of the generic
+;; template admin entity API (/admin/api/receipts/:id).
+;; -----------------------------------------------------------------------------
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :receipts
+   :bridge-id :expenses-user-receipts
+   :priority 90
+   :context-pred (fn [db] (not (x/admin-context? db)))
+   :operations
+   {:delete
+    {:request (fn [{:keys [db]} entity-type id default-effect]
+                (assoc default-effect
+                  :db (assoc-in db (paths/entity-loading? entity-type) true)
+                  :http-xhrio
+                  (x/xhrio db
+                    {:method :delete
+                     :uri (str endpoints/receipts-endpoint "/" id)
+                     :admin-uri (str endpoints/admin-receipts-endpoint "/" id)
+                     :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+                     :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})))
+     :on-success (fn [{:keys [db]} entity-type _id default-effect]
+                   (assoc default-effect
+                     :db (-> db
+                           (assoc-in (paths/entity-loading? entity-type) false)
+                           (assoc-in (paths/entity-error entity-type) nil))
+                     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}}})
 
 ;; ---------------------------------------------------------------------------
 ;; List receipts

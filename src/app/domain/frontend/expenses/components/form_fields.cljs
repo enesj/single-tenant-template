@@ -142,7 +142,7 @@
                     :type "button"
                     :on-click add-item}
           "Add line item"))
-      ($ :div {:class "overflow-x-auto"}
+      ($ :div {:class "overflow-x-auto max-h-[320px] overflow-y-auto"}
         ($ :table {:class "ds-table w-full"}
           ($ :thead
             ($ :tr

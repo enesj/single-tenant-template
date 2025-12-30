@@ -14,14 +14,16 @@
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-effect use-state]]
+    [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (def ^:private receipts-entity-spec
   {:id :receipts
    :fields [{:id :original-filename :label "original filename" :type :text}
             {:id :status :label "status" :type :text}
-            {:id :supplier-guess :label "supplier guess" :type :text}]})
+            {:id :supplier-guess :label "supplier guess" :type :text}
+            ;; Single column: show total; include line total only when it differs.
+            {:id :total-display :label "total" :type :text}]})
 
 (defn- detail-header
   [{:keys [title subtitle icon]}]
@@ -94,23 +96,78 @@
             ($ :pre {:class "text-xs opacity-80 whitespace-pre-wrap break-words"}
               (pr-str (or (not-empty details-summary) error-details)))))))))
 
+(def ^:private receipt-processing-statuses
+  #{"uploaded" "parsing" "parsed" "extracting"})
+
+(defn- receipt-processing?
+  [status]
+  (contains? receipt-processing-statuses status))
+
+(defn- format-time
+  [d]
+  (when d
+    (try
+      (.toLocaleTimeString d "en-US" #js {:hour "2-digit" :minute "2-digit" :second "2-digit"})
+      (catch :default _
+        (str d)))))
+
 (defui receipt-detail-body
   [{:keys [receipt-id]}]
   (let [receipt (use-subscribe [:user-expenses/receipt receipt-id])
         loading? (boolean (use-subscribe [:user-expenses/receipt-detail-loading?]))
         action-loading? (boolean (use-subscribe [:user-expenses/receipt-action-loading?]))
         error (use-subscribe [:user-expenses/receipts-error])
-        [active-tab set-active-tab!] (use-state :details)]
+        [active-tab set-active-tab!] (use-state :details)
+        [last-checked set-last-checked!] (use-state nil)
+        refresh! (use-callback
+                   (fn []
+                     (when receipt-id
+                       (rf/dispatch [:user-expenses/fetch-receipt receipt-id])
+                       (set-last-checked! (js/Date.))))
+                   [receipt-id])
+        status (when (map? receipt) (:status receipt))
+        processing? (and (string? status) (receipt-processing? status))
+        rid (or receipt-id
+              (when (map? receipt)
+                (id-utils/extract-entity-id receipt)))
+        rid-str (if rid (str rid) "unknown")]
 
+    ;; Reset tab + fetch on open/change
     (use-effect
       (fn []
         (set-active-tab! :details)
-        (when receipt-id
-          (rf/dispatch [:user-expenses/fetch-receipt receipt-id]))
+        (refresh!)
         js/undefined)
-      [receipt-id])
+      [receipt-id refresh!])
+
+    ;; Auto-poll receipt detail while OCR is processing
+    (use-effect
+      (fn []
+        (when (and receipt-id processing?)
+          (let [handle (js/setInterval refresh! 2500)]
+            (fn []
+              (js/clearInterval handle)))))
+      [receipt-id processing? refresh!])
 
     ($ :div {:class "space-y-4"}
+      (when processing?
+        ($ :div {:id (str "receipt-detail-processing-banner-" rid-str)
+                 :class "ds-alert ds-alert-info"}
+          ($ :div {:class "flex items-center justify-between gap-2 w-full"}
+            ($ :div {:class "flex items-center gap-2"}
+              ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+              ($ :span {:class "text-sm"} "Processing…")
+              (when last-checked
+                ($ :span {:class "text-xs text-base-content/60"}
+                  (str "Last checked: " (format-time last-checked)))))
+            ($ :button {:id (str "btn-refresh-receipt-detail-" rid-str)
+                        :class "ds-btn ds-btn-ghost ds-btn-xs"
+                        :type "button"
+                        :on-click (fn [e]
+                                    (.preventDefault e)
+                                    (refresh!))}
+              "Refresh"))))
+
       (when error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span (str error))))
@@ -125,10 +182,7 @@
           "Receipt not found.")
 
         :else
-        (let [rid (or receipt-id (id-utils/extract-entity-id receipt))
-              rid-str (if rid (str rid) "unknown")
-              status (:status receipt)
-              approve-allowed? (contains? #{"extracted" "review_required"} status)]
+        (let [approve-allowed? (contains? #{"extracted" "review_required"} status)]
           ($ :div {:class "space-y-4"}
             ($ receipt-problem-alert {:receipt receipt})
 
@@ -286,9 +340,22 @@
           ($ :span {:class "ds-badge ds-badge-sm ml-1"}
             (count selected-ids)))))))
 
-(defui receipts-list-page []
+(defui receipts-list-page
+  []
   (let [title "Receipts"
         error (use-subscribe [:user-expenses/receipts-error])
+        receipts (or (use-subscribe [:user-expenses/receipts]) [])
+        processing-count (->> receipts
+                           (filter (fn [receipt]
+                                     (receipt-processing? (:status receipt))))
+                           count)
+        processing? (pos? processing-count)
+        [last-checked set-last-checked!] (use-state nil)
+        refresh! (use-callback
+                   (fn []
+                     (rf/dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}])
+                     (set-last-checked! (js/Date.)))
+                   [])
         display-settings {:show-select? true
                           :show-edit? false
                           :show-delete? false
@@ -300,6 +367,23 @@
                           :show-batch-edit? false
                           :show-batch-delete? false
                           :per-page 25}]
+
+    ;; Initial load
+    (use-effect
+      (fn []
+        (refresh!)
+        js/undefined)
+      [refresh!])
+
+    ;; Auto-poll while any receipt is processing
+    (use-effect
+      (fn []
+        (when processing?
+          (let [handle (js/setInterval refresh! 3000)]
+            (fn []
+              (js/clearInterval handle)))))
+      [refresh! processing?])
+
     ($ :<>
       ($ :div {:class "p-6 min-h-screen bg-base-100"}
         ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
@@ -308,9 +392,28 @@
               ($ :div {:class "px-4 pt-4"}
                 ($ :div {:class "ds-alert ds-alert-error"}
                   ($ :span (str error)))))
-            ;; Batch parse button above the list
-            ($ :div {:class "flex justify-end px-4 pt-4"}
+
+            ;; Top bar: live processing indicator + batch parse button
+            ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "
+                              (if processing? "justify-between" "justify-end"))}
+              (when processing?
+                ($ :div {:id "receipt-processing-banner"
+                         :class "flex items-center gap-2"}
+                  ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+                  ($ :span {:class "text-sm"}
+                    (str "Processing " processing-count " receipt" (when (not= 1 processing-count) "s") "…"))
+                  (when last-checked
+                    ($ :span {:class "text-xs text-base-content/60"}
+                      (str "Last checked: " (format-time last-checked))))
+                  ($ :button {:id "btn-refresh-user-receipts"
+                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+                              :type "button"
+                              :on-click (fn [e]
+                                          (.preventDefault e)
+                                          (refresh!))}
+                    "Refresh")))
               ($ batch-parse-button))
+
             ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
               ($ list-view
                 {:entity-name :receipts

@@ -2,7 +2,8 @@
   (:require
     [app.template.frontend.api :as api]
     [app.template.frontend.api.http :as http]
-    [cljs.test :refer-macros [deftest is testing]]))
+    [cljs.test :refer-macros [deftest is testing]]
+    [re-frame.db :as rf-db]))
 
 (deftest test-api-request
   (testing "api-request creates correct request configuration"
@@ -53,25 +54,41 @@
       (is (= [:failure] (:on-failure result))))))
 
 (deftest test-create-entity
-  (testing "create-entity creates correct POST request (admin context)"
-    ;; In single-tenant template, create-entity detects admin context
-    ;; and uses admin endpoints when appropriate
+  (testing "create-entity uses admin endpoints on admin routes"
+    (.removeItem js/localStorage "admin-token")
+    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
     (let [config {:entity-name "users"
                   :data {:name "John" :email "john@example.com"}
                   :on-success [:success]
                   :on-failure [:failure]}
           result (http/create-entity config)]
       (is (= :post (:method result)))
-      ;; Admin context detection returns admin-prefixed URI
-      (is (or (= "/admin/api/users" (:uri result))
-              (= (api/entity-endpoint "users") (:uri result))))
+      (is (= "/admin/api/users" (:uri result)))
       (is (= {:name "John" :email "john@example.com"} (:params result)))
       (is (= [:success] (:on-success result)))
-      (is (= [:failure] (:on-failure result))))))
+      (is (= [:failure] (:on-failure result)))))
+
+  (testing "create-entity uses versioned entity endpoints on non-admin routes (even if an admin token exists)"
+    (.setItem js/localStorage "admin-token" "stale-token")
+    (reset! rf-db/app-db {:current-route {:data {:name :receipts}}})
+    (let [config {:entity-name "users"
+                  :data {:name "John" :email "john@example.com"}
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/create-entity config)]
+      (is (= :post (:method result)))
+      (is (= (api/entity-endpoint "users") (:uri result)))
+      (is (= [:success] (:on-success result)))
+      (is (= [:failure] (:on-failure result)))))
+
+  ;; cleanup
+  (.removeItem js/localStorage "admin-token")
+  (reset! rf-db/app-db {}))
 
 (deftest test-update-entity
-  (testing "update-entity creates correct PUT request (admin context)"
-    ;; In single-tenant template, update-entity detects admin context
+  (testing "update-entity uses admin endpoints on admin routes"
+    (.removeItem js/localStorage "admin-token")
+    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
     (let [config {:entity-name "users"
                   :id 123
                   :data {:name "John Updated"}
@@ -79,27 +96,59 @@
                   :on-failure [:failure]}
           result (http/update-entity config)]
       (is (= :put (:method result)))
-      ;; Admin context detection returns admin-prefixed URI
-      (is (or (= "/admin/api/users/123" (:uri result))
-              (= (api/entity-endpoint "users" 123) (:uri result))))
+      (is (= "/admin/api/users/123" (:uri result)))
       (is (= {:name "John Updated"} (:params result)))
       (is (= [:success] (:on-success result)))
-      (is (= [:failure] (:on-failure result))))))
+      (is (= [:failure] (:on-failure result)))))
+
+  (testing "update-entity uses versioned entity endpoints on non-admin routes (even if an admin token exists)"
+    (.setItem js/localStorage "admin-token" "stale-token")
+    (reset! rf-db/app-db {:current-route {:data {:name :receipts}}})
+    (let [config {:entity-name "users"
+                  :id 123
+                  :data {:name "John Updated"}
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/update-entity config)]
+      (is (= :put (:method result)))
+      (is (= (api/entity-endpoint "users" 123) (:uri result)))
+      (is (= [:success] (:on-success result)))
+      (is (= [:failure] (:on-failure result)))))
+
+  ;; cleanup
+  (.removeItem js/localStorage "admin-token")
+  (reset! rf-db/app-db {}))
 
 (deftest test-delete-entity
-  (testing "delete-entity creates correct DELETE request (admin context)"
-    ;; In single-tenant template, delete-entity detects admin context
+  (testing "delete-entity uses admin endpoints on admin routes"
+    (.removeItem js/localStorage "admin-token")
+    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
     (let [config {:entity-name "users"
                   :id 123
                   :on-success [:success]
                   :on-failure [:failure]}
           result (http/delete-entity config)]
       (is (= :delete (:method result)))
-      ;; Admin context detection returns admin-prefixed URI
-      (is (or (= "/admin/api/users/123" (:uri result))
-              (= (api/entity-endpoint "users" 123) (:uri result))))
+      (is (= "/admin/api/users/123" (:uri result)))
       (is (= [:success] (:on-success result)))
-      (is (= [:failure] (:on-failure result))))))
+      (is (= [:failure] (:on-failure result)))))
+
+  (testing "delete-entity uses versioned entity endpoints on non-admin routes (even if an admin token exists)"
+    (.setItem js/localStorage "admin-token" "stale-token")
+    (reset! rf-db/app-db {:current-route {:data {:name :receipts}}})
+    (let [config {:entity-name "users"
+                  :id 123
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/delete-entity config)]
+      (is (= :delete (:method result)))
+      (is (= (api/entity-endpoint "users" 123) (:uri result)))
+      (is (= [:success] (:on-success result)))
+      (is (= [:failure] (:on-failure result)))))
+
+  ;; cleanup
+  (.removeItem js/localStorage "admin-token")
+  (reset! rf-db/app-db {}))
 
 (deftest test-extract-error-message
   (testing "extract-error-message extracts error from various response formats"

@@ -23,7 +23,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :suppliers
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -78,7 +78,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :expenses
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -132,7 +132,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :expense-items
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -186,7 +186,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :receipts
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -240,7 +240,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :payers
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -294,7 +294,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :articles
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -348,7 +348,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :article-aliases
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
@@ -402,7 +402,7 @@
 
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :price-observations
-   :context-pred (fn [_] true)
+
    :operations
    {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)

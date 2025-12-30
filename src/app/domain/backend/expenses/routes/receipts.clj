@@ -57,7 +57,7 @@
       (let [{:keys [sum count]}
             (reduce
               (fn [{:keys [sum count]} item]
-                (if-let [line-total (parse-money (:line-total item))]
+                (if-let [line-total (parse-money (or (:line-total item) (:line_total item)))]
                   {:sum (+ sum line-total) :count (inc count)}
                   {:sum sum :count count}))
               {:sum 0M :count 0}
@@ -75,9 +75,17 @@
         supplier-app (some-> supplier to-app (select-keys [:id :display-name :normalized-key]))
         lines-total (lines-total-amount-guess receipt)
         total (:total-amount-guess receipt)
+        abs-dec (fn [d] (if (neg? d) (- d) d))
         total-equals-lines? (when (and (some? total) (some? lines-total))
-                              (zero? (compare total lines-total)))]
-    (cond-> (assoc receipt :supplier-guess-has-supplier? (boolean supplier))
+                              (<= (abs-dec (- total lines-total)) 0.01M))
+        effective-status (let [status (:status receipt)]
+                           (if (and (= "extracted" status)
+                                 (false? total-equals-lines?))
+                             "review_required"
+                             status))]
+    (cond-> (assoc receipt
+              :supplier-guess-has-supplier? (boolean supplier)
+              :status effective-status)
       supplier-app (assoc :supplier-guess-supplier supplier-app)
       (some? lines-total) (assoc :lines-total-amount-guess lines-total)
       (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))

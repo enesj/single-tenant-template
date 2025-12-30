@@ -1,5 +1,6 @@
 (ns app.template.frontend.components.list.fields
   (:require
+    [clojure.string :as str]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
@@ -57,6 +58,34 @@
         (when is-json?
           ($ :span {:class "ml-1 text-xs text-gray-500"} "📄"))))))
 
+(defn- titleize-status
+  [s]
+  (->> (str/split (str s) #"[\s_-]+")
+    (remove str/blank?)
+    (map str/capitalize)
+    (str/join " ")))
+
+(defn- status->badge-variant
+  [status-lower]
+  (cond
+    (contains? #{"active" "verified" "complete" "success" "extracted" "posted" "approved"} status-lower)
+    "ds-badge-success"
+
+    (contains? #{"review_required" "needs-review" "need-review" "needs review" "review" "warning"} status-lower)
+    "ds-badge-warning"
+
+    (contains? #{"failed" "error" "cancelled" "canceled"} status-lower)
+    "ds-badge-error"
+
+    (contains? #{"uploaded" "pending" "parsing" "parsed" "extracting" "processing" "in-progress"} status-lower)
+    "ds-badge-info"
+
+    (contains? #{"inactive" "suspended" "archived"} status-lower)
+    "ds-badge-ghost"
+
+    :else
+    "ds-badge-outline"))
+
 (defn get-field-display-value
   "Gets the display value for a field, handling select fields specially and truncating long text content."
   [field value]
@@ -68,6 +97,10 @@
           input-type (:input-type field)
           field-type (:type field)
           text-value (str (if (keyword? value) (name value) (or value "")))
+
+      status-str (when (= field-id :status)
+           (some-> text-value str/trim not-empty))
+      status-lower (some-> status-str str/lower-case)
 
           ;; JSON detection based only on field type from database schema
           is-json-field? (or (= field-type "json")
@@ -104,9 +137,17 @@
                       ;; Default for other truncatable fields
                        :else 30)]
 
-      (if should-truncate?
+      (cond
+        status-str
+        ($ :span {:class (str "ds-badge uppercase tracking-wide text-xs px-3 py-1 rounded-full border shadow-sm "
+                           (status->badge-variant status-lower))}
+          (titleize-status status-str))
+
+        should-truncate?
         ($ truncated-text-value {:text text-value
                                  :max-length max-length
                                  :field-type field-type
                                  :field-id field-id})
+
+        :else
         ($ :span text-value)))))

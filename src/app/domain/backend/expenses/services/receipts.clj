@@ -334,13 +334,65 @@
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn list-receipts
-  "List receipts with optional status filter."
-  [db {:keys [status limit offset order-dir] :or {limit 50 offset 0 order-dir :desc}}]
-  (let [status-clause (cond
-                        (string? status) [:= :status (receipt-status-cast status)]
-                        (sequential? status) [:in :status (mapv receipt-status-cast status)]
+  "List receipts with optional status filter.
+
+  Returns a lightweight projection for list views (detail endpoints return
+  raw_extract_json / parsed_markdown, etc.)."
+  [db {:keys [status limit offset order-dir]
+       :or {limit 50 offset 0 order-dir :desc}}]
+  (let [;; Sum extracted line totals (supports both line_total and line-total keys).
+        lines-total-sql
+        (str
+          "(select sum("
+          "nullif(replace(regexp_replace(coalesce(item->>'line_total', item->>'line-total',''), '[^0-9,.-]', '', 'g'), ',', '.'), '')::numeric"
+          ") from jsonb_array_elements(coalesce(raw_extract_json->'extraction'->'items','[]'::jsonb)) as item)")
+
+        mismatch-sql
+        (str
+          "status = 'extracted'::receipt_status"
+          " and total_amount_guess is not null"
+          " and " lines-total-sql " is not null"
+          " and abs((" lines-total-sql ") - total_amount_guess) > 0.01")
+
+        mismatch-clause [:raw mismatch-sql]
+        not-mismatch-clause [:raw (str "not (" mismatch-sql ")")]
+
+        ;; Treat extracted-but-mismatched receipts as review_required for UX.
+        status-clause (cond
+                        (string? status)
+                        (case status
+                          "review_required" [:or
+                                             [:= :status (receipt-status-cast "review_required")]
+                                             mismatch-clause]
+                          "extracted" [:and
+                                       [:= :status (receipt-status-cast "extracted")]
+                                       not-mismatch-clause]
+                          [:= :status (receipt-status-cast status)])
+
+                        (sequential? status)
+                        (let [sset (set status)
+                              base [:in :status (mapv receipt-status-cast status)]
+                              want-review? (contains? sset "review_required")
+                              want-extracted? (contains? sset "extracted")]
+                          (cond
+                            (and want-review? (not want-extracted?)) [:or base mismatch-clause]
+                            (and want-extracted? (not want-review?)) [:and base not-mismatch-clause]
+                            :else base))
+
                         :else nil)
-        query (cond-> {:select [:*]
+
+        effective-status-sql (str
+                               "case when (" mismatch-sql ") then 'review_required'::receipt_status else status end")
+
+        query (cond-> {:select [:id
+                                :original_filename
+                                [[:raw effective-status-sql] :status]
+                                :supplier_guess
+                                :total_amount_guess
+                                [[:raw lines-total-sql] :lines_total_amount_guess]
+                                :currency_guess
+                                :created_at
+                                :updated_at]
                        :from [:receipts]
                        :order-by [[:created_at order-dir]]
                        :limit limit
@@ -355,22 +407,75 @@
   - receipts owned by `user-id`
   - receipts with no `user_id` (unassigned/admin-uploaded)
 
-  Supports optional status filter."
+  Supports optional status filter.
+
+  Returns a lightweight projection for list views (detail endpoints return
+  raw_extract_json / parsed_markdown, etc.)."
   [db user-id {:keys [status limit offset order-dir]
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
-  (let [status-clause (cond
-                        (string? status) [:= :status (receipt-status-cast status)]
-                        (sequential? status) [:in :status (mapv receipt-status-cast status)]
-                        :else nil)
-        visibility-clause [:or
+  (let [visibility-clause [:or
                            [:= :user_id user-id]
                            [:is :user_id nil]]
-        where-clause (if status-clause
-                       [:and visibility-clause status-clause]
-                       visibility-clause)
-        query {:select [:*]
+
+        ;; Sum extracted line totals (supports both line_total and line-total keys).
+        lines-total-sql
+        (str
+          "(select sum("
+          "nullif(replace(regexp_replace(coalesce(item->>'line_total', item->>'line-total',''), '[^0-9,.-]', '', 'g'), ',', '.'), '')::numeric"
+          ") from jsonb_array_elements(coalesce(raw_extract_json->'extraction'->'items','[]'::jsonb)) as item)")
+
+        mismatch-sql
+        (str
+          "status = 'extracted'::receipt_status"
+          " and total_amount_guess is not null"
+          " and " lines-total-sql " is not null"
+          " and abs((" lines-total-sql ") - total_amount_guess) > 0.01")
+
+        mismatch-clause [:raw mismatch-sql]
+        not-mismatch-clause [:raw (str "not (" mismatch-sql ")")]
+
+        ;; Treat extracted-but-mismatched receipts as review_required for UX.
+        status-clause (cond
+                        (string? status)
+                        (case status
+                          "review_required" [:or
+                                             [:= :status (receipt-status-cast "review_required")]
+                                             mismatch-clause]
+                          "extracted" [:and
+                                       [:= :status (receipt-status-cast "extracted")]
+                                       not-mismatch-clause]
+                          [:= :status (receipt-status-cast status)])
+
+                        (sequential? status)
+                        (let [sset (set status)
+                              base [:in :status (mapv receipt-status-cast status)]
+                              want-review? (contains? sset "review_required")
+                              want-extracted? (contains? sset "extracted")]
+                          (cond
+                            (and want-review? (not want-extracted?)) [:or base mismatch-clause]
+                            (and want-extracted? (not want-review?)) [:and base not-mismatch-clause]
+                            :else base))
+
+                        :else nil)
+
+        where-clause (cond
+                       status-clause [:and visibility-clause status-clause]
+                       :else visibility-clause)
+
+        effective-status-sql (str
+                               "case when (" mismatch-sql ") then 'review_required'::receipt_status else status end")
+
+        query {:select [:id
+                        :original_filename
+                        [[:raw effective-status-sql] :status]
+                        :supplier_guess
+                        :total_amount_guess
+                        [[:raw lines-total-sql] :lines_total_amount_guess]
+                        :currency_guess
+                        :created_at
+                        :updated_at]
                :from [:receipts]
                :where where-clause
                :order-by [[:created_at order-dir]]

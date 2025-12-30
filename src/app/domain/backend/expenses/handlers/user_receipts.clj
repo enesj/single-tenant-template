@@ -120,7 +120,7 @@
       (let [{:keys [sum count]}
             (reduce
               (fn [{:keys [sum count]} item]
-                (if-let [line-total (parse-money (:line-total item))]
+                (if-let [line-total (parse-money (or (:line-total item) (:line_total item)))]
                   {:sum (+ sum line-total) :count (inc count)}
                   {:sum sum :count count}))
               {:sum 0M :count 0}
@@ -138,9 +138,17 @@
         supplier-app (some-> supplier to-app (select-keys [:id :display-name :normalized-key]))
         lines-total (lines-total-amount-guess receipt)
         total (:total-amount-guess receipt)
+        abs-dec (fn [d] (if (neg? d) (- d) d))
         total-equals-lines? (when (and (some? total) (some? lines-total))
-                              (zero? (compare total lines-total)))]
-    (cond-> (assoc receipt :supplier-guess-has-supplier? (boolean supplier))
+                              (<= (abs-dec (- total lines-total)) 0.01M))
+        effective-status (let [status (:status receipt)]
+                           (if (and (= "extracted" status)
+                                 (false? total-equals-lines?))
+                             "review_required"
+                             status))]
+    (cond-> (assoc receipt
+              :supplier-guess-has-supplier? (boolean supplier)
+              :status effective-status)
       supplier-app (assoc :supplier-guess-supplier supplier-app)
       (some? lines-total) (assoc :lines-total-amount-guess lines-total)
       (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))
@@ -218,6 +226,34 @@
             (json-response {:error "Invalid id"} 400)))
         (unauthorized-response)))
     "Failed to fetch receipt"))
+
+(defn delete-receipt-handler
+  "DELETE /api/v1/expenses/receipts/:id
+
+  Returns JSON to keep frontend XHR pipelines (which may expect JSON) happy."
+  [db]
+  (with-error-handling
+    (fn [request]
+      (if-let [user-id (get-user-id request)]
+        (let [role (get-user-role request)]
+          (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
+            (if (= "admin" role)
+              (if-let [deleted (receipts/delete-receipt! db id)]
+                (json-response {:data {:deleted true
+                                       :receipt (to-app deleted)}}
+                  200)
+                (json-response {:error "Receipt not found"} 404))
+              ;; Regular users can only delete receipts visible to them (owned or unassigned).
+              (if-not (receipts/get-user-receipt db user-id id)
+                (json-response {:error "Receipt not found"} 404)
+                (if-let [deleted (receipts/delete-receipt! db id)]
+                  (json-response {:data {:deleted true
+                                         :receipt (to-app deleted)}}
+                    200)
+                  (json-response {:error "Receipt not found"} 404))))
+            (json-response {:error "Invalid id"} 400)))
+        (unauthorized-response)))
+    "Failed to delete receipt"))
 
 (defn approve-receipt-handler
   "POST /api/v1/expenses/receipts/:id/approve

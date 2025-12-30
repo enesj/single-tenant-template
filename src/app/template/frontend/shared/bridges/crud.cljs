@@ -115,8 +115,18 @@
               (-> db
                 (assoc-in (paths/entity-loading? entity-type) false)
                 (assoc-in (paths/entity-error entity-type) message))
-              db)]
-    {:db db*}))
+              db)
+        status (or (:status error)
+                 (get-in error [:response :status]))
+        route-name (get-in db [:current-route :data :name])
+        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        pathname (when (exists? js/window)
+                   (some-> js/window .-location .-pathname))
+        in-admin-path? (and pathname (str/includes? pathname "/admin"))]
+    (cond-> {:db db*}
+      (and (= 401 status)
+        (or admin-route? in-admin-path?))
+      (assoc :dispatch [:admin/auth-invalid]))))
 
 ;; Convenience wrappers so the default failure handler receives the
 ;; correct operation keyword. run-bridge-operation does not pass the

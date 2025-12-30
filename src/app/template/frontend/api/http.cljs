@@ -111,18 +111,29 @@
       (catch :default _ nil))))
 
 (defn- admin-context?
-  "Best-effort detection that we are inside the admin bundle.  We rely on
-  either an admin token being present or the location containing \"admin\"
-  in the pathname/hostname."
+  "Best-effort detection that we are inside an admin UI context.
+
+  IMPORTANT: Do NOT use presence of an admin token as a signal. Users can have a stale
+  token in localStorage while browsing non-admin routes, and routing admin API calls
+  from user pages causes confusing 401/405 errors.
+
+  Precedence:
+  - If a reitit route name is present, it is treated as the source of truth.
+  - Otherwise fall back to URL-based heuristics (pathname/hostname)."
   []
-  (let [token (get-admin-token)
+  (let [db @rf-db/app-db
+        route-name (get-in db [:current-route :data :name])
         pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))
         hostname (when (exists? js/window)
                    (some-> js/window .-location .-hostname))]
-    (boolean (or token
-               (and pathname (str/includes? pathname "/admin"))
-               (and hostname (str/includes? (str/lower-case hostname) "admin"))))))
+    (cond
+      route-name
+      (str/starts-with? (name route-name) "admin")
+
+      :else
+      (boolean (or (and pathname (str/includes? pathname "/admin"))
+                 (and hostname (str/includes? (str/lower-case hostname) "admin")))))))
 
 (defn create-entity
   "Create a new entity"

@@ -13,3 +13,11 @@
     (reset! rf-db/app-db {})
     (.setItem js/localStorage "admin-token" "y")
     (is (= "y" (core/admin-token @rf-db/app-db)))))
+
+(deftest admin-context-detection
+  (testing "admin-context? keys off the active route"
+    (reset! rf-db/app-db {:current-route {:data {:name :admin-dashboard}}})
+    (is (true? (core/admin-context? @rf-db/app-db)))
+    (reset! rf-db/app-db {:admin/token "x"
+                          :current-route {:data {:name :receipts}}})
+    (is (false? (core/admin-context? @rf-db/app-db)))))

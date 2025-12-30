@@ -22,10 +22,11 @@
 (defn admin-context?
   "Return true when the current runtime indicates the admin UI context."
   [db]
-  (let [pathname (when (exists? js/window)
+  (let [route-name (get-in db [:current-route :data :name])
+        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))]
-    (boolean (or (:admin/token db)
-               (:admin/authenticated? db)
+    (boolean (or admin-route?
                (and pathname (str/includes? pathname "/admin"))))))
 
 (defn admin-token

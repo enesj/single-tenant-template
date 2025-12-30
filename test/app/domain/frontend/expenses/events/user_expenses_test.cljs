@@ -75,6 +75,16 @@
         (is (= "r.jpg" (.-name uploaded)))
         (is (not (true? (req-format-content-type req))))))))
 
+(deftest upload-receipt-success-queues-ocr
+  (testing "upload-receipt-success automatically triggers OCR"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/upload-receipt-success {:data {:id "rec-1"}}])
+    (is (= 1 (count @captured-http-requests)))
+    (let [req (last-http-request)]
+      (is (= :post (req-method req)))
+      (is (= "/api/v1/expenses/receipts/ocr" (req-uri req)))
+      (is (= ["rec-1"] (get-in req [:params :receipt_ids]))))))
+
 (deftest upload-receipts-batch-sends-multiple-requests
   (testing "upload-receipts queues files and uploads sequentially"
     (reset-db!)
@@ -103,6 +113,12 @@
         (is (= "b.jpg" (.-name uploaded2))))
 
       (rf/dispatch-sync [:user-expenses/upload-receipts-success [] {:data {:id "rec-2"}}])
+      ;; Final success should also queue one OCR batch request for the receipts.
+      (is (= 3 (count @captured-http-requests)))
+      (let [req3 (last-http-request)]
+        (is (= :post (req-method req3)))
+        (is (= "/api/v1/expenses/receipts/ocr" (req-uri req3)))
+        (is (= ["rec-1" "rec-2"] (get-in req3 [:params :receipt_ids]))))
       (is (false? (get-in @rf-db/app-db [:user-expenses :upload :loading?]))))))
 
 (deftest upload-receipts-batch-continues-after-failure
@@ -128,4 +144,12 @@
       (is (= 1 (get-in @rf-db/app-db [:user-expenses :upload :batch :failed])))
       (let [msg (get-in @rf-db/app-db [:user-expenses :upload :error])]
         (is (string? msg))
-        (is (.startsWith msg "a.jpg:"))))))
+        (is (.startsWith msg "a.jpg:")))
+
+      ;; simulate success of the remaining file -> should queue OCR for receipts that did upload
+      (rf/dispatch-sync [:user-expenses/upload-receipts-success [] {:data {:id "rec-2"}}])
+      (is (= 3 (count @captured-http-requests)))
+      (let [req3 (last-http-request)]
+        (is (= :post (req-method req3)))
+        (is (= "/api/v1/expenses/receipts/ocr" (req-uri req3)))
+        (is (= ["rec-2"] (get-in req3 [:params :receipt_ids])))))))
