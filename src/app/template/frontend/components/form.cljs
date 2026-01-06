@@ -271,11 +271,11 @@
                                :id (if editing "btn-update" "btn-save")
                                :type "submit"
                                ;; Adjust the disabled condition based on form type
-                               :disabled (or
-                                           submitting?
-                                           (nil? dirty)
-                                           (and (map? dirty) (empty? dirty))
-                                           (and (set? dirty) (empty? dirty))
+                               :disabled (or submitting?
+                                           (and editing
+                                             (or (nil? dirty)
+                                               (and (map? dirty) (empty? dirty))
+                                               (and (set? dirty) (empty? dirty))))
                                            (not all-fields-valid?)
                                            save-disabled?*)
                                :children [(or button-text (if editing "Update" "Save")) ($ save-icon)]}))

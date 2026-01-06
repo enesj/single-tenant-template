@@ -68,7 +68,10 @@
 (defn- status->badge-variant
   [status-lower]
   (cond
-    (contains? #{"active" "verified" "complete" "success" "extracted" "posted" "approved"} status-lower)
+    (contains? #{"posted"} status-lower)
+    "ds-badge-primary"
+
+    (contains? #{"active" "verified" "complete" "success" "extracted" "approved"} status-lower)
     "ds-badge-success"
 
     (contains? #{"review_required" "needs-review" "need-review" "needs review" "review" "warning"} status-lower)
@@ -98,9 +101,9 @@
           field-type (:type field)
           text-value (str (if (keyword? value) (name value) (or value "")))
 
-      status-str (when (= field-id :status)
-           (some-> text-value str/trim not-empty))
-      status-lower (some-> status-str str/lower-case)
+          status-str (when (= field-id :status)
+                       (some-> text-value str/trim not-empty))
+          status-lower (some-> status-str str/lower-case)
 
           ;; JSON detection based only on field type from database schema
           is-json-field? (or (= field-type "json")
