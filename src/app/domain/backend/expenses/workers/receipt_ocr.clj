@@ -379,7 +379,7 @@
             (cond-> (assoc item :line_total (bigdec new-total))
               new-unit (assoc :unit_price new-unit))))))))
 
-(declare line->trailing-money item-ignore-prefixes)
+(declare line->trailing-money item-ignore-prefixes ignore-item-line?)
 
 (defn- markdown->qty-line-items [markdown]
   (when (string? markdown)
@@ -396,8 +396,7 @@
               (nil? line)
               (recur (rest remaining) [] items)
 
-              (or (nil? norm)
-                (some #(str/starts-with? norm %) item-ignore-prefixes))
+              (ignore-item-line? norm)
               (recur (rest remaining) [] items)
 
               (and (seq items) (line->discount line))
@@ -499,6 +498,17 @@
     (conj "tbfm")
     (conj "pdu")))
 
+(def ^:private payment-summary-line-re
+  #"^(?:pov(?:$|\s|:)|(?:cek|ček)(?:$|\s|:)|kortica(?:$|\s|:))")
+
+(defn- ignore-item-line? [norm]
+  (boolean
+    (or (nil? norm)
+      (some #(str/starts-with? norm %) item-ignore-prefixes)
+      (re-find payment-summary-line-re norm)
+      (and (str/starts-with? norm "umla")
+        (re-find #"(?:kortica|kartica)" norm)))))
+
 (defn- markdown->price-line-items [markdown]
   (when (string? markdown)
     (let [lines (str/split-lines markdown)]
@@ -514,8 +524,7 @@
               (nil? line)
               (recur (rest remaining) [] items)
 
-              (or (nil? norm)
-                (some #(str/starts-with? norm %) item-ignore-prefixes))
+              (ignore-item-line? norm)
               (recur (rest remaining) [] items)
 
               (and (seq items) (line->discount line))

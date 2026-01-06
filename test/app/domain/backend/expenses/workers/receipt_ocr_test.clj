@@ -159,6 +159,21 @@
     (is (= 1 (count items)))
     (is (= "ITEM" (:raw_label (first items))))))
 
+(deftest markdown-line-item-candidates-ignores-payment-summary-lines
+  (let [candidates #'receipt-ocr/markdown->line-item-candidates
+        markdown (str "POVRCE MIX\n"
+                   "1,00E\n"
+                   "POV E: 0,00\n"
+                   "POV: 0,00\n"
+                   "CEK: 1,00\n"
+                   "CEKIC\n"
+                   "10,00E\n"
+                   "UMLAČENO: KORTICA: 11,00\n")
+        items (candidates markdown)]
+    (is (= 2 (count items)))
+    (is (= "POVRCE MIX" (:raw_label (first items))))
+    (is (= "CEKIC" (:raw_label (second items))))))
+
 (deftest markdown-line-item-candidates-supports-markdown-table-rows
   (let [candidates #'receipt-ocr/markdown->line-item-candidates
         markdown (str "|  Mivolis flasteri za djecu |  |   |\n"
