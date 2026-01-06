@@ -23,10 +23,12 @@
 
 (def ^:private ReceiptExtraction
   [:map {:closed false}
-   [:merchant [:map {:closed false}
-               [:name string?]
-               [:address {:optional true} [:maybe string?]]
-               [:tax_id {:optional true} [:maybe string?]]]]
+   [:merchant {:optional true}
+    [:maybe
+     [:map {:closed false}
+      [:name string?]
+      [:address {:optional true} [:maybe string?]]
+      [:tax_id {:optional true} [:maybe string?]]]]]
    [:purchased_at {:optional true} [:maybe string?]]
    [:currency {:optional true} [:maybe string?]]
    [:totals [:map {:closed false}
@@ -186,25 +188,477 @@
             {:receipt-id receipt-id :stage :parse :result :failed :error (.getMessage e)}))
         {:receipt-id receipt-id :stage :parse :result :skipped :reason :not-claimed}))))
 
+(defn- normalize-text [s]
+  (some-> s
+    str
+    str/lower-case
+    (str/replace #"\s+" " ")
+    str/trim
+    not-empty))
+
+(defn- label-present-in-markdown? [markdown raw-label]
+  (let [m (normalize-text markdown)
+        l (normalize-text raw-label)]
+    (boolean (and m l (str/includes? m l)))))
+
+(defn- has-letter? [s]
+  (boolean (and (string? s) (re-find #"[A-Za-zÀ-ÿ]" s))))
+
+(defn- looks-like-json-schema? [m]
+  (boolean
+    (and (map? m)
+      (contains? m :properties)
+      (contains? m :type)
+      (contains? m :required))))
+
+(defn- normalize-item-label [raw-label]
+  (let [raw-label (some-> raw-label
+                    str
+                    (str/replace #"\|" " ")
+                    (str/replace #"\s+" " ")
+                    str/trim
+                    not-empty)]
+    (when raw-label
+      (if-let [[_ _ rest] (re-matches #"(?i)^([0-9]{4,}|[A-Z][0-9]{4,})[ \t]+(.+)$" raw-label)]
+        (let [rest (str/trim rest)]
+          (if (has-letter? rest)
+            rest
+            raw-label))
+        raw-label))))
+
+(def ^:private unit-prefixes
+  #{"t/pc"})
+
+(defn- unit-prefix? [s]
+  (when (string? s)
+    (contains? unit-prefixes (normalize-text s))))
+
+(def ^:private supplier-ignore-prefixes
+  ["jib"
+   "pib"
+   "tbfm"
+   "bf"
+   "fiskalni"
+   "racun"
+   "račun"
+   "total"
+   "ukupno"
+   "pdv"
+   "vat"
+   "osn"
+   "ve"
+   "upl"
+   "gotovina"
+   "kartica"
+   "povrat"])
+
+(defn- markdown->supplier-guess [markdown]
+  (when (string? markdown)
+    (->> (str/split-lines markdown)
+      (keep (fn [line0]
+              (let [line (some-> line0 str str/trim not-empty)
+                    norm (normalize-text line)]
+                (when (and norm
+                        (not (some #(str/starts-with? norm %) supplier-ignore-prefixes)))
+                  line))))
+      first)))
+
+(defn- markdown->total-amount [markdown]
+  (when (string? markdown)
+    (->> (str/split-lines markdown)
+      (keep (fn [line0]
+              (let [line (some-> line0 str str/trim not-empty)
+                    norm (normalize-text line)]
+                (when (and norm
+                        (or (str/starts-with? norm "total")
+                          (str/starts-with? norm "ukupno")))
+                  (parse-money line)))))
+      last)))
+
+(defn- markdown->pipe-line-items [markdown]
+  (when (string? markdown)
+    (->> (str/split-lines markdown)
+      (map (fn [line]
+             (->> (str/split (or line "") #"\|")
+               (map str/trim)
+               (remove str/blank?)
+               vec)))
+      (filter #(>= (count %) 4))
+      (map (fn [cells]
+             (let [raw-label (normalize-item-label (first cells))
+                   qty (parse-money (nth cells 1 nil))
+                   unit-price (parse-money (nth cells 2 nil))
+                   line-total (parse-money (nth cells 3 nil))]
+               (when (and (has-letter? raw-label)
+                       line-total)
+                 {:raw_label raw-label
+                  :qty qty
+                  :unit_price unit-price
+                  :line_total line-total}))))
+      (remove nil?)
+      vec)))
+
+(defn- line->qty-unit-total [line]
+  (let [tokens (->> (str/split (str/trim (or line "")) #"\s+")
+                 (remove str/blank?)
+                 (remove #{"|" "¦" "│"})
+                 vec)]
+    (when (seq tokens)
+      (or
+        ;; qty token already contains "x", e.g. "1.000x"
+        (some
+          (fn [i]
+            (let [t (get tokens i)
+                  qty (when (and (string? t) (re-find #"(?i)x" t))
+                        (parse-money t))]
+              (when qty
+                (let [unit-price (parse-money (get tokens (inc i)))
+                      line-total (parse-money (get tokens (+ i 2)))]
+                  (when unit-price
+                    {:label-from-line (when (pos? i) (str/join " " (subvec tokens 0 i)))
+                     :qty qty
+                     :unit_price unit-price
+                     :line_total line-total})))))
+          (range (count tokens)))
+        ;; separate "x" token, e.g. "1.000 x 2,10 2,10"
+        (some
+          (fn [i]
+            (let [t (get tokens i)]
+              (when (and (= "x" (str/lower-case t)) (pos? i))
+                (let [qty (parse-money (get tokens (dec i)))
+                      unit-price (parse-money (get tokens (inc i)))
+                      line-total (parse-money (get tokens (+ i 2)))]
+                  (when (and qty unit-price)
+                    {:label-from-line (when (pos? (dec i)) (str/join " " (subvec tokens 0 (dec i))))
+                     :qty qty
+                     :unit_price unit-price
+                     :line_total line-total})))))
+          (range (count tokens)))))))
+
+(def ^:private discount-line-re
+  #"(?i)^\s*-?\s*([0-9]{1,3}(?:[\.,][0-9]{1,2})?)\s*%\s*:?:?\s*(-?[0-9]{1,9}[\.,][0-9]{2})\s*(?:e|km|bam|€)?\s*$")
+
+(defn- line->discount [line]
+  (when (string? line)
+    (when-let [[_ pct amount] (re-matches discount-line-re (str/trim line))]
+      (let [pct (parse-money pct)
+            amount (parse-money amount)]
+        (when (and pct amount (pos? (double pct)) (<= (double pct) 100.0))
+          {:pct (.abs (bigdec pct))
+           :amount (bigdec amount)})))))
+
+(defn- apply-discount-to-item
+  [{:keys [line_total qty] :as item} {:keys [pct amount]}]
+  (let [base-total (parse-money line_total)
+        qty (parse-money qty)]
+    (if-not (and base-total pct amount)
+      item
+      (let [base-total (bigdec base-total)
+            pct (.abs (bigdec pct))
+            amount (bigdec amount)
+            amount-abs (.abs amount)
+            expected-discount (* base-total (/ pct 100M))
+            expected-final (.subtract base-total expected-discount)
+            treat-as-final?
+            (and (not (neg? (.signum amount)))
+              (let [d-discount (double (.abs (.subtract amount expected-discount)))
+                    d-final (double (.abs (.subtract amount expected-final)))]
+                (<= d-final d-discount)))
+            new-total (cond
+                        (neg? (.signum amount)) (.subtract base-total amount-abs)
+                        treat-as-final? amount
+                        :else (.subtract base-total amount))]
+        (if (neg? (.signum (bigdec new-total)))
+          item
+          (let [new-unit (when (and qty (pos? (.signum (bigdec qty))))
+                           (.divide (bigdec new-total) (bigdec qty) 2 java.math.RoundingMode/HALF_UP))]
+            (cond-> (assoc item :line_total (bigdec new-total))
+              new-unit (assoc :unit_price new-unit))))))))
+
+(declare line->trailing-money item-ignore-prefixes)
+
+(defn- markdown->qty-line-items [markdown]
+  (when (string? markdown)
+    (let [lines (str/split-lines markdown)]
+      (loop [remaining lines
+             pending []
+             items []]
+        (if-not (seq remaining)
+          (vec items)
+          (let [line0 (first remaining)
+                line (some-> line0 str str/trim not-empty)
+                norm (normalize-text line)]
+            (cond
+              (nil? line)
+              (recur (rest remaining) [] items)
+
+              (or (nil? norm)
+                (some #(str/starts-with? norm %) item-ignore-prefixes))
+              (recur (rest remaining) [] items)
+
+              (and (seq items) (line->discount line))
+              (let [discount (line->discount line)
+                    last-item (peek items)
+                    items (conj (pop items) (apply-discount-to-item last-item discount))]
+                (recur (rest remaining) [] items))
+
+              :else
+              (if-let [{:keys [label-from-line qty unit_price line_total]} (line->qty-unit-total line)]
+                (let [label-lines-raw (if-let [l (some-> label-from-line str/trim not-empty)]
+                                        (if (has-letter? l) [l] pending)
+                                        pending)
+                      pending-total (->> label-lines-raw
+                                      (keep (comp :money line->trailing-money))
+                                      last)
+                      label-lines (->> label-lines-raw
+                                    (map (fn [l]
+                                           (or (:prefix (line->trailing-money l)) l)))
+                                    (remove str/blank?)
+                                    vec)
+                      label (->> label-lines
+                              (map str/trim)
+                              (remove str/blank?)
+                              (str/join " ")
+                              normalize-item-label)
+                      line-total0 (or line_total pending-total)
+                      unit-price0 (or unit_price
+                                    (when (and qty line-total0 (pos? (.signum (bigdec qty))))
+                                      (.divide (bigdec line-total0) (bigdec qty) 2 java.math.RoundingMode/HALF_UP)))
+                      line-total1 (or line-total0
+                                    (when (and qty unit-price0)
+                                      (.setScale (* (bigdec qty) (bigdec unit-price0)) 2 java.math.RoundingMode/HALF_UP)))]
+                  (if (and (has-letter? label) line-total1)
+                    (recur (rest remaining)
+                      []
+                      (conj items {:raw_label label
+                                   :qty qty
+                                   :unit_price unit-price0
+                                   :line_total line-total1}))
+                    (recur (rest remaining) [] items)))
+                (if-let [{:keys [prefix money]} (line->trailing-money line)]
+                  (if (str/includes? line "|")
+                    (let [pending (cond-> pending
+                                    (has-letter? line) (conj line))
+                          pending (if (> (count pending) 3)
+                                    (subvec pending (- (count pending) 3))
+                                    pending)]
+                      (recur (rest remaining) pending items))
+                    (let [label-lines-raw (cond-> pending
+                                            (and prefix (has-letter? prefix) (not (unit-prefix? prefix)))
+                                            (conj prefix))
+                          label-lines (->> label-lines-raw
+                                        (map (fn [l]
+                                               (or (:prefix (line->trailing-money l)) l)))
+                                        (remove str/blank?)
+                                        vec)
+                          label (->> label-lines
+                                  (map str/trim)
+                                  (remove str/blank?)
+                                  (str/join " ")
+                                  normalize-item-label)]
+                      (if (and money (has-letter? label))
+                        (recur (rest remaining)
+                          []
+                          (conj items {:raw_label label
+                                       :qty 1M
+                                       :unit_price money
+                                       :line_total money}))
+                        (recur (rest remaining) [] items))))
+                  (let [pending (cond-> pending
+                                  (has-letter? line) (conj line))
+                        pending (if (> (count pending) 3)
+                                  (subvec pending (- (count pending) 3))
+                                  pending)]
+                    (recur (rest remaining) pending items)))))))))))
+
+(def ^:private trailing-money-re
+  #"(?i)^(.*?)(\d{1,9}[\.,]\d{2})\s*(?:e|km|bam|€)?\s*$")
+
+(defn- line->trailing-money [line]
+  (when (string? line)
+    (let [line (-> line
+                 str
+                 (str/replace #"\|" " ")
+                 (str/replace #"\s+" " ")
+                 str/trim)]
+      (when-let [[_ prefix amount] (re-matches trailing-money-re line)]
+        (let [money (parse-money amount)
+              prefix (some-> prefix str/trim not-empty)]
+          (when money
+            {:prefix prefix
+             :money money}))))))
+
+(def ^:private item-ignore-prefixes
+  (-> supplier-ignore-prefixes
+    (conj "ibfm")
+    (conj "ibem")
+    (conj "tbfm")
+    (conj "pdu")))
+
+(defn- markdown->price-line-items [markdown]
+  (when (string? markdown)
+    (let [lines (str/split-lines markdown)]
+      (loop [remaining lines
+             pending []
+             items []]
+        (if-not (seq remaining)
+          (vec items)
+          (let [line0 (first remaining)
+                line (some-> line0 str str/trim not-empty)
+                norm (normalize-text line)]
+            (cond
+              (nil? line)
+              (recur (rest remaining) [] items)
+
+              (or (nil? norm)
+                (some #(str/starts-with? norm %) item-ignore-prefixes))
+              (recur (rest remaining) [] items)
+
+              (and (seq items) (line->discount line))
+              (let [discount (line->discount line)
+                    last-item (peek items)
+                    items (conj (pop items) (apply-discount-to-item last-item discount))]
+                (recur (rest remaining) [] items))
+
+              :else
+              (if-let [{:keys [prefix money]} (line->trailing-money line)]
+                (let [label-lines (cond-> pending
+                                    (and prefix (has-letter? prefix) (not (unit-prefix? prefix)))
+                                    (conj prefix))
+                      label (->> label-lines
+                              (map str/trim)
+                              (remove str/blank?)
+                              (str/join " ")
+                              normalize-item-label)]
+                  (if (and money (has-letter? label))
+                    (recur (rest remaining)
+                      []
+                      (conj items {:raw_label label
+                                   :qty 1M
+                                   :unit_price money
+                                   :line_total money}))
+                    (recur (rest remaining) [] items)))
+                (let [pending (cond-> pending
+                                (has-letter? line) (conj line))
+                      pending (if (> (count pending) 3)
+                                (subvec pending (- (count pending) 3))
+                                pending)]
+                  (recur (rest remaining) pending items))))))))))
+
+(defn- markdown->line-item-candidates [markdown]
+  (when (string? markdown)
+    (let [pipe-items (markdown->pipe-line-items markdown)]
+      (if (seq pipe-items)
+        pipe-items
+        (let [qty-items (markdown->qty-line-items markdown)]
+          (if (seq qty-items)
+            qty-items
+            (markdown->price-line-items markdown)))))))
+
+(defn- abs-decimal-diff [a b]
+  (when (and a b)
+    (double (.abs (.subtract (bigdec a) (bigdec b))))))
+
+(defn- best-markdown-item-match [markdown-items item]
+  (let [item-total (parse-money (:line_total item))
+        item-qty (parse-money (:qty item))
+        item-unit (parse-money (:unit_price item))]
+    (when (and item-total (seq markdown-items))
+      (->> markdown-items
+        (map (fn [cand]
+               (let [d-total (abs-decimal-diff (:line_total cand) item-total)
+                     d-unit (abs-decimal-diff (:unit_price cand) item-unit)
+                     d-qty (abs-decimal-diff (:qty cand) item-qty)
+                     score (+ (* 10 (or d-total 999.0))
+                             (* 2 (or d-unit 1.0))
+                             (* 1 (or d-qty 1.0)))]
+                 {:cand cand
+                  :d-total d-total
+                  :score score})))
+        ;; Ensure we match the correct row primarily by line total
+        (filter #(<= (double (or (:d-total %) 999.0)) 0.05))
+        (sort-by :score)
+        first
+        :cand))))
+
+(defn- reconcile-extraction-with-markdown [extraction markdown]
+  (if-not (and (map? extraction) (string? markdown) (sequential? (:items extraction)))
+    {:extraction extraction
+     :changed? false
+     :changes []}
+    (let [markdown-items (markdown->line-item-candidates markdown)
+          {:keys [items changes]}
+          (reduce
+            (fn [{:keys [items changes] :as acc} item]
+              (let [raw-label (:raw_label item)]
+                (cond
+                  (label-present-in-markdown? markdown raw-label)
+                  (update acc :items conj item)
+
+                  :else
+                  (if-let [match (best-markdown-item-match markdown-items item)]
+                    (-> acc
+                      (update :items conj (merge item (select-keys match [:raw_label :qty :unit_price :line_total])))
+                      (update :changes conj {:from raw-label
+                                             :to (:raw_label match)
+                                             :match :ocr-markdown}))
+                    (update acc :items conj item)))))
+            {:items [] :changes []}
+            (:items extraction))
+          changed? (boolean (seq changes))]
+      {:extraction (assoc extraction :items items)
+       :changed? changed?
+       :changes changes})))
+
 (defn- persist-extract-result!
   [db receipt-id extract-result opts]
-  (let [extraction (:extraction extract-result)
+  (let [markdown (:parsed-markdown extract-result)
+        markdown-items (markdown->line-item-candidates markdown)
+        markdown-supplier (markdown->supplier-guess markdown)
+        markdown-total (markdown->total-amount markdown)
+        extraction0 (or (:extraction extract-result) {})
+        extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
+        extraction0 (cond
+                      (seq markdown-items) (assoc extraction0 :items markdown-items)
+                      (sequential? (:items extraction0)) extraction0
+                      :else (assoc extraction0 :items []))
+        provider-total (parse-money (get-in extraction0 [:totals :total]))
+        extraction0 (cond-> extraction0
+                      (and markdown-total
+                        (or (nil? provider-total)
+                          (> (abs-decimal-diff markdown-total provider-total) 0.05)))
+                      (assoc :totals {:total markdown-total})
+
+                      (and (nil? (get-in extraction0 [:merchant :name])) markdown-supplier)
+                      (assoc :merchant {:name markdown-supplier}))
+        {:keys [extraction changed? changes]}
+        (reconcile-extraction-with-markdown extraction0 markdown)
         valid-shape? (and (map? extraction) (m/validate ReceiptExtraction extraction))
-        guesses (when (map? extraction) (extraction->guesses extraction opts))
+        guesses (when (map? extraction)
+                  (let [g (extraction->guesses extraction opts)]
+                    (cond-> g
+                      (and (nil? (:supplier_guess g)) markdown-supplier)
+                      (assoc :supplier_guess markdown-supplier)
+
+                      (and (nil? (:total_amount_guess g)) markdown-total)
+                      (assoc :total_amount_guess markdown-total))))
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
-        raw-extract-json {:provider "mistral"
-                          :received_at (:received-at extract-result)
-                          :model (:model extract-result)
-                          :response (:raw extract-result)
-                          :extraction extraction
-                          :valid_shape? valid-shape?}]
+        raw-extract-json (cond-> {:provider "mistral"
+                                  :received_at (:received-at extract-result)
+                                  :model (:model extract-result)
+                                  :response (:raw extract-result)
+                                  :extraction extraction
+                                  :valid_shape? valid-shape?}
+                           changed?
+                           (assoc :reconciliation {:changes changes
+                                                   :source :parsed_markdown}))]
     (receipts/store-extraction-results!
       db
       receipt-id
       (merge {:raw_extract_json raw-extract-json
-              :parsed_markdown (:parsed-markdown extract-result)}
+              :parsed_markdown markdown}
         (select-keys guesses [:supplier_guess
                               :total_amount_guess
                               :currency_guess

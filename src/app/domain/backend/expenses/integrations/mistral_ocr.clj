@@ -25,12 +25,12 @@
 (def ^:private default-retry-sleep-ms 500)
 
 (def receipt-extraction-json-schema
-  "JSON Schema (draft-07) used for structured extraction.
+  "JSON Schema (draft-07) used for structured extraction of receipt metadata.
 
   Stored provider responses are persisted in `receipts.raw_extract_json`.
-  This schema is also mirrored by the Malli schema in the worker."
+  The worker augments this metadata with line items parsed from OCR markdown."
   {"$schema" "http://json-schema.org/draft-07/schema#"
-   "title" "ReceiptExtractionV1"
+   "title" "ReceiptMetaExtractionV1"
    "type" "object"
    "properties"
    {"merchant" {"type" "object"
@@ -64,21 +64,8 @@
                      "properties" {"method" {"type" ["string" "null"]
                                              "description" "cash|card|account|person|unknown"}
                                    "card_last4" {"type" ["string" "null"]
-                                                 "description" "Last 4 digits if present."}}}
-
-    "items" {"type" "array"
-             "description" "Purchased line items only. Exclude VAT/tax/PDV/subtotal/total/payment/change lines."
-             "items" {"type" "object"
-                      "properties" {"raw_label" {"type" "string"
-                                                 "description" "Item label/name as printed (do not include totals/tax lines)."}
-                                    "qty" {"type" ["number" "null"]
-                                           "description" "Quantity (may be decimal for weighted goods)."}
-                                    "unit_price" {"type" ["number" "null"]
-                                                  "description" "Price per unit if available."}
-                                    "line_total" {"type" "number"
-                                                  "description" "Total amount for this line; should approximately equal qty*unit_price when both are present."}}
-                      "required" ["raw_label" "line_total"]}}}
-   "required" ["merchant" "totals" "items"]})
+                                                 "description" "Last 4 digits if present."}}}}
+   "required" ["totals"]})
 
 (defn build-config
   "Build a provider config from an app config map (Aero) and environment.
@@ -531,9 +518,7 @@
   [resp-json]
   (cond
     (and (map? resp-json)
-      (contains? resp-json :merchant)
-      (contains? resp-json :totals)
-      (contains? resp-json :items))
+      (contains? resp-json :totals))
     resp-json
 
     (map? (:extraction resp-json))
