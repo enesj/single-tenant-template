@@ -2,10 +2,10 @@
   "Convenient REPL utilities for inspecting re-frame traces.
 
    Usage from browser REPL:
-   (require '[app.template.frontend.dev.repl-tracing :as repl-trace])
-   (repl-trace/recent)  ; Return recent traces
-   (repl-trace/events) ; Return only events
-   (repl-trace/stats)  ; Return buffer statistics"
+   (require '[app.template.frontend.dev.repl-tracing :as rt])
+   (rt/recent)  ; Return recent traces
+   (rt/events) ; Return only events
+   (rt/stats)  ; Return buffer statistics"
 
   (:require [app.template.frontend.dev.tracing :as tracing]
     [clojure.string :as str]))
@@ -47,6 +47,14 @@
      (->> (tracing/get-events)
        (take-last limited-n)
        format-traces))))
+
+(defn logs
+  "Return log entries from history (default: 50)."
+  ([] (logs 50))
+  ([n]
+   (->> (tracing/get-history)
+        (filter #(= (:op-type %) :log))
+        (take-last n))))
 
 (defn subscriptions
   "Return the most recent subscription traces (default: 20, max: 100)."

@@ -9,7 +9,8 @@
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
     [day8.re-frame.http-fx]
-    [re-frame.core :as rf]))
+    [re-frame.core :as rf]
+    [taoensso.timbre :as log]))
 
 ;; =============================================================================
 ;; Entity Configuration Protocol
@@ -314,4 +315,4 @@
   (when has-forms?
     (generate-form-events config))
 
-  (println (str "Registered events for entity: " entity-key)))
+  (log/info (str "Registered events for entity: " entity-key)))

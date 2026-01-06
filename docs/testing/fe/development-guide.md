@@ -506,5 +506,6 @@ This ensures all tests pass before merging.
 ## Related Documentation
 
 - [Frontend Testing Overview](./overview.md) - Architecture and implementation details
+- [Frontend Debugging & Tracing](../../frontend/debugging.md) - Using the REPL tracer
 - [Re-frame Documentation](https://day8.github.io/re-frame/) - Re-frame patterns
 - [cljs.test Reference](https://clojurescript.org/tools/testing) - ClojureScript testing

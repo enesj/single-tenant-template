@@ -97,7 +97,7 @@
   Safe to call multiple times; runs only once per page load."
   []
   (when (compare-and-set! admin-initialized? false true)
-    (install-unified-settings-debug!)
+    #_(install-unified-settings-debug!)
     ;; Initialize authentication persistence first (before any auth checks)
     (rf/dispatch [:admin/init-auth-persistence])
     ;; Initialize the theme when admin module loads

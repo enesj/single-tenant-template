@@ -26,5 +26,4 @@
 
 (def common-interceptors
   (cond-> [re-frame/trim-v]
-    ^boolean goog.DEBUG (conj re-frame/debug)
     (flags/validation-enabled?) (conj check-spec-interceptor)))
