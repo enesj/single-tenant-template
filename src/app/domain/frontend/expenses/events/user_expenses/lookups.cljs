@@ -126,7 +126,8 @@
       {:db (-> db
              (assoc-in [:user-expenses :upload :batch] nil)
              (assoc-in [:user-expenses :upload :loading?] true)
-             (assoc-in [:user-expenses :upload :error] nil))
+             (assoc-in [:user-expenses :upload :error] nil)
+             (assoc-in [:user-expenses :upload :notice] nil))
        :http-xhrio (x/xhrio db
                      {:method :post
                       :uri endpoints/upload-endpoint
@@ -148,14 +149,29 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [receipt (receipt-from-response response)
+          duplicate? (true? (or (:duplicate? response) (:duplicate response)))
           receipt-id (:id receipt)
+          receipt-id-str (some-> receipt-id str)
+          filename (or (:original-filename receipt)
+                     (:original_filename receipt)
+                     "receipt")
+          notice (when duplicate?
+                   [(str "Already uploaded: " filename ". Using the existing receipt.")])
+          items (if receipt-id-str
+                  (->> (or (get-in db [:user-expenses :receipts :items]) [])
+                    (remove (fn [r]
+                              (= receipt-id-str (some-> (:id r) str))))
+                    (cons receipt)
+                    vec)
+                  (vec (cons receipt (or (get-in db [:user-expenses :receipts :items]) []))))
           db' (-> db
                 (assoc-in [:user-expenses :upload :loading?] false)
                 (assoc-in [:user-expenses :upload :error] nil)
-                (update-in [:user-expenses :receipts :items] (fnil #(vec (cons receipt %)) []))
+                (assoc-in [:user-expenses :upload :notice] notice)
+                (assoc-in [:user-expenses :receipts :items] items)
                 (assoc-in [:user-expenses :upload :last-receipt-id] receipt-id))]
       (cond-> {:db db'}
-        receipt-id
+        (and receipt-id (not duplicate?))
         ;; Automatically queue OCR for this receipt.
         ;; Do this via :http-xhrio directly (instead of :dispatch) so tests that use
         ;; dispatch-sync remain deterministic.
@@ -203,6 +219,7 @@
           (-> db
             (assoc-in [:user-expenses :upload :loading?] true)
             (assoc-in [:user-expenses :upload :error] nil)
+            (assoc-in [:user-expenses :upload :notice] nil)
             (assoc-in [:user-expenses :upload :batch] {:total total
                                                        :done 0
                                                        :failed 0
@@ -218,13 +235,30 @@
   common-interceptors
   (fn [{:keys [db]} [remaining response]]
     (let [receipt (receipt-from-response response)
+          duplicate? (true? (or (:duplicate? response) (:duplicate response)))
           receipt-id (:id receipt)
+          receipt-id-str (some-> receipt-id str)
+          filename (or (get-in db [:user-expenses :upload :batch :current])
+                     (:original-filename receipt)
+                     (:original_filename receipt)
+                     "receipt")
+          notice-msg (when duplicate?
+                       (str "Already uploaded: " filename ". Using the existing receipt."))
+          items (if receipt-id-str
+                  (->> (or (get-in db [:user-expenses :receipts :items]) [])
+                    (remove (fn [r]
+                              (= receipt-id-str (some-> (:id r) str))))
+                    (cons receipt)
+                    vec)
+                  (vec (cons receipt (or (get-in db [:user-expenses :receipts :items]) []))))
           db' (-> db
                 (update-in [:user-expenses :upload :batch :done] (fnil inc 0))
-                (cond-> receipt-id
+                (cond-> (and receipt-id (not duplicate?))
                   (update-in [:user-expenses :upload :batch :receipt-ids] (fnil conj []) (str receipt-id)))
-                (update-in [:user-expenses :receipts :items] (fnil #(vec (cons receipt %)) []))
-                (assoc-in [:user-expenses :upload :last-receipt-id] receipt-id))
+                (assoc-in [:user-expenses :receipts :items] items)
+                (assoc-in [:user-expenses :upload :last-receipt-id] receipt-id)
+                (cond-> notice-msg
+                  (update-in [:user-expenses :upload :notice] (fnil conj []) notice-msg)))
           all-ids (get-in db' [:user-expenses :upload :batch :receipt-ids])]
       (if (seq remaining)
         (upload-receipts-next-fx db' remaining)

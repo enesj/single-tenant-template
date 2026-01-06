@@ -120,7 +120,15 @@
                                                :original_filename original_filename
                                                :content_type content_type
                                                :file_size file_size})]
-      (:receipt result))))
+      ;; If the receipt is a duplicate, delete the just-uploaded file so we don't
+      ;; accumulate orphaned files under upload/stripes/.
+      (when (:duplicate? result)
+        (try
+          (let [uploaded-file (io/file (ensure-upload-dir!) storage_key)]
+            (Files/deleteIfExists (.toPath uploaded-file)))
+          (catch Exception e
+            (log/warn e "Failed to delete duplicate uploaded receipt file" {:storage_key storage_key}))))
+      result)))
 
 (defn- to-app
   [data]
@@ -131,14 +139,18 @@
 (defn user-upload-handler
   "POST /api/v1/expenses/upload
 
-  Returns {:data <receipt>} (201) on success."
+  Returns {:data <receipt> :duplicate? <bool>}.
+  - 201 when a new receipt is created
+  - 200 when the upload is a duplicate of an existing receipt"
   [db]
   (fn [request]
     (try
-      (let [receipt (create-receipt-from-upload! db request)]
-        (-> (response/response (json/generate-string {:data (to-app receipt)}))
+      (let [{:keys [receipt duplicate?]} (create-receipt-from-upload! db request)
+            duplicate? (boolean duplicate?)]
+        (-> (response/response (json/generate-string {:data (to-app receipt)
+                                                      :duplicate? duplicate?}))
           (response/content-type "application/json")
-          (response/status 201)))
+          (response/status (if duplicate? 200 201))))
       (catch clojure.lang.ExceptionInfo e
         (let [{:keys [status]} (ex-data e)
               status (or status 500)]
@@ -157,10 +169,11 @@
 (defn admin-upload-handler
   "POST /admin/api/expenses/upload
 
-  Returns {:success true :receipt <receipt>} (200) on success."
+  Returns {:success true :receipt <receipt> :duplicate? <bool>} (200) on success."
   [db]
   (admin-utils/with-error-handling
     (fn [request]
-      (let [receipt (create-receipt-from-upload! db request)]
-        (admin-utils/success-response {:receipt (to-app receipt)})))
+      (let [{:keys [receipt duplicate?]} (create-receipt-from-upload! db request)]
+        (admin-utils/success-response {:receipt (to-app receipt)
+                                       :duplicate? (boolean duplicate?)})))
     "Failed to upload receipt"))

@@ -32,7 +32,7 @@
                        "📄")
                 badge (case status
                         "extracted" "ds-badge-success"
-                        "posted" "ds-badge-success"
+                        "posted" "ds-badge-primary"
                         "review_required" "ds-badge-warning"
                         "failed" "ds-badge-error"
                         "ds-badge-ghost")]
@@ -60,12 +60,13 @@
         uploading? (boolean (use-subscribe [:user-expenses/upload-loading?]))
         upload-batch (use-subscribe [:user-expenses/upload-batch])
         upload-error (use-subscribe [:user-expenses/upload-error])
+        upload-notice (use-subscribe [:user-expenses/upload-notice])
         recent-receipts (or (use-subscribe [:user-expenses/recent-receipts]) [])
         uploading-label (when (and uploading? (map? upload-batch))
                           (let [{:keys [total done failed current]} upload-batch
                                 processed (+ (or done 0) (or failed 0))
                                 idx (inc processed)]
-                                (when (and (number? total) (> total 1))
+                            (when (and (number? total) (> total 1))
                               (str "Uploading " idx " of " total
                                 (when current (str ": " current))
                                 "..."))))
@@ -103,6 +104,16 @@
                  ($ button {:btn-type :outline
                             :on-click handle-manual}
                    "Manual Entry")))))
+
+         ;; Notice
+         (when (seq upload-notice)
+           ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
+             ($ :div {:class "ds-alert ds-alert-warning"}
+               (if (sequential? upload-notice)
+                 ($ :ul {:class "list-disc pl-5 text-sm"}
+                   (for [msg upload-notice]
+                     ($ :li {:key msg} msg)))
+                 ($ :span (str upload-notice))))))
 
          ;; Error
          (when upload-error

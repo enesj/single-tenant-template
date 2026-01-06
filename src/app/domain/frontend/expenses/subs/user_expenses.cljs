@@ -111,6 +111,11 @@
     (get-in db [:user-expenses :upload :error])))
 
 (rf/reg-sub
+  :user-expenses/upload-notice
+  (fn [db _]
+    (get-in db [:user-expenses :upload :notice])))
+
+(rf/reg-sub
   :user-expenses/upload-batch
   (fn [db _]
     (get-in db [:user-expenses :upload :batch])))

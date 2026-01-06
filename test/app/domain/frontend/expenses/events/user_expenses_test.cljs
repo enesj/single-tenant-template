@@ -85,6 +85,17 @@
       (is (= "/api/v1/expenses/receipts/ocr" (req-uri req)))
       (is (= ["rec-1"] (get-in req [:params :receipt_ids]))))))
 
+(deftest upload-receipt-duplicate-shows-notice-and-skips-ocr
+  (testing "duplicate uploads show a notice and do not queue OCR"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/upload-receipt-success
+                       {:data {:id "rec-1" :original_filename "r.jpg"}
+                        :duplicate? true}])
+    (is (= 0 (count @captured-http-requests)))
+    (let [notice (get-in @rf-db/app-db [:user-expenses :upload :notice])]
+      (is (seq notice))
+      (is (some #(re-find #"Already uploaded" (str %)) notice)))))
+
 (deftest upload-receipts-batch-sends-multiple-requests
   (testing "upload-receipts queues files and uploads sequentially"
     (reset-db!)
