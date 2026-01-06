@@ -58,7 +58,7 @@
 (defn get-expense-form-spec
   ([suppliers payers]
    (get-expense-form-spec suppliers payers nil))
-  ([suppliers payers {:keys [new-supplier-default-display-name]}]
+  ([suppliers payers {:keys [new-supplier-default-display-name receipt-approval?]}]
    [{:id :supplier_id
      :type :select
      :component supplier-select-with-inline-create
@@ -94,7 +94,10 @@
     {:id :items
      :component line-items-input ;; Custom component
      :label "Line Items"
-     :columns line-item-columns}]))
+     :columns line-item-columns
+     :style (if receipt-approval? {:maxHeight "260px"} {:maxHeight "300px"})
+     :overflow-y-class "overflow-y-auto"
+     :scrollbar-gutter-stable? true}]))
 
 ;; =============================================================================
 ;; Normalization & Validation Helpers
@@ -401,7 +404,7 @@
 (defui expense-form-body
   "Internal form body component. Used by both add and edit modals."
   [{:keys [mode initial-data on-submit on-cancel _loading?
-           new-supplier-default-display-name]}]
+           new-supplier-default-display-name receipt-approval?]}]
   (let [suppliers (use-subscribe [:expenses/suppliers])
         payers (use-subscribe [:expenses/payers])
         form-error (use-subscribe [:expenses/entries-error])
@@ -410,8 +413,9 @@
         ;; Memoize entity-spec to avoid recreating on every render
         entity-spec (use-memo
                       #(get-expense-form-spec suppliers payers
-                         {:new-supplier-default-display-name new-supplier-default-display-name})
-                      [suppliers payers new-supplier-default-display-name])
+                         {:new-supplier-default-display-name new-supplier-default-display-name
+                          :receipt-approval? receipt-approval?})
+                      [suppliers payers new-supplier-default-display-name receipt-approval?])
 
         ;; Memoize initial values so fork/form doesn't reset on every render
         form-initial-values (use-memo
@@ -480,6 +484,7 @@
        :loading? loading?
        :initial-data merged-initial-data
        :new-supplier-default-display-name default-supplier-display-name
+       :receipt-approval? (boolean receipt-id)
        :on-cancel on-cancel
        :on-submit (fn [form-data]
                     (if receipt-id

@@ -220,12 +220,58 @@
             (if-let [receipt (if (= "admin" role)
                                (receipts/get-receipt db id)
                                (receipts/get-user-receipt db user-id id))]
-              (let [receipt-app (to-app receipt)]
-                (json-response {:data (enrich-receipt-for-detail db receipt-app)} 200))
+              (let [receipt-app (to-app receipt)
+                    download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt-app))
+                                   (str "/api/v1/expenses/receipts/" (str id) "/download"))
+                    receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
+                                  download-url (assoc :download-url download-url))]
+                (json-response {:data receipt-app} 200))
               (json-response {:error "Receipt not found"} 404))
             (json-response {:error "Invalid id"} 400)))
         (unauthorized-response)))
     "Failed to fetch receipt"))
+
+(defn- truthy-param?
+  [value]
+  (let [value* (some-> value str str/lower-case str/trim)]
+    (contains? #{"1" "true" "yes"} value*)))
+
+(defn- safe-filename
+  [value fallback]
+  (let [value* (some-> value
+                 str
+                 (str/replace #"[\r\n\"]" "")
+                 str/trim)]
+    (if (seq value*) value* fallback)))
+
+(defn download-receipt-handler
+  "GET /api/v1/expenses/receipts/:id/download"
+  [db]
+  (with-error-handling
+    (fn [request]
+      (if-let [user-id (get-user-id request)]
+        (let [role (get-user-role request)]
+          (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
+            (if-let [receipt (if (= "admin" role)
+                               (receipts/get-receipt db id)
+                               (receipts/get-user-receipt db user-id id))]
+              (let [receipt-app (to-app receipt)
+                    file (receipts/resolve-local-receipt-file (:storage-key receipt-app))]
+                (if-not file
+                  (json-response {:error "Receipt file not found"} 404)
+                  (let [qp (:query-params request)
+                        download? (truthy-param? (or (:download qp) (get qp "download")))
+                        disposition (if download? "attachment" "inline")
+                        filename (safe-filename (:original-filename receipt-app) (str "receipt-" id))
+                        content-type (or (:content-type receipt-app) "application/octet-stream")]
+                    (-> (response/file-response (.getPath file))
+                      (response/content-type content-type)
+                      (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
+                      (response/header "Cache-Control" "private, max-age=0, no-store")))))
+              (json-response {:error "Receipt not found"} 404))
+            (json-response {:error "Invalid id"} 400)))
+        (unauthorized-response)))
+    "Failed to download receipt"))
 
 (defn delete-receipt-handler
   "DELETE /api/v1/expenses/receipts/:id

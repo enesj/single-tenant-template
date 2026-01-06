@@ -3,6 +3,7 @@
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]
+    [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
 (defn- format-bytes
@@ -42,10 +43,12 @@
 
 (defui receipt-viewer
   [{:keys [receipt show-summary?] :or {show-summary? true}}]
-  (let [{:keys [status original-filename content-type file-size storage-key
+  (let [{:keys [id status original-filename content-type file-size storage-key download-url
                 supplier-guess total-amount-guess currency-guess purchased-at-guess
                 payment-hints error-message error-details raw-parse-json raw-extract-json
                 parsed-markdown expense-id retry-count created-at updated-at]} receipt
+        rid-str (or (some-> id str) "unknown")
+        download-href (when download-url (str download-url "?download=true"))
         status-label (shared/format-value status "—" false)]
     ($ :div {:class "grid gap-6 lg:grid-cols-2"}
       ($ :div {:class "space-y-4"}
@@ -71,10 +74,43 @@
                 (label-value "Updated At" (shared/format-date updated-at))))))
 
         ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-          ($ :div {:class "ds-card-body"}
-            ($ :h3 {:class "text-sm font-semibold"} "Preview")
-            ($ :p {:class "text-xs text-base-content/60"}
-              "Receipt preview is not available without a download URL.")))
+          ($ :div {:class "ds-card-body space-y-3"}
+            ($ :div {:class "flex items-center justify-between gap-2"}
+              ($ :h3 {:class "text-sm font-semibold"} "Preview")
+              (when (seq download-url)
+                ($ :div {:class "flex items-center gap-2"}
+                  ($ :a {:id (str "link-open-receipt-" rid-str)
+                         :href download-url
+                         :target "_blank"
+                         :rel "noreferrer"
+                         :class "ds-btn ds-btn-ghost ds-btn-xs"}
+                    "Open")
+                  ($ :a {:id (str "btn-download-receipt-" rid-str)
+                         :href download-href
+                         :class "ds-btn ds-btn-primary ds-btn-xs"}
+                    "Download"))))
+
+            (cond
+              (not (seq download-url))
+              ($ :p {:class "text-xs text-base-content/60"}
+                "Receipt preview is not available without a download URL.")
+
+              (str/starts-with? (or content-type "") "image/")
+              ($ :div {:class "w-full bg-base-200 rounded-lg overflow-hidden"}
+                ($ :img {:id (str "receipt-preview-img-" rid-str)
+                         :src download-url
+                         :alt (or original-filename "Receipt image")
+                         :class "w-full max-h-[70vh] object-contain"}))
+
+              (= content-type "application/pdf")
+              ($ :iframe {:id (str "receipt-preview-pdf-" rid-str)
+                          :src download-url
+                          :title (or original-filename "Receipt PDF")
+                          :class "w-full h-[70vh] rounded-lg bg-base-200"})
+
+              :else
+              ($ :p {:class "text-xs text-base-content/60"}
+                "Preview is not available for this file type."))))
 
         (when (seq parsed-markdown)
           ($ :div {:class "ds-card ds-card-bordered bg-base-100"}

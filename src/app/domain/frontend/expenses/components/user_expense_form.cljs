@@ -54,49 +54,54 @@
     :width "w-32"}])
 
 (defn get-expense-form-spec
-  [suppliers payers]
-  [{:id :supplier_id
-    :type :select
-    :label "Supplier"
-    :required true
-    :placeholder "Select supplier"
-    :options (map (fn [s]
-                    {:value (:id s)
-                     :label (select-options/supplier-label s)})
-               suppliers)}
-   {:id :payer_id
-    :type :select
-    :label "Payer"
-    :required true
-    :placeholder "Select payer"
-    :options (map (fn [p]
-                    {:value (:id p)
-                     :label (str (:label p)
-                              (when (:type p)
-                                (str " (" (:type p) ")")))})
-               payers)}
-   {:id :purchased_at
-    :type :datetime-local
-    :label "Purchased at"
-    :required true}
-   {:id :total_amount
-    :component app.domain.frontend.expenses.components.form-fields/total-amount-input
-    :label "Total amount"
-    :required true}
-   {:id :currency
-    :type :select
-    :label "Currency"
-    :required true
-    :options currency-options}
-   {:id :notes
-    :type :textarea
-    :label "Notes"
-    :required false
-    :placeholder "Optional notes"}
-   {:id :items
-    :component line-items-input
-    :label "Line Items"
-    :columns line-item-columns}])
+  ([suppliers payers]
+   (get-expense-form-spec suppliers payers nil))
+  ([suppliers payers {:keys [receipt-approval?]}]
+   [{:id :supplier_id
+     :type :select
+     :label "Supplier"
+     :required true
+     :placeholder "Select supplier"
+     :options (map (fn [s]
+                     {:value (:id s)
+                      :label (select-options/supplier-label s)})
+                suppliers)}
+    {:id :payer_id
+     :type :select
+     :label "Payer"
+     :required true
+     :placeholder "Select payer"
+     :options (map (fn [p]
+                     {:value (:id p)
+                      :label (str (:label p)
+                               (when (:type p)
+                                 (str " (" (:type p) ")")))})
+                payers)}
+    {:id :purchased_at
+     :type :datetime-local
+     :label "Purchased at"
+     :required true}
+    {:id :total_amount
+     :component app.domain.frontend.expenses.components.form-fields/total-amount-input
+     :label "Total amount"
+     :required true}
+    {:id :currency
+     :type :select
+     :label "Currency"
+     :required true
+     :options currency-options}
+    {:id :notes
+     :type :textarea
+     :label "Notes"
+     :required false
+     :placeholder "Optional notes"}
+    {:id :items
+     :component line-items-input
+     :label "Line Items"
+     :columns line-item-columns
+     :style (if receipt-approval? {:maxHeight "260px"} {:maxHeight "300px"})
+     :overflow-y-class "overflow-y-auto"
+     :scrollbar-gutter-stable? true}]))
 
 ;; =============================================================================
 ;; Normalization & Validation Helpers
@@ -367,7 +372,7 @@
 ;; =============================================================================
 
 (defui user-expense-form-body
-  [{:keys [mode initial-data on-submit on-cancel]}]
+  [{:keys [mode initial-data on-submit on-cancel receipt-approval?]}]
   (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         form-error (use-subscribe [:user-expenses/form-error])
@@ -376,8 +381,9 @@
         ;; Memoize entity-spec to avoid recreating on every render.
         ;; Only rebuild when suppliers or payers content actually changes.
         entity-spec (use-memo
-                      #(get-expense-form-spec suppliers payers)
-                      [suppliers payers])
+                      #(get-expense-form-spec suppliers payers
+                         {:receipt-approval? receipt-approval?})
+                      [suppliers payers receipt-approval?])
 
         ;; Memoize initial values so fork/form doesn't reset on every render.
         ;; Use initial-data identity as the dependency (it's passed from parent).
@@ -436,6 +442,7 @@
                               [receipt-initial-data])]
     ($ user-expense-form-body
       {:mode :create
+       :receipt-approval? (boolean receipt-id)
        :initial-data merged-initial-data
        :on-cancel on-cancel
        :on-submit (fn [form-data]

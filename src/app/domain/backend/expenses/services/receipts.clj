@@ -74,6 +74,29 @@
       (throw (ex-info "Unsafe storage_key path" {:storage_key relative-path})))
     (.toFile resolved)))
 
+(defn resolve-local-receipt-file
+  "Return a java.io.File for a local receipt storage key (relative to `upload/stripes/`).
+
+  Returns nil when:
+  - storage-key is blank
+  - storage-key is a URI (e.g. s3://...)
+  - the resolved file does not exist
+
+  Throws ex-info with :status 400 when the path is unsafe."
+  [storage-key]
+  (let [k (some-> storage-key str/trim not-empty)]
+    (cond
+      (not k) nil
+      (uri-storage-key? k) nil
+      :else
+      (try
+        (let [f (safe-resolve-under! local-receipt-storage-base-dir k)]
+          (when (.exists f) f))
+        (catch clojure.lang.ExceptionInfo e
+          (throw (ex-info (ex-message e)
+                   (assoc (ex-data e) :status 400)
+                   e)))))))
+
 (defn- finalize-local-receipt-file!
   "Move a local receipt file from `upload/stripes/<storage_key>` to
   `upload/stripes/exported/<storage_key>`.

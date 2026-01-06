@@ -19,8 +19,6 @@
 
 (def ^:private default-base-url "https://api.mistral.ai")
 (def ^:private default-model "mistral-ocr-2512")
-(def ^:private default-document-type "receipt")
-
 (def ^:private default-conn-timeout-ms 5000)
 (def ^:private default-socket-timeout-ms 30000)
 (def ^:private default-max-retries 2)
@@ -36,34 +34,49 @@
    "type" "object"
    "properties"
    {"merchant" {"type" "object"
-                "properties" {"name" {"type" "string"}
-                              "address" {"type" ["string" "null"]}
-                              "tax_id" {"type" ["string" "null"]}}
+                "description" "Seller/merchant printed on the receipt."
+                "properties" {"name" {"type" "string"
+                                      "description" "Merchant/store name (as printed)."}
+                              "address" {"type" ["string" "null"]
+                                         "description" "Address if present."}
+                              "tax_id" {"type" ["string" "null"]
+                                        "description" "Merchant tax/VAT id if present."}}
                 "required" ["name"]}
 
     "purchased_at" {"type" ["string" "null"]
-                    "description" "ISO-8601 timestamp if available"}
+                    "description" "ISO-8601 timestamp (local time) if available, e.g. 2023-12-23T19:23:00"}
 
     "currency" {"type" ["string" "null"]
-                "description" "ISO 4217, e.g. USD/EUR/BAM"}
+                "description" "ISO 4217 currency code (e.g. BAM/EUR/USD). Use null if unknown."}
 
     "totals" {"type" "object"
-              "properties" {"subtotal" {"type" ["number" "null"]}
-                            "tax" {"type" ["number" "null"]}
-                            "total" {"type" "number"}}
+              "description" "Totals printed on the receipt."
+              "properties" {"subtotal" {"type" ["number" "null"]
+                                        "description" "Subtotal before tax/fees if present."}
+                            "tax" {"type" ["number" "null"]
+                                   "description" "Total tax amount if present."}
+                            "total" {"type" "number"
+                                     "description" "Grand total paid; prefer the final total."}}
               "required" ["total"]}
 
     "payment_hints" {"type" ["object" "null"]
+                     "description" "Optional hints about the payment method."
                      "properties" {"method" {"type" ["string" "null"]
                                              "description" "cash|card|account|person|unknown"}
-                                   "card_last4" {"type" ["string" "null"]}}}
+                                   "card_last4" {"type" ["string" "null"]
+                                                 "description" "Last 4 digits if present."}}}
 
     "items" {"type" "array"
+             "description" "Purchased line items only. Exclude VAT/tax/PDV/subtotal/total/payment/change lines."
              "items" {"type" "object"
-                      "properties" {"raw_label" {"type" "string"}
-                                    "qty" {"type" ["number" "null"]}
-                                    "unit_price" {"type" ["number" "null"]}
-                                    "line_total" {"type" "number"}}
+                      "properties" {"raw_label" {"type" "string"
+                                                 "description" "Item label/name as printed (do not include totals/tax lines)."}
+                                    "qty" {"type" ["number" "null"]
+                                           "description" "Quantity (may be decimal for weighted goods)."}
+                                    "unit_price" {"type" ["number" "null"]
+                                                  "description" "Price per unit if available."}
+                                    "line_total" {"type" "number"
+                                                  "description" "Total amount for this line; should approximately equal qty*unit_price when both are present."}}
                       "required" ["raw_label" "line_total"]}}}
    "required" ["merchant" "totals" "items"]})
 
@@ -137,7 +150,6 @@
      :api-key (or (getenv "MISTRAL_API_KEY") (:api-key cfg))
      :base-url (or (getenv "MISTRAL_OCR_BASE_URL") (:base-url cfg) default-base-url)
      :model (or (getenv "MISTRAL_OCR_MODEL") (:ocr-model cfg) default-model)
-     :document-type (or (:document-type cfg) default-document-type)
      :conn-timeout-ms (or (some-> (getenv "MISTRAL_OCR_CONN_TIMEOUT_MS") parse-int)
                         (:conn-timeout-ms cfg)
                         default-conn-timeout-ms)
@@ -338,7 +350,8 @@
         (let [lines (mapv
                       (fn [{:keys [custom-id bytes content-type]}]
                         {:custom_id (str custom-id)
-                         :body {:document (build-document-map bytes content-type)
+                         :body {:model (or (:model cfg) default-model)
+                                :document (build-document-map bytes content-type)
                                 :document_annotation_format {:type "json_schema"
                                                              :json_schema {:name "receipt_extraction"
                                                                            :schema receipt-extraction-json-schema}}}})

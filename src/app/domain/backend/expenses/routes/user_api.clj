@@ -45,6 +45,7 @@
    ;; Receipts inbox (review + approve + OCR)
    ["/receipts" {:get {:handler (user-receipts/list-receipts-handler db)}}]
    ["/receipts/ocr" {:post {:handler (user-receipts/ocr-batch-receipts-handler db app-config)}}]
+   ["/receipts/:id/download" {:get {:handler (user-receipts/download-receipt-handler db)}}]
    ["/receipts/:id"
     {:get {:handler (user-receipts/get-receipt-handler db)}
      :delete {:handler (user-receipts/delete-receipt-handler db)}}]

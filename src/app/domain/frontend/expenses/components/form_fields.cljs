@@ -142,44 +142,50 @@
                     :type "button"
                     :on-click add-item}
           "Add line item"))
-      ($ :div {:class "overflow-x-auto max-h-[320px] overflow-y-auto"}
-        ($ :table {:class "ds-table w-full"}
-          ($ :thead
-            ($ :tr
-              (for [col columns
-                    :let [label (:label col)
-                          width (:width col)]]
-                ($ :th {:key (:id col)
-                        :class (or width "")}
-                  label))
-              ($ :th "")))
-          ($ :tbody
-            (for [item items
-                  :let [item-id (:id item)]]
-              ($ :tr {:key item-id}
+      (let [overflow-y-class (or (:overflow-y-class field-spec) "overflow-y-auto")
+            stable-gutter? (true? (:scrollbar-gutter-stable? field-spec))
+            style (merge {:maxHeight "300px"}
+                         (:style field-spec)
+                         (when stable-gutter? {:scrollbarGutter "stable"}))]
+        ($ :div {:class (str "overflow-x-auto " (:max-height-class field-spec) " " overflow-y-class)
+                 :style style}
+          ($ :table {:class "ds-table w-full"}
+            ($ :thead
+              ($ :tr
                 (for [col columns
-                      :let [col-id (:id col)
-                            val (get item col-id)
-                            type (:type col)
-                            placeholder (:placeholder col)
-                            step (:step col)
-                            min-val (:min col)]]
-                  ($ :td {:key col-id}
-                    ($ common/input
-                      (cond-> {:id (input-id item-id col-id)
-                               :class "ds-input ds-input-bordered w-full"
-                               :value (or val "")
-                               :type (name (or type :text))
-                               :on-change (handle-line-change item-id col-id)}
-                        placeholder (assoc :placeholder placeholder)
-                        step (assoc :step step)
-                        min-val (assoc :min min-val)))))
-                ($ :td
-                  ($ :button {:id (str "btn-remove-" field-key "-line-item-" item-id)
-                              :class "text-xs text-error"
-                              :type "button"
-                              :on-click #(remove-item item-id)}
-                    "Remove")))))))
+                      :let [label (:label col)
+                            width (:width col)]]
+                  ($ :th {:key (:id col)
+                          :class (or width "")}
+                    label))
+                ($ :th "")))
+            ($ :tbody
+              (for [item items
+                    :let [item-id (:id item)]]
+                ($ :tr {:key item-id}
+                  (for [col columns
+                        :let [col-id (:id col)
+                              val (get item col-id)
+                              type (:type col)
+                              placeholder (:placeholder col)
+                              step (:step col)
+                              min-val (:min col)]]
+                    ($ :td {:key col-id}
+                      ($ common/input
+                        (cond-> {:id (input-id item-id col-id)
+                                 :class "ds-input ds-input-bordered w-full"
+                                 :value (or val "")
+                                 :type (name (or type :text))
+                                 :on-change (handle-line-change item-id col-id)}
+                          placeholder (assoc :placeholder placeholder)
+                          step (assoc :step step)
+                          min-val (assoc :min min-val)))))
+                  ($ :td
+                    ($ :button {:id (str "btn-remove-" field-key "-line-item-" item-id)
+                                :class "text-xs text-error"
+                                :type "button"
+                                :on-click #(remove-item item-id)}
+                      "Remove"))))))))
       (when error
         ($ :div {:class "text-error text-sm mt-1"} error)))))
 

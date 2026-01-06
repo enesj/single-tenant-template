@@ -8,6 +8,7 @@
     [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.string :as str]
+    [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
 (defn- to-app [data]
@@ -130,10 +131,50 @@
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
         (if-let [receipt (receipts/get-receipt db id)]
-          (utils/success-response {:receipt (->> receipt to-app (enrich-receipt-for-detail db))})
+          (let [receipt* (->> receipt to-app (enrich-receipt-for-detail db))
+                download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt*))
+                               (str "/admin/api/expenses/receipts/" (str id) "/download"))]
+            (utils/success-response
+              {:receipt (cond-> receipt*
+                          download-url (assoc :download-url download-url))}))
           (utils/error-response "Receipt not found" :status 404))
         (utils/error-response "Invalid id" :status 400)))
     "Failed to fetch receipt"))
+
+(defn- truthy-param?
+  [value]
+  (let [value* (some-> value str str/lower-case str/trim)]
+    (contains? #{"1" "true" "yes"} value*)))
+
+(defn- safe-filename
+  [value fallback]
+  (let [value* (some-> value
+                 str
+                 (str/replace #"[\r\n\"]" "")
+                 str/trim)]
+    (if (seq value*) value* fallback)))
+
+(defn download-receipt-handler [db]
+  (utils/with-error-handling
+    (fn [request]
+      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+        (if-let [receipt (receipts/get-receipt db id)]
+          (let [receipt-app (to-app receipt)
+                file (receipts/resolve-local-receipt-file (:storage-key receipt-app))]
+            (if-not file
+              (utils/error-response "Receipt file not found" :status 404)
+              (let [qp (:query-params request)
+                    download? (truthy-param? (or (:download qp) (get qp "download")))
+                    disposition (if download? "attachment" "inline")
+                    filename (safe-filename (:original-filename receipt-app) (str "receipt-" id))
+                    content-type (or (:content-type receipt-app) "application/octet-stream")]
+                (-> (response/file-response (.getPath file))
+                  (response/content-type content-type)
+                  (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
+                  (response/header "Cache-Control" "private, max-age=0, no-store")))))
+          (utils/error-response "Receipt not found" :status 404))
+        (utils/error-response "Invalid id" :status 400)))
+    "Failed to download receipt"))
 
 (defn delete-receipt-handler [db]
   (utils/with-error-handling
@@ -297,6 +338,7 @@
         :post (upload-receipt-handler db)}]
    ["/pending" {:get (list-pending-handler db)}]
    ["/ocr" {:post (ocr-batch-receipts-handler db app-config)}]
+   ["/:id/download" {:get (download-receipt-handler db)}]
    ["/:id" {:get (get-receipt-handler db)
             :delete (delete-receipt-handler db)}]
    ["/:id/status" {:post (update-status-handler db)}]
