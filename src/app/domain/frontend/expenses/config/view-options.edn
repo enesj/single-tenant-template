@@ -5,7 +5,7 @@
    :show-highlights? true,
    :show-timestamps? true},
   :display-locks {:show-batch-edit? false, :show-batch-delete? false},
-  :column-locks {:supplier_id false},
+  :column-locks {},
   :column-defaults {:purchased_at false}},
  :receipts
  {:display-defaults

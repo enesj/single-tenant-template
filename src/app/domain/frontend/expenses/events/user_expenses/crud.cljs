@@ -186,9 +186,11 @@
 (rf/reg-event-fx
   :user-expenses/call-modal-callback
   common-interceptors
-  (fn [_cofx [callback]]
-    (when callback
-      (callback))
+  (fn [_cofx [callback & args]]
+    (when (fn? callback)
+      (if (seq args)
+        (apply callback args)
+        (callback)))
     {}))
 
 ;; ---------------------------------------------------------------------------

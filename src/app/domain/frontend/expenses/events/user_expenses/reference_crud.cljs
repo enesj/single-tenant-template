@@ -35,7 +35,9 @@
   :user-expenses/create-supplier-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [supplier-id (or (get-in response [:data :id])
+    (let [supplier (or (:data response) (:supplier response) response)
+          supplier-id (or (:id supplier)
+                        (get-in response [:data :id])
                         (get-in response [:supplier :id]))
           highlight-id (some-> supplier-id str)]
       {:db (-> db
@@ -46,7 +48,7 @@
        :dispatch-n [[:user-expenses/fetch-suppliers]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
-                                :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
+                                :dispatch [:user-expenses/call-modal-callback on-success supplier]}])]})))
 
 (rf/reg-event-db
   :user-expenses/create-supplier-modal-failure

@@ -1,5 +1,7 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr-test
   (:require
+    [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.services.receipts :as receipts]
     [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
     [clojure.test :refer [deftest is testing]]))
 
@@ -123,6 +125,17 @@
             :line_total 42.00M}
           (nth items 2)))))
 
+(deftest markdown-line-item-candidates-does-not-treat-dimensions-as-qty
+  (let [candidates #'receipt-ocr/markdown->line-item-candidates
+        markdown (str "60963601 Torba papirna velika 32 x 16 x 45 - bez /pc 0,70E\n")
+        items (candidates markdown)]
+    (is (= 1 (count items)))
+    (is (= {:raw_label "Torba papirna velika 32 x 16 x 45 - bez /pc"
+            :qty 1M
+            :unit_price 0.70M
+            :line_total 0.70M}
+          (first items)))))
+
 (deftest markdown-line-item-candidates-applies-discounts
   (let [candidates #'receipt-ocr/markdown->line-item-candidates
         markdown (str "62778401 Mirisna svijeca u staklu Premium Collec\n"
@@ -171,3 +184,58 @@
             :unit_price 9.90M
             :line_total 9.90M}
           (first items)))))
+
+(deftest process-extract-auto-retries-review-required-once
+  (let [process-extract! #'receipt-ocr/process-extract!
+        receipt-id (java.util.UUID/randomUUID)
+        calls (atom {:claim 0 :ocr 0 :persist 0 :retry 0})]
+    (with-redefs [receipts/claim-for-extracting! (fn [_db _rid _opts]
+                                                   (swap! calls update :claim inc)
+                                                   true)
+                  receipt-ocr/read-receipt-bytes! (fn [_receipt _opts]
+                                                    {:bytes (.getBytes "x")})
+                  mistral-ocr/ocr-extract! (fn [_cfg _req]
+                                             (swap! calls update :ocr inc)
+                                             {})
+                  receipt-ocr/persist-extract-result! (fn [_db _rid _extract-result _opts]
+                                                        (swap! calls update :persist inc)
+                                                        (if (= 1 (:persist @calls))
+                                                          {:receipt-id receipt-id :stage :extract :result :ok :status "review_required"}
+                                                          {:receipt-id receipt-id :stage :extract :result :ok :status "extracted"}))
+                  receipts/retry-extraction! (fn [_db _rid]
+                                               (swap! calls update :retry inc)
+                                               nil)]
+      (let [res (process-extract! nil {:api-key "k"} {:id receipt-id :content_type "image/jpeg"} {:lease-seconds 900})]
+        (is (= "extracted" (:status res)))
+        (is (= 2 (:claim @calls)))
+        (is (= 2 (:ocr @calls)))
+        (is (= 2 (:persist @calls)))
+        (is (= 1 (:retry @calls)))))))
+
+(deftest process-receipts-by-ids-batch-auto-retries-review-required-once
+  (let [process-batch! #'receipt-ocr/process-receipts-by-ids-batch!
+        receipt-id (java.util.UUID/randomUUID)
+        calls (atom {:persist 0 :retry 0 :process-extract 0})]
+    (with-redefs [receipts/get-receipt (fn [_db rid]
+                                         {:id rid :content_type "image/jpeg"})
+                  receipts/claim-for-extracting! (fn [_db _rid _opts] true)
+                  receipt-ocr/read-receipt-bytes! (fn [_receipt _opts]
+                                                    {:bytes (.getBytes "x")})
+                  mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
+                                                   {:results {(str receipt-id) {}}})
+                  receipt-ocr/persist-extract-result! (fn [_db rid _extract-result _opts]
+                                                        (swap! calls update :persist inc)
+                                                        {:receipt-id rid :stage :extract :result :ok :status "review_required"})
+                  receipts/retry-extraction! (fn [_db _rid]
+                                               (swap! calls update :retry inc)
+                                               nil)
+                  receipt-ocr/process-extract! (fn [_db _cfg _receipt opts]
+                                                 (swap! calls update :process-extract inc)
+                                                 (is (false? (:review-required-auto-retry? opts)))
+                                                 {:receipt-id receipt-id :stage :extract :result :ok :status "extracted"})]
+      (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})]
+        (is (= 1 (count results)))
+        (is (= "extracted" (:status (first results))))
+        (is (= 1 (:persist @calls)))
+        (is (= 1 (:retry @calls)))
+        (is (= 1 (:process-extract @calls)))))))

@@ -309,7 +309,8 @@
         (some
           (fn [i]
             (let [t (get tokens i)
-                  qty (when (and (string? t) (re-find #"(?i)x" t))
+                  qty (when (and (string? t)
+                              (re-matches #"(?i)^[0-9][0-9,\\.]*x$" t))
                         (parse-money t))]
               (when qty
                 (let [unit-price (parse-money (get tokens (inc i)))
@@ -323,12 +324,15 @@
         ;; separate "x" token, e.g. "1.000 x 2,10 2,10"
         (some
           (fn [i]
-            (let [t (get tokens i)]
-              (when (and (= "x" (str/lower-case t)) (pos? i))
+            (let [t (get tokens i)
+                  t0 (some-> t str/lower-case)
+                  prev2 (when (>= i 2) (some-> (get tokens (- i 2)) str/lower-case))]
+              (when (and (= "x" t0) (pos? i) (not= "x" prev2))
                 (let [qty (parse-money (get tokens (dec i)))
                       unit-price (parse-money (get tokens (inc i)))
-                      line-total (parse-money (get tokens (+ i 2)))]
-                  (when (and qty unit-price)
+                      line-total-token (get tokens (+ i 2))
+                      line-total (parse-money line-total-token)]
+                  (when (and qty unit-price (or (nil? line-total-token) line-total))
                     {:label-from-line (when (pos? (dec i)) (str/join " " (subvec tokens 0 (dec i))))
                      :qty qty
                      :unit_price unit-price
@@ -669,21 +673,34 @@
 
 (defn- process-extract!
   [db ocr-cfg receipt opts]
-  (let [receipt-id (:id receipt)]
+  (let [receipt-id (:id receipt)
+        auto-retry? (if (contains? opts :review-required-auto-retry?)
+                      (boolean (:review-required-auto-retry? opts))
+                      true)]
     (if-not (seq (:api-key ocr-cfg))
       (do
         (log/warn "Receipt OCR extract skipped: missing Mistral API key" {:receipt-id receipt-id})
         {:receipt-id receipt-id :stage :extract :result :skipped :reason :missing-api-key})
-      (if-let [_claimed (receipts/claim-for-extracting! db receipt-id {:lease-seconds (:lease-seconds opts)})]
-        (try
-          (let [{:keys [bytes]} (read-receipt-bytes! receipt opts)
-                extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
-                                                                  :content-type (:content_type receipt)})]
-            (persist-extract-result! db receipt-id extract-result opts))
-          (catch Exception e
-            (receipts/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (safe-ex-data e))
-            {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
-        {:receipt-id receipt-id :stage :extract :result :skipped :reason :not-claimed}))))
+      (loop [attempt 0]
+        (let [res (if-let [_claimed (receipts/claim-for-extracting! db receipt-id {:lease-seconds (:lease-seconds opts)})]
+                    (try
+                      (let [{:keys [bytes]} (read-receipt-bytes! receipt opts)
+                            extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
+                                                                              :content-type (:content_type receipt)})]
+                        (persist-extract-result! db receipt-id extract-result opts))
+                      (catch Exception e
+                        (receipts/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (safe-ex-data e))
+                        {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
+                    {:receipt-id receipt-id :stage :extract :result :skipped :reason :not-claimed})]
+          (if (and auto-retry?
+                (zero? attempt)
+                (= :ok (:result res))
+                (= "review_required" (:status res)))
+            (do
+              (log/info "Receipt OCR extraction needs review; retrying once" {:receipt-id receipt-id})
+              (receipts/retry-extraction! db receipt-id)
+              (recur (inc attempt)))
+            res))))))
 
 (defn process-receipt!
   "Process a single receipt based on its current status.
@@ -810,7 +827,17 @@
                   (dissoc m :receipt :request)
 
                   extract-result
-                  (persist-extract-result! db receipt-id extract-result opts)
+                  (let [res (persist-extract-result! db receipt-id extract-result opts)]
+                    (if (and (not= false (:review-required-auto-retry? opts))
+                          (= :ok (:result res))
+                          (= "review_required" (:status res)))
+                      (do
+                        (log/info "Receipt OCR batch extraction needs review; retrying once" {:receipt-id receipt-id})
+                        (receipts/retry-extraction! db receipt-id)
+                        (if-let [receipt* (receipts/get-receipt db receipt-id)]
+                          (process-extract! db ocr-cfg receipt* (assoc opts :review-required-auto-retry? false))
+                          res))
+                      res))
 
                   :else
                   (do

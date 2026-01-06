@@ -94,6 +94,11 @@
   (fn [db _]
     (get-in db [:user-expenses :payers :items])))
 
+(rf/reg-sub
+  :user-expenses/payers-loading?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :payers :loading?]))))
+
 ;; Upload state
 (rf/reg-sub
   :user-expenses/upload-loading?

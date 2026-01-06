@@ -4,7 +4,9 @@
    :show-edit? true,
    :show-select? true,
    :show-pagination? true,
-   :show-filtering? true}},
+   :show-filtering? true,
+   :show-batch-delete? true},
+  :display-defaults {}},
  :suppliers
  {:display-locks
   {:show-delete? false,
@@ -52,8 +54,10 @@
   :display-defaults {:show-batch-delete? true}},
  :receipts
  {:display-locks
-  {:show-select? true, :show-pagination? true, :show-filtering? true},
-  :display-defaults {}},
+  {:show-select? true,
+   :show-edit? false,
+   :show-pagination? true,
+   :show-filtering? true}},
  :login-events
  {:display-locks
   {:show-add-button? false,

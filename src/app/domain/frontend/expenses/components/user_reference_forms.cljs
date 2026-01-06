@@ -59,7 +59,7 @@
          :initial-values {}
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/create-supplier-modal values on-success]))
+                      (rf/dispatch [:user-expenses/create-supplier-modal values (when on-success (fn [& _] (on-success)))]))
          :button-text "Save Supplier"}))))
 
 (defui user-supplier-edit-form-modal
