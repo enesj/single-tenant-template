@@ -2,6 +2,7 @@
   "Receipt upload, status transitions, and approval workflow."
   (:require
     [app.domain.backend.expenses.services.expenses :as expenses]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
     [buddy.core.codecs :as codecs]
     [buddy.core.hash :as hash]
     [cheshire.core :as json]
@@ -13,9 +14,186 @@
     [taoensso.timbre :as log])
   (:import
     [java.nio.file Files StandardCopyOption]
+    [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
     [java.util UUID]))
 
 (def ^:private approvable-status? #{"extracted" "review_required"})
+
+(def ^:private allowed-currencies #{"BAM" "EUR" "USD"})
+
+(defn- blank->nil
+  [v]
+  (cond
+    (nil? v) nil
+    (and (string? v) (str/blank? v)) nil
+    :else v))
+
+(defn- parse-instant!
+  "Parse `v` as an Instant.
+
+  Accepts ISO-8601 instants, OffsetDateTime strings, HTML `datetime-local`
+  strings (e.g. \"2025-12-12T12:34\"), LocalDate strings, epoch millis.
+
+  Throws ex-info {:status 400 :field field} on invalid input."
+  [field v]
+  (let [v (blank->nil v)]
+    (cond
+      (nil? v) nil
+      (instance? Instant v) v
+      (number? v) (Instant/ofEpochMilli (long v))
+      (string? v)
+      (or
+        (try
+          (Instant/parse v)
+          (catch Exception _ nil))
+        (try
+          (-> (OffsetDateTime/parse v) .toInstant)
+          (catch Exception _ nil))
+        ;; Support HTML `datetime-local` values like "2025-12-12T12:34".
+        (try
+          (-> (LocalDateTime/parse v)
+            (.atZone (ZoneId/systemDefault))
+            .toInstant)
+          (catch Exception _ nil))
+        (try
+          (-> (LocalDate/parse v)
+            (.atStartOfDay ZoneOffset/UTC)
+            .toInstant)
+          (catch Exception _ nil))
+        (throw (ex-info (str "Invalid " (name field))
+                 {:status 400
+                  :field field
+                  :value v})))
+      :else
+      (throw (ex-info (str "Invalid " (name field))
+               {:status 400
+                :field field
+                :value v})))))
+
+(defn- normalize-currency!
+  "Normalize/validate currency string.
+
+  Returns an uppercase currency code (e.g. \"BAM\") or nil.
+  Throws ex-info {:status 400 :field :currency} when non-blank but invalid."
+  [currency]
+  (let [currency* (some-> currency blank->nil str str/trim str/upper-case)]
+    (cond
+      (nil? currency*) nil
+      (contains? allowed-currencies currency*) currency*
+      :else (throw (ex-info "Invalid currency"
+                     {:status 400
+                      :field :currency
+                      :value currency})))))
+
+
+(defn- try-parse-uuid
+  [v]
+  (try
+    (when (some? v)
+      (UUID/fromString (str v)))
+    (catch Exception _
+      nil)))
+
+(defn- parse-money
+  "Coerce user/JSON numeric values into BigDecimal.
+
+  Accepts numbers, BigDecimal, or numeric-ish strings. Returns nil when unparsable."
+  [v]
+  (cond
+    (nil? v) nil
+    (instance? java.math.BigDecimal v) v
+    (number? v) (bigdec v)
+    (string? v)
+    (let [s (-> v
+              str/trim
+              ;; keep digits/decimal separators/minus
+              (str/replace #"[^0-9,\.\-]" ""))
+          s (cond
+              ;; both separators present → treat commas as thousands
+              (and (str/includes? s ",") (str/includes? s ".")) (str/replace s "," "")
+              ;; only comma present → treat comma as decimal separator
+              (str/includes? s ",") (str/replace s "," ".")
+              :else s)]
+      (try
+        (bigdec s)
+        (catch Exception _ nil)))
+    :else nil))
+
+(defn- lines-total
+  [items]
+  (when (sequential? items)
+    (let [totals (keep (fn [item]
+                         (parse-money (or (:line_total item) (:line-total item))))
+                   items)]
+      (when (seq totals)
+        (reduce + 0M totals)))))
+
+;; Forward declares (helps static analysis tools when functions are defined later in this file)
+(declare get-receipt)
+(declare jsonb-value receipt-status-cast)
+
+(defn save-review!
+  "Persist reviewed receipt values without posting an expense.
+
+  - Updates raw_extract_json.extraction.items to reviewed items
+  - Updates supplier_guess/total_amount_guess/currency_guess/purchased_at_guess
+  - Optionally flips status review_required → extracted when totals match
+
+  Returns the updated receipt row."
+  [db receipt-id {:keys [supplier_id purchased_at total_amount currency items] :as review-data}]
+  (jdbc/with-transaction [tx db]
+    (let [receipt (get-receipt tx receipt-id)]
+      (when-not receipt
+        (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
+      (when-not (approvable-status? (:status receipt))
+        (throw (ex-info "Receipt not in approvable status"
+                 {:status 409 :id receipt-id :current-status (:status receipt)})))
+
+      (let [supplier-uuid (try-parse-uuid supplier_id)
+            supplier (when supplier-uuid (suppliers/get-supplier tx supplier-uuid))
+            supplier-guess (or (some-> supplier :display_name str/trim not-empty)
+                             (:supplier_guess review-data)
+                             (:supplier-guess review-data))
+            purchased-at* (parse-instant! :purchased_at purchased_at)
+            currency* (normalize-currency! currency)
+            total* (parse-money total_amount)
+            lines* (lines-total items)
+            abs-dec (fn [d] (if (neg? d) (- d) d))
+            totals-match? (when (and (some? total*) (some? lines*))
+                            (<= (abs-dec (- total* lines*)) 0.01M))
+            new-status (if (and (= "review_required" (:status receipt)) (true? totals-match?))
+                         "extracted"
+                         (:status receipt))]
+
+        (when-not supplier-uuid
+          (throw (ex-info "supplier_id is required" {:status 400 :field :supplier_id})))
+        (when-not (some? purchased-at*)
+          (throw (ex-info "purchased_at is required" {:status 400 :field :purchased_at})))
+        (when-not (seq items)
+          (throw (ex-info "items is required" {:status 400 :field :items})))
+        (when-not (some? total*)
+          (throw (ex-info "total_amount is required" {:status 400 :field :total_amount})))
+
+        (jdbc/execute-one!
+          tx
+          (sql/format
+            {:update :receipts
+             :set {:raw_extract_json
+                   [:call :jsonb_set
+                    [:call :coalesce :raw_extract_json [:cast "{}" :jsonb]]
+                ;; jsonb_set expects a `text[]` path; use a typed array literal.
+                [:raw "'{extraction,items}'::text[]"]
+                    (jsonb-value items)
+                    true]
+                   :supplier_guess supplier-guess
+                   :total_amount_guess total*
+                   :currency_guess (when currency* [:cast currency* :currency])
+                   :purchased_at_guess purchased-at*
+                   :status (receipt-status-cast new-status)
+                   :updated_at [:now]}
+             :where [:= :id receipt-id]
+             :returning [:*]})
+          {:builder-fn rs/as-unqualified-lower-maps})))))
 
 ;; ============================================================================
 ;; Helpers

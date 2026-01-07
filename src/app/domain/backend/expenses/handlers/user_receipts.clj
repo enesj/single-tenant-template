@@ -327,6 +327,41 @@
         (unauthorized-response)))
     "Failed to approve receipt"))
 
+(defn save-receipt-review-handler
+  "POST /api/v1/expenses/receipts/:id/review
+
+  Body: receipt review payload (supplier_id, purchased_at, total_amount, currency, items)
+
+  Persists reviewed values without creating an expense.
+
+  Returns {:data {:receipt ...}}"
+  [db]
+  (with-error-handling
+    (fn [request]
+      (if-let [user-id (get-user-id request)]
+        (let [role (get-user-role request)]
+          (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
+            (let [body (or (read-json-body request) {})
+                  accessible? (if (= "admin" role)
+                                (some? (receipts/get-receipt db id))
+                                (some? (receipts/get-user-receipt db user-id id)))]
+              (if-not accessible?
+                (json-response {:error "Receipt not found"} 404)
+                (do
+                  (receipts/save-review! db id body)
+                  (let [receipt (if (= "admin" role)
+                                  (receipts/get-receipt db id)
+                                  (receipts/get-user-receipt db user-id id))
+                        receipt-app (to-app receipt)
+                        download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt-app))
+                                       (str "/api/v1/expenses/receipts/" (str id) "/download"))
+                        receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
+                                      download-url (assoc :download-url download-url))]
+                    (json-response {:data {:receipt receipt-app}} 200)))))
+            (json-response {:error "Invalid id"} 400)))
+        (unauthorized-response)))
+    "Failed to save receipt review"))
+
 ;; ---------------------------------------------------------------------------
 ;; OCR Handlers (UI-triggered)
 ;; ---------------------------------------------------------------------------

@@ -95,6 +95,36 @@
       (assoc-in (conj base-path :action-loading?) false)
       (assoc-in (conj base-path :error) (admin-http/extract-error-message error)))))
 
+(rf/reg-event-fx
+  ::save-receipt-review
+  (fn [{:keys [db]} [_ receipt-id form-data on-success]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (admin-http/admin-post
+                   {:uri (str "/admin/api/expenses/receipts/" receipt-id "/review")
+                    :params form-data
+                    :on-success [::save-receipt-review-success receipt-id on-success]
+                    :on-failure [::save-receipt-review-failure receipt-id]})}))
+
+(rf/reg-event-fx
+  ::save-receipt-review-success
+  (fn [{:keys [db]} [_ receipt-id on-success response]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) false)
+           (assoc-in (conj base-path :error) nil))
+     :dispatch-n [[:admin/refresh-entity :receipts (:receipt response)]
+                  [::load-detail receipt-id]]
+     :fx [(when on-success
+            [:dispatch [::expenses-events/call-modal-callback on-success]])]}))
+
+(rf/reg-event-db
+  ::save-receipt-review-failure
+  (fn [db [_ _ error]]
+    (-> db
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (admin-http/extract-error-message error)))))
+
 ;; ---------------------------------------------------------------------------
 ;; OCR Events (UI-triggered)
 ;; ---------------------------------------------------------------------------

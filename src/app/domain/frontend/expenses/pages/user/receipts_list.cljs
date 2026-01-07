@@ -3,11 +3,12 @@
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
-    [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-viewer]]
+    [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview receipt-viewer]]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
     [app.template.frontend.components.action-components :refer [view-details-icon]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.json-highlight :refer [json-display-card]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal :refer [modal]]
     [app.template.frontend.subs.list :as list-subs]
@@ -111,6 +112,41 @@
       (catch :default _
         (str d)))))
 
+(defn- format-bytes
+  [value]
+  (let [bytes (cond
+                (number? value) value
+                (string? value) (js/parseFloat value)
+                :else nil)
+        kb 1024
+        mb (* 1024 1024)]
+    (cond
+      (nil? bytes) "—"
+      (< bytes kb) (str bytes " B")
+      (< bytes mb) (str (.toFixed (/ bytes kb) 1) " KB")
+      :else (str (.toFixed (/ bytes mb) 1) " MB"))))
+
+(defn- status-class
+  [status]
+  (case status
+    "uploaded" "ds-badge ds-badge-ghost"
+    "parsing" "ds-badge ds-badge-info"
+    "parsed" "ds-badge ds-badge-info"
+    "extracting" "ds-badge ds-badge-warning"
+    "extracted" "ds-badge ds-badge-success"
+    "review_required" "ds-badge ds-badge-warning"
+    "approved" "ds-badge ds-badge-success"
+    "posted" "ds-badge ds-badge-success"
+    "failed" "ds-badge ds-badge-error"
+    "ds-badge"))
+
+(defn- capitalize-words
+  [s]
+  (when (string? s)
+    (->> (str/split (str/replace s #"_" " ") #"\\s+")
+      (map str/capitalize)
+      (str/join " "))))
+
 (defui receipt-detail-body
   [{:keys [receipt-id]}]
   (let [receipt (use-subscribe [:user-expenses/receipt receipt-id])
@@ -118,6 +154,7 @@
         action-loading? (boolean (use-subscribe [:user-expenses/receipt-action-loading?]))
         error (use-subscribe [:user-expenses/receipts-error])
         [active-tab set-active-tab!] (use-state :details)
+        [preview-expanded? set-preview-expanded!] (use-state true)
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
                    (fn []
@@ -211,17 +248,26 @@
               (if approve-allowed?
                 ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
                   ($ :div {:class "ds-card-body"}
-                    ($ :div {:class "flex items-center justify-between gap-2"}
-                      ($ :h2 {:class "text-lg font-semibold"} "Approve Receipt & Create Expense")
-                      (when action-loading?
-                        ($ :span {:class "text-xs text-base-content/60"} "Working...")))
-                    ($ user-expense-add-form-modal
-                      {:receipt-id rid-str
-                       :receipt receipt
-                       :on-success (fn []
-                                     (set-active-tab! :details)
-                                     (rf/dispatch [:user-expenses/fetch-receipt receipt-id]))
-                       :on-cancel #(set-active-tab! :details)})))
+                    ($ :div {:class (str "grid gap-6 " (when preview-expanded? "lg:grid-cols-2"))}
+                      ($ :div {:class "space-y-4"}
+                        ($ receipt-preview {:receipt receipt
+                                            :title "Receipt image"
+                                            :expanded? preview-expanded?
+                                            :on-toggle #(set-preview-expanded! not)}))
+                      ($ :div {:class "space-y-4"}
+                        ($ :div {:class "flex items-center justify-between gap-2"}
+                          ($ :h2 {:class "text-lg font-semibold"} "Approve & Post")
+                          (when action-loading?
+                            ($ :span {:class "text-xs text-base-content/60"} "Working...")))
+                        ($ user-expense-add-form-modal
+                          {:receipt-id rid-str
+                           :receipt receipt
+                           :on-success (fn []
+                                         (set-active-tab! :details)
+                                         (rf/dispatch [:user-expenses/fetch-receipt receipt-id]))
+                           :on-review-saved (fn []
+                                              (rf/dispatch [:user-expenses/fetch-receipt receipt-id]))
+                           :on-cancel #(set-active-tab! :details)})))))
 
                 ($ :div {:class "ds-alert ds-alert-info"}
                   ($ :span
@@ -231,35 +277,29 @@
 
               ;; default: :details
               ($ :div {:class "space-y-6"}
-                ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-4"}
+                ($ :div {:class "grid gap-3 md:grid-cols-3"}
+                  (label-value "Status" ($ :span {:class (status-class status)}
+                                          (or (capitalize-words status) "—")))
                   (label-value "Original Filename" (:original-filename receipt))
-                  (label-value "Status" status)
+                  (label-value "Content Type" (:content-type receipt))
+                  (label-value "File Size" (format-bytes (:file-size receipt)))
+                  (label-value "Created At" (shared/format-date (:created-at receipt)))
                   (label-value "Supplier Guess" (:supplier-guess receipt))
-                  (label-value
-                    "Supplier Guess Match"
-                    (let [supplier (:supplier-guess-supplier receipt)]
-                      (if supplier
-                        ($ :div {:class "flex items-center gap-2"}
-                          ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
-                          ($ :a {:id (str "link-supplier-list-from-receipt-" rid-str)
-                                 :href "/suppliers"
-                                 :class "ds-link ds-link-primary"}
-                            (:display-name supplier)))
-                        ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"} "No"))))
-                  (label-value "Total Guess" (:total-amount-guess receipt))
-                  (label-value "Lines Total Guess" (format-money (:lines-total-amount-guess receipt) (:currency-guess receipt)))
-                  (label-value
-                    "Total Guess = Lines Total?"
-                    (let [equal? (:total-guess-equals-lines-total-guess? receipt)]
-                      (cond
-                        (true? equal?) ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
-                        (false? equal?) ($ :span {:class "ds-badge ds-badge-error ds-badge-sm"} "No")
-                        :else nil)))
-                  (label-value "Currency" (:currency-guess receipt))
-                  (label-value "Purchased At" (:purchased-at-guess receipt))
-                  (label-value "Expense ID" (:expense-id receipt))
-                  (label-value "Created At" (:created-at receipt))
-                  (label-value "Updated At" (:updated-at receipt)))))))))))
+                  (label-value "Total Amount Guess" (when (:total-amount-guess receipt)
+                                                      (str (:total-amount-guess receipt) " " (:currency-guess receipt))))
+                  (label-value "Purchased At Guess" (:purchased-at-guess receipt)))
+
+                ($ :div {:class "grid gap-6 lg:grid-cols-2"}
+                  (when (seq (:raw-extract-json receipt))
+                    ($ :div {:id (str "receipt-extract-json-" rid-str)}
+                      ($ json-display-card
+                        {:title "Extracted Data"
+                         :json-value (:raw-extract-json receipt)})))
+                  (when (seq (:raw-parse-json receipt))
+                    ($ :div {:id (str "receipt-parse-json-" rid-str)}
+                      ($ json-display-card
+                        {:title "LlamaParse Results"
+                         :json-value (:raw-parse-json receipt)}))))))))))))
 
 (defui receipt-detail-modal
   []

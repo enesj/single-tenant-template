@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.components.expense-form
   "Reusable expense form components using the template form system.
-   
+
    Uses the master-detail-form wrapper for edit modal orchestration."
   (:require
     [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local
@@ -15,7 +15,8 @@
     [app.domain.frontend.expenses.events.payers :as payers-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
     [app.domain.frontend.expenses.ui.select-options :as select-options]
-    [app.template.frontend.components.form :refer [form]]
+    [app.template.frontend.components.form :refer [form form-fields]]
+    [app.template.frontend.components.form.base :as base]
     [app.template.frontend.components.form.master-detail :refer [master-detail-form]]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -58,46 +59,65 @@
 (defn get-expense-form-spec
   ([suppliers payers]
    (get-expense-form-spec suppliers payers nil))
-  ([suppliers payers {:keys [new-supplier-default-display-name receipt-approval?]}]
-   [{:id :supplier_id
-     :type :select
-     :component supplier-select-with-inline-create
-     :label "Supplier"
-     :required true
-     :placeholder "Select supplier"
-     :create-default-display-name new-supplier-default-display-name
-     :options (map (fn [s] {:value (:id s) :label (select-options/supplier-label s)}) suppliers)}
-    {:id :payer_id
-     :type :select
-     :label "Payer"
-     :required true
-     :placeholder "Select payer"
-     :options (map (fn [p] {:value (:id p) :label (str (:label p) (when (:type p) (str " (" (:type p) ")")))}) payers)}
-    {:id :purchased_at
-     :type :datetime-local ;; standard input type
-     :label "Purchased at"
-     :required true}
-    {:id :total_amount
-     :component total-amount-input ;; Custom component
-     :label "Total amount"
-     :required true}
-    {:id :currency
-     :type :select
-     :label "Currency"
-     :required true
-     :options currency-options}
-    {:id :notes
-     :type :textarea
-     :label "Notes"
-     :required false
-     :placeholder "Optional notes"}
-    {:id :items
-     :component line-items-input ;; Custom component
-     :label "Line Items"
-     :columns line-item-columns
-     :style (if receipt-approval? {:maxHeight "260px"} {:maxHeight "300px"})
-     :overflow-y-class "overflow-y-auto"
-     :scrollbar-gutter-stable? true}]))
+  ([suppliers payers {:keys [new-supplier-default-display-name receipt-approval? receipt receipt-id]}]
+   (let [receipt-id* (or receipt-id (:id receipt))
+         receipt-id-str (some-> receipt-id* str)
+         receipt-supplier-guess (some-> (:supplier-guess receipt) str str/trim not-empty)
+         receipt-total-guess (:total-amount-guess receipt)
+         totals-match? (:total-guess-equals-lines-total-guess? receipt)]
+     [{:id :supplier_id
+       :type :select
+       :component supplier-select-with-inline-create
+       :label "Supplier"
+       :required true
+       :placeholder "Select supplier"
+       :create-default-display-name new-supplier-default-display-name
+       :receipt-id receipt-id-str
+       :receipt-supplier-guess receipt-supplier-guess
+       :options (map (fn [s]
+                       {:value (:id s)
+                        :label (select-options/supplier-label s)})
+                  suppliers)}
+      {:id :payer_id
+       :type :select
+       :label "Payer"
+       :required true
+       :placeholder "Select payer"
+       :options (map (fn [p]
+                       {:value (:id p)
+                        :label (str (:label p)
+                                 (when (:type p)
+                                   (str " (" (:type p) ")")))})
+                  payers)}
+      {:id :purchased_at
+       :type :datetime-local ;; standard input type
+       :label "Purchased at"
+       :required true}
+      {:id :total_amount
+       :component total-amount-input ;; Custom component
+       :label "Total amount"
+       :required true
+       ;; Receipt-approval UX: total is auto-derived.
+       :show-use-total? (not receipt-approval?)
+       :receipt-total-guess receipt-total-guess
+       :totals-match? totals-match?}
+      {:id :currency
+       :type :select
+       :label "Currency"
+       :required true
+       :options currency-options}
+      {:id :notes
+       :type :textarea
+       :label "Notes"
+       :required false
+       :placeholder "Optional notes"}
+      {:id :items
+       :component line-items-input ;; Custom component
+       :label "Line Items"
+       :columns line-item-columns
+       :style (if receipt-approval? {:maxHeight "260px"} {:maxHeight "300px"})
+       :overflow-y-class "overflow-y-auto"
+       :scrollbar-gutter-stable? true}])))
 
 ;; =============================================================================
 ;; Normalization & Validation Helpers
@@ -382,6 +402,42 @@
       :else
       {:ok? true})))
 
+(defn validate-receipt-review-values
+  "Validate values for saving reviewed receipt data.
+
+  Differs from `validate-expense-values` by NOT requiring expense-only fields
+  (e.g. payer)."
+  [values]
+  (let [supplier-id (:supplier_id values)
+        purchased-at (:purchased_at values)
+        prepared-items (vec (prepare-line-items (:items values)))
+        computed-total (line-items-total prepared-items)
+        parsed-total (safe-parse-number (:total_amount values))
+        effective-total (or parsed-total (when (pos? computed-total) computed-total))
+        total-diff (when (and (number? parsed-total)
+                           (number? computed-total)
+                           (pos? computed-total))
+                     (js/Math.abs (- parsed-total computed-total)))
+        total-mismatch? (and total-diff (> total-diff amount-tolerance))]
+    (cond
+      (or (str/blank? (str supplier-id))
+        (str/blank? (str purchased-at)))
+      {:ok? false :error "Supplier and date are required."}
+
+      (empty? prepared-items)
+      {:ok? false :error "Add at least one line item with a label and total."}
+
+      (or (nil? effective-total) (<= effective-total 0))
+      {:ok? false :error "Enter a total amount greater than 0."}
+
+      total-mismatch?
+      {:ok? false
+       :error (str "Total (" (or (format-decimal effective-total) effective-total)
+                ") must match line items (" (or (format-decimal computed-total) computed-total) ").")}
+
+      :else
+      {:ok? true})))
+
 (defn prepare-expense-submit-values
   "Prepare expense form values for submission."
   [values]
@@ -404,7 +460,7 @@
 (defui expense-form-body
   "Internal form body component. Used by both add and edit modals."
   [{:keys [mode initial-data on-submit on-cancel _loading?
-           new-supplier-default-display-name receipt-approval?]}]
+           new-supplier-default-display-name receipt-approval? receipt receipt-id]}]
   (let [suppliers (use-subscribe [:expenses/suppliers])
         payers (use-subscribe [:expenses/payers])
         form-error (use-subscribe [:expenses/entries-error])
@@ -412,10 +468,12 @@
 
         ;; Memoize entity-spec to avoid recreating on every render
         entity-spec (use-memo
-                      #(get-expense-form-spec suppliers payers
-                         {:new-supplier-default-display-name new-supplier-default-display-name
-                          :receipt-approval? receipt-approval?})
-                      [suppliers payers new-supplier-default-display-name receipt-approval?])
+                     #(get-expense-form-spec suppliers payers
+                        {:new-supplier-default-display-name new-supplier-default-display-name
+                         :receipt-approval? receipt-approval?
+                         :receipt receipt
+                         :receipt-id receipt-id})
+                     [suppliers payers new-supplier-default-display-name receipt-approval? receipt receipt-id])
 
         ;; Memoize initial values so fork/form doesn't reset on every render
         form-initial-values (use-memo
@@ -459,11 +517,129 @@
          :button-text (if (= mode :edit) "Update Expense" "Save Expense")}))))
 
 ;; =============================================================================
+;; Receipt approval form (split actions)
+;; =============================================================================
+
+(defn- dirty?
+  [dirty]
+  (cond
+    (nil? dirty) false
+    (map? dirty) (seq dirty)
+    (set? dirty) (seq dirty)
+    (sequential? dirty) (seq dirty)
+    :else true))
+
+(defui receipt-approval-form
+  [{:keys [receipt-id receipt initial-data on-cancel on-expense-saved on-review-saved]}]
+  (let [suppliers (use-subscribe [:expenses/suppliers])
+        payers (use-subscribe [:expenses/payers])
+        form-error (use-subscribe [:expenses/entries-error])
+  [validation-error set-validation-error!] (use-state nil)
+
+        entity-spec (use-memo
+                      #(get-expense-form-spec suppliers payers
+                         {:new-supplier-default-display-name (receipt-merchant-name receipt)
+                          :receipt-approval? true
+                          :receipt receipt
+                          :receipt-id receipt-id})
+                      [suppliers payers receipt receipt-id])
+
+        form-initial-values (use-memo
+                              (fn []
+                                (let [default-values {:currency "BAM"
+                                                      :purchased_at (current-datetime-local)
+                                                      :items [(new-line-item)]}]
+                                  (merge default-values initial-data)))
+                              [initial-data])
+
+        rid-str (or (some-> receipt-id str) "unknown")]
+
+    (use-effect
+      (fn []
+        (rf/dispatch [::suppliers-events/load-list {:limit 100 :offset 0}])
+        (rf/dispatch [::payers-events/load-list {:limit 100 :offset 0}])
+        js/undefined)
+      [])
+
+    ($ :div {:class "space-y-4"}
+      (when (or validation-error form-error)
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span (or validation-error form-error))))
+
+      ($ base/initialize-form
+        {:entity-name "expense"
+         :entity-spec entity-spec
+         :editing false
+         :initial-values form-initial-values
+         :prevent-default? true
+         :keywordize-keys true
+
+         :on-submit (fn [{:keys [values]}]
+                      (let [validation-result (validate-expense-values values)]
+                        (if (:ok? validation-result)
+                          (do
+                            (set-validation-error! nil)
+                            (rf/dispatch
+                              [:app.domain.frontend.expenses.events.receipts/approve-receipt
+                               receipt-id
+                               (prepare-expense-submit-values values)
+                               on-expense-saved]))
+                          (set-validation-error! (:error validation-result)))))
+
+         :render-fn
+         (fn [{:keys [form-id handle-submit dirty submitting? values] :as form-props}]
+           (let [expense-valid-now? (:ok? (validate-expense-values values))
+                 receipt-valid-now? (:ok? (validate-receipt-review-values values))
+                 can-save-receipt? (and receipt-valid-now? (dirty? dirty))]
+             ($ :form {:id form-id
+                       :on-submit handle-submit}
+               ($ form-fields
+                 (merge form-props
+                   {:entity-name "expense"
+                    :editing false
+                    :values values
+                    :form-id form-id
+                    :entity-spec entity-spec}))
+
+               ($ :div {:class "flex justify-end gap-2"}
+                 ($ :button {:id (str "btn-cancel-receipt-approve-" rid-str)
+                             :type "button"
+                             :class "ds-btn"
+                             :disabled submitting?
+                             :on-click (fn [e]
+                                         (.preventDefault e)
+                                         (when (fn? on-cancel) (on-cancel)))}
+                   "Cancel")
+                 ($ :button {:id (str "btn-save-receipt-" rid-str)
+                             :type "button"
+                             :class "ds-btn ds-btn-outline"
+                             :disabled (or submitting? (not can-save-receipt?))
+                             :on-click (fn [e]
+                                         (.preventDefault e)
+                                         (.stopPropagation e)
+                                         (let [validation-result (validate-receipt-review-values values)]
+                                           (if (:ok? validation-result)
+                                             (do
+                                               (set-validation-error! nil)
+                                               (rf/dispatch
+                                                 [:app.domain.frontend.expenses.events.receipts/save-receipt-review
+                                                  receipt-id
+                                                  (prepare-expense-submit-values values)
+                                                  on-review-saved]))
+                                             (set-validation-error! (:error validation-result)))))}
+                   "Save receipt")
+                 ($ :button {:id (str "btn-save-expense-" rid-str)
+                             :type "submit"
+                             :class "ds-btn ds-btn-primary"
+                             :disabled (or submitting? (not expense-valid-now?))}
+                   "Save expense")))))}))))
+
+;; =============================================================================
 ;; Modal Wrappers
 ;; =============================================================================
 
 (defui expense-add-form-modal
-  [{:keys [receipt-id initial-data on-success on-cancel]}]
+  [{:keys [receipt-id initial-data on-success on-review-saved on-cancel]}]
   (let [loading? (use-subscribe [:expenses/form-loading?])
         receipt (use-subscribe [:expenses/receipt receipt-id])
         default-supplier-display-name (use-memo
@@ -479,17 +655,26 @@
         merged-initial-data (use-memo
                               #(merge receipt-initial-data initial-data)
                               [receipt-initial-data initial-data])]
-    ($ expense-form-body
-      {:mode :create
-       :loading? loading?
-       :initial-data merged-initial-data
-       :new-supplier-default-display-name default-supplier-display-name
-       :receipt-approval? (boolean receipt-id)
-       :on-cancel on-cancel
-       :on-submit (fn [form-data]
-                    (if receipt-id
-                      (rf/dispatch [:app.domain.frontend.expenses.events.receipts/approve-receipt receipt-id form-data on-success])
-                      (rf/dispatch [::expenses-events/create-entry-modal form-data on-success])))})))
+    (if receipt-id
+      ($ receipt-approval-form
+        {:receipt-id receipt-id
+         :receipt receipt
+         :initial-data merged-initial-data
+         :on-cancel on-cancel
+         :on-review-saved on-review-saved
+         :on-expense-saved on-success})
+
+      ($ expense-form-body
+        {:mode :create
+         :loading? loading?
+         :initial-data merged-initial-data
+         :new-supplier-default-display-name default-supplier-display-name
+         :receipt-approval? false
+         :receipt nil
+         :receipt-id nil
+         :on-cancel on-cancel
+         :on-submit (fn [form-data]
+                      (rf/dispatch [::expenses-events/create-entry-modal form-data on-success]))}))))
 
 (defui expense-edit-form-modal
   "Edit expense modal using master-detail-form wrapper for detail orchestration."

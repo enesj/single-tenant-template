@@ -218,6 +218,59 @@
       (assoc-in (conj base-path :error) (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
+;; Save receipt review (no approve/post)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/save-receipt-review
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id form-data on-success]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil)
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri (str endpoints/receipts-endpoint "/" receipt-id "/review")
+                    :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id "/review")
+                    :params form-data
+                    :on-success [:user-expenses/save-receipt-review-success receipt-id on-success]
+                    :on-failure [:user-expenses/save-receipt-review-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/save-receipt-review-success
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id on-success response]]
+    (let [receipt (or (get-in response [:data :receipt])
+                    (:receipt response)
+                    (:data response))
+          fx (cond-> []
+               on-success (conj [:dispatch-later {:ms 100}
+                                 :dispatch [:user-expenses/call-modal-callback on-success]]))]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] false)
+             (assoc-in [:user-expenses :form :error] nil)
+             (assoc-in (conj base-path :action-loading?) false)
+             (assoc-in (conj base-path :error) nil)
+             (cond-> receipt
+               (assoc-in (conj base-path :by-id receipt-id) receipt)))
+       :dispatch-n [[:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+                    [:user-expenses/fetch-receipt receipt-id]]
+       :fx fx})))
+
+(rf/reg-event-db
+  :user-expenses/save-receipt-review-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to save receipt review" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error))
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
 ;; OCR Events (UI-triggered)
 ;; ---------------------------------------------------------------------------
 

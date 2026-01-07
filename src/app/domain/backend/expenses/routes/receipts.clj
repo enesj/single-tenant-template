@@ -246,6 +246,16 @@
           (utils/error-response "Invalid id" :status 400))))
     "Failed to approve receipt"))
 
+(defn save-review-handler [db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)]
+        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+          (let [receipt (receipts/save-review! db id body)]
+            (utils/success-response {:receipt (to-app receipt)}))
+          (utils/error-response "Invalid id" :status 400))))
+    "Failed to save receipt review"))
+
 ;; ---------------------------------------------------------------------------
 ;; OCR Handlers (UI-triggered)
 ;; ---------------------------------------------------------------------------
@@ -345,5 +355,6 @@
    ["/:id/retry" {:post (retry-receipt-handler db)}]
    ["/:id/fail" {:post (fail-receipt-handler db)}]
    ["/:id/extraction" {:post (save-extraction-handler db)}]
+  ["/:id/review" {:post (save-review-handler db)}]
    ["/:id/approve" {:post (approve-and-post-handler db)}]
    ["/:id/ocr" {:post (ocr-single-receipt-handler db app-config)}]])

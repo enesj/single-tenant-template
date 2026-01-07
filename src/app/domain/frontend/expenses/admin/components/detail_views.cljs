@@ -3,7 +3,7 @@
     [app.admin.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.components.expense-form :as expense-form]
-    [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-viewer]]
+    [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview receipt-viewer]]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
@@ -11,6 +11,7 @@
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
+    [app.template.frontend.components.json-highlight :refer [json-display-card]]
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -23,6 +24,41 @@
     ($ :span {:class "text-xs uppercase tracking-wide text-base-content/70"} label)
     ($ :span {:class "text-sm font-medium"}
       (shared/format-value value "—" false))))
+
+(defn- format-bytes
+  [value]
+  (let [bytes (cond
+                (number? value) value
+                (string? value) (js/parseFloat value)
+                :else nil)
+        kb 1024
+        mb (* 1024 1024)]
+    (cond
+      (nil? bytes) "—"
+      (< bytes kb) (str bytes " B")
+      (< bytes mb) (str (.toFixed (/ bytes kb) 1) " KB")
+      :else (str (.toFixed (/ bytes mb) 1) " MB"))))
+
+(defn- status-class
+  [status]
+  (case status
+    "uploaded" "ds-badge ds-badge-ghost"
+    "parsing" "ds-badge ds-badge-info"
+    "parsed" "ds-badge ds-badge-info"
+    "extracting" "ds-badge ds-badge-warning"
+    "extracted" "ds-badge ds-badge-success"
+    "review_required" "ds-badge ds-badge-warning"
+    "approved" "ds-badge ds-badge-success"
+    "posted" "ds-badge ds-badge-success"
+    "failed" "ds-badge ds-badge-error"
+    "ds-badge"))
+
+(defn- capitalize-words
+  [s]
+  (when (string? s)
+    (->> (str/split (str/replace s #"_" " ") #"\s+")
+      (map str/capitalize)
+      (str/join " "))))
 
 (defn- column-value
   [row {:keys [key value-fn]}]
@@ -396,6 +432,7 @@
         action-loading? (use-subscribe [:expenses/receipt-action-loading?])
         error (use-subscribe [:expenses/receipts-error])
         [active-tab set-active-tab!] (use-state :details)
+        [preview-expanded? set-preview-expanded!] (use-state true)
         [next-status set-next-status!] (use-state nil)]
     (use-effect
       (fn []
@@ -458,14 +495,23 @@
               (if approve-allowed?
                 ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
                   ($ :div {:class "ds-card-body"}
-                    ($ :h2 {:class "text-lg font-semibold"}
-                      "Approve Receipt & Create Expense")
-                    ($ expense-form/expense-add-form-modal
-                      {:receipt-id receipt-id
-                       :on-success (fn []
-                                     (set-active-tab! :details)
-                                     (rf/dispatch [::receipts-events/load-detail receipt-id]))
-                       :on-cancel #(set-active-tab! :details)})))
+                    ($ :div {:class (str "grid gap-6 " (when preview-expanded? "lg:grid-cols-2"))}
+                      ($ :div {:class "space-y-4"}
+                        ($ receipt-preview {:receipt receipt
+                                            :title "Receipt image"
+                                            :expanded? preview-expanded?
+                                            :on-toggle #(set-preview-expanded! not)}))
+                      ($ :div {:class "space-y-4"}
+                        ($ :h2 {:class "text-lg font-semibold"}
+                          "Approve & Post")
+                        ($ expense-form/expense-add-form-modal
+                          {:receipt-id receipt-id
+                           :on-success (fn []
+                                         (set-active-tab! :details)
+                                         (rf/dispatch [::receipts-events/load-detail receipt-id]))
+                           :on-review-saved (fn []
+                                              (rf/dispatch [::receipts-events/load-detail receipt-id]))
+                           :on-cancel #(set-active-tab! :details)})))))
 
                 ($ :div {:class "ds-alert ds-alert-info"}
                   ($ :span
@@ -477,38 +523,20 @@
               ($ :div {:class "space-y-6"}
                 ;; Core Info
                 ($ :div {:class "grid grid-cols-1 md:grid-cols-3 gap-4"}
+                  (label-value "Status" ($ :span {:class (status-class status)}
+                                          (capitalize-words status)))
                   (label-value "Original Filename" (:original-filename receipt))
-                  (label-value "Status" status)
                   (label-value "Content Type" (:content-type receipt))
-                  (label-value "File Size" (str (:file-size receipt) " bytes"))
+                  (label-value "File Size" (format-bytes (:file-size receipt)))
                   (label-value "Storage Key" (:storage-key receipt))
                   (label-value "Supplier Guess" (:supplier-guess receipt))
-                  (label-value
-                    "Supplier Guess Match"
-                    (let [supplier (:supplier-guess-supplier receipt)]
-                      (if supplier
-                        ($ :div {:class "flex items-center gap-2"}
-                          ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
-                          ($ :a {:id (str "link-supplier-from-receipt-" rid-str)
-                                 :href (str "/admin/suppliers/" (:id supplier))
-                                 :class "ds-link ds-link-primary"}
-                            (:display-name supplier)))
-                        ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"} "No"))))
-                  (label-value "Total Guess" (:total-amount-guess receipt))
-                  (label-value "Lines Total Guess" (format-money (:lines-total-amount-guess receipt) (:currency-guess receipt)))
-                  (label-value
-                    "Total Guess = Lines Total?"
-                    (let [equal? (:total-guess-equals-lines-total-guess? receipt)]
-                      (cond
-                        (true? equal?) ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Yes")
-                        (false? equal?) ($ :span {:class "ds-badge ds-badge-error ds-badge-sm"} "No")
-                        :else nil)))
-                  (label-value "Currency" (:currency-guess receipt))
-                  (label-value "Purchased At" (:purchased-at-guess receipt))
+                  (label-value "Total Amount Guess" (when (:total-amount-guess receipt)
+                                                      (str (:total-amount-guess receipt) " " (:currency-guess receipt))))
+                  (label-value "Purchased At Guess" (:purchased-at-guess receipt))
                   (label-value "Retry Count" (:retry-count receipt))
                   (label-value "Expense ID" (:expense-id receipt))
-                  (label-value "Created At" (:created-at receipt))
-                  (label-value "Updated At" (:updated-at receipt)))
+                  (label-value "Created At" (shared/format-date (:created-at receipt)))
+                  (label-value "Updated At" (shared/format-date (:updated-at receipt))))
 
                 ;; Actions
                 ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
@@ -542,7 +570,19 @@
                                                 (not (seq next-status))
                                                 (= next-status status))
                                     :on-click #(rf/dispatch [::receipts-events/update-status receipt-id next-status])}
-                          "Set status")))))))))))))
+                          "Set status")))))
+
+                ($ :div {:class "grid gap-6 lg:grid-cols-2"}
+                  (when (seq (:raw-extract-json receipt))
+                    ($ json-display-card
+                      {:id (str "receipt-extract-json-" rid-str)
+                       :title "Extracted Data"
+                       :json (:raw-extract-json receipt)}))
+                  (when (seq (:raw-parse-json receipt))
+                    ($ json-display-card
+                      {:id (str "receipt-parse-json-" rid-str)
+                       :title "LlamaParse Results"
+                       :json (:raw-parse-json receipt)})))))))))))
 
 (defui expense-item-detail-body
   [{:keys [expense-item-id]}]

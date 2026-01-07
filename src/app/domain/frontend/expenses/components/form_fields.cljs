@@ -145,8 +145,8 @@
       (let [overflow-y-class (or (:overflow-y-class field-spec) "overflow-y-auto")
             stable-gutter? (true? (:scrollbar-gutter-stable? field-spec))
             style (merge {:maxHeight "300px"}
-                         (:style field-spec)
-                         (when stable-gutter? {:scrollbarGutter "stable"}))]
+                    (:style field-spec)
+                    (when stable-gutter? {:scrollbarGutter "stable"}))]
         ($ :div {:class (str "overflow-x-auto " (:max-height-class field-spec) " " overflow-y-class)
                  :style style}
           ($ :table {:class "ds-table w-full"}
@@ -192,7 +192,7 @@
 (def ^:private amount-tolerance 0.01)
 
 (defui total-amount-input
-  [{:keys [id value on-change values error]}]
+  [{:keys [id value on-change values error field-spec]}]
   (let [field-key (let [id* id]
                     (cond
                       (keyword? id*) (name id*)
@@ -203,6 +203,14 @@
         computed-total (line-items-total items)
         parsed-total (safe-parse-number value)
         [auto-total? set-auto-total!] (use-state true)
+        show-use-total? (not (false? (:show-use-total? field-spec)))
+
+        receipt-total-guess (some-> (:receipt-total-guess field-spec) safe-parse-number)
+        totals-match? (let [diff (when (and (number? receipt-total-guess)
+                    (number? computed-total))
+                 (js/Math.abs (- receipt-total-guess computed-total)))]
+                 (and (some? diff) (<= diff amount-tolerance)))
+
         total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
                      (js/Math.abs (- parsed-total computed-total)))
         total-mismatch? (and total-diff (> total-diff amount-tolerance))]
@@ -222,7 +230,7 @@
                    :on-change (fn [e]
                                 (set-auto-total! false)
                                 (on-change (safe-parse-number (.. e -target -value))))})
-        (when (pos? computed-total)
+        (when (and show-use-total? (pos? computed-total))
           ($ :button {:id (str "btn-use-total-" input-id)
                       :class "ds-btn ds-btn-ghost ds-btn-xs"
                       :type "button"
@@ -231,10 +239,14 @@
                                   (on-change computed-total))}
             "Use total")))
       (when (pos? computed-total)
-        ($ :p {:class "text-xs text-base-content/60"}
-          (str "Line items total: " (or (format-decimal computed-total) "0.00"))
-          (when total-mismatch?
-            ($ :span {:class "text-error ml-2"} "(does not match total)"))))
+        ($ :div {:class "flex items-center justify-between gap-3 text-xs text-base-content/60"}
+          ($ :div {:class (str "truncate " (when totals-match? "text-success"))}
+            (str "Line items total: " (or (format-decimal computed-total) "0.00"))
+            (when total-mismatch?
+              ($ :span {:class "text-error ml-2"} "(does not match total)")))
+          (when (number? receipt-total-guess)
+            ($ :div {:class (str "truncate " (when totals-match? "text-success"))}
+              (str "Total guess: " (format-decimal receipt-total-guess))))))
       (when error
         ($ :div {:id (str input-id "-error")
                  :class "text-error text-sm mt-1"}
@@ -298,6 +310,15 @@
         label-class (str "ds-label" (when inline " mb-0 min-w-[150px] text-left"))
         wrapper-class (str "mb-4" (if inline " flex flex-row items-start gap-4"
                                     " flex flex-col items-start gap-4"))
+
+        receipt-id-str (some-> (or (:receipt-id field-spec) (:receipt_id field-spec)) str)
+        supplier-guess (some-> (or (:receipt-supplier-guess field-spec)
+                                 (:supplier-guess field-spec)
+                                 (:supplier_guess field-spec))
+                         str
+                         str/trim
+                         not-empty)
+        supplier-guess-id (when receipt-id-str (str "receipt-supplier-guess-" receipt-id-str))
 
         field-error-msg (cond
                           (nil? error) nil
@@ -369,57 +390,61 @@
                       :class "ds-btn ds-btn-ghost ds-btn-sm"
                       :on-click open-modal}
             "New"))
-        (when field-error-msg
-          ($ :div {:id error-id
-                   :class "text-error text-sm mt-1"}
-            field-error-msg)))
+        (when supplier-guess
+          ($ :div {:id supplier-guess-id
+                   :class "text-xs text-base-content/60 self-center max-w-[18rem] truncate"}
+            (str "Guess: " supplier-guess))))
+      (when field-error-msg
+        ($ :div {:id error-id
+                 :class "text-error text-sm mt-1"}
+          field-error-msg)))
 
-      (when open?
-        ($ modal {:id modal-id
-                  :on-close close-modal
-                  :draggable? false
-                  :width "520px"
-                  :header "New supplier"}
-          ($ :div {:class "p-6 space-y-4"}
-            (when (or local-error create-error)
-              ($ :div {:class "ds-alert ds-alert-error"}
-                ($ :span (or local-error create-error))))
+    (when open?
+      ($ modal {:id modal-id
+                :on-close close-modal
+                :draggable? false
+                :width "520px"
+                :header "New supplier"}
+        ($ :div {:class "p-6 space-y-4"}
+          (when (or local-error create-error)
+            ($ :div {:class "ds-alert ds-alert-error"}
+              ($ :span (or local-error create-error))))
 
-            ;; NOTE: This modal is rendered inside the main expense form (<form>).
-            ;; Nested <form> elements cause the parent form to submit and close the page/modal.
-            ;; Keep this as a <div> and manually handle submit interactions.
-            ($ :div {:class "space-y-2"}
-              ($ :label {:class "ds-label" :for name-input-id}
-                "Display name")
-              ($ :input {:id name-input-id
-                         :class "ds-input ds-input-bordered w-full"
-                         :type "text"
-                         :value display-name
-                         :auto-focus true
-                         :on-key-down (fn [e]
-                                        (when (= "Enter" (.-key e))
-                                          (.preventDefault e)
-                                          (.stopPropagation e)
-                                          (submit)))
-                         :on-change (fn [e]
-                                      (set-display-name! (.. e -target -value)))})
-
-              ($ :div {:class "flex justify-end gap-2 pt-4"}
-                ($ :button {:id cancel-btn-id
-                            :type "button"
-                            :class "ds-btn"
-                            :on-click close-modal}
-                  "Cancel")
-                ($ :button {:id save-btn-id
-                            :type "button"
-                            :class "ds-btn ds-btn-primary"
-                            :disabled (or creating?
-                                        (str/blank? (str/trim (str display-name))))
-                            :on-click (fn [e]
+          ;; NOTE: This modal is rendered inside the main expense form (<form>).
+          ;; Nested <form> elements cause the parent form to submit and close the page/modal.
+          ;; Keep this as a <div> and manually handle submit interactions.
+          ($ :div {:class "space-y-2"}
+            ($ :label {:class "ds-label" :for name-input-id}
+              "Display name")
+            ($ :input {:id name-input-id
+                       :class "ds-input ds-input-bordered w-full"
+                       :type "text"
+                       :value display-name
+                       :auto-focus true
+                       :on-key-down (fn [e]
+                                      (when (= "Enter" (.-key e))
                                         (.preventDefault e)
                                         (.stopPropagation e)
-                                        (submit))}
-                  (if creating? "Saving..." "Create"))))))))))
+                                        (submit)))
+                       :on-change (fn [e]
+                                    (set-display-name! (.. e -target -value)))})
+
+            ($ :div {:class "flex justify-end gap-2 pt-4"}
+              ($ :button {:id cancel-btn-id
+                          :type "button"
+                          :class "ds-btn"
+                          :on-click close-modal}
+                "Cancel")
+              ($ :button {:id save-btn-id
+                          :type "button"
+                          :class "ds-btn ds-btn-primary"
+                          :disabled (or creating?
+                                      (str/blank? (str/trim (str display-name))))
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (.stopPropagation e)
+                                      (submit))}
+                (if creating? "Saving..." "Create")))))))))
 
 (defui supplier-select-input
   [{:keys [id label error required inline class on-change value form-id formId]}]

@@ -50,6 +50,7 @@
     {:get {:handler (user-receipts/get-receipt-handler db)}
      :delete {:handler (user-receipts/delete-receipt-handler db)}}]
    ["/receipts/:id/approve" {:post {:handler (user-receipts/approve-receipt-handler db)}}]
+   ["/receipts/:id/review" {:post {:handler (user-receipts/save-receipt-review-handler db)}}]
    ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
 
    ;; Expenses CRUD
