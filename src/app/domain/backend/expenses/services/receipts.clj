@@ -159,8 +159,12 @@
             total* (parse-money total_amount)
             lines* (lines-total items)
             abs-dec (fn [d] (if (neg? d) (- d) d))
-            totals-match? (when (and (some? total*) (some? lines*))
-                            (<= (abs-dec (- total* lines*)) 0.01M))
+            ;; IMPORTANT: keep `total_amount_guess` stable (it's the OCR/extraction guess).
+            ;; When a user edits line items and saves a review, we store the reviewed items,
+            ;; but we do NOT overwrite the original total guess.
+            guess-total (:total_amount_guess receipt)
+            totals-match? (when (and (some? guess-total) (some? lines*))
+                            (<= (abs-dec (- guess-total lines*)) 0.01M))
             new-status (if (and (= "review_required" (:status receipt)) (true? totals-match?))
                          "extracted"
                          (:status receipt))]
@@ -186,7 +190,6 @@
                     (jsonb-value items)
                     true]
                    :supplier_guess supplier-guess
-                   :total_amount_guess total*
                    :currency_guess (when currency* [:cast currency* :currency])
                    :purchased_at_guess purchased-at*
                    :status (receipt-status-cast new-status)
