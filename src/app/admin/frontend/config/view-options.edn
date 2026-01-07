@@ -56,7 +56,8 @@
    :show-pagination? true,
    :show-filtering? true,
    :show-edit? true,
-   :show-delete? true},
+   :show-delete? true,
+   :show-highlights? true},
   :display-defaults {}},
  :login-events
  {:display-locks

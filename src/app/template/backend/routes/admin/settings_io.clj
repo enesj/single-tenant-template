@@ -84,8 +84,8 @@
                        (edn/read-string (slurp file))
                        {})
           domain-data (read-domain-admin-configs :view-options)
-          ;; Merge: domain settings take precedence for domain entities
-          merged-data (merge admin-data domain-data)
+          ;; Merge: admin settings override domain defaults (runtime overlay)
+          merged-data (merge domain-data admin-data)
           validation (view-options-spec/validate-view-options-strict merged-data)]
       (when-not (:valid? validation)
         (log/warn "merged view-options validation issues:"
@@ -130,8 +130,8 @@
                        (edn/read-string (slurp file))
                        {})
           domain-data (read-domain-admin-configs :form-fields)
-          ;; Merge: domain settings take precedence for domain entities
-          merged-data (merge admin-data domain-data)
+          ;; Merge: admin settings override domain defaults (runtime overlay)
+          merged-data (merge domain-data admin-data)
           validation (form-fields-spec/validate-form-fields-strict merged-data)]
       (when-not (:valid? validation)
         (log/warn "merged form-fields validation issues:"
@@ -172,8 +172,8 @@
                        (edn/read-string (slurp file))
                        {})
           domain-data (read-domain-admin-configs :table-columns)
-          ;; Merge: domain settings take precedence for domain entities
-          merged-data (merge admin-data domain-data)
+          ;; Merge: admin settings override domain defaults (runtime overlay)
+          merged-data (merge domain-data admin-data)
           validation (table-columns-spec/validate-table-columns-strict merged-data)]
       (when-not (:valid? validation)
         (log/warn "merged table-columns validation issues:"

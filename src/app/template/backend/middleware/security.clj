@@ -87,7 +87,7 @@
           ;; Enhanced headers for admin routes
           admin-headers (if is-admin-route
                           {"Content-Security-Policy"
-                           "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* wss://localhost:*"
+                           "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* wss://localhost:*; frame-src 'self' blob:"
                            "X-Frame-Options" "DENY"
                            "Cache-Control" "no-cache, no-store, must-revalidate, private"}
                           {})

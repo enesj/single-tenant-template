@@ -4,7 +4,56 @@
     [app.admin.frontend.components.shared-utils :as shared]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]
     [clojure.string :as str]
-    [uix.core :refer [$ defui use-state]]))
+    [uix.core :refer [$ defui use-effect use-state]]))
+
+(defn- admin-protected-url?
+  [url]
+  (and (string? url)
+    (or (str/starts-with? url "/admin/api/")
+      (str/includes? url "/admin/api/"))))
+
+(defn- with-download-param
+  [url]
+  (when (seq url)
+    (let [separator (if (str/includes? url "?") "&" "?")]
+      (str url separator "download=true"))))
+
+(defn- fetch-receipt-blob
+  "Fetch a receipt file as a Blob.
+
+  - Adds `x-admin-token` for admin-protected URLs (e.g. /admin/api/*).
+  - Uses same-origin credentials for user-session cookies."
+  [url opts]
+  (let [opts* (or opts #js {})
+        token (.getItem js/localStorage "admin-token")]
+    (when (and token (admin-protected-url? url))
+      (set! (.-headers opts*) #js {"x-admin-token" token}))
+    (set! (.-credentials opts*) "same-origin")
+    (set! (.-cache opts*) "no-store")
+    (-> (js/fetch url opts*)
+      (.then (fn [resp]
+               (if (.-ok resp)
+                 (.blob resp)
+                 (js/Promise.reject
+                   (js/Error.
+                     (str "Failed to load receipt (" (.-status resp) ")")))))))))
+
+(defn- open-url-in-new-tab!
+  [url]
+  (when (seq url)
+    (.open js/window url "_blank" "noopener,noreferrer")))
+
+(defn- download-blob!
+  [blob filename]
+  (let [url (.createObjectURL js/URL blob)
+        link (.createElement js/document "a")]
+    (set! (.-href link) url)
+    (set! (.-download link) filename)
+    (.appendChild (.-body js/document) link)
+    (.click link)
+    (.remove link)
+    ;; Revoke on a short delay so the download can start.
+    (js/setTimeout (fn [] (.revokeObjectURL js/URL url)) 1000)))
 
 (defn- format-bytes
   [value]
@@ -48,10 +97,63 @@
   [{:keys [receipt title expanded? on-toggle] :or {title "Preview"}}]
   (let [{:keys [id content-type original-filename download-url]} receipt
         rid-str (or (some-> id str) "unknown")
-        download-href (when download-url (str download-url "?download=true"))
+        download-href (with-download-param download-url)
+        admin-protected? (admin-protected-url? download-url)
+        previewable? (or (str/starts-with? (or content-type "") "image/")
+                       (= content-type "application/pdf"))
         ;; Support both controlled and uncontrolled expansion state
         [local-expanded? set-local-expanded!] (use-state true)
-        current-expanded? (if (some? expanded?) expanded? local-expanded?)]
+        current-expanded? (if (some? expanded?) expanded? local-expanded?)
+        [preview set-preview!] (use-state nil)
+        [loading? set-loading!] (use-state false)
+        [load-error set-load-error!] (use-state nil)
+        preview-url (when (and (some? preview)
+                            (= (:source-url preview) download-url))
+                      (:blob-url preview))]
+    ;; Clean up object URLs when preview changes/unmounts.
+    (use-effect
+      (fn []
+        (fn []
+          (when (seq (:blob-url preview))
+            (.revokeObjectURL js/URL (:blob-url preview)))))
+      [preview])
+
+    ;; Reset preview state when the receipt (download-url) changes.
+    (use-effect
+      (fn []
+        (set-preview! nil)
+        (set-loading! false)
+        (set-load-error! nil)
+        js/undefined)
+      [download-url])
+
+    ;; Lazily fetch blob previews for admin-protected URLs (img/iframe can't send headers).
+    (use-effect
+      (fn []
+        (if (and admin-protected?
+              previewable?
+              current-expanded?
+              (seq download-url)
+              (nil? preview-url)
+              (nil? load-error))
+          (let [controller (js/AbortController.)
+                opts #js {:signal (.-signal controller)}]
+            (set-loading! true)
+            (-> (fetch-receipt-blob download-url opts)
+              (.then (fn [blob]
+                       (let [url (.createObjectURL js/URL blob)]
+                         (set-preview! {:source-url download-url
+                                        :blob-url url}))))
+              (.catch (fn [err]
+                          ;; Ignore abort errors.
+                        (when-not (= "AbortError" (.-name err))
+                          (set-load-error! (or (.-message err) "Failed to load preview.")))))
+              (.finally (fn []
+                          (set-loading! false))))
+            (fn []
+              (.abort controller)))
+          js/undefined))
+      [admin-protected? previewable? current-expanded? download-url preview-url load-error])
     ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
       ($ :div {:class "ds-card-body space-y-3"}
         ($ :div {:class "flex items-center justify-between gap-2"}
@@ -69,14 +171,57 @@
                                         (set-local-expanded! (not local-expanded?))))}
                 (if current-expanded? "Hide" "Show"))
               ($ :a {:id (str "link-open-receipt-" rid-str)
-                     :href download-url
+                     :href (or preview-url download-url)
                      :target "_blank"
-                     :rel "noreferrer"
-                     :class "ds-btn ds-btn-ghost ds-btn-xs"}
+                     :rel "noopener noreferrer"
+                     :class "ds-btn ds-btn-ghost ds-btn-xs"
+                     :on-click (when (and admin-protected? (not (seq preview-url)))
+                                 (fn [e]
+                                   (.preventDefault e)
+                                   (.stopPropagation e)
+                                   (set-loading! true)
+                                   (set-load-error! nil)
+                                   (-> (fetch-receipt-blob download-url #js {})
+                                     (.then (fn [blob]
+                                              (let [url (.createObjectURL js/URL blob)]
+                                                (set-preview! {:source-url download-url
+                                                               :blob-url url})
+                                                ;; NOTE: async open may be popup-blocked; once preview-url is set,
+                                                ;; the anchor will point to the blob URL and a second click works.
+                                                (open-url-in-new-tab! url))))
+                                     (.catch (fn [err]
+                                               (when-not (= "AbortError" (.-name err))
+                                                 (set-load-error! (or (.-message err) "Failed to open receipt.")))))
+                                     (.finally (fn []
+                                                 (set-loading! false))))))}
                 "Open")
               ($ :a {:id (str "btn-download-receipt-" rid-str)
                      :href download-href
-                     :class "ds-btn ds-btn-primary ds-btn-xs"}
+                     :class "ds-btn ds-btn-primary ds-btn-xs"
+                     :on-click (when admin-protected?
+                                 (fn [e]
+                                   (.preventDefault e)
+                                   (.stopPropagation e)
+                                   (let [filename (or (some-> original-filename str)
+                                                    (str "receipt-" rid-str))]
+                                     (if (seq preview-url)
+                                       (let [link (.createElement js/document "a")]
+                                         (set! (.-href link) preview-url)
+                                         (set! (.-download link) filename)
+                                         (.appendChild (.-body js/document) link)
+                                         (.click link)
+                                         (.remove link))
+                                       (do
+                                         (set-loading! true)
+                                         (set-load-error! nil)
+                                         (-> (fetch-receipt-blob (or download-href download-url) #js {})
+                                           (.then (fn [blob]
+                                                    (download-blob! blob filename)))
+                                           (.catch (fn [err]
+                                                     (when-not (= "AbortError" (.-name err))
+                                                       (set-load-error! (or (.-message err) "Failed to download receipt.")))))
+                                           (.finally (fn []
+                                                       (set-loading! false)))))))))}
                 "Download"))))
 
         (cond
@@ -89,16 +234,28 @@
                    :class "text-xs text-base-content/60"}
             "Preview hidden")
 
+          (and admin-protected? previewable? (not (seq preview-url)))
+          ($ :div {:class "w-full bg-base-200 rounded-lg p-6 flex items-center justify-center"}
+            (cond
+              loading?
+              ($ :span {:class "ds-loading ds-loading-spinner ds-loading-md text-primary"})
+
+              (seq load-error)
+              ($ :div {:class "text-xs text-error"} load-error)
+
+              :else
+              ($ :span {:class "text-xs text-base-content/60"} "Loading preview…")))
+
           (str/starts-with? (or content-type "") "image/")
           ($ :div {:class "w-full bg-base-200 rounded-lg overflow-hidden"}
             ($ :img {:id (str "receipt-preview-img-" rid-str)
-                     :src download-url
+                     :src (or preview-url download-url)
                      :alt (or original-filename "Receipt image")
                      :class "w-full max-h-[70vh] object-contain"}))
 
           (= content-type "application/pdf")
           ($ :iframe {:id (str "receipt-preview-pdf-" rid-str)
-                      :src download-url
+                      :src (or preview-url download-url)
                       :title (or original-filename "Receipt PDF")
                       :class "w-full h-[70vh] rounded-lg bg-base-200"})
 

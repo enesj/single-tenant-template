@@ -40,9 +40,17 @@
         ;; Only merge overrides once the config exists (prevents flicker and
         ;; ensures we still rely on the canonical entity-config for defaults).
         merged-config (when entity-config
-                        (cond-> (merge entity-config (or page-opts {}))
-                          (map? list-overrides)
-                          (update-in [:components :list] (fnil merge {}) list-overrides)))
+                        (let [page-components (:components page-opts)
+                              base-config (merge entity-config (dissoc (or page-opts {}) :components))]
+                          (cond-> base-config
+                            (map? page-components)
+                            (update :components (fnil merge {}) page-components)
+
+                            (and (some? page-components) (not (map? page-components)))
+                            (assoc :components page-components)
+
+                            (map? list-overrides)
+                            (update-in [:components :list] (fnil merge {}) list-overrides))))
 
         ;; Call all hooks at the top level to satisfy Rules of Hooks
         entity-data (use-subscribe [::entity-subs/paginated-entities actual-entity-key])
