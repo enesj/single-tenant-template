@@ -260,6 +260,94 @@
       (is (= 1 (count (:items expense))))
       (is (= (inc before) after)))))
 
+(deftest expenses-auto-links-article-when-alias-exists
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Walmart" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          article-name (str "Gala Apples-" (UUID/randomUUID))
+          article (articles/create-article! db {:canonical_name article-name})
+          _ (articles/create-alias! db (:id supplier) "APPLES G" (:id article))
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "1.00")
+                     :currency "BAM"}
+                    [{:raw_label "APPLES G"
+                      :line_total (bigdec "1.00")}])
+          item (-> expense :items first)]
+      (is (= (:id article) (:article_id item))))))
+
+(deftest expenses-auto-linking-is-supplier-scoped
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-a (:supplier (suppliers/find-or-create-supplier! db "Supplier A" {}))
+          supplier-b (:supplier (suppliers/find-or-create-supplier! db "Supplier B" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          article-a (articles/create-article! db {:canonical_name (str "ArticleA-" (UUID/randomUUID))})
+          _ (articles/create-alias! db (:id supplier-a) "MILK" (:id article-a))
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier-b)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "2.00")
+                     :currency "BAM"}
+                    [{:raw_label "MILK"
+                      :line_total (bigdec "2.00")}])
+          item (-> expense :items first)]
+      (is (nil? (:article_id item))))))
+
+(deftest expenses-auto-linking-does-not-override-explicit-article-id
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Override Supplier" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          article-aliased (articles/create-article! db {:canonical_name (str "Aliased-" (UUID/randomUUID))})
+          article-explicit (articles/create-article! db {:canonical_name (str "Explicit-" (UUID/randomUUID))})
+          _ (articles/create-alias! db (:id supplier) "TP" (:id article-aliased))
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "3.00")
+                     :currency "BAM"}
+                    [{:raw_label "TP"
+                      :article_id (:id article-explicit)
+                      :line_total (bigdec "3.00")}])
+          item (-> expense :items first)]
+      (is (= (:id article-explicit) (:article_id item))))))
+
+(deftest expenses-auto-linking-skips-blank-or-short-labels
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "BlankLabel Supplier" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          article (articles/create-article! db {:canonical_name (str "ShouldNotMatch-" (UUID/randomUUID))})
+          ;; Even if an alias exists with a bad/blank-ish label, we intentionally skip matching.
+          _ (articles/create-alias! db (:id supplier) "  " (:id article))
+
+          exp-blank (expenses/create-expense! db
+                      {:supplier_id (:id supplier)
+                       :payer_id (:id payer)
+                       :purchased_at (now)
+                       :total_amount (bigdec "1.00")
+                       :currency "BAM"}
+                      [{:raw_label "  " :line_total (bigdec "1.00")}])
+          exp-short (expenses/create-expense! db
+                      {:supplier_id (:id supplier)
+                       :payer_id (:id payer)
+                       :purchased_at (now)
+                       :total_amount (bigdec "1.00")
+                       :currency "BAM"}
+                      [{:raw_label "A" :line_total (bigdec "1.00")}])
+          exp-punct (expenses/create-expense! db
+                      {:supplier_id (:id supplier)
+                       :payer_id (:id payer)
+                       :purchased_at (now)
+                       :total_amount (bigdec "1.00")
+                       :currency "BAM"}
+                      [{:raw_label "##" :line_total (bigdec "1.00")}])]
+      (is (nil? (-> exp-blank :items first :article_id)))
+      (is (nil? (-> exp-short :items first :article_id)))
+      (is (nil? (-> exp-punct :items first :article_id))))))
+
 (deftest expenses-create-accepts-body-with-items-two-arity
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "TwoArity Supplier" {})
@@ -347,6 +435,49 @@
       (is (= (:id article) (:article_id new-item)))
       (is (== (bigdec "2.00") (:line_total new-item)))
       (is (= (inc before) after)))))
+
+(deftest expenses-update-auto-links-only-newly-inserted-items
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "UpdateAutoLink Supplier" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+
+          ;; Create an expense with an item that will match later, but with NO alias yet.
+          ;; This ensures the existing item remains article_id=nil after update.
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "2.00")
+                     :currency "BAM"}
+                    [{:raw_label "MILK"
+                      :line_total (bigdec "2.00")}])
+          existing-item (-> expense :items first)
+
+          article (articles/create-article! db {:canonical_name (str "Milk-" (UUID/randomUUID))})
+          _ (articles/create-alias! db (:id supplier) "MILK" (:id article))
+
+          ;; Update expense with:
+          ;; - the existing item (by id) unchanged (should stay nil)
+          ;; - a NEW inserted item without :article_id (should be auto-linked)
+          updated (expenses/update-expense! db
+                    (:id expense)
+                    {:items [{:id (:id existing-item)
+                              :raw_label (:raw_label existing-item)
+                              :line_total (:line_total existing-item)}
+                             {:raw_label "MILK"
+                              :line_total (bigdec "0.00")}]})
+          items (:items updated)
+          existing-after (first (filter #(= (:id existing-item) (:id %)) items))
+          inserted-after (first (filter #(and (= "MILK" (:raw_label %))
+                                           (not= (:id existing-item) (:id %)))
+                                  items))]
+      (is (some? existing-after))
+      (is (nil? (:article_id existing-after))
+        "Existing items are not retroactively auto-linked on update (follow-up behavior)")
+
+      (is (some? inserted-after))
+      (is (= (:id article) (:article_id inserted-after))
+        "Newly inserted items are auto-linked when an alias exists"))))
 
 (deftest expenses-soft-delete-excluded-from-list
   (when-let [db fixtures/*test-db*]

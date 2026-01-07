@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.services.expenses
   "Expense creation/update with line items."
   (:require
+    [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.price-history :as price-history]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -142,6 +143,61 @@
 ;; Core
 ;; ============================================================================
 
+(def ^:private min-alias-label-length 2)
+
+(defn- normalize-label-for-alias-lookup
+  "Prepare a raw expense item label for alias matching.
+
+  Returns nil when the label is blank/too short or normalizes to an empty key.
+  Otherwise returns {:label <trimmed> :normalized <normalized-key>}.
+
+  NOTE: We intentionally avoid matching very short/empty keys to keep auto-matching
+  predictable for non-technical users."
+  [raw-label]
+  (let [label (some-> raw-label str str/trim not-empty)]
+    (when (and label (>= (count label) min-alias-label-length))
+      (let [normalized (articles/normalize-alias-label label)]
+        (when (and normalized (not (str/blank? normalized)))
+          {:label label
+           :normalized normalized})))))
+
+(defn- auto-link-items-to-articles
+  "For each item missing :article_id, attempt to link it using supplier-scoped
+  article aliases.
+
+  - Never overrides existing :article_id.
+  - Skips blank/too-short/punctuation-only labels.
+  - Uses a small in-request cache to avoid repeated DB lookups for repeated labels.
+
+  Returns updated items vector."
+  [tx supplier-id items]
+  (if-not supplier-id
+    items
+    (let [cache (volatile! {})]
+      (mapv
+        (fn [item]
+          (if (:article_id item)
+            item
+            (if-let [{:keys [label normalized]} (normalize-label-for-alias-lookup (:raw_label item))]
+              (let [cached (get @cache normalized ::not-cached)]
+                (cond
+                  (= cached ::not-cached)
+                  (let [article (articles/find-article-by-alias tx supplier-id label)
+                        article-id (:id article)
+                        cached* (or article-id ::miss)]
+                    (vswap! cache assoc normalized cached*)
+                    (if article-id
+                      (assoc item :article_id article-id)
+                      item))
+
+                  (= cached ::miss)
+                  item
+
+                  :else
+                  (assoc item :article_id cached)))
+              item)))
+        items))))
+
 (defn create-expense!
   "Create an expense and its line items. Returns expense with :items.
 
@@ -161,7 +217,9 @@
                  :field :items})))
      (require-keys! expense-data [:supplier_id :payer_id :purchased_at :total_amount])
      (jdbc/with-transaction [tx db]
-       (let [expense-id (UUID/randomUUID)
+       (let [supplier-id (:supplier_id expense-data)
+             items (auto-link-items-to-articles tx supplier-id items)
+             expense-id (UUID/randomUUID)
              expense-row (-> expense-data
                            (select-keys [:user_id :receipt_id :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
                            (assoc :id expense-id)
@@ -245,6 +303,8 @@
                 insert-items (filterv (fn [{item-id :id}]
                                         (not (and item-id (contains? existing-ids item-id))))
                                items*)
+                ;; Follow-up behavior: auto-link only newly inserted items, never existing ones.
+                insert-items (auto-link-items-to-articles tx (:supplier_id expense) insert-items)
                 delete-where (if (seq keep-ids)
                                [:and
                                 [:= :expense_id id]

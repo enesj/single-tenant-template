@@ -4,7 +4,9 @@
    :show-edit? true,
    :show-select? true,
    :show-pagination? true,
-   :show-filtering? true}},
+   :show-filtering? true,
+   :show-batch-delete? true},
+  :display-defaults {}},
  :suppliers
  {:display-locks
   {:show-delete? false,
@@ -29,7 +31,9 @@
   {:show-select? true,
    :show-pagination? true,
    :show-filtering? true,
-   :show-batch-edit? true}},
+   :show-batch-edit? true,
+   :show-batch-delete? true},
+  :display-defaults {}},
  :price-observations
  {:display-locks
   {:show-delete? false,
@@ -57,7 +61,8 @@
    :show-filtering? true,
    :show-edit? true,
    :show-delete? true,
-   :show-highlights? true},
+   :show-highlights? true,
+   :show-batch-delete? true},
   :display-defaults {}},
  :login-events
  {:display-locks
