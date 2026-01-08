@@ -26,13 +26,33 @@
         (assoc-in [:admin :expenses :unmapped-items :lookups :suppliers] [])
         (assoc-in [:admin :expenses :unmapped-items :lookups :articles] [])))))
 
+(defn- wait-for!
+  "Poll (pred) on successive ticks until it returns truthy or times out.
+
+  Calls (cb result) with the truthy result, or nil on timeout."
+  ([pred cb]
+   (wait-for! pred cb 25))
+  ([pred cb tries]
+   (letfn [(tick [n]
+             (let [res (try (pred) (catch :default _ nil))]
+               (if res
+                 (cb res)
+                 (if (pos? n)
+                   (js/setTimeout #(tick (dec n)) 0)
+                   (cb nil)))))]
+     (tick tries))))
+
 (deftest create-article-name-prefill-does-not-stick-between-modal-openings
   (testing "Create-new article name is re-prefilled from the newly selected raw label"
     (setup/reset-db!)
 
     (async done
       (let [container (.createElement js/document "div")
-            root (rdom/createRoot container)]
+            root (rdom/createRoot container)
+            cleanup! (fn []
+                       (.unmount root)
+                       (.removeChild (.-body js/document) container)
+                       (done))]
         (.appendChild (.-body js/document) container)
 
         (seed-unmapped-items! {:items [{:id 1 :supplier-id "supplier-1" :raw-label "Raw Label A"}]
@@ -41,16 +61,26 @@
         (.render root ($ unmapped-ui/map-to-article-modal))
 
         (rf/dispatch-sync [::unmapped-events/open-map-modal])
-        (js/setTimeout
-          (fn []
-            (when-let [btn (.getElementById js/document "btn-create-article-from-labels")]
-              (.click btn))
 
-            (js/setTimeout
-              (fn []
-                (let [input (.getElementById js/document "input-new-article-name")]
-                  (is (= "Raw Label A" (.-value input))
-                    "First opening should prefill canonical name from selected label"))
+        (wait-for!
+          #(.getElementById js/document "btn-create-article-from-labels")
+          (fn [btn]
+            (when-not btn
+              (is (some? btn) "Create-article button should render")
+              (cleanup!))
+
+            (.click btn)
+
+            (wait-for!
+              #(let [input (.getElementById js/document "input-new-article-name")]
+                 (when (and input (= "Raw Label A" (.-value input))) input))
+              (fn [input]
+                (when-not input
+                  (is (some? input) "New-article input should render (first opening)")
+                  (cleanup!))
+
+                (is (= "Raw Label A" (.-value input))
+                  "First opening should prefill canonical name from selected label")
 
                 (rf/dispatch-sync [::unmapped-events/close-map-modal])
 
@@ -62,27 +92,26 @@
                                            :selected-ids #{2}})
 
                     (rf/dispatch-sync [::unmapped-events/open-map-modal])
-                    (js/setTimeout
-                      (fn []
-                        ;; Give the component a tick to apply its \"reset on open\" effect,
-                        ;; then switch to :new mode (which should prefill from the new selection).
-                        (js/setTimeout
-                          (fn []
-                            (when-let [btn (.getElementById js/document "btn-create-article-from-labels")]
-                              (.click btn))
 
-                            (js/setTimeout
-                              (fn []
-                                (let [input (.getElementById js/document "input-new-article-name")]
-                                  (is (= "Raw Label B" (.-value input))
-                                    "Second opening should prefill from the newly selected label (not the previous one)"))
+                    (wait-for!
+                      #(.getElementById js/document "btn-create-article-from-labels")
+                      (fn [btn2]
+                        (when-not btn2
+                          (is (some? btn2) "Create-article button should render (second opening)")
+                          (cleanup!))
 
-                                (.unmount root)
-                                (.removeChild (.-body js/document) container)
-                                (done))
-                              0))
-                          0))
-                      0))
-                  0))
-              0))
-          0)))))
+                        (.click btn2)
+
+                        (wait-for!
+                          #(let [input2 (.getElementById js/document "input-new-article-name")]
+                             (when (and input2 (= "Raw Label B" (.-value input2))) input2))
+                          (fn [input2]
+                            (when-not input2
+                              (is (some? input2) "New-article input should render (second opening)")
+                              (cleanup!))
+
+                            (is (= "Raw Label B" (.-value input2))
+                              "Second opening should prefill from the newly selected label (not the previous one)")
+
+                            (cleanup!)))))))
+                0))))))))
