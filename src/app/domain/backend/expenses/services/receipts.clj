@@ -13,7 +13,7 @@
     [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log])
   (:import
-    [java.nio.file Files StandardCopyOption]
+    [java.nio.file Files]
     [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
     [java.util UUID]))
 
@@ -84,7 +84,6 @@
                      {:status 400
                       :field :currency
                       :value currency})))))
-
 
 (defn- try-parse-uuid
   [v]
@@ -186,7 +185,7 @@
                    [:call :jsonb_set
                     [:call :coalesce :raw_extract_json [:cast "{}" :jsonb]]
                 ;; jsonb_set expects a `text[]` path; use a typed array literal.
-                [:raw "'{extraction,items}'::text[]"]
+                    [:raw "'{extraction,items}'::text[]"]
                     (jsonb-value items)
                     true]
                    :supplier_guess supplier-guess
@@ -238,113 +237,53 @@
 (def ^:private local-receipt-storage-base-dir
   (io/file "upload" "stripes"))
 
-(def ^:private exported-subdir "exported")
-
-(defn- uri-storage-key?
-  [storage-key]
-  (boolean
-    (when (string? storage-key)
-      (re-find #"(?i)^[a-z][a-z0-9+.-]*://" (str/trim storage-key)))))
-
-(defn- safe-resolve-under!
-  "Resolve `relative-path` under `base-dir` and ensure it does not escape."
-  [^java.io.File base-dir relative-path]
-  (let [base-path (.toPath base-dir)
-        resolved (.normalize (.resolve base-path (str relative-path)))]
-    (when-not (.startsWith resolved base-path)
-      (throw (ex-info "Unsafe storage_key path" {:storage_key relative-path})))
-    (.toFile resolved)))
-
 (defn resolve-local-receipt-file
   "Return a java.io.File for a local receipt storage key (relative to `upload/stripes/`).
 
   Returns nil when:
   - storage-key is blank
-  - storage-key is a URI (e.g. s3://...)
   - the resolved file does not exist
 
-  Throws ex-info with :status 400 when the path is unsafe."
+  Throws ex-info with :status 400 when the path is unsafe (escapes base dir)."
   [storage-key]
   (let [k (some-> storage-key str/trim not-empty)]
-    (cond
-      (not k) nil
-      (uri-storage-key? k) nil
-      :else
+    (when k
       (try
-        (let [f (safe-resolve-under! local-receipt-storage-base-dir k)]
-          (when (.exists f) f))
+        (let [base-path (.toPath local-receipt-storage-base-dir)
+              resolved (.normalize (.resolve base-path k))]
+          (when-not (.startsWith resolved base-path)
+            (throw (ex-info "Unsafe storage_key path" {:status 400 :storage_key k})))
+          (let [f (.toFile resolved)]
+            (when (.exists f) f)))
         (catch clojure.lang.ExceptionInfo e
           (throw (ex-info (ex-message e)
                    (assoc (ex-data e) :status 400)
                    e)))))))
 
-(defn- finalize-local-receipt-file!
-  "Move a local receipt file from `upload/stripes/<storage_key>` to
-  `upload/stripes/exported/<storage_key>`.
+;; File move functionality removed - receipts stay in upload/stripes/
+;; Status is tracked via database receipts.status column
 
-  Returns the updated storage key (prefixed with \"exported/\") when successful.
-  Returns nil for non-local storage keys (e.g. s3://) or when the file does not exist.
+(defn- delete-receipt-file!
+  "Delete the receipt file from disk if it exists.
+   
+   Handles both regular files (upload/stripes/<storage_key>) and exported files
+   (upload/stripes/exported/<storage_key>).
 
-  Any failures are logged and ignored so expense posting can still succeed."
-  [{:keys [id storage_key]}]
-  (let [k (some-> storage_key str/trim not-empty)]
-    (cond
-      (not k) nil
-      (uri-storage-key? k) nil
+   Logs errors but does not throw - deletion should succeed even if file cleanup fails."
+  [receipt]
+  (when-let [storage-key (:storage_key receipt)]
+    (try
+      (when-let [f (resolve-local-receipt-file storage-key)]
+        (Files/deleteIfExists (.toPath f))
+        (log/info "Deleted receipt file" {:receipt-id (:id receipt)
+                                          :storage-key storage-key
+                                          :path (.getAbsolutePath f)}))
+      (catch Exception e
+        (log/warn e "Failed to delete receipt file" {:receipt-id (:id receipt)
+                                                     :storage-key storage-key})))))
 
-      (str/starts-with? k (str exported-subdir "/"))
-      (let [export-file (safe-resolve-under! local-receipt-storage-base-dir k)]
-        (if (.exists export-file)
-          k
-          (do
-            (log/warn "Receipt exported file not found" {:receipt-id id
-                                                         :storage_key k
-                                                         :path (.getPath export-file)})
-            nil)))
-
-      :else
-      (let [src-file (safe-resolve-under! local-receipt-storage-base-dir k)
-            dest-key (str exported-subdir "/" k)
-            dest-file (safe-resolve-under! local-receipt-storage-base-dir dest-key)]
-        (try
-          (when-let [parent (.getParentFile dest-file)]
-            (when-not (.exists parent)
-              (.mkdirs parent)))
-          (cond
-            (.exists dest-file)
-            (do
-              (when (.exists src-file)
-                (try
-                  (Files/deleteIfExists (.toPath src-file))
-                  (catch Exception e
-                    (log/warn e "Failed to delete duplicate receipt file" {:receipt-id id
-                                                                           :path (.getPath src-file)}))))
-              dest-key)
-
-            (.exists src-file)
-            (do
-              (try
-                (Files/move (.toPath src-file) (.toPath dest-file)
-                  (into-array java.nio.file.CopyOption [StandardCopyOption/ATOMIC_MOVE]))
-                (catch Exception _e
-                  (Files/move (.toPath src-file) (.toPath dest-file)
-                    (into-array java.nio.file.CopyOption [StandardCopyOption/REPLACE_EXISTING]))))
-              (try
-                (Files/deleteIfExists (.toPath src-file))
-                (catch Exception e
-                  (log/warn e "Failed to delete receipt source file after move" {:receipt-id id
-                                                                                 :path (.getPath src-file)})))
-              dest-key)
-
-            :else
-            (do
-              (log/warn "Receipt file not found for export" {:receipt-id id
-                                                             :storage_key k
-                                                             :path (.getPath src-file)})
-              nil))
-          (catch Exception e
-            (log/warn e "Failed to finalize receipt file" {:receipt-id id :storage_key k})
-            nil))))))
+;; File move functionality removed - receipts stay in upload/stripes/
+;; Status is tracked via database receipts.status column
 
 ;; ============================================================================
 ;; CRUD / status management
@@ -516,6 +455,8 @@
   Safety rules:
   - Disallow deleting receipts that have already been posted / linked to an expense.
 
+  Also deletes the associated receipt image file from disk.
+
   Returns the deleted receipt row (map) or nil if the receipt did not exist."
   [db receipt-id]
   (jdbc/with-transaction [tx db]
@@ -525,11 +466,17 @@
                  {:status 409
                   :id receipt-id
                   :current-status (:status receipt)})))
-      (when (:expense_id receipt)
-        (throw (ex-info "Cannot delete a receipt linked to an expense"
-                 {:status 409
-                  :id receipt-id
-                  :expense-id (:expense_id receipt)})))
+      (let [expense-id (:expense_id receipt)]
+        (when expense-id
+          ;; Self-heal stale links: if the linked expense is already soft-deleted (or missing),
+          ;; allow deleting the receipt.
+          (when (expenses/get-expense tx expense-id)
+            (throw (ex-info "Cannot delete a receipt linked to an expense"
+                     {:status 409
+                      :id receipt-id
+                      :expense-id expense-id})))))
+      ;; Delete the file from disk before deleting the database record
+      (delete-receipt-file! receipt)
       (jdbc/execute-one!
         tx
         (sql/format {:delete-from :receipts
@@ -732,11 +679,9 @@
                               :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
                         review-data)
                       (:items review-data))
-            exported-storage-key (finalize-local-receipt-file! receipt)
             claim? (nil? (:user_id receipt))
             extra (cond-> {:expense_id (:id expense)}
-                    claim? (assoc :user_id user-id)
-                    exported-storage-key (assoc :storage_key exported-storage-key))]
+                    claim? (assoc :user_id user-id))]
         (update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -767,11 +712,9 @@
                               :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
                         review-data)
                       (:items review-data))
-            exported-storage-key (finalize-local-receipt-file! receipt)
             claim? (nil? (:user_id receipt))
             extra (cond-> {:expense_id (:id expense)}
-                    claim? (assoc :user_id user-id)
-                    exported-storage-key (assoc :storage_key exported-storage-key))]
+                    claim? (assoc :user_id user-id))]
         (update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -810,8 +753,6 @@
                               :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
                         review-data)
                       (:items review-data))
-            exported-storage-key (finalize-local-receipt-file! receipt)
-            extra (cond-> {:expense_id (:id expense)}
-                    exported-storage-key (assoc :storage_key exported-storage-key))]
+            extra {:expense_id (:id expense)}]
         (update-status! tx receipt-id "posted" extra)
         expense))))

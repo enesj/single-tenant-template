@@ -167,15 +167,16 @@
     (when spec
       ;; Convert vector config spec to format expected by template system
       (let [fields (:fields spec)]
-        fields))))
+        spec))))
 
 ;; Removed unused create-admin-entity-specs-override function
 
 ;; FIXED: Admin-specific entity specs subscription - reads from Re-frame DB
+;; Now returns the full entity-spec map instead of just fields vector
 (rf/reg-sub
   :admin/entity-specs-by-name
   (fn [db [_ entity-name]]
-    (create-admin-entity-specs-override-from-db db entity-name)))
+    (generate-admin-entity-spec-from-db db entity-name)))
 
 ;; Backward compatibility subscription for :admin/entity-spec
 (rf/reg-sub

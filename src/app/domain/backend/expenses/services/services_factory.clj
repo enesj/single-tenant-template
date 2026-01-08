@@ -11,27 +11,30 @@
 ;; Generic Query Builders
 ;; ============================================================================
 
+(declare build-where-clause)
+
 (defn build-base-query
   "Build a base query with joins for an entity."
-  [{:keys [table-name _primary-key joins select-fields table-alias]}]
+  [{:keys [table-name _primary-key joins select-fields table-alias base-filters]}]
   (let [base-select (or select-fields [:*])
         from-target (if table-alias
                       [[(keyword table-name) table-alias]]
-                      [(keyword table-name)])]
+                      [(keyword table-name)])
+        where (build-where-clause base-filters)]
     (cond-> {:select base-select
              :from from-target}
-      joins (assoc :left-join joins))))
+      joins (assoc :left-join joins)
+      where (assoc :where where))))
 
 (defn build-where-clause
   "Build where clause from filters."
   [base-filters]
-  (cond-> [:and]
-    (seq base-filters)
-    (into base-filters)))
+  (when (seq base-filters)
+    (into [:and] base-filters)))
 
 (defn build-query-with-filters
   "Build complete query with filters, ordering, and pagination."
-  [{:keys [table-name primary-key joins select-fields allowed-order-by table-alias]
+  [{:keys [table-name primary-key joins select-fields allowed-order-by table-alias base-filters]
     :as config}
    {:keys [limit offset order-by order-dir]
     :or {limit 50 offset 0 order-dir :asc}}]
@@ -41,7 +44,8 @@
                                       :primary-key primary-key
                                       :joins joins
                                       :select-fields select-fields
-                                      :table-alias table-alias})
+                                      :table-alias table-alias
+                                      :base-filters base-filters})
         order-column (get allowed-order-by order-by-col default-order-by)
         order-direction (if (= :asc order-dir) :asc :desc)
         query (cond-> base-query
@@ -53,11 +57,15 @@
 (defn apply-search-filter
   "Apply search filter to query if search term provided."
   [query search-fields search-term]
-  (if search-term
+  (if (and search-term (seq search-fields))
     (let [search-conditions (mapv (fn [field]
                                     [:ilike field (str "%" search-term "%")])
-                              search-fields)]
-      (assoc query :where (into [:and] search-conditions)))
+                              search-fields)
+          search-where (into [:or] search-conditions)]
+      (update query :where (fn [existing]
+                             (if existing
+                               [:and existing search-where]
+                               search-where))))
     query))
 
 (defn apply-id-filter
@@ -65,8 +73,12 @@
   [query table-name table-alias id]
   (let [id-col (if table-alias
                  (keyword (name table-alias) "id")
-                 (keyword (str table-name ".id")))]
-    (assoc query :where [:= id-col id])))
+                 (keyword (str table-name ".id")))
+        id-filter [:= id-col id]]
+    (update query :where (fn [existing]
+                           (if existing
+                             [:and existing id-filter]
+                             id-filter)))))
 
 ;; ============================================================================
 ;; Generic CRUD Operations
@@ -74,7 +86,7 @@
 
 (defn build-list-function
   "Build a generic list function for an entity."
-  [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields table-alias]
+  [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields table-alias base-filters]
     :as config}]
   (fn list-entity
     [db {:keys [limit offset order-by order-dir search]
@@ -87,7 +99,8 @@
                         :select-fields select-fields
                         :allowed-order-by allowed-order-by
                         :default-order-by default-order-by
-                        :table-alias table-alias}
+                        :table-alias table-alias
+                        :base-filters base-filters}
                        {:limit limit
                         :offset offset
                         :order-by order-by
@@ -100,14 +113,15 @@
 
 (defn build-get-function
   "Build a generic get-by-id function for an entity."
-  [{:keys [table-name primary-key joins select-fields table-alias]}]
+  [{:keys [table-name primary-key joins select-fields table-alias base-filters]}]
   (fn get-entity
     [db id]
     (let [query (-> (build-base-query {:table-name table-name
                                        :primary-key primary-key
                                        :joins joins
                                        :select-fields select-fields
-                                       :table-alias table-alias})
+                                       :table-alias table-alias
+                                       :base-filters base-filters})
                   (apply-id-filter table-name table-alias id))]
       (jdbc/execute-one! db (sql/format query)
         {:builder-fn rs/as-unqualified-lower-maps}))))
@@ -188,17 +202,21 @@
 
 (defn build-count-function
   "Build a generic count function for an entity."
-  [{:keys [table-name search-fields joins table-alias]}]
+  [{:keys [table-name search-fields joins table-alias base-filters]}]
   (fn count-entity
-    [db & [search]]
-    (let [base-query (cond-> {:select [[[:count :*] :total]]
+    [db & [opts]]
+    (let [search (cond
+                   (map? opts) (:search opts)
+                   (string? opts) opts
+                   :else nil)
+          where (build-where-clause base-filters)
+          base-query (cond-> {:select [[[:count :*] :total]]
                               :from (if table-alias
                                       [[(keyword table-name) table-alias]]
                                       [(keyword table-name)])}
-                       joins (assoc :left-join joins))
-          final-query (if (and search search-fields)
-                        (apply-search-filter base-query search-fields search)
-                        base-query)]
+                       joins (assoc :left-join joins)
+                       where (assoc :where where))
+          final-query (apply-search-filter base-query search-fields search)]
       (:total
        (jdbc/execute-one! db
          (sql/format final-query)
@@ -206,24 +224,22 @@
 
 (defn build-search-function
   "Build a generic search function for autocomplete."
-  [{:keys [table-name search-fields order-by-field default-limit joins table-alias]
+  [{:keys [table-name search-fields order-by-field default-limit joins table-alias base-filters]
     :or {order-by-field :display_name default-limit 10}}]
   (fn search-entity
     [db query {:keys [limit] :or {limit default-limit}}]
     (when (and query (>= (count query) 2))
-      (let [search-pattern (str "%" query "%")
-            search-conditions (mapv (fn [field]
-                                      [:ilike field search-pattern])
-                                search-fields)
+      (let [where (build-where-clause base-filters)
             base-query (cond-> {:select [:*]
                                 :from (if table-alias
                                         [[(keyword table-name) table-alias]]
                                         [(keyword table-name)])}
-                         joins (assoc :left-join joins))
-            query (assoc base-query
-                    :where [:or search-conditions]
-                    :order-by [[order-by-field :asc]]
-                    :limit limit)]
+                         joins (assoc :left-join joins)
+                         where (assoc :where where))
+            query (-> base-query
+                    (apply-search-filter search-fields query)
+                    (assoc :order-by [[order-by-field :asc]]
+                      :limit limit))]
         (jdbc/execute! db (sql/format query)
           {:builder-fn rs/as-unqualified-lower-maps})))))
 

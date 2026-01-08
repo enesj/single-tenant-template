@@ -198,6 +198,7 @@
    [:qty [:decimal 10 3]]
    [:unit_price [:decimal 12 2]]
    [:line_total [:decimal 12 2] {:null false}]
+   [:deleted_at :timestamptz]
    [:created_at :timestamptz {:default "NOW()"}]],
   :indexes
   [[:idx_expense_items_expense :btree {:fields [:expense_id]}]

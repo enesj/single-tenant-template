@@ -145,8 +145,16 @@
         ;; Fallback to raw entity-spec if enhanced specs aren't available yet
         raw-spec (:entity-spec props)
 
-        ;; Prefer enhanced specs, fallback to raw specs
-        spec-to-use (or enhanced-field-specs raw-spec)
+        ;; Prefer the explicitly-provided entity spec when it contains custom components.
+        ;; This avoids auto-derived specs accidentally dropping/overriding custom fields.
+        prefer-raw-spec? (and (sequential? raw-spec)
+                           (some :component raw-spec))
+
+        ;; Prefer enhanced specs (from models-data) unless the caller provided a custom spec.
+        spec-to-use (cond
+                      prefer-raw-spec? raw-spec
+                      (some? enhanced-field-specs) enhanced-field-specs
+                      :else raw-spec)
 
         ;; Normalize field specs: accept either a map of fields or a seq of field maps
         excluded-field-ids #{:id :created-at :updated-at}

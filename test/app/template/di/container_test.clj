@@ -184,7 +184,9 @@
       (let [cast-data (crud-protocols/cast-for-insert type-casting-service :expenses
                         {:total_amount 42.50
                          :notes "Test expense"})]
-        (is (contains? cast-data :total_amount))
+        ;; Note: inputs may be DB-style snake_case, but the casting service
+        ;; returns app-style kebab-case keys.
+        (is (contains? cast-data :total-amount))
         (is (contains? cast-data :notes)))
 
       ;; Test validation service integration

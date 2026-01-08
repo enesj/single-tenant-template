@@ -116,7 +116,74 @@
         (is (= "extracted" (:status after)))
         (is (nil? (:expense_id after)))))))
 
-(deftest receipts-approve-moves-local-receipt-file-to-exported
+(deftest receipts-soft-delete-expense-clears-link-even-if-receipt-already-reverted
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier (reverted receipt)" {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          upload (receipts/upload-receipt! db {:storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
+                                               :bytes (.getBytes (str "del-" (UUID/randomUUID)))})
+          receipt-id (:id (:receipt upload))
+          _ (receipts/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "10.00")
+                  :currency "BAM"
+                  :items [{:raw_label "Item" :line_total (bigdec "10.00")}]}
+          expense (receipts/approve-and-post! db receipt-id review)]
+      ;; Simulate an inconsistent-but-realistic state: receipt status reverted/reset while
+      ;; still retaining :expense_id (e.g. via a manual reset action).
+      (receipts/update-status! db receipt-id "extracted")
+
+      (let [before (receipts/get-receipt db receipt-id)]
+        (is (= "extracted" (:status before)))
+        (is (= (:id expense) (:expense_id before))))
+
+      (expenses/soft-delete-expense! db (:id expense))
+
+      (let [after (receipts/get-receipt db receipt-id)]
+        (is (= "extracted" (:status after)))
+        (is (nil? (:expense_id after))))
+
+      ;; With the link cleared, the receipt should now be deletable.
+      (is (= receipt-id (:id (receipts/delete-receipt! db receipt-id))))
+      (is (nil? (receipts/get-receipt db receipt-id))))))
+
+(deftest receipts-delete-allows-stale-expense-link-when-expense-soft-deleted
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "DeleteReceipt stale expense link " (UUID/randomUUID)) {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          upload (receipts/upload-receipt! db {:storage_key (str "s3://bucket/r-del-stale-" (UUID/randomUUID) ".jpg")
+                                               :bytes (.getBytes (str "del-stale-" (UUID/randomUUID)))})
+          receipt-id (:id (:receipt upload))
+          _ (receipts/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "10.00")
+                  :currency "BAM"
+                  :items [{:raw_label "Item" :line_total (bigdec "10.00")}]}
+          expense (receipts/approve-and-post! db receipt-id review)]
+      ;; Put receipt into deletable status.
+      (receipts/update-status! db receipt-id "extracted")
+
+      ;; Soft-delete expense (expected to clear link normally).
+      (expenses/soft-delete-expense! db (:id expense))
+
+      ;; Re-introduce a stale link to a deleted expense (simulates old data).
+      (jdbc/execute! db
+        (hsql/format {:update :receipts
+                      :set {:expense_id (:id expense)}
+                      :where [:= :id receipt-id]}))
+
+      (let [stale (receipts/get-receipt db receipt-id)]
+        (is (= (:id expense) (:expense_id stale))))
+
+      ;; Should still be deletable because the linked expense is soft-deleted.
+      (is (= receipt-id (:id (receipts/delete-receipt! db receipt-id))))
+      (is (nil? (receipts/get-receipt db receipt-id))))))
+
+(deftest receipts-approve-does-not-move-local-receipt-file
   (when-let [db fixtures/*test-db*]
     (let [base-dir (io/file "upload" "stripes")
           _ (.mkdirs base-dir)
@@ -125,6 +192,7 @@
           src-file (io/file base-dir storage-key)
           dest-file (io/file base-dir "exported" storage-key)]
       (try
+        ;; Create a local file to ensure approve-and-post doesn't relocate it.
         (Files/write (.toPath src-file) bytes (into-array java.nio.file.OpenOption []))
         (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Konzum" {}))
               payer (payers/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
@@ -140,9 +208,10 @@
                       :items [{:raw_label "Milk" :line_total (bigdec "12.34")}]}
               _expense (receipts/approve-and-post! db receipt-id review)
               stored (receipts/get-receipt db receipt-id)]
-          (is (= (str "exported/" storage-key) (:storage_key stored)))
-          (is (false? (.exists src-file)))
-          (is (true? (.exists dest-file))))
+          ;; File move functionality was removed; receipt files stay in upload/stripes/.
+          (is (= storage-key (:storage_key stored)))
+          (is (true? (.exists src-file)))
+          (is (false? (.exists dest-file))))
         (finally
           (try
             (Files/deleteIfExists (.toPath src-file))
@@ -438,7 +507,7 @@
 
 (deftest expenses-update-auto-links-only-newly-inserted-items
   (when-let [db fixtures/*test-db*]
-    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "UpdateAutoLink Supplier" {}))
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "UpdateAutoLink Supplier " (UUID/randomUUID)) {}))
           payer (payers/create-payer! db {:type "cash" :label "Cash"})
 
           ;; Create an expense with an item that will match later, but with NO alias yet.
@@ -494,3 +563,39 @@
       (expenses/soft-delete-expense! db (:id exp))
       (let [listed (expenses/list-expenses db {:limit 100})]
         (is (empty? (filter #(= (:id exp) (:id %)) listed)))))))
+
+(deftest expenses-soft-delete-soft-deletes-expense-items
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "DeleteExpenseItems Supplier " (UUID/randomUUID)) {}))
+          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          exp (expenses/create-expense! db
+                {:supplier_id (:id supplier)
+                 :payer_id (:id payer)
+                 :purchased_at (now)
+                 :total_amount (bigdec "3.00")
+                 :currency "BAM"}
+                [{:raw_label "Item 1" :line_total (bigdec "1.00")}
+                 {:raw_label "Item 2" :line_total (bigdec "2.00")}])
+          expense-id (:id exp)
+          count-active (fn []
+                         (:count
+                          (jdbc/execute-one! db
+                            ["select count(*) as count from expense_items where expense_id = ? and deleted_at is null" expense-id])))
+          count-deleted (fn []
+                          (:count
+                           (jdbc/execute-one! db
+                             ["select count(*) as count from expense_items where expense_id = ? and deleted_at is not null" expense-id])))
+          count-all (fn []
+                      (:count
+                       (jdbc/execute-one! db
+                         ["select count(*) as count from expense_items where expense_id = ?" expense-id])))]
+      (is (= 2 (count (:items exp))) "Sanity: expense created with 2 items")
+      (is (= 2 (count-active)) "Sanity: 2 active expense_items rows exist")
+      (is (= 0 (count-deleted)) "Sanity: no deleted rows before delete")
+
+      (expenses/soft-delete-expense! db expense-id)
+
+      (is (= 0 (count-active)) "Soft-deleting an expense should soft-delete its expense_items")
+      (is (= 2 (count-deleted)) "Soft-deleted expense_items remain, but have deleted_at set")
+      (is (= 2 (count-all)) "Soft delete should not physically remove expense_items rows"))))
+

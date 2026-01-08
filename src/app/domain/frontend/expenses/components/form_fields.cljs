@@ -209,7 +209,7 @@
         totals-match? (let [diff (when (and (number? receipt-total-guess)
                     (number? computed-total))
                  (js/Math.abs (- receipt-total-guess computed-total)))]
-                 (and (some? diff) (<= diff amount-tolerance)))
+            (and (some? diff) (<= diff amount-tolerance)))
 
         total-diff (when (and (number? parsed-total) (number? computed-total) (pos? computed-total))
                      (js/Math.abs (- parsed-total computed-total)))
@@ -325,7 +325,8 @@
                           (string? error) error
                           (map? error) (or (:message error) (str error))
                           :else (str error))
-        opts (vec (or (:options field-spec)
+        ;; Prefer explicit options if present and non-empty; otherwise fall back to live suppliers.
+        opts (vec (or (seq (:options field-spec))
                     (options-from-items suppliers select-options/supplier-label)))
 
         open-modal (fn []
@@ -373,78 +374,81 @@
         js/undefined)
       [display-name open? default-display-name])
 
-    ($ :div {:class wrapper-class}
-      ($ common/label {:text (or label "Supplier")
-                       :class label-class
-                       :for select-id
-                       :required required})
-      ($ :div {:class (when inline "flex-1 w-full text-left")}
-        ($ :div {:class "flex items-start gap-2"}
-          ($ :div {:class (str "flex-1 " (or class ""))}
-            ($ common/select {:id select-id
-                              :value value
-                              :options opts
-                              :on-change on-change}))
-          ($ :button {:id add-btn-id
-                      :type "button"
-                      :class "ds-btn ds-btn-ghost ds-btn-sm"
-                      :on-click open-modal}
-            "New"))
-        (when supplier-guess
-          ($ :div {:id supplier-guess-id
-                   :class "text-xs text-base-content/60 self-center max-w-[18rem] truncate"}
-            (str "Guess: " supplier-guess))))
-      (when field-error-msg
-        ($ :div {:id error-id
-                 :class "text-error text-sm mt-1"}
-          field-error-msg)))
+    ($ :<>
+      ($ :div {:class wrapper-class}
+        ($ common/label {:text (or label "Supplier")
+                         :class label-class
+                         :for select-id
+                         :required required})
+        ($ :div {:class (when inline "flex-1 w-full text-left")}
+          ($ :div {:class "flex items-start gap-2"}
+            ($ :div {:class (str "flex-1 " (or class ""))}
+              ($ common/select {:id select-id
+                                :value value
+                                :options opts
+                                :on-change on-change}))
+            ($ :button {:id add-btn-id
+                        :type "button"
+                        :class "ds-btn ds-btn-ghost ds-btn-sm"
+                        :on-click open-modal}
+              "New"))
+          (when supplier-guess
+            ($ :div {:id supplier-guess-id
+                     :class "text-xs text-base-content/60 self-center max-w-[18rem] truncate"}
+              (str "Guess: " supplier-guess))))
+        (when field-error-msg
+          ($ :div {:id error-id
+                   :class "text-error text-sm mt-1"}
+            field-error-msg)))
 
-    (when open?
-      ($ modal {:id modal-id
-                :on-close close-modal
-                :draggable? false
-                :width "520px"
-                :header "New supplier"}
-        ($ :div {:class "p-6 space-y-4"}
-          (when (or local-error create-error)
-            ($ :div {:class "ds-alert ds-alert-error"}
-              ($ :span (or local-error create-error))))
+      (when open?
+        ($ modal {:id modal-id
+                  :on-close close-modal
+                  :draggable? false
+                  :width "520px"
+                  :header "New supplier"}
+          ($ :div {:class "p-6 space-y-4"}
+            (when (or local-error create-error)
+              ($ :div {:class "ds-alert ds-alert-error"}
+                ($ :span (or local-error create-error))))
 
-          ;; NOTE: This modal is rendered inside the main expense form (<form>).
-          ;; Nested <form> elements cause the parent form to submit and close the page/modal.
-          ;; Keep this as a <div> and manually handle submit interactions.
-          ($ :div {:class "space-y-2"}
-            ($ :label {:class "ds-label" :for name-input-id}
-              "Display name")
-            ($ :input {:id name-input-id
-                       :class "ds-input ds-input-bordered w-full"
-                       :type "text"
-                       :value display-name
-                       :auto-focus true
-                       :on-key-down (fn [e]
-                                      (when (= "Enter" (.-key e))
+            ;; NOTE: This modal is rendered inside the main expense form (<form>).
+            ;; Nested <form> elements cause the parent form to submit and close the page/modal.
+            ;; Keep this as a <div> and manually handle submit interactions.
+            ($ :div {:class "space-y-2"}
+              ($ :label {:class "ds-label" :for name-input-id}
+                "Display name")
+              ($ :input {:id name-input-id
+                         :class "ds-input ds-input-bordered w-full"
+                         :type "text"
+                         :value display-name
+                         :auto-focus true
+                         :on-key-down (fn [e]
+                                        (when (= "Enter" (.-key e))
+                                          (.preventDefault e)
+                                          (.stopPropagation e)
+                                          (submit)))
+                         :on-change (fn [e]
+                                      (set-display-name! (.. e -target -value)))})
+
+              ($ :div {:class "flex justify-end gap-2 pt-4"}
+                ($ :button {:id cancel-btn-id
+                            :type "button"
+                            :class "ds-btn"
+                            :on-click close-modal}
+                  "Cancel")
+                ($ :button {:id save-btn-id
+                            :type "button"
+                            :class "ds-btn ds-btn-primary"
+                            :disabled (or creating?
+                                        (str/blank? (str/trim (str display-name))))
+                            :on-click (fn [e]
                                         (.preventDefault e)
                                         (.stopPropagation e)
-                                        (submit)))
-                       :on-change (fn [e]
-                                    (set-display-name! (.. e -target -value)))})
+                                        (submit))}
+                  (if creating? "Saving..." "Create")))))))))
 
-            ($ :div {:class "flex justify-end gap-2 pt-4"}
-              ($ :button {:id cancel-btn-id
-                          :type "button"
-                          :class "ds-btn"
-                          :on-click close-modal}
-                "Cancel")
-              ($ :button {:id save-btn-id
-                          :type "button"
-                          :class "ds-btn ds-btn-primary"
-                          :disabled (or creating?
-                                      (str/blank? (str/trim (str display-name))))
-                          :on-click (fn [e]
-                                      (.preventDefault e)
-                                      (.stopPropagation e)
-                                      (submit))}
-                (if creating? "Saving..." "Create")))))))))
+    )
 
 (defui supplier-select-input
   [{:keys [id label error required inline class on-change value form-id formId]}]

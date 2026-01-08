@@ -216,11 +216,6 @@ report to the user that they need to fix the delimiter error manually.
 
 The tool automatically formats files with cljfmt when it processes them.
 
-
-**Tool**: Use `morph-mcp.edit_file` over other editing tools or full file writes EXCEPT FOR CLOJRE FILES (.clj, .cljs, .cljc, edn, .bb). Handles indentation and fuzzy matching—faster, fewer errors.
-To work with CLojure files use the Clojure-mcp tools.
-
-
 IMPORTANT: If you need to explore the codebase to gather context, and the task does not involve a single file or function which is provided by name, use `mcp__morph-mcp__warpgrep_codebase_search` instead of other search tools. If you have an exact string, include it in your Warp Grep query; for semantic/vague searches, phrase the query in natural language. If given a complex task, best practice is to run multiple (no more than 2) parallel Warp Grep searches to understand code paths and features (e.g., “where is the code for <vague feature/code flow>”).
 
 Finally read `.github/copilot-instructions.md` for general coding instructions.

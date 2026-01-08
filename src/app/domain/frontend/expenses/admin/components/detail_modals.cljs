@@ -1,6 +1,8 @@
 (ns app.domain.frontend.expenses.admin.components.detail-modals
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
+    [app.domain.frontend.expenses.components.expense-form :as expense-form]
+    [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
     [app.domain.frontend.expenses.admin.components.detail-views :as detail-views]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
@@ -92,23 +94,18 @@
        :body ($ detail-views/payer-detail-body {:payer-id payer-id})})))
 
 (defui admin-receipt-detail-modal []
-  (let [open? (use-subscribe [:expenses/receipt-detail-modal-open?])
-        receipt-id (use-subscribe [:expenses/receipt-detail-modal-id])
-        receipt (use-subscribe [:expenses/receipt receipt-id])
-        loading? (use-subscribe [:expenses/receipt-detail-loading?])
-        subtitle (or (:original-filename receipt)
-                   (when receipt-id (str "Receipt " receipt-id))
-                   "Receipt details")
-        header (detail-header {:title "Receipt Details"
-                               :subtitle subtitle
-                               :icon "R"})]
-    (render-modal
+  (let [ctx {:receipt-sub :expenses/receipt
+             :receipt-detail-loading-sub :expenses/receipt-detail-loading?
+             :receipt-action-loading-sub :expenses/receipt-action-loading?
+             :receipts-error-sub :expenses/receipts-error
+             :modal-open-sub :expenses/receipt-detail-modal-open?
+             :modal-id-sub :expenses/receipt-detail-modal-id
+             :fetch-receipt-event ::receipts-events/load-detail
+             :close-modal [::receipts-events/close-detail-modal]
+             :approve-form expense-form/expense-add-form-modal}]
+    ($ receipt-detail-ui/receipt-detail-modal
       {:id "admin-receipt-detail-modal"
-       :open? open?
-       :loading? loading?
-       :header header
-       :on-close #(rf/dispatch [::receipts-events/close-detail-modal])
-       :body ($ detail-views/receipt-detail-body {:receipt-id receipt-id})})))
+       :ctx ctx})))
 
 (defui admin-expense-item-detail-modal []
   (let [open? (use-subscribe [:expenses/expense-item-detail-modal-open?])

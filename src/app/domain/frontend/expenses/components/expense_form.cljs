@@ -529,6 +529,22 @@
     (sequential? dirty) (seq dirty)
     :else true))
 
+(defn- payer-default?
+  [payer]
+  (boolean
+    (or (:is_default payer)
+      (:is-default payer)
+      (:isDefault payer))))
+
+(defn- default-payer-id
+  [payers]
+  (let [payers (or payers [])]
+    (or (some (fn [p]
+                (when (payer-default? p)
+                  (:id p)))
+          payers)
+      (:id (first payers)))))
+
 (defui receipt-approval-form
   [{:keys [receipt-id receipt initial-data on-cancel on-expense-saved on-review-saved]}]
   (let [suppliers (use-subscribe [:expenses/suppliers])
@@ -567,7 +583,7 @@
           ($ :span (or validation-error form-error))))
 
       ($ base/initialize-form
-        {:entity-name "expense"
+        {:entity-name "user-expense"
          :entity-spec entity-spec
          :editing false
          :initial-values form-initial-values
@@ -595,7 +611,7 @@
                        :on-submit handle-submit}
                ($ form-fields
                  (merge form-props
-                   {:entity-name "expense"
+                   {:entity-name "user-expense"
                     :editing false
                     :values values
                     :form-id form-id
@@ -642,6 +658,10 @@
   [{:keys [receipt-id initial-data on-success on-review-saved on-cancel]}]
   (let [loading? (use-subscribe [:expenses/form-loading?])
         receipt (use-subscribe [:expenses/receipt receipt-id])
+  payers (or (use-subscribe [:expenses/payers]) [])
+  payers-loading? (boolean (use-subscribe [:expenses/payers-loading?]))
+  [requested? set-requested!] (use-state false)
+  [prepared-initial-data set-prepared-initial-data!] (use-state nil)
         default-supplier-display-name (use-memo
                                         #(when receipt (receipt-merchant-name receipt))
                                         [receipt])
@@ -655,14 +675,46 @@
         merged-initial-data (use-memo
                               #(merge receipt-initial-data initial-data)
                               [receipt-initial-data initial-data])]
+
+    ;; For receipt approval, load dependencies early so we can preselect defaults
+    ;; before the form mounts (avoids Fork resetting mid-edit).
+    (use-effect
+      (fn []
+        (when receipt-id
+          (set-requested! true)
+          (rf/dispatch [::suppliers-events/load-list {:limit 100 :offset 0}])
+          (rf/dispatch [::payers-events/load-list {:limit 100 :offset 0}]))
+        js/undefined)
+      [receipt-id])
+
+    ;; Lock in initial values once payers have loaded so the payer default is selected.
+    (use-effect
+      (fn []
+        (when (and receipt-id
+                requested?
+                (nil? prepared-initial-data)
+                (or (seq payers) (not payers-loading?)))
+          (let [existing-payer-id (some-> (:payer_id merged-initial-data) str str/trim not-empty)
+                default-id (some-> (default-payer-id payers) str str/trim not-empty)
+                prepared (cond-> merged-initial-data
+                           (and (nil? existing-payer-id) default-id)
+                           (assoc :payer_id default-id))]
+            (set-prepared-initial-data! prepared)))
+        js/undefined)
+      [receipt-id requested? prepared-initial-data payers payers-loading? merged-initial-data])
+
     (if receipt-id
-      ($ receipt-approval-form
-        {:receipt-id receipt-id
-         :receipt receipt
-         :initial-data merged-initial-data
-         :on-cancel on-cancel
-         :on-review-saved on-review-saved
-         :on-expense-saved on-success})
+      (if (nil? prepared-initial-data)
+        ($ :div {:class "flex justify-center p-6"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-md text-primary"}))
+
+        ($ receipt-approval-form
+          {:receipt-id receipt-id
+           :receipt receipt
+           :initial-data prepared-initial-data
+           :on-cancel on-cancel
+           :on-review-saved on-review-saved
+           :on-expense-saved on-success}))
 
       ($ expense-form-body
         {:mode :create

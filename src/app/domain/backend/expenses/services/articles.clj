@@ -182,6 +182,7 @@
                  :join [[:expenses :e] [:= :e.id :ei.expense_id]]
                  :where [:and
                          [:is :ei.article_id nil]
+                         [:is :ei.deleted_at nil]
                          [:is :e.deleted_at nil]]
                  :order-by [[:ei.created_at :desc]]
                  :limit limit
@@ -198,7 +199,10 @@
                               (sql/format {:select [:ei.* [:e.supplier_id] [:e.currency] [:e.purchased_at]]
                                            :from [[:expense_items :ei]]
                                            :join [[:expenses :e] [:= :e.id :ei.expense_id]]
-                                           :where [:= :ei.id item-id]})
+                                           :where [:and
+                                                   [:= :ei.id item-id]
+                                                   [:is :ei.deleted_at nil]
+                                                   [:is :e.deleted_at nil]]})
                               {:builder-fn rs/as-unqualified-lower-maps})]
       (when-not item-with-expense
         (throw (ex-info "Expense item not found" {:id item-id})))
@@ -208,7 +212,9 @@
                       tx
                       (sql/format {:update :expense_items
                                    :set {:article_id article-id}
-                                   :where [:= :id item-id]
+                                   :where [:and
+                                           [:= :id item-id]
+                                           [:is :deleted_at nil]]
                                    :returning [:*]})
                       {:builder-fn rs/as-unqualified-lower-maps})]
         (when create-alias?

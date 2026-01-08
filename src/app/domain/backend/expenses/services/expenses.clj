@@ -287,7 +287,9 @@
                                     tx
                                     (sql/format {:select [:id]
                                                  :from [:expense_items]
-                                                 :where [:= :expense_id id]})
+                                                 :where [:and
+                                                         [:= :expense_id id]
+                                                         [:is :deleted_at nil]]})
                                     {:builder-fn rs/as-unqualified-lower-maps})
                                (map :id)
                                (into #{}))
@@ -305,13 +307,19 @@
                                items*)
                 ;; Follow-up behavior: auto-link only newly inserted items, never existing ones.
                 insert-items (auto-link-items-to-articles tx (:supplier_id expense) insert-items)
-                delete-where (if (seq keep-ids)
-                               [:and
-                                [:= :expense_id id]
-                                [:not [:in :id keep-ids]]]
-                               [:= :expense_id id])]
-            (jdbc/execute! tx (sql/format {:delete-from :expense_items
-                                           :where delete-where}))
+                soft-delete-where (if (seq keep-ids)
+                                    [:and
+                                     [:= :expense_id id]
+                                     [:is :deleted_at nil]
+                                     [:not [:in :id keep-ids]]]
+                                    [:and
+                                     [:= :expense_id id]
+                                     [:is :deleted_at nil]])]
+            ;; Soft-delete removed items.
+            (jdbc/execute! tx
+              (sql/format {:update :expense_items
+                           :set {:deleted_at [:now]}
+                           :where soft-delete-where}))
             (doseq [item update-items]
               (require-keys! item [:raw_label :line_total])
               (jdbc/execute! tx
@@ -319,7 +327,8 @@
                              :set (select-keys item [:raw_label :article_id :qty :unit_price :line_total])
                              :where [:and
                                      [:= :id (:id item)]
-                                     [:= :expense_id id]]})))
+                                     [:= :expense_id id]
+                                     [:is :deleted_at nil]]})))
             (let [item-rows (map (fn [{:keys [raw_label article_id qty unit_price line_total] :as item}]
                                    (require-keys! item [:raw_label :line_total])
                                    {:id (UUID/randomUUID)
@@ -357,7 +366,8 @@
 
   Rules:
   - Only applies when the receipt is currently linked to this expense.
-  - Only reverts receipts in status \"posted\".
+  - Always clears the receipt's :expense_id link.
+  - Only reverts receipts in status \"posted\" back to \"extracted\".
 
   NOTE: We revert to \"extracted\" (approvable); there is no \"exported\" receipt status
   (\"exported\" refers to the local file storage subdir used during posting)."
@@ -367,17 +377,26 @@
       tx
       (sql/format {:update :receipts
                    :set {:expense_id nil
-                         :status [:cast "extracted" :receipt_status]
+                         ;; If the receipt was posted, revert it to an approvable state.
+                         ;; If it was already reverted/reset to a different status, keep it
+                         ;; but still clear the now-invalid expense link.
+                         :status [:raw "CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END"]
                          :updated_at [:now]}
                    :where [:and
                            [:= :id receipt_id]
-                           [:= :expense_id id]
-                           [:= :status [:cast "posted" :receipt_status]]]
+                           [:= :expense_id id]]
                    :returning [:*]})
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn soft-delete-expense!
   "Soft delete expense.
+
+  In addition to marking the expense as deleted, this also soft-deletes all expense_items
+  that belong to the expense by setting their :deleted_at timestamp.
+
+  NOTE: The DB has a FK from expense_items.expense_id -> expenses.id with ON DELETE
+  CASCADE, but since we implement expense deletion as a *soft delete* (update), the
+  FK cascade does not apply.
 
   If the expense is linked to a receipt (via :receipt_id and the receipt's :expense_id),
   the receipt is reverted to an approvable status so it can be deleted or processed again."
@@ -392,6 +411,14 @@
                                               [:is :deleted_at nil]]
                                       :returning [:*]})
                          {:builder-fn rs/as-unqualified-lower-maps})]
+      ;; Soft-delete line items for the deleted expense.
+      (jdbc/execute!
+        tx
+        (sql/format {:update :expense_items
+                     :set {:deleted_at [:now]}
+                     :where [:and
+                             [:= :expense_id id]
+                             [:is :deleted_at nil]]}))
       (revert-linked-receipt-after-expense-delete! tx deleted)
       deleted)))
 
@@ -414,7 +441,9 @@
                 db
                 (sql/format {:select [:*]
                              :from [:expense_items]
-                             :where [:= :expense_id id]
+                             :where [:and
+                                     [:= :expense_id id]
+                                     [:is :deleted_at nil]]
                              :order-by [[:created_at :asc]]})
                 {:builder-fn rs/as-unqualified-lower-maps})]
     (when expense

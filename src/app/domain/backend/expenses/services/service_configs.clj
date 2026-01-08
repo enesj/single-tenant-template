@@ -182,6 +182,9 @@
   {:table-name "expense_items"
    :table-alias :ei
    :primary-key :ei/id
+   ;; Hide soft-deleted line items and items belonging to soft-deleted expenses.
+   :base-filters [[:is :ei/deleted_at nil]
+                  [:is :e/deleted_at nil]]
    :required-fields [:expense_id :raw_label :line_total]
    :allowed-order-by {:expense-id :ei/expense_id
                       :raw-label :ei/raw_label

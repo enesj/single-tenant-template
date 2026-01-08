@@ -8,10 +8,11 @@
   (fn [db _]
     (get-in db (conj base-path :items))))
 
-#_(rf/reg-sub
-    :expenses/payers-loading?
-    (fn [db _]
-      (true? (get-in db (conj base-path :loading?)))))
+;; Used by receipt approval flows to delay form mount until defaults can be applied.
+(rf/reg-sub
+  :expenses/payers-loading?
+  (fn [db _]
+    (true? (get-in db (conj base-path :loading?)))))
 
 #_(rf/reg-sub
     :expenses/payers-error

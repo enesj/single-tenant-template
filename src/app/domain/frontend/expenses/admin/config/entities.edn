@@ -45,6 +45,12 @@
  {:entity-key :receipts
   :page-title "Receipts"
   :page-description "Receipt inbox and parsing statuses"
+  :entity-spec
+  {:id :receipts
+   :fields [{:id :original-filename :label "File" :type :text}
+            {:id :status :label "Status" :type :text}
+            {:id :supplier-guess :label "Supplier guess" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}]}
   :display-settings {:show-select? true
                      :show-edit? false
                      :show-delete? false

@@ -96,7 +96,9 @@
                     db
                     (sql/format {:select [:*]
                                  :from [:expense_items]
-                                 :where [:= :expense_id expense-id]
+                                 :where [:and
+                                         [:= :expense_id expense-id]
+                                         [:is :deleted_at nil]]
                                  :order-by [[:created_at :asc]]})
                     {:builder-fn rs/as-unqualified-lower-maps}))]
       (when expense

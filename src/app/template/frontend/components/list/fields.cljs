@@ -101,8 +101,11 @@
           field-type (:type field)
           text-value (str (if (keyword? value) (name value) (or value "")))
 
-          status-str (when (= field-id :status)
-                       (some-> text-value str/trim not-empty))
+          ;; Check for status field - handle both keyword and string field IDs
+          status-field-id? (or (= field-id :status)
+                                (= field-id "status")
+                                (= (name field-id) "status"))
+          status-str (when status-field-id? (some-> text-value str/trim not-empty))
           status-lower (some-> status-str str/lower-case)
 
           ;; JSON detection based only on field type from database schema
