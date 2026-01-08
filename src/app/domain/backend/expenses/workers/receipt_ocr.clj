@@ -35,10 +35,6 @@
              [:subtotal {:optional true} [:maybe [:or number? string?]]]
              [:tax {:optional true} [:maybe [:or number? string?]]]
              [:total [:or number? string?]]]]
-   [:payment_hints {:optional true}
-    [:maybe [:map {:closed false}
-             [:method {:optional true} [:maybe string?]]
-             [:card_last4 {:optional true} [:maybe string?]]]]]
    [:items [:sequential [:map {:closed false}
                          [:raw_label string?]
                          [:qty {:optional true} [:maybe [:or number? string?]]]
@@ -143,20 +139,17 @@
        :path (.getPath file)})))
 
 (defn- extraction->guesses
-  [{:keys [merchant totals currency purchased_at payment_hints items]} {:keys [default-currency]}]
+  [{:keys [merchant totals currency purchased_at items]} {:keys [default-currency]}]
   (let [supplier (some-> merchant :name str/trim not-empty)
         total (parse-money (some-> totals :total))
         currency* (normalize-currency currency (or default-currency "BAM"))
         purchased-at (some-> purchased_at parse-instant)
         purchased-at-ts (some-> purchased-at Timestamp/from)
-        payment (when (map? payment_hints)
-                  (select-keys payment_hints [:method :card_last4]))
         items-count (if (sequential? items) (count items) 0)]
     {:supplier_guess supplier
      :total_amount_guess total
      :currency_guess currency*
      :purchased_at_guess purchased-at-ts
-     :payment_hints payment
      :items-count items-count}))
 
 (defn- review-required?
@@ -675,8 +668,7 @@
         (select-keys guesses [:supplier_guess
                               :total_amount_guess
                               :currency_guess
-                              :purchased_at_guess
-                              :payment_hints])))
+                              :purchased_at_guess])))
     (receipts/update-status! db receipt-id status {:error_message nil :error_details nil})
     {:receipt-id receipt-id :stage :extract :result :ok :status status}))
 

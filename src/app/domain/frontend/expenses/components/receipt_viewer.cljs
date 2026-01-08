@@ -267,7 +267,7 @@
   [{:keys [receipt show-summary?] :or {show-summary? true}}]
   (let [{:keys [status original-filename content-type file-size storage-key
                 supplier-guess total-amount-guess currency-guess purchased-at-guess
-                payment-hints error-message error-details raw-parse-json raw-extract-json
+                error-message error-details raw-parse-json raw-extract-json
                 parsed-markdown expense-id retry-count created-at updated-at]} receipt
         status-label (shared/format-value status "—" false)]
     ($ :div {:class "grid gap-6 lg:grid-cols-2"}
@@ -312,11 +312,6 @@
             {:title "Raw Extract JSON"
              :json-value raw-extract-json
              :max-height "max-h-96"}))
-        (when (seq payment-hints)
-          ($ json-display-card
-            {:title "Payment Hints"
-             :json-value payment-hints
-             :max-height "max-h-80"}))
         (when (seq error-details)
           ($ json-display-card
             {:title "Error Details"

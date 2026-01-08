@@ -176,7 +176,7 @@ Key columns we will populate/update:
 - `storage_key`, `file_hash`, `original_filename`, `content_type`, `file_size`
 - `status` (`uploaded|parsing|parsed|extracting|extracted|review_required|approved|posted|failed`)
 - Parse: `raw_parse_json`, `parsed_markdown`
-- Extract: `raw_extract_json`, plus convenience guesses: `supplier_guess`, `total_amount_guess`, `currency_guess`, `purchased_at_guess`, `payment_hints`
+- Extract: `raw_extract_json`, plus convenience guesses: `supplier_guess`, `total_amount_guess`, `currency_guess`, `purchased_at_guess`
 - Errors: `error_message`, `error_details`, `retry_count`
 
 Extracted line items should live inside `raw_extract_json` until an admin approves; on approval, canonical `expense_items` are created via `approve-and-post!`.
@@ -210,13 +210,6 @@ We store the full structured output payload in `receipts.raw_extract_json` (JSON
         "total": {"type": "number"}
       },
       "required": ["total"]
-    },
-    "payment_hints": {
-      "type": ["object", "null"],
-      "properties": {
-        "method": {"type": ["string", "null"], "description": "cash|card|account|person|unknown"},
-        "card_last4": {"type": ["string", "null"]}
-      }
     },
     "items": {
       "type": "array",
@@ -377,7 +370,7 @@ When approving extracted receipts, the expense form requires selecting a `suppli
 - Expected fields to be populated by the worker:
   - `raw_parse_json`, `parsed_markdown`
   - `raw_extract_json`
-  - guess fields: `supplier_guess`, `total_amount_guess`, `currency_guess`, `purchased_at_guess`, `payment_hints`
+  - guess fields: `supplier_guess`, `total_amount_guess`, `currency_guess`, `purchased_at_guess`
 
 4) Admin review
 - Admin receipts list/detail should show:

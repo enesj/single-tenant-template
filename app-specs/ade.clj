@@ -28,7 +28,7 @@
 
 (defn ade-api-key []
   (or (env "VISION_AGENT_API_KEY")
-      (throw (ex-info "Missing env var VISION_AGENT_API_KEY" {}))))
+    (throw (ex-info "Missing env var VISION_AGENT_API_KEY" {}))))
 
 (defn auth-headers []
   {"Authorization" (str "Bearer " (ade-api-key))})
@@ -43,7 +43,7 @@
   "Retry on transient errors commonly seen with hosted APIs."
   [status]
   (or (= status 429)
-      (<= 500 status 599)))
+    (<= 500 status 599)))
 
 (defn- request-with-retry
   "Simple exponential backoff retry for transient statuses."
@@ -56,12 +56,12 @@
         (<= 200 status 299) resp
         (and (< attempt max-attempts) (retry? status))
         (do (Thread/sleep delay-ms)
-            (recur (inc attempt) (min 5000 (* 2 delay-ms))))
+          (recur (inc attempt) (min 5000 (* 2 delay-ms))))
         :else
         (throw (ex-info "ADE request failed"
-                        {:status status
-                         :headers (:headers resp)
-                         :body (:body resp)}))))))
+                 {:status status
+                  :headers (:headers resp)
+                  :body (:body resp)}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; ADE Schemas (Totals + Line Items) - as a Clojure map; encoded to JSON string.
@@ -70,7 +70,7 @@
 (def pos-receipt-schema
   {:type "object"
    :title "POS Receipt - Totals + Line Items"
-   :description "Extract supplier, purchase datetime, total, optional payment hints, and line items for price comparison."
+   :description "Extract supplier, purchase datetime, total, and line items for price comparison."
    :properties
    {:supplier {:type "object"
                :title "Supplier / Merchant"
@@ -92,13 +92,6 @@
                          :currency {:type "string" :nullable true :description "Currency code if present."}}
             :required ["amount"]}
 
-    :payment_hints {:type "object"
-                    :title "Payment Hints"
-                    :nullable true
-                    :description "Optional hints used to auto-suggest payer; user can override."
-                    :properties {:method {:type "string" :nullable true :enum ["cash" "card" "unknown"]}
-                                 :card_last4 {:type "string" :nullable true :description "Last 4 digits if printed."}}}
-
     :line_items {:type "array"
                  :title "Line Items"
                  :description "Items purchased as printed on the receipt. Use this for article normalization + price comparisons."
@@ -112,7 +105,7 @@
                          :required ["raw_label" "line_total"]
                          :propertyOrdering ["raw_label" "qty" "unit_price" "line_total"]}}}
    :required ["supplier" "total"]
-   :propertyOrdering ["supplier" "purchased_at" "total" "payment_hints" "line_items"]})
+   :propertyOrdering ["supplier" "purchased_at" "total" "line_items"]})
 
 (defn schema->json ^String [schema-map]
   ;; don't pretty print to keep payload small
@@ -136,11 +129,11 @@
       (throw (ex-info "File not found" {:file-path file-path})))
     (request-with-retry
       #(http/post url
-                  (merge default-http-opts
-                         {:headers (auth-headers)
-                          :multipart (cond-> [{:name "document" :content f}]
-                                             {:name "model" :content model}
-                                       split (conj {:name "split" :content split}))}))
+         (merge default-http-opts
+           {:headers (auth-headers)
+            :multipart (cond-> [{:name "document" :content f}]
+                         {:name "model" :content model}
+                         split (conj {:name "split" :content split}))}))
       {:max-attempts max-attempts})))
 
 ;; -----------------------------------------------------------------------------
@@ -167,11 +160,11 @@
     (try
       (request-with-retry
         #(http/post url
-                    (merge default-http-opts
-                           {:headers (auth-headers)
-                            :multipart [{:name "markdown" :content md-file}
-                                        {:name "schema" :content schema-json}
-                                        {:name "model" :content model}]}))
+           (merge default-http-opts
+             {:headers (auth-headers)
+              :multipart [{:name "markdown" :content md-file}
+                          {:name "schema" :content schema-json}
+                          {:name "model" :content model}]}))
         {:max-attempts max-attempts})
       (finally
         (try (.delete ^File md-file) (catch Exception _))))))
@@ -183,9 +176,9 @@
     :or {parse-model "dpt-2-latest"
          extract-model "extract-latest"}}]
   (let [parse-resp (ade-parse-file {:file-path file-path}
-                                   :model parse-model
-                                   :split split
-                                   :max-attempts max-attempts)
+                     :model parse-model
+                     :split split
+                     :max-attempts max-attempts)
         markdown   (get-in parse-resp [:body "markdown"])
         schema     (schema->json pos-receipt-schema)
         extract-resp (ade-extract-markdown {:markdown markdown

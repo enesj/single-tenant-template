@@ -100,7 +100,6 @@ A household member tracking spending.
   - Supplier (autocomplete + create new)
   - Purchased date/time (date picker + time picker)
   - Total (numeric)
-  - Payment hints → suggest payer
   - Line items table (editable)
 - Buttons:
   - “Save Draft” (keeps receipt, not in reports)
@@ -348,7 +347,7 @@ This is the “money feature”: compare the same product across suppliers.
 - Supplier selector
 - Purchased at picker
 - Total amount
-- Payer selector (with suggestion from payment_hints)
+- Payer selector
 - Line items editable grid
 - “Approve & Post” and “Save Draft”
 

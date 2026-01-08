@@ -177,7 +177,6 @@ Create `resources/db/domain/models.edn` with the following tables:
                     [:total_amount_guess [:decimal 12 2]]
                     [:currency_guess [:enum :currency]]
                     [:purchased_at_guess :timestamptz]
-                    [:payment_hints :jsonb]  ;; {method: "card", card_last4: "1234"}
                     [:error_message :text]
                     [:error_details :jsonb]
                     [:retry_count :integer {:default 0}]
@@ -335,7 +334,6 @@ src/app/domain/expenses/services/
 (defn create-payer! [db data] ...)
 (defn list-payers [db] ...)
 (defn get-default-payer [db type] ...)
-(defn suggest-payer [db payment-hints] ...)  ;; From ADE hints
 ```
 
 #### `app.domain.expenses.services.receipts`

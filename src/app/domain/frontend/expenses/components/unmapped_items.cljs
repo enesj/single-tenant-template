@@ -75,19 +75,43 @@
         [mode set-mode!] (use-state :existing)
         [existing-article-id set-existing-article-id!] (use-state "")
         [new-article-name set-new-article-name!] (use-state "")
+        ;; Tracks the last auto-prefilled name so we can safely update the suggestion
+        ;; when the selected raw label changes (without overwriting user edits).
+        [auto-prefill-name set-auto-prefill-name!] (use-state nil)
         [create-aliases? set-create-aliases!] (use-state true)
         [allow-reassign? set-allow-reassign!] (use-state false)]
+
+    (use-effect
+      (fn []
+        ;; Reset local modal state on each open so we don't keep stale values between runs.
+        ;; (This component stays mounted while the modal is closed.)
+        (when open?
+          (set-mode! :existing)
+          (set-existing-article-id! "")
+          (set-new-article-name! "")
+          (set-auto-prefill-name! nil)
+          (set-create-aliases! true)
+          (set-allow-reassign! false))
+        js/undefined)
+      [open?])
 
     (use-effect
       (fn []
         (when open?
           ;; Ensure lookups exist for select inputs.
           (rf/dispatch [::unmapped-events/load-lookups])
-          ;; UX: in create-new mode, prefill with first label.
-          (when (and (= mode :new) (str/blank? new-article-name) (seq labels))
-            (set-new-article-name! (first labels))))
+          ;; UX: in create-new mode, prefill with first label, and keep it in sync with
+          ;; selection changes *only* while the user hasn't edited the input.
+          (when (and (= mode :new) (seq labels))
+            (let [desired (first labels)
+                  can-autofill? (or (str/blank? new-article-name)
+                                  (= new-article-name auto-prefill-name))]
+              (when (and can-autofill? (not= new-article-name desired))
+                (set-new-article-name! desired))
+              (when (and can-autofill? (not= auto-prefill-name desired))
+                (set-auto-prefill-name! desired)))))
         js/undefined)
-      [open? mode new-article-name labels])
+      [open? mode new-article-name auto-prefill-name labels])
 
     ($ modal-wrapper
       {:visible? open?
@@ -143,7 +167,11 @@
                              :class "ds-input ds-input-bordered w-full"
                              :disabled (or working? lookups-loading?)
                              :value new-article-name
-                             :on-change (fn [e] (set-new-article-name! (.. e -target -value)))})))
+                             :on-change (fn [e]
+                                          (let [v (.. e -target -value)]
+                                            (set-new-article-name! v)
+                                            ;; Any manual edit disables future auto-updates.
+                                            (set-auto-prefill-name! nil)))})))
 
               ;; default: :existing
               ($ :div {:class "space-y-2"}

@@ -4,7 +4,6 @@ This document defines the **LandingAI ADE Extract** schema used to extract:
 - Supplier (merchant) data
 - Purchase date/time
 - Total amount (no subtotals/tax)
-- Optional payment hints (for payer auto-suggestion)
 - Line items (for article DB + price comparisons)
 
 Use this schema with the ADE **Extract** endpoint or the `landingai-ade` TypeScript library by passing it as the `schema` argument in your Extract request. The Extract API accepts a JSON schema object in the `schema` field. 
@@ -22,8 +21,6 @@ Use this schema with the ADE **Extract** endpoint or the `landingai-ade` TypeScr
 - `supplier.tax_id`
 - `purchased_at`
 - `total.currency`
-- `payment_hints.method`
-- `payment_hints.card_last4`
 - `line_items[]` (can be empty, but included for price comparison)
 
 ---
@@ -32,14 +29,13 @@ Use this schema with the ADE **Extract** endpoint or the `landingai-ade` TypeScr
 
 > Notes:
 > - `purchased_at` allows `date-time`, `date`, or freeform string to handle receipts that don’t format cleanly.
-> - `payment_hints` is used to **suggest** a payer; the user can override in UI.
 > - `line_items[].raw_label` retains the original receipt wording to support later normalization/matching.
 
 ```json
 {
   "type": "object",
   "title": "POS Receipt - Totals + Line Items",
-  "description": "Extract supplier, purchase datetime, total, optional payment hints, and line items for price comparison.",
+  "description": "Extract supplier, purchase datetime, total, and line items for price comparison.",
   "properties": {
     "supplier": {
       "type": "object",
@@ -73,16 +69,6 @@ Use this schema with the ADE **Extract** endpoint or the `landingai-ade` TypeScr
       "required": ["amount"]
     },
 
-    "payment_hints": {
-      "type": "object",
-      "title": "Payment Hints",
-      "nullable": true,
-      "description": "Optional hints used to auto-suggest payer; user can override.",
-      "properties": {
-        "method": { "type": "string", "nullable": true, "enum": ["cash", "card", "unknown"] },
-        "card_last4": { "type": "string", "nullable": true, "description": "Last 4 digits if printed." }
-      }
-    },
 
     "line_items": {
       "type": "array",
@@ -121,5 +107,5 @@ Use this schema with the ADE **Extract** endpoint or the `landingai-ade` TypeScr
     }
   },
   "required": ["supplier", "total"],
-  "propertyOrdering": ["supplier", "purchased_at", "total", "payment_hints", "line_items"]
+  "propertyOrdering": ["supplier", "purchased_at", "total", "line_items"]
 }

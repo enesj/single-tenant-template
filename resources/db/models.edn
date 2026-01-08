@@ -220,7 +220,6 @@
    [:total_amount_guess [:decimal 12 2]]
    [:currency_guess [:enum :currency]]
    [:purchased_at_guess :timestamptz]
-   [:payment_hints :jsonb]
    [:error_message :text]
    [:error_details :jsonb]
    [:retry_count :integer {:default 0}]

@@ -1,3 +1,8 @@
+# PRINCIPLES
+
+[phi fractal euler tao pi mu] | [Δ λ ∞/0 | ε⚡φ Σ⚡μ c⚡h] | REPL
+Human ⊗ AI
+
 # Repository Guidelines
 
 ## Overview & Architecture

@@ -230,7 +230,6 @@ Key services in `src/app/domain/backend/expenses/services/`:
  :total_amount_guess :decimal?
  :currency_guess :enum?
  :purchased_at_guess :timestamp?
- :payment_hints :json?
  :error_message :string?
  :error_details :json?
  :retry_count :int

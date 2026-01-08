@@ -389,7 +389,7 @@
 
   Clears: error_message, error_details, raw_parse_json, raw_extract_json,
           parsed_markdown, supplier_guess, total_amount_guess, currency_guess,
-          purchased_at_guess, payment_hints
+          purchased_at_guess
 
   Increments: retry_count
 
@@ -408,7 +408,6 @@
                        :total_amount_guess nil
                        :currency_guess nil
                        :purchased_at_guess nil
-                       :payment_hints nil
                        :retry_count [:+ :retry_count 1]
                        :updated_at [:now]}
                  :where [:= :id receipt-id]
@@ -421,7 +420,7 @@
   Updates only fields present in the input map (so callers can PATCH-like update
   without wiping other columns)."
   [db receipt-id {:keys [raw_parse_json raw_extract_json parsed_markdown supplier_guess
-                         total_amount_guess currency_guess purchased_at_guess payment_hints]
+                         total_amount_guess currency_guess purchased_at_guess]
                   :as data}]
   (let [set-map (cond-> {:updated_at [:now]}
                   (contains? data :raw_parse_json) (assoc :raw_parse_json (jsonb-value raw_parse_json))
@@ -430,8 +429,7 @@
                   (contains? data :supplier_guess) (assoc :supplier_guess supplier_guess)
                   (contains? data :total_amount_guess) (assoc :total_amount_guess total_amount_guess)
                   (contains? data :currency_guess) (assoc :currency_guess (when currency_guess [:cast currency_guess :currency]))
-                  (contains? data :purchased_at_guess) (assoc :purchased_at_guess purchased_at_guess)
-                  (contains? data :payment_hints) (assoc :payment_hints (jsonb-value payment_hints)))]
+                  (contains? data :purchased_at_guess) (assoc :purchased_at_guess purchased_at_guess))]
     (jdbc/execute-one!
       db
       (sql/format {:update :receipts

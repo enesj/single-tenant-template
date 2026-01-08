@@ -57,14 +57,7 @@
                                    "description" "Total tax amount if present."}
                             "total" {"type" "number"
                                      "description" "Grand total paid; prefer the final total."}}
-              "required" ["total"]}
-
-    "payment_hints" {"type" ["object" "null"]
-                     "description" "Optional hints about the payment method."
-                     "properties" {"method" {"type" ["string" "null"]
-                                             "description" "cash|card|account|person|unknown"}
-                                   "card_last4" {"type" ["string" "null"]
-                                                 "description" "Last 4 digits if present."}}}}
+              "required" ["total"]}}
    "required" ["totals"]})
 
 (defn build-config
