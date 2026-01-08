@@ -9,6 +9,7 @@
     [app.domain.frontend.expenses.events.expense-items :as expense-items-events]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
+    [app.domain.frontend.expenses.events.unmapped-items :as unmapped-items-events]
     [app.domain.frontend.expenses.pages.admin.expense-detail :as expense-detail]
     [app.domain.frontend.expenses.pages.admin.expense-list :as expense-list]
     [app.domain.frontend.expenses.pages.admin.expense-items :as expense-items]
@@ -20,6 +21,7 @@
     [app.domain.frontend.expenses.pages.admin.supplier-detail :as supplier-detail]
     [app.domain.frontend.expenses.pages.admin.articles :as articles]
     [app.domain.frontend.expenses.pages.admin.article-detail :as article-detail]
+    [app.domain.frontend.expenses.pages.admin.unmapped-items :as unmapped-items]
     [app.domain.frontend.expenses.pages.admin.article-aliases :as article-aliases]
     [app.domain.frontend.expenses.pages.admin.article-alias-detail :as article-alias-detail]
     [app.domain.frontend.expenses.pages.admin.price-observations :as price-observations]
@@ -149,6 +151,15 @@
      :controllers [(guarded-start (fn [params]
                                     (when-let [article-id (get-in params [:path-params :id])]
                                       [[::articles-events/load-detail article-id]])))]}]
+
+   ;; Unmapped items
+   ["/unmapped-items"
+    {:name :admin-unmapped-items
+     :view unmapped-items/admin-unmapped-items-page
+     :controllers [(guarded-start (fn [{:keys [query]}]
+                                    (let [params (list-params query)]
+                                      [[::unmapped-items-events/load-unmapped-items params]])))]}]
+
    ;; Article aliases
    ["/article-aliases"
     {:name :admin-article-aliases

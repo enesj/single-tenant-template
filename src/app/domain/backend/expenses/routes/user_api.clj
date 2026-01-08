@@ -5,6 +5,7 @@
    Path prefix for this router is /expenses."
   (:require
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
+    [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-expenses :as user-expenses-handlers]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
 
@@ -52,6 +53,18 @@
    ["/receipts/:id/approve" {:post {:handler (user-receipts/approve-receipt-handler db)}}]
    ["/receipts/:id/review" {:post {:handler (user-receipts/save-receipt-review-handler db)}}]
    ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
+
+   ;; Articles + unmapped items (role-gated to admin/owner)
+   ;; IMPORTANT: Must come before the "/:id" expense route.
+   ["/articles"
+    ["" {:get {:handler (user-articles/list-articles-handler db)}
+         :post {:handler (user-articles/create-article-handler db)}}]
+
+    ["/unmapped-items" {:get {:handler (user-articles/list-unmapped-items-handler db)}}]
+
+    ["/items/:item-id/map" {:post {:handler (user-articles/map-item-to-article-handler db)}}]
+
+    ["/:id/aliases" {:post {:handler (user-articles/batch-create-aliases-handler db)}}]]
 
    ;; Expenses CRUD
    ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}

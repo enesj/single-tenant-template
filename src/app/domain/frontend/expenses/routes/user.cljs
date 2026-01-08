@@ -25,6 +25,12 @@
      :view :expenses-dashboard
      :controllers (controllers/make-simple-controller :page/init-expenses-dashboard)}]
 
+   ;; Admin/owner-only power-user page
+   ["/unmapped-items"
+    {:name :unmapped-items
+     :view :unmapped-items
+     :controllers (controllers/make-simple-controller :page/init-unmapped-items)}]
+
    ;; Explicit nested dashboard path to avoid catching by /expenses/:expense-id
    ["/expenses/dashboard"
     {:name :expenses-dashboard-alias

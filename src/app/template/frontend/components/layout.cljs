@@ -8,7 +8,8 @@
                                                     payers-icon
                                                     receipts-icon
                                                     settings-icon
-                                                    suppliers-icon]]
+                                                    suppliers-icon
+                                                    unmapped-items-icon]]
     [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
     [reitit.frontend.easy :as rtfe]
@@ -28,12 +29,22 @@
    :active? active?
    :on-click (fn [e] (stop-and-push! e route))})
 
+(defn- normalize-role
+  [role]
+  (cond
+    (keyword? role) (name role)
+    (string? role) role
+    :else nil))
+
 (defui user-sidebar []
   (let [current-route (use-subscribe [:current-route])
+        role (normalize-role (use-subscribe [:user-role]))
+        power-user? (contains? #{"admin" "owner"} role)
         route-name (or (get-in current-route [:data :name]) (:name current-route))
         active? (fn [names] (contains? names route-name))
 
-        expense-items [(nav-item {:id "user-sidebar-dashboard"
+        expense-items (cond->
+                       [(nav-item {:id "user-sidebar-dashboard"
                                   :label "Dashboard"
                                   :href "/dashboard"
                                   :route :user-dashboard
@@ -73,6 +84,13 @@
                                   :route :expense-settings
                                   :icon ($ settings-icon {:class "w-6 h-6"})
                                   :active? (active? #{:expense-settings})})]
+                       power-user?
+                       (conj (nav-item {:id "user-sidebar-unmapped-items"
+                                       :label "Unmapped Items"
+                                       :href "/unmapped-items"
+                                       :route :unmapped-items
+                                       :icon ($ unmapped-items-icon {:class "w-6 h-6"})
+                                       :active? (active? #{:unmapped-items})})))
 
         reference-items [(nav-item {:id "user-sidebar-suppliers"
                                     :label "Suppliers"

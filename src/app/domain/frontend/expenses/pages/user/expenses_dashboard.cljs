@@ -66,8 +66,9 @@
 ;; Quick Action Component
 ;; ========================================================================
 
-(defui quick-action [{:keys [title description icon on-click]}]
-  ($ :button {:class "flex items-center gap-4 p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md hover:border-slate-200 transition-all text-left w-full"
+(defui quick-action [{:keys [id title description icon on-click]}]
+  ($ :button {:id id
+              :class "flex items-center gap-4 p-4 bg-white rounded-xl shadow-sm border border-slate-100 hover:shadow-md hover:border-slate-200 transition-all text-left w-full"
               :on-click on-click}
     ($ :div {:class "p-3 bg-blue-50 rounded-lg text-blue-600"}
       ($ :span {:class "text-2xl"} icon))
@@ -120,6 +121,12 @@
 
 (defui expenses-dashboard-page []
   (let [user (use-subscribe [:current-user])
+        role (use-subscribe [:user-role])
+        role-str (cond
+                   (keyword? role) (name role)
+                   (string? role) role
+                   :else nil)
+        power-user? (contains? #{"admin" "owner"} role-str)
         user-name (or (:full_name user) (:full-name user) "there")
         summary (or (use-subscribe [:user-expenses/summary]) {})
         summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
@@ -226,15 +233,24 @@
           ;; Quick Actions
           ($ :div {:class "space-y-4"}
             ($ :h2 {:class "font-semibold text-slate-900"} "Quick Actions")
-            ($ quick-action {:title "Upload Receipt"
+            ($ quick-action {:id "btn-quick-upload-receipt"
+                             :title "Upload Receipt"
                              :description "Scan or upload a receipt"
                              :icon "📷"
                              :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])})
-            ($ quick-action {:title "Add Expense"
+            ($ quick-action {:id "btn-quick-add-expense"
+                             :title "Add Expense"
                              :description "Manual expense entry"
                              :icon "✏️"
                              :on-click #(rf/dispatch [:navigate-to "/expenses/new"])})
-            ($ quick-action {:title "View Reports"
+            ($ quick-action {:id "btn-quick-view-reports"
+                             :title "View Reports"
                              :description "Monthly summaries"
                              :icon "📊"
-                             :on-click #(rf/dispatch [:navigate-to "/expenses/reports"])})))))))
+                             :on-click #(rf/dispatch [:navigate-to "/expenses/reports"])})
+            (when power-user?
+              ($ quick-action {:id "btn-quick-unmapped-items"
+                               :title "Unmapped Items"
+                               :description "Bulk-map receipt labels to articles"
+                               :icon "🧩"
+                               :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}))))))))

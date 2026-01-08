@@ -396,6 +396,21 @@
     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
               :d "M4 17l4-4 4 4 6-6 2 2M4 7h16"})))
 
+(defui unmapped-items-icon [{:keys [class] :or {class "w-6 h-6"}}]
+  ($ :svg {:class class
+           :fill "none"
+           :stroke "currentColor"
+           :viewBox "0 0 24 24"
+           :xmlns "http://www.w3.org/2000/svg"}
+    ($ :path {:stroke-linecap "round"
+              :stroke-linejoin "round"
+              :stroke-width "2"
+              :d "M9 20l-5-2.18V5.18L9 7l5-2 7 3.18v11.64L14 17l-5 2z"})
+    ($ :path {:stroke-linecap "round"
+              :stroke-linejoin "round"
+              :stroke-width "2"
+              :d "M14 17v-13.18L7 4.5v11.64"})))
+
 (defui expense-items-icon [{:keys [class] :or {class "w-6 h-6"}}]
   ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"

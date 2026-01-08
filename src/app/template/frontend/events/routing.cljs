@@ -188,6 +188,14 @@
                       [:app.template.frontend.events.config/set-editing nil]
                       [:user-expenses/fetch-payers]]}))))
 
+(rf/reg-event-fx
+  :page/init-unmapped-items
+  common-interceptors
+  (fn [{:keys [db]} _]
+    ;; Keep routing init simple: page components handle auth/role gating.
+    ;; This avoids relying on a specific db path for session/user.
+    {:db (assoc-in db (paths/current-page) :unmapped-items)}))
+
 (rf/reg-event-db
   :navigated
   common-interceptors

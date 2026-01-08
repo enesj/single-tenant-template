@@ -61,8 +61,8 @@
                           :tenant "You must be logged in to access your tenant dashboard."
                           :customer "Please sign in to continue."))
         on-redirect (or on-redirect
-                #(dispatch [:navigate-to login-redirect-path]))
-        show-message? (or show-message? true)
+                      #(dispatch [:navigate-to login-redirect-path]))
+        show-message? (if (nil? show-message?) true show-message?)
         class (or class "")]
 
     (if loading?
@@ -100,24 +100,24 @@
 
 ;; Convenience functions for common use cases
 
-(defn admin-auth-guard
-  "Convenience function for admin authentication guard."
-  [& args]
-  ($ auth-guard (merge {:auth-type :admin} (first args))))
+(defui admin-auth-guard
+  "Convenience component for admin authentication guard."
+  [props]
+  ($ auth-guard (merge {:auth-type :admin} props)))
 
-(defn tenant-auth-guard
-  "Convenience function for tenant authentication guard."
-  [& args]
-  ($ auth-guard (merge {:auth-type :tenant} (first args))))
+(defui tenant-auth-guard
+  "Convenience component for tenant authentication guard."
+  [props]
+  ($ auth-guard (merge {:auth-type :tenant} props)))
 
-(defn customer-auth-guard
-  "Convenience function for customer authentication guard."
-  [& args]
-  ($ auth-guard (merge {:auth-type :customer} (first args))))
+(defui customer-auth-guard
+  "Convenience component for customer authentication guard."
+  [props]
+  ($ auth-guard (merge {:auth-type :customer} props)))
 
 ;; Specialized guard for role-based access
 
-(defn role-based-guard
+(defui role-based-guard
   "Advanced authentication guard with role-based access control.
 
    Props:
@@ -131,7 +131,6 @@
     :as auth-guard-props}]
 
   (let [has-required-role? (some (set required-roles) user-roles)]
-
     (if has-required-role?
       ($ auth-guard auth-guard-props)
       (if fallback-component
@@ -139,7 +138,8 @@
         ($ :div {:class "p-6 text-center"}
           ($ :h1 {:class "text-2xl font-semibold text-white mb-4"} "Access Denied")
           (when show-denied-message?
-            ($ :p {:class "text-gray-400 mb-6"} "You don't have permission to access this resource."))
+            ($ :p {:class "text-gray-400 mb-6"}
+              "You don't have permission to access this resource."))
           ($ button {:btn-type :primary
                      :on-click #(dispatch [:navigate-to "/dashboard"])}
             "Go to Dashboard"))))))

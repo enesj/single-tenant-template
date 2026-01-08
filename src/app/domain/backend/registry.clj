@@ -37,6 +37,7 @@
    :spa-routes
    ["/waiting-room"
     "/dashboard"
+    "/unmapped-items"
     "/expenses"
     "/expenses/list"
     "/expenses/upload"

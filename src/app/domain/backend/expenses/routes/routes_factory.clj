@@ -35,7 +35,7 @@
                {:ns ns-sym :sym sym :target target-sym})))
     resolved))
 
-(defn- read-json-body
+(defn read-json-body
   "Return a parsed request body map.
 
   Domain admin routes under /admin/api/expenses do not currently run the same JSON

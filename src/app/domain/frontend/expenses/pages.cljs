@@ -15,7 +15,8 @@
     [app.domain.frontend.expenses.pages.user.suppliers :refer [suppliers-page]]
     [app.domain.frontend.expenses.pages.user.payers :refer [payers-page]]
     [app.domain.frontend.expenses.pages.user.receipts-list :refer [receipts-list-page]]
-    [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]))
+    [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]
+    [app.domain.frontend.expenses.pages.user.unmapped-items :refer [unmapped-items-page]]))
 
 (def pages
   "Map of route :view keywords to page components.
@@ -32,4 +33,5 @@
    :expense-reports expense-reports-page
    :expense-settings expense-settings-page
    :expense-suppliers suppliers-page
-   :expense-payers payers-page})
+   :expense-payers payers-page
+   :unmapped-items unmapped-items-page})

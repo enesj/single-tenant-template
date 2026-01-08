@@ -18,6 +18,10 @@
 ;; Receipts (user inbox)
 (def receipts-endpoint (api/versioned-endpoint "/expenses/receipts"))
 
+;; Articles (user app, role-gated in backend)
+(def articles-endpoint (api/versioned-endpoint "/expenses/articles"))
+(def articles-unmapped-items-endpoint (api/versioned-endpoint "/expenses/articles/unmapped-items"))
+
 ;; Admin endpoints for acting on behalf of a user
 (def admin-expenses-endpoint "/admin/api/expenses/entries")
 (def admin-receipts-endpoint "/admin/api/expenses/receipts")
@@ -25,3 +29,7 @@
 (def admin-payers-endpoint "/admin/api/expenses/payers")
 (def admin-settings-endpoint "/admin/api/expenses/settings")
 (def admin-upload-endpoint "/admin/api/expenses/upload")
+
+;; Articles (admin)
+(def admin-articles-endpoint "/admin/api/expenses/articles")
+(def admin-articles-unmapped-items-endpoint "/admin/api/expenses/articles/unmapped-items")

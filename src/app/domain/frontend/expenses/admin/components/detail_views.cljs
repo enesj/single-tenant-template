@@ -4,6 +4,7 @@
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.components.expense-form :as expense-form]
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview receipt-viewer]]
+    [app.domain.frontend.expenses.events.article-alias-bulk :as alias-bulk-events]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
@@ -11,6 +12,9 @@
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
+    [app.domain.frontend.expenses.subs.article-alias-bulk :as alias-bulk-subs]
+    [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
@@ -68,17 +72,19 @@
     :else nil))
 
 (defn- related-table
-  [{:keys [title rows columns empty-label view-all-href view-all-id]}]
+  [{:keys [title rows columns empty-label view-all-href view-all-id header-actions]}]
   (let [rows* (take 5 (or rows []))]
     ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
       ($ :div {:class "ds-card-body space-y-3"}
         ($ :div {:class "flex items-center justify-between"}
           ($ :h2 {:class "text-lg font-semibold"} title)
-          (when view-all-href
-            ($ :a {:id view-all-id
-                   :href view-all-href
-                   :class "ds-btn ds-btn-ghost ds-btn-xs"}
-              "View all")))
+          ($ :div {:class "flex items-center gap-2"}
+            header-actions
+            (when view-all-href
+              ($ :a {:id view-all-id
+                     :href view-all-href
+                     :class "ds-btn ds-btn-ghost ds-btn-xs"}
+                "View all"))))
         (if (seq rows*)
           ($ :div {:class "overflow-x-auto"}
             ($ :table {:class "ds-table w-full"}
@@ -96,6 +102,98 @@
                         (shared/format-value cell-value "—" false))))))))
           ($ :div {:class "text-sm text-base-content/70"}
             (or empty-label "No related records found.")))))))
+
+(defui article-add-aliases-modal
+  [{:keys [article-id]}]
+  (let [open? (use-subscribe [::alias-bulk-subs/open?])
+        working? (use-subscribe [::alias-bulk-subs/working?])
+        error (use-subscribe [::alias-bulk-subs/error])
+        result (use-subscribe [::alias-bulk-subs/result])
+        suppliers (use-subscribe [:expenses/suppliers])
+        [supplier-id set-supplier-id!] (use-state "")
+        [raw-labels set-raw-labels!] (use-state "")
+        [allow-reassign? set-allow-reassign?!] (use-state false)]
+    (use-effect
+      (fn []
+        (when open?
+          (set-supplier-id! "")
+          (set-raw-labels! "")
+          (set-allow-reassign?! false))
+        js/undefined)
+      [open?])
+
+    ($ modal-wrapper
+      {:visible? open?
+       :title "Add aliases"
+       :size :large
+       :close-button-id (when article-id (str "btn-close-add-aliases-article-" article-id))
+       :on-close [::alias-bulk-events/close]}
+      ($ :div {:id (when article-id (str "modal-add-aliases-article-" article-id))
+               :class "space-y-4"}
+        (when error
+          ($ :div {:class "ds-alert ds-alert-error"}
+            ($ :span (str error))))
+
+        ($ :div {:class "grid gap-3 md:grid-cols-2"}
+          ($ :div {:class "space-y-2"}
+            ($ :label {:class "text-sm font-medium"} "Supplier")
+            ($ :select
+              {:id (when article-id (str "select-supplier-add-aliases-article-" article-id))
+               :class "ds-select ds-select-bordered w-full"
+               :value supplier-id
+               :on-change #(set-supplier-id! (-> % .-target .-value))}
+              ($ :option {:value ""} "Select supplier…")
+              (for [s (or suppliers [])
+                    :let [sid (:id s)
+                          label (or (:display-name s) (:normalized-key s) (str sid))]]
+                ($ :option {:key (str sid) :value sid} label))))
+
+          ($ :div {:class "space-y-2"}
+            ($ :label {:class "text-sm font-medium"} "Options")
+            ($ :label {:class "flex items-center gap-2"}
+              ($ :input
+                {:id (when article-id (str "toggle-reassign-conflicts-add-aliases-article-" article-id))
+                 :type "checkbox"
+                 :class "ds-toggle ds-toggle-sm"
+                 :checked (boolean allow-reassign?)
+                 :on-change #(set-allow-reassign?! (-> % .-target .-checked))})
+              ($ :span {:class "text-sm"} "Reassign conflicts (dangerous)"))))
+
+        ($ :div {:class "space-y-2"}
+          ($ :label {:class "text-sm font-medium"} "Raw labels (one per line)")
+          ($ :textarea
+            {:id (when article-id (str "textarea-raw-labels-add-aliases-article-" article-id))
+             :class "ds-textarea ds-textarea-bordered w-full"
+             :rows 6
+             :placeholder "e.g.\nCoca Cola Zero 330ml\nCoke Zero 0.33l"
+             :value raw-labels
+             :on-change #(set-raw-labels! (-> % .-target .-value))}))
+
+        (when result
+          ($ :div {:class "ds-alert ds-alert-info"}
+            ($ :div {:class "space-y-1"}
+              ($ :div {:class "font-medium"} "Result")
+              ($ :div {:class "text-sm"}
+                (str "Created: " (count (:created result))
+                  ", skipped: " (count (:skipped result))
+                  ", conflicts: " (count (:conflicts result))
+                  ", reassigned: " (count (:reassigned result)))))))
+
+        ($ :div {:class "flex justify-end gap-2"}
+          ($ button
+            {:id (when article-id (str "btn-submit-add-aliases-article-" article-id))
+             :btn-type :primary
+             :loading working?
+             :disabled (or working?
+                         (str/blank? supplier-id)
+                         (str/blank? raw-labels))
+             :on-click (fn []
+                         (rf/dispatch [::alias-bulk-events/submit
+                                       {:article-id article-id
+                                        :supplier-id supplier-id
+                                        :raw-labels raw-labels
+                                        :allow-reassign? allow-reassign?}]))}
+            "Add aliases"))))))
 
 (defn- format-money
   [amount currency]
@@ -207,6 +305,8 @@
       [article-id])
 
     ($ :div {:class "space-y-6"}
+      ($ article-add-aliases-modal {:article-id article-id})
+
       (when error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span (str error))))
@@ -236,6 +336,13 @@
                          {:label "Supplier" :value-fn #(:supplier-display-name %)}
                          {:label "Confidence" :value-fn #(:confidence %)}]
                :empty-label "No aliases mapped to this article."
+               :header-actions ($ button
+                                {:id (when article-id (str "btn-add-aliases-article-" article-id))
+                                 :btn-type :ghost
+                                 :class "ds-btn-xs"
+                                 :on-click (fn []
+                                             (rf/dispatch [::alias-bulk-events/open article-id]))}
+                                "Add aliases")
                :view-all-href (when article-id
                                 (str "/admin/article-aliases?article_id=" article-id))
                :view-all-id (when article-id
