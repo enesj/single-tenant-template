@@ -97,6 +97,8 @@
                  :value (or raw_label "")
                  :on-change #(on-change id :raw_label (.. % -target -value))})
       ($ :input {:type "number"
+                 :step "0.001"
+                 :min "0"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
                  :placeholder "Qty"
                  :value (or qty "")

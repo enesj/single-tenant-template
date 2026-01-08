@@ -35,7 +35,7 @@
      :icon-bg "bg-primary/10"}))
 
 (defui receipt-problem-alert
-  "Identical warning/error banner for both user/admin receipt review." 
+  "Identical warning/error banner for both user/admin receipt review."
   [{:keys [receipt]}]
   (let [status (:status receipt)
         raw-extract (:raw-extract-json receipt)
@@ -148,7 +148,7 @@
   Notes:
   - The approve form component is expected to accept keys:
     {:receipt-id :receipt :on-success :on-review-saved :on-cancel}
-    and may ignore any it doesn't use." 
+    and may ignore any it doesn't use."
   [{:keys [receipt-id ctx]}]
   (let [{:keys [receipt-sub
                 receipt-detail-loading-sub
@@ -156,14 +156,15 @@
                 receipts-error-sub
                 fetch-receipt-event
                 approve-form
+                close-modal
                 poll-interval-ms]
          :or {poll-interval-ms 2500}} ctx
         receipt (use-subscribe [receipt-sub receipt-id])
         loading? (boolean (use-subscribe [receipt-detail-loading-sub]))
         action-loading? (boolean (use-subscribe [receipt-action-loading-sub]))
         error (use-subscribe [receipts-error-sub])
-        [active-tab set-active-tab!] (use-state :details)
-        [preview-expanded? set-preview-expanded!] (use-state true)
+        [active-tab set-active-tab!] (use-state :approve)
+        [preview-expanded? set-preview-expanded!] (use-state false)
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
                    (fn []
@@ -171,6 +172,10 @@
                        (rf/dispatch [fetch-receipt-event receipt-id])
                        (set-last-checked! (js/Date.))))
                    [receipt-id fetch-receipt-event])
+        close-modal-fn (use-callback
+                         (fn []
+                           (dispatch! close-modal))
+                         [close-modal])
         status (when (map? receipt) (:status receipt))
         processing? (and (string? status) (receipt-processing? status))
         rid (or receipt-id
@@ -181,7 +186,8 @@
     ;; Reset tab + fetch on open/change
     (use-effect
       (fn []
-        (set-active-tab! :details)
+        (set-active-tab! :approve)
+        (set-preview-expanded! false)
         (refresh!)
         js/undefined)
       [receipt-id refresh!])
@@ -273,8 +279,7 @@
                             {:receipt-id rid-str
                              :receipt receipt
                              :on-success (fn []
-                                          (set-active-tab! :details)
-                                          (rf/dispatch [fetch-receipt-event receipt-id]))
+                                           (close-modal-fn))
                              :on-review-saved (fn []
                                                 (rf/dispatch [fetch-receipt-event receipt-id]))
                              :on-cancel #(set-active-tab! :details)}))))))
@@ -332,14 +337,13 @@
         open? (use-subscribe [modal-open-sub])
         receipt-id (use-subscribe [modal-id-sub])
         receipt (use-subscribe [receipt-sub receipt-id])
-        loading? (boolean (use-subscribe [receipt-detail-loading-sub]))
         subtitle (or (:original-filename receipt)
                    (when receipt-id (str "Receipt " receipt-id))
                    "Receipt details")
         header (detail-header {:title "Receipt Details"
                                :subtitle subtitle
                                :icon "R"})]
-    (when (or open? loading?)
+    (when open?
       ($ modal {:id id
                 :on-close #(dispatch! close-modal)
                 :draggable? true

@@ -3,6 +3,11 @@
     [app.domain.frontend.expenses.components.expense-form :as sut]
     [cljs.test :refer [deftest is testing]]))
 
+(deftest line-item-columns-qty-step-test
+  (testing "Qty supports 3 decimal places"
+    (let [qty-col (some #(when (= :qty (:id %)) %) sut/line-item-columns)]
+      (is (= "0.001" (:step qty-col))))))
+
 (deftest normalize-initial-data-test
   (testing "Normalizes snake_case data from backend"
     (let [raw-expense {:supplier_id "s1"
@@ -39,7 +44,7 @@
       (is (re-find #"required" (:error (sut/validate-expense-values values))))))
 
   (testing "Fails if there are no prepared line items"
-    (let [values {:supplier_id "s1" :payer_id "p1" :purchased_at "2023-10-01" 
+    (let [values {:supplier_id "s1" :payer_id "p1" :purchased_at "2023-10-01"
                   :items [{:raw_label "" :line_total "0"}]}]
       (is (false? (:ok? (sut/validate-expense-values values))))
       (is (re-find #"at least one line item" (:error (sut/validate-expense-values values))))))

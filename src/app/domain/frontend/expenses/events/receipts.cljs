@@ -85,7 +85,8 @@
            (assoc-in (conj base-path :error) nil))
      :dispatch-n [[:admin/refresh-entity :receipts (:receipt response)]
                   [:admin/refresh-entity :expenses (:expense response)]
-                  [::load-detail receipt-id]]
+                  [::load-detail receipt-id]
+                  [::close-detail-modal]]
      :fx [(when on-success [:dispatch [::expenses-events/call-modal-callback on-success]])]}))
 
 (rf/reg-event-db

@@ -187,7 +187,6 @@
                     (:expense response))
           receipt (or (get-in response [:data :receipt])
                     (:receipt response))
-          expense-id (or (:id expense) (get-in expense [:id]))
           fx (cond-> []
                on-success (conj [:dispatch-later {:ms 100}
                                  :dispatch [:user-expenses/call-modal-callback on-success]]))]
@@ -198,10 +197,10 @@
                      (assoc-in (conj base-path :error) nil)
                      (cond-> receipt
                        (assoc-in (conj base-path :by-id receipt-id) receipt)))
-               :dispatch-n (cond-> [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
-                                    [:user-expenses/fetch-receipts {:limit 50 :offset 0}]
-                                    [:user-expenses/fetch-receipt receipt-id]]
-                             expense-id (conj [:navigate-to (str "/expenses/" expense-id)]))
+               :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
+                            [:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+                            [:user-expenses/fetch-receipt receipt-id]
+                            [:user-expenses/close-receipt-detail-modal]]
                :fx fx}
         expense
         (assoc :dispatch [::expenses-sync/upsert-expenses [expense]])))))

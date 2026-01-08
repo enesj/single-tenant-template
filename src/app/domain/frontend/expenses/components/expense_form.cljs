@@ -40,7 +40,7 @@
    {:id :qty
     :label "Qty"
     :type :number
-    :step "0.01"
+    :step "0.001"
     :min "0"
     :width "w-24"}
    {:id :unit_price
@@ -468,12 +468,12 @@
 
         ;; Memoize entity-spec to avoid recreating on every render
         entity-spec (use-memo
-                     #(get-expense-form-spec suppliers payers
-                        {:new-supplier-default-display-name new-supplier-default-display-name
-                         :receipt-approval? receipt-approval?
-                         :receipt receipt
-                         :receipt-id receipt-id})
-                     [suppliers payers new-supplier-default-display-name receipt-approval? receipt receipt-id])
+                      #(get-expense-form-spec suppliers payers
+                         {:new-supplier-default-display-name new-supplier-default-display-name
+                          :receipt-approval? receipt-approval?
+                          :receipt receipt
+                          :receipt-id receipt-id})
+                      [suppliers payers new-supplier-default-display-name receipt-approval? receipt receipt-id])
 
         ;; Memoize initial values so fork/form doesn't reset on every render
         form-initial-values (use-memo
@@ -550,7 +550,7 @@
   (let [suppliers (use-subscribe [:expenses/suppliers])
         payers (use-subscribe [:expenses/payers])
         form-error (use-subscribe [:expenses/entries-error])
-  [validation-error set-validation-error!] (use-state nil)
+        [validation-error set-validation-error!] (use-state nil)
 
         entity-spec (use-memo
                       #(get-expense-form-spec suppliers payers
@@ -658,10 +658,10 @@
   [{:keys [receipt-id initial-data on-success on-review-saved on-cancel]}]
   (let [loading? (use-subscribe [:expenses/form-loading?])
         receipt (use-subscribe [:expenses/receipt receipt-id])
-  payers (or (use-subscribe [:expenses/payers]) [])
-  payers-loading? (boolean (use-subscribe [:expenses/payers-loading?]))
-  [requested? set-requested!] (use-state false)
-  [prepared-initial-data set-prepared-initial-data!] (use-state nil)
+        payers (or (use-subscribe [:expenses/payers]) [])
+        payers-loading? (boolean (use-subscribe [:expenses/payers-loading?]))
+        [requested? set-requested!] (use-state false)
+        [prepared-initial-data set-prepared-initial-data!] (use-state nil)
         default-supplier-display-name (use-memo
                                         #(when receipt (receipt-merchant-name receipt))
                                         [receipt])

@@ -40,7 +40,7 @@
    {:id :qty
     :label "Qty"
     :type :number
-    :step "0.01"
+    :step "0.001"
     :min "0"
     :width "w-24"}
    {:id :unit_price
@@ -118,11 +118,11 @@
 
         receipt-id-str (some-> (or (:receipt-id field-spec) (:receipt_id field-spec)) str)
         supplier-guess (some-> (or (:receipt-supplier-guess field-spec)
-               (:supplier-guess field-spec)
-               (:supplier_guess field-spec))
-             str
-             str/trim
-             not-empty)
+                                 (:supplier-guess field-spec)
+                                 (:supplier_guess field-spec))
+                         str
+                         str/trim
+                         not-empty)
         supplier-guess-id (when receipt-id-str (str "receipt-supplier-guess-" receipt-id-str))
 
         field-error-msg (cond
@@ -301,7 +301,7 @@
        :columns line-item-columns
        :style (if receipt-approval? {:maxHeight "260px"} {:maxHeight "300px"})
        :overflow-y-class "overflow-y-auto"
-        :scrollbar-gutter-stable? true}])))
+       :scrollbar-gutter-stable? true}])))
 
 ;; =============================================================================
 ;; Normalization & Validation Helpers
@@ -625,13 +625,13 @@
 
         ;; Memoize entity-spec to avoid recreating on every render.
         ;; Only rebuild when suppliers or payers content actually changes.
-          entity-spec (use-memo
-                   #(get-expense-form-spec suppliers payers
-                     {:receipt-approval? receipt-approval?
-                      :supplier-guess supplier-guess
-                      :receipt nil
-                      :receipt-id nil})
-                   [suppliers payers receipt-approval? supplier-guess])
+        entity-spec (use-memo
+                      #(get-expense-form-spec suppliers payers
+                         {:receipt-approval? receipt-approval?
+                          :supplier-guess supplier-guess
+                          :receipt nil
+                          :receipt-id nil})
+                      [suppliers payers receipt-approval? supplier-guess])
 
         ;; Memoize initial values so fork/form doesn't reset on every render.
         ;; Use initial-data identity as the dependency (it's passed from parent).
