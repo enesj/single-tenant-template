@@ -4,7 +4,7 @@
    :show-add-button? true,
    :show-highlights? true,
    :show-timestamps? true},
-  :display-locks {:show-batch-edit? false, :show-batch-delete? false},
+  :display-locks {:show-batch-delete? true, :show-batch-edit? true},
   :column-locks {},
   :column-defaults {:purchased_at false}},
  :receipts
