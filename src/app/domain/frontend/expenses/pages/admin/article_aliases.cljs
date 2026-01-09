@@ -7,6 +7,7 @@
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]))
 
+
 (defn- render-add-form
   [{:keys [on-success on-cancel entity-name entity-spec]}]
   ($ entity-form-modal

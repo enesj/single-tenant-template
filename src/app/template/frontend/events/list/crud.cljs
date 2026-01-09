@@ -17,40 +17,60 @@
 
 (crud-bridges/register-template-crud-events!)
 
+(defn- default-fetch-request
+  "Default entity fetch request.
+
+  NOTE: This is intentionally a *request* effect only. Success/failure handling
+  stays in ::fetch-success/::fetch-failure.
+
+  This is also bridgeable via `crud-bridges/run-bridge-operation` using
+  operation `:fetch` so domains can override the endpoint used for FK lookups
+  (e.g. in user UI where generic entity CRUD is deny-by-default)."
+  [{:keys [db]} entity-type]
+  ;; In admin UI, route sensitive entities through admin API
+  (let [pathname (when (exists? js/window)
+                   (some-> js/window .-location .-pathname))
+        in-admin? (and pathname (str/includes? pathname "/admin"))
+        admin-managed? (contains? #{:users :tenants} entity-type)]
+    (if (and in-admin? admin-managed?)
+      {:dispatch [:admin/fetch-entities entity-type]}
+      ;; Handle both string/keyword entity types and map values with :value/:label format
+      (let [entity-name (cond
+                          (map? entity-type) (:value entity-type)
+                          (string? entity-type) entity-type
+                          (keyword? entity-type) (name entity-type)
+                          :else (str entity-type))
+            uri (api/entity-endpoint entity-name)]
+        ;; Note: We're intentionally NOT clearing recently-updated or recently-created IDs here
+        ;; so they persist until explicit navigation away from the page or explicit clearing
+        {:db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio (http/api-request
+                       {:method :get
+                        :uri uri
+                        :on-success [::fetch-success entity-type]
+                        :on-failure [::fetch-failure entity-type]})}))))
+
 (rf/reg-event-fx
   ::fetch-entities
   common-interceptors
-  (fn [{:keys [db]} [entity-type]]
-
-    (when entity-type
-      ;; In admin UI, route sensitive entities through admin API
-      (let [in-admin? (str/includes? (.-pathname js/window.location) "/admin")
-            admin-managed? (contains? #{:users :tenants} entity-type)]
-        (if (and in-admin? admin-managed?)
-          {:dispatch [:admin/fetch-entities entity-type]}
-          ;; Handle both string/keyword entity types and map values with :value/:label format
-          (let [entity-name (cond
-                              (map? entity-type) (:value entity-type)
-                              (string? entity-type) entity-type
-                              (keyword? entity-type) (name entity-type)
-                              :else (str entity-type))
-                uri (api/entity-endpoint entity-name)]
-            ;; Note: We're intentionally NOT clearing recently-updated or recently-created IDs here
-            ;; so they persist until explicit navigation away from the page or explicit clearing
-            {:db (assoc-in db (paths/entity-loading? entity-type) true)
-             :http-xhrio (http/api-request
-                           {:method :get
-                            :uri uri
-                            :on-success [::fetch-success entity-type]
-                            :on-failure [::fetch-failure entity-type]})}))))))
+  (fn [cofx [entity-type]]
+    (if entity-type
+      (crud-bridges/run-bridge-operation
+        :fetch :request default-fetch-request cofx entity-type [])
+      {:db (:db cofx)})))
 
 (rf/reg-event-fx
   ::fetch-success
   common-interceptors
   (fn [{:keys [db]} [entity-type response]]
-    ;; Debug logging for transaction_types API response
-    ;; Debug logging for transaction_types API response
-    (let [normalized (normalize/normalize-entities response)]
+    ;; Support both:
+    ;; - a raw vector response: [{...} {...}]
+    ;; - a wrapped response: {:data [{...} {...}] ...}
+    (let [items (cond
+                  (map? response) (or (:data response) (:results response) [])
+                  (coll? response) response
+                  :else [])
+          normalized (normalize/normalize-entities items)]
       {:db (-> db
              (assoc-in (paths/entity-data entity-type) (:data normalized))
              (assoc-in (paths/entity-ids entity-type) (:ids normalized))
@@ -58,7 +78,7 @@
                {:loading? false
                 :error nil
                 :last-updated (js/Date.now)})
-             (assoc-in (paths/list-total-items entity-type) (count response)))})))
+             (assoc-in (paths/list-total-items entity-type) (count items)))})))
 
 (rf/reg-event-db
   ::fetch-failure

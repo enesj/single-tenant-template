@@ -70,6 +70,114 @@
       (when existing
         (admin-expenses/soft-delete-expense! db expense-id)))))
 
+(defn soft-delete-user-expenses!
+  "Soft delete multiple expenses owned by a user.
+
+  Returns a result map:
+  - :deleted-count
+  - :deleted-ids
+  - :not-found-ids (includes ids not owned by the user, already deleted, or missing)"
+  [db user-id expense-ids]
+  (let [user-id (ensure-uuid user-id)
+        ids (->> (or expense-ids [])
+              (map ensure-uuid)
+              (remove nil?)
+              vec)]
+    (when-not user-id
+      (throw (ex-info "user-id is required" {:expense-ids expense-ids})))
+    (if (empty? ids)
+      {:deleted-count 0
+       :deleted-ids []
+       :not-found-ids []}
+      (jdbc/with-transaction [tx db]
+        ;; Only delete expenses that are owned by the user and not already soft-deleted.
+        (let [owned-rows (jdbc/execute!
+                           tx
+                           (sql/format {:select [:id]
+                                        :from [:expenses]
+                                        :where [:and
+                                                [:= :user_id user-id]
+                                                [:in :id ids]
+                                                [:is :deleted_at nil]]})
+                           {:builder-fn rs/as-unqualified-lower-maps})
+              owned-ids (mapv :id owned-rows)
+              deleted-ids (reduce
+                            (fn [acc expense-id]
+                              (if-let [deleted (admin-expenses/soft-delete-expense! tx expense-id)]
+                                (conj acc (:id deleted))
+                                acc))
+                            []
+                            owned-ids)
+              deleted-set (set deleted-ids)
+              not-found-ids (->> ids
+                              (remove deleted-set)
+                              vec)]
+          {:deleted-count (count deleted-ids)
+           :deleted-ids deleted-ids
+           :not-found-ids not-found-ids})))))
+
+(defn batch-update-user-expenses!
+  "Batch update multiple expenses owned by a user.
+
+  `items` is a collection of maps, each containing:
+  - :id (UUID or UUID string)
+  - any updatable expense columns (snake_case keys)
+
+  Only the following keys are applied:
+  :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id
+
+  Returns:
+  {:updated n
+   :results [<updated-expense> ...]
+   :errors  [{:id <uuid-or-raw> :error <msg>} ...]}"
+  [db user-id items]
+  (let [user-id (ensure-uuid user-id)
+        allowed-keys #{:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id}
+        items (vec (or items []))
+        try-uuid (fn [v]
+                   (cond
+                     (nil? v) nil
+                     (instance? UUID v) v
+                     :else (try
+                             (UUID/fromString (str v))
+                             (catch Exception _ nil))))]
+    (when-not user-id
+      (throw (ex-info "user-id is required" {:items-count (count items)})))
+    (if (empty? items)
+      {:updated 0
+       :results []
+       :errors []}
+      (jdbc/with-transaction [tx db]
+        (let [{:keys [results errors]}
+              (reduce
+                (fn [{:keys [results errors] :as acc} item]
+                  (let [expense-id (try-uuid (:id item))
+                        updates (-> item
+                                  (dissoc :id
+                                    :created_at :updated_at :deleted_at
+                                    :created-at :updated-at :deleted-at)
+                                  (select-keys allowed-keys))]
+                    (cond
+                      (nil? expense-id)
+                      (update acc :errors conj {:id (:id item) :error "Invalid expense id"})
+
+                      (empty? updates)
+                      (update acc :errors conj {:id expense-id :error "No updatable fields provided"})
+
+                      :else
+                      (try
+                        (if-let [expense (update-user-expense! tx user-id expense-id updates)]
+                          (update acc :results conj expense)
+                          (update acc :errors conj {:id expense-id :error "Expense not found or access denied"}))
+                        (catch Exception e
+                          (log/error e "Batch update failed for expense" {:expense-id expense-id :user-id user-id})
+                          (update acc :errors conj {:id expense-id :error "Failed to update expense"}))))))
+                {:results [] :errors []}
+                items)]
+          {:updated (count results)
+           :results results
+           :errors errors})))))
+
 (defn get-user-expense-with-items
   "Get a user's own expense with items. Returns nil if not found or not owned by user."
   [db user-id expense-id]

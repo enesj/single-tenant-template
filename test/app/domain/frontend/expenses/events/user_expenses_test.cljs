@@ -2,6 +2,10 @@
   (:require
     ;; Ensure events are registered
     [app.domain.frontend.expenses.events.user-expenses]
+    ;; Ensure template list events are registered
+    app.template.frontend.events.list.crud
+    app.template.frontend.events.list.batch
+    [app.template.frontend.db.paths :as paths]
     [app.template.frontend.helpers-test :as helpers]
     [cljs.test :refer [deftest is testing]]
     [goog.object :as gobj]
@@ -59,6 +63,69 @@
                        {:expense {:id "exp-2"}}])
     (is (= #{"exp-2"}
           (get-in @rf-db/app-db [:ui :recently-updated :expenses])))))
+
+(deftest template-delete-expenses-is-bridged
+  (testing "template delete-entity for :expenses uses /api/v1/expenses/:id (not generic /api/v1/entities)"
+    (reset-db!)
+    ;; Seed minimal entity + list state so the delete-success bridge can update it.
+    (swap! rf-db/app-db assoc-in (paths/entity-data :expenses) {"exp-1" {:id "exp-1"}
+                                                                "exp-2" {:id "exp-2"}})
+    (swap! rf-db/app-db assoc-in (paths/entity-ids :expenses) ["exp-1" "exp-2"])
+    (swap! rf-db/app-db assoc-in (paths/entity-selected-ids :expenses) #{"exp-1"})
+    (swap! rf-db/app-db assoc-in (paths/list-total-items :expenses) 2)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-entity :expenses "exp-1"])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/api/v1/expenses/exp-1" (req-uri req))))
+
+    ;; Simulate the HTTP success event that the template CRUD delete would dispatch.
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-success :expenses "exp-1"])
+
+    (is (nil? (get-in @rf-db/app-db (conj (paths/entity-data :expenses) "exp-1"))))
+    (is (= ["exp-2"] (get-in @rf-db/app-db (paths/entity-ids :expenses))))
+    (is (= #{} (get-in @rf-db/app-db (paths/entity-selected-ids :expenses))))
+    (is (= 1 (get-in @rf-db/app-db (paths/list-total-items :expenses))))))
+
+(deftest template-batch-update-expenses-is-bridged
+  (testing "template batch update for :expenses uses /api/v1/expenses/batch (not generic /api/v1/entities/expenses/batch)"
+    (reset-db!)
+
+    (rf/dispatch-sync
+      [:app.template.frontend.events.list.batch/batch-update
+       {:entity-name :expenses
+        :item-ids ["exp-1"]
+        :values {:notes "hello"}}])
+
+    (let [req (last-http-request)
+          items (get-in req [:params :items])
+          item (first items)]
+      (is (= :put (req-method req)))
+      (is (= "/api/v1/expenses/batch" (req-uri req)))
+      (is (= 1 (count items)))
+      (is (= "exp-1" (:id item)))
+      (is (= "hello" (:notes item)))
+      (is (instance? js/Date (:updated-at item))))))
+
+(deftest template-fetch-lookups-is-bridged
+  (testing "template fetch for payers/suppliers/receipts uses /api/v1/expenses/* (not generic /api/v1/entities/*)"
+    (reset-db!)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/fetch-entities :payers])
+    (let [req (last-http-request)]
+      (is (= :get (req-method req)))
+      (is (= "/api/v1/expenses/payers?limit=500&offset=0" (req-uri req))))
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/fetch-entities :suppliers])
+    (let [req (last-http-request)]
+      (is (= :get (req-method req)))
+      (is (= "/api/v1/expenses/suppliers?limit=500&offset=0" (req-uri req))))
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/fetch-entities :receipts])
+    (let [req (last-http-request)]
+      (is (= :get (req-method req)))
+      (is (= "/api/v1/expenses/receipts?limit=500&offset=0" (req-uri req))))))
 
 (deftest upload-receipt-sends-file-in-formdata
   (testing "upload-receipt sends multipart file (guards against trim-v arg loss)"

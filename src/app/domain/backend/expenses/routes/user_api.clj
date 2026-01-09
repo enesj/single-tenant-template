@@ -69,6 +69,12 @@
    ;; Expenses CRUD
    ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}
         :post {:handler (user-expenses-handlers/create-expense-handler db)}}]
+
+   ;; Batch operations
+   ["/batch" {:put {:handler (user-expenses-handlers/batch-update-expenses-handler db)}}]
+
+   ["/batch-delete" {:post {:handler (user-expenses-handlers/batch-delete-expenses-handler db)}}]
+
    ["/:id" {:get {:handler (user-expenses-handlers/get-expense-handler db)}
             :put {:handler (user-expenses-handlers/update-expense-handler db)}
             :delete {:handler (user-expenses-handlers/delete-expense-handler db)}}]])

@@ -30,9 +30,16 @@
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
   (let [expense-id (id-utils/extract-entity-id item)]
+    ;; IMPORTANT: do NOT pass list-row data as :initial-data.
+    ;;
+    ;; The list row is intentionally "summary" data and often does not include
+    ;; nested detail like :items. Fork forms do not re-initialize when initial
+    ;; values change, so the first open could render without line items.
+    ;;
+    ;; We let the modal fetch the full detail and mount the form once it is loaded.
     ($ user-expense-edit-form-modal
       {:expense-id expense-id
-       :initial-data item
+       :initial-data nil
        :on-success on-success
        :on-cancel on-cancel})))
 

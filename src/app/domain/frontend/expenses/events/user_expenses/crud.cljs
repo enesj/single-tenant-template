@@ -6,9 +6,149 @@
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
+    [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.shared.bridges.crud :as crud-bridges]
     [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
+
+;; ---------------------------------------------------------------------------
+;; Template CRUD bridge overrides
+;;
+;; The shared template list-view selection/batch delete dispatches
+;; :app.template.frontend.events.list.crud/delete-entity for the entity keyword
+;; (e.g. :expenses). For expenses, those template CRUD events would normally hit
+;; the generic entity API (/api/v1/entities/expenses/:id), which is blocked for
+;; security. We override delete to use the user-scoped expenses API instead.
+;; ---------------------------------------------------------------------------
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :expenses
+   :bridge-id :expenses-user-expenses
+   :priority 90
+   :operations
+   {:delete
+    {:request
+     (fn [{:keys [db]} entity-type id default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (x/xhrio db
+           {:method :delete
+            :uri (str endpoints/list-endpoint "/" id)
+            :admin-uri (str endpoints/admin-expenses-endpoint "/" id)
+            :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+            :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})))
+
+     :on-success
+     (fn [{:keys [db]} entity-type id _default-effect]
+       (let [existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
+             remaining-ids (vec (remove #(= % id) existing-ids))
+             db* (-> db
+                   (assoc-in (paths/entity-loading? entity-type) false)
+                   (assoc-in (paths/entity-error entity-type) nil)
+                   (update-in (paths/entity-data entity-type) dissoc id)
+                   (assoc-in (paths/entity-ids entity-type) remaining-ids)
+                   (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id)))
+                   (update-in (paths/list-total-items entity-type) (fn [n]
+                                                                     (if (number? n)
+                                                                       (max 0 (dec n))
+                                                                       n))))]
+         {:db db*}))}
+
+    :batch-update
+    {:request
+     (fn [{:keys [db]} entity-type request-params default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (x/xhrio db
+           {:method :put
+            :uri (str endpoints/list-endpoint "/batch")
+            :admin-uri (str endpoints/list-endpoint "/batch")
+            :params request-params
+            :timeout 8000
+            :on-success [:app.template.frontend.events.list.batch/batch-update-success entity-type]
+            :on-failure [:app.template.frontend.events.list.batch/batch-update-failure entity-type]})))
+
+     :on-success
+     (fn [_cofx _entity-type response default-effect]
+       (let [updated-records (or (:results response)
+                               (get-in response [:data :results])
+                               (get-in response [:data])
+                               response)
+             updated-records (vec (or updated-records []))
+             dispatches (or (:dispatch-n default-effect) [])
+             dispatches* (->> dispatches
+                           (remove (fn [dispatch]
+                                     (= :app.template.frontend.events.list.crud/fetch-entities (first dispatch))))
+                           vec)
+             dispatches** (into [[:user-expenses/fetch-recent {:limit 25 :offset 0}]] dispatches*)
+             dispatches*** (cond-> dispatches**
+                             (seq updated-records) (conj [::expenses-sync/upsert-expenses updated-records]))]
+         (assoc default-effect :dispatch-n dispatches***)))}}})
+
+(defn- user-ui-context?
+  [db]
+  (not (x/admin-context? db)))
+
+(defn- lookup-uri
+  [base-uri]
+  (str base-uri "?limit=500&offset=0"))
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :payers
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:fetch
+    {:request
+     (fn [{:keys [db]} entity-type default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (http/api-request
+           {:method :get
+            :uri (lookup-uri endpoints/payers-endpoint)
+            :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :suppliers
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:fetch
+    {:request
+     (fn [{:keys [db]} entity-type default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (http/api-request
+           {:method :get
+            :uri (lookup-uri endpoints/suppliers-endpoint)
+            :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :receipts
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:fetch
+    {:request
+     (fn [{:keys [db]} entity-type default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (http/api-request
+           {:method :get
+            :uri (lookup-uri endpoints/receipts-endpoint)
+            :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
 
 ;; ---------------------------------------------------------------------------
 ;; Create expense

@@ -213,7 +213,7 @@ User edits and clicks "Update" button
 
 ### Template Context (Non-Admin)
 
-When not in admin context, forms use the template's direct path:
+When not in admin context, forms use the template's direct path (generic entity CRUD):
 
 ```
 Form Submit
@@ -225,11 +225,16 @@ Form Interceptor → NOT admin context
 [:app.template.frontend.events.form/process-default-submission]
     │
     ▼
-Template HTTP endpoints (/api/entities/...)
+Template HTTP endpoints (/api/v1/entities/...)
     │
     ▼
 Template success handlers (form.cljs)
 ```
+
+> [!NOTE]
+> `/api/v1/entities/{entity}` is a generic, metadata-driven CRUD surface. It is intentionally **deny-by-default** via an entity allowlist on the backend.
+> If you see a 403 like “Unknown entity - blocking for security” for a domain entity (e.g. `:expenses`), route that operation through the domain API (for example `DELETE /api/v1/expenses/:id`) via a CRUD bridge override, rather than allowlisting blindly.
+> See [Generic Entity CRUD API](../backend/generic-entity-crud.md).
 
 ---
 

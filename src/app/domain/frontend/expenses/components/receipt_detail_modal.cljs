@@ -331,7 +331,6 @@
   (let [{:keys [modal-open-sub
                 modal-id-sub
                 receipt-sub
-                receipt-detail-loading-sub
                 close-modal]}
         ctx
         open? (use-subscribe [modal-open-sub])

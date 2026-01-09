@@ -13,7 +13,7 @@ The single-tenant app still reuses the template/shared stack, but without RLS/te
 ## What Changed for Single-Tenant
 - No tenant context function or RLS policies; models live only in `resources/db/models.edn`.
 - Service container wiring is focused on admin + monitoring services (users, audit, login-events) instead of domain packs.
-- Routes are composed in `app.template.backend.routes.admin-api` rather than generic CRUD routers.
+- Admin routes are composed in `app.template.backend.routes.admin-api` (under `/admin/api`). User routes are composed in `app.template.backend.routes.api` (under `/api/v1`), including the generic entity CRUD surface (`/api/v1/entities/*`, deny-by-default).
 - Auth template helpers that created/switched tenants were removed; OAuth callback now only upserts a user record for this single-tenant flow.
 
 ## Extending Safely

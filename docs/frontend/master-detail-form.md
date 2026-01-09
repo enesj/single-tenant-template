@@ -70,6 +70,17 @@ Keep **domain rules** (numeric coercions, tolerances, required fields, payload s
 - Runs `:validate-values` before submit.
 - Calls `:on-submit` with `prepare-submit-values` output.
 
+### Gotcha: list-row data is often *summary* data
+
+If you open an edit modal from a list row, that row frequently **does not include nested detail** (e.g. expense `:items`). If you pass that row as `:initial-row-data`, the form can mount without the nested fields — and many form libs (including Fork-style flows) **won’t fully re-initialize** when later detail data arrives.
+
+Recommended patterns:
+
+- **If nested detail is required (e.g. line items):** pass `:initial-row-data nil` so `master-detail-form` renders a small “Loading…” state and mounts the form only after the full detail entity is loaded.
+- **If you want “no-flicker” UI while loading:** only pass `:initial-row-data` when it already contains all required nested fields.
+
+This prevents the classic symptom: “first open has empty line items; close and reopen shows them.”
+
 ---
 
 ## Expenses integration notes

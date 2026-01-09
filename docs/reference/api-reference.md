@@ -9,6 +9,7 @@ Current HTTP surface for the single-tenant template. Admin endpoints live under 
 - **Base URL (dev)**: `http://localhost:8085`
 - **Admin API**: `/admin/api/*` – requires admin token
 - **User API**: `/api/v1/*` – some public, some require user session
+- **Generic entity CRUD**: `/api/v1/entities/*` – generic CRUD for allowlisted entities only (deny-by-default). Domain entities should use domain APIs (e.g. `/api/v1/expenses/*`) and route template CRUD via a frontend bridge. See [Generic Entity CRUD API](../backend/generic-entity-crud.md).
 - **Auth**: Admin token via `x-admin-token` header or `admin-token` cookie. User auth via Ring session cookie.
 - **Content-Type**: `application/json`
 - **Success shape**: `{:success true :data {...}}` (some handlers return top-level keys such as `{:users [...]}`)

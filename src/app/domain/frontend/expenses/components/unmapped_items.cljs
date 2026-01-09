@@ -83,9 +83,9 @@
 
     (use-effect
       (fn []
-        ;; Reset local modal state on each open so we don't keep stale values between runs.
-        ;; (This component stays mounted while the modal is closed.)
-        (when open?
+        ;; Reset local modal state after close so the next open starts clean.
+        ;; (Resetting on open can race with very fast user clicks in tests/UI.)
+        (when (not open?)
           (set-mode! :existing)
           (set-existing-article-id! "")
           (set-new-article-name! "")

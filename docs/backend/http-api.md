@@ -6,6 +6,7 @@ This is the current HTTP API surface for the single-tenant app.
 
 - **Admin routes** live under `/admin/api` on **http://localhost:8085** and are secured by admin auth middleware.
 - **User routes** live under `/api/v1` (e.g. `/api/v1/expenses/**`) and are secured by user auth middleware.
+- **Generic entity CRUD** lives under `/api/v1/entities/*` for allowlisted template entities. Domain entities that need ownership/business rules should use domain APIs (e.g. `/api/v1/expenses/*`) and route template CRUD actions via a frontend bridge. See [Generic Entity CRUD API](./generic-entity-crud.md).
 
 ## Base Shape
 - **Admin auth**: `app.template.backend.middleware.admin/wrap-admin-authentication` expects an admin token (dev mode may relax). Pass `x-admin-token: <token>` or the token cookie set by the admin login flow.
@@ -16,7 +17,7 @@ This is the current HTTP API surface for the single-tenant app.
 - **Middleware**: JSON parsing + security headers + auth. Rate-limiting hooks are available but may be disabled in dev.
 
 ## Route Map (Key Endpoints)
-All paths are relative to `/admin/api`.
+Admin paths are relative to `/admin/api` unless otherwise noted.
 
 ### Auth (public)
 - `POST /admin/api/login` – exchange credentials for admin token (namespace `app.template.backend.routes.admin.auth`).

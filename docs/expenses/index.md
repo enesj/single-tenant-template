@@ -112,6 +112,13 @@ Current integrations:
 - Admin: `src/app/domain/frontend/expenses/components/expense_form.cljs`
 - User: `src/app/domain/frontend/expenses/components/user_expense_form.cljs`
 
+**Important (line items / first-open empty modal bug):** list rows are often *summary* data and may not include nested fields like `:items`. If you pass list-row data as `:initial-row-data` / `:initial-data` for an edit modal, the form can mount without line items and may not fully re-initialize when the detail fetch returns.
+
+- Prefer `:initial-row-data nil` for expense edit modals so the form mounts only after detail is loaded.
+- If you pass row data for “no flicker,” ensure it already contains `:items`.
+
+(See: `docs/frontend/master-detail-form.md` → “Gotcha: list-row data is often summary data”.)
+
 **Admin detail response key note:** the admin expenses detail endpoint returns `{ :expense ... }` (singular). The generic events factory supports this via `:detail-response-key` in `src/app/domain/frontend/expenses/events/entity_configs.cljs` so `::load-detail` stores the correct entity under `[:admin :expenses :entries :by-id <id>]`.
 
 ## User Expenses Interface

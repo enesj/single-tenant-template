@@ -1,10 +1,10 @@
 (ns app.template.frontend.components.batch-edit.field-props
   (:require
-   [app.shared.validation.core :as validation-core]
-   [app.shared.validation.fork :as validation-fork]
-   [app.template.frontend.components.form.fields.input :refer [input-width]]
-   [app.template.frontend.events.form :as form-events]
-   [re-frame.core :as rf]))
+    [app.shared.validation.core :as validation-core]
+    [app.shared.validation.fork :as validation-fork]
+    [app.template.frontend.components.form.fields.input :refer [input-width]]
+    [app.template.frontend.events.form :as form-events]
+    [re-frame.core :as rf]))
 
 (defn create-change-handler
   "Creates a change handler for batch edit fields with validation"
@@ -92,32 +92,43 @@
         (assoc :placeholder "(Mixed values)")))))          ;; Disable server validation for batch edit
 
 (defn determine-field-component
-  "Determines which component to use for a given field type and input type"
+  "Determines which component to use for a given field type and input type.
+
+  Batch edit field specs can come from multiple sources (EDN config, JSON, or
+  JS objects), so `:type` / `:input-type` may arrive as keywords or strings.
+  This function normalizes both and mirrors the logic used by the main form
+  renderer so select/textarea/etc render correctly in batch edit."
   [field-type input-type _field-id]
-  (case field-type
-    "input" :input
-    "number" :number-input
-    "checkbox" :checkbox-input
-    "textarea" :textarea-input
-    "select" :select-input
-    "json" :json-editor
-    "array" :array-input
-    ;; Handle nil/null types by detecting input-type or defaulting to input
-    nil (cond
-          ;; Number types
-          (#{:integer :decimal "integer" "decimal" "number"} input-type)
-          :number-input
-          ;; Boolean types
-          (#{:boolean "boolean"} input-type)
-          :checkbox-input
-          ;; JSON types
-          (#{:jsonb "jsonb" "json"} input-type)
-          :json-editor
-          ;; Array types
-          (#{:array "array"} input-type)
-          :array-input
-          ;; Default to input
-          :else
-          :input)
-    ;; Default case for any other unrecognized field type
-    :input))
+  (let [->kw (fn [x]
+               (cond
+                 (keyword? x) x
+                 (string? x) (keyword x)
+                 (symbol? x) (keyword (name x))
+                 :else nil))
+        ft (->kw field-type)
+        it (->kw input-type)
+        ui-type (or (when (#{:input :number :checkbox :textarea :select :json :array} ft)
+                      ft)
+                  (cond
+                    (#{:string :text :varchar :uuid :timestamp :date :datetime :datetime-local} ft) :input
+                    (#{:integer :decimal :bigint :float :double :number} ft) :number
+                    (#{:boolean} ft) :checkbox
+                    (#{:json :jsonb} ft) :json
+                    (#{:array} ft) :array
+                    :else nil))]
+    (case ui-type
+      :input :input
+      :number :number-input
+      :checkbox :checkbox-input
+      :textarea :textarea-input
+      :select :select-input
+      :json :json-editor
+      :array :array-input
+      ;; If `:type` is missing/unknown, infer from `:input-type`.
+      (cond
+        (#{:select} it) :select-input
+        (#{:integer :decimal :bigint :float :double :number} it) :number-input
+        (#{:boolean} it) :checkbox-input
+        (#{:jsonb :json} it) :json-editor
+        (#{:array} it) :array-input
+        :else :input))))
