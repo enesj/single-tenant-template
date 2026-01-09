@@ -131,7 +131,9 @@
   [db receipt-id extract-result opts]
   (let [markdown (:parsed-markdown extract-result)
         markdown-items (markdown/markdown->line-item-candidates markdown)
-        markdown-supplier (markdown/markdown->supplier-guess markdown)
+        markdown-merchant-header (markdown/markdown->merchant-header markdown)
+        markdown-supplier (or (:merchant_name markdown-merchant-header)
+                            (markdown/markdown->supplier-guess markdown))
         markdown-total (markdown/markdown->total-amount markdown)
         extraction0 (or (:extraction extract-result) {})
         extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
@@ -147,7 +149,11 @@
                       (assoc :totals {:total markdown-total})
 
                       (and (nil? (get-in extraction0 [:merchant :name])) markdown-supplier)
-                      (assoc :merchant {:name markdown-supplier}))
+                      (assoc :merchant (cond-> {:name markdown-supplier}
+                                         (:store_name markdown-merchant-header)
+                                         (assoc :store_name (:store_name markdown-merchant-header))
+                                         (:address markdown-merchant-header)
+                                         (assoc :address (:address markdown-merchant-header)))))
         {:keys [extraction changed? changes]}
         (reconcile-extraction-with-markdown extraction0 markdown)
         valid-shape? (and (map? extraction) (m/validate ReceiptExtraction extraction))

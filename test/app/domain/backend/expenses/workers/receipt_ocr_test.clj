@@ -203,6 +203,52 @@
             :line_total 9.90M}
           (first items)))))
 
+(deftest markdown-merchant-header-extracts-quoted-name
+  (let [parse-header #'markdown/markdown->merchant-header
+        markdown (str "\"Pepco B-H\" d.o.o.\n"
+                   "Podružnica Sarajevo 2\n"
+                   "ul. Kolodvorska br.12\n"
+                   "71000 Sarajevo\n"
+                   "\n"
+                   "JIB: 4203144510090\n"
+                   "PIB: 203144510006\n")
+        result (parse-header markdown)]
+    (is (= "Pepco B-H" (:merchant_name result)))
+    (is (= "Podružnica Sarajevo 2" (:store_name result)))
+    (is (= "ul. Kolodvorska br.12, 71000 Sarajevo" (:address result)))))
+
+(deftest markdown-merchant-header-extracts-unquoted-name
+  (let [parse-header #'markdown/markdown->merchant-header
+        markdown (str "KONZUM d.o.o.\n"
+                   "Poslovnica Tuzla 5\n"
+                   "Trg slobode 10\n"
+                   "75000 Tuzla\n"
+                   "JIB: 123456789\n")
+        result (parse-header markdown)]
+    (is (= "KONZUM" (:merchant_name result)))
+    (is (= "Poslovnica Tuzla 5" (:store_name result)))
+    (is (= "Trg slobode 10, 75000 Tuzla" (:address result)))))
+
+(deftest markdown-merchant-header-handles-minimal-header
+  (let [parse-header #'markdown/markdown->merchant-header
+        markdown (str "BINGO d.d.\n"
+                   "TC Mercator\n"
+                   "JIB: 999\n")
+        result (parse-header markdown)]
+    (is (= "BINGO" (:merchant_name result)))
+    (is (= "TC Mercator" (:store_name result)))
+    (is (nil? (:address result)))))
+
+(deftest markdown-merchant-header-handles-no-store-name
+  (let [parse-header #'markdown/markdown->merchant-header
+        markdown (str "\"DM\" d.o.o.\n"
+                   "ul. Marsala Tita 25\n"
+                   "71000 Sarajevo\n"
+                   "JIB: 111\n")
+        result (parse-header markdown)]
+    (is (= "DM" (:merchant_name result)))
+    (is (= "ul. Marsala Tita 25, 71000 Sarajevo" (:address result)))))
+
 (deftest process-extract-auto-retries-review-required-once
   (let [process-extract! #'core/process-extract!
         receipt-id (java.util.UUID/randomUUID)

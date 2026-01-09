@@ -65,6 +65,106 @@
    "kartica"
    "povrat"])
 
+(def ^:private header-stop-prefixes
+  ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "fiskalni" "racun" "račun"])
+
+(def ^:private legal-suffix-re
+  #"(?i)\s+(d\.?o\.?o\.?|d\.?d\.?|a\.?d\.?|s\.?p\.?|j\.?p\.?)\.?\s*$")
+
+(def ^:private store-name-prefixes
+  ["podružnica" "poslovnica" "tc " "pc " "cc " "centar" "market" "maloprodaja" "prodavnica"])
+
+(def ^:private address-prefixes
+  ["ul." "ul " "ulica" "bb" "br." "br " "trg"])
+
+(defn- extract-quoted-name
+  "Extract text inside quotes, e.g. '\"Pepco B-H\" d.o.o.' -> 'Pepco B-H'"
+  [line]
+  (when (string? line)
+    (when-let [[_ name] (re-find #"\"([^\"]+)\"" line)]
+      (str/trim name))))
+
+(defn- looks-like-postal-city?
+  "Check if line looks like '71000 Sarajevo' pattern"
+  [line]
+  (when (string? line)
+    (boolean (re-matches #"^\d{5}\s+\S.*$" (str/trim line)))))
+
+(defn- strip-legal-suffix
+  "Remove legal suffixes like d.o.o., d.d., etc."
+  [name]
+  (when (string? name)
+    (-> name
+      (str/replace legal-suffix-re "")
+      str/trim
+      not-empty)))
+
+(defn- is-header-stop-line?
+  "Check if this line marks end of merchant header (tax IDs, receipt markers)"
+  [norm]
+  (or (some #(str/starts-with? norm %) header-stop-prefixes)
+    (re-find #"^\d{1,2}\.\d{1,2}\.\d{2,4}" norm)))
+
+(defn- is-store-name-line?
+  "Check if line looks like a store/branch name"
+  [norm]
+  (some #(str/starts-with? norm %) store-name-prefixes))
+
+(defn- is-address-line?
+  "Check if line looks like an address"
+  [norm line]
+  (or (some #(str/starts-with? norm %) address-prefixes)
+    (looks-like-postal-city? line)))
+
+(defn markdown->merchant-header
+  "Parse receipt header into structured merchant info.
+   Returns {:merchant_name .. :store_name .. :address ..} or nil."
+  [markdown]
+  (when (string? markdown)
+    (let [lines (str/split-lines markdown)
+          header-lines (take-while
+                         (fn [line0]
+                           (let [line (some-> line0 str str/trim not-empty)
+                                 norm (normalize-text line)]
+                             (and norm (not (is-header-stop-line? norm)))))
+                         lines)
+          header-lines (map #(some-> % str str/trim not-empty) header-lines)
+          header-lines (remove nil? header-lines)]
+      (when (seq header-lines)
+        (let [first-line (first header-lines)
+              quoted-name (extract-quoted-name first-line)
+              merchant-name (or quoted-name
+                              (strip-legal-suffix first-line)
+                              first-line)
+              rest-lines (if quoted-name
+                           (rest header-lines)
+                           (rest header-lines))
+              {:keys [store-name address-lines]}
+              (reduce
+                (fn [acc line]
+                  (let [norm (normalize-text line)]
+                    (cond
+                      (and (nil? (:store-name acc)) (is-store-name-line? norm))
+                      (assoc acc :store-name line)
+
+                      (is-address-line? norm line)
+                      (update acc :address-lines conj line)
+
+                      (and (nil? (:store-name acc))
+                        (empty? (:address-lines acc))
+                        (not (re-find legal-suffix-re line)))
+                      (assoc acc :store-name line)
+
+                      :else
+                      (update acc :address-lines conj line))))
+                {:store-name nil :address-lines []}
+                rest-lines)
+              address (when (seq address-lines)
+                        (str/join ", " address-lines))]
+          (cond-> {:merchant_name merchant-name}
+            store-name (assoc :store_name store-name)
+            address (assoc :address address)))))))
+
 (defn markdown->supplier-guess
   "Take the first plausible merchant-like line from markdown."
   [markdown]
