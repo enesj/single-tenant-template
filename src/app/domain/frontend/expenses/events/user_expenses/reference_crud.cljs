@@ -12,6 +12,12 @@
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
+(rf/reg-event-db
+  :user-expenses/clear-form-error
+  common-interceptors
+  (fn [db _]
+    (assoc-in db [:user-expenses :form :error] nil)))
+
 ;; ---------------------------------------------------------------------------
 ;; Suppliers
 ;; ---------------------------------------------------------------------------
@@ -123,7 +129,8 @@
   :user-expenses/delete-supplier-failure
   common-interceptors
   (fn [db [error]]
-    (log/warn "Failed to delete supplier" {:error error})
+    (log/warn "Failed to delete supplier - DEBUG" {:error error :keys (keys error) :response (:response error)})
+    (log/warn "Extracted message:" (http/extract-error-message error))
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))

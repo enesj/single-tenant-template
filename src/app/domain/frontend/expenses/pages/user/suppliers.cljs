@@ -6,6 +6,7 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.messages :refer [error-alert]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -38,6 +39,7 @@
 (defui suppliers-page []
   (let [role (normalize-role (use-subscribe [:user-role]))
         can-modify? (contains? #{"member" "admin"} role)
+        form-error (use-subscribe [:user-expenses/form-error])
         entity-name :suppliers
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
@@ -103,6 +105,11 @@
           ($ :div {:class "w-full px-4 mt-4"}
             ($ :div {:class "ds-alert"}
               ($ :span "Read-only access. Ask a household member to update suppliers."))))
+
+        (when form-error
+          ($ :div {:class "w-full px-4 mt-4"}
+            ($ error-alert {:error form-error
+                            :on-close #(rf/dispatch [:user-expenses/clear-form-error])})))
 
         ($ :main {:class "w-full px-4 py-6"}
           ($ list-view

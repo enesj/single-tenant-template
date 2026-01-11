@@ -112,6 +112,15 @@
                 (if deleted?
                   (h/json-response {:success true})
                   (h/not-found-response "Supplier not found")))
+              (catch org.postgresql.util.PSQLException e
+                (let [sql-state (.getSQLState e)]
+                  (if (= "23503" sql-state) ;; foreign_key_violation
+                    (do
+                      (log/warn "Cannot delete supplier - has related records" {:supplier-id supplier-id})
+                       (h/json-response {:error "Cannot delete: record has related data. Remove related records first."} 409))
+                    (do
+                      (log/error e "Database error deleting supplier" {:supplier-id supplier-id :sql-state sql-state})
+                      (h/json-response {:error "Failed to delete supplier"} 500)))))
               (catch Exception e
                 (log/error e "Error deleting supplier" {:supplier-id supplier-id})
                 (h/json-response {:error "Failed to delete supplier"} 500)))
@@ -192,6 +201,15 @@
                 (if deleted?
                   (h/json-response {:success true})
                   (h/not-found-response "Payer not found")))
+              (catch org.postgresql.util.PSQLException e
+                (let [sql-state (.getSQLState e)]
+                  (if (= "23503" sql-state) ;; foreign_key_violation
+                    (do
+                      (log/warn "Cannot delete payer - has related records" {:payer-id payer-id})
+                      (h/json-response {:error "Cannot delete payer: it has related expenses or other records. Remove related records first."} 409))
+                    (do
+                      (log/error e "Database error deleting payer" {:payer-id payer-id :sql-state sql-state})
+                      (h/json-response {:error "Failed to delete payer"} 500)))))
               (catch Exception e
                 (log/error e "Error deleting payer" {:payer-id payer-id})
                 (h/json-response {:error "Failed to delete payer"} 500)))

@@ -14,18 +14,6 @@
         "copilot/gpt-5.1-codex-max",
         "copilot/gpt-5.2"
       ]
-    },
-    "single-tenant-template/.vscode/mcp.json: postgres": {
-      "allowedModels": [
-        "copilot/gpt-5.1-codex-max",
-        "copilot/gpt-5.2"
-      ]
-    },
-    "single-tenant-template/.vscode/mcp.json: morph-mcp": {
-      "allowedModels": [
-        "copilot/gpt-5.1-codex-max",
-        "copilot/gpt-5.2"
-      ]
     }
   }
 }

@@ -104,6 +104,15 @@
   (fn [request]
     (try
       (handler-fn request)
+      (catch org.postgresql.util.PSQLException e
+        (let [sql-state (.getSQLState e)]
+          (if (= "23503" sql-state) ;; foreign_key_violation
+            (do
+              (log/warn "Cannot delete - has related records" {:message (.getMessage e)})
+              (error-response "Cannot delete: record has related data. Remove related records first." :status 409))
+            (do
+              (log/error e error-message {:message (.getMessage e) :sql-state sql-state})
+              (error-response error-message :status 500)))))
       (catch Exception e
         (let [data (ex-data e)
               status (:status data)]

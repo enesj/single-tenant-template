@@ -38,7 +38,7 @@
 (defui error-alert
   {:prop-types {:error {:type [:string :map :nil]}
                 :entity-name {:type :string}}}
-  [{:keys [error entity-name]}]
+  [{:keys [error entity-name on-close]}]
   (when error
     ($ :div {:class "ds-alert ds-alert-error ds-alert-soft mb-4"
              :id "error-alert-component"}
@@ -60,9 +60,11 @@
           ($ button
             {:btn-type :ghost
              :class "!p-1 !min-h-0 !h-auto"
-             :on-click #(do
-                          (rf/dispatch [::crud-events/clear-error (keyword entity-name)])
-                          (rf/dispatch [::form-events/clear-form-errors (keyword entity-name)]))}
+             :on-click #(if on-close
+                          (on-close)
+                          (when entity-name
+                            (rf/dispatch [::crud-events/clear-error (keyword entity-name)])
+                            (rf/dispatch [::form-events/clear-form-errors (keyword entity-name)])))}
             ($ :span {:class "sr-only"} "Close")
             ($ delete-icon)))))))
 
