@@ -25,14 +25,19 @@
    "payer_id"
    "currency"
    "total_amount"
-   "is_posted"],
+   "is_posted"
+   "created_at"
+   "updated_at"],
   :sortable-columns
   ["purchased_at"
    "supplier_id"
    "payer_id"
    "currency"
    "total_amount"
-   "is_posted"]},
+   "is_posted"
+   "created_at"
+   "updated_at"],
+  :always-visible []},
  :receipts
  {:available-columns
   ["original-filename"

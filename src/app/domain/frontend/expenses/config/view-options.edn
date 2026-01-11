@@ -1,11 +1,12 @@
 {:expenses
  {:display-defaults
-  {:show-pagination? false,
-   :show-add-button? true,
+  {:show-add-button? false,
    :show-highlights? true,
-   :show-timestamps? true},
+   :show-timestamps? true,
+   :show-pagination? true},
   :display-locks {:show-batch-delete? true, :show-batch-edit? true},
-  :column-locks {},
+  :column-locks
+  {:receipt_id false, :id false, :is_posted false, :created_at true},
   :column-defaults {:purchased_at false}},
  :receipts
  {:display-defaults
@@ -17,11 +18,7 @@
    :show-timestamps? true},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
  :suppliers
- {:display-locks
-  {:show-select? false,
-   :show-batch-edit? false,
-   :show-batch-delete? false,
-   :show-add-button? true},
+ {:display-locks {:show-batch-edit? true, :show-batch-delete? true},
   :display-defaults {}},
  :payers
  {:display-locks

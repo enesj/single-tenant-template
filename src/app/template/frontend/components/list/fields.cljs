@@ -4,6 +4,24 @@
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
+(defn- format-timestamp
+  "Format a timestamp value for display, matching Created/Updated column formatting."
+  [value]
+  (when (and value (not= value "") (not= value "—"))
+    (try
+      (let [date (js/Date. value)]
+        (when-not (js/isNaN (.getTime date))
+          (let [month (.toLocaleString date "en-US" #js {:month "short"})
+                day (.getDate date)
+                hours (.getHours date)
+                minutes (.getMinutes date)
+                formatted-time (str (when (< hours 10) "0") hours ":" (when (< minutes 10) "0") minutes)]
+            ($ :div
+              ($ :span {:class "text-primary"} (str month " " day))
+              ($ :span {:class "ml-1"} formatted-time)))))
+      (catch js/Error _
+        ($ :span (str value))))))
+
 (defui select-field-value [{:keys [field value]}]
   (let [raw-options (:options field)
         is-dynamic-options? (and (vector? raw-options)
@@ -112,6 +130,17 @@
           is-json-field? (or (= field-type "json")
                            (= field-type "jsonb"))
 
+          ;; Datetime detection - handle both keyword and string types
+          ;; Also check input-type for fields from database schema (e.g., :input-type "datetime-local")
+          is-datetime-field? (or (= field-type :datetime)
+                               (= field-type "datetime")
+                               (= field-type :timestamp)
+                               (= field-type "timestamp")
+                               (= field-type :datetime-local)
+                               (= field-type "datetime-local")
+                               (= input-type "datetime-local")
+                               (= input-type :datetime-local))
+
           ;; Determine if this field should be truncated based on type or ID
           should-truncate? (or
                              (= input-type "url")          ; URL fields
@@ -148,6 +177,10 @@
         ($ :span {:class (str "ds-badge uppercase tracking-wide text-xs px-3 py-1 rounded-full border shadow-sm "
                            (status->badge-variant status-lower))}
           (titleize-status status-str))
+
+        is-datetime-field?
+        ($ :span {:class "whitespace-nowrap"}
+          (format-timestamp value))
 
         should-truncate?
         ($ truncated-text-value {:text text-value
