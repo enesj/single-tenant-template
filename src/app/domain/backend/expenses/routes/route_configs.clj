@@ -7,6 +7,11 @@
 ;; Entity Route Configurations
 ;; =============================================================================
 
+(defn- get-param
+  "Get param from map, trying both keyword and string keys."
+  [m k]
+  (or (get m k) (get m (if (keyword? k) (name k) (keyword k)))))
+
 (def supplier-config
   {:entity-key :supplier
    :entity-plural :suppliers
@@ -18,7 +23,11 @@
    :has-count? true
    :has-search? true
    :custom-query-params (fn [qp]
-                          {:search (:search qp)})})
+                          {:search (get-param qp :search)
+                           :include_archived (utils/parse-boolean-param qp :include_archived)})
+   :custom-count-params (fn [qp]
+                         {:search (get-param qp :search)
+                          :include_archived (utils/parse-boolean-param qp :include_archived)})})
 
 (def payer-config
   {:entity-key :payer
@@ -31,7 +40,7 @@
    :has-count? true
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:type (:type qp)})
+                          {:type (get-param qp :type)})
    :transform-request (fn [body]
                         (update body :type #(when % (name %))))})
 
@@ -46,7 +55,7 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:search (:search qp)})})
+                          {:search (get-param qp :search)})})
 
 (def expense-config
   {:entity-key :expense
@@ -59,14 +68,14 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:from (:from qp)
-                           :to (:to qp)
-                           :supplier-id (or (utils/parse-uuid-custom (:supplier_id qp))
-                                          (utils/parse-uuid-custom (:supplier-id qp)))
-                           :payer-id (or (utils/parse-uuid-custom (:payer_id qp))
-                                       (utils/parse-uuid-custom (:payer-id qp)))
+                          {:from (get-param qp :from)
+                           :to (get-param qp :to)
+                           :supplier-id (or (utils/parse-uuid-custom (get-param qp :supplier_id))
+                                          (utils/parse-uuid-custom (get-param qp :supplier-id)))
+                           :payer-id (or (utils/parse-uuid-custom (get-param qp :payer_id))
+                                       (utils/parse-uuid-custom (get-param qp :payer-id)))
                            :is-posted? (utils/parse-boolean-param qp :is_posted)
-                           :order-dir (keyword (or (:order-dir qp) "desc"))})})
+                           :order-dir (keyword (or (get-param qp :order-dir) "desc"))})})
 
 (def expense-item-config
   {:entity-key :expense-item
@@ -79,7 +88,7 @@
    :has-count? true
    :has-search? true
    :custom-query-params (fn [qp]
-                          {:search (:search qp)})})
+                          {:search (get-param qp :search)})})
 
 (def receipt-config
   {:entity-key :receipt
@@ -92,7 +101,7 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:status (:status qp)})
+                          {:status (get-param qp :status)})
    :transform-request (fn [body]
                         (update body :status #(when % (name %))))})
 
@@ -107,10 +116,10 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:article-id (utils/parse-uuid-custom (:article_id qp))
-                           :supplier-id (utils/parse-uuid-custom (:supplier_id qp))
-                           :from (:from qp)
-                           :to (:to qp)})})
+                          {:article-id (utils/parse-uuid-custom (get-param qp :article_id))
+                           :supplier-id (utils/parse-uuid-custom (get-param qp :supplier_id))
+                           :from (get-param qp :from)
+                           :to (get-param qp :to)})})
 
 (def article-alias-config
   {:entity-key :article-alias
@@ -123,9 +132,9 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:supplier-id (utils/parse-uuid-custom (:supplier_id qp))
-                           :raw-label (:raw-label qp)
-                           :article-id (utils/parse-uuid-custom (:article_id qp))})})
+                          {:supplier-id (utils/parse-uuid-custom (get-param qp :supplier_id))
+                           :raw-label (get-param qp :raw-label)
+                           :article-id (utils/parse-uuid-custom (get-param qp :article_id))})})
 
 ;; =============================================================================
 ;; Configuration Map

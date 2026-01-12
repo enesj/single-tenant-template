@@ -13,19 +13,33 @@
 ;; Suppliers
 ;; ---------------------------------------------------------------------------
 
+(rf/reg-event-db
+  :user-expenses/set-suppliers-include-archived
+  common-interceptors
+  (fn [db [include-archived?]]
+    (assoc-in db [:user-expenses :suppliers :include-archived?] (boolean include-archived?))))
+
 (rf/reg-event-fx
   :user-expenses/fetch-suppliers
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (-> db
-           (assoc-in [:user-expenses :suppliers :loading?] true)
-           (assoc-in [:user-expenses :suppliers :error] nil))
-     :http-xhrio (x/xhrio db
-                   {:method :get
-                    :uri endpoints/suppliers-endpoint
-                    :admin-uri endpoints/admin-suppliers-endpoint
-                    :on-success [:user-expenses/fetch-suppliers-success]
-                    :on-failure [:user-expenses/fetch-suppliers-failure]})}))
+  (fn [{:keys [db]} [params]]
+    (let [stored-include-archived? (true? (get-in db [:user-expenses :suppliers :include-archived?]))
+          params* (if (map? params) params {})
+          include-archived? (if (contains? params* :include_archived)
+                              (true? (:include_archived params*))
+                              stored-include-archived?)
+          request-params (cond-> (dissoc params* :include_archived)
+                           include-archived? (assoc :include_archived true))]
+  {:db (-> db
+     (assoc-in [:user-expenses :suppliers :loading?] true)
+     (assoc-in [:user-expenses :suppliers :error] nil))
+   :http-xhrio (x/xhrio db
+         {:method :get
+          :uri endpoints/suppliers-endpoint
+          :admin-uri endpoints/admin-suppliers-endpoint
+          :params (when (seq request-params) request-params)
+          :on-success [:user-expenses/fetch-suppliers-success]
+          :on-failure [:user-expenses/fetch-suppliers-failure]})})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-suppliers-success
@@ -55,7 +69,7 @@
 (rf/reg-event-fx
   :user-expenses/fetch-payers
   common-interceptors
-  (fn [{:keys [db]} _]
+  (fn [{:keys [db]} [params]]
     {:db (-> db
            (assoc-in [:user-expenses :payers :loading?] true)
            (assoc-in [:user-expenses :payers :error] nil))
@@ -63,6 +77,7 @@
                    {:method :get
                     :uri endpoints/payers-endpoint
                     :admin-uri endpoints/admin-payers-endpoint
+                    :params (when (map? params) params)
                     :on-success [:user-expenses/fetch-payers-success]
                     :on-failure [:user-expenses/fetch-payers-failure]})}))
 

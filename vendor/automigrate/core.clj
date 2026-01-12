@@ -2,15 +2,15 @@
   "Public interface for lib's users."
   (:gen-class)
   (:require
-   [automigrate.errors :as errors]
-   [automigrate.help :as automigrate-help]
-   [automigrate.migrations :as migrations]
-   [automigrate.util.file :as file-util]
-   [automigrate.util.spec :as spec-util]
-   [clojure.spec.alpha :as s]
-   [clojure.string :as str]
-   [clojure.tools.cli :as cli]
-   [slingshot.slingshot :refer [try+]])
+    [automigrate.errors :as errors]
+    [automigrate.help :as automigrate-help]
+    [automigrate.migrations :as migrations]
+    [automigrate.util.file :as file-util]
+    [automigrate.util.spec :as spec-util]
+    [clojure.spec.alpha :as s]
+    [clojure.string :as str]
+    [clojure.tools.cli :as cli]
+    [slingshot.slingshot :refer [try+]])
   (:refer-clojure :exclude [list]))
 
 (def ^:private JDBC-URL-ENV-VAR "DATABASE_URL")
@@ -140,21 +140,9 @@ Available options:
    ; 0-arity function can be used inside application code if there are no any options.
    (migrate {}))
   ([{:keys [jdbc-url-env-var] :as args}]
-   (println "🐛 DEBUG CORE 1: migrate called with args:" args)
    (let [jdbc-url-env-var* (or jdbc-url-env-var JDBC-URL-ENV-VAR)
          args* (update args :jdbc-url #(or % (System/getenv jdbc-url-env-var*)))]
-     (println "🐛 DEBUG CORE 2: processed args*:" args*)
-     (println "🐛 DEBUG CORE 3: about to call run-fn with migrations/migrate")
-     (try
-       (run-fn migrations/migrate args* ::migrate-args)
-       (println "🐛 DEBUG CORE 4: run-fn completed successfully")
-       (catch Exception e
-         (println "🐛 DEBUG CORE 5: Exception in core/migrate:")
-         (println "  Exception type:" (type e))
-         (println "  Exception message:" (.getMessage e))
-         (println "  Stack trace:")
-         (.printStackTrace e)
-         (throw e))))))
+     (run-fn migrations/migrate args* ::migrate-args))))
 
 (defn explain
   "Show raw SQL or human-readable description for a migration by number.

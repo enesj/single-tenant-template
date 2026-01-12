@@ -10,6 +10,7 @@
     app.domain.frontend.expenses.events.user-expenses.crud
     app.domain.frontend.expenses.events.user-expenses.dashboard
     app.domain.frontend.expenses.events.user-expenses.detail
+    app.domain.frontend.expenses.events.user-expenses.supplier-detail
     app.domain.frontend.expenses.events.user-expenses.export
     app.domain.frontend.expenses.events.user-expenses.lookups
     app.domain.frontend.expenses.events.user-expenses.receipts

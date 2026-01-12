@@ -5,6 +5,7 @@
    Path prefix for this router is /expenses."
   (:require
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
+    [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-expenses :as user-expenses-handlers]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
@@ -28,9 +29,21 @@
     {:get {:handler (user-expenses-handlers/list-suppliers-handler db)}
      :post {:handler (user-expenses-handlers/create-supplier-handler db)}}]
 
+   ;; Purge endpoints (admin/owner only) must come before "/suppliers/:id".
+   ["/suppliers/:id/purge-preview"
+    {:get {:handler (user-expenses-handlers/purge-supplier-preview-handler db)}}]
+
+   ["/suppliers/:id/purge"
+    {:post {:handler (user-expenses-handlers/purge-supplier-handler db)}}]
+
    ["/suppliers/:id"
-    {:put {:handler (user-expenses-handlers/update-supplier-handler db)}
+    {:get {:handler (user-expenses-handlers/get-supplier-handler db)}
+     :put {:handler (user-expenses-handlers/update-supplier-handler db)}
      :delete {:handler (user-expenses-handlers/delete-supplier-handler db)}}]
+
+   ;; Supplier detail related lists (used by user Suppliers "View Details" modal)
+   ["/article-aliases" {:get {:handler (supplier-detail/list-article-aliases-handler db)}}]
+   ["/price-observations" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]
 
    ["/payers"
     {:get {:handler (user-expenses-handlers/list-payers-handler db)}

@@ -7,6 +7,8 @@
    - Transaction-based test isolation fixtures"
   (:require
     [app.template.backend.core :as backend]
+    [app.template.backend.migrations.simple-repl :as mig]
+    [automigrate.core :as am]
     [next.jdbc :as jdbc]
     [system.state :as state]
     [taoensso.timbre :as log]))
@@ -16,6 +18,41 @@
 ;; ============================================================================
 
 (defonce ^:private test-instance (atom nil))
+
+(defonce ^:private migrations-ensured? (atom false))
+
+(defn- column-exists?
+  "Check whether a given column exists in the public schema."
+  [db table-name column-name]
+  (boolean
+    (:exists
+     (jdbc/execute-one!
+       db
+       [(str "select exists (select 1 "
+          "from information_schema.columns "
+          "where table_schema = 'public' "
+          "and table_name = ? "
+          "and column_name = ?) as exists")
+        table-name
+        column-name]))))
+
+(defn- ensure-test-schema!
+  "Ensure the test DB schema is migrated.
+
+  This keeps backend tests runnable even when the local test DB is stale.
+  Runs at most once per JVM."
+  []
+  (when (compare-and-set! migrations-ensured? false true)
+    (try
+      (when-let [db (get @state/state :database)]
+        (when-not (column-exists? db "suppliers" "archived_at")
+          (log/warn "⚠️ Test DB schema missing suppliers.archived_at; running migrations for :test profile...")
+          (am/migrate {:jdbc-url (mig/get-jdbc-url :test)})
+          (log/info "✅ Test DB migrations complete")))
+      (catch Throwable t
+        ;; Allow retries if migration fails.
+        (reset! migrations-ensured? false)
+        (throw t)))))
 
 (defn get-test-db
   "Get the database connection from the running test system"
@@ -67,17 +104,19 @@
     (loop [attempts 0]
       (cond
         (>= attempts 50)
-        (throw (ex-info "Test system failed to start within 5 seconds" 
-                        {:attempts attempts}))
+        (throw (ex-info "Test system failed to start within 5 seconds"
+                 {:attempts attempts}))
 
         (nil? @state/state)
         (do (Thread/sleep 100) (recur (inc attempts)))
 
         :else
-        (log/info "✅ Test system ready" 
-                  {:database (some? (get-test-db))
-                   :service-container (some? (get-test-service-container))
-                   :config (some? (get-test-config))}))))
+        (do
+          (log/info "✅ Test system ready"
+            {:database (some? (get-test-db))
+             :service-container (some? (get-test-service-container))
+             :config (some? (get-test-config))})
+          (ensure-test-schema!)))))
   ;; Return suite unchanged
   suite)
 
@@ -89,8 +128,8 @@
   (log/info "🧹 Stopping test system...")
   (when-let [instance @test-instance]
     (future-cancel instance)
-    (try 
-      @instance 
+    (try
+      @instance
       (catch java.util.concurrent.CancellationException _
         ;; Expected when future is cancelled
         nil)))
@@ -104,7 +143,7 @@
 ;; Dynamic Vars for Test Access
 ;; ============================================================================
 
-(def ^:dynamic *test-db* 
+(def ^:dynamic *test-db*
   "Dynamic var bound to test database connection within test fixtures"
   nil)
 

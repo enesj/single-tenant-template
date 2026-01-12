@@ -18,7 +18,7 @@
    :show-timestamps? true},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
  :suppliers
- {:display-locks {:show-batch-edit? true, :show-batch-delete? true},
+ {:display-locks {:show-batch-edit? false, :show-batch-delete? false},
   :display-defaults {}},
  :payers
  {:display-locks

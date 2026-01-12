@@ -73,21 +73,29 @@
 
 ;; Parameter Extraction & Validation
 
+(defn- get-param
+  "Get a parameter from params map, trying both keyword and string keys."
+  [params key]
+  (or (get params key)
+      (get params (if (keyword? key) (name key) (keyword key)))))
+
 (defn parse-int-param
-  "Parse integer parameter with default value"
+  "Parse integer parameter with default value.
+   Handles both keyword and string keys in the params map."
   [params key default-val]
-  (if-let [val (get params key)]
+  (if-let [val (get-param params key)]
     (try
-      (Integer/parseInt val)
+      (Integer/parseInt (str val))
       (catch NumberFormatException _
         default-val))
     default-val))
 
 (defn parse-boolean-param
-  "Parse boolean parameter"
+  "Parse boolean parameter.
+   Handles both keyword and string keys in the params map."
   [params key]
-  (when-let [val (get params key)]
-    (Boolean/parseBoolean val)))
+  (when-let [val (get-param params key)]
+    (Boolean/parseBoolean (str val))))
 
 (defn extract-pagination-params
   "Extract pagination parameters from request"

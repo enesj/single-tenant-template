@@ -3,7 +3,12 @@
   (:require
     [app.domain.backend.expenses.services.price-history :as price-history]
     [app.domain.backend.expenses.services.service-configs :as configs]
-    [app.domain.backend.expenses.services.services-factory :as factory]))
+    [app.domain.backend.expenses.services.services-factory :as factory]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs])
+  (:import
+    [java.util UUID]))
 
 ;; ============================================================================
 ;; Service Registration
@@ -18,7 +23,50 @@
 (def service (factory/build-entity-service config))
 
 ;; Legacy function names for backward compatibility with routes
-(def list-price-observations (:list service))
+(def ^:private list-price-observations-base (:list service))
+
+(defn- try-uuid
+  [v]
+  (when v
+    (try
+      (cond
+        (instance? UUID v) v
+        :else (UUID/fromString (str v)))
+      (catch Exception _ nil))))
+
+(defn list-price-observations
+  "List price observations.
+
+  Supports optional filters (used by supplier detail views):
+  - :supplier-id / :supplier_id
+  - :article-id / :article_id
+  - :from, :to (timestamp strings)
+
+  Keeps the same base signature as the generated service (db, opts)."
+  [db {:keys [limit offset order-by order-dir search supplier-id supplier_id article-id article_id from to]
+       :or {limit 100 offset 0 order-dir :asc}
+       :as opts}]
+  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
+        article-uuid (try-uuid (or article-id article_id))
+        base-filters (cond-> (vec (or (:base-filters config) []))
+                       supplier-uuid (conj [:= :po/supplier_id supplier-uuid])
+                       article-uuid (conj [:= :po/article_id article-uuid])
+                       from (conj [:>= :po/observed_at from])
+                       to (conj [:<= :po/observed_at to]))
+        config* (assoc config :base-filters base-filters)
+        base-query (factory/build-query-with-filters
+                    config*
+                    {:limit limit
+                     :offset offset
+                     :order-by order-by
+                     :order-dir order-dir})
+        final-query (factory/apply-search-filter base-query (:search-fields config*) search)]
+    ;; NOTE: When no filters are provided, fall back to the base behavior.
+    ;; This preserves compatibility for callers that rely on the generated list.
+    (if (or supplier-uuid article-uuid from to)
+      (jdbc/execute! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})
+      (list-price-observations-base db opts))))
+
 (def get-price-observation (:get service))
 (def update-price-observation! (:update! service))
 (def delete-price-observation! (:delete! service))

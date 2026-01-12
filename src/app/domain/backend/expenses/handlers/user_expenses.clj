@@ -42,10 +42,13 @@
 
 ;; Re-export reference data handlers
 (def list-suppliers-handler reference-data/list-suppliers-handler)
+(def get-supplier-handler reference-data/get-supplier-handler)
 (def list-payers-handler reference-data/list-payers-handler)
 (def create-supplier-handler reference-data/create-supplier-handler)
 (def update-supplier-handler reference-data/update-supplier-handler)
 (def delete-supplier-handler reference-data/delete-supplier-handler)
+(def purge-supplier-preview-handler reference-data/purge-supplier-preview-handler)
+(def purge-supplier-handler reference-data/purge-supplier-handler)
 (def create-payer-handler reference-data/create-payer-handler)
 (def update-payer-handler reference-data/update-payer-handler)
 (def delete-payer-handler reference-data/delete-payer-handler)

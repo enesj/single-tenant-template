@@ -13,6 +13,7 @@
                       [:normalized_key [:varchar 255] {:null false}]
                       [:address :text]
                       [:tax_id [:varchar 50]]
+                      [:archived_at :timestamptz]
                       [:created_at :timestamptz {:default "NOW()"}]
                       [:updated_at :timestamptz {:default "NOW()"}]]
              :indexes [[:idx_suppliers_normalized_key :btree {:fields [:normalized_key] :unique true}]]}

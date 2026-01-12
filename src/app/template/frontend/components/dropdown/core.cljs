@@ -63,6 +63,24 @@
                                    (when (and (not inside-dropdown?) (not inside-trigger?))
                                      (toggle-dropdown! false)))))
 
+        ;; Handle click on a menu item to auto-close.
+        ;; Important: this is wired using a CAPTURE-PHASE listener so it still
+        ;; runs even if dropdown items stop propagation.
+        ;; We close on next tick so the item's own onClick handler still runs.
+        handle-click-menuitem (fn [e]
+                                (when (and auto-close? is-open?)
+                                  (let [target (.-target e)
+                                        dropdown-node @dropdown-ref
+                                        rendered-dropdown (.getElementById js/document dropdown-id)
+                                        trigger-node (.getElementById js/document trigger-id)
+                                        inside-dropdown? (or (and dropdown-node (.contains dropdown-node target))
+                                                           (and rendered-dropdown (.contains rendered-dropdown target)))
+                                        inside-trigger? (and trigger-node (.contains trigger-node target))
+                                        menuitem-el (when (and target (.-closest target))
+                                                     (.closest target "[role='menuitem']"))]
+                                    (when (and inside-dropdown? (not inside-trigger?) menuitem-el)
+                                      (js/setTimeout #(toggle-dropdown! false) 0)))))
+
         ;; Position utility for popover/portal
         position-popover (fn [button-element popover-element & [apply-style?]]
                            (let [apply-style? (if (nil? apply-style?) true apply-style?)]
@@ -167,6 +185,15 @@
             (.addEventListener js/document "mousedown" handle-click-outside)
             #(.removeEventListener js/document "mousedown" handle-click-outside)))
         [handle-click-outside auto-close? is-open?])
+
+      ;; Effect for click-inside (menu item) auto-close.
+      ;; Use capture phase so dropdown-item stopPropagation doesn't block it.
+      (uix/use-effect
+        (fn []
+          (when auto-close?
+            (.addEventListener js/document "click" handle-click-menuitem true)
+            #(.removeEventListener js/document "click" handle-click-menuitem true)))
+        [handle-click-menuitem auto-close? is-open?])
 
       ;; Effect to handle portal positioning - fixed dependencies
       (uix/use-effect

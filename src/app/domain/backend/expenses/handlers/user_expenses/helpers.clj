@@ -1,9 +1,33 @@
 (ns app.domain.backend.expenses.handlers.user-expenses.helpers
   "Common helpers for user expense handlers."
   (:require
-    [cheshire.core :as json])
+    [cheshire.core :as json]
+    [clojure.string :as str])
   (:import
     [java.util UUID]))
+
+(defn get-param
+  "Get a parameter from a params map that may have keyword keys, string keys,
+  snake_case, or kebab-case.
+
+  Examples:
+  - (get-param params :supplier_id) will match :supplier_id, \"supplier_id\",
+    :supplier-id, or \"supplier-id\".
+
+  Intended for Ring/Reitit :query-params maps that often contain string keys."
+  [params k]
+  (when (some? params)
+    (let [k-name (when (keyword? k) (name k))
+          k-str (when (string? k) k)
+          variants (->> [(when (keyword? k) k)
+                         k-name
+                         (when k-name (str/replace k-name "_" "-"))
+                         (when k-name (str/replace k-name "-" "_"))
+                         (when k-str (keyword k-str))
+                         (when k-str (keyword (str/replace k-str "_" "-")))
+                         (when k-str (keyword (str/replace k-str "-" "_")))]
+                     (remove nil?))]
+      (some #(get params %) variants))))
 
 (defn try-parse-uuid
   "Parse a UUID from string, returns nil if invalid."
@@ -16,7 +40,7 @@
 (defn parse-boolean-param
   "Parse boolean parameter from query params map (string values)."
   [params k]
-  (when-let [val (get params k)]
+  (when-let [val (get-param params k)]
     (Boolean/parseBoolean (str val))))
 
 (defn get-user-id

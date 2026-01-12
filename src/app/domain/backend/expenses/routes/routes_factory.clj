@@ -63,6 +63,11 @@
 ;; Generic Handler Builders
 ;; =============================================================================
 
+(defn- get-param
+  "Get param from map, trying both keyword and string keys."
+  [m k]
+  (or (get m k) (get m (if (keyword? k) (name k) (keyword k)))))
+
 (defn build-list-handler
   "Builds a generic list handler for an entity."
   [{:keys [service _entity-key entity-plural default-limit default-order-by
@@ -71,12 +76,12 @@
     (utils/with-error-handling
       (fn [request]
         (let [qp (:query-params request)
+              custom-params (when custom-query-params (custom-query-params qp))
               query-params (merge {:limit (utils/parse-int-param qp :limit default-limit)
                                    :offset (utils/parse-int-param qp :offset 0)
-                                   :order-by (keyword (or (:order-by qp) default-order-by))
-                                   :order-dir (keyword (or (:order-dir qp) "asc"))}
-                             (when custom-query-params
-                               (custom-query-params qp)))
+                                   :order-by (keyword (or (get-param qp :order-by) default-order-by))
+                                   :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
+                             custom-params)
               list-fn (resolve-fn service (symbol (str "list-" (name entity-plural))))
               results (list-fn db query-params)
               response-key (or (:response-key transform-response) entity-plural)

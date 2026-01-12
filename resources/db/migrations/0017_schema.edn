@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :archived-at,
+  :model-name :suppliers,
+  :options {:type :timestamptz}})

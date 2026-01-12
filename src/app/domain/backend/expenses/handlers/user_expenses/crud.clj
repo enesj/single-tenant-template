@@ -13,14 +13,14 @@
     (if-let [user-id (h/get-user-id request)]
       (try
         (let [params (:query-params request)
-              opts {:from (:from params)
-                    :to (:to params)
-                    :supplier-id (h/try-parse-uuid (:supplier_id params))
-                    :payer-id (h/try-parse-uuid (:payer_id params))
-                    :is-posted? (h/parse-boolean-param params :is_posted)
-                    :limit (or (some-> (:limit params) parse-long) 50)
-                    :offset (or (some-> (:offset params) parse-long) 0)
-                    :order-dir (keyword (or (:order_dir params) "desc"))}
+            opts {:from (h/get-param params :from)
+              :to (h/get-param params :to)
+              :supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
+              :payer-id (h/try-parse-uuid (h/get-param params :payer_id))
+              :is-posted? (h/parse-boolean-param params :is_posted)
+              :limit (or (some-> (h/get-param params :limit) parse-long) 50)
+              :offset (or (some-> (h/get-param params :offset) parse-long) 0)
+              :order-dir (keyword (or (h/get-param params :order_dir) "desc"))}
               expenses (user-expenses/list-user-expenses db user-id opts)
               total (user-expenses/count-user-expenses db user-id opts)]
           (h/json-response {:data expenses

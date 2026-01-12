@@ -7,6 +7,9 @@
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
+    app.domain.frontend.expenses.subs.suppliers
+    [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -16,9 +19,15 @@
   (let [supplier (use-subscribe [:expenses/supplier supplier-id])
         loading? (use-subscribe [:expenses/supplier-detail-loading?])
         error (use-subscribe [:expenses/suppliers-error])
+  archiving? (use-subscribe [:expenses/supplier-archive-loading?])
         expenses (use-subscribe [:expenses/entries])
         aliases (use-subscribe [:expenses/article-aliases])
-        observations (use-subscribe [:expenses/price-observations])]
+  observations (use-subscribe [:expenses/price-observations])
+  archived-at (or (some-> supplier :archived_at)
+          (some-> supplier :suppliers/archived_at)
+          (some-> supplier :archived-at))
+  archived? (some? archived-at)
+  supplier-id-str (some-> supplier-id str)]
     (use-effect
       (fn []
         (when supplier-id
@@ -49,7 +58,28 @@
             (utils/label-value "Address" (:address supplier))
             (utils/label-value "Tax ID" (:tax-id supplier))
             (utils/label-value "Created At" (shared/format-date (:created-at supplier)))
+            (utils/label-value "Archived At" (when archived-at (shared/format-date archived-at)))
             (utils/label-value "ID" (:id supplier)))
+
+          ($ :div {:class "flex flex-wrap items-center gap-2"}
+            (cond
+              archived?
+              ($ :span {:class "text-xs text-base-content/60"}
+                "Archived")
+
+              :else
+              ($ button
+                {:id (str "btn-archive-suppliers-" supplier-id-str)
+                 :btn-type :warning
+                 :loading archiving?
+                 :disabled archiving?
+                 :on-click (fn []
+                             (confirm-dialog/show-confirm
+                               {:title "Archive supplier"
+                                :message "Archive this supplier? You can still purge it later from the suppliers list actions menu (admin-only)."
+                                :danger? true
+                                :on-confirm #(rf/dispatch [::suppliers-events/archive-supplier supplier-id-str])}))}
+                "Archive supplier")))
 
           ($ :div {:class "grid gap-4 lg:grid-cols-3"}
             ($ utils/related-table

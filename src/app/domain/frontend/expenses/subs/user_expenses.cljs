@@ -87,7 +87,77 @@
 (rf/reg-sub
   :user-expenses/suppliers
   (fn [db _]
-    (get-in db [:user-expenses :suppliers :items])))
+    (let [items (or (get-in db [:user-expenses :suppliers :items]) [])]
+      (->> items
+        (remove (fn [s]
+                  (some? (or (:archived_at s) (:suppliers/archived_at s) (:archived-at s)))))
+        vec))))
+
+(rf/reg-sub
+  :user-expenses/suppliers-include-archived?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :suppliers :include-archived?]))))
+
+;; Supplier detail (used by the user suppliers modal)
+(rf/reg-sub
+  :user-expenses/supplier-detail
+  (fn [db [_ supplier-id]]
+    (get-in db [:user-expenses :suppliers :detail :by-id (some-> supplier-id str)])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-loading?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :suppliers :detail :loading?]))))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-error
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :error])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-expenses
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :expenses])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-expenses-loading?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :suppliers :detail :expenses-loading?]))))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-expenses-error
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :expenses-error])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-article-aliases
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :aliases])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-article-aliases-loading?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :suppliers :detail :aliases-loading?]))))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-article-aliases-error
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :aliases-error])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-price-observations
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :observations])))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-price-observations-loading?
+  (fn [db _]
+    (true? (get-in db [:user-expenses :suppliers :detail :observations-loading?]))))
+
+(rf/reg-sub
+  :user-expenses/supplier-detail-price-observations-error
+  (fn [db _]
+    (get-in db [:user-expenses :suppliers :detail :observations-error])))
 
 (rf/reg-sub
   :user-expenses/payers
