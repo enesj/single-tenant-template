@@ -22,11 +22,9 @@
 
 (def service (factory/build-entity-service config))
 
-;; Legacy function names for backward compatibility with routes
-(def list-expense-items (:list service))
-(def get-expense-item (:get service))
-(def create-expense-item! (:create! service))
-(def update-expense-item! (:update! service))
+;; NOTE: Avoid legacy alias vars like `list-expense-items`/`get-expense-item`.
+;; Admin routes resolve operations via the `service` map, except for the custom
+;; soft-delete override below.
 (def delete-expense-item!
   "Soft delete an expense item by setting :deleted_at. Returns the updated row, or nil
   if it was already deleted or not found."
@@ -40,5 +38,4 @@
                            [:is :deleted_at nil]]
                    :returning [:*]})
       {:builder-fn rs/as-unqualified-lower-maps})))
-(def count-expense-items (:count service))
-(def search-expense-items (:search service))
+

@@ -63,7 +63,8 @@
 (deftest save-review-parses-datetime-local-validates-currency-and-does-not-mutate-total-guess
   (testing "datetime-local purchased_at is parsed; invalid currency yields 400; saving a review does not overwrite total_amount_guess"
     (let [db fixtures/*test-db*
-          supplier (suppliers/create-supplier! db {:display_name (str "Test Supplier " (UUID/randomUUID))})
+          create-supplier! (:create! suppliers/service)
+          supplier (create-supplier! db {:display_name (str "Test Supplier " (UUID/randomUUID))})
           receipt-id (UUID/randomUUID)
           _receipt (insert-receipt! db {:id receipt-id
                                         :status "review_required"

@@ -114,14 +114,6 @@
     (when-let [init-fn (:init! manifest)]
       (init-fn))))
 
-(defn all-admin-routes
-  "Admin routes are NOT provided via the registry to avoid circular dependencies.
-   Use this function as a placeholder - admin routes should be required directly
-   by admin/frontend/routes.cljs from domain route namespaces."
-  []
-  ;; Return empty - admin routes are merged directly in admin/frontend/routes.cljs
-  [])
-
 (defn all-user-routes
   "Collect user routes from all enabled domains.
    Routes are stored as functions and called lazily to avoid circular dependencies.
@@ -133,13 +125,6 @@
                 (routes-fn)
                 routes-fn)))
     enabled-domains))
-
-(defn all-pages
-  "Pages are NOT provided via the registry to avoid circular dependencies.
-   Use app.domain.frontend.pages instead."
-  []
-  ;; Return empty - pages should be loaded from app.domain.frontend.pages
-  {})
 
 (defn all-admin-entities
   "Collect admin entity registry entries from all enabled domains.

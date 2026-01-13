@@ -4,6 +4,32 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [taoensso.timbre :as log]))
 
+(defn- resolve-service-map
+  "Resolve the `service` var in a service namespace and return its value." 
+  [service-ns]
+  (when-let [service-var (requiring-resolve (symbol (name service-ns) "service"))]
+    (let [m (var-get service-var)]
+      (when (map? m)
+        m))))
+
+(defn- resolve-service-op-fn
+  "Resolve an operation fn for a service.
+
+  Prefers an explicitly named var when provided (so wrappers/overrides still win),
+  otherwise falls back to the `service` map key." 
+  ([service-ns service-op]
+   (resolve-service-op-fn service-ns service-op nil))
+  ([service-ns service-op legacy-var]
+   (or (when legacy-var
+         (requiring-resolve (symbol (name service-ns) (name legacy-var))))
+     (when-let [m (resolve-service-map service-ns)]
+       (get m service-op))
+     (throw (ex-info (str "Could not resolve service op " service-op
+                       " in namespace " service-ns)
+              {:ns service-ns
+               :service-op service-op
+               :legacy-var legacy-var})))))
+
 (def ^:private supplier-purge-roles
   "User roles allowed to permanently purge suppliers."
   #{"admin" "owner"})
@@ -54,7 +80,10 @@
                             (h/try-parse-uuid (get-in request [:parameters :path :id])))]
           (if supplier-id
             (try
-              (let [get-supplier (requiring-resolve 'app.domain.backend.expenses.services.suppliers/get-supplier)
+              (let [get-supplier (resolve-service-op-fn
+                                  'app.domain.backend.expenses.services.suppliers
+                                  :get
+                                  'get-supplier)
                     supplier (get-supplier db supplier-id)]
                 (if supplier
                   (h/json-response {:data supplier})
@@ -76,7 +105,10 @@
           (let [params (:query-params request)
                 limit (or (some-> (:limit params) parse-long) 100)
                 offset (or (some-> (:offset params) parse-long) 0)
-                payers-svc (requiring-resolve 'app.domain.backend.expenses.services.payers/list-payers)
+                payers-svc (resolve-service-op-fn
+                            'app.domain.backend.expenses.services.payers
+                            :list
+                            'list-payers)
                 payers (payers-svc db {:limit limit :offset offset})]
             (h/json-response {:data payers}))
           (catch Exception e
@@ -96,7 +128,10 @@
         (try
           (let [body (h/read-json-body request)
                 supplier-data (select-keys body [:display_name :address :tax_id])
-                create-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/create-supplier!)
+                create-supplier! (resolve-service-op-fn
+                                  'app.domain.backend.expenses.services.suppliers
+                                  :create!
+                                  'create-supplier!)
                 supplier (create-supplier! db supplier-data)]
             (h/json-response {:data supplier} 201))
           (catch clojure.lang.ExceptionInfo e
@@ -122,7 +157,10 @@
             (try
               (let [body (h/read-json-body request)
                     updates (select-keys body [:display_name :address :tax_id])
-                    update-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/update-supplier!)
+                    update-supplier! (resolve-service-op-fn
+                                      'app.domain.backend.expenses.services.suppliers
+                                      :update!
+                                      'update-supplier!)
                     supplier (update-supplier! db supplier-id updates)]
                 (if supplier
                   (h/json-response {:data supplier})
@@ -296,7 +334,10 @@
                          (h/try-parse-uuid (get-in request [:parameters :path :id])))]
           (if payer-id
             (try
-              (let [delete-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/delete-payer!)
+              (let [delete-payer! (resolve-service-op-fn
+                                   'app.domain.backend.expenses.services.payers
+                                   :delete!
+                                   'delete-payer!)
                     deleted? (boolean (delete-payer! db payer-id))]
                 (if deleted?
                   (h/json-response {:success true})

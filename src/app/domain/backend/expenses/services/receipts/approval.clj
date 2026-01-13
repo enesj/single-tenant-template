@@ -30,7 +30,8 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [supplier-uuid (parsing/try-parse-uuid supplier_id)
-            supplier (when supplier-uuid (suppliers/get-supplier tx supplier-uuid))
+        get-supplier (:get suppliers/service)
+        supplier (when supplier-uuid (get-supplier tx supplier-uuid))
             supplier-guess (or (some-> supplier :display_name str/trim not-empty)
                              (:supplier_guess review-data)
                              (:supplier-guess review-data))

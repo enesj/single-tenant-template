@@ -35,6 +35,45 @@
                {:ns ns-sym :sym sym :target target-sym})))
     resolved))
 
+(defn- maybe-resolve-fn
+  "Like resolve-fn, but returns nil when the target var doesn't exist.
+
+  NOTE: still throws if the namespace itself can't be loaded."
+  [ns-sym sym]
+  (let [target-sym (if (namespace sym)
+                     sym
+                     (symbol (name ns-sym) (name sym)))]
+    (requiring-resolve target-sym)))
+
+(defn- resolve-service-map
+  "Resolve the `service` var in a service namespace and return its value.
+
+  Service maps are produced by `services-factory/build-entity-service` and include
+  keys like :list/:get/:create!/:update!/:delete!/:count and sometimes :search." 
+  [service-ns]
+  (when-let [service-var (maybe-resolve-fn service-ns 'service)]
+    (let [m (var-get service-var)]
+      (when (map? m)
+        m))))
+
+(defn- resolve-service-op-fn
+  "Resolve a handler/service function for a CRUD op.
+
+  Resolution order:
+  1) Prefer an explicitly named var (e.g., wrappers/overrides like delete-expense-item!)
+  2) Fallback to the `service` map op (allows removing legacy alias vars)
+
+  Throws if neither exists." 
+  [service-ns legacy-sym service-op]
+  (or (maybe-resolve-fn service-ns legacy-sym)
+    (when-let [service-map (resolve-service-map service-ns)]
+      (get service-map service-op))
+    (throw (ex-info (str "Could not resolve " legacy-sym " or service op " service-op
+                      " in namespace " service-ns)
+             {:ns service-ns
+              :legacy-sym legacy-sym
+              :service-op service-op}))))
+
 (defn read-json-body
   "Return a parsed request body map.
 
@@ -82,7 +121,9 @@
                                    :order-by (keyword (or (get-param qp :order-by) default-order-by))
                                    :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
                              custom-params)
-              list-fn (resolve-fn service (symbol (str "list-" (name entity-plural))))
+              list-fn (resolve-service-op-fn service
+                        (symbol (str "list-" (name entity-plural)))
+                        :list)
               results (list-fn db query-params)
               response-key (or (:response-key transform-response) entity-plural)
               response-data (if (:transform transform-response)
@@ -101,7 +142,9 @@
               count-params (merge {}
                              (when custom-count-params
                                (custom-count-params qp)))
-              count-fn (resolve-fn service (symbol (str "count-" (name entity-plural))))
+              count-fn (resolve-service-op-fn service
+                         (symbol (str "count-" (name entity-plural)))
+                         :count)
               total (count-fn db count-params)]
           (utils/success-response {:total total})))
       (str "Failed to count " (name entity-plural)))))
@@ -127,7 +170,9 @@
                    :body-keys (when (map? body) (keys body))
                    :required-values (when (map? body) (select-keys body required-fields))})
                 (utils/error-response (str (str/join ", " required-fields) " are required") :status 400))
-              (let [create-fn (resolve-fn service (symbol (str "create-" (name entity-key) "!")))
+              (let [create-fn (resolve-service-op-fn service
+                                (symbol (str "create-" (name entity-key) "!"))
+                                :create!)
                     entity (create-fn db body)
                     response-key (or (:response-key transform-response) entity-key)
                     response-data (if (:transform transform-response)
@@ -144,7 +189,9 @@
       (fn [request]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (let [get-fn (or custom-get-fn
-                         (resolve-fn service (symbol (str "get-" (name entity-key)))))
+                         (resolve-service-op-fn service
+                           (symbol (str "get-" (name entity-key)))
+                           :get))
                 entity (get-fn db id)]
             (if entity
               (let [response-key (or (:response-key transform-response) entity-key)
@@ -165,7 +212,9 @@
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (let [body (-> (read-json-body request)
                        (cond-> transform-request transform-request))
-                update-fn (resolve-fn service (symbol (str "update-" (name entity-key) "!")))
+                update-fn (resolve-service-op-fn service
+                            (symbol (str "update-" (name entity-key) "!"))
+                            :update!)
                 updated (update-fn db id body)]
             (if updated
               (let [response-key (or (:response-key transform-response) entity-key)
@@ -185,7 +234,9 @@
       (fn [request]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (let [delete-fn (or custom-delete-fn
-                            (resolve-fn service (symbol (str "delete-" (name entity-key) "!"))))
+                            (resolve-service-op-fn service
+                              (symbol (str "delete-" (name entity-key) "!"))
+                              :delete!))
                 deleted (delete-fn db id)]
             (if deleted
               (utils/success-response
@@ -207,7 +258,9 @@
               query (get qp query-param-name)
               limit (utils/parse-int-param qp :limit 10)
               search-fn (or (when search-fn-name (resolve-fn service search-fn-name))
-                          (resolve-fn service (symbol (str "search-" (name entity-plural)))))
+                          (resolve-service-op-fn service
+                            (symbol (str "search-" (name entity-plural)))
+                            :search))
               results (search-fn db query {:limit limit})
               response-key (or (:response-key transform-response) entity-plural)
               response-data (if (:transform transform-response)

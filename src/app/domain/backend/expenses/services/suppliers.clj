@@ -19,10 +19,9 @@
 
 (def service (factory/build-entity-service config))
 
-;; Legacy function names for backward compatibility with routes
-(def get-supplier (:get service))
-(def create-supplier! (:create! service))
-(def update-supplier! (:update! service))
+;; NOTE: We intentionally avoid legacy alias vars like `get-supplier`/`create-supplier!`.
+;; Admin routes and user handlers resolve operations via the `service` map or
+;; explicit overrides in this namespace.
 
 ;; NOTE: Suppliers are *archived* (soft-deleted) instead of hard-deleted, because
 ;; expenses are soft-deleted and keep FK references to suppliers.
@@ -398,9 +397,9 @@
     (if-let [existing (find-by-normalized-key db normalized)]
       {:existing? true :supplier existing}
       {:existing? false
-       :supplier (create-supplier! db {:display_name display-name
-                                       :address address
-                                       :tax_id tax_id})})))
+       :supplier ((:create! service) db {:display_name display-name
+                                         :address address
+                                         :tax_id tax_id})})))
 
 (defn search-suppliers-autocomplete
   "Search suppliers for autocomplete with fuzzy matching."

@@ -21,6 +21,7 @@
 (deftest only-one-default-payer-on-create
   (testing "creating a payer with is_default=true unsets any previous default"
     (let [db fixtures/*test-db*
+          get-payer (:get payers/service)
           p1 (payers/create-payer!
                db
                {:type "cash"
@@ -31,8 +32,8 @@
                {:type "card"
                 :label (str "card-" (UUID/randomUUID))
                 :is_default true})
-          p1* (payers/get-payer db (:id p1))
-          p2* (payers/get-payer db (:id p2))
+          p1* (get-payer db (:id p1))
+          p2* (get-payer db (:id p2))
           default (payers/get-default-payer db)]
       (is (= 1 (count-default-payers db))
         "There should be at most one default payer")
@@ -46,6 +47,7 @@
 (deftest only-one-default-payer-on-update
   (testing "updating a payer to is_default=true unsets any previous default"
     (let [db fixtures/*test-db*
+          get-payer (:get payers/service)
           p1 (payers/create-payer!
                db
                {:type "cash"
@@ -61,8 +63,8 @@
                      (:id p2)
                      {:label (str "acct-updated-" (UUID/randomUUID))
                       :is_default true})
-          p1* (payers/get-payer db (:id p1))
-          p2* (payers/get-payer db (:id p2))
+          p1* (get-payer db (:id p1))
+          p2* (get-payer db (:id p2))
           default (payers/get-default-payer db)]
       (is (= 1 (count-default-payers db))
         "There should be at most one default payer")

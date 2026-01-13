@@ -20,9 +20,9 @@
 
 (def service (factory/build-entity-service config))
 
-;; Legacy function names for backward compatibility with routes
-(def list-payers (:list service))
-(def get-payer (:get service))
+;; NOTE: Avoid legacy alias vars like `list-payers`/`get-payer`/etc.
+;; Route handlers resolve operations via the `service` map, except where we
+;; intentionally provide wrappers (create/update) below.
 ;; NOTE: We wrap the factory create/update fns to enforce that there is at most
 ;; one default payer at any time.
 (declare set-default-payer-in-tx!)
@@ -46,9 +46,6 @@
           (when-let [_payer (update-payer!* tx payer-id (assoc (dissoc updates :is_default) :is_default false))]
             (set-default-payer-in-tx! tx payer-id)))
         (update-payer!* db payer-id updates)))))
-(def delete-payer! (:delete! service))
-(def count-payers (:count service))
-(def search-payers (:search service))
 
 ;; ============================================================================
 ;; Custom Operations

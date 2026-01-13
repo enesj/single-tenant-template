@@ -21,7 +21,3 @@
     [app.domain.frontend.expenses.subs.suppliers]
     [app.domain.frontend.expenses.subs.unmapped-items]
     [app.domain.frontend.expenses.subs.user-expenses]))
-
-(defn init!
-  "Ensure expenses domain events/subs are loaded."
-  [])

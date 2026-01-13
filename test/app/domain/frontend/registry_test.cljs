@@ -54,20 +54,6 @@
       (is (contains? paths "/expenses/new"))
       (is (contains? paths "/expenses/upload")))))
 
-(deftest all-admin-routes-test
-  (testing "all-admin-routes returns empty (admin routes imported directly)"
-    ;; Admin routes are intentionally empty in the registry to avoid circular deps
-    ;; They are imported directly by admin/frontend/routes.cljs
-    (let [routes (domain-registry/all-admin-routes)]
-      (is (empty? routes)))))
-
-(deftest all-pages-test
-  (testing "all-pages returns empty (pages imported directly)"
-    ;; Pages are intentionally empty in the registry to avoid circular deps
-    ;; They are imported directly by template/frontend/core.cljs
-    (let [pages (domain-registry/all-pages)]
-      (is (empty? pages)))))
-
 (deftest all-admin-entities-test
   (testing "all-admin-entities returns map of entity registrations"
     (let [entities (domain-registry/all-admin-entities)]
