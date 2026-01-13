@@ -73,46 +73,19 @@
             (route-fn db service-container)))
     enabled-domains))
 
-(defn- fn-supports-arity?
-  "True if `f` has a declared invoke/doInvoke method for `arity`.
-
-  This is used to support both legacy (2-arity) and newer (3-arity) domain route fns."
-  [f arity]
-  (some (fn [^java.lang.reflect.Method m]
-          (and (#{"invoke" "doInvoke"} (.getName m))
-            (= arity (count (.getParameterTypes m)))))
-    (.getDeclaredMethods (class f))))
-
-(defn- call-user-api-route-fn
-  "Invoke a domain `:user-api` route function with the right arity.
-
-  Supported signatures:
-  - (fn [db wrap-user-auth] ...)
-  - (fn [db wrap-user-auth app-config] ...)
-  - (fn [db wrap-user-auth & [app-config]] ...)
-
-  Prefer passing `app-config` when supported."
-  [route-fn db wrap-user-auth app-config]
-  (cond
-    (fn-supports-arity? route-fn 3) (route-fn db wrap-user-auth app-config)
-    (fn-supports-arity? route-fn 2) (route-fn db wrap-user-auth)
-    ;; Fallback: preserve previous behavior.
-    :else (route-fn db wrap-user-auth app-config)))
-
 (defn all-user-api-routes
   "Collect user API routes from all enabled domains.
    Returns a vector of reitit route vectors.
 
    `app-config` is optional.
 
-   Domain `:user-api` fns support either 2 or 3 args:
-   - (fn [db wrap-user-auth] ...)
+   Domain `:user-api` fns must accept 3 args:
    - (fn [db wrap-user-auth app-config] ...)
    - (fn [db wrap-user-auth & [app-config]] ...)"
   [db wrap-user-auth & [app-config]]
   (mapv (fn [manifest]
           (when-let [route-fn (get-in manifest [:routes :user-api])]
-            (call-user-api-route-fn route-fn db wrap-user-auth app-config)))
+            (route-fn db wrap-user-auth app-config)))
     enabled-domains))
 
 (defn get-ui-config-paths

@@ -1,7 +1,7 @@
 # Plan: Removal of Unused/Legacy Code in `src/app/domain`
 
 **Date:** 2026-01-13
-**Status:** In Progress — Phase 3 (legacy alias refactor) completed for payers/suppliers/expense-items/article-aliases/price-observations
+**Status:** In Progress — Phase 3 (legacy alias refactor) completed for payers/suppliers/expense-items/article-aliases/price-observations; Phase 4 (arity support) completed
 
 ## Overview
 
@@ -104,45 +104,38 @@ The following service files previously contained wrapper vars that aliased servi
 
 ### Backend Registry - `src/app/domain/backend/registry.clj`
 
-#### `fn-supports-arity?` function (lines 76-84)
-```clojure
-(defn- fn-supports-arity?
-  "True if `f` has a declared invoke/doInvoke method for `arity`.
+#### Phase 4 change (✅ completed)
 
-  This is used to support both legacy (2-arity) and newer (3-arity) domain route fns."
-  [f arity]
-  (some (fn [^java.lang.reflect.Method m]
-          (and (#{"invoke" "doInvoke"} (.getName m))
-            (= arity (count (.getParameterTypes m)))))
-    (.getDeclaredMethods (class f))))
+The registry previously supported both 2-arity and 3-arity domain `:user-api` route functions via
+reflection-based arity detection.
+
+That compatibility layer has now been **removed**.
+
+**New requirement:** domain `:user-api` route fns must accept 3 args:
+- `(fn [db wrap-user-auth app-config] ...)` or
+- `(fn [db wrap-user-auth & [app-config]] ...)`
+
+**Current implementation (simplified):**
+```clojure
+(defn all-user-api-routes
+  "Collect user API routes from all enabled domains.
+   Returns a vector of reitit route vectors.
+
+   `app-config` is optional.
+
+   Domain `:user-api` fns must accept 3 args:
+   - (fn [db wrap-user-auth app-config] ...)
+   - (fn [db wrap-user-auth & [app-config]] ...)"
+  [db wrap-user-auth & [app-config]]
+  (mapv (fn [manifest]
+          (when-let [route-fn (get-in manifest [:routes :user-api])]
+            (route-fn db wrap-user-auth app-config)))
+    enabled-domains))
 ```
 
-#### `call-user-api-route-fn` function (lines 86-100)
-```clojure
-(defn- call-user-api-route-fn
-  "Invoke a domain `:user-api` route function with the right arity.
-
-  Supported signatures:
-  - (fn [db wrap-user-auth] ...)
-  - (fn [db wrap-user-auth app-config] ...)
-  - (fn [db wrap-user-auth & [app-config]] ...)
-
-  Prefer passing `app-config` when supported."
-  [route-fn db wrap-user-auth app-config]
-  (cond
-    (fn-supports-arity? route-fn 3) (route-fn db wrap-user-auth app-config)
-    (fn-supports-arity? route-fn 2) (route-fn db wrap-user-auth)
-    ;; Fallback: preserve previous behavior.
-    :else (route-fn db wrap-user-auth app-config)))
-```
-
-- **Status:** Supports backward compatibility with old 2-arity route functions
-- **Status (verified):** Compatibility is explicitly covered by `test/app/domain/backend/registry_test.clj`.
-- **Risk:** MEDIUM - Removing this breaks tests and any future/legacy domains that still provide 2-arity route fns.
-- **Action:** Keep until we intentionally drop legacy support. If/when removing:
-  1) verify all manifests provide a 3-arity `:user-api` wrapper,
-  2) update/remove the compatibility tests,
-  3) update docs to require `(fn [db wrap-user-auth app-config] ...)` (where `app-config` may be nil).
+- **Status:** ✅ Removed legacy 2-arity support (Phase 4)
+- **Risk:** MEDIUM (intentional breaking change for any future 2-arity domains)
+- **Action:** ✅ Updated tests by removing the explicit 2-arity compatibility test in `test/app/domain/backend/registry_test.clj`.
 
 ---
 
@@ -207,7 +200,7 @@ TODO: Add user_expense_settings table or JSONB column to users table.
 |----------|---------------|-------|--------------|----------------|
 | Empty/Placeholder Functions | 2 | ~25 | LOW | ✅ Removed |
 | Legacy Function Aliases | 5 | ~40 | MEDIUM | ✅ Refactor completed for payers/suppliers/expense-items/article-aliases/price-observations |
-| Legacy Arity Support | 1 | ~25 | MEDIUM | Keep (covered by tests); remove only as an intentional breaking change |
+| Legacy Arity Support | 1 | ~25 | MEDIUM | ✅ Removed (registry now requires 3-arity `:user-api` route fns) |
 | Stub Implementations | 1 | ~50 | N/A | Keep or implement TODO |
 | Empty Init | 1 | ~3 | LOW | ✅ Removed |
 
@@ -237,11 +230,11 @@ TODO: Add user_expense_settings table or JSONB column to users table.
 > Note: With current dynamic resolution patterns, Phase 3 is a refactor project (not a quick cleanup).
 
 ### Phase 4: Simplify Arity Support
-1. Verify all domain routes use 3-arity
-2. Simplify `call-user-api-route-fn` to direct call
-3. Remove `fn-supports-arity?` if no longer needed
+1. ✅ Verify all domain routes use 3-arity
+2. ✅ Simplify user route invocation to a direct call (removed `call-user-api-route-fn`)
+3. ✅ Remove `fn-supports-arity?`
 
-> Note: Phase 4 requires updating/removing the explicit compatibility tests.
+> Note: Phase 4 included removing the explicit 2-arity compatibility test.
 
 ### Phase 5: Decision Required (Stubs)
 1. Decide: Keep stub as-is, implement settings storage, or document as intentional limitation

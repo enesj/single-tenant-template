@@ -56,29 +56,6 @@
       (is (string? first-path))
       (is (= "/expenses" first-path)))))
 
-(deftest user-api-route-fn-arity-compatibility-test
-  (testing "supports legacy 2-arity :user-api route fns when app-config is provided"
-    (with-redefs [domain-registry/enabled-domains
-                  [{:id :legacy
-                    :routes {:user-api (fn [_db _wrap-user-auth]
-                                         ["/legacy"])}
-                    :ui-config {:user {:paths {}}}
-                    :redirects {}
-                    :spa-routes []}]]
-      (is (= [["/legacy"]]
-            (domain-registry/all-user-api-routes nil nil {:some :config})))))
-
-  (testing "supports 3-arity :user-api route fns"
-    (with-redefs [domain-registry/enabled-domains
-                  [{:id :v2
-                    :routes {:user-api (fn [_db _wrap-user-auth _app-config]
-                                         ["/v2"])}
-                    :ui-config {:user {:paths {}}}
-                    :redirects {}
-                    :spa-routes []}]]
-      (is (= [["/v2"]]
-            (domain-registry/all-user-api-routes nil nil {:some :config}))))))
-
 (deftest get-ui-config-paths-test
   (testing "get-ui-config-paths returns map with domain config paths"
     (let [paths (domain-registry/get-ui-config-paths)]
