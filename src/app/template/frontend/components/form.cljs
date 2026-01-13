@@ -141,7 +141,8 @@
   [{:keys [editing set-dirty form-id] :as props}]
   (let [entity-name (:entity-name props)
         ;; Use enhanced field specs with validation metadata from subscription
-        enhanced-field-specs (urf/use-subscribe [:form-entity-specs/by-name entity-name])
+        ;; Pass editing state to get correct fields (create-fields vs edit-fields)
+        enhanced-field-specs (urf/use-subscribe [:form-entity-specs/by-name entity-name editing])
         ;; Fallback to raw entity-spec if enhanced specs aren't available yet
         raw-spec (:entity-spec props)
 

@@ -90,6 +90,27 @@
      :view :expense-payers
      :controllers (controllers/make-simple-controller :page/init-expense-payers)}]
 
+   ;; Power-user reference management (admin/owner only)
+   ["/expense-items"
+    {:name :expense-items
+     :view :expense-items
+     :controllers (controllers/make-simple-controller :page/init-expense-items)}]
+
+   ["/articles"
+    {:name :expense-articles
+     :view :expense-articles
+     :controllers (controllers/make-simple-controller :page/init-expense-articles)}]
+
+   ["/article-aliases"
+    {:name :expense-article-aliases
+     :view :expense-article-aliases
+     :controllers (controllers/make-simple-controller :page/init-expense-article-aliases)}]
+
+   ["/price-observations"
+    {:name :expense-price-observations
+     :view :expense-price-observations
+     :controllers (controllers/make-simple-controller :page/init-expense-price-observations)}]
+
    ;; Expense detail (kept after literal routes to avoid catching static paths)
    ["/expenses/:expense-id"
     {:name :expense-detail

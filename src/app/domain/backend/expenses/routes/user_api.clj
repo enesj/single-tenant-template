@@ -8,6 +8,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-expenses :as user-expenses-handlers]
+    [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
 
 (defn routes
@@ -23,6 +24,17 @@
    ["/summary" {:get {:handler (user-expenses-handlers/expense-summary-handler db)}}]
    ["/by-month" {:get {:handler (user-expenses-handlers/spending-by-month-handler db)}}]
    ["/by-supplier" {:get {:handler (user-expenses-handlers/spending-by-supplier-handler db)}}]
+
+   ;; Settings endpoints (must come before /:id routes)
+   ["/settings"
+    {:get {:handler (settings/get-settings-handler db)}
+     :put {:handler (settings/update-settings-handler db)}}]
+
+   ;; Export endpoint
+   ["/export" {:get {:handler (settings/export-expenses-handler db)}}]
+
+   ;; Delete-all endpoint (danger zone, admin/owner only)
+   ["/all" {:delete {:handler (settings/delete-all-expenses-handler db)}}]
 
    ;; Reference data endpoints (suppliers, payers)
    ["/suppliers"
@@ -52,6 +64,13 @@
    ["/payers/:id"
     {:put {:handler (user-expenses-handlers/update-payer-handler db)}
      :delete {:handler (user-expenses-handlers/delete-payer-handler db)}}]
+
+   ;; Expense items (power-user only)
+   ["/expense-items" {:get {:handler (user-expenses-handlers/list-expense-items-handler db)}}]
+
+   ["/expense-items/:id"
+    {:put {:handler (user-expenses-handlers/update-expense-item-handler db)}
+     :delete {:handler (user-expenses-handlers/delete-expense-item-handler db)}}]
 
    ;; Receipt upload (creates a receipts row)
    ["/upload" {:post {:handler (receipt-upload/user-upload-handler db)}}]

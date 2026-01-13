@@ -1,0 +1,220 @@
+(ns app.domain.backend.expenses.handlers.user-expenses.expense-items
+  "User-facing (non-admin) expense items list.
+
+  This endpoint is intended as a power-user tool for inspecting line items.
+  It is role-gated to admin/owner and scoped to the current user's expenses."
+  (:require
+    [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [clojure.string :as str]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
+    [taoensso.timbre :as log]))
+
+(def ^:private power-user-roles
+  "Roles allowed to access the expense items power page."
+  #{"admin" "owner"})
+
+(defn- blank->nil
+  [v]
+  (cond
+    (nil? v) nil
+    (string? v) (let [s (str/trim v)]
+                  (when-not (str/blank? s) s))
+    :else v))
+
+(defn- parse-decimal!
+  [field v]
+  (let [v (blank->nil v)]
+    (cond
+      (nil? v) nil
+      (instance? java.math.BigDecimal v) v
+      (number? v) (bigdec v)
+      (string? v)
+      (try
+        (bigdec v)
+        (catch Exception _
+          (throw (ex-info (str "Invalid " (name field))
+                   {:status 400
+                    :field field
+                    :value v}))))
+      :else
+      (throw (ex-info (str "Invalid " (name field))
+               {:status 400
+                :field field
+                :value v})))))
+
+(defn- parse-uuid!
+  [field v]
+  (let [v (blank->nil v)]
+    (cond
+      (nil? v) nil
+      (instance? java.util.UUID v) v
+      :else
+      (or (h/try-parse-uuid v)
+        (throw (ex-info (str "Invalid " (name field))
+                 {:status 400
+                  :field field
+                  :value v}))))))
+
+(defn- clamp-limit
+  [n]
+  (-> (long (or n 200))
+    (max 1)
+    (min 500)))
+
+(defn list-expense-items-handler
+  "GET /api/v1/expenses/expense-items
+
+  Returns expense_items joined with basic expense/supplier/payer/article context,
+  scoped to the current user's expenses.
+
+  Allowed roles: admin/owner."
+  [db]
+  (fn [request]
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request power-user-roles
+                           "Only admins and owners can access expense items")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                limit (clamp-limit (some-> (h/get-param params :limit) parse-long))
+                offset (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0)))
+                search (some-> (h/get-param params :search) str)
+                search* (when (and (string? search) (not (str/blank? search)))
+                          (str "%" search "%"))
+                where (cond-> [:and
+                               [:= :e.user_id user-id]
+                               [:is :ei.deleted_at nil]
+                               [:is :e.deleted_at nil]]
+                        search*
+                        (conj [:or
+                               [:ilike :ei.raw_label search*]
+                               [:ilike :a.canonical_name search*]
+                               [:ilike :s.display_name search*]
+                               [:ilike :p.label search*]]))
+                query {:select [[:ei.*]
+                                [:e.purchased_at :expense_purchased_at]
+                                [:s.display_name :supplier_display_name]
+                                [:p.label :payer_label]
+                                [:a.canonical_name :article_canonical_name]]
+                       :from [[:expense_items :ei]]
+                       :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                   [:suppliers :s] [:= :s.id :e.supplier_id]
+                                   [:payers :p] [:= :p.id :e.payer_id]
+                                   [:articles :a] [:= :a.id :ei.article_id]]
+                       :where where
+                       :order-by [[:ei.created_at :desc]]
+                       :limit limit
+                       :offset offset}
+                items (jdbc/execute! db (sql/format query)
+                        {:builder-fn rs/as-unqualified-lower-maps})]
+            (h/json-response {:data (vec items)}))
+          (catch Exception e
+            (log/error e "Error listing expense items" {:user-id user-id})
+            (h/json-response {:error "Failed to list expense items"} 500))))
+      (h/unauthorized-response))))
+
+(defn- expense-item-id
+  [request]
+  (or (h/try-parse-uuid (get-in request [:path-params :id]))
+    (h/try-parse-uuid (get-in request [:parameters :path :id]))))
+
+(defn- update-expense-item!
+  [db user-id item-id updates]
+  (jdbc/execute-one! db
+    (sql/format
+      {:update [:expense_items :ei]
+       :set updates
+       :from [[:expenses :e]]
+       :where [:and
+               [:= :ei.id item-id]
+               [:= :e.id :ei.expense_id]
+               [:= :e.user_id user-id]
+               [:is :ei.deleted_at nil]
+               [:is :e.deleted_at nil]]
+       :returning [:ei.*]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn update-expense-item-handler
+  "PUT /api/v1/expenses/expense-items/:id
+
+  Updates an expense item (line item) scoped to the current user's expenses.
+
+  Allowed roles: admin/owner."
+  [db]
+  (fn [request]
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request power-user-roles
+                           "Only admins and owners can modify expense items")]
+        forbidden
+        (if-let [item-id (expense-item-id request)]
+          (try
+            (let [body (h/read-body-params request)
+                  raw-label (some-> (h/get-param body :raw_label) str str/trim)
+                  raw-label* (when-not (str/blank? raw-label) raw-label)
+                  updates {:raw_label (or raw-label*
+                                        (throw (ex-info "raw_label is required"
+                                                 {:status 400
+                                                  :field :raw_label})))
+                           :article_id (parse-uuid! :article_id (h/get-param body :article_id))
+                           :qty (parse-decimal! :qty (h/get-param body :qty))
+                           :unit_price (parse-decimal! :unit_price (h/get-param body :unit_price))
+                           :line_total (or (parse-decimal! :line_total (h/get-param body :line_total))
+                                         (throw (ex-info "line_total is required"
+                                                  {:status 400
+                                                   :field :line_total})))}]
+              (if-let [updated (update-expense-item! db user-id item-id updates)]
+                (h/json-response {:data updated})
+                (h/not-found-response "Expense item not found or access denied")))
+            (catch clojure.lang.ExceptionInfo e
+              (let [{:keys [status]} (ex-data e)]
+                (if (number? status)
+                  (h/json-response {:error (.getMessage e)} status)
+                  (do
+                    (log/error e "Error updating expense item (ex-info)" {:user-id user-id :item-id item-id})
+                    (h/json-response {:error "Failed to update expense item"} 500)))))
+            (catch Exception e
+              (log/error e "Error updating expense item" {:user-id user-id :item-id item-id})
+              (h/json-response {:error "Failed to update expense item"} 500)))
+          (h/json-response {:error "Invalid expense item ID"} 400)))
+      (h/unauthorized-response))))
+
+(defn- delete-expense-item!
+  [db user-id item-id]
+  (jdbc/execute-one! db
+    (sql/format
+      {:update [:expense_items :ei]
+       :set {:deleted_at [:now]}
+       :from [[:expenses :e]]
+       :where [:and
+               [:= :ei.id item-id]
+               [:= :e.id :ei.expense_id]
+               [:= :e.user_id user-id]
+               [:is :ei.deleted_at nil]
+               [:is :e.deleted_at nil]]
+       :returning [:ei.*]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn delete-expense-item-handler
+  "DELETE /api/v1/expenses/expense-items/:id
+
+  Soft-deletes an expense item scoped to the current user's expenses.
+
+  Allowed roles: admin/owner."
+  [db]
+  (fn [request]
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request power-user-roles
+                           "Only admins and owners can modify expense items")]
+        forbidden
+        (if-let [item-id (expense-item-id request)]
+          (try
+            (if-let [deleted (delete-expense-item! db user-id item-id)]
+              (h/json-response {:data deleted :message "Expense item deleted"})
+              (h/not-found-response "Expense item not found or access denied"))
+            (catch Exception e
+              (log/error e "Error deleting expense item" {:user-id user-id :item-id item-id})
+              (h/json-response {:error "Failed to delete expense item"} 500)))
+          (h/json-response {:error "Invalid expense item ID"} 400)))
+      (h/unauthorized-response))))

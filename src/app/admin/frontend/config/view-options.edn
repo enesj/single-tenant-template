@@ -5,7 +5,8 @@
    :show-select? true,
    :show-pagination? true,
    :show-filtering? true,
-   :show-batch-delete? true},
+   :show-batch-delete? true,
+   :show-add-button? true},
   :display-defaults {}},
  :suppliers
  {:display-locks

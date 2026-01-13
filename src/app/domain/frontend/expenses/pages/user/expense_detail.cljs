@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.pages.user.expense-detail
   "User-facing expense detail view."
   (:require
+    [app.domain.frontend.expenses.authz :as authz]
     [app.template.frontend.components.button :refer [button]]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -80,11 +81,12 @@
 (defui expense-detail-page []
   (let [current-route (use-subscribe [:current-route])
         expense-id (or (get-in current-route [:path-params :expense-id])
-                       (get-in current-route [:parameters :path :expense-id]))
+                     (get-in current-route [:parameters :path :expense-id]))
         expense (use-subscribe [:user-expenses/current-expense])
         loading? (boolean (use-subscribe [:user-expenses/current-expense-loading?]))
-        error (use-subscribe [:user-expenses/current-expense-error])]
-    
+        error (use-subscribe [:user-expenses/current-expense-error])
+        can-write? (use-subscribe [:expenses/can-write?])]
+
     ;; Fetch expense on mount
     (use-effect
       (fn []
@@ -92,7 +94,7 @@
           (rf/dispatch [:user-expenses/fetch-expense expense-id]))
         js/undefined)
       [expense-id])
-    
+
     (let [{:keys [supplier_display_name payer_label total_amount currency
                   purchased_at notes is_posted items created_at]} expense]
       ($ :div {:class "min-h-screen bg-base-100"}
@@ -112,31 +114,32 @@
                 ($ button {:btn-type :ghost
                            :on-click #(rf/dispatch [:navigate-to "/expenses/list"])}
                   "Back")
-                (when (and expense (not is_posted))
+                (when (and expense (not is_posted) can-write?)
                   ($ button {:btn-type :outline
+                             :id "btn-edit-expense"
                              :on-click #(rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")])}
                     "Edit"))
                 ($ button {:btn-type :ghost
                            :on-click #(when expense-id
                                         (rf/dispatch [:user-expenses/fetch-expense expense-id]))}
                   "⟳")))))
-        
+
         ;; Error
         (when error
           ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
             ($ :div {:class "ds-alert ds-alert-error"}
               ($ :span error))))
-        
+
         ;; Content
         ($ :main {:class "max-w-4xl mx-auto px-4 py-6"}
           (cond
             loading?
             ($ expense-detail-skeleton)
-            
+
             (nil? expense)
             ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-8 text-center"}
               ($ :p {:class "text-base-content/50"} "Expense not found."))
-            
+
             :else
             ($ :div {:class "space-y-6"}
               ;; Status badge
@@ -147,20 +150,20 @@
                 (when created_at
                   ($ :span {:class "text-sm text-base-content/60"}
                     (str "Created " (format-short-date created_at)))))
-              
+
               ;; Info cards
               ($ :div {:class "grid grid-cols-2 md:grid-cols-4 gap-4"}
                 ($ info-card {:label "Supplier" :value supplier_display_name :icon "🏪"})
                 ($ info-card {:label "Payer" :value payer_label :icon "👤"})
                 ($ info-card {:label "Total" :value (format-money total_amount currency) :icon "💰"})
                 ($ info-card {:label "Date" :value (format-short-date purchased_at) :icon "📅"}))
-              
+
               ;; Notes
               (when (and notes (not (str/blank? notes)))
                 ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
                   ($ :h3 {:class "font-semibold mb-2"} "Notes")
                   ($ :p {:class "text-base-content/80 whitespace-pre-wrap"} notes)))
-              
+
               ;; Line items
               ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
                 ($ :div {:class "flex items-center justify-between mb-4"}
@@ -168,16 +171,19 @@
                   ($ :span {:class "text-sm text-base-content/60"}
                     (str (count items) " items")))
                 ($ line-item-table {:items items :currency currency}))
-              
-              ;; Actions
-              ($ :div {:class "flex gap-2 justify-end pt-4 border-t"}
-                (when (not is_posted)
-                  ($ button {:btn-type :error
-                             :size :sm
-                             :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
-                    "Delete"))
-                (when (not is_posted)
-                  ($ button {:btn-type :primary
-                             :size :sm
-                             :on-click #(rf/dispatch [:user-expenses/post-expense expense-id])}
-                    "Mark as Posted"))))))))))
+
+              ;; Actions - only show for member+ (can-write?)
+              (when can-write?
+                ($ :div {:class "flex gap-2 justify-end pt-4 border-t"}
+                  (when (not is_posted)
+                    ($ button {:btn-type :error
+                               :size :sm
+                               :id "btn-delete-expense"
+                               :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
+                      "Delete"))
+                  (when (not is_posted)
+                    ($ button {:btn-type :primary
+                               :size :sm
+                               :id "btn-post-expense"
+                               :on-click #(rf/dispatch [:user-expenses/post-expense expense-id])}
+                      "Mark as Posted")))))))))))

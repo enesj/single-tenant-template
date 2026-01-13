@@ -121,12 +121,9 @@
 
 (defui expenses-dashboard-page []
   (let [user (use-subscribe [:current-user])
-        role (use-subscribe [:user-role])
-        role-str (cond
-                   (keyword? role) (name role)
-                   (string? role) role
-                   :else nil)
-        power-user? (contains? #{"admin" "owner"} role-str)
+        power-user? (boolean (use-subscribe [:expenses/power-user?]))
+        can-upload? (boolean (use-subscribe [:expenses/can? :expenses/upload]))
+        can-add-expense? (boolean (use-subscribe [:expenses/can? :expenses/expense.write]))
         user-name (or (:full_name user) (:full-name user) "there")
         summary (or (use-subscribe [:user-expenses/summary]) {})
         summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
@@ -157,10 +154,13 @@
                 (str "Hello, " user-name "!"))
               ($ :p {:class "text-sm text-slate-600"} "Here's your expense overview"))
             ($ :div {:class "flex gap-2"}
-              ($ button {:btn-type :primary
-                         :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])}
-                "📷 Upload Receipt")
-              ($ button {:btn-type :ghost
+              (when can-upload?
+                ($ button {:id "btn-expenses-dashboard-upload-receipt"
+                           :btn-type :primary
+                           :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])}
+                  "📷 Upload Receipt"))
+              ($ button {:id "btn-expenses-dashboard-view-all"
+                         :btn-type :ghost
                          :on-click #(rf/dispatch [:navigate-to "/expenses/list"])}
                 "View All")))))
 
@@ -233,16 +233,18 @@
           ;; Quick Actions
           ($ :div {:class "space-y-4"}
             ($ :h2 {:class "font-semibold text-slate-900"} "Quick Actions")
-            ($ quick-action {:id "btn-quick-upload-receipt"
-                             :title "Upload Receipt"
-                             :description "Scan or upload a receipt"
-                             :icon "📷"
-                             :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])})
-            ($ quick-action {:id "btn-quick-add-expense"
-                             :title "Add Expense"
-                             :description "Manual expense entry"
-                             :icon "✏️"
-                             :on-click #(rf/dispatch [:navigate-to "/expenses/new"])})
+            (when can-upload?
+              ($ quick-action {:id "btn-quick-upload-receipt"
+                               :title "Upload Receipt"
+                               :description "Scan or upload a receipt"
+                               :icon "📷"
+                               :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))
+            (when can-add-expense?
+              ($ quick-action {:id "btn-quick-add-expense"
+                               :title "Add Expense"
+                               :description "Manual expense entry"
+                               :icon "✏️"
+                               :on-click #(rf/dispatch [:navigate-to "/expenses/new"])}))
             ($ quick-action {:id "btn-quick-view-reports"
                              :title "View Reports"
                              :description "Monthly summaries"

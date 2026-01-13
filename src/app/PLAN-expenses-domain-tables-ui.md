@@ -1,6 +1,8 @@
-# Expenses Domain — Admin + User Tables UI Plan
+# Expenses Domain — Admin + User Tables UI Plan (ARCHIVED)
 
-Last updated: 2025-12-26
+Last updated: 2026-01-13
+
+NOTE (2026-01-13): The Expenses domain is no longer exposed in the admin panel. `src/app/domain/frontend/expenses/pages/admin/*` and `src/app/domain/frontend/expenses/routes.cljs` were deleted. Any ongoing work should target user pages/routes (see `PLAN-expenses-role-gating.md`).
 
 This plan upgrades the “stub” admin pages for Expenses-domain reference entities (suppliers, articles, payers, etc.) into a drill-down friendly admin experience, and defines an incremental path for user-facing reference data.
 

@@ -163,7 +163,8 @@
         loading? (boolean (use-subscribe [receipt-detail-loading-sub]))
         action-loading? (boolean (use-subscribe [receipt-action-loading-sub]))
         error (use-subscribe [receipts-error-sub])
-        [active-tab set-active-tab!] (use-state :approve)
+        can-approve? (boolean (use-subscribe [:expenses/can? :expenses/receipts.approve]))
+        [active-tab set-active-tab!] (use-state (if can-approve? :approve :details))
         [preview-expanded? set-preview-expanded!] (use-state false)
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
@@ -186,11 +187,11 @@
     ;; Reset tab + fetch on open/change
     (use-effect
       (fn []
-        (set-active-tab! :approve)
+        (set-active-tab! (if can-approve? :approve :details))
         (set-preview-expanded! false)
         (refresh!)
         js/undefined)
-      [receipt-id refresh!])
+      [receipt-id refresh! can-approve?])
 
     ;; Auto-poll receipt detail while OCR is processing
     (use-effect
@@ -247,10 +248,11 @@
                               :label "Receipt"
                               :active? (= active-tab :receipt)
                               :on-select #(set-active-tab! :receipt)})
-              (tabs/tab-link {:id (str "tab-receipt-approve-" rid-str)
-                              :label "Approve & Post"
-                              :active? (= active-tab :approve)
-                              :on-select #(set-active-tab! :approve)}))
+              (when can-approve?
+                (tabs/tab-link {:id (str "tab-receipt-approve-" rid-str)
+                                :label "Approve & Post"
+                                :active? (= active-tab :approve)
+                                :on-select #(set-active-tab! :approve)})))
 
             (case active-tab
               :receipt
@@ -260,7 +262,7 @@
                                      :show-summary? false})))
 
               :approve
-              (if approve-allowed?
+              (if (and can-approve? approve-allowed?)
                 ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
                   ($ :div {:class "ds-card-body"}
                     ($ :div {:class (str "grid gap-6 " (when preview-expanded? "lg:grid-cols-2"))}

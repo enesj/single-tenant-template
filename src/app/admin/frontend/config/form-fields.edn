@@ -7,11 +7,12 @@
  :users
  {:create-fields
   ["email" "status" "full-name"],
-  :edit-fields ["role" "status"],
+  :edit-fields ["email" "full-name" "role" "status"],
   :required-fields ["email"],
   :field-config
   {:email {:type "email", :validation "email"},
-   :role {:type "select", :options ["member" "admin" "owner"]},
+   :full-name {:type "text", :max-length 255, :placeholder "Full Name"},
+   :role {:type "select", :options ["admin" "member" "viewer" "unassigned"]},
    :status
    {:type "select", :options ["active" "inactive" "suspended"]}}}
 

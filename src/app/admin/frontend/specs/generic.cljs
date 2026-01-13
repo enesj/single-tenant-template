@@ -432,10 +432,14 @@
 ;;   - prefer [:domain :config :form-fields]
 ;;   - if we fall back to models-data, strip system-managed fields that frequently trigger
 ;;     blocked generic lookups (e.g. /api/v1/entities/users).
+;;
+;; The subscription accepts an optional second parameter for editing? (defaults to false/create mode).
+;; Usage: [:form-entity-specs/by-name :users] or [:form-entity-specs/by-name :users true] for edit mode.
 (rf/reg-sub
   :form-entity-specs/by-name
-  (fn [db [_ entity-name]]
+  (fn [db [_ entity-name editing?]]
     (let [entity-name (->kw entity-name)
+          editing? (boolean editing?)
           route-name (get-in db [:current-route :data :name])
           ;; Prefer explicit route context when available; otherwise infer from config presence.
           ;; This keeps non-router contexts (notably Node tests) working as expected.
@@ -452,8 +456,8 @@
                          :else
                          false)
           spec-from-config (if admin-route?
-                             (generate-admin-form-entity-spec-from-db db entity-name false)
-                             (generate-domain-form-entity-spec-from-db db entity-name false))
+                             (generate-admin-form-entity-spec-from-db db entity-name editing?)
+                             (generate-domain-form-entity-spec-from-db db entity-name editing?))
           spec-from-models (when-let [md (:models-data db)]
                              (get (field-specs/form-entity-specs md) entity-name))
           spec-from-models* (if admin-route?

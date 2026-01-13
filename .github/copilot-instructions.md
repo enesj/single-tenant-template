@@ -71,6 +71,18 @@
 - Entity store sync: after updates, refresh both the feature store and UI read locations to avoid empty tables until refresh.
 - HoneySQL clause keywords: verify correct keyword shapes (`:id` vs `:users/id`) to prevent silent query issues.
 
+### Recurring frontend issue: list pages show only timestamp columns
+
+- **Symptom:** list table renders only `created-at` / `updated-at` columns.
+- **Root cause (most common):** entity spec lookup returned `nil` due to **entity key mismatch** (UI uses app/kebab-case like `:price-observations`, but specs/models/config may be keyed by db/snake_case like `:price_observations`).
+- **Fix:** ensure the spec map keys are normalized to **app/kebab-case** (use `model-naming/db-keyword->app` in spec generation / lookups).
+
+### Common follow-up: API has data but table rows are empty
+
+- **Symptom:** Network response has non-empty `{:data [...]}`, columns render, but list is empty.
+- **Root cause (common):** re-frame handlers using `common-interceptors` include `trim-v`; handler event vectors are **already trimmed**.
+  - Use handler args like `[params]`, `[response]`, `[error]` (NOT `[_ params]`, `[_ response]`, `[_ error]`). Otherwise you bind `nil` and end up syncing `[]`.
+
 ## Frontend UI Conventions
 - Effective `:entity-spec`: When a page's table uses customized or computed fields, pass the effective spec to `list-view` via `:entity-spec`. The table forwards it to the column settings so toggles operate on the exact rendered fields.
 - Fallback behavior: If `:entity-spec` is omitted, settings fall back to the template spec; computed/admin-only fields might be missing from toggles.

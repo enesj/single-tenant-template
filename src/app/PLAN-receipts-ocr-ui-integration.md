@@ -1,11 +1,14 @@
 ---
-title: Receipt OCR UI Integration (Admin + User)
+title: Receipt OCR UI Integration (User App)
 created_at: 2025-12-26
-status: implemented
+status: implemented (user app)
 scope:
-  - /admin/receipts
   - /receipts
 ---
+
+# NOTE (2026-01-13)
+
+The Expenses domain is no longer exposed in the admin panel. `/admin/receipts` and `src/app/domain/frontend/expenses/pages/admin/*` were removed. Treat any “Admin” sections in this document as historical context; focus on the user app (`/receipts`) flow.
 
 # Goal
 

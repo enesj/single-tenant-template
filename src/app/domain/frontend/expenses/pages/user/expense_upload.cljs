@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.pages.user.expense-upload
   "User-facing receipt upload page for expense tracking."
   (:require
+    [app.domain.frontend.expenses.components.page-guard :as page-guard]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.auth-guard :refer [auth-guard]]
     [app.template.frontend.components.file-drop-zone :refer [file-drop-zone]]
@@ -86,81 +87,89 @@
        :login-redirect-path "/login?redirect=/expenses/upload"
        :login-message "Please sign in to upload a receipt."
        :children
-       ($ :div {:class "min-h-screen bg-base-100"}
-         ;; Header
-         ($ :header {:class "bg-white border-b border-base-200"}
-           ($ :div {:class "max-w-4xl mx-auto px-4 py-4 sm:py-6"}
-             ($ :div {:class "flex items-center justify-between"}
-               ($ :div
-                 ($ :div {:class "text-sm ds-breadcrumbs"}
-                   ($ :ul
-                     ($ :li ($ :a {:href "/expenses"} "Expenses"))
-                     ($ :li "Upload Receipt")))
-                 ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Upload Receipt"))
-               ($ :div {:class "flex gap-2"}
-                 ($ button {:btn-type :ghost
-                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")
-                 ($ button {:btn-type :outline
-                            :on-click handle-manual}
-                   "Manual Entry")))))
+       ($ page-guard/expenses-page-guard
+         {:capability :expenses/upload
+          :children
+          ($ :div {:class "min-h-screen bg-base-100"}
+            ;; Header
+            ($ :header {:class "bg-white border-b border-base-200"}
+              ($ :div {:class "max-w-4xl mx-auto px-4 py-4 sm:py-6"}
+                ($ :div {:class "flex items-center justify-between"}
+                  ($ :div
+                    ($ :div {:class "text-sm ds-breadcrumbs"}
+                      ($ :ul
+                        ($ :li ($ :a {:id "link-expenses-breadcrumb-upload-receipt"
+                                      :href "/expenses"}
+                                 "Expenses"))
+                        ($ :li "Upload Receipt")))
+                    ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Upload Receipt"))
+                  ($ :div {:class "flex gap-2"}
+                    ($ button {:id "btn-dashboard-expense-upload"
+                               :btn-type :ghost
+                               :on-click #(rf/dispatch [:navigate-to "/expenses"])}
+                      "Dashboard")
+                    ($ button {:id "btn-manual-entry-expense-upload"
+                               :btn-type :outline
+                               :on-click handle-manual}
+                      "Manual Entry")))))
 
-         ;; Notice
-         (when (seq upload-notice)
-           ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
-             ($ :div {:class "ds-alert ds-alert-warning"}
-               (if (sequential? upload-notice)
-                 ($ :ul {:class "list-disc pl-5 text-sm"}
-                   (for [msg upload-notice]
-                     ($ :li {:key msg} msg)))
-                 ($ :span (str upload-notice))))))
+            ;; Notice
+            (when (seq upload-notice)
+              ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
+                ($ :div {:class "ds-alert ds-alert-warning"}
+                  (if (sequential? upload-notice)
+                    ($ :ul {:class "list-disc pl-5 text-sm"}
+                      (for [msg upload-notice]
+                        ($ :li {:key msg} msg)))
+                    ($ :span (str upload-notice))))))
 
-         ;; Error
-         (when upload-error
-           ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
-             ($ :div {:class "ds-alert ds-alert-error"}
-               ($ :span upload-error))))
+            ;; Error
+            (when upload-error
+              ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
+                ($ :div {:class "ds-alert ds-alert-error"}
+                  ($ :span upload-error))))
 
-         ;; Content
-         ($ :main {:class "max-w-4xl mx-auto px-4 py-6"}
-           ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6"}
-             ;; Instructions
-             ($ :div {:class "mb-6"}
-               ($ :p {:class "text-base-content/80"}
-                 "Upload a photo of your receipt and we'll extract the expense details automatically. "
-                 "You can review and edit the extracted information before saving."))
+            ;; Content
+            ($ :main {:class "max-w-4xl mx-auto px-4 py-6"}
+              ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6"}
+                ;; Instructions
+                ($ :div {:class "mb-6"}
+                  ($ :p {:class "text-base-content/80"}
+                    "Upload a photo of your receipt and we'll extract the expense details automatically. "
+                    "You can review and edit the extracted information before saving."))
 
-             ;; Upload zone
-             ($ file-drop-zone {:dropzone-id "dropzone-receipt-upload"
-                                :input-id "receipt-upload"
-                                :choose-button-id "btn-choose-receipt-upload"
-                                :on-files-select handle-files-select
-                                :uploading? uploading?
-                                :uploading-label (or uploading-label "Processing receipts...")
-                                :accept "image/*,.pdf"
-                                :multiple? true
-                                :title "Drop your receipts here"
-                                :subtitle "or click to browse"
-                                :choose-label "Choose Files"
-                                :icon "📷"
-                                :help-text "Supports: JPG, PNG, PDF (max 10MB)"})
+                ;; Upload zone
+                ($ file-drop-zone {:dropzone-id "dropzone-receipt-upload"
+                                   :input-id "receipt-upload"
+                                   :choose-button-id "btn-choose-receipt-upload"
+                                   :on-files-select handle-files-select
+                                   :uploading? uploading?
+                                   :uploading-label (or uploading-label "Processing receipts...")
+                                   :accept "image/*,.pdf"
+                                   :multiple? true
+                                   :title "Drop your receipts here"
+                                   :subtitle "or click to browse"
+                                   :choose-label "Choose Files"
+                                   :icon "📷"
+                                   :help-text "Supports: JPG, PNG, PDF (max 10MB)"})
 
-             ;; Tips
-             ($ :div {:class "mt-6 bg-base-200 rounded-lg p-4"}
-               ($ :h4 {:class "font-medium text-sm mb-2"} "📌 Tips for best results:")
-               ($ :ul {:class "text-sm text-base-content/70 space-y-1 list-disc list-inside"}
-                 ($ :li "Make sure the receipt is well-lit and in focus")
-                 ($ :li "Include the entire receipt in the frame")
-                 ($ :li "Avoid wrinkled or damaged receipts when possible")
-                 ($ :li "PDF receipts from email work great too!")))
+                ;; Tips
+                ($ :div {:class "mt-6 bg-base-200 rounded-lg p-4"}
+                  ($ :h4 {:class "font-medium text-sm mb-2"} "📌 Tips for best results:")
+                  ($ :ul {:class "text-sm text-base-content/70 space-y-1 list-disc list-inside"}
+                    ($ :li "Make sure the receipt is well-lit and in focus")
+                    ($ :li "Include the entire receipt in the frame")
+                    ($ :li "Avoid wrinkled or damaged receipts when possible")
+                    ($ :li "PDF receipts from email work great too!")))
 
-             ;; Recent uploads
-             ($ recent-uploads {:receipts recent-receipts}))
+                ;; Recent uploads
+                ($ recent-uploads {:receipts recent-receipts}))
 
-           ;; Alternative action
-           ($ :div {:class "mt-6 text-center"}
-             ($ :p {:class "text-sm text-base-content/60"}
-               "Don't have a receipt? ")
-             ($ :a {:href "/expenses/new"
-                    :class "text-sm text-primary hover:underline"}
-               "Enter expense manually →"))))})))
+              ;; Alternative action
+              ($ :div {:class "mt-6 text-center"}
+                ($ :p {:class "text-sm text-base-content/60"}
+                  "Don't have a receipt? ")
+                ($ :a {:id "link-expense-new-from-upload"
+                       :href "/expenses/new"
+                       :class "text-sm text-primary hover:underline"}
+                  "Enter expense manually →"))))})})))

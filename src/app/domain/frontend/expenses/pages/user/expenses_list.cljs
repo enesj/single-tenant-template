@@ -1,8 +1,9 @@
 (ns app.domain.frontend.expenses.pages.user.expenses-list
   "User-facing expense list page with filtering and pagination.
 
-  Implements admin-like UX (modal add/edit) while using user-scoped endpoints."
+   Implements admin-like UX (modal add/edit) while using user-scoped endpoints."
   (:require
+    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal
                                                                        user-expense-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
@@ -46,7 +47,8 @@
 (defn- render-actions
   "Row action dropdown (admin-style) for user expenses.
 
-  Uses list-view's modal edit handler when available, and user-scoped delete."
+   Uses list-view's modal edit handler when available, and user-scoped delete.
+   Edit/delete buttons are hidden for viewers (show-edit?/show-delete? from row data)."
   [item]
   (let [expense-id (id-utils/extract-entity-id item)
         on-edit-click (:on-edit-click item)
@@ -110,10 +112,18 @@
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         error (use-subscribe [:user-expenses/recent-error])
+        can-write? (use-subscribe [:expenses/can-write?])
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]))
-                       [])]
+                       [])
+        ;; Wrap render-actions to inject show-edit?/show-delete? based on role
+        render-actions-gated (use-callback
+                               (fn [item]
+                                 (render-actions (assoc item
+                                                   :show-edit? can-write?
+                                                   :show-delete? can-write?)))
+                               [can-write?])]
 
     ;; Ensure we kick off a user-scoped fetch so that the shared
     ;; template entity store for :expenses and its FK references is
@@ -155,8 +165,9 @@
            :entity-spec entity-spec
            :title "Expense"
            :form-display :modal
+           :allow-add? can-write?
            :render-add-form render-add-form
            :render-edit-form render-edit-form
            :on-add-success refresh-list
            :on-edit-success refresh-list
-           :render-actions render-actions})))))
+           :render-actions render-actions-gated})))))

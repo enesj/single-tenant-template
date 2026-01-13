@@ -98,6 +98,22 @@
 (def reference-data-write-roles
   #{"member" "admin" "owner"})
 
+(def expenses-read-roles
+  "Roles allowed to read expenses data (summary, list, detail)."
+  reference-data-read-roles)
+
+(def expenses-write-roles
+  "Roles allowed to create/update/delete expenses."
+  reference-data-write-roles)
+
+(def receipts-read-roles
+  "Roles allowed to view receipts."
+  reference-data-read-roles)
+
+(def receipts-write-roles
+  "Roles allowed to mutate receipts (upload, review, approve, delete, OCR)."
+  reference-data-write-roles)
+
 (defn ensure-role
   [request allowed-roles message]
   (let [role (get-user-role request)]

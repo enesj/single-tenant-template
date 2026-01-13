@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.integrations.mistral-ocr-test
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.integrations.mistral-ocr.http :as mistral-http]
     [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]))
@@ -38,7 +39,7 @@
                            {:index 2 :markdown "B"}]
                    :model "mistral-ocr-2512"
                    :usage_info {:pages_processed 2}}]
-    (with-redefs [mistral-ocr/http-post!
+    (with-redefs [mistral-http/http-post!
                   (fn [url opts]
                     (reset! called {:url url :opts opts})
                     {:status 200 :body (json/generate-string resp-json)})]
@@ -73,7 +74,7 @@
                       :totals {:total 10.26}
                       :items [{:raw_label "Coffee" :line_total 6.00}]}
           resp-json extraction]
-      (with-redefs [mistral-ocr/http-post!
+      (with-redefs [mistral-http/http-post!
                     (fn [url opts]
                       (reset! called {:url url :opts opts})
                       {:status 200 :body (json/generate-string resp-json)})]
@@ -112,7 +113,7 @@
                                            :response {:status_code 400
                                                       :body (json/generate-string {:object "error" :message "bad"})}})
                     "\n")]
-    (with-redefs [mistral-ocr/http-post!
+    (with-redefs [mistral-http/http-post!
                   (fn [url opts]
                     (cond
                       (str/ends-with? url "/v1/files")
@@ -126,7 +127,7 @@
 
                       :else
                       {:status 404 :body (json/generate-string {:error "unexpected url" :url url})}))
-                  mistral-ocr/http-get!
+                  mistral-http/http-get!
                   (fn [url _opts]
                     (cond
                       (str/ends-with? url "/v1/batch/jobs/job-1")

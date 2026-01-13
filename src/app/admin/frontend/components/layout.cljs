@@ -4,7 +4,7 @@
     [app.admin.frontend.subs.dashboard]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
-    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon expenses-icon receipts-icon suppliers-icon payers-icon articles-icon expense-items-icon article-aliases-icon unmapped-items-icon price-observations-icon settings-icon]]
+    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon settings-icon]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -12,35 +12,23 @@
 
 (defui admin-sidebar []
   (let [current-route (use-subscribe [:current-route])
-    ;; Reitit match stores the route name under :data.
-    route-name (or (get-in current-route [:data :name]) (:name current-route))
-    current-admin-role (use-subscribe [:admin/current-user-role])
-    is-owner? (= current-admin-role :owner)
+        route-name (or (get-in current-route [:data :name]) (:name current-route))
+        current-admin-role (use-subscribe [:admin/current-user-role])
+        is-owner? (= current-admin-role :owner)
 
-    system-admin-items (cond-> [{:label "Dashboard"
-            :href "/admin/dashboard"
-            :icon ($ dashboard-icon {:class "w-6 h-6"})
-            :active? (contains? #{:admin-dashboard :admin-dashboard-alt} route-name)}
-               {:label "Users"
-            :href "/admin/users"
-            :icon ($ users-icon {:class "w-6 h-6"})
-            :active? (= route-name :admin-users)}]
-             is-owner? (conj {:label "Admins" :href "/admin/admins" :icon ($ admins-icon {:class "w-6 h-6"}) :active? (= route-name :admin-admins)})
-             true (into [{:label "Audit Logs" :href "/admin/audit" :icon ($ audit-icon {:class "w-6 h-6"}) :active? (= route-name :admin-audit)}
-                 {:label "Login Events" :href "/admin/login-events" :icon ($ login-events-icon {:class "w-6 h-6"}) :active? (= route-name :admin-login-events)}]))
+        system-admin-items (cond-> [{:label "Dashboard"
+                                     :href "/admin/dashboard"
+                                     :icon ($ dashboard-icon {:class "w-6 h-6"})
+                                     :active? (contains? #{:admin-dashboard :admin-dashboard-alt} route-name)}
+                                    {:label "Users"
+                                     :href "/admin/users"
+                                     :icon ($ users-icon {:class "w-6 h-6"})
+                                     :active? (= route-name :admin-users)}]
+                             is-owner? (conj {:label "Admins" :href "/admin/admins" :icon ($ admins-icon {:class "w-6 h-6"}) :active? (= route-name :admin-admins)})
+                             true (into [{:label "Audit Logs" :href "/admin/audit" :icon ($ audit-icon {:class "w-6 h-6"}) :active? (= route-name :admin-audit)}
+                                         {:label "Login Events" :href "/admin/login-events" :icon ($ login-events-icon {:class "w-6 h-6"}) :active? (= route-name :admin-login-events)}]))
 
-        domain-items [{:label "Expenses" :href "/admin/expenses" :icon ($ expenses-icon {:class "w-6 h-6"}) :active? (= route-name :admin-expenses)}
-                      {:label "Receipts" :href "/admin/receipts" :icon ($ receipts-icon {:class "w-6 h-6"}) :active? (= route-name :admin-receipts)}
-                      {:label "Suppliers" :href "/admin/suppliers" :icon ($ suppliers-icon {:class "w-6 h-6"}) :active? (= route-name :admin-suppliers)}
-                      {:label "Payers" :href "/admin/payers" :icon ($ payers-icon {:class "w-6 h-6"}) :active? (= route-name :admin-payers)}
-                      {:label "Articles" :href "/admin/articles" :icon ($ articles-icon {:class "w-6 h-6"}) :active? (= route-name :admin-articles)}
-                      {:label "Expense Items" :href "/admin/expense-items" :icon ($ expense-items-icon {:class "w-6 h-6"}) :active? (= route-name :admin-expense-items)}
-                      {:label "Article Aliases" :href "/admin/article-aliases" :icon ($ article-aliases-icon {:class "w-6 h-6"}) :active? (= route-name :admin-article-aliases)}
-                      {:label "Unmapped Items" :href "/admin/unmapped-items" :icon ($ unmapped-items-icon {:class "w-6 h-6"}) :active? (= route-name :admin-unmapped-items)}
-                      {:label "Price Observations" :href "/admin/price-observations" :icon ($ price-observations-icon {:class "w-6 h-6"}) :active? (= route-name :admin-price-observations)}]
-
-        sections [{:title "System Administration" :items system-admin-items}
-                  {:title "Expenses Domain" :items domain-items}]]
+        sections [{:title "System Administration" :items system-admin-items}]]
     ($ sidebar {:title "Admin Panel"
                 :sections sections
                 :footer ($ :ul {:class "ds-menu w-full p-0"}

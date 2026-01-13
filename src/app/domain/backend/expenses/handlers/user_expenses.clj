@@ -9,12 +9,14 @@
    - crud: CRUD handlers for expenses
    - batch: Batch update/delete handlers
    - summary: Dashboard and summary handlers
-   - reference-data: Suppliers and payers handlers"
+   - reference-data: Suppliers and payers handlers
+   - expense-items: Power-user expense items list"
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as helpers]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as crud]
     [app.domain.backend.expenses.handlers.user-expenses.batch :as batch]
     [app.domain.backend.expenses.handlers.user-expenses.summary :as summary]
+    [app.domain.backend.expenses.handlers.user-expenses.expense-items :as expense-items]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as reference-data]))
 
 ;; Re-export helpers
@@ -52,3 +54,8 @@
 (def create-payer-handler reference-data/create-payer-handler)
 (def update-payer-handler reference-data/update-payer-handler)
 (def delete-payer-handler reference-data/delete-payer-handler)
+
+;; Re-export expense items handlers
+(def list-expense-items-handler expense-items/list-expense-items-handler)
+(def update-expense-item-handler expense-items/update-expense-item-handler)
+(def delete-expense-item-handler expense-items/delete-expense-item-handler)

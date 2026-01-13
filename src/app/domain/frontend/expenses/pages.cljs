@@ -14,8 +14,12 @@
     [app.domain.frontend.expenses.pages.user.expense-settings :refer [expense-settings-page]]
     [app.domain.frontend.expenses.pages.user.suppliers :refer [suppliers-page]]
     [app.domain.frontend.expenses.pages.user.payers :refer [payers-page]]
+    [app.domain.frontend.expenses.pages.user.expense-items :refer [expense-items-page]]
     [app.domain.frontend.expenses.pages.user.receipts-list :refer [receipts-list-page]]
     [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]
+    [app.domain.frontend.expenses.pages.user.articles :refer [articles-page]]
+    [app.domain.frontend.expenses.pages.user.article-aliases :refer [article-aliases-page]]
+    [app.domain.frontend.expenses.pages.user.price-observations :refer [price-observations-page]]
     [app.domain.frontend.expenses.pages.user.unmapped-items :refer [unmapped-items-page]]))
 
 (def pages
@@ -34,4 +38,8 @@
    :expense-settings expense-settings-page
    :expense-suppliers suppliers-page
    :expense-payers payers-page
+   :expense-items expense-items-page
+   :expense-articles articles-page
+   :expense-article-aliases article-aliases-page
+   :expense-price-observations price-observations-page
    :unmapped-items unmapped-items-page})

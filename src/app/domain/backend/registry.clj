@@ -48,7 +48,11 @@
     "/expenses/settings"
     "/expenses/:expense-id"
     "/suppliers"
-    "/payers"]})
+    "/payers"
+    "/expense-items"
+    "/articles"
+    "/article-aliases"
+    "/price-observations"]})
 
 (def enabled-domains
   "Vector of enabled domain manifests.

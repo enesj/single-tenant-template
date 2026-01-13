@@ -13,6 +13,7 @@
     app.domain.frontend.expenses.events.user-expenses.supplier-detail
     app.domain.frontend.expenses.events.user-expenses.export
     app.domain.frontend.expenses.events.user-expenses.lookups
+    app.domain.frontend.expenses.events.user-expenses.power-tools
     app.domain.frontend.expenses.events.user-expenses.receipts
     app.domain.frontend.expenses.events.user-expenses.reference-crud
     app.domain.frontend.expenses.events.user-expenses.recent

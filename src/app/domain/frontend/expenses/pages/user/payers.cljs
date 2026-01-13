@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.pages.user.payers
   "User-facing payers list (shared catalog)."
   (:require
+    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.user-reference-forms :refer [user-payer-add-form-modal user-payer-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
@@ -11,13 +12,6 @@
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
     app.domain.frontend.expenses.subs.user-expenses))
-
-(defn- normalize-role
-  [role]
-  (cond
-    (keyword? role) (name role)
-    (string? role) role
-    :else nil))
 
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
@@ -36,8 +30,8 @@
      :on-cancel on-cancel}))
 
 (defui payers-page []
-  (let [role (normalize-role (use-subscribe [:user-role]))
-        can-modify? (contains? #{"member" "admin"} role)
+  (let [role (use-subscribe [:expenses/user-role])
+        can-modify? (authz/can? role :expenses/reference.write)
         entity-name :payers
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
@@ -99,7 +93,7 @@
                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
                   "Dashboard")))))
 
-        (when (= role "viewer")
+        (when (not can-modify?)
           ($ :div {:class "w-full px-4 mt-4"}
             ($ :div {:class "ds-alert"}
               ($ :span "Read-only access. Ask a household member to update payers."))))

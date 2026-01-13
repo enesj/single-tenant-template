@@ -9,6 +9,7 @@
   can resolve it using `--storage-base-dir upload/stripes`."
   (:require
     [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.template.backend.routes.admin.utils :as admin-utils]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [cheshire.core :as json]
@@ -144,27 +145,29 @@
   - 200 when the upload is a duplicate of an existing receipt"
   [db]
   (fn [request]
-    (try
-      (let [{:keys [receipt duplicate?]} (create-receipt-from-upload! db request)
-            duplicate? (boolean duplicate?)]
-        (-> (response/response (json/generate-string {:data (to-app receipt)
-                                                      :duplicate? duplicate?}))
-          (response/content-type "application/json")
-          (response/status (if duplicate? 200 201))))
-      (catch clojure.lang.ExceptionInfo e
-        (let [{:keys [status]} (ex-data e)
-              status (or status 500)]
-          (when (= status 500)
-            (log/error e "Upload receipt failed"))
-          (-> (response/response (json/generate-string {:error (or (.getMessage e) "Upload failed")
-                                                        :details (dissoc (ex-data e) :status)}))
+    (if-let [forbidden (h/ensure-role request h/receipts-write-roles "Only members, admins, and owners can upload receipts")]
+      forbidden
+      (try
+        (let [{:keys [receipt duplicate?]} (create-receipt-from-upload! db request)
+              duplicate? (boolean duplicate?)]
+          (-> (response/response (json/generate-string {:data (to-app receipt)
+                                                        :duplicate? duplicate?}))
             (response/content-type "application/json")
-            (response/status status))))
-      (catch Exception e
-        (log/error e "Upload receipt failed")
-        (-> (response/response (json/generate-string {:error "Upload failed"}))
-          (response/content-type "application/json")
-          (response/status 500))))))
+            (response/status (if duplicate? 200 201))))
+        (catch clojure.lang.ExceptionInfo e
+          (let [{:keys [status]} (ex-data e)
+                status (or status 500)]
+            (when (= status 500)
+              (log/error e "Upload receipt failed"))
+            (-> (response/response (json/generate-string {:error (or (.getMessage e) "Upload failed")
+                                                          :details (dissoc (ex-data e) :status)}))
+              (response/content-type "application/json")
+              (response/status status))))
+        (catch Exception e
+          (log/error e "Upload receipt failed")
+          (-> (response/response (json/generate-string {:error "Upload failed"}))
+            (response/content-type "application/json")
+            (response/status 500)))))))
 
 (defn admin-upload-handler
   "POST /admin/api/expenses/upload

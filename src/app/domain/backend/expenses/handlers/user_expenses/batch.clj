@@ -16,27 +16,29 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (try
-        (let [body (h/read-body-params request)
-              raw-items (or (:items body) [])
-              items (cond
-                      (vector? raw-items) raw-items
-                      (sequential? raw-items) (vec raw-items)
-                      :else [])
-              parsed-items (mapv (fn [item]
-                                   (if (map? item)
-                                     (update item :id h/try-parse-uuid)
-                                     item))
-                             items)]
-          (if (empty? items)
-            (h/json-response {:error "No items provided"} 400)
-            (h/json-response (user-expenses/batch-update-user-expenses! db user-id parsed-items))))
-        (catch Exception e
-          (log/error e "Error batch updating user expenses"
-            {:user-id user-id
-             :path-params (:path-params request)
-             :message (.getMessage e)})
-          (h/json-response {:error "Failed to update expenses"} 500)))
+      (if-let [forbidden (h/ensure-role request h/expenses-write-roles "Only members, admins, and owners can modify expenses")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-items (or (:items body) [])
+                items (cond
+                        (vector? raw-items) raw-items
+                        (sequential? raw-items) (vec raw-items)
+                        :else [])
+                parsed-items (mapv (fn [item]
+                                     (if (map? item)
+                                       (update item :id h/try-parse-uuid)
+                                       item))
+                               items)]
+            (if (empty? items)
+              (h/json-response {:error "No items provided"} 400)
+              (h/json-response (user-expenses/batch-update-user-expenses! db user-id parsed-items))))
+          (catch Exception e
+            (log/error e "Error batch updating user expenses"
+              {:user-id user-id
+               :path-params (:path-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to update expenses"} 500))))
       (h/unauthorized-response))))
 
 (defn batch-delete-expenses-handler
@@ -50,32 +52,34 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (try
-        (let [body (h/read-body-params request)
-              raw-ids (or (:ids body)
-                        (:expense_ids body)
-                        (:expense-ids body)
-                        [])
-              ids (cond
-                    (vector? raw-ids) raw-ids
-                    (set? raw-ids) (vec raw-ids)
-                    (sequential? raw-ids) (vec raw-ids)
-                    :else [])
-              parsed-ids (mapv h/try-parse-uuid ids)]
-          (cond
-            (empty? ids)
-            (h/json-response {:error "No expense ids provided"} 400)
+      (if-let [forbidden (h/ensure-role request h/expenses-write-roles "Only members, admins, and owners can modify expenses")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:expense_ids body)
+                          (:expense-ids body)
+                          [])
+                ids (cond
+                      (vector? raw-ids) raw-ids
+                      (set? raw-ids) (vec raw-ids)
+                      (sequential? raw-ids) (vec raw-ids)
+                      :else [])
+                parsed-ids (mapv h/try-parse-uuid ids)]
+            (cond
+              (empty? ids)
+              (h/json-response {:error "No expense ids provided"} 400)
 
-            (some nil? parsed-ids)
-            (h/json-response {:error "One or more expense ids are invalid"} 400)
+              (some nil? parsed-ids)
+              (h/json-response {:error "One or more expense ids are invalid"} 400)
 
-            :else
-            (let [result (user-expenses/soft-delete-user-expenses! db user-id parsed-ids)]
-              (h/json-response {:data result}))))
-        (catch Exception e
-          (log/error e "Error batch deleting user expenses"
-            {:user-id user-id
-             :path-params (:path-params request)
-             :message (.getMessage e)})
-          (h/json-response {:error "Failed to delete expenses"} 500)))
+              :else
+              (let [result (user-expenses/soft-delete-user-expenses! db user-id parsed-ids)]
+                (h/json-response {:data result}))))
+          (catch Exception e
+            (log/error e "Error batch deleting user expenses"
+              {:user-id user-id
+               :path-params (:path-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to delete expenses"} 500))))
       (h/unauthorized-response))))

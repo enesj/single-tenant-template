@@ -3,6 +3,7 @@
   (:require
     [app.admin.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as detail-utils]
+    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.user-reference-forms :refer [user-supplier-add-form-modal user-supplier-edit-form-modal]]
     [app.template.frontend.components.action-components :as action-components]
     [app.template.frontend.components.button :refer [button]]
@@ -17,13 +18,6 @@
     [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]
     app.domain.frontend.expenses.subs.user-expenses))
-
-(defn- normalize-role
-  [role]
-  (cond
-    (keyword? role) (name role)
-    (string? role) role
-    :else nil))
 
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
@@ -106,8 +100,7 @@
                          {:label "Payer" :value-fn #(or (:payer-label %) (:payer_label %) (:payer %) (:payers/label %))}
                          {:label "Status" :value-fn #(or (:status %) (:receipt_status %) (:expense_status %))}]
                :empty-label "No expenses for this supplier yet."
-               :view-all-href (when supplier-id
-                                (str "/admin/expenses?supplier_id=" supplier-id))
+               :view-all-href nil
                :view-all-id (when supplier-id
                               (str "btn-view-expenses-supplier-" supplier-id))})
             ($ detail-utils/related-table
@@ -117,8 +110,7 @@
                          {:label "Article" :value-fn #(or (:article-canonical-name %) (:article_canonical_name %))}
                          {:label "Confidence" :value-fn #(or (:confidence %) (:confidence_score %))}]
                :empty-label "No article aliases for this supplier."
-               :view-all-href (when supplier-id
-                                (str "/admin/article-aliases?supplier_id=" supplier-id))
+               :view-all-href nil
                :view-all-id (when supplier-id
                               (str "btn-view-article-aliases-supplier-" supplier-id))})
             ($ detail-utils/related-table
@@ -129,15 +121,14 @@
                          {:label "Unit Price" :value-fn #(or (:unit-price %) (:unit_price %))}
                          {:label "Currency" :value-fn #(or (:currency %) (:currency_code %))}]
                :empty-label "No price observations for this supplier."
-               :view-all-href (when supplier-id
-                                (str "/admin/price-observations?supplier_id=" supplier-id))
+               :view-all-href nil
                :view-all-id (when supplier-id
                               (str "btn-view-price-observations-supplier-" supplier-id))})))))))
 
 (defui suppliers-page []
-  (let [role (normalize-role (use-subscribe [:user-role]))
-        can-modify? (contains? #{"member" "admin" "owner"} role)
-        can-purge? (contains? #{"admin" "owner"} role)
+  (let [role (use-subscribe [:expenses/user-role])
+        can-modify? (authz/can? role :expenses/reference.write)
+        can-purge? (authz/can? role :expenses/reference.purge)
         form-error (use-subscribe [:user-expenses/form-error])
         include-archived? (true? (use-subscribe [:user-expenses/suppliers-include-archived?]))
         entity-name :suppliers
@@ -272,7 +263,7 @@
                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
                   "Dashboard")))))
 
-        (when (= role "viewer")
+        (when (not can-modify?)
           ($ :div {:class "w-full px-4 mt-4"}
             ($ :div {:class "ds-alert"}
               ($ :span "Read-only access. Ask a household member to update suppliers."))))
@@ -285,9 +276,9 @@
         (when detail-supplier
           (let [supplier-id detail-supplier-id
                 supplier-name (or (:display-name detail-supplier-record)
-                              (:display_name detail-supplier-record)
-                              (:display-name detail-supplier)
-                              (:display_name detail-supplier))
+                                (:display_name detail-supplier-record)
+                                (:display-name detail-supplier)
+                                (:display_name detail-supplier))
                 subtitle (or supplier-name
                            (when supplier-id (str "Supplier " supplier-id))
                            "Supplier details")

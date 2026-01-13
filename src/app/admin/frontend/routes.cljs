@@ -9,8 +9,6 @@
     [app.admin.frontend.pages.unified-settings :as unified-settings]
     [app.admin.frontend.pages.users :as users]
     [app.admin.frontend.pages.audit :as audit]
-    ;; Domain admin routes - imported directly to avoid circular dependency via registry
-    [app.domain.frontend.expenses.routes :as expenses-routes]
     [re-frame.core :as rf]))
 
 (defn guarded-start
@@ -29,7 +27,7 @@
               (rf/dispatch [:admin/check-auth-protected events])))})
 
 (def admin-routes
-  "Admin panel routes (single-tenant)"
+  "Admin panel routes (single-tenant). Domain routes are NOT included here."
   (let [base-child-routes
         [;; Login
          ["/login"
@@ -112,8 +110,5 @@
          ["/amin-settings"
           {:name :admin-amin-settings-legacy
            :view unified-settings/admin-settings-page
-           :controllers [(guarded-start (fn [_] [[:admin/navigate-client "/admin/admin-settings"]]))]}]]
-        ;; Domain routes - imported directly to avoid circular dependency
-        domain-routes (expenses-routes/routes)]
-    [["/admin"
-      (into [] (concat base-child-routes domain-routes))]]))
+           :controllers [(guarded-start (fn [_] [[:admin/navigate-client "/admin/admin-settings"]]))]}]]]
+    [["/admin" base-child-routes]]))

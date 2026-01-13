@@ -12,6 +12,7 @@
 
 (def suppliers-endpoint (api/versioned-endpoint "/expenses/suppliers"))
 (def payers-endpoint (api/versioned-endpoint "/expenses/payers"))
+(def expense-items-endpoint (api/versioned-endpoint "/expenses/expense-items"))
 (def article-aliases-endpoint (api/versioned-endpoint "/expenses/article-aliases"))
 (def price-observations-endpoint (api/versioned-endpoint "/expenses/price-observations"))
 (def settings-endpoint (api/versioned-endpoint "/expenses/settings"))
@@ -29,6 +30,7 @@
 (def admin-receipts-endpoint "/admin/api/expenses/receipts")
 (def admin-suppliers-endpoint "/admin/api/expenses/suppliers")
 (def admin-payers-endpoint "/admin/api/expenses/payers")
+(def admin-expense-items-endpoint "/admin/api/expenses/expense-items")
 (def admin-article-aliases-endpoint "/admin/api/expenses/article-aliases")
 (def admin-price-observations-endpoint "/admin/api/expenses/price-observations")
 (def admin-settings-endpoint "/admin/api/expenses/settings")

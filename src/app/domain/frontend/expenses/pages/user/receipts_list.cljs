@@ -68,7 +68,7 @@
       status)))
 
 (defn- receipt-actions
-  [receipt]
+  [can-ocr? receipt]
   (let [receipt-id (id-utils/extract-entity-id receipt)
         ocr-allowed? (receipt-ocr-allowed? receipt)
         action-groups (cond-> [{:group-title "View"
@@ -79,7 +79,7 @@
                                                      (.stopPropagation e)
                                                      (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id]))}]}]
                         ;; Add OCR group when allowed
-                        ocr-allowed?
+                        (and can-ocr? ocr-allowed?)
                         (conj {:group-title "OCR"
                                :items [{:id "parse-ocr"
                                         :icon "🔍"
@@ -96,10 +96,11 @@
 (defui batch-parse-button
   "Batch parse button shown when receipts are selected."
   []
-  (let [selected-ids (use-subscribe [::list-subs/selected-ids :receipts])
+  (let [can-ocr? (boolean (use-subscribe [:expenses/can-write?]))
+        selected-ids (use-subscribe [::list-subs/selected-ids :receipts])
         action-loading? (boolean (use-subscribe [:user-expenses/receipt-action-loading?]))
         has-selection? (and (seq selected-ids) (pos? (count selected-ids)))]
-    (when has-selection?
+    (when (and can-ocr? has-selection?)
       ($ button
         {:id "btn-batch-parse-user-receipts"
          :btn-type :primary
@@ -120,6 +121,7 @@
   (let [title "Receipts"
         error (use-subscribe [:user-expenses/receipts-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
+        can-ocr? (boolean (use-subscribe [:expenses/can-write?]))
         processing-count (->> receipts
                            (filter (fn [receipt]
                                      (receipt-processing? (:status receipt))))
@@ -131,14 +133,14 @@
                      (rf/dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}])
                      (set-last-checked! (js/Date.)))
                    [])
-        display-settings {:show-select? true
+        display-settings {:show-select? can-ocr?
                           :show-edit? false
                           :show-delete? false
                           :show-filtering? true
                           :show-pagination? true
                           :show-timestamps? true
                           :show-highlights? true
-                          :show-add-button? true
+                          :show-add-button? can-ocr?
                           :show-batch-edit? false
                           :show-batch-delete? false
                           :per-page 25}]
@@ -196,6 +198,7 @@
                  :title title
                  :display-settings display-settings
                  :per-page 25
-                 :custom-actions receipt-actions
+                 :custom-actions (fn [receipt]
+                                   (receipt-actions can-ocr? receipt))
                  :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])})))))
       ($ receipt-detail-modal))))

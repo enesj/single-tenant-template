@@ -10,17 +10,19 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (try
-        (let [params (:query-params request)
-              days-back (or (some-> (:days_back params) parse-long) 30)
-              summary (user-expenses/get-user-expense-summary db user-id {:days-back days-back})]
-          (h/json-response {:data summary}))
-        (catch Exception e
-          (log/error e "Error getting expense summary"
-            {:user-id user-id
-             :query-params (:query-params request)
-             :message (.getMessage e)})
-          (h/json-response {:error "Failed to get expense summary"} 500)))
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                days-back (or (some-> (:days_back params) parse-long) 30)
+                summary (user-expenses/get-user-expense-summary db user-id {:days-back days-back})]
+            (h/json-response {:data summary}))
+          (catch Exception e
+            (log/error e "Error getting expense summary"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get expense summary"} 500))))
       (h/unauthorized-response))))
 
 (defn spending-by-month-handler
@@ -28,17 +30,19 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (try
-        (let [params (:query-params request)
-              months-back (or (some-> (:months_back params) parse-long) 6)
-              spending (user-expenses/get-user-spending-by-month db user-id {:months-back months-back})]
-          (h/json-response {:data spending}))
-        (catch Exception e
-          (log/error e "Error getting spending by month"
-            {:user-id user-id
-             :query-params (:query-params request)
-             :message (.getMessage e)})
-          (h/json-response {:error "Failed to get spending by month"} 500)))
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                months-back (or (some-> (:months_back params) parse-long) 6)
+                spending (user-expenses/get-user-spending-by-month db user-id {:months-back months-back})]
+            (h/json-response {:data spending}))
+          (catch Exception e
+            (log/error e "Error getting spending by month"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get spending by month"} 500))))
       (h/unauthorized-response))))
 
 (defn spending-by-supplier-handler
@@ -46,14 +50,16 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (try
-        (let [params (:query-params request)
-              opts {:from (:from params)
-                    :to (:to params)
-                    :limit (or (some-> (:limit params) parse-long) 10)}
-              spending (user-expenses/get-user-spending-by-supplier db user-id opts)]
-          (h/json-response {:data spending}))
-        (catch Exception e
-          (log/error e "Error getting spending by supplier")
-          (h/json-response {:error "Failed to get spending by supplier"} 500)))
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                opts {:from (:from params)
+                      :to (:to params)
+                      :limit (or (some-> (:limit params) parse-long) 10)}
+                spending (user-expenses/get-user-spending-by-supplier db user-id opts)]
+            (h/json-response {:data spending}))
+          (catch Exception e
+            (log/error e "Error getting spending by supplier")
+            (h/json-response {:error "Failed to get spending by supplier"} 500))))
       (h/unauthorized-response))))

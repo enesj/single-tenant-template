@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.pages.user.expense-new
   "User-facing expense creation form."
   (:require
+    [app.domain.frontend.expenses.components.page-guard :as page-guard]
     [app.template.frontend.components.button :refer [button]]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
@@ -88,15 +89,19 @@
 ;; Line Item Component
 ;; ========================================================================
 
+(def ^:private form-id "expense-new-form")
+
 (defui line-item-row [{:keys [item on-change on-remove]}]
   (let [{:keys [id raw_label qty unit_price line_total]} item]
     ($ :div {:class "grid grid-cols-12 gap-2 items-center"}
       ($ :input {:type "text"
+                 :id (str form-id "-item-" id "-raw-label")
                  :class "ds-input ds-input-sm ds-input-bordered col-span-5"
                  :placeholder "Item description"
                  :value (or raw_label "")
                  :on-change #(on-change id :raw_label (.. % -target -value))})
       ($ :input {:type "number"
+                 :id (str form-id "-item-" id "-qty")
                  :step "0.001"
                  :min "0"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
@@ -104,18 +109,21 @@
                  :value (or qty "")
                  :on-change #(on-change id :qty (.. % -target -value))})
       ($ :input {:type "number"
+                 :id (str form-id "-item-" id "-unit-price")
                  :step "0.01"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
                  :placeholder "Unit price"
                  :value (or unit_price "")
                  :on-change #(on-change id :unit_price (.. % -target -value))})
       ($ :input {:type "number"
+                 :id (str form-id "-item-" id "-line-total")
                  :step "0.01"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
                  :placeholder "Total"
                  :value (or line_total "")
                  :on-change #(on-change id :line_total (.. % -target -value))})
       ($ :button {:type "button"
+                  :id (str "btn-remove-expense-new-item-" id)
                   :class "ds-btn ds-btn-ghost ds-btn-sm ds-btn-square col-span-1"
                   :on-click #(on-remove id)}
         "×"))))
@@ -124,7 +132,7 @@
 ;; Main Form
 ;; ========================================================================
 
-(defui expense-new-page []
+(defui expense-new-page-content []
   (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         loading? (use-subscribe [:user-expenses/form-loading?])
@@ -202,14 +210,18 @@
               ($ :div
                 ($ :div {:class "text-sm ds-breadcrumbs"}
                   ($ :ul
-                    ($ :li ($ :a {:href "/expenses"} "Expenses"))
+                    ($ :li ($ :a {:id "link-expenses-breadcrumb-expense-new"
+                                  :href "/expenses"}
+                             "Expenses"))
                     ($ :li "New Expense")))
                 ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Add Expense"))
               ($ :div {:class "flex gap-2"}
-                ($ button {:btn-type :ghost
+                ($ button {:id "btn-cancel-expense-new"
+                           :btn-type :ghost
                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
                   "Cancel")
-                ($ button {:btn-type :primary
+                ($ button {:id "btn-save-expense-new"
+                           :btn-type :primary
                            :loading? loading?
                            :on-click handle-submit}
                   "Save Expense")))))
@@ -217,7 +229,8 @@
         ;; Errors
         (when (or validation-error form-error)
           ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
-            ($ :div {:class "ds-alert ds-alert-error"}
+            ($ :div {:id (str form-id "-error")
+                     :class "ds-alert ds-alert-error"}
               ($ :span (or validation-error form-error)))))
 
         ;; Form
@@ -229,7 +242,8 @@
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Supplier *"))
-                ($ :select {:class "ds-select ds-select-bordered w-full"
+                ($ :select {:id (str form-id "-supplier-select")
+                            :class "ds-select ds-select-bordered w-full"
                             :value (or supplier-id "")
                             :on-change #(set-supplier-id! (.. % -target -value))}
                   ($ :option {:value ""} "Select supplier...")
@@ -241,7 +255,8 @@
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Payer *"))
-                ($ :select {:class "ds-select ds-select-bordered w-full"
+                ($ :select {:id (str form-id "-payer-select")
+                            :class "ds-select ds-select-bordered w-full"
                             :value (or payer-id "")
                             :on-change #(set-payer-id! (.. % -target -value))}
                   ($ :option {:value ""} "Select payer...")
@@ -253,7 +268,8 @@
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Purchase Date *"))
-                ($ :input {:type "datetime-local"
+                ($ :input {:id (str form-id "-purchased-at")
+                           :type "datetime-local"
                            :class "ds-input ds-input-bordered w-full"
                            :value purchased-at
                            :on-change #(set-purchased-at! (.. % -target -value))}))
@@ -262,7 +278,8 @@
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Currency"))
-                ($ :select {:class "ds-select ds-select-bordered w-full"
+                ($ :select {:id (str form-id "-currency-select")
+                            :class "ds-select ds-select-bordered w-full"
                             :value currency
                             :on-change #(set-currency! (.. % -target -value))}
                   (for [{:keys [label value]} currency-options]
@@ -273,6 +290,7 @@
               ($ :div {:class "flex items-center justify-between mb-4"}
                 ($ :h3 {:class "font-semibold"} "Line Items")
                 ($ :button {:type "button"
+                            :id "btn-add-expense-new-item"
                             :class "ds-btn ds-btn-ghost ds-btn-sm"
                             :on-click #(set-line-items! (conj line-items (new-line-item)))}
                   "+ Add Item"))
@@ -310,7 +328,8 @@
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Total Amount *"))
-                ($ :input {:type "number"
+                ($ :input {:id (str form-id "-total-amount")
+                           :type "number"
                            :step "0.01"
                            :class (str "ds-input ds-input-bordered w-full "
                                     (when total-mismatch? "ds-input-warning"))
@@ -321,8 +340,13 @@
               ($ :div
                 ($ :label {:class "ds-label"}
                   ($ :span {:class "ds-label-text font-medium"} "Notes"))
-                ($ :textarea {:class "ds-textarea ds-textarea-bordered w-full"
+                ($ :textarea {:id (str form-id "-notes")
+                              :class "ds-textarea ds-textarea-bordered w-full"
                               :rows 2
                               :value notes
                               :placeholder "Optional notes..."
                               :on-change #(set-notes! (.. % -target -value))})))))))))
+
+(defui expense-new-page []
+  ($ page-guard/write-access-guard
+    {:children ($ expense-new-page-content)}))

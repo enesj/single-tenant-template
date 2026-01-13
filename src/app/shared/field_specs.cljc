@@ -7,11 +7,22 @@
     [app.shared.validation.metadata :as validation-meta]
     [clojure.string :as str]))
 
-(def excluded-fields #{:id :created_at :updated_at :tenant_id})
+;; NOTE: Models metadata may arrive in snake_case (db) or kebab-case (app).
+;; Keep these exclusions resilient to either representation.
+(def excluded-fields
+  #{:id
+    :created_at :created-at
+    :updated_at :updated-at
+    :tenant_id :tenant-id})
 
 ;; Fields to exclude from forms but keep in tables
 ;; Fields to exclude from forms but keep in tables
-(def form-excluded-fields #{:id :created_at :updated_at :tenant_id :owner_id})
+(def form-excluded-fields
+  #{:id
+    :created_at :created-at
+    :updated_at :updated-at
+    :tenant_id :tenant-id
+    :owner_id :owner-id})
 
 ;; Load models data
 ;; Runtime models metadata ------------------------------------------------
@@ -41,9 +52,10 @@
   "Convert field name to human readable label"
   [field-name]
   (-> (name field-name)
-    (str/split #"_id" 0)
-    first
-    (str/replace #"_" " ")
+      ;; Strip common foreign-key suffixes in both snake_case and kebab-case.
+    (str/replace #"(_id|-id)$" "")
+      ;; Normalize separators.
+    (str/replace #"[_-]" " ")
     str/capitalize))
 
 (defn- find-first-unique-field
@@ -62,10 +74,11 @@
              (map? models-data) models-data
              (vector? models-data) (into {} (map (fn [[k v]] [(keyword k) v]) models-data))
              :else {})
-        ;; Handle both string and keyword keys in models-data
-        entity-key (if (contains? md entity-name)
-                     entity-name
-                     (name entity-name))
+        entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+        entity-app-kw (model-naming/db-keyword->app entity-kw)
+       ;; Handle both string and keyword keys in models-data (and both db/app forms).
+        entity-key (or (some #(when (contains? md %) %) [entity-kw entity-app-kw (name entity-kw) (name entity-app-kw)])
+                     entity-kw)
         fields (get-in md [entity-key :fields])
         ;; Helper to coerce any field name (str/kw) → keyword
         kw (fn [x] (if (keyword? x) x (keyword x)))
@@ -73,7 +86,7 @@
         ;; Check for common human-readable field names in order of preference
         explicit (cond
                    (some #{:name} fnames) :name
-                   (some #{:full_name} fnames) :full_name
+                   (some #{:full_name :full-name} fnames) (if (some #{:full-name} fnames) :full-name :full_name)
                    (some #{:title} fnames) :title
                    (some #{:description} fnames) :description
                    :else nil)
@@ -88,8 +101,10 @@
         readable-col (some (fn [f]
                              (when (readable? f) (kw (first f))))
                        fields)
-        choice (or explicit unique-col readable-col :id)]
-    choice))
+        choice-db (or explicit unique-col readable-col :id)
+        ;; Return the app/kebab-case form so downstream UI lookups match API responses.
+        choice-app (model-naming/db-keyword->app choice-db)]
+    choice-app))
 
 (defn- create-field-type
   "Create appropriate field type handler based on field definition.
@@ -106,9 +121,11 @@
     (cond
       ;; 1. Foreign keys (integer + :foreign-key) become ForeignKeyField
       (and (#{:integer :uuid :bigint} base-type) foreign-key)
-      (let [entity-name (let [fk (if (keyword? foreign-key) foreign-key (keyword foreign-key))] (keyword (namespace fk)))
-            unique-field (find-first-unique-field entity-name models-data)]
-        (field-types/->ForeignKeyField entity-name unique-field))
+      (let [fk (if (keyword? foreign-key) foreign-key (keyword foreign-key))
+            entity-name-db (keyword (namespace fk))
+            entity-name-app (model-naming/db-keyword->app entity-name-db)
+            unique-field (find-first-unique-field entity-name-db models-data)]
+        (field-types/->ForeignKeyField entity-name-app unique-field))
 
       ;; 2. Enumerated values [:enum <type>] become EnumField. <type> may arrive as string -> keyword
       (and (= base-type :enum) (vector? field-type))
@@ -189,7 +206,10 @@
 (defn entity-specs
   "Return a map of `entity-key → vector-of-field-defs` built from the models metadata.
    Works whether `md` is a normal Clojure map or the `[k v]` vector form coming from
-   EDN/JSON serialisation. Fields are sorted by :display-order from admin metadata."
+   EDN/JSON serialisation. Fields are sorted by :display-order from admin metadata.
+
+   IMPORTANT: Keys in the returned map are **app/kebab-case** entity keywords so that
+   UI callers can use `:price-observations` (not `:price_observations`)."
   ([md]
    (entity-specs md excluded-fields))
   ([md exclusion-set]
@@ -200,7 +220,8 @@
          types-map (compute-types-map md-map)]
      (reduce-kv
        (fn [acc entity-key entity-def]
-         (let [fields (:fields entity-def)
+         (let [entity-key-app (model-naming/db-keyword->app (keyword entity-key))
+               fields (:fields entity-def)
                computed-fields (:computed-fields entity-def)
                regular-field-definitions (->> fields
                                            (keep #(process-field % md-map types-map exclusion-set)))
@@ -209,15 +230,10 @@
                                                    (process-computed-field field-name field-def))))
                all-field-definitions (concat regular-field-definitions computed-field-definitions)
                field-definitions (->> all-field-definitions
-                                   ;; Debug: log final field definitions
-                                   (doall (map (fn [field-spec]
-                                                 (log/info "Final field spec:" (:id field-spec) "admin:" (:admin field-spec))
-                                                 field-spec)))
-                                   ;; Sort by display-order from admin metadata
                                    (sort-by (fn [field-spec]
                                               (get-in field-spec [:admin :display-order] 1000)))
                                    vec)]
-           (assoc acc (keyword entity-key) field-definitions)))
+           (assoc acc entity-key-app field-definitions)))
        {}
        md-map))))
 
