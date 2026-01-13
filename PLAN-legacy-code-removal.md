@@ -1,7 +1,7 @@
 # Plan: Removal of Unused/Legacy Code in `src/app/domain`
 
 **Date:** 2026-01-13
-**Status:** In Progress — Phase 3 (legacy alias refactor) completed for payers/suppliers/expense-items
+**Status:** In Progress — Phase 3 (legacy alias refactor) completed for payers/suppliers/expense-items/article-aliases/price-observations
 
 ## Overview
 
@@ -63,15 +63,15 @@ This document outlines unused, legacy, and stub code found in the `src/app/domai
 
 ### Backend Service Files - "Legacy function names for backward compatibility"
 
-The following service files contain wrapper vars that alias service methods:
+The following service files previously contained wrapper vars that aliased service methods:
 
-| File | Lines | Pattern |
-|------|-------|---------|
-| `expense_items.clj` | 25-44 | `(def list-expense-items (:list service))` |
-| `payers.clj` | 23-51 | `(def list-payers (:list service))` |
-| `suppliers.clj` | 22-26 | `(def get-supplier (:get service))` |
-| `article_aliases.clj` | 25-26 | `(def ^:private list-article-aliases-base (:list service))` |
-| `price_observations.clj` | 25-26 | `(def ^:private list-price-observations-base (:list service))` |
+| File | Pattern (historical) | Status |
+|------|----------------------|--------|
+| `expense_items.clj` | `(def list-expense-items (:list service))` | ✅ Removed |
+| `payers.clj` | `(def list-payers (:list service))` | ✅ Removed |
+| `suppliers.clj` | `(def get-supplier (:get service))` | ✅ Removed |
+| `article_aliases.clj` | `(def ^:private list-article-aliases-base (:list service))` | ✅ Removed |
+| `price_observations.clj` | `(def ^:private list-price-observations-base (:list service))` | ✅ Removed |
 
 **Example from `expense_items.clj`:**
 ```clojure
@@ -94,7 +94,9 @@ The following service files contain wrapper vars that alias service methods:
     - `services/expense_items.clj`: removed `list-expense-items`, `get-expense-item`, `create-expense-item!`, `update-expense-item!`, `count-expense-items`, `search-expense-items` (kept custom `delete-expense-item!`).
   - Updated direct call sites/tests to use the `service` map where needed.
 - **Risk:** MEDIUM (resolved via incremental refactor + tests)
-- **Action:** ✅ Done for the above. Remaining alias-like private vars in other services (`article_aliases.clj`, `price_observations.clj`) can be evaluated separately.
+- **Action:** ✅ Done for the above **including**:
+  - `services/article_aliases.clj`: removed private `list-article-aliases-base` and legacy CRUD alias `def`s; kept `list-article-aliases` wrapper for filtered supplier detail views.
+  - `services/price_observations.clj`: removed private `list-price-observations-base` and legacy CRUD alias `def`s; kept `list-price-observations` wrapper + `create-price-observation!` override.
 
 ---
 
@@ -204,7 +206,7 @@ TODO: Add user_expense_settings table or JSONB column to users table.
 | Category | Files Affected | Lines | Removal Risk | Recommendation |
 |----------|---------------|-------|--------------|----------------|
 | Empty/Placeholder Functions | 2 | ~25 | LOW | ✅ Removed |
-| Legacy Function Aliases | 5 | ~40 | MEDIUM | ✅ Refactor completed for payers/suppliers/expense-items; others TBD |
+| Legacy Function Aliases | 5 | ~40 | MEDIUM | ✅ Refactor completed for payers/suppliers/expense-items/article-aliases/price-observations |
 | Legacy Arity Support | 1 | ~25 | MEDIUM | Keep (covered by tests); remove only as an intentional breaking change |
 | Stub Implementations | 1 | ~50 | N/A | Keep or implement TODO |
 | Empty Init | 1 | ~3 | LOW | ✅ Removed |

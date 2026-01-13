@@ -22,8 +22,9 @@
 
 (def service (factory/build-entity-service config))
 
-;; Legacy function names for backward compatibility with routes
-(def ^:private list-article-aliases-base (:list service))
+;; NOTE: Avoid legacy alias vars like `get-article-alias`/`update-article-alias!`.
+;; Admin routes resolve operations via the `service` map (or explicit overrides).
+;; We keep a custom `list-article-aliases` wrapper below to support optional filters.
 
 (defn- try-uuid
   [v]
@@ -62,13 +63,7 @@
     ;; This preserves compatibility for callers that rely on the generated list.
     (if (or supplier-uuid article-uuid)
       (jdbc/execute! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})
-      (list-article-aliases-base db opts))))
-
-(def get-article-alias (:get service))
-(def update-article-alias! (:update! service))
-(def delete-article-alias! (:delete! service))
-(def count-article-aliases (:count service))
-(def search-article-aliases (:search service))
+      ((:list service) db opts))))
 
 ;; ============================================================================
 ;; Custom Operations
@@ -79,10 +74,3 @@
   [db {:keys [supplier_id raw_label article_id confidence]}]
   (articles/create-alias! db supplier_id raw_label article_id {:confidence confidence}))
 
-(def count-aliases
-  "Count total aliases, optionally with search filter."
-  (:count service))
-
-(def search-aliases
-  "Search aliases for autocomplete."
-  (:search service))

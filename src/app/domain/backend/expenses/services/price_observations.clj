@@ -22,8 +22,9 @@
 
 (def service (factory/build-entity-service config))
 
-;; Legacy function names for backward compatibility with routes
-(def ^:private list-price-observations-base (:list service))
+;; NOTE: Avoid legacy alias vars like `get-price-observation`/`update-price-observation!`.
+;; Admin routes resolve operations via the `service` map (or explicit overrides).
+;; We keep custom wrappers below (list/create) to support filtering + price-history behavior.
 
 (defn- try-uuid
   [v]
@@ -65,12 +66,7 @@
     ;; This preserves compatibility for callers that rely on the generated list.
     (if (or supplier-uuid article-uuid from to)
       (jdbc/execute! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})
-      (list-price-observations-base db opts))))
-
-(def get-price-observation (:get service))
-(def update-price-observation! (:update! service))
-(def delete-price-observation! (:delete! service))
-(def count-price-observations (:count service))
+      ((:list service) db opts))))
 
 ;; ============================================================================
 ;; Custom Operations
