@@ -54,23 +54,9 @@
       (is (= [:failure] (:on-failure result))))))
 
 (deftest test-create-entity
-  (testing "create-entity uses admin endpoints on admin routes"
-    (.removeItem js/localStorage "admin-token")
-    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
-    (let [config {:entity-name "users"
-                  :data {:name "John" :email "john@example.com"}
-                  :on-success [:success]
-                  :on-failure [:failure]}
-          result (http/create-entity config)]
-      (is (= :post (:method result)))
-      (is (= "/admin/api/users" (:uri result)))
-      (is (= {:name "John" :email "john@example.com"} (:params result)))
-      (is (= [:success] (:on-success result)))
-      (is (= [:failure] (:on-failure result)))))
-
-  (testing "create-entity uses versioned entity endpoints on non-admin routes (even if an admin token exists)"
+  (testing "create-entity targets public endpoint even on admin routes"
     (.setItem js/localStorage "admin-token" "stale-token")
-    (reset! rf-db/app-db {:current-route {:data {:name :receipts}}})
+    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
     (let [config {:entity-name "users"
                   :data {:name "John" :email "john@example.com"}
                   :on-success [:success]
@@ -78,32 +64,46 @@
           result (http/create-entity config)]
       (is (= :post (:method result)))
       (is (= (api/entity-endpoint "users") (:uri result)))
+      (is (= {:name "John" :email "john@example.com"} (:params result)))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result)))))
+
+  (testing "create-entity-admin targets admin entity endpoint and includes token"
+    (.setItem js/localStorage "admin-token" "admin-token-123")
+    (reset! rf-db/app-db {})
+    (let [config {:entity-name "users"
+                  :data {:name "John" :email "john@example.com"}
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/create-entity-admin config)]
+      (is (= :post (:method result)))
+      (is (= "/admin/api/entities/users" (:uri result)))
+      (is (= {"x-admin-token" "admin-token-123"} (:headers result)))
+      (is (= {:name "John" :email "john@example.com"} (:params result)))
+      (is (= [:success] (:on-success result)))
+      (is (= [:failure] (:on-failure result)))))
+
+  (testing "create-entity-admin omits headers when token is missing"
+    (.removeItem js/localStorage "admin-token")
+    (reset! rf-db/app-db {})
+    (let [config {:entity-name "users"
+                  :data {:name "John" :email "john@example.com"}
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/create-entity-admin config)]
+      (is (= :post (:method result)))
+      (is (= "/admin/api/entities/users" (:uri result)))
+      (is (not (contains? result :headers))))
+      )
 
   ;; cleanup
   (.removeItem js/localStorage "admin-token")
   (reset! rf-db/app-db {}))
 
 (deftest test-update-entity
-  (testing "update-entity uses admin endpoints on admin routes"
-    (.removeItem js/localStorage "admin-token")
-    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
-    (let [config {:entity-name "users"
-                  :id 123
-                  :data {:name "John Updated"}
-                  :on-success [:success]
-                  :on-failure [:failure]}
-          result (http/update-entity config)]
-      (is (= :put (:method result)))
-      (is (= "/admin/api/users/123" (:uri result)))
-      (is (= {:name "John Updated"} (:params result)))
-      (is (= [:success] (:on-success result)))
-      (is (= [:failure] (:on-failure result)))))
-
-  (testing "update-entity uses versioned entity endpoints on non-admin routes (even if an admin token exists)"
+  (testing "update-entity targets public endpoint even on admin routes"
     (.setItem js/localStorage "admin-token" "stale-token")
-    (reset! rf-db/app-db {:current-route {:data {:name :receipts}}})
+    (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
     (let [config {:entity-name "users"
                   :id 123
                   :data {:name "John Updated"}
@@ -112,6 +112,23 @@
           result (http/update-entity config)]
       (is (= :put (:method result)))
       (is (= (api/entity-endpoint "users" 123) (:uri result)))
+      (is (= {:name "John Updated"} (:params result)))
+      (is (= [:success] (:on-success result)))
+      (is (= [:failure] (:on-failure result)))))
+
+  (testing "update-entity-admin targets admin entity endpoint and includes token"
+    (.setItem js/localStorage "admin-token" "admin-token-123")
+    (reset! rf-db/app-db {})
+    (let [config {:entity-name "users"
+                  :id 123
+                  :data {:name "John Updated"}
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/update-entity-admin config)]
+      (is (= :put (:method result)))
+      (is (= "/admin/api/entities/users/123" (:uri result)))
+      (is (= {"x-admin-token" "admin-token-123"} (:headers result)))
+      (is (= {:name "John Updated"} (:params result)))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result)))))
 
@@ -120,8 +137,8 @@
   (reset! rf-db/app-db {}))
 
 (deftest test-delete-entity
-  (testing "delete-entity uses admin endpoints on admin routes"
-    (.removeItem js/localStorage "admin-token")
+  (testing "delete-entity targets public endpoint even on admin routes"
+    (.setItem js/localStorage "admin-token" "stale-token")
     (reset! rf-db/app-db {:current-route {:data {:name :admin-users}}})
     (let [config {:entity-name "users"
                   :id 123
@@ -129,20 +146,21 @@
                   :on-failure [:failure]}
           result (http/delete-entity config)]
       (is (= :delete (:method result)))
-      (is (= "/admin/api/users/123" (:uri result)))
+      (is (= (api/entity-endpoint "users" 123) (:uri result)))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result)))))
 
-  (testing "delete-entity uses versioned entity endpoints on non-admin routes (even if an admin token exists)"
-    (.setItem js/localStorage "admin-token" "stale-token")
-    (reset! rf-db/app-db {:current-route {:data {:name :receipts}}})
+  (testing "delete-entity-admin targets admin entity endpoint and includes token"
+    (.setItem js/localStorage "admin-token" "admin-token-123")
+    (reset! rf-db/app-db {})
     (let [config {:entity-name "users"
                   :id 123
                   :on-success [:success]
                   :on-failure [:failure]}
-          result (http/delete-entity config)]
+          result (http/delete-entity-admin config)]
       (is (= :delete (:method result)))
-      (is (= (api/entity-endpoint "users" 123) (:uri result)))
+      (is (= "/admin/api/entities/users/123" (:uri result)))
+      (is (= {"x-admin-token" "admin-token-123"} (:headers result)))
       (is (= [:success] (:on-success result)))
       (is (= [:failure] (:on-failure result)))))
 

@@ -178,3 +178,84 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 - This inventory is based on code + docs visible in `docs/` and core shared/template paths.  
 - If additional domain modules are added later, re-run this inventory to include new shared patterns.
 - Docs reference `app.shared.adapters.database`, but the expected file path isn’t present; verify the current DB-normalization utility location before auditing duplication in that area.
+
+## Non-DRY Code Snippets (Candidates for Consolidation)
+
+- **Duplicate model customization extraction** — **Resolved (2026-01-13)**.
+  - `app.template.backend.utils.model-customizations` now delegates extraction helpers to `app.shared.model-customizations` to avoid drift.
+  - Schema-stripping helpers (`strip-*`) remain in the template backend namespace for migration/alignment tooling.
+
+- **Multiple HTTP request builders (frontend)** — three overlapping request helpers with similar responsibilities.
+  - **Progress (2026-01-13):** centralized error extraction (admin helper now delegates to `app.shared.http/extract-error-message`, and the shared extractor was expanded to cover common admin response shapes).
+  - **Progress (2026-01-13):** admin helper token retrieval now prefers auth persistence (`app.admin.frontend.auth.persistence/get-persisted-token`) with fallback to raw localStorage for legacy sessions.
+  - **Progress (2026-01-13):** request map construction (formats, params/body inclusion, and safe Content-Type behavior) centralized in `app.shared.http.core/build-xhrio-request`; both `admin-request` and `api-request` now delegate to it.
+  - **Progress (2026-01-13):** template entity CRUD helpers are now split into explicit `*-public` vs `*-admin` callers; the legacy `create-entity/update-entity/delete-entity` wrappers are public-only.
+  - **Progress (2026-01-13):** admin vs public routing decisions for generic CRUD now live in the CRUD bridge default request handler (route/path based), not inside the HTTP helper.
+  - **Remaining:** consider deprecating/removing legacy `app.shared.http.core/build-request` once all call sites are migrated to `build-xhrio-request`.
+  `src/app/template/frontend/api/http.cljs`:
+  ```clojure
+  (defn api-request [{:keys [method uri params body format response-format on-success on-failure timeout headers]}] ...)
+  ```
+  `src/app/admin/frontend/utils/http.cljs`:
+  ```clojure
+  (defn admin-request [{:keys [method uri params body format response-format headers timeout on-success on-failure token]}] ...)
+  ```
+  `src/app/shared/http/core.cljs`:
+  ```clojure
+  (defn build-request [db context method endpoint-path & [opts]] ...)
+  ```
+
+- **Duplicate JSON response helpers (backend)** — response helpers defined in two places.
+  - **Progress (2026-01-13):** added CLJ-only helpers in `app.shared.http` for routes that must return JSON *string* bodies: `encode-json-body`, `json-string-response`, `error-string-response`.
+  - **Progress (2026-01-13):** `app.template.backend.routes.admin.utils/json-response` + `error-response` now delegate to `app.shared.http` (preserving the admin routes' string-body requirement).
+  - **Progress (2026-01-13):** expenses user handler helpers now delegate to `app.shared.http/json-string-response` to avoid drifting JSON response behavior.
+  `src/app/template/backend/routes/admin/utils.clj`:
+  ```clojure
+  (defn json-response [data & {:keys [status] :or {status 200}}] ...)
+  (defn error-response [message & {:keys [status details] :or {status 500}}] ...)
+  ```
+  `src/app/shared/http.cljc`:
+  ```clojure
+  (defn json-response ([data] (json-response status-ok data)) ...)
+  (defn error-response ([message] (error-response status-internal-server-error message)) ...)
+  ```
+
+- **Query builder duplication (backend)** — both template admin and domain services implement their own query builders.
+  `src/app/template/backend/utils/query_builders.clj`:
+  ```clojure
+  (defn add-pagination [query {:keys [limit offset]}] ...)
+  (defn add-sorting [query {:keys [sort-by sort-order table-alias default-column]}] ...)
+  ```
+  `src/app/domain/backend/expenses/services/services_factory.clj`:
+  ```clojure
+  (defn build-query-with-filters [config {:keys [limit offset order-by order-dir]}] ...)
+  (defn apply-search-filter [query search-fields search-term] ...)
+  ```
+
+- **Duplicate key conversion in form submission** — **Resolved (2026-01-13)**.
+  - Centralized as `app.shared.model-naming/app-map-keys->db`.
+  - Call sites now delegate to the shared helper:
+    - `src/app/template/frontend/events/form.cljs`
+    - `src/app/admin/frontend/events/users/template/form_interceptors.cljs`
+
+## Prioritization (Order for DRY Fixes)
+
+1) **Duplicate model customization extraction** — ✅ **Done (2026-01-13)**
+  - Template backend delegates to shared; strip helpers kept for migrations.
+
+2) **Duplicate key conversion in form submission** — ✅ **Done (2026-01-13)**
+  - Added `app.shared.model-naming/app-map-keys->db`; updated both call sites.
+
+3) **Multiple HTTP request builders (frontend)**  
+  - Medium impact, medium risk: three overlapping helpers; needs careful API alignment.  
+   - Files: `src/app/template/frontend/api/http.cljs`, `src/app/admin/frontend/utils/http.cljs`, `src/app/shared/http/core.cljs`
+  - Status: ✅ **Done (2026-01-13)** — error extraction + token retrieval aligned; request map construction centralized; template CRUD split into explicit public vs admin callers.
+
+4) **Duplicate JSON response helpers (backend)**  
+   - Medium impact, medium risk: two response layers; standardize on one to avoid drift.  
+   - Files: `src/app/template/backend/routes/admin/utils.clj`, `src/app/shared/http.cljc`
+  - Status: ✅ **Done (2026-01-13)** — shared response shape lives in `app.shared.http`; CLJ-only JSON string encoding helpers added for non-muuntaja routes.
+
+5) **Query builder duplication (backend)**  
+   - Higher complexity: domain vs template query needs alignment; refactor last.  
+   - Files: `src/app/template/backend/utils/query_builders.clj`, `src/app/domain/backend/expenses/services/services_factory.clj`

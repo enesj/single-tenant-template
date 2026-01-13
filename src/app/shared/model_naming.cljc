@@ -51,6 +51,22 @@
     (string? v) (str/replace v "-" "_")
     :else v))
 
+(defn app-map-keys->db
+  "Convert a map's keyword keys from kebab-case to snake_case.
+
+   - Converts only keyword keys; non-keyword keys are preserved.
+   - Preserves the input map type (sorted-map stays sorted, etc.).
+   - Preserves nil by returning nil."
+  [m]
+  (when m
+    (into (empty m)
+      (map (fn [[k v]]
+             [(if (keyword? k)
+                (app-keyword->db k)
+                k)
+              v]))
+      m)))
+
 (defn- derive-field-aliases
   "Create a map of database field keywords to application field keywords for a
    single entity definition."

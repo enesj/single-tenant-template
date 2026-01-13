@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.handlers.user-expenses.helpers
   "Common helpers for user expense handlers."
   (:require
+    [app.shared.http :as shared-http]
     [cheshire.core :as json]
     [clojure.string :as str])
   (:import
@@ -57,9 +58,7 @@
   "Create a JSON response with the given body and status."
   ([body] (json-response body 200))
   ([body status]
-   {:status status
-    :headers {"Content-Type" "application/json"}
-    :body (json/generate-string body)}))
+  (shared-http/json-string-response status body)))
 
 (defn unauthorized-response
   "Return 401 unauthorized response."

@@ -145,33 +145,57 @@
 ;; Default Request Handlers
 ;; ============================================================================
 
+(defn- in-admin-context?
+  "Best-effort detection that we are inside an admin UI context.
+
+  IMPORTANT: Do NOT use presence of an admin token as a signal. Users can have a stale
+  token in localStorage while browsing non-admin routes, and routing admin API calls
+  from user pages causes confusing 401/405 errors.
+
+  Precedence:
+  - If a reitit route name is present, it is treated as the source of truth.
+  - Otherwise fall back to URL pathname heuristics."
+  [db]
+  (let [route-name (get-in db [:current-route :data :name])
+        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        pathname (when (exists? js/window)
+                   (some-> js/window .-location .-pathname))
+        in-admin-path? (and pathname (str/includes? pathname "/admin"))]
+    (boolean (or admin-route? in-admin-path?))))
+
 (defn default-delete-request [{:keys [db]} entity-type id]
   ; Default delete request handler using template HTTP.
   {:db (assoc-in db (paths/entity-loading? entity-type) true)
-   :http-xhrio (template-http/delete-entity
-                 {:entity-name (entity-name entity-type)
-                  :id id
-                  :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                  :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})})
+   :http-xhrio (let [opts {:entity-name (entity-name entity-type)
+                           :id id
+                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}]
+                (if (in-admin-context? db)
+                  (template-http/delete-entity-admin opts)
+                  (template-http/delete-entity-public opts)))})
 
 (defn default-create-request [{:keys [db]} entity-type form-data]
   ; Default create request handler using template HTTP.
   {:db (assoc-in db (paths/entity-loading? entity-type) true)
-   :http-xhrio (template-http/create-entity
-                 {:entity-name (entity-name entity-type)
-                  :data form-data
-                  :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
-                  :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]})})
+   :http-xhrio (let [opts {:entity-name (entity-name entity-type)
+                           :data form-data
+                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}]
+                (if (in-admin-context? db)
+                  (template-http/create-entity-admin opts)
+                  (template-http/create-entity-public opts)))})
 
 (defn default-update-request [{:keys [db]} entity-type id form-data]
   ; Default update request handler using template HTTP.
   {:db (assoc-in db (paths/entity-loading? entity-type) true)
-   :http-xhrio (template-http/update-entity
-                 {:entity-name (entity-name entity-type)
-                  :id id
-                  :data form-data
-                  :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
-                  :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]})})
+   :http-xhrio (let [opts {:entity-name (entity-name entity-type)
+                           :id id
+                           :data form-data
+                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}]
+                (if (in-admin-context? db)
+                  (template-http/update-entity-admin opts)
+                  (template-http/update-entity-public opts)))})
 
 ;; ============================================================================
 ;; Bridge Registration and Management

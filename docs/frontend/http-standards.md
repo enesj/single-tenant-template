@@ -4,7 +4,7 @@
 
 ## Overview
 
-Single-tenant app with an admin console at `/admin`. All admin API calls go to `/admin/api/*` and must include the bearer token. Use the shared helpers instead of inline `:http-xhrio` blocks to keep auth, formats, and timeouts consistent. The public `:app` build is optional; if used, it should also rely on the template helper for any public calls.
+Single-tenant app with an admin console at `/admin`. All admin API calls go to `/admin/api/*` and must include the admin token header (`x-admin-token`). Use the shared helpers instead of inline `:http-xhrio` blocks to keep auth, formats, and timeouts consistent. The public `:app` build is optional; if used, it should also rely on the template helper for any public calls.
 
 ## Core Principles
 
@@ -32,7 +32,7 @@ Single-tenant app with an admin console at `/admin`. All admin API calls go to `
                         :on-failure [:admin/user-save-failed]})
 ```
 
-- Injects `Authorization: Bearer <token>` automatically.  
+- Injects `x-admin-token: <token>` automatically (reads via auth persistence when available; falls back to localStorage).  
 - JSON request/response formats configured centrally.  
 - Timeouts: 10s default; exports may use longer where supported.  
 - Error messages normalized via `admin-http/extract-error-message`.
@@ -51,6 +51,31 @@ Used only if the public `:app` build calls backend endpoints.
 
 Defaults: JSON formats, 8s timeout, no tenant headers (single-tenant).
 
+#### Entity CRUD: explicit public vs admin
+
+The template/public HTTP namespace also exposes generic entity CRUD helpers.
+
+- Public/template routes should call the **public** helpers (or the legacy wrappers):
+
+```clojure
+(http/create-entity-public {:entity-name "receipts" :data payload :on-success [:ok] :on-failure [:err]})
+(http/update-entity-public {:entity-name "receipts" :id 123 :data payload :on-success [:ok] :on-failure [:err]})
+(http/delete-entity-public {:entity-name "receipts" :id 123 :on-success [:ok] :on-failure [:err]})
+
+;; Backward-compatible wrappers (public-only):
+(http/create-entity {...})
+(http/update-entity {...})
+(http/delete-entity {...})
+```
+
+- Admin routes must use **explicit** admin helpers (admin entity routes are mounted under `/admin/api/entities/*`):
+
+```clojure
+(http/create-entity-admin {:entity-name "receipts" :data payload :on-success [:ok] :on-failure [:err]})
+```
+
+In practice, admin UI flows should prefer the CRUD bridge + admin adapters; the bridge defaults decide admin vs public based on route/path (never on presence of a token).
+
 ## Migration Patterns
 
 ### Before (inline, avoid)
@@ -58,7 +83,7 @@ Defaults: JSON formats, 8s timeout, no tenant headers (single-tenant).
 ```clojure
 {:http-xhrio {:method :get
               :uri "/admin/api/audit"
-              :headers {"Authorization" (str "Bearer " token)} ; manual
+              :headers {"x-admin-token" token} ; manual
               :format :json
               :response-format :json}}
 ```

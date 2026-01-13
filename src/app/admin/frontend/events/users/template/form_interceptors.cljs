@@ -29,7 +29,7 @@
 (defn- convert-keys-to-db
   "Convert all keys in a map from kebab-case to snake_case for database/API compatibility"
   [m]
-  (into {} (map (fn [[k v]] [(model-naming/app-keyword->db k) v]) m)))
+  (model-naming/app-map-keys->db m))
 
 (rf/reg-event-fx
   :app.template.frontend.events.form/submit-form
@@ -70,19 +70,25 @@
         ;; Fallback to template default - inline the logic directly 
         ;; to avoid dispatch timing issues in tests
         :else
-        {:db (assoc-in db (paths/form-submitting? entity-name) true)
-         :http-xhrio (if editing
-                       (http/update-entity
+        (let [request (if editing
+                        ((if in-admin?
+                           http/update-entity-admin
+                           http/update-entity)
                          {:entity-name (name entity-name)
                           :id (:id values)
                           :data request-params
                           :on-success [:app.template.frontend.events.form/update-success entity-name]
                           :on-failure [:app.template.frontend.events.form/update-failure entity-name]})
-                       (http/create-entity
+                        ((if in-admin?
+                           http/create-entity-admin
+                           http/create-entity)
                          {:entity-name (name entity-name)
                           :data request-params
                           :on-success [:app.template.frontend.events.form/create-success entity-name]
-                          :on-failure [:app.template.frontend.events.form/create-failure entity-name]}))}))))
+                          :on-failure [:app.template.frontend.events.form/create-failure entity-name]}))]
+          {:db (assoc-in db (paths/form-submitting? entity-name) true)
+             :http-xhrio request}))))
+    )
 
 ;; Note: The separate :admin.template.form/submit-user-edit and :admin.template.form/submit-user-create
 ;; events are no longer needed since we now route through the bridge system.

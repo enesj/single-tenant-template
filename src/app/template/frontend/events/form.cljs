@@ -14,7 +14,7 @@
 (defn- convert-keys-to-db
   "Convert all keys in a map from kebab-case to snake_case for database/API compatibility"
   [m]
-  (into {} (map (fn [[k v]] [(model-naming/app-keyword->db k) v]) m)))
+  (model-naming/app-map-keys->db m))
 
 ;;; -------------------------
 ;;; Form Submission
@@ -140,22 +140,22 @@
 ;; --------------------------------------------------------------------------
 
 #_(rf/reg-event-fx
-  :app.template.frontend.events.form/default-create-success
-  common-interceptors
-  (fn [{:keys [db]} [entity-type response]]
-    (let [new-db (crud-success/handle-create-success db entity-type response)]
-      {:db new-db
-       :fx (when (and entity-type (keyword? entity-type))
-             [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
+    :app.template.frontend.events.form/default-create-success
+    common-interceptors
+    (fn [{:keys [db]} [entity-type response]]
+      (let [new-db (crud-success/handle-create-success db entity-type response)]
+        {:db new-db
+         :fx (when (and entity-type (keyword? entity-type))
+               [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
 #_(rf/reg-event-fx
-  :app.template.frontend.events.form/default-update-success
-  common-interceptors
-  (fn [{:keys [db]} [entity-type provided-id response]]
-    (let [new-db (crud-success/handle-update-success db entity-type provided-id response)]
-      {:db new-db
-       :fx (when (and entity-type (keyword? entity-type))
-             [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
+    :app.template.frontend.events.form/default-update-success
+    common-interceptors
+    (fn [{:keys [db]} [entity-type provided-id response]]
+      (let [new-db (crud-success/handle-update-success db entity-type provided-id response)]
+        {:db new-db
+         :fx (when (and entity-type (keyword? entity-type))
+               [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
 (rf/reg-event-db
   ::set-submitted

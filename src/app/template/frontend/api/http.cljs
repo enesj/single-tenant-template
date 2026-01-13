@@ -3,10 +3,11 @@
    Provides request builders and common configurations."
   (:require
     [ajax.core :as ajax]
-    [app.shared.http :as http]
+    [app.shared.http :as shared-http]
+    [app.shared.http.core :as shared-http-core]
     [app.template.frontend.api :as api]
-    [re-frame.db :as rf-db]
     [clojure.string :as str]
+    [re-frame.db :as rf-db]
     #_[taoensso.timbre :as log]))
 
 ;;; -------------------------
@@ -41,16 +42,17 @@
          response-format json-response-format
          timeout 8000}
     :as _config}]
-  (cond-> {:method method
-           :uri uri
-           :format format
-           :response-format response-format
-           :on-success on-success
-           :on-failure on-failure
-           :timeout timeout}
-    (some? params) (assoc :params params)
-    (some? body) (assoc :body body)
-    headers (assoc :headers headers)))
+  (shared-http-core/build-xhrio-request
+    {:method method
+     :uri uri
+     :params params
+     :body body
+     :format format
+     :response-format response-format
+     :timeout timeout
+     :headers headers
+     :on-success on-success
+     :on-failure on-failure}))
 
 ;; Alias for backwards compatibility
 #_(def build-request api-request)
@@ -104,79 +106,114 @@
      :on-success on-success
      :on-failure on-failure}))
 
-(defn- get-admin-token []
+(defn- admin-token-from-storage
+  "Return the admin token from app-db or localStorage.
+
+  NOTE: This helper is only used by the explicit *-admin request builders below.
+  Public/template requests must not rely on admin auth state."
+  []
   (or (try (:admin/token @rf-db/app-db) (catch :default _ nil))
     (try (when (exists? js/localStorage)
            (.getItem js/localStorage "admin-token"))
       (catch :default _ nil))))
 
-(defn- admin-context?
-  "Best-effort detection that we are inside an admin UI context.
+(defn- admin-entity-endpoint
+  "Admin entity CRUD endpoint.
 
-  IMPORTANT: Do NOT use presence of an admin token as a signal. Users can have a stale
-  token in localStorage while browsing non-admin routes, and routing admin API calls
-  from user pages causes confusing 401/405 errors.
+  Admin entity routes are mounted under /admin/api/entities/*"
+  ([entity-name]
+   (str "/admin/api/entities/" entity-name))
+  ([entity-name id]
+   (str "/admin/api/entities/" entity-name "/" id)))
 
-  Precedence:
-  - If a reitit route name is present, it is treated as the source of truth.
-  - Otherwise fall back to URL-based heuristics (pathname/hostname)."
-  []
-  (let [db @rf-db/app-db
-        route-name (get-in db [:current-route :data :name])
-        pathname (when (exists? js/window)
-                   (some-> js/window .-location .-pathname))
-        hostname (when (exists? js/window)
-                   (some-> js/window .-location .-hostname))]
-    (cond
-      route-name
-      (str/starts-with? (name route-name) "admin")
+(defn create-entity-public
+  "Create an entity via the public/template API endpoint (versioned /api/*).
 
-      :else
-      (boolean (or (and pathname (str/includes? pathname "/admin"))
-                 (and hostname (str/includes? (str/lower-case hostname) "admin")))))))
-
-(defn create-entity
-  "Create a new entity"
+  This is the correct choice for non-admin routes even if a stale admin token exists."
   [{:keys [entity-name data on-success on-failure]}]
-  (let [admin-token (get-admin-token)
-        admin-uri (str "/admin/api/" entity-name)
-        uri (if (admin-context?) admin-uri (api/entity-endpoint entity-name))
+  (post-request
+    {:uri (api/entity-endpoint entity-name)
+     :params data
+     :on-success on-success
+     :on-failure on-failure}))
+
+(defn update-entity-public
+  "Update an entity via the public/template API endpoint (versioned /api/*)."
+  [{:keys [entity-name id data on-success on-failure]}]
+  (put-request
+    {:uri (api/entity-endpoint entity-name id)
+     :params data
+     :on-success on-success
+     :on-failure on-failure}))
+
+(defn delete-entity-public
+  "Delete an entity via the public/template API endpoint (versioned /api/*)."
+  [{:keys [entity-name id on-success on-failure]}]
+  (delete-request
+    {:uri (api/entity-endpoint entity-name id)
+     :on-success on-success
+     :on-failure on-failure}))
+
+(defn create-entity-admin
+  "Create an entity via the admin API endpoint (/admin/api/entities/*).
+
+  Use this only when you are explicitly performing an admin operation."
+  [{:keys [entity-name data on-success on-failure token]}]
+  (let [admin-token (or token (admin-token-from-storage))
         headers (when admin-token {"x-admin-token" admin-token})]
     (post-request
-      (cond-> {:uri uri
+      (cond-> {:uri (admin-entity-endpoint entity-name)
                :params data
                :on-success on-success
                :on-failure on-failure}
         headers (assoc :headers headers)))))
 
-(defn update-entity
-  "Update an existing entity"
-  [{:keys [entity-name id data on-success on-failure]}]
-  (let [admin-token (get-admin-token)
-        admin-uri (str "/admin/api/" entity-name "/" id)
-        uri (if (admin-context?) admin-uri (api/entity-endpoint entity-name id))
+(defn update-entity-admin
+  "Update an entity via the admin API endpoint (/admin/api/entities/*)."
+  [{:keys [entity-name id data on-success on-failure token]}]
+  (let [admin-token (or token (admin-token-from-storage))
         headers (when admin-token {"x-admin-token" admin-token})]
     (put-request
-      (cond-> {:uri uri
+      (cond-> {:uri (admin-entity-endpoint entity-name id)
                :params data
                :on-success on-success
                :on-failure on-failure}
         headers (assoc :headers headers)))))
 
-(defn delete-entity
-  "Delete an entity"
-  [{:keys [entity-name id on-success on-failure]}]
-  (let [admin-token (get-admin-token)
-        uri (if (admin-context?)
-              (str "/admin/api/" entity-name "/" id)
-              (api/entity-endpoint entity-name id))
-        headers (when admin-token
-                  {"x-admin-token" admin-token})]
+(defn delete-entity-admin
+  "Delete an entity via the admin API endpoint (/admin/api/entities/*)."
+  [{:keys [entity-name id on-success on-failure token]}]
+  (let [admin-token (or token (admin-token-from-storage))
+        headers (when admin-token {"x-admin-token" admin-token})]
     (delete-request
-      (cond-> {:uri uri
+      (cond-> {:uri (admin-entity-endpoint entity-name id)
                :on-success on-success
                :on-failure on-failure}
         headers (assoc :headers headers)))))
+
+(defn create-entity
+  "Backward-compatible wrapper.
+
+  This function now always targets the public/template API endpoint.
+  Use `create-entity-admin` explicitly for admin operations."
+  [opts]
+  (create-entity-public opts))
+
+(defn update-entity
+  "Backward-compatible wrapper.
+
+  This function now always targets the public/template API endpoint.
+  Use `update-entity-admin` explicitly for admin operations."
+  [opts]
+  (update-entity-public opts))
+
+(defn delete-entity
+  "Backward-compatible wrapper.
+
+  This function now always targets the public/template API endpoint.
+  Use `delete-entity-admin` explicitly for admin operations."
+  [opts]
+  (delete-entity-public opts))
 
 (defn batch-update-entities
   "Batch update multiple entities"
@@ -205,7 +242,7 @@
 (defn extract-error-message
   "Extract error message from various response formats - delegates to shared utilities"
   [response]
-  (http/extract-error-message response))
+  (shared-http/extract-error-message response))
 
 #_(defn log-request-error
     "Log request errors with context"

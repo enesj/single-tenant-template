@@ -110,16 +110,30 @@
   []
   (let [token (.getItem js/localStorage token-key)
         timestamp-str (.getItem js/localStorage timestamp-key)
-        timestamp (when timestamp-str (js/parseInt timestamp-str))]
-    (if (and token (is-session-valid? timestamp))
+        raw-timestamp (when timestamp-str (js/parseInt timestamp-str))
+        timestamp (when (and raw-timestamp (not (js/isNaN raw-timestamp))) raw-timestamp)]
+    (cond
+      (and token (is-session-valid? timestamp))
       (do
         (log/info "Retrieved valid persisted token")
         token)
+
+      ;; Backwards compatibility: older sessions may have a token stored without our timestamp.
+      ;; Treat as valid and start the expiry clock from now.
+      (and token (nil? timestamp))
       (do
-        (when token
-          (log/warn "Persisted token expired, clearing"))
+        (log/info "Retrieved legacy persisted token (no timestamp); initializing timestamp")
+        (.setItem js/localStorage timestamp-key (str (js/Date.now)))
+        token)
+
+      token
+      (do
+        (log/warn "Persisted token expired, clearing")
         (clear-auth-state!)
-        nil))))
+        nil)
+
+      :else
+      nil)))
 
 ;; Initialize auth state restoration
 (defn init-auth-persistence!
@@ -137,8 +151,9 @@
   []
   (let [token (.getItem js/localStorage token-key)
         timestamp-str (.getItem js/localStorage timestamp-key)
-        timestamp (when timestamp-str (js/parseInt timestamp-str))]
-    (and token (is-session-valid? timestamp))))
+    raw-timestamp (when timestamp-str (js/parseInt timestamp-str))
+    timestamp (when (and raw-timestamp (not (js/isNaN raw-timestamp))) raw-timestamp)]
+  (boolean (and token (or (nil? timestamp) (is-session-valid? timestamp))))))
 
 ;; Export for debugging
 (defn debug-auth-storage

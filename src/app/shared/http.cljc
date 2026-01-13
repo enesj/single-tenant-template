@@ -1,7 +1,9 @@
 (ns app.shared.http
   "Cross-platform HTTP constants and utilities for consistent API communication.
    Provides status codes, content types, and common response patterns
-   that work in both Clojure and ClojureScript environments.")
+   that work in both Clojure and ClojureScript environments."
+  #?(:clj (:require
+            [cheshire.core :as json])))
 
 ;; -------------------------
 ;; HTTP Status Codes
@@ -107,6 +109,35 @@
     :headers {header-content-type content-type-json-utf8}
     :body data}))
 
+#?(:clj
+   (defn encode-json-body
+     "Encode a Ring response map's :body as a JSON string.
+
+     Useful for routes that do not use reitit/muuntaja response middleware and
+     therefore must return a string body for JSON responses.
+
+     - Preserves existing headers (and status)
+     - Ensures Content-Type is set (defaults to application/json; charset=utf-8)
+     - No-op when :body is already a string"
+     [{:keys [headers body] :as response}]
+     (let [content-type (or (get headers header-content-type)
+                          content-type-json-utf8)]
+       (-> response
+         (update :headers #(assoc (or % {}) header-content-type content-type))
+         (cond-> (not (string? body))
+           (assoc :body (json/generate-string body)))))))
+
+#?(:clj
+   (defn json-string-response
+     "Create a JSON response whose :body is a JSON string.
+
+     Prefer `json-response` in routes that have response encoding middleware
+     (e.g. reitit/muuntaja)."
+     ([data]
+      (json-string-response status-ok data))
+     ([status data]
+      (encode-json-body (json-response status data)))))
+
 #_(defn created-response
     "Create a 201 Created response"
     [data]
@@ -136,6 +167,19 @@
     :headers {header-content-type content-type-json-utf8}
     :body {:error message
            :details details}}))
+
+#?(:clj
+   (defn error-string-response
+     "Create an error response whose :body is a JSON string.
+
+     Mirrors `error-response` arities, but encodes the body for routes without
+     response encoding middleware."
+     ([message]
+      (encode-json-body (error-response message)))
+     ([status message]
+      (encode-json-body (error-response status message)))
+     ([status message details]
+      (encode-json-body (error-response status message details)))))
 
 (defn bad-request-response
   "Create a 400 Bad Request response"
@@ -191,21 +235,29 @@
 ;; -------------------------
 
 (defn extract-error-message
-  "Extract error message from various response formats (primarily for frontend)"
-  [response]
-  (or (:error response)
-    (get-in response [:response :error])
-    (get-in response [:body :error])
-    (:status-text response)
-    (:message response)
-    "An error occurred"))
+  "Extract error message from various response formats (primarily for frontend).
+
+    Arity:
+    - (extract-error-message response)
+    - (extract-error-message response default-message)"
+  ([response]
+   (extract-error-message response "An error occurred"))
+  ([response default-message]
+   (or (:error response)
+     (get-in response [:response :error])
+     (get-in response [:response :message])
+     (get-in response [:body :error])
+     (get-in response [:body :message])
+     (:status-text response)
+     (:message response)
+     default-message)))
 
 #_(defn get-status
     "Get status code from response"
     [response]
     (or (:status response)
-        (get-in response [:response :status])
-        status-internal-server-error))
+      (get-in response [:response :status])
+      status-internal-server-error))
 
 #_(defn success?
     "Check if response indicates success"
@@ -226,7 +278,7 @@
     [content-type]
     (when content-type
       (or (.contains content-type "application/json")
-          (.contains content-type "application/vnd.api+json"))))
+        (.contains content-type "application/vnd.api+json"))))
 
 #_(defn html-content-type?
     "Check if content type is HTML"
@@ -264,9 +316,9 @@
     "Build a validation error response"
     [validation-errors]
     (json-response status-unprocessable-entity
-                  {:success false
-                   :error "Validation failed"
-                   :validation-errors validation-errors}))
+      {:success false
+       :error "Validation failed"
+       :validation-errors validation-errors}))
 
 ;; -------------------------
 ;; Health Check Response
@@ -278,11 +330,11 @@
      (health-check-response {}))
     ([additional-data]
      (json-response status-ok
-                   (merge {:status "ok"
-                           :timestamp #?(:clj (System/currentTimeMillis)
-                                         :cljs (.getTime (js/Date.)))
-                           :database "connected"}
-                          additional-data))))
+       (merge {:status "ok"
+               :timestamp #?(:clj (System/currentTimeMillis)
+                             :cljs (.getTime (js/Date.)))
+               :database "connected"}
+         additional-data))))
 
 ;; -------------------------
 ;; CSRF Token Response

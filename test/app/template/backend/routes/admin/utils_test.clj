@@ -7,6 +7,20 @@
 (defn- parse-body [response]
   (json/parse-string (:body response) true))
 
+(deftest json-response-encodes-body
+  (testing "json-response returns a JSON string body with the requested status"
+    (let [response (utils/json-response {:ok true} :status 201)]
+      (is (= 201 (:status response)))
+      (is (string? (:body response)))
+      (is (= {:ok true} (parse-body response)))
+      (is (re-find #"application/json" (get-in response [:headers "Content-Type"] ""))))))
+
+(deftest error-response-encodes-details
+  (testing "error-response includes :details when provided"
+    (let [response (utils/error-response "Nope" :status 400 :details {:reason "bad"})]
+      (is (= 400 (:status response)))
+      (is (= {:error "Nope" :details {:reason "bad"}} (parse-body response))))))
+
 (deftest with-error-handling-passes-through-4xx
   (testing "passes through explicit client errors (status + message)"
     (let [handler (utils/with-error-handling

@@ -1,9 +1,9 @@
 (ns app.template.backend.routes.admin.utils
   "Shared utilities for admin API routes"
   (:require
+    [app.shared.http :as shared-http]
     [cheshire.core :as json]
     [clojure.string :as str]
-    [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
 ;; Response Generation Utilities
@@ -11,17 +11,15 @@
 (defn json-response
   "Generate a JSON response with optional status"
   [data & {:keys [status] :or {status 200}}]
-  (-> (response/response (json/generate-string data))
-    (response/content-type "application/json")
-    (response/status status)))
+  (shared-http/json-string-response status data))
 
 (defn error-response
   "Generate a JSON error response. Optionally include :details in the body so
   callers can surface context (e.g., suggestions) to the frontend."
   [message & {:keys [status details] :or {status 500}}]
-  (json-response (cond-> {:error message}
-                   details (assoc :details details))
-    :status status))
+  (if (some? details)
+    (shared-http/error-string-response status message details)
+    (shared-http/error-string-response status message)))
 
 (defn success-response
   "Generate a JSON success response"

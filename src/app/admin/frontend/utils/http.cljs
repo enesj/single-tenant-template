@@ -5,6 +5,9 @@
    and timeout management for all admin API calls."
   (:require
     [ajax.core :as ajax]
+    [app.admin.frontend.auth.persistence :as auth-persist]
+    [app.shared.http :as shared-http]
+    [app.shared.http.core :as shared-http-core]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -21,8 +24,8 @@
 (defn admin-request
   "Creates a standardized HTTP request configuration for admin API calls.
 
-   Automatically includes:
-   - Admin token authentication from localStorage or db
+  Automatically includes:
+  - Admin token authentication from localStorage (via auth persistence when available)
    - Proper JSON request/response formatting
    - Timeout protection
    - Standard error handling
@@ -43,28 +46,28 @@
     :or {headers {}
          timeout default-timeout}}]
   (let [admin-token (or token
+                      (auth-persist/get-persisted-token)
                       (.getItem js/localStorage "admin-token"))
-        format (or format (ajax/json-request-format))
-        response-format (or response-format (ajax/json-response-format {:keywords? true}))
-        use-default-headers? (and (nil? body)
-                               (not (false? (:content-type format)))
-                               (not (contains? headers "Content-Type")))
-        final-headers (cond-> (merge (when use-default-headers? default-headers) headers)
-                        admin-token (assoc "x-admin-token" admin-token))]
+        headers (cond-> headers
+                  admin-token (assoc "x-admin-token" admin-token))]
 
     (when-not admin-token
-      (log/warn "Admin request without token:" uri))
+      (log/warn "Admin request without token:"
+        {:uri uri
+         :has-persisted-session? (boolean (auth-persist/has-valid-session?))}))
 
-    (cond-> {:method method
-             :uri uri
-             :headers final-headers
-             :format format
-             :response-format response-format
-             :timeout timeout
-             :on-success on-success
-             :on-failure on-failure}
-      (some? params) (assoc :params params)
-      (some? body) (assoc :body body))))
+    (shared-http-core/build-xhrio-request
+      {:method method
+       :uri uri
+       :params params
+       :body body
+       :format format
+       :response-format response-format
+       :headers headers
+       :default-headers default-headers
+       :timeout timeout
+       :on-success on-success
+       :on-failure on-failure})))
 
 ;; ============================================================================
 ;; HTTP Method Helpers
@@ -155,11 +158,7 @@
 (defn extract-error-message
   "Extract user-friendly error message from API response"
   [error-response]
-  (or (get-in error-response [:response :error])
-    (get-in error-response [:response :message])
-    (:error error-response)
-    (:message error-response)
-    "An unexpected error occurred"))
+  (shared-http/extract-error-message error-response "An unexpected error occurred"))
 
 (defn log-request-error
   "Log request error with context for debugging"
