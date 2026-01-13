@@ -1,13 +1,12 @@
 (ns app.domain.backend.expenses.handlers.user-expenses.settings
   "User expense settings and export handlers.
 
-   NOTE: Settings storage is currently stubbed - returns defaults.
-   TODO: Add user_expense_settings table or JSONB column to users table."
+   Settings are persisted per-user in `user_expense_settings`."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [clojure.string :as str]
     [next.jdbc :as jdbc]
-    [next.jdbc.sql :as sql]
     [taoensso.timbre :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -18,31 +17,134 @@
   "Roles allowed to execute danger-zone actions (delete-all)."
   #{"admin" "owner"})
 
+(def ^:private settings-read-roles
+  "Roles allowed to view per-user settings."
+  h/reference-data-read-roles)
+
+(def ^:private settings-write-roles
+  "Roles allowed to mutate per-user settings."
+  h/reference-data-write-roles)
+
 ;; ---------------------------------------------------------------------------
-;; Settings handlers (stub implementation)
+;; Settings handlers
 ;; ---------------------------------------------------------------------------
+
+(defn- parse-notifications-enabled
+  [v]
+  (cond
+    (nil? v) nil
+    (boolean? v) v
+    (string? v) (case (str/lower-case (str/trim v))
+                  "true" true
+                  "false" false
+                  nil)
+    :else nil))
+
+(defn- blank->nil
+  [v]
+  (cond
+    (nil? v) nil
+    (string? v) (let [s (str/trim v)]
+                  (when-not (str/blank? s) s))
+    :else v))
+
+(defn- normalize-settings-update
+  "Return {:settings <effective-settings>} or {:error <ring-response>}.
+
+  Supports partial updates by applying only keys present in the request body.
+  A blank :default_payer_id (\"\" / whitespace) clears the payer (sets nil)."
+  [current body]
+  ;; Normalize body keys to keywords (handles JSON string keys)
+  (let [body (reduce-kv (fn [m k v]
+                          (assoc m (keyword k) v))
+               {}
+               body)
+        _ (log/info "After key normalization" {:body body})
+        supported-keys #{:default_currency :default_payer_id :notifications_enabled}
+        present-keys (->> supported-keys (filter #(contains? body %)) set)]
+    (log/info "Settings validation" {:present-keys present-keys :supported-keys supported-keys})
+    (cond
+      (empty? present-keys)
+      {:error (h/json-response {:error "No settings fields provided"} 400)}
+
+      :else
+      (let [currency (when (contains? body :default_currency)
+                       (blank->nil (:default_currency body)))
+            payer-id-raw (when (contains? body :default_payer_id)
+                           (blank->nil (:default_payer_id body)))
+            payer-id (when (contains? body :default_payer_id)
+                       (if (nil? payer-id-raw)
+                         nil
+                         (h/try-parse-uuid payer-id-raw)))
+            notifications (when (contains? body :notifications_enabled)
+                            (parse-notifications-enabled (:notifications_enabled body)))]
+        (cond
+          (and (contains? body :default_currency)
+            (nil? currency))
+          {:error (h/json-response {:error "default_currency is required"} 400)}
+
+          (and (contains? body :default_currency)
+            (not (contains? user-expense-settings/allowed-currencies currency)))
+          {:error (h/json-response {:error "Unsupported currency"
+                                    :allowed (sort user-expense-settings/allowed-currencies)} 400)}
+
+          (and (contains? body :default_payer_id)
+            (some? payer-id-raw)
+            (nil? payer-id))
+          {:error (h/json-response {:error "default_payer_id must be a UUID (or blank to clear)"} 400)}
+
+          (and (contains? body :notifications_enabled)
+            (nil? notifications))
+          {:error (h/json-response {:error "notifications_enabled must be a boolean"} 400)}
+
+          :else
+          {:settings
+           (cond-> current
+             (contains? body :default_currency) (assoc :default_currency currency)
+             (contains? body :default_payer_id) (assoc :default_payer_id payer-id)
+             (contains? body :notifications_enabled) (assoc :notifications_enabled notifications))})))))
 
 (defn get-settings-handler
   "GET /api/v1/expenses/settings - fetch user settings.
-   Currently returns default values until settings storage is implemented."
-  [_db]
+   Returns defaults if the user has no persisted settings yet."
+  [db]
   (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (h/json-response
-        {:default_currency "BAM"
-         :default_payer_id nil
-         :notifications_enabled true})
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request settings-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [persisted (user-expense-settings/get-user-expense-settings db user-id)
+                effective (user-expense-settings/effective-settings persisted)]
+            (h/json-response effective))
+          (catch Exception e
+            (log/error e "Failed to load user expense settings" {:user-id user-id})
+            (h/json-response {:error "Failed to load settings"} 500))))
       (h/unauthorized-response))))
 
 (defn update-settings-handler
   "PUT /api/v1/expenses/settings - update user settings.
-   Currently a no-op stub that returns the input."
-  [_db]
+   Supports partial updates."
+  [db]
   (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (let [body (h/read-body-params request)]
-        (log/info "Settings update request (stub)" {:settings body})
-        (h/json-response body))
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request settings-write-roles
+                           "Only members, admins, and owners can update settings")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                _ (log/info "Settings update request body" {:body body :body-type (type body)})
+                persisted (user-expense-settings/get-user-expense-settings db user-id)
+                current (user-expense-settings/effective-settings persisted)
+                {:keys [settings error]} (normalize-settings-update current body)]
+            (if error
+              error
+              (let [stored (user-expense-settings/upsert-user-expense-settings! db user-id settings)]
+                (log/info "Updated user expense settings" {:user-id user-id
+                                                           :keys (keys body)})
+                (h/json-response stored))))
+          (catch Exception e
+            (log/error e "Failed to update user expense settings" {:user-id user-id})
+            (h/json-response {:error "Failed to update settings"} 500))))
       (h/unauthorized-response))))
 
 ;; ---------------------------------------------------------------------------

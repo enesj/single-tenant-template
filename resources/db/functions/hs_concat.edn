@@ -1,0 +1,4 @@
+{:name "hs_concat",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hs_concat(hstore, hstore)\n RETURNS hstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_concat$function$\n",
+ :down "DROP FUNCTION IF EXISTS hs_concat(, hstore);"}

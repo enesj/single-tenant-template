@@ -1,0 +1,4 @@
+{:name "isdefined",
+ :up
+ "CREATE OR REPLACE FUNCTION public.isdefined(hstore, text)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_defined$function$\n",
+ :down "DROP FUNCTION IF EXISTS isdefined(, text);"}

@@ -1,0 +1,5 @@
+{:name "gin_consistent_hstore",
+ :up
+ "CREATE OR REPLACE FUNCTION public.gin_consistent_hstore(internal, smallint, hstore, integer, internal, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$gin_consistent_hstore$function$\n",
+ :down
+ "DROP FUNCTION IF EXISTS gin_consistent_hstore(, smallint, hstore, integer, internal, internal);"}

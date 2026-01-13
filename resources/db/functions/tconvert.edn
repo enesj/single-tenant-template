@@ -1,0 +1,4 @@
+{:name "tconvert",
+ :up
+ "CREATE OR REPLACE FUNCTION public.tconvert(text, text)\n RETURNS hstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE\nAS '$libdir/hstore', $function$hstore_from_text$function$\n",
+ :down "DROP FUNCTION IF EXISTS tconvert(, text);"}

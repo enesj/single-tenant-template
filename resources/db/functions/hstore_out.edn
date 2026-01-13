@@ -1,0 +1,4 @@
+{:name "hstore_out",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_out(hstore)\n RETURNS cstring\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_out$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_out();"}

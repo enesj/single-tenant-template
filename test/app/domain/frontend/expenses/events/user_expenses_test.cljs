@@ -41,6 +41,9 @@
 (defn- req-body [req]
   (or (:body req) (gobj/get req "body")))
 
+(defn- req-params [req]
+  (or (:params req) (gobj/get req "params")))
+
 (defn- req-format-content-type [req]
   (let [fmt (or (:format req) (gobj/get req "format"))]
     (or (get fmt :content-type) (gobj/get fmt "content-type"))))
@@ -231,3 +234,16 @@
         (is (= :post (req-method req3)))
         (is (= "/api/v1/expenses/receipts/ocr" (req-uri req3)))
         (is (= ["rec-2"] (get-in req3 [:params :receipt_ids])))))))
+
+(deftest update-settings-sends-json-params
+  (testing "update-settings sends JSON payload in :params (not :body)"
+    (reset-db!)
+    (let [settings {:default_currency "EUR"
+                    :default_payer_id ""
+                    :notifications_enabled true}]
+      (rf/dispatch-sync [:user-expenses/update-settings settings])
+      (let [req (last-http-request)]
+        (is (= :put (req-method req)))
+        (is (= "/api/v1/expenses/settings" (req-uri req)))
+        (is (= settings (req-params req)))
+        (is (nil? (req-body req)))))))

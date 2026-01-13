@@ -1,0 +1,4 @@
+{:name "hstore_send",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_send(hstore)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_send$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_send();"}

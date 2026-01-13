@@ -1,0 +1,4 @@
+{:name "hstore_hash",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_hash(hstore)\n RETURNS integer\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_hash$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_hash();"}

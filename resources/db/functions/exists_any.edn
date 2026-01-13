@@ -1,0 +1,4 @@
+{:name "exists_any",
+ :up
+ "CREATE OR REPLACE FUNCTION public.exists_any(hstore, text[])\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_exists_any$function$\n",
+ :down "DROP FUNCTION IF EXISTS exists_any(, text[]);"}

@@ -1,0 +1,4 @@
+{:name "ghstore_decompress",
+ :up
+ "CREATE OR REPLACE FUNCTION public.ghstore_decompress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$ghstore_decompress$function$\n",
+ :down "DROP FUNCTION IF EXISTS ghstore_decompress();"}

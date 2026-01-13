@@ -45,10 +45,14 @@
   (when (compare-and-set! migrations-ensured? false true)
     (try
       (when-let [db (get @state/state :database)]
-        (when-not (column-exists? db "suppliers" "archived_at")
-          (log/warn "⚠️ Test DB schema missing suppliers.archived_at; running migrations for :test profile...")
+        (let [missing-suppliers-archived? (not (column-exists? db "suppliers" "archived_at"))
+              missing-user-settings? (not (column-exists? db "user_expense_settings" "user_id"))]
+          (when (or missing-suppliers-archived? missing-user-settings?)
+            (log/warn "⚠️ Test DB schema looks stale; running migrations for :test profile..."
+              {:missing {:suppliers.archived_at missing-suppliers-archived?
+                         :user_expense_settings.user_id missing-user-settings?}})
           (am/migrate {:jdbc-url (mig/get-jdbc-url :test)})
-          (log/info "✅ Test DB migrations complete")))
+            (log/info "✅ Test DB migrations complete"))))
       (catch Throwable t
         ;; Allow retries if migration fails.
         (reset! migrations-ensured? false)

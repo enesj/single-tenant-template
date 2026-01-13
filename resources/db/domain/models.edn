@@ -90,6 +90,19 @@
                       [:idx_expenses_is_posted :btree {:fields [:is_posted]}]]}
 
 ;; ----------------------------------------------------------------------------
+;; User Expense Settings (per-user defaults)
+;; ----------------------------------------------------------------------------
+
+ :user_expense_settings {:fields [[:user_id :uuid {:primary-key true}
+                                                  :foreign-key :users/id
+                                                  :on-delete :cascade]
+                                  [:default_currency [:enum :currency] {:null false :default "BAM"}]
+                                  [:default_payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
+                                  [:notifications_enabled :boolean {:null false :default true}]
+                                  [:created_at :timestamptz {:default "NOW()"}]
+                                  [:updated_at :timestamptz {:default "NOW()"}]]}
+
+;; ----------------------------------------------------------------------------
  ;; Expense Items (line items on receipts)
  ;; ----------------------------------------------------------------------------
 

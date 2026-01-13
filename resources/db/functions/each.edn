@@ -1,0 +1,4 @@
+{:name "each",
+ :up
+ "CREATE OR REPLACE FUNCTION public.each(hs hstore, OUT key text, OUT value text)\n RETURNS SETOF record\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_each$function$\n",
+ :down "DROP FUNCTION IF EXISTS each(hstore, OUT, OUT);"}

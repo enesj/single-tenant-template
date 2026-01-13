@@ -1,0 +1,4 @@
+{:name "delete",
+ :up
+ "CREATE OR REPLACE FUNCTION public.delete(hstore, text[])\n RETURNS hstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_delete_array$function$\n",
+ :down "DROP FUNCTION IF EXISTS delete(, text[]);"}

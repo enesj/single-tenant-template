@@ -1,0 +1,5 @@
+{:name "admins_updated_at",
+ :table "admins",
+ :up
+ "CREATE TRIGGER admins_updated_at BEFORE UPDATE ON public.admins FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+ :down "DROP TRIGGER IF EXISTS admins_updated_at ON admins;"}

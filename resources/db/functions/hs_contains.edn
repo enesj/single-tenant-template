@@ -1,0 +1,4 @@
+{:name "hs_contains",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hs_contains(hstore, hstore)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_contains$function$\n",
+ :down "DROP FUNCTION IF EXISTS hs_contains(, hstore);"}

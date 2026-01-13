@@ -1,0 +1,4 @@
+{:name "hstore_eq",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_eq(hstore, hstore)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_eq$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_eq(, hstore);"}

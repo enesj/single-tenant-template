@@ -60,7 +60,9 @@
                    {:method :put
                     :uri endpoints/settings-endpoint
                     :admin-uri endpoints/admin-settings-endpoint
-                    :params settings-data
+                     ;; NOTE: day8.re-frame.http-fx + cljs-ajax expects JSON payloads in :params.
+                     ;; :body is reserved for raw bodies like FormData or pre-serialized JSON strings.
+                     :params settings-data
                     :on-success [:user-expenses/update-settings-success]
                     :on-failure [:user-expenses/update-settings-failure]})}))
 
@@ -99,3 +101,66 @@
   common-interceptors
   (fn [db [setting-key]]
     (update-in db [:user-expenses :local-settings setting-key] not)))
+
+;; ---------------------------------------------------------------------------
+;; Save settings (alias for update-settings for better UX naming)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/save-settings
+  common-interceptors
+  ;; NOTE: common-interceptors includes trim-v, so the event vector here is [settings-data]
+  (fn [{:keys [db]} [settings-data]]
+    (log/info "Saving user expense settings" {:settings settings-data})
+    {:db (-> db
+           (assoc-in [:user-expenses :settings :loading?] true)
+           (assoc-in [:user-expenses :settings :saving?] true)
+           (assoc-in [:user-expenses :settings :error] nil))
+     :dispatch [:user-expenses/update-settings settings-data]}))
+
+;; Override the success/failure handlers to also clear :saving?
+(rf/reg-event-fx
+  :user-expenses/update-settings-success
+  common-interceptors
+  (fn [{:keys [db]} [response]]
+    (let [settings (or (:data response) (:settings response) response)]
+      {:db (-> db
+             (assoc-in [:user-expenses :settings :data] settings)
+             (assoc-in [:user-expenses :settings :loading?] false)
+             (assoc-in [:user-expenses :settings :saving?] false)
+             (assoc-in [:user-expenses :settings :error] nil))
+       :dispatch [:toast {:type :success :message "Settings updated"}]})))
+
+(rf/reg-event-db
+  :user-expenses/update-settings-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to update user settings" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :settings :loading?] false)
+      (assoc-in [:user-expenses :settings :saving?] false)
+      (assoc-in [:user-expenses :settings :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Subscriptions
+;; ---------------------------------------------------------------------------
+
+(rf/reg-sub
+  :user-expenses/settings
+  (fn [db _]
+    (get-in db [:user-expenses :settings :data] {})))
+
+(rf/reg-sub
+  :user-expenses/settings-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :settings :loading?] false)))
+
+(rf/reg-sub
+  :user-expenses/settings-saving?
+  (fn [db _]
+    (get-in db [:user-expenses :settings :saving?] false)))
+
+(rf/reg-sub
+  :user-expenses/settings-error
+  (fn [db _]
+    (get-in db [:user-expenses :settings :error])))

@@ -1,7 +1,6 @@
 (ns app.domain.frontend.expenses.pages.user.expense-settings
   "User-facing expense settings page."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.template.frontend.components.button :refer [button]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
@@ -39,17 +38,29 @@
         saving? (boolean (use-subscribe [:user-expenses/settings-saving?]))
         power-user? (use-subscribe [:expenses/power-user?])
         [default-currency set-default-currency!] (use-state (or (:default_currency settings) "BAM"))
-        [default-payer set-default-payer!] (use-state (:default_payer_id settings))
+        ;; Keep payer-id normalized as (string-or-nil). Avoid "" so we don't mark
+        ;; the form dirty when the user re-selects "None".
+        [default-payer set-default-payer!] (use-state (some-> (:default_payer_id settings) str))
         [notifications set-notifications!] (use-state (if (contains? settings :notifications_enabled)
                                                         (:notifications_enabled settings)
                                                         true))
         payers (or (use-subscribe [:user-expenses/payers]) [])
 
+        ;; Compute "dirty" state to enable Save only when values differ.
+        current-currency (or (:default_currency settings) "BAM")
+        current-payer (some-> (:default_payer_id settings) str)
+        current-notifications (if (contains? settings :notifications_enabled)
+                                (boolean (:notifications_enabled settings))
+                                true)
+        dirty? (or (not= default-currency current-currency)
+                 (not= (some-> default-payer str) current-payer)
+                 (not= (boolean notifications) current-notifications))
+
         handle-save (fn []
-                      (rf/dispatch [:user-expenses/save-settings
-                                    {:default_currency default-currency
-                                     :default_payer_id default-payer
-                                     :notifications_enabled notifications}]))]
+                      (let [settings {:default_currency default-currency
+                                      :default_payer_id default-payer
+                                      :notifications_enabled notifications}]
+                        (rf/dispatch [:user-expenses/save-settings settings])))]
 
     ;; Fetch settings and payers on mount
     (use-effect
@@ -63,12 +74,13 @@
     (use-effect
       (fn []
         (when (seq settings)
-          (when (:default_currency settings)
-            (set-default-currency! (:default_currency settings)))
-          (when (:default_payer_id settings)
-            (set-default-payer! (:default_payer_id settings)))
-          (when (contains? settings :notifications_enabled)
-            (set-notifications! (:notifications_enabled settings)))))
+          ;; Always set from settings (including nil payer-id / false notifications).
+          (set-default-currency! (or (:default_currency settings) "BAM"))
+          (set-default-payer! (some-> (:default_payer_id settings) str))
+          (set-notifications!
+            (if (contains? settings :notifications_enabled)
+              (boolean (:notifications_enabled settings))
+              true))))
       [settings])
 
     ($ :div {:class "min-h-screen bg-base-100"}
@@ -90,6 +102,7 @@
               ($ button {:btn-type :primary
                          :id "btn-save-settings"
                          :loading saving?
+                         :disabled (or (not dirty?) loading?)
                          :on-click handle-save}
                 "Save Changes")))))
 
@@ -120,7 +133,8 @@
                   ($ :select {:id "settings-payer-select"
                               :class "ds-select ds-select-sm ds-select-bordered"
                               :value (or default-payer "")
-                              :on-change #(set-default-payer! (.. % -target -value))}
+                              :on-change #(let [v (.. % -target -value)]
+                                            (set-default-payer! (when (seq v) v)))}
                     ($ :option {:value ""} "None")
                     (for [p payers]
                       ($ :option {:key (:id p) :value (:id p)}

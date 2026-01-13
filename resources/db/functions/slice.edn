@@ -1,0 +1,4 @@
+{:name "slice",
+ :up
+ "CREATE OR REPLACE FUNCTION public.slice(hstore, text[])\n RETURNS hstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_slice_to_hstore$function$\n",
+ :down "DROP FUNCTION IF EXISTS slice(, text[]);"}

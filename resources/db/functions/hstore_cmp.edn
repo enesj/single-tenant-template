@@ -1,0 +1,4 @@
+{:name "hstore_cmp",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_cmp(hstore, hstore)\n RETURNS integer\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_cmp$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_cmp(, hstore);"}

@@ -1,0 +1,4 @@
+{:name "hstore_recv",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_recv(internal)\n RETURNS hstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_recv$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_recv();"}

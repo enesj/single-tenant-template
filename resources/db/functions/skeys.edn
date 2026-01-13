@@ -1,0 +1,4 @@
+{:name "skeys",
+ :up
+ "CREATE OR REPLACE FUNCTION public.skeys(hstore)\n RETURNS SETOF text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_skeys$function$\n",
+ :down "DROP FUNCTION IF EXISTS skeys();"}

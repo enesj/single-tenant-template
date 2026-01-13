@@ -1,7 +1,7 @@
 # Plan: Removal of Unused/Legacy Code in `src/app/domain`
 
 **Date:** 2026-01-13
-**Status:** In Progress — Phase 3 (legacy alias refactor) completed for payers/suppliers/expense-items/article-aliases/price-observations; Phase 4 (arity support) completed
+**Status:** In Progress — Phase 3 (legacy alias refactor) completed for payers/suppliers/expense-items/article-aliases/price-observations; Phase 4 (arity support) completed; Phase 5 (settings persistence) completed
 
 ## Overview
 
@@ -139,42 +139,26 @@ That compatibility layer has now been **removed**.
 
 ---
 
-## Category 4: Stub Implementations (LOW CONFIDENCE - Requires Feature Decision)
+## Category 4: Stub Implementations (✅ Implemented)
 
 ### Settings Handlers - `src/app/domain/backend/expenses/handlers/user_expenses/settings.clj`
 
-Lines 22-46 contain stub implementations:
-```clojure
-;; ---------------------------------------------------------------------------
-;; Settings handlers (stub implementation)
-;; ---------------------------------------------------------------------------
+The settings endpoints are now backed by a real persistence layer:
 
-(defn get-settings-handler
-  "GET /api/v1/expenses/settings - fetch user settings.
-   Currently returns default values until settings storage is implemented."
-  [_db]
-  (fn [request]
-    ;; ... returns hardcoded defaults
-    ))
+- **Schema**: Added `user_expense_settings` (keyed by `user_id`) to `resources/db/domain/models.edn`.
+- **Migration**: Generated `resources/db/migrations/0018_user_expense_settings.edn`.
+- **Backend implementation**:
+  - New service: `src/app/domain/backend/expenses/services/user_expense_settings.clj` (get + upsert)
+  - Updated handlers:
+    - `GET /api/v1/expenses/settings` returns defaults if no row exists
+    - `PUT /api/v1/expenses/settings` validates input + upserts
+  - Role gating aligns with other user-expenses endpoints:
+    - GET: `reference-data-read-roles`
+    - PUT: `reference-data-write-roles`
+- **Tests**: Added focused handler tests in `test/app/domain/backend/expenses/handlers/user_expenses/settings_test.clj`.
 
-(defn update-settings-handler
-  "PUT /api/v1/expenses/settings - update user settings.
-   Currently a no-op stub that returns the input."
-  [_db]
-  (fn [request]
-    ;; ... no-op, just echoes input
-    ))
-```
-
-**File header comment (lines 1-5):**
-```
-NOTE: Settings storage is currently stubbed - returns defaults.
-TODO: Add user_expense_settings table or JSONB column to users table.
-```
-
-- **Status:** Documented stub with TODO for proper implementation
-- **Risk:** LOW (feature works, just not persisted)
-- **Action:** This is **intentional technical debt**, not unused code. Keep stub or implement the TODO.
+- **Status:** ✅ Implemented (no longer a stub)
+- **Risk:** LOW-MEDIUM (new table + migration, but isolated and covered by tests)
 
 ---
 
@@ -201,7 +185,7 @@ TODO: Add user_expense_settings table or JSONB column to users table.
 | Empty/Placeholder Functions | 2 | ~25 | LOW | ✅ Removed |
 | Legacy Function Aliases | 5 | ~40 | MEDIUM | ✅ Refactor completed for payers/suppliers/expense-items/article-aliases/price-observations |
 | Legacy Arity Support | 1 | ~25 | MEDIUM | ✅ Removed (registry now requires 3-arity `:user-api` route fns) |
-| Stub Implementations | 1 | ~50 | N/A | Keep or implement TODO |
+| Stub Implementations | 1 | ~50 | LOW-MEDIUM | ✅ Implemented settings persistence |
 | Empty Init | 1 | ~3 | LOW | ✅ Removed |
 
 ---
@@ -237,7 +221,7 @@ TODO: Add user_expense_settings table or JSONB column to users table.
 > Note: Phase 4 included removing the explicit 2-arity compatibility test.
 
 ### Phase 5: Decision Required (Stubs)
-1. Decide: Keep stub as-is, implement settings storage, or document as intentional limitation
+1. ✅ Implemented settings storage via `user_expense_settings` + migration + tests
 
 ---
 
@@ -256,7 +240,7 @@ After analysis, the following were determined to be **actively used** and **shou
 
 - The domain architecture uses registries to dynamically compose routes, entities, and groups
 - Some "legacy" code supports graceful migration from older patterns
-- Settings stub is documented with a TODO - this is intentional, not accidental
+- Settings persistence is now implemented and no longer considered legacy/stub code
 
 ---
 

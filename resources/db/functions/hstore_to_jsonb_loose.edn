@@ -1,0 +1,4 @@
+{:name "hstore_to_jsonb_loose",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_to_jsonb_loose(hstore)\n RETURNS jsonb\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_to_jsonb_loose$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_to_jsonb_loose();"}

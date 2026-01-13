@@ -1,0 +1,4 @@
+{:name "ghstore_union",
+ :up
+ "CREATE OR REPLACE FUNCTION public.ghstore_union(internal, internal)\n RETURNS ghstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$ghstore_union$function$\n",
+ :down "DROP FUNCTION IF EXISTS ghstore_union(, internal);"}

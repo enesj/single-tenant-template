@@ -1,0 +1,4 @@
+{:name "akeys",
+ :up
+ "CREATE OR REPLACE FUNCTION public.akeys(hstore)\n RETURNS text[]\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_akeys$function$\n",
+ :down "DROP FUNCTION IF EXISTS akeys();"}

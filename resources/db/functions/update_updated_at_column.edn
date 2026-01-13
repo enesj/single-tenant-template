@@ -1,0 +1,4 @@
+{:name "update_updated_at_column",
+ :up
+ "CREATE OR REPLACE FUNCTION public.update_updated_at_column()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\n       BEGIN\n         NEW.updated_at = CURRENT_TIMESTAMP;\n         RETURN NEW;\n       END;\n       $function$\n",
+ :down "DROP FUNCTION IF EXISTS update_updated_at_column();"}

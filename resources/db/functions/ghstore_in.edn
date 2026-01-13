@@ -1,0 +1,4 @@
+{:name "ghstore_in",
+ :up
+ "CREATE OR REPLACE FUNCTION public.ghstore_in(cstring)\n RETURNS ghstore\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$ghstore_in$function$\n",
+ :down "DROP FUNCTION IF EXISTS ghstore_in();"}

@@ -1,0 +1,4 @@
+{:name "hstore_to_matrix",
+ :up
+ "CREATE OR REPLACE FUNCTION public.hstore_to_matrix(hstore)\n RETURNS text[]\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_to_matrix$function$\n",
+ :down "DROP FUNCTION IF EXISTS hstore_to_matrix();"}

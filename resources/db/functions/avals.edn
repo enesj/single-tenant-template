@@ -1,0 +1,4 @@
+{:name "avals",
+ :up
+ "CREATE OR REPLACE FUNCTION public.avals(hstore)\n RETURNS text[]\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/hstore', $function$hstore_avals$function$\n",
+ :down "DROP FUNCTION IF EXISTS avals();"}
