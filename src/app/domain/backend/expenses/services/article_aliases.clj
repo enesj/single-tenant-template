@@ -4,11 +4,10 @@
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
+    [app.shared.type-conversion :as type-conv]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
-  (:import
-    [java.util UUID]))
+    [next.jdbc.result-set :as rs]))
 
 ;; ============================================================================
 ;; Service Registration
@@ -26,14 +25,7 @@
 ;; Admin routes resolve operations via the `service` map (or explicit overrides).
 ;; We keep a custom `list-article-aliases` wrapper below to support optional filters.
 
-(defn- try-uuid
-  [v]
-  (when v
-    (try
-      (cond
-        (instance? UUID v) v
-        :else (UUID/fromString (str v)))
-      (catch Exception _ nil))))
+(def ^:private try-uuid type-conv/try-parse-uuid)
 
 (defn list-article-aliases
   "List article aliases.

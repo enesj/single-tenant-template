@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.admin.components.detail-modals
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.components.expense-form :as expense-form]
     [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
     [app.domain.frontend.expenses.admin.components.detail-views :as detail-views]

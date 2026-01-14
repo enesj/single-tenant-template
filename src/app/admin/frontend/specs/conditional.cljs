@@ -1,6 +1,7 @@
 (ns app.admin.frontend.specs.conditional
   "Advanced field customizations with conditional visibility and dynamic behavior"
   (:require
+    [app.template.frontend.components.advanced-fields :as advanced-fields]
     [re-frame.core :as rf]))
 
 ;; ========================================================================
@@ -181,12 +182,7 @@
   [_field-spec value _record]
   {:component :badge
    :text value
-   :class (case value
-            "active" "ds-badge-success"
-            "inactive" "ds-badge-warning"
-            "suspended" "ds-badge-error"
-            "trialing" "ds-badge-info"
-            "ds-badge-neutral")})
+  :class (advanced-fields/status->badge-class value)})
 
 (defmethod format-field-display :health-score
   [_field-spec value _record]

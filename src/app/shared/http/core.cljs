@@ -1,9 +1,6 @@
 (ns app.shared.http.core
   (:require [ajax.core :as ajax]))
 
-(def ^:private default-headers
-  {"Content-Type" "application/json"})
-
 (defn build-xhrio-request
   "Build a standardized :http-xhrio request map.
 
@@ -40,31 +37,3 @@
                (some? body) (assoc :body body)
                (seq final-headers) (assoc :headers final-headers))]
     base))
-
-(defn build-request
-  ;; Legacy request builder (kept for backwards compatibility).
-  ;;
-  ;; Prefer `build-xhrio-request` and the higher-level helpers:
-  ;; - `app.admin.frontend.utils.http/*`
-  ;; - `app.template.frontend.api.http/*`
-  ;;
-  ;; Historically this reads a token from app-db for admin requests.
-  ;; Callers may also pass {:token "..."} in opts to avoid relying on app-db.
-  ([db context method endpoint-path]
-   (build-request db context method endpoint-path nil))
-  ([db context method endpoint-path opts]
-   (let [admin-token (when (= context :admin)
-                       (or (:token opts)
-                         (get-in db [:admin/token])))
-         auth-headers (when admin-token
-                        {"x-admin-token" admin-token})
-         base-path (if (= context :admin)
-                     "/admin/api"
-                     "/api")
-         headers (merge (get opts :headers {}) auth-headers)]
-     (build-xhrio-request
-       (-> opts
-         (assoc :method method
-                :uri (str base-path endpoint-path)
-                :default-headers default-headers)
-         (cond-> (seq headers) (assoc :headers headers)))))))

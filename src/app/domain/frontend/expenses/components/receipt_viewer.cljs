@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.components.receipt-viewer
   "Receipt detail display for admin UI."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]
     [clojure.string :as str]
     [uix.core :refer [$ defui use-effect use-state]]))

@@ -3,6 +3,7 @@
    These services enforce that users can only access their own expenses."
   (:require
     [app.domain.backend.expenses.services.expenses :as admin-expenses]
+    [app.shared.type-conversion :as type-conv]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -134,13 +135,7 @@
   (let [user-id (ensure-uuid user-id)
         allowed-keys #{:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id}
         items (vec (or items []))
-        try-uuid (fn [v]
-                   (cond
-                     (nil? v) nil
-                     (instance? UUID v) v
-                     :else (try
-                             (UUID/fromString (str v))
-                             (catch Exception _ nil))))]
+        try-uuid type-conv/try-parse-uuid]
     (when-not user-id
       (throw (ex-info "user-id is required" {:items-count (count items)})))
     (if (empty? items)
@@ -150,7 +145,7 @@
       (jdbc/with-transaction [tx db]
         (let [{:keys [results errors]}
               (reduce
-                (fn [{:keys [results errors] :as acc} item]
+                (fn [acc item]
                   (let [expense-id (try-uuid (:id item))
                         updates (-> item
                                   (dissoc :id

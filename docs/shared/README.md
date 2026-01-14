@@ -5,7 +5,7 @@
 The `app.shared` layer holds cross-platform helpers used by both the backend and the admin UI. It is single-tenant only—there is no tenant context or RLS. Modules are small, reusable, and focused on consistent data handling across Clojure and ClojureScript.
 
 ## What lives here
-- **Adapters**: `app.shared.adapters.database` – normalize DB results (convert PG objects, strip namespaced keys) and support admin-facing APIs like audit/login events.
+- **Adapters**: `app.shared.adapters.database` (JVM-only) + `app.shared.adapters.normalization` (CLJC) – convert PostgreSQL JDBC objects (PGobject/PgArray) and normalize result keys for admin-facing APIs like audit/login events.
 - **Type conversion**: `app.shared.type-conversion` – HoneySQL-friendly casts and value coercion.
 - **HTTP utilities**: `app.shared.http` – status constants, header helpers, and response helpers shared by admin UI and backend tests.
 - **Validation/Patterns**: `app.shared.patterns`, `app.shared.validation` helpers used by form and API validation.

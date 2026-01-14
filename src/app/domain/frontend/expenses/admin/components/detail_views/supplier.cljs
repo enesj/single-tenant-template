@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views.supplier
   "Supplier detail view component."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]

@@ -54,9 +54,6 @@
      :on-success on-success
      :on-failure on-failure}))
 
-;; Alias for backwards compatibility
-#_(def build-request api-request)
-
 ;;; -------------------------
 ;;; HTTP Method Helpers
 ;;; -------------------------

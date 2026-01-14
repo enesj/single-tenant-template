@@ -10,9 +10,8 @@
     [app.domain.backend.expenses.services.receipts :as receipts]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
-    [taoensso.timbre :as log])
-  (:import
-    [java.util UUID]))
+    [app.shared.type-conversion :as type-conv]
+    [taoensso.timbre :as log]))
 
 (defn- process-parse!
   [db ocr-cfg receipt opts]
@@ -173,7 +172,7 @@
         (if-let [e (:exception batch-res)]
           (do
             (doseq [cid batch-ids]
-              (let [rid (try (UUID/fromString cid) (catch Exception _ nil))]
+              (let [rid (type-conv/try-parse-uuid cid)]
                 (when rid
                   (receipts/mark-failed! db rid (or (.getMessage e) "Batch extraction failed") (common/safe-ex-data e)))))
             (mapv

@@ -227,6 +227,41 @@
                                 {:value value :target-type :array}))))
       value)))
 
+(defn try-convert-to-type
+  "Best-effort conversion wrapper around `convert-to-type`.
+
+  Returns nil when conversion fails instead of throwing."
+  [value target-type]
+  (try
+    (convert-to-type value target-type)
+    (catch #?(:clj Exception :cljs js/Error) _
+      nil)))
+
+(defn try-parse-uuid
+  "Best-effort UUID parsing.
+
+  - Returns a UUID when `value` is a valid UUID (or already a UUID)
+  - Returns nil when `value` is nil, blank, or invalid"
+  [value]
+  (let [uuid-re #"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        value (cond
+                (nil? value) nil
+                (string? value) (let [s (str/trim value)]
+                                  (when-not (str/blank? s) s))
+                :else value)]
+    (cond
+      (nil? value) nil
+      (uuid? value) value
+
+      ;; In CLJS, `cljs.core/uuid` may return a UUID value even for invalid strings.
+      ;; Validate format first to preserve best-effort semantics (invalid → nil).
+      (string? value)
+      (when (re-matches uuid-re value)
+        (try-convert-to-type value :uuid))
+
+      :else
+      (try-convert-to-type value :uuid))))
+
 (defn detect-field-type
   "Best-effort detection of a value's logical type."
   [value]

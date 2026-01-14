@@ -5,10 +5,7 @@
     [app.domain.backend.expenses.services.reports :as reports]
     [app.template.backend.utils.adapters.database :as db-adapter]))
 
-(defn- to-app [data]
-  (-> data
-      db-adapter/convert-pg-objects
-      db-adapter/convert-db-keys->app-keys))
+(def ^:private to-app db-adapter/to-app)
 
 (defn- range-opts [qp]
   {:from (:from qp)

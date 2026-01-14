@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views.receipt
   "Receipt detail view component with approve/post workflow."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
     [app.domain.frontend.expenses.components.expense-form :as expense-form]

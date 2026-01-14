@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views.price-observation
   "Price observation detail view component."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
     [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
     [re-frame.core :as rf]

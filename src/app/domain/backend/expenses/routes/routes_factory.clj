@@ -18,9 +18,7 @@
 (defn to-app
   "Convert DB rows to API-friendly maps."
   [data]
-  (-> data
-    db-adapter/convert-pg-objects
-    db-adapter/convert-db-keys->app-keys))
+  (db-adapter/to-app data))
 
 (defn resolve-fn
   "Require and resolve a var in the given namespace. Accepts namespaced or bare symbols.

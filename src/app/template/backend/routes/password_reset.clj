@@ -1,6 +1,7 @@
 (ns app.template.backend.routes.password-reset
   "Password reset and change API routes for users"
   (:require
+    [app.shared.type-conversion :as type-conv]
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [app.template.backend.auth.password-reset :as pwd-reset]
     [app.template.backend.routes.utils :as route-utils]
@@ -134,8 +135,7 @@
            :body (json/generate-string {:error "New password is required"})}
           
           :else
-          (let [user-id (or (:id user) (when (string? (:id user)) 
-                                          (java.util.UUID/fromString (:id user))))
+          (let [user-id (type-conv/try-parse-uuid (:id user))
                 result (pwd-reset/change-password! 
                          db-adapter :user user-id current-pwd new-pwd)]
             (if (:success result)

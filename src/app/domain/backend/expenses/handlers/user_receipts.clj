@@ -15,73 +15,16 @@
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
     [app.template.backend.utils.adapters.database :as db-adapter]
-    [cheshire.core :as json]
     [clojure.string :as str]
     [ring.util.response :as response]
-    [taoensso.timbre :as log])
-  (:import
-    [java.util UUID]))
+    [taoensso.timbre :as log]))
 
-(defn- to-app
-  [data]
-  (-> data
-    db-adapter/convert-pg-objects
-    db-adapter/convert-db-keys->app-keys))
+(def ^:private to-app db-adapter/to-app)
 
-(defn- json-response
-  [data status]
-  (-> (response/response (json/generate-string data))
-    (response/content-type "application/json")
-    (response/status status)))
-
-(defn- unauthorized-response
-  ([] (unauthorized-response "Authentication required"))
-  ([message]
-   (json-response {:error message} 401)))
-
-(defn- forbidden-response
-  ([] (forbidden-response "Forbidden"))
-  ([message]
-   (json-response {:error message} 403)))
-
-(defn- try-parse-uuid
-  [x]
-  (when x
-    (try
-      (UUID/fromString (str x))
-      (catch Exception _ nil))))
-
-(defn- get-user-id
-  "Extract user-id from request session and normalize to UUID.
-
-  Accepts either UUID objects or string UUIDs; returns nil if missing/invalid."
-  [request]
-  (let [raw-id (or (get-in request [:session :auth-session :user :id])
-                 (get-in request [:session :user :id])
-                 (get-in request [:identity :id]))]
-    (cond
-      (instance? UUID raw-id) raw-id
-      :else (try-parse-uuid raw-id))))
-
-(defn- get-user-role
-  "Extract user role from request session and normalize to string (e.g. \"admin\")."
-  [request]
-  (let [role (or (get-in request [:session :auth-session :user :role])
-               (get-in request [:session :user :role])
-               (get-in request [:identity :role]))]
-    (cond
-      (keyword? role) (name role)
-      (string? role) role
-      :else nil)))
+(def ^:private try-parse-uuid h/try-parse-uuid)
 
 (def ^:private receipts-read-roles h/receipts-read-roles)
 (def ^:private receipts-write-roles h/receipts-write-roles)
-
-(defn- ensure-role
-  [request allowed-roles message]
-  (let [role (get-user-role request)]
-    (when-not (contains? allowed-roles role)
-      (forbidden-response (or message "Forbidden")))))
 
 (defn- parse-long-param
   [params k default-val]
@@ -168,15 +111,6 @@
       (some? lines-total) (assoc :lines-total-amount-guess lines-total)
       (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))
 
-(defn- read-json-body
-  [request]
-  (or
-    (:body-params request)
-    (when-let [body (:body request)]
-      (try
-        (json/parse-string (slurp body) true)
-        (catch Exception _ nil)))))
-
 (defn- with-error-handling
   [handler-fn error-message]
   (fn [request]
@@ -188,12 +122,12 @@
               message (or (ex-message e) error-message)]
           (when (= status 500)
             (log/error e error-message data))
-          (json-response (cond-> {:error message}
-                           (seq (dissoc data :status)) (assoc :details (dissoc data :status)))
+          (h/json-response (cond-> {:error message}
+                             (seq (dissoc data :status)) (assoc :details (dissoc data :status)))
             status)))
       (catch Exception e
         (log/error e error-message)
-        (json-response {:error error-message} 500)))))
+        (h/json-response {:error error-message} 500)))))
 
 (defn list-receipts-handler
   "GET /api/v1/expenses/receipts
@@ -206,10 +140,10 @@
   [db]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-read-roles "Role assignment required")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-read-roles "Role assignment required")]
           forbidden
-          (let [role (get-user-role request)
+          (let [role (h/get-user-role request)
                 qp (:query-params request)
                 status (parse-status-param (or (:status qp) (get qp "status")))
                 opts {:status status
@@ -219,11 +153,11 @@
                 rows (if (= "admin" role)
                        (receipts/list-receipts db opts)
                        (receipts/list-user-receipts db user-id opts))]
-            (json-response {:data (to-app rows)
-                            :limit (:limit opts)
-                            :offset (:offset opts)}
+            (h/json-response {:data (to-app rows)
+                              :limit (:limit opts)
+                              :offset (:offset opts)}
               200)))
-        (unauthorized-response)))
+        (h/unauthorized-response)))
     "Failed to list receipts"))
 
 (defn get-receipt-handler
@@ -231,11 +165,11 @@
   [db]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-read-roles "Role assignment required")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-read-roles "Role assignment required")]
           forbidden
-          (let [role (get-user-role request)]
-            (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
+          (let [role (h/get-user-role request)]
+            (if-let [id (h/try-parse-uuid (get-in request [:path-params :id]))]
               (if-let [receipt (if (= "admin" role)
                                  (receipts/get-receipt db id)
                                  (receipts/get-user-receipt db user-id id))]
@@ -244,10 +178,10 @@
                                      (str "/api/v1/expenses/receipts/" (str id) "/download"))
                       receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                     download-url (assoc :download-url download-url))]
-                  (json-response {:data receipt-app} 200))
-                (json-response {:error "Receipt not found"} 404))
-              (json-response {:error "Invalid id"} 400))))
-        (unauthorized-response)))
+                  (h/json-response {:data receipt-app} 200))
+                (h/json-response {:error "Receipt not found"} 404))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
     "Failed to fetch receipt"))
 
 (defn- truthy-param?
@@ -268,10 +202,10 @@
   [db]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-read-roles "Role assignment required")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-read-roles "Role assignment required")]
           forbidden
-          (let [role (get-user-role request)]
+          (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (if-let [receipt (if (= "admin" role)
                                  (receipts/get-receipt db id)
@@ -279,7 +213,7 @@
                 (let [receipt-app (to-app receipt)
                       file (receipts/resolve-local-receipt-file (:storage-key receipt-app))]
                   (if-not file
-                    (json-response {:error "Receipt file not found"} 404)
+                    (h/json-response {:error "Receipt file not found"} 404)
                     (let [qp (:query-params request)
                           download? (truthy-param? (or (:download qp) (get qp "download")))
                           disposition (if download? "attachment" "inline")
@@ -289,9 +223,9 @@
                         (response/content-type content-type)
                         (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
                         (response/header "Cache-Control" "private, max-age=0, no-store")))))
-                (json-response {:error "Receipt not found"} 404))
-              (json-response {:error "Invalid id"} 400))))
-        (unauthorized-response)))
+                (h/json-response {:error "Receipt not found"} 404))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
     "Failed to download receipt"))
 
 (defn delete-receipt-handler
@@ -301,27 +235,27 @@
   [db]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-write-roles "Only members, admins, and owners can delete receipts")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can delete receipts")]
           forbidden
-          (let [role (get-user-role request)]
+          (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (if (= "admin" role)
                 (if-let [deleted (receipts/delete-receipt! db id)]
-                  (json-response {:data {:deleted true
-                                         :receipt (to-app deleted)}}
+                  (h/json-response {:data {:deleted true
+                                           :receipt (to-app deleted)}}
                     200)
-                  (json-response {:error "Receipt not found"} 404))
+                  (h/json-response {:error "Receipt not found"} 404))
                 ;; Regular users can only delete receipts visible to them (owned or unassigned).
                 (if-not (receipts/get-user-receipt db user-id id)
-                  (json-response {:error "Receipt not found"} 404)
+                  (h/json-response {:error "Receipt not found"} 404)
                   (if-let [deleted (receipts/delete-receipt! db id)]
-                    (json-response {:data {:deleted true
-                                           :receipt (to-app deleted)}}
+                    (h/json-response {:data {:deleted true
+                                             :receipt (to-app deleted)}}
                       200)
-                    (json-response {:error "Receipt not found"} 404))))
-              (json-response {:error "Invalid id"} 400))))
-        (unauthorized-response)))
+                    (h/json-response {:error "Receipt not found"} 404))))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
     "Failed to delete receipt"))
 
 (defn approve-receipt-handler
@@ -333,23 +267,23 @@
   [db]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-write-roles "Only members, admins, and owners can approve receipts")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can approve receipts")]
           forbidden
-          (let [role (get-user-role request)]
+          (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
-              (let [body (or (read-json-body request) {})
+              (let [body (h/read-body-params request)
                     expense (if (= "admin" role)
                               (receipts/approve-and-post-for-user-any! db user-id id body)
                               (receipts/approve-and-post-for-user! db user-id id body))
                     receipt (if (= "admin" role)
                               (receipts/get-receipt db id)
                               (receipts/get-user-receipt db user-id id))]
-                (json-response {:data {:expense (to-app expense)
-                                       :receipt (to-app receipt)}}
+                (h/json-response {:data {:expense (to-app expense)
+                                         :receipt (to-app receipt)}}
                   200))
-              (json-response {:error "Invalid id"} 400))))
-        (unauthorized-response)))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
     "Failed to approve receipt"))
 
 (defn save-receipt-review-handler
@@ -363,17 +297,17 @@
   [db]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-write-roles "Only members, admins, and owners can review receipts")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can review receipts")]
           forbidden
-          (let [role (get-user-role request)]
+          (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
-              (let [body (or (read-json-body request) {})
+              (let [body (h/read-body-params request)
                     accessible? (if (= "admin" role)
                                   (some? (receipts/get-receipt db id))
                                   (some? (receipts/get-user-receipt db user-id id)))]
                 (if-not accessible?
-                  (json-response {:error "Receipt not found"} 404)
+                  (h/json-response {:error "Receipt not found"} 404)
                   (do
                     (receipts/save-review! db id body)
                     (let [receipt (if (= "admin" role)
@@ -384,9 +318,9 @@
                                          (str "/api/v1/expenses/receipts/" (str id) "/download"))
                           receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                         download-url (assoc :download-url download-url))]
-                      (json-response {:data {:receipt receipt-app}} 200)))))
-              (json-response {:error "Invalid id"} 400))))
-        (unauthorized-response)))
+                      (h/json-response {:data {:receipt receipt-app}} 200)))))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
     "Failed to save receipt review"))
 
 ;; ---------------------------------------------------------------------------
@@ -401,10 +335,10 @@
   [db app-config]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
           forbidden
-          (let [role (get-user-role request)]
+          (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               ;; Check access: admin can OCR any, users only their own
               (let [receipt (if (= "admin" role)
@@ -414,11 +348,11 @@
                   (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
                     (cond
                       (not enabled?)
-                      (json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
+                      (h/json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
                         409)
 
                       (not (seq api-key))
-                      (json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
+                      (h/json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
                         409)
 
                       :else
@@ -432,12 +366,12 @@
                             (catch Exception e
                               (log/error e "OCR failed for receipt" {:receipt-id id}))))
                         ;; Return immediately with 202 Accepted
-                        (json-response {:data {:queued true
-                                               :receipt_ids [(str id)]}}
+                        (h/json-response {:data {:queued true
+                                     :receipt_ids [(str id)]}}
                           202))))
-                  (json-response {:error "Receipt not found"} 404)))
-              (json-response {:error "Invalid id"} 400))))
-        (unauthorized-response)))
+                      (h/json-response {:error "Receipt not found"} 404)))
+                    (h/json-response {:error "Invalid id"} 400))))
+                (h/unauthorized-response)))
     "Failed to trigger OCR"))
 
 (defn- parse-receipt-ids-from-body
@@ -460,14 +394,14 @@
   [db app-config]
   (with-error-handling
     (fn [request]
-      (if-let [user-id (get-user-id request)]
-        (if-let [forbidden (ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
           forbidden
-          (let [role (get-user-role request)
-                body (or (read-json-body request) {})
+          (let [role (h/get-user-role request)
+                body (h/read-body-params request)
                 all-ids (parse-receipt-ids-from-body body)]
             (if (empty? all-ids)
-              (json-response {:error "receipt_ids is required and must be a non-empty array"} 400)
+              (h/json-response {:error "receipt_ids is required and must be a non-empty array"} 400)
               ;; Filter to only receipts the user can access
               (let [accessible-ids (if (= "admin" role)
                                      all-ids
@@ -475,15 +409,15 @@
                                        (filter #(receipts/get-user-receipt db user-id %))
                                        vec))]
                 (if (empty? accessible-ids)
-                  (json-response {:error "No accessible receipts found"} 404)
+                  (h/json-response {:error "No accessible receipts found"} 404)
                   (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
                     (cond
                       (not enabled?)
-                      (json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
+                      (h/json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
                         409)
 
                       (not (seq api-key))
-                      (json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
+                      (h/json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
                         409)
 
                       :else
@@ -497,8 +431,8 @@
                             (catch Exception e
                               (log/error e "Batch OCR failed" {:receipt-ids accessible-ids}))))
                         ;; Return immediately with 202 Accepted
-                        (json-response {:data {:queued true
-                                               :receipt_ids (mapv str accessible-ids)}}
+                        (h/json-response {:data {:queued true
+                                     :receipt_ids (mapv str accessible-ids)}}
                           202)))))))))
-        (unauthorized-response)))
+                (h/unauthorized-response)))
     "Failed to trigger batch OCR"))

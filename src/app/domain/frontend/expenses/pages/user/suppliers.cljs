@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.pages.user.suppliers
   "User-facing suppliers list (shared catalog)."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as detail-utils]
     [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.user-reference-forms :refer [user-supplier-add-form-modal user-supplier-edit-form-modal]]

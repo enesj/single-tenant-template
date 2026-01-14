@@ -1,6 +1,7 @@
 (ns app.template.backend.routes.api
   (:require
     [app.domain.backend.registry :as domain-registry]
+    [app.shared.frontend-config.io :as frontend-config-io]
     [app.shared.specs.entities :as entities-spec]
     [app.shared.specs.form-fields :as form-fields-spec]
     [app.shared.specs.table-columns :as table-columns-spec]
@@ -11,8 +12,6 @@
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.http :as http]
     [cheshire.core :as json]
-    [clojure.edn :as edn]
-    [clojure.java.io :as io]
     [java-time.api :as time]
     [malli.transform :as mt]
     [muuntaja.core :as m]
@@ -38,24 +37,13 @@
   These files are edited at runtime via /admin/user-settings, so we load them
   dynamically to avoid shadow-cljs treating them as build inputs."
   [k path]
-  (try
-    (let [f (io/file path)]
-      (if (.exists f)
-        (let [data (edn/read-string (slurp f))
-              validate-fn (get domain-ui-config-validators k)]
-          (when validate-fn
-            (let [validation (validate-fn data)]
-              (when-not (:valid? validation)
-                (log/warn "Domain UI config EDN validation issues"
-                  {:config k
-                   :path path
-                   :errors (:errors validation)
-                   :warnings (:warnings validation)}))))
-          data)
-        {}))
-    (catch Exception e
-      (log/warn e "Failed to read domain UI config EDN" {:path path})
-      {})))
+  (let [validate-fn (get domain-ui-config-validators k)]
+    (frontend-config-io/read-edn-or-empty+validate
+      {:config-key k
+       :path path
+       :validate-fn validate-fn
+       :log-message "Failed to read domain UI config EDN"
+       :log-context {:scope :domain-ui-config}})))
 
 (defn- load-domain-ui-config
   "Load UI config from all enabled domains.

@@ -13,6 +13,7 @@
    - Audit context support"
   (:require
     [app.shared.pagination :as pagination]
+    [app.shared.query-builders :as shared-qb]
     [clojure.string :as str]))
 
 ;; ============================================================================
@@ -46,16 +47,10 @@
    Example:
    (add-pagination query {:limit 25 :offset 50})"
   [query {:keys [limit offset]}]
-  (let [safe-limit (-> limit
-                     (or pagination/default-page-size)
-                     (min pagination/max-page-size)
-                     (max 1))
-        safe-offset (-> offset
-                      (or 0)
-                      (max 0))]
-    (assoc query
-      :limit safe-limit
-      :offset safe-offset)))
+  (shared-qb/apply-pagination query {:limit limit :offset offset}
+    {:default-limit pagination/default-page-size
+     :max-limit pagination/max-page-size
+     :default-offset 0}))
 
 ;; ============================================================================
 ;; Sorting Builder
@@ -79,8 +74,8 @@
                default-column :created_at}}]
   (let [column (or sort-by default-column)
         qualified-column (qualify-column column table-alias)
-        order (if (= sort-order :asc) :asc :desc)]
-    (assoc query :order-by [[qualified-column order]])))
+        order (shared-qb/normalize-order-direction sort-order {:default :desc})]
+    (shared-qb/apply-order-by query qualified-column order)))
 
 ;; ============================================================================
 ;; Text Search Builder
@@ -100,11 +95,8 @@
    ; => [:or [:ilike :u/email \"%john%\"] [:ilike :u/full_name \"%john%\"]]"
   [search columns]
   (when (and search (not (str/blank? search)))
-    (let [search-term (str "%" (str/trim search) "%")]
-      (into [:or]
-        (map (fn [col]
-               [:ilike col search-term])
-          columns)))))
+    (let [pattern (str "%" (str/trim search) "%")]
+      (shared-qb/build-ilike-or columns pattern))))
 
 ;; ============================================================================
 ;; Filter Builder

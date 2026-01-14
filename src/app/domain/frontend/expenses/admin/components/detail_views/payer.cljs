@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views.payer
   "Payer detail view component."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
     [app.domain.frontend.expenses.events.payers :as payers-events]

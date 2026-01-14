@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views.utils
   "Shared helpers for detail view components."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]))

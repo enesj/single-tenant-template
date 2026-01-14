@@ -11,10 +11,7 @@
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
-(defn- to-app [data]
-  (-> data
-    db-adapter/convert-pg-objects
-    db-adapter/convert-db-keys->app-keys))
+(def ^:private to-app db-adapter/to-app)
 
 (defn- parse-status-param [status-param]
   (cond

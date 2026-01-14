@@ -37,27 +37,6 @@
     (get-in request [:params :file])
     (get-in request [:params "file"])))
 
-(defn- try-parse-uuid
-  [x]
-  (when x
-    (try
-      (UUID/fromString (str x))
-      (catch Exception _ nil))))
-
-(defn- request-user-id
-  "Best-effort extraction of user id from request session.
-
-  This keeps `user_id` populated for receipts uploaded via the user UI.
-  For admin-context uploads, this may be nil (and is allowed by schema)."
-  [request]
-  (or
-    (when-let [raw (or (get-in request [:session :auth-session :user :id])
-                     (get-in request [:session :user :id]))]
-      (cond
-        (instance? UUID raw) raw
-        :else (try-parse-uuid raw)))
-    (try-parse-uuid (get-in request [:identity :id]))))
-
 (defn- safe-extension
   [filename content-type]
   (let [ext (some->> filename
@@ -114,7 +93,7 @@
                                                              :multipart-keys (some-> request :multipart-params keys vec)
                                                              :param-keys (some-> request :params keys vec)})))
     (let [{:keys [storage_key bytes original_filename content_type file_size]} (store-uploaded-file! file)
-          user-id (request-user-id request)
+          user-id (h/get-user-id request)
           result (receipts/upload-receipt! db {:user_id user-id
                                                :storage_key storage_key
                                                :bytes bytes
@@ -131,11 +110,7 @@
             (log/warn e "Failed to delete duplicate uploaded receipt file" {:storage_key storage_key}))))
       result)))
 
-(defn- to-app
-  [data]
-  (-> data
-    db-adapter/convert-pg-objects
-    db-adapter/convert-db-keys->app-keys))
+(def ^:private to-app db-adapter/to-app)
 
 (defn user-upload-handler
   "POST /api/v1/expenses/upload

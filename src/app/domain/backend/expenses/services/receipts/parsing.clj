@@ -1,10 +1,10 @@
 (ns app.domain.backend.expenses.services.receipts.parsing
   "Value parsing and validation utilities for receipt data."
   (:require
+    [app.shared.type-conversion :as type-conv]
     [clojure.string :as str])
   (:import
-    [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
-    [java.util UUID]))
+    [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]))
 
 (def approvable-status? #{"extracted" "review_required"})
 
@@ -73,13 +73,7 @@
                       :field :currency
                       :value currency})))))
 
-(defn try-parse-uuid
-  [v]
-  (try
-    (when (some? v)
-      (UUID/fromString (str v)))
-    (catch Exception _
-      nil)))
+(def try-parse-uuid type-conv/try-parse-uuid)
 
 (defn parse-money
   "Coerce user/JSON numeric values into BigDecimal.

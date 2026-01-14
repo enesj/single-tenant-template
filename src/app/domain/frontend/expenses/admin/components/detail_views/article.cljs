@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-views.article
   "Article detail view component and add-aliases modal."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
     [app.domain.frontend.expenses.events.article-alias-bulk :as alias-bulk-events]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]

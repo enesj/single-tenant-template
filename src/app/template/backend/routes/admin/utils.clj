@@ -2,6 +2,7 @@
   "Shared utilities for admin API routes"
   (:require
     [app.shared.http :as shared-http]
+    [app.shared.type-conversion :as type-conv]
     [cheshire.core :as json]
     [clojure.string :as str]
     [taoensso.timbre :as log]))
@@ -47,11 +48,7 @@
 (defn parse-uuid-custom
   "Parse a string to UUID, returns nil if invalid"
   [s]
-  (when s
-    (try
-      (java.util.UUID/fromString s)
-      (catch IllegalArgumentException _
-        nil))))
+  (type-conv/try-parse-uuid s))
 
 (defn parse-and-validate-uuid
   "Parse and validate UUID with descriptive error"
@@ -225,7 +222,7 @@
             {:admin_id admin-id
              :action action
              :entity-type (str entity-type)
-             :entity-id (when entity-id (java.util.UUID/fromString (str entity-id)))
+             :entity-id (type-conv/try-parse-uuid entity-id)
              :changes details
              :ip-address nil
              :user-agent nil}))))
@@ -262,7 +259,7 @@
             {:admin_id admin-id
              :action action
              :entity-type (str entity-type)
-             :entity-id (when entity-id (java.util.UUID/fromString (str entity-id)))
+             :entity-id (type-conv/try-parse-uuid entity-id)
              :changes details
              :ip-address ip-address
              :user-agent user-agent}))))

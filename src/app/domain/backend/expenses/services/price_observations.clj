@@ -4,11 +4,10 @@
     [app.domain.backend.expenses.services.price-history :as price-history]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
+    [app.shared.type-conversion :as type-conv]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
-  (:import
-    [java.util UUID]))
+    [next.jdbc.result-set :as rs]))
 
 ;; ============================================================================
 ;; Service Registration
@@ -26,14 +25,7 @@
 ;; Admin routes resolve operations via the `service` map (or explicit overrides).
 ;; We keep custom wrappers below (list/create) to support filtering + price-history behavior.
 
-(defn- try-uuid
-  [v]
-  (when v
-    (try
-      (cond
-        (instance? UUID v) v
-        :else (UUID/fromString (str v)))
-      (catch Exception _ nil))))
+(def ^:private try-uuid type-conv/try-parse-uuid)
 
 (defn list-price-observations
   "List price observations.

@@ -11,6 +11,7 @@
     (boolean (and entity-kw (admin-config/has-vector-config? entity-kw)))
     (catch :default _ false)))
 
+
 (defn visible-columns-source
   "Return the subscription vector for visible columns.
 

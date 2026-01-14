@@ -55,6 +55,17 @@
                         :cljs (js->clj converted :keywordize-keys true))]
       (is (= {:foo true} normalized)))))
 
+(deftest try-parse-uuid-test
+  (testing "Best-effort UUID parsing returns nil for blank/invalid"
+    (let [uuid-str "550e8400-e29b-41d4-a716-446655440000"
+          parsed (type-conv/try-parse-uuid uuid-str)]
+      (is (uuid? parsed))
+      (is (= uuid-str (str parsed))))
+    (is (nil? (type-conv/try-parse-uuid nil)))
+    (is (nil? (type-conv/try-parse-uuid "")))
+    (is (nil? (type-conv/try-parse-uuid "   ")))
+    (is (nil? (type-conv/try-parse-uuid "not-a-uuid")))))
+
 (deftest parse-number-test
   (testing "Valid numbers"
     (is (= 42 (type-conv/parse-number "42")))

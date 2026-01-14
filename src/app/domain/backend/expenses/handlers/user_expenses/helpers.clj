@@ -1,7 +1,11 @@
 (ns app.domain.backend.expenses.handlers.user-expenses.helpers
-  "Common helpers for user expense handlers."
+  "Common helpers for user-facing expenses handlers.
+
+  Intended to be used by all /api/v1/expenses/** endpoints (not just expenses CRUD),
+  so we keep auth/role extraction and JSON responses consistent."
   (:require
     [app.shared.http :as shared-http]
+    [app.shared.type-conversion :as type-conv]
     [cheshire.core :as json]
     [clojure.string :as str])
   (:import
@@ -33,10 +37,7 @@
 (defn try-parse-uuid
   "Parse a UUID from string, returns nil if invalid."
   [s]
-  (when s
-    (try
-      (UUID/fromString (str s))
-      (catch Exception _ nil))))
+  (type-conv/try-parse-uuid s))
 
 (defn parse-boolean-param
   "Parse boolean parameter from query params map (string values)."
@@ -44,12 +45,23 @@
   (when-let [val (get-param params k)]
     (Boolean/parseBoolean (str val))))
 
+(defn get-user
+  "Return the user map from the request (session or identity), or nil if missing.
+
+  Some routes/middleware attach an `:identity` map (e.g. Buddy) while others rely
+  on the template session structure." 
+  [request]
+  (or (get-in request [:session :auth-session :user])
+      (get-in request [:session :user])
+      (:identity request)))
+
 (defn get-user-id
   "Extract user-id from request session and normalize to UUID.
    Accepts either UUID objects or string UUIDs; returns nil if missing/invalid."
   [request]
   (let [raw-id (or (get-in request [:session :auth-session :user :id])
-                 (get-in request [:session :user :id]))]
+                   (get-in request [:session :user :id])
+                   (get-in request [:identity :id]))]
     (cond
       (instance? UUID raw-id) raw-id
       :else (try-parse-uuid raw-id))))
@@ -89,7 +101,8 @@
   [request]
   (normalize-role
     (or (get-in request [:session :auth-session :user :role])
-      (get-in request [:session :user :role]))))
+        (get-in request [:session :user :role])
+        (get-in request [:identity :role]))))
 
 (def reference-data-read-roles
   #{"viewer" "member" "admin" "owner"})
@@ -121,8 +134,11 @@
 
 (defn read-json-body
   [request]
-  (or (:body-params request)
-    (json/parse-string (slurp (:body request)) true)))
+  (or
+    (:body-params request)
+    (when-let [body (:body request)]
+      (json/parse-string (slurp body) true))
+    {}))
 
 (defn read-body-params
   "Flexible body parsing that handles various input formats."

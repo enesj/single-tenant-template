@@ -1,56 +1,22 @@
 (ns app.template.backend.utils.adapters.database
   "Shared database adapter utilities. 
-   Acts as an aggregator for normalization and persistence logic."
+   Acts as an aggregator for normalization and persistence logic.
+
+   Backward-compatible wrapper that delegates JVM-only PG object conversion to
+   `app.shared.adapters.database`."
   (:require
+    [app.shared.adapters.database :as shared-db]
     [app.template.backend.utils.adapters.normalization :as norm]
-    [app.template.backend.utils.adapters.persistence :as persist]
-    [cheshire.core :as json]
-    [clojure.string :as str]
-    [clojure.walk :as walk]
-    [taoensso.timbre :as log])
-  (:import
-    (org.postgresql.jdbc PgArray)
-    (org.postgresql.util PGobject)))
+    [app.template.backend.utils.adapters.persistence :as persist]))
 
 ;; ============================================================================
 ;; Low-level PostgreSQL Object Conversion
 ;; ============================================================================
 
-(defn convert-pg-objects
-  "Convert PostgreSQL objects to JSON-serializable Clojure data structures."
-  [data]
-  (walk/postwalk
-    (fn [x]
-      (cond
-        (instance? PgArray x)
-        (try
-          (vec (.getArray x))
-          (catch Exception e
-            (log/warn "Failed to convert PgArray, using string representation:" (.getMessage e))
-            (let [array-str (.toString x)]
-              (if (and (> (count array-str) 2)
-                    (= (first array-str) \{)
-                    (= (last array-str) \}))
-                (-> array-str
-                  (subs 1 (dec (count array-str)))
-                  (str/split #",")
-                  (->> (mapv str/trim)))
-                []))))
+(def convert-pg-objects shared-db/convert-pg-objects)
 
-        (instance? PGobject x)
-        (try
-          (let [type (.getType x)
-                value (.getValue x)]
-            (case type
-              "json" (json/parse-string value true)
-              "jsonb" (json/parse-string value true)
-              value))
-          (catch Exception e
-            (log/warn "Failed to convert PGobject, using string value:" (.getMessage e))
-            (.getValue x)))
-
-        :else x))
-    data))
+;; Convenience: standard DB → app normalization pipeline
+(def to-app shared-db/to-app)
 
 ;; ============================================================================
 ;; Re-exports for Backward Compatibility

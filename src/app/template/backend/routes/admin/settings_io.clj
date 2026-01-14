@@ -7,9 +7,7 @@
    Admin runtime settings (view-options, table-columns, form-fields) are
    merged from both admin core files and domain-specific files."
   (:require
-    [clojure.edn :as edn]
-    [clojure.java.io :as io]
-    [clojure.pprint :as pprint]
+    [app.shared.frontend-config.io :as frontend-config-io]
     [app.shared.specs.entities :as entities-spec]
     [app.shared.specs.form-fields :as form-fields-spec]
     [app.shared.specs.table-columns :as table-columns-spec]
@@ -29,25 +27,16 @@
     :form-fields "src/app/domain/frontend/expenses/admin/config/form-fields.edn"
     :table-columns "src/app/domain/frontend/expenses/admin/config/table-columns.edn"}])
 
-(defn- read-edn-file
-  "Read an EDN file if it exists, return empty map otherwise."
-  [path]
-  (try
-    (let [file (io/file path)]
-      (if (.exists file)
-        (edn/read-string (slurp file))
-        {}))
-    (catch Exception e
-      (log/warn "Failed to read EDN file" {:path path :error (.getMessage e)})
-      {})))
-
 (defn- read-domain-admin-configs
   "Read and merge all domain admin config files of a given type.
    config-key is one of :view-options, :form-fields, :table-columns"
   [config-key]
   (reduce
     (fn [acc domain-paths]
-      (merge acc (read-edn-file (get domain-paths config-key))))
+      (merge acc (frontend-config-io/read-edn-or-empty (get domain-paths config-key)
+                   {:log-message "Failed to read domain admin config EDN"
+                    :log-context {:scope :admin-settings
+                                  :config config-key}})))
     {}
     domain-admin-config-paths))
 
@@ -79,10 +68,10 @@
    Validates the merged content against the Malli spec."
   []
   (try
-    (let [file (io/file view-options-path)
-          admin-data (if (.exists file)
-                       (edn/read-string (slurp file))
-                       {})
+    (let [admin-data (frontend-config-io/read-edn-or-throw view-options-path
+                       {:log-message "Failed to read admin view-options.edn"
+                        :log-context {:scope :admin-settings
+                                      :config :view-options}})
           domain-data (read-domain-admin-configs :view-options)
           ;; Merge: admin settings override domain defaults (runtime overlay)
           merged-data (merge domain-data admin-data)
@@ -111,11 +100,7 @@
                 :errors errors
                 :nested-locks-errors nested-locks-errors}))))
   (try
-    (let [file (io/file view-options-path)]
-      ;; Ensure parent directory exists
-      (io/make-parents file)
-      ;; Write with pretty printing for readability
-      (spit file (with-out-str (pprint/pprint view-options))))
+    (frontend-config-io/write-edn-pretty! view-options-path view-options)
     (catch Exception e
       (log/error e "Failed to write view-options.edn")
       (throw (ex-info "Failed to write settings file" {:status 500})))))
@@ -125,10 +110,10 @@
    Validates the merged content."
   []
   (try
-    (let [file (io/file form-fields-path)
-          admin-data (if (.exists file)
-                       (edn/read-string (slurp file))
-                       {})
+    (let [admin-data (frontend-config-io/read-edn-or-throw form-fields-path
+                       {:log-message "Failed to read admin form-fields.edn"
+                        :log-context {:scope :admin-settings
+                                      :config :form-fields}})
           domain-data (read-domain-admin-configs :form-fields)
           ;; Merge: admin settings override domain defaults (runtime overlay)
           merged-data (merge domain-data admin-data)
@@ -155,9 +140,7 @@
                 :errors errors
                 :warnings warnings}))))
   (try
-    (let [file (io/file form-fields-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint form-fields))))
+    (frontend-config-io/write-edn-pretty! form-fields-path form-fields)
     (catch Exception e
       (log/error e "Failed to write form-fields.edn")
       (throw (ex-info "Failed to write form fields file" {:status 500})))))
@@ -167,10 +150,10 @@
    Validates the merged content."
   []
   (try
-    (let [file (io/file table-columns-path)
-          admin-data (if (.exists file)
-                       (edn/read-string (slurp file))
-                       {})
+    (let [admin-data (frontend-config-io/read-edn-or-throw table-columns-path
+                       {:log-message "Failed to read admin table-columns.edn"
+                        :log-context {:scope :admin-settings
+                                      :config :table-columns}})
           domain-data (read-domain-admin-configs :table-columns)
           ;; Merge: admin settings override domain defaults (runtime overlay)
           merged-data (merge domain-data admin-data)
@@ -197,9 +180,7 @@
                 :errors errors
                 :warnings warnings}))))
   (try
-    (let [file (io/file table-columns-path)]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint table-columns))))
+    (frontend-config-io/write-edn-pretty! table-columns-path table-columns)
     (catch Exception e
       (log/error e "Failed to write table-columns.edn")
       (throw (ex-info "Failed to write table columns file" {:status 500})))))
@@ -207,15 +188,12 @@
 (defn read-user-entities
   []
   (try
-    (let [file (io/file (user-entities-path))]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (entities-spec/validate-user-entities data)]
-          (when-not (:valid? validation)
-            (log/warn "user entities.edn validation issues:"
-              {:errors (:errors validation)}))
-          data)
-        {}))
+    (frontend-config-io/read-edn-or-throw+validate
+      {:config-key :entities
+       :path (user-entities-path)
+       :validate-fn entities-spec/validate-user-entities
+       :log-message "Failed to read user entities.edn"
+       :log-context {:scope :user-ui-config}})
     (catch Exception e
       (log/error e "Failed to read user entities.edn")
       (throw (ex-info "Failed to read user entities file" {:status 500})))))
@@ -230,9 +208,7 @@
                {:status 400
                 :errors errors}))))
   (try
-    (let [file (io/file (user-entities-path))]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint entities))))
+    (frontend-config-io/write-edn-pretty! (user-entities-path) entities)
     (catch Exception e
       (log/error e "Failed to write user entities.edn")
       (throw (ex-info "Failed to write user entities file" {:status 500})))))
@@ -242,16 +218,12 @@
    Validates the data and logs warnings if issues found."
   []
   (try
-    (let [file (io/file (user-view-options-path))]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              {:keys [valid? errors nested-locks-errors]}
-              (view-options-spec/validate-view-options-strict data)]
-          (when-not valid?
-            (log/warn "user view-options.edn validation issues:"
-              {:errors errors :nested-locks-errors nested-locks-errors}))
-          data)
-        {}))
+    (frontend-config-io/read-edn-or-throw+validate
+      {:config-key :view-options
+       :path (user-view-options-path)
+       :validate-fn view-options-spec/validate-view-options-strict
+       :log-message "Failed to read user view-options.edn"
+       :log-context {:scope :user-ui-config}})
     (catch Exception e
       (log/error e "Failed to read user view-options.edn")
       (throw (ex-info "Failed to read user view options file" {:status 500})))))
@@ -271,9 +243,7 @@
                 :errors errors
                 :nested-locks-errors nested-locks-errors}))))
   (try
-    (let [file (io/file (user-view-options-path))]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint view-options))))
+    (frontend-config-io/write-edn-pretty! (user-view-options-path) view-options)
     (catch Exception e
       (log/error e "Failed to write user view-options.edn")
       (throw (ex-info "Failed to write user view options file" {:status 500})))))
@@ -281,16 +251,12 @@
 (defn read-user-form-fields
   []
   (try
-    (let [file (io/file (user-form-fields-path))]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (form-fields-spec/validate-form-fields-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "user form-fields.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
+    (frontend-config-io/read-edn-or-throw+validate
+      {:config-key :form-fields
+       :path (user-form-fields-path)
+       :validate-fn form-fields-spec/validate-form-fields-strict
+       :log-message "Failed to read user form-fields.edn"
+       :log-context {:scope :user-ui-config}})
     (catch Exception e
       (log/error e "Failed to read user form-fields.edn")
       (throw (ex-info "Failed to read user form fields file" {:status 500})))))
@@ -307,9 +273,7 @@
                 :errors errors
                 :warnings warnings}))))
   (try
-    (let [file (io/file (user-form-fields-path))]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint form-fields))))
+    (frontend-config-io/write-edn-pretty! (user-form-fields-path) form-fields)
     (catch Exception e
       (log/error e "Failed to write user form-fields.edn")
       (throw (ex-info "Failed to write user form fields file" {:status 500})))))
@@ -317,16 +281,12 @@
 (defn read-user-table-columns
   []
   (try
-    (let [file (io/file (user-table-columns-path))]
-      (if (.exists file)
-        (let [data (edn/read-string (slurp file))
-              validation (table-columns-spec/validate-table-columns-strict data)]
-          (when-not (:valid? validation)
-            (log/warn "user table-columns.edn validation issues:"
-              {:errors (:errors validation)
-               :warnings (:warnings validation)}))
-          data)
-        {}))
+    (frontend-config-io/read-edn-or-throw+validate
+      {:config-key :table-columns
+       :path (user-table-columns-path)
+       :validate-fn table-columns-spec/validate-table-columns-strict
+       :log-message "Failed to read user table-columns.edn"
+       :log-context {:scope :user-ui-config}})
     (catch Exception e
       (log/error e "Failed to read user table-columns.edn")
       (throw (ex-info "Failed to read user table columns file" {:status 500})))))
@@ -343,9 +303,7 @@
                 :errors errors
                 :warnings warnings}))))
   (try
-    (let [file (io/file (user-table-columns-path))]
-      (io/make-parents file)
-      (spit file (with-out-str (pprint/pprint table-columns))))
+    (frontend-config-io/write-edn-pretty! (user-table-columns-path) table-columns)
     (catch Exception e
       (log/error e "Failed to write user table-columns.edn")
       (throw (ex-info "Failed to write user table columns file" {:status 500})))))

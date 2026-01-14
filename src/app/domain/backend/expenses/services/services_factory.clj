@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.services.services-factory
   "Generic service factory for expenses domain entities."
   (:require
+    [app.shared.query-builders :as shared-qb]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
@@ -47,25 +48,18 @@
                                       :table-alias table-alias
                                       :base-filters base-filters})
         order-column (get allowed-order-by order-by-col default-order-by)
-        order-direction (if (= :asc order-dir) :asc :desc)
-        query (cond-> base-query
-                limit (assoc :limit limit)
-                offset (assoc :offset offset)
-                order-column (assoc :order-by [[order-column order-direction]]))]
-    query))
+        order-direction (shared-qb/normalize-order-direction order-dir {:default :asc})]
+    (-> base-query
+      (shared-qb/apply-pagination {:limit limit :offset offset}
+        {:default-limit 50
+         :default-offset 0})
+      (shared-qb/apply-order-by order-column order-direction))))
 
 (defn apply-search-filter
   "Apply search filter to query if search term provided."
   [query search-fields search-term]
   (if (and search-term (seq search-fields))
-    (let [search-conditions (mapv (fn [field]
-                                    [:ilike field (str "%" search-term "%")])
-                              search-fields)
-          search-where (into [:or] search-conditions)]
-      (update query :where (fn [existing]
-                             (if existing
-                               [:and existing search-where]
-                               search-where))))
+    (shared-qb/apply-search-where query search-fields (str "%" search-term "%"))
     query))
 
 (defn apply-id-filter

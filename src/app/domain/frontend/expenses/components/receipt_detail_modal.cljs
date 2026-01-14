@@ -7,7 +7,7 @@
   This component is intentionally 'context-driven' via a small config map of
   subscription keys and event keywords."
   (:require
-    [app.admin.frontend.components.shared-utils :as shared]
+    [app.template.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview receipt-viewer]]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]

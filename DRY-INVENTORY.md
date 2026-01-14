@@ -85,6 +85,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 **Why DRY:** Avoids ad hoc pagination/sorting/filtering in each service.  
 **Where:**
 - `src/app/shared/pagination.cljc` (cross-platform pagination utilities)
+- `src/app/shared/query_builders.clj` (shared backend HoneySQL query-building helpers)
 - `src/app/template/backend/utils/query_builders.clj` (shared query composition for admin services)
 - `src/app/domain/backend/expenses/services/services_factory.clj` (generic domain query builder functions)
 
@@ -177,7 +178,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 ## Notes / Gaps
 - This inventory is based on code + docs visible in `docs/` and core shared/template paths.  
 - If additional domain modules are added later, re-run this inventory to include new shared patterns.
-- Docs reference `app.shared.adapters.database`, but the expected file path isn’t present; verify the current DB-normalization utility location before auditing duplication in that area.
+- ✅ `app.shared.adapters.database` exists (JVM-only) and centralizes PostgreSQL JDBC object conversion; template backend delegates to it (2026-01-13).
 
 ## Non-DRY Code Snippets (Candidates for Consolidation)
 
@@ -191,7 +192,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
   - **Progress (2026-01-13):** request map construction (formats, params/body inclusion, and safe Content-Type behavior) centralized in `app.shared.http.core/build-xhrio-request`; both `admin-request` and `api-request` now delegate to it.
   - **Progress (2026-01-13):** template entity CRUD helpers are now split into explicit `*-public` vs `*-admin` callers; the legacy `create-entity/update-entity/delete-entity` wrappers are public-only.
   - **Progress (2026-01-13):** admin vs public routing decisions for generic CRUD now live in the CRUD bridge default request handler (route/path based), not inside the HTTP helper.
-  - **Remaining:** consider deprecating/removing legacy `app.shared.http.core/build-request` once all call sites are migrated to `build-xhrio-request`.
+  - **Progress (2026-01-13):** removed legacy `app.shared.http.core/build-request` after migrating all call sites to `build-xhrio-request`.
   `src/app/template/frontend/api/http.cljs`:
   ```clojure
   (defn api-request [{:keys [method uri params body format response-format on-success on-failure timeout headers]}] ...)
@@ -199,10 +200,6 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
   `src/app/admin/frontend/utils/http.cljs`:
   ```clojure
   (defn admin-request [{:keys [method uri params body format response-format headers timeout on-success on-failure token]}] ...)
-  ```
-  `src/app/shared/http/core.cljs`:
-  ```clojure
-  (defn build-request [db context method endpoint-path & [opts]] ...)
   ```
 
 - **Duplicate JSON response helpers (backend)** — response helpers defined in two places.
@@ -220,23 +217,100 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
   (defn error-response ([message] (error-response status-internal-server-error message)) ...)
   ```
 
+- **Duplicate user-facing expenses handler utilities (backend)** — **Resolved (2026-01-13)**.
+  - Consolidated request user extraction (`:session` and `:identity`), role gating, safe JSON body parsing defaults, and consistent JSON *string* responses in:
+    - `src/app/domain/backend/expenses/handlers/user_expenses/helpers.clj`
+  - Updated user handlers to delegate instead of re-defining local helpers:
+    - `src/app/domain/backend/expenses/handlers/user_receipts.clj`
+    - `src/app/domain/backend/expenses/handlers/user_articles.clj`
+  - Added regression tests to lock the early auth/role behavior:
+    - `test/app/domain/expenses/handlers/user_handlers_test.clj`
+  - Verified via focused Kaocha run:
+    - `/tmp/be-test-dry10-user-handlers.txt` (3 tests, 0 failures)
+    - `/tmp/be-test-dry10-user-handlers-2.txt` (3 tests, 0 failures)
+
+- **Duplicate frontend config EDN I/O + validation logging (backend)** — **Resolved (2026-01-14)**.
+  - Centralized safe vs strict EDN reads, validation warning logging, and pretty EDN writes in:
+    - `src/app/shared/frontend_config/io.clj` (`app.shared.frontend-config.io`)
+  - Updated both admin settings I/O and user `/api/v1/config` domain UI config loading to delegate:
+    - `src/app/template/backend/routes/admin/settings_io.clj`
+    - `src/app/template/backend/routes/api.clj`
+  - Added focused unit coverage:
+    - `test/app/shared/frontend_config/io_test.clj`
+  - Verified via focused Kaocha run:
+    - `/tmp/be-test-dry11-frontend-config-io.txt` (2 tests, 0 failures)
+
+- **Duplicate status badge mapping (frontend)** — **Resolved (2026-01-14)**.
+  - Centralized status → DaisyUI badge variant mapping as:
+    - `app.template.frontend.components.advanced-fields/status->badge-class`
+  - Updated admin-side callers to delegate instead of hardcoding status cases:
+    - `src/app/admin/frontend/components/ui.cljs` (admin status badges now reuse template mapping + renderer)
+    - `src/app/admin/frontend/specs/conditional.cljs` (dynamic `:status-badge` formatting uses shared mapping)
+  - Added focused unit coverage:
+    - `test/app/template/frontend/components/advanced_fields_test.cljs`
+  - Verified via ClojureScript test run:
+    - `/tmp/fe-test-dry12-status-badge-3.txt` (270 tests, 0 failures)
+
+- **Admin-only shared UI utils used by domain (frontend)** — **Resolved (2026-01-14)**.
+  - Extracted shared display/formatting helpers from admin into the template layer so domain code doesn’t depend on admin namespaces:
+    - `src/app/template/frontend/utils/display.cljs`
+  - Extracted reusable detail-view UI components from admin into the template layer:
+    - `src/app/template/frontend/components/detail.cljs`
+  - Added a template-level shared-utils aggregator for these helpers/components:
+    - `src/app/template/frontend/components/shared_utils.cljs`
+  - Updated call sites to depend on template instead of admin:
+    - `src/app/admin/frontend/components/ui.cljs`
+    - `src/app/domain/frontend/expenses/**`
+  - Verified via ClojureScript test run:
+    - `/tmp/fe-test-dry12-template-shared-utils-2.txt` (270 tests, 0 failures)
+
 - **Query builder duplication (backend)** — both template admin and domain services implement their own query builders.
-  `src/app/template/backend/utils/query_builders.clj`:
-  ```clojure
-  (defn add-pagination [query {:keys [limit offset]}] ...)
-  (defn add-sorting [query {:keys [sort-by sort-order table-alias default-column]}] ...)
-  ```
-  `src/app/domain/backend/expenses/services/services_factory.clj`:
-  ```clojure
-  (defn build-query-with-filters [config {:keys [limit offset order-by order-dir]}] ...)
-  (defn apply-search-filter [query search-fields search-term] ...)
-  ```
+- **Query builder duplication (backend)** — **Resolved (2026-01-13)**.
+  - Introduced a small shared backend helper namespace: `src/app/shared/query_builders.clj`.
+    - Pagination normalization + application: `normalize-limit`, `normalize-offset`, `apply-pagination`
+    - Sorting helpers: `normalize-order-direction`, `apply-order-by`
+    - Search/where helpers: `build-ilike-or`, `merge-where-and`, `apply-search-where`
+  - Updated call sites to delegate (public signatures preserved):
+    - `src/app/template/backend/utils/query_builders.clj`
+    - `src/app/domain/backend/expenses/services/services_factory.clj`
+  - Added focused unit tests: `test/app/shared/query_builders_test.clj`.
+  - Verified via backend test suite: `bb be-test` (208 tests, 0 failures).
 
 - **Duplicate key conversion in form submission** — **Resolved (2026-01-13)**.
   - Centralized as `app.shared.model-naming/app-map-keys->db`.
   - Call sites now delegate to the shared helper:
     - `src/app/template/frontend/events/form.cljs`
     - `src/app/admin/frontend/events/users/template/form_interceptors.cljs`
+
+- **Duplicate DB result → app normalization helpers (backend)** — **Resolved (2026-01-13)**.
+  - Centralized as `app.shared.adapters.database/to-app` (PGobject/PgArray conversion + snake_case → kebab-case keys).
+  - Template DB adapter re-exports for backward compatibility: `app.template.backend.utils.adapters.database/to-app`.
+  - Removed duplicated local `to-app` implementations across expenses backend routes/handlers:
+    - `src/app/domain/backend/expenses/routes/routes_factory.clj`
+    - `src/app/domain/backend/expenses/routes/receipts.clj`
+    - `src/app/domain/backend/expenses/routes/reports.clj`
+    - `src/app/domain/backend/expenses/handlers/user_articles.clj`
+    - `src/app/domain/backend/expenses/handlers/user_receipts.clj`
+    - `src/app/domain/backend/expenses/handlers/receipt_upload.clj`
+  - Verified via focused backend tests:
+    - `clj -M:test -m kaocha.runner --focus app.domain.backend.expenses.routes.receipts-test` (output: `/tmp/be-test-dry8-receipts.txt`)
+    - `clj -M:test -m kaocha.runner --focus app.shared.adapters.database-test` (output: `/tmp/be-test-dry8-adapters.txt`)
+
+- **Duplicate UUID parsing helpers (backend)** — **Resolved (2026-01-13)**.
+  - Centralized best-effort UUID parsing as `app.shared.type-conversion/try-parse-uuid` (blank/invalid → nil).
+  - Updated call sites to delegate instead of defining local `try-parse-uuid`/`try-uuid` helpers:
+    - `src/app/domain/backend/expenses/handlers/user-expenses/helpers.clj`
+    - `src/app/domain/backend/expenses/handlers/user_articles.clj`
+    - `src/app/domain/backend/expenses/handlers/user_receipts.clj`
+    - `src/app/domain/backend/expenses/handlers/receipt_upload.clj`
+    - `src/app/domain/backend/expenses/services/receipts/parsing.clj`
+    - `src/app/domain/backend/expenses/services/{price_observations,article_aliases}.clj`
+    - `src/app/domain/backend/expenses/services/user_expenses.clj` (batch update)
+    - `src/app/domain/backend/expenses/workers/receipt_ocr/core.clj` (batch OCR)
+    - `src/app/template/backend/services/monitoring/login_events.clj`
+    - `src/app/template/backend/routes/password_reset.clj` (normalize session user-id)
+    - `src/app/template/backend/routes/admin/utils.clj`
+  - Added focused unit coverage: `test/app/shared/type_conversion_test.cljc`.
 
 ## Prioritization (Order for DRY Fixes)
 
@@ -259,3 +333,51 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 5) **Query builder duplication (backend)**  
    - Higher complexity: domain vs template query needs alignment; refactor last.  
    - Files: `src/app/template/backend/utils/query_builders.clj`, `src/app/domain/backend/expenses/services/services_factory.clj`
+  - Status: ✅ **Done (2026-01-13)** — common pagination/sorting/search query-building behavior centralized in `app.shared.query-builders` while preserving existing APIs.
+
+6) **Remove legacy `build-request` (frontend)**
+  - Low impact, low risk: delete unused legacy request builder to prevent drift and confusion.
+  - Files: `src/app/shared/http/core.cljs`
+  - Status: ✅ **Done (2026-01-13)** — removed `build-request`; callers use `build-xhrio-request` via higher-level helpers.
+  - Verification: ✅ `npm run test:cljs` (2026-01-13) — 268 tests, 0 failures (output: `/tmp/fe-test-dry6.txt`).
+
+7) **Shared DB adapter utilities (backend)**
+  - Low impact, medium value: align docs with code and centralize PG JDBC object conversion + key normalization in `app.shared.adapters.*`, with template backend delegating for backward compatibility.
+  - Files: `src/app/shared/adapters/database.clj`, `src/app/shared/adapters/normalization.cljc`, `src/app/template/backend/utils/adapters/{database,normalization}.clj`
+  - Status: ✅ **Done (2026-01-13)** — created `app.shared.adapters.database` + `app.shared.adapters.normalization`; template adapters now delegate.
+  - Verification: ✅ `clj -M:test -m kaocha.runner --focus app.shared.adapters.database-test` (2026-01-13) — 2 tests, 0 failures (output: `/tmp/be-test-dry7.txt`).
+
+8) **Deduplicate expenses backend `to-app` helpers**
+  - Low impact, medium value: replace repeated local `(-> data convert-pg-objects convert-db-keys->app-keys)` helpers with a single shared helper.
+  - Files: `src/app/shared/adapters/database.clj` + expenses backend routes/handlers listed above.
+  - Status: ✅ **Done (2026-01-13)** — standardized on `db-adapter/to-app` (delegating to shared implementation).
+  - Verification: ✅ focused tests (outputs: `/tmp/be-test-dry8-receipts.txt`, `/tmp/be-test-dry8-adapters.txt`).
+
+9) **Deduplicate UUID parsing helpers (backend)**
+  - Low impact, medium value: remove local `try-parse-uuid`/`try-uuid` helpers scattered across routes/handlers/services.
+  - Files: `src/app/shared/type_conversion.cljc` + call sites listed above.
+  - Status: ✅ **Done (2026-01-13)** — standardized on `app.shared.type-conversion/try-parse-uuid`.
+  - Verification:
+    - ✅ `clj -M:test -m kaocha.runner --focus app.shared.type-conversion-test` (output: `/tmp/be-test-dry9-type-conversion.txt`).
+    - ✅ `clj -M:test -m kaocha.runner --focus app.domain.expenses.services.receipts-test` (output: `/tmp/be-test-dry9-receipts-services.txt`).
+    - ✅ `clj -M:test -m kaocha.runner --focus app.backend.routes.admin.password-test` (output: `/tmp/be-test-dry9-password-routes.txt`).
+
+10) **Deduplicate user-facing expenses handler utilities (backend)**
+  - Consolidate request user extraction (`:session` + `:identity`), role gating, safe JSON body parsing defaults, and consistent JSON string responses.
+  - Status: ✅ **Done (2026-01-13)** — standardized on `app.domain.backend.expenses.handlers.user-expenses.helpers`.
+  - Verification: ✅ focused tests (outputs: `/tmp/be-test-dry10-user-handlers.txt`, `/tmp/be-test-dry10-user-handlers-2.txt`).
+
+11) **Centralize frontend config EDN I/O (backend)**
+  - Deduplicate EDN read/validate/log logic used by admin settings I/O and `/api/v1/config` domain UI config loading.
+  - Status: ✅ **Done (2026-01-14)** — introduced `app.shared.frontend-config.io` and migrated both call sites.
+  - Verification: ✅ `clj -M:test -m kaocha.runner --focus app.shared.frontend-config.io-test` (output: `/tmp/be-test-dry11-frontend-config-io.txt`).
+
+12) **Centralize status badge mapping (frontend)**
+  - Deduplicate status → DaisyUI badge-class mapping and reuse template rendering in admin UI.
+  - Status: ✅ **Done (2026-01-14)** — introduced `app.template.frontend.components.advanced-fields/status->badge-class` and migrated admin call sites.
+  - Verification: ✅ `npm run test:cljs` (output: `/tmp/fe-test-dry12-status-badge-3.txt`).
+
+13) **Move admin shared UI helpers into template (frontend)**
+  - Remove domain → admin coupling by relocating shared display/detail utilities to the template layer.
+  - Status: ✅ **Done (2026-01-14)** — created `app.template.frontend.utils.display`, `app.template.frontend.components.detail`, and a template `shared-utils` aggregator; migrated admin + domain call sites.
+  - Verification: ✅ `npm run test:cljs` (output: `/tmp/fe-test-dry12-template-shared-utils-2.txt`).
