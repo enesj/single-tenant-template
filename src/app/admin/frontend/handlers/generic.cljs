@@ -23,11 +23,6 @@
   (fn [db [_ entity-key]]
     (assoc-in db [:admin :batch-operations entity-key :visible?] false)))
 
-#_(rf/reg-sub
-  :admin/batch-actions-visible?
-  (fn [db [_ entity-key]]
-    (get-in db [:admin :batch-operations entity-key :visible?] false)))
-
 (defn create-generic-selection-handler
   "Create entity-specific selection change handler."
   [entity-key]

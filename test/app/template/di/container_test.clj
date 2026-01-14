@@ -4,6 +4,7 @@
     [app.template.backend.crud.protocols :as crud-protocols]
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.backend.email.service :as email-service]
+    [app.template.di.container :as di]
     [app.template.di.config :as di-config]
     [app.template.protocols :as core-protocols]
     [clojure.test :refer [deftest is run-tests testing]]
@@ -197,6 +198,50 @@
       (let [select-query (crud-protocols/build-select-query query-builder :expenses {})]
         (is (= [:*] (:select select-query)))
         (is (= [:expenses] (:from select-query)))))))
+
+;; =============================================================================
+;; DI container lifecycle ordering regression tests
+;; =============================================================================
+
+(defrecord TestSvc [id events]
+  di/Lifecycle
+  (init [svc _container]
+    (swap! events conj [:init id])
+    svc)
+  (start [svc _container]
+    (swap! events conj [:start id])
+    svc)
+  (stop [svc _container]
+    (swap! events conj [:stop id])
+    svc))
+
+(deftest lifecycle-ordering-test
+  (testing "Services start in dependency order and stop in reverse dependency order"
+    ;; Use a dependency graph with a single valid order to avoid relying on
+    ;; unspecified map iteration ordering.
+    (let [events (atom [])
+          container (-> (di/create-container {})
+                      (di/register-service!
+                        (di/create-simple-service :c (fn [_] (->TestSvc :c events))))
+                      (di/register-service!
+                        (di/create-simple-service :b (fn [_] (->TestSvc :b events))
+                          :deps #{:c}))
+                      (di/register-service!
+                        (di/create-simple-service :a (fn [_] (->TestSvc :a events))
+                          :deps #{:b :c})))]
+      (di/initialize-services! container)
+      (di/start-services! container)
+
+      (is (= [[:init :c] [:init :b] [:init :a]
+              [:start :c] [:start :b] [:start :a]]
+            @events))
+
+      (di/stop-services! container)
+
+      (is (= [[:init :c] [:init :b] [:init :a]
+              [:start :c] [:start :b] [:start :a]
+              [:stop :a] [:stop :b] [:stop :c]]
+            @events)))))
 
 (deftest test-configuration-handling
   (testing "Configuration handling in service creation"

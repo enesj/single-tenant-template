@@ -29,7 +29,6 @@
     [re-frame.core :as rf]
     [re-frame.loggers :as rlog]
     [reitit.frontend :as rtf]
-    [reitit.frontend.easy :as rtfe]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui] :as uix]
     [uix.dom :as uix.dom]
@@ -200,16 +199,16 @@
         page-el)
       ($ confirm-dialog))))
 
-#_{:clj-kondo/ignore [:inline-def :uninitialized-var]}
+^{:clj-kondo/ignore [:inline-def :uninitialized-var]}
 (defonce root
   (uix.dom/create-root (js/document.getElementById "app")))
 
-#_{:clj-kondo/ignore [:inline-def]}
+^{:clj-kondo/ignore [:inline-def]}
 (defn mount-ui
   []
   (uix.dom/render-root ($ current-page) root))
 
-#_{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn ^:dev/after-load clear-cache-and-render!
   []
   ;; The `:dev/after-load` metadata causes this function to be called
@@ -246,7 +245,7 @@
     (admin-core/init-admin!))
   (routes/init-routes!) (maybe-restore-last-admin-route!) (mount-ui))
 
-#_{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn init                                                  ;; Your app calls this when it starts. See shadow-cljs.edn :init-fn.
   []
   ;; Ensure logging is configured as early as possible
@@ -258,6 +257,6 @@
   (init-app!))
 
 ;; Function to run after HMR reloads
-#_{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn after-load []
   (css-reload/reload-css))

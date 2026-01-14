@@ -352,7 +352,7 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 2. **Run single test** (in REPL or by temporarily commenting others):
 ```clojure
 ;; In test file, comment out other tests temporarily
-#_(deftest other-test ...)
+;; (deftest other-test ...)
 ```
 
 ### Common Issues & Solutions

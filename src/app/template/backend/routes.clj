@@ -55,7 +55,7 @@
   [_md]
   [])
 
-#_{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn app-routes [db service-container]
   ;; Extract models-data from service container instead of taking it as separate parameter
   (let [md (:models-data service-container)

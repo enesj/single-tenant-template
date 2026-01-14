@@ -267,7 +267,7 @@
 
 (def form-state
   [:map
-   [:data {:optional true} [:or [:map-of :keyword :any] [:map-of :int :any]]]
+   [:values {:optional true} [:or [:map-of :keyword :any] [:map-of :int :any]]]
    [:errors {:optional true} [:or :any [:map-of :keyword :any]]]
    [:server-errors {:optional true} [:or :any [:map-of :keyword :any]]]
    [:submitting? {:optional true} :boolean]
@@ -341,17 +341,19 @@
        [:show-delete? {:optional true} :boolean]
        [:show-highlights? {:optional true} :boolean]
        [:show-select? {:optional true} :boolean]
-       [:show-filtering? {:optional true} :boolean]
-       [:show-pagination? {:optional true} :boolean]
-       [:lists {:optional true} lists-schema]
-       [:defaults {:optional true} ui-defaults-schema]
-       [:controls {:optional true} ui-controls-schema]
-       [:entity-configs {:optional true} [:map-of :keyword ui-entity-config-schema]]
-       [:notifications {:optional true} ui-notifications-schema]
-       [:sidebar {:optional true} ui-sidebar-schema]
-       [:modals {:optional true} [:map-of :keyword :any]]
-       [:toasts {:optional true} ui-notifications-schema]]]
+     [:show-filtering? {:optional true} :boolean]
+     [:show-pagination? {:optional true} :boolean]
+     [:lists {:optional true} lists-schema]
+     [:defaults {:optional true} ui-defaults-schema]
+     [:controls {:optional true} ui-controls-schema]
+     [:entity-configs {:optional true} [:map-of :keyword ui-entity-config-schema]]
+     [:entity-prefs {:optional true} [:map-of :keyword :any]]
+     [:notifications {:optional true} ui-notifications-schema]
+     [:sidebar {:optional true} ui-sidebar-schema]
+     [:modals {:optional true} [:map-of :keyword :any]]
+     [:toasts {:optional true} ui-notifications-schema]]]
      [:forms {:optional true} [:map-of :keyword form-state]]
+     [:entity-fetches {:optional true} [:map-of :keyword [:map-of :string :boolean]]]
      [:csrf-token {:optional true} :any]]))
 
 (def app-db-schema

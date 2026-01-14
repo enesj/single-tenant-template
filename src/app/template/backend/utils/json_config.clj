@@ -2,8 +2,8 @@
   "Centralized JSON encoding configuration for the application.
    Sets up Cheshire encoders for Java time types and other problematic types."
   (:require
+    [app.shared.adapters.database :as db-adapter]
     [cheshire.generate :refer [add-encoder]]
-    [clojure.string :as str]
     [taoensso.timbre :as log])
   (:import
     (java.math BigDecimal BigInteger)
@@ -84,15 +84,9 @@
   (add-encoder PgArray
     (fn [pg-array json-generator]
       (try
-        ;; Get the array data as a string first, then parse it
-        (let [array-str (.toString pg-array)
-              ;; Remove the curly braces and split by comma
-              cleaned-str (-> array-str
-                            (subs 1 (dec (count array-str)))  ; Remove { and }
-                            (str/split #","))
-              ;; Clean up each element
-              array-data (mapv str/trim cleaned-str)]
-          (.writeObject json-generator array-data))
+        ;; Delegate conversion logic to the shared adapter so array handling is
+        ;; consistent across the codebase.
+        (.writeObject json-generator (db-adapter/convert-pg-objects pg-array))
         (catch Exception e
           (log/warn "Failed to serialize PgArray, using empty array:" (.getMessage e))
           (.writeObject json-generator [])))))

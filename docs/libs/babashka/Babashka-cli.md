@@ -441,7 +441,7 @@ Here’s a useful snippet for using Simon Willison’s `llm` command line tool f
 
 
 ;; Example usage:
-#_(comment
+(comment
   ;; Basic prompt
     (prompt "Write a haiku about coding")
 

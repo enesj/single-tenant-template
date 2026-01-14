@@ -118,7 +118,7 @@
               db)
         status (or (:status error)
                  (get-in error [:response :status]))
-        route-name (get-in db [:current-route :data :name])
+        route-name (get-in db (paths/current-route-name))
         admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
         pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))
@@ -156,7 +156,7 @@
   - If a reitit route name is present, it is treated as the source of truth.
   - Otherwise fall back to URL pathname heuristics."
   [db]
-  (let [route-name (get-in db [:current-route :data :name])
+  (let [route-name (get-in db (paths/current-route-name))
         admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
         pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))

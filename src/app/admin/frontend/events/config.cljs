@@ -11,6 +11,8 @@
    via the persistence interceptor."
   (:require
     [app.admin.frontend.config.loader :as config-loader]
+    [app.shared.model-naming :as model-naming]
+    [app.template.frontend.db.paths :as paths]
     [app.template.frontend.interceptors.persistence :as persistence]
     [clojure.string :as str]
     [re-frame.core :as rf]))
@@ -30,40 +32,6 @@
 ;; Configuration Loading Events
 ;; =============================================================================
 
-;; Load all config from EDN files
-#_(rf/reg-event-fx
-  ::load-config
-  (fn [{:keys [db]} _]
-    (let [configs (config-loader/load-all-configs)]
-      {:db (assoc-in db [:admin :config] configs)})))
-
-;; Load saved config from localStorage (unified prefs first, then legacy)
-#_(rf/reg-event-db
-  ::load-saved-column-config
-  (fn [db [_ entity-name]]
-    (let [entity-key (keyword entity-name)
-          ;; Try unified prefs first (Phase 3 path)
-          unified-order (get-in db [:ui :entity-prefs entity-key :columns :visible-order])
-
-          ;; Fall back to legacy localStorage key
-          legacy-columns (when-not unified-order
-                           (let [stored-key (str "column-visibility-" entity-name)
-                                 stored-value (js/localStorage.getItem stored-key)]
-                             (when stored-value
-                               (->> (js->clj (js/JSON.parse stored-value))
-                                 (keep (fn [col]
-                                         (cond
-                                           (keyword? col) col
-                                           (string? col) (keyword col)
-                                           (nil? col) nil
-                                           :else (keyword (str col)))))
-                                 vec))))
-
-          visible-columns (or unified-order legacy-columns)]
-      (if visible-columns
-        (assoc-in db [:admin :config :table-columns entity-name :visible-columns] visible-columns)
-        db))))
-
 ;; =============================================================================
 ;; Column Visibility Events (Vector-based with Order Preservation)
 ;; =============================================================================
@@ -74,28 +42,29 @@
   ::toggle-column-visibility
   [persistence/persist-entity-prefs]
   (fn [{:keys [db]} [_ entity-name column-name]]
-    (let [normalize (fn [col]
-                      (cond
-                        (nil? col) nil
-                        (keyword? col) col
-                        (string? col) (keyword col)
-                        :else (keyword (str col))))
-          entity-key (keyword entity-name)
+    (let [normalize model-naming/ensure-app-keyword
+          entity-key (model-naming/ensure-app-keyword entity-name)
           policy-locks (merge
                          (get-in db [:admin :config :view-options entity-key :column-locks])
                          (get-in db [:admin :settings :view-options entity-key :column-locks]))
-          current-visible (->> (or (get-in db [:admin :config :table-columns entity-name :visible-columns])
-                                 (get-in db [:admin :config :table-columns entity-name :default-visible-columns])
+          locked? (and (map? policy-locks)
+                   (contains? (into #{} (keep normalize (keys policy-locks)))
+                     (normalize column-name)))
+          current-visible (->> (or (get-in db [:admin :config :table-columns entity-key :visible-columns])
+                                 (get-in db [:admin :config :table-columns entity-key :default-visible-columns])
                                  [])
                             (keep normalize)
                             vec)
-          all-columns (->> (get-in db [:admin :config :table-columns entity-name :available-columns] [])
+          all-columns (->> (get-in db [:admin :config :table-columns entity-key :available-columns] [])
                         (keep normalize)
                         vec)
           column-name (normalize column-name)
-          always-visible (set (map normalize (get-in db [:admin :config :table-columns entity-name :always-visible] [])))]
-      (if (or (nil? column-name)
-            (and (map? policy-locks) (contains? policy-locks column-name)))
+          always-visible (->> (get-in db [:admin :config :table-columns entity-key :always-visible] [])
+                           (keep normalize)
+                           set)]
+      (if (or (nil? entity-key)
+            (nil? column-name)
+            locked?)
         {:db db}
         (let [removing? (some #{column-name} current-visible)
             ;; Do not allow hiding always-visible columns
@@ -120,64 +89,18 @@
               ;; Build visibility map for quick lookup (for components using map-based access)
               visibility-map (into {} (map (fn [col] [col true]) normalized-visible))]
           {:db (-> db
-                 (assoc-in [:admin :config :table-columns entity-name :visible-columns] normalized-visible)
+                 (assoc-in [:admin :config :table-columns entity-key :visible-columns] normalized-visible)
                    ;; Also store in unified prefs for persistence
-                 (assoc-in [:ui :entity-prefs entity-key :columns :visible-order] normalized-visible)
-                 (assoc-in [:ui :entity-prefs entity-key :columns :visible] visibility-map))})))))
+                 (assoc-in (paths/entity-prefs-columns-visible-order entity-key) normalized-visible)
+                 (assoc-in (paths/entity-prefs-columns-visible entity-key) visibility-map))})))))
 
 ;; Reorder columns
-#_(rf/reg-event-fx
-  ::reorder-columns
-  [persistence/persist-entity-prefs]
-  (fn [{:keys [db]} [_ entity-name from-index to-index]]
-    (let [entity-key (keyword entity-name)
-          visible-columns (vec (get-in db [:admin :config :table-columns entity-name :visible-columns] []))
-          column-to-move (nth visible-columns from-index)
-          without-column (vec (concat (subvec visible-columns 0 from-index)
-                                (subvec visible-columns (inc from-index))))
-          new-visible (vec (concat (subvec without-column 0 to-index)
-                             [column-to-move]
-                             (subvec without-column to-index)))
-          visibility-map (into {} (map (fn [col] [col true]) new-visible))]
-      {:db (-> db
-             (assoc-in [:admin :config :table-columns entity-name :visible-columns] new-visible)
-             (assoc-in [:ui :entity-prefs entity-key :columns :visible-order] new-visible)
-             (assoc-in [:ui :entity-prefs entity-key :columns :visible] visibility-map))})))
 
 ;; Reset to default columns
-#_(rf/reg-event-fx
-  ::reset-columns-to-default
-  [persistence/persist-entity-prefs]
-  (fn [{:keys [db]} [_ entity-name]]
-    (let [entity-key (keyword entity-name)
-          default-columns (get-in db [:admin :config :table-columns entity-name :default-visible-columns] [])
-          visibility-map (into {} (map (fn [col] [col true]) default-columns))]
-      {:db (-> db
-             (assoc-in [:admin :config :table-columns entity-name :visible-columns] default-columns)
-               ;; Clear unified prefs to use defaults
-             (update-in [:ui :entity-prefs entity-key :columns] dissoc :visible-order :visible))})))
 
 ;; =============================================================================
-;; LocalStorage Persistence (DEPRECATED - kept for backward compatibility)
+;; LocalStorage Persistence (legacy effect handlers)
 ;; =============================================================================
-;; NOTE: Column visibility is now persisted via the unified ui-entity-prefs system.
-;; These events are kept for backward compatibility but are no longer dispatched
-;; by the main toggle/reorder/reset events.
-
-;; Save column config to localStorage (DEPRECATED)
-#_(rf/reg-event-fx
-  ::save-column-config
-  (fn [_ [_ entity-name visible-columns]]
-    {::save-to-local-storage {:key (str "column-visibility-" entity-name)
-                              :value visible-columns}}))
-
-;; Clear saved config (DEPRECATED)
-#_(rf/reg-event-fx
-  ::clear-saved-column-config
-  (fn [_ [_ entity-name]]
-    {::remove-from-local-storage {:key (str "column-visibility-" entity-name)}}))
-
-;; Effect handlers for localStorage (DEPRECATED)
 (rf/reg-fx
  ::save-to-local-storage
   (fn [{:keys [key value]}]

@@ -286,17 +286,3 @@
   (fn [[entity-spec record admin-role] [_ _entity-name _record-id]]
     (when (and entity-spec record)
       (filter-and-enhance-fields-for-record entity-spec record admin-role))))
-
-#_(rf/reg-sub
-    :admin/visible-fields-for-record
-    (fn [[_ entity-name record-id]]
-      (rf/subscribe [:admin/enhanced-entity-spec entity-name record-id]))
-    (fn [enhanced-spec [_ entity-name _]]
-    ;; Use vector-based configuration for field visibility and ordering
-      (let [config @(rf/subscribe [:admin/visible-columns entity-name])
-            field-map enhanced-spec]
-        (if config
-        ;; Use the vector order from config
-          (keep #(get field-map %) config)
-        ;; Fallback to all fields if no config
-          (vals enhanced-spec)))))

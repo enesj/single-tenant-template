@@ -4,18 +4,9 @@
    application. Provides helpers to translate keywords back to their
    database form when building queries."
   (:require
+    [app.shared.keywords :as kw]
     [clojure.set :as set]
     [clojure.string :as str]))
-
-(defn- ensure-keyword
-  "Best-effort keyword coercion that preserves nil."
-  [v]
-  (cond
-    (keyword? v) v
-    (string? v) (keyword v)
-    (symbol? v) (keyword (name v))
-    (nil? v) nil
-    :else (keyword (str v))))
 
 (defn db-keyword->app
   "Convert a keyword or string that uses snake_case into a kebab-case keyword
@@ -33,6 +24,17 @@
                      (keyword normal-name)))
     (string? v) (str/replace v "_" "-")
     :else v))
+
+(defn ensure-app-keyword
+  "Coerce an identifier into the canonical app keyword.
+
+  - Best-effort keyword coercion that preserves nil.
+  - Converts snake_case to kebab-case (including namespaces).
+
+  Intended for boundary normalization where callers may supply strings,
+  symbols, snake_case keywords, or already-canonical kebab-case keywords." 
+  [v]
+  (some-> v kw/ensure-keyword db-keyword->app))
 
 (defn app-keyword->db
   "Convert a keyword or string that uses kebab-case into a snake_case keyword
@@ -73,7 +75,7 @@
   [entity-def]
   (->> (:fields entity-def)
     (map (fn [field-def]
-           (let [db-field (ensure-keyword (first field-def))]
+           (let [db-field (kw/ensure-keyword (first field-def))]
              (when db-field
                [db-field (db-keyword->app db-field)]))))
     (remove nil?)
@@ -82,7 +84,7 @@
 (defn- convert-keyword
   "Convert a keyword using known aliases, falling back to snake->kebab."
   [aliases kw]
-  (let [kw* (ensure-keyword kw)]
+  (let [kw* (kw/ensure-keyword kw)]
     (cond
       (nil? kw*) nil
       (contains? aliases kw*) (get aliases kw*)
@@ -137,13 +139,13 @@
   [models]
   (let [db->app-entities (->> models
                            (map (fn [[entity-key _]]
-                                  (let [db-kw (ensure-keyword entity-key)
+                                  (let [db-kw (kw/ensure-keyword entity-key)
                                         app-kw (db-keyword->app db-kw)]
                                     [db-kw app-kw])))
                            (into {}))
         converted (reduce-kv
                     (fn [acc db-entity entity-def]
-                      (let [db-entity-kw (ensure-keyword db-entity)
+                      (let [db-entity-kw (kw/ensure-keyword db-entity)
                             app-entity (get db->app-entities db-entity-kw)
                             converted-entity (-> (convert-entity-definition entity-def)
                                                (assoc :db/entity db-entity-kw
@@ -162,7 +164,7 @@
    Falls back to snake->kebab conversion when metadata is not available."
   [models db-entity]
   (let [aliases (:db/entity-aliases (meta models))
-        db-kw (ensure-keyword db-entity)]
+      db-kw (kw/ensure-keyword db-entity)]
     (or (some-> aliases (get db-kw))
       (db-keyword->app db-kw))))
 
@@ -172,7 +174,7 @@
    not present."
   [models app-entity]
   (let [aliases (:app/entity-aliases (meta models))
-        app-kw (ensure-keyword app-entity)]
+      app-kw (kw/ensure-keyword app-entity)]
     (or (some-> aliases (get app-kw))
       (app-keyword->db app-kw))))
 
@@ -180,7 +182,7 @@
   "Translate a database field keyword to its kebab-case application keyword
    using the alias map stored on an entity definition."
   [entity field]
-  (let [db-kw (ensure-keyword field)
+  (let [db-kw (kw/ensure-keyword field)
         aliases (:db/field-aliases entity)]
     (or (some-> aliases (get db-kw))
       (db-keyword->app db-kw))))
@@ -189,7 +191,7 @@
   "Translate an application field keyword back to the snake_case database
    keyword using an entity definition's alias map."
   [entity field]
-  (let [app-kw (ensure-keyword field)
+  (let [app-kw (kw/ensure-keyword field)
         aliases (:app/field-aliases entity)]
     (or (some-> aliases (get app-kw))
       (app-keyword->db app-kw))))

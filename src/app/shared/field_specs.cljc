@@ -3,9 +3,9 @@
     #?(:clj [taoensso.timbre :as log]
        :cljs [taoensso.timbre :as log])
     [app.shared.field-types :as field-types]
+    [app.shared.labels :as labels]
     [app.shared.model-naming :as model-naming]
-    [app.shared.validation.metadata :as validation-meta]
-    [clojure.string :as str]))
+    [app.shared.validation.metadata :as validation-meta]))
 
 ;; NOTE: Models metadata may arrive in snake_case (db) or kebab-case (app).
 ;; Keep these exclusions resilient to either representation.
@@ -48,15 +48,8 @@
                   (:types table-def))))
       (into {}))))
 
-(defn- field-name->label
-  "Convert field name to human readable label"
-  [field-name]
-  (-> (name field-name)
-      ;; Strip common foreign-key suffixes in both snake_case and kebab-case.
-    (str/replace #"(_id|-id)$" "")
-      ;; Normalize separators.
-    (str/replace #"[_-]" " ")
-    str/capitalize))
+;; NOTE: Use `app.shared.labels/field-name->label` to keep labels consistent
+;; across field specs and validation metadata.
 
 (defn- find-first-unique-field
   "Choose a sensible display column for a referenced entity so that foreign-key
@@ -152,7 +145,7 @@
              type-info (field-types/get-input-type field-type-handler)
              options (field-types/get-options field-type-handler types-map)
              default-value (field-types/get-default-value field-type-handler)
-             field-label (field-name->label field-name)
+              field-label (labels/field-name->label field-name)
 
              ;; Extract admin metadata from constraints
              admin-meta (:admin constraints)
@@ -192,7 +185,7 @@
   [field-name field-def]
   (let [admin-meta (:admin field-def)
         field-type (:type field-def :string)
-        label (:label field-def (field-name->label field-name))]
+         label (:label field-def (labels/field-name->label field-name))]
     ;; Debug log
     (log/info "Processing computed field:" field-name "with admin meta:" admin-meta)
     {:id (name field-name)

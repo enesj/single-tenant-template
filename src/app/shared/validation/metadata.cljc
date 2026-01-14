@@ -3,6 +3,7 @@
    This namespace provides functions to extract and process validation metadata
    embedded in database model EDN files."
   (:require
+    [app.shared.labels :as labels]
     [clojure.set :as set]
     [clojure.string :as str]))
 
@@ -314,11 +315,7 @@
 (defn field-name->label
   "Convert field name to human readable label"
   [field-name]
-  (-> (name field-name)
-    (clojure.string/split #"_id" 2)
-    first
-    (clojure.string/replace #"_" " ")
-    clojure.string/capitalize))
+  (labels/field-name->label field-name))
 
 (defn process-model-validation
   "Process all validation metadata for a model, returning enhanced field definitions"

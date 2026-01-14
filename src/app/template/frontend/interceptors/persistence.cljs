@@ -7,9 +7,81 @@
    
    Also provides migration utilities for legacy localStorage keys."
   (:require
+    [app.shared.model-naming :as model-naming]
     [cljs.reader :as reader]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
+
+(defn- deep-merge
+  "Recursively merge maps.
+
+  When values are both maps, merges them; otherwise the right-most value wins."
+  [& ms]
+  (letfn [(m [a b]
+            (merge-with
+              (fn [x y]
+                (if (and (map? x) (map? y))
+                  (m x y)
+                  y))
+              (or a {})
+              (or b {})))]
+    (reduce m {} ms)))
+
+(defn- normalize-pref-keyed-map
+  "Normalize a map keyed by identifiers to a canonical app keyword map.
+
+  Keeps values as-is; drops entries whose keys cannot be normalized." 
+  [m]
+  (when (map? m)
+    (into {}
+      (keep (fn [[k v]]
+              (when-let [k' (model-naming/ensure-app-keyword k)]
+                [k' v])))
+      m)))
+
+(defn- normalize-pref-key-vec
+  "Normalize a sequential of identifiers to a vector of canonical app keywords.
+
+  Drops items which cannot be normalized." 
+  [xs]
+  (when (sequential? xs)
+    (->> xs
+      (keep model-naming/ensure-app-keyword)
+      vec)))
+
+(defn- normalize-entity-pref
+  "Normalize known nested shapes inside a single entity's prefs map.
+
+  We intentionally restrict normalization to nested maps/vectors which are
+  known to contain field/column identifiers, to avoid rewriting arbitrary
+  stored user data." 
+  [x]
+  (if (map? x)
+    (cond-> x
+      (map? (get-in x [:columns :visible]))
+      (update-in [:columns :visible] normalize-pref-keyed-map)
+
+      (sequential? (get-in x [:columns :visible-order]))
+      (update-in [:columns :visible-order] normalize-pref-key-vec)
+
+      (map? (get-in x [:filters :fields]))
+      (update-in [:filters :fields] normalize-pref-keyed-map))
+    x))
+
+(defn- normalize-stored-prefs
+  "Normalize top-level entity keys in the persisted prefs map.
+
+  This migrates old prefs that were accidentally stored under snake_case
+  (e.g. :price_observations) to canonical kebab-case (:price-observations)." 
+  [prefs]
+  (when (map? prefs)
+    (reduce-kv
+      (fn [acc k v]
+        (if-let [k' (model-naming/ensure-app-keyword k)]
+          (deep-merge acc {k' (normalize-entity-pref v)})
+          acc))
+      {}
+      prefs)))
 
 (def ^:private storage-key "ui-entity-prefs")
 
@@ -86,9 +158,9 @@
   [(rf/inject-cofx :stored-entity-prefs)]
   (fn [{:keys [db stored-entity-prefs]} _]
     (if stored-entity-prefs
-      (do
-        (log/info "Loaded entity-prefs from localStorage:" (keys stored-entity-prefs))
-        {:db (update-in db [:ui :entity-prefs] merge stored-entity-prefs)})
+      (let [normalized (or (normalize-stored-prefs stored-entity-prefs) stored-entity-prefs)]
+        (log/info "Loaded entity-prefs from localStorage:" (keys normalized))
+        {:db (update-in db [:ui :entity-prefs] #(deep-merge % normalized))})
       {:db db})))
 
 ;; ============================================================================
@@ -149,7 +221,7 @@
   (when-let [legacy-columns (get-legacy-column-visibility entity-name)]
     (log/info "Migrating column visibility for" entity-name ":" legacy-columns)
     (let [prefs (get-stored-prefs)
-          entity-key (keyword entity-name)
+          entity-key (model-naming/ensure-app-keyword entity-name)
           updated-prefs (-> prefs
                           (assoc-in [entity-key :columns :visible-order] legacy-columns)
                           (assoc-in [entity-key :columns :visible] (vector->visibility-map legacy-columns)))]
@@ -169,7 +241,7 @@
 (rf/reg-event-fx
   ::migrate-entity-column-visibility
   (fn [{:keys [db]} [_ entity-name]]
-    (let [entity-key (keyword entity-name)
+    (let [entity-key (model-naming/ensure-app-keyword entity-name)
           ;; Check if already migrated (has :visible-order in unified prefs)
           already-migrated? (get-in db [:ui :entity-prefs entity-key :columns :visible-order])]
       (if already-migrated?

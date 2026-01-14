@@ -12,11 +12,6 @@
   (fn [db _]
     (u/draft-config db)))
 
-#_(rf/reg-sub
-    :app.admin.frontend.events.user-settings/saved
-    (fn [db _]
-      (u/saved-config db)))
-
 (rf/reg-sub
   :app.admin.frontend.events.user-settings/dirty?
   (fn [db _]
@@ -51,18 +46,4 @@
   :app.admin.frontend.events.user-settings/table-columns-config
   (fn [db _]
     (u/safe-map (get-in db [:admin :user-settings :draft :table-columns]))))
-
-;; =============================================================================
-;; Additional subscriptions for config editing
-;; =============================================================================
-
-#_(rf/reg-sub
-    :app.admin.frontend.events.user-settings/entities-config
-    (fn [db _]
-      (u/safe-map (get-in db [:admin :user-settings :draft :entities]))))
-
-#_(rf/reg-sub
-    :app.admin.frontend.events.user-settings/form-fields-config
-    (fn [db _]
-      (u/safe-map (get-in db [:admin :user-settings :draft :form-fields]))))
 

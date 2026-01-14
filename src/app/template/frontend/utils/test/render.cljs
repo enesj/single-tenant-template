@@ -1,5 +1,6 @@
 (ns app.template.frontend.utils.test.render
   (:require
+    [app.template.frontend.db.paths :as paths]
     [app.template.frontend.utils.test.env :as env]
     [clojure.string :as str]
     [goog.object :as gobj]
@@ -188,7 +189,7 @@
                            (get db error-sub-key))
             entity-success (or (env/safe-subscribe success-sub-key)
                              (get db success-sub-key))
-            selected-ids (get-in db [:ui :lists (keyword entity-name) :selected-ids] #{})
+            selected-ids (get-in db (paths/entity-selected-ids (keyword entity-name)) #{})
             header-text (str (when (string? page-title) (str page-title " "))
                           (when (string? page-description) (str page-description " "))
                           (when custom-header? "custom-btn Custom Button ")
@@ -239,7 +240,7 @@
                              (get db error-sub-key))
               entity-success (or (env/safe-subscribe success-sub-key)
                                (get db success-sub-key))
-              selected-ids (get-in db [:ui :lists (keyword entity-name) :selected-ids] #{})
+              selected-ids (get-in db (paths/entity-selected-ids (keyword entity-name)) #{})
               header-text (str (when (string? page-title) (str page-title " "))
                             (when (string? page-description) (str page-description " "))
                             (when custom-header? "custom-btn Custom Button ")
@@ -263,7 +264,7 @@
                              (get db error-sub-key))
               entity-success (or (env/safe-subscribe success-sub-key)
                                (get db success-sub-key))
-              selected-ids (get-in db [:ui :lists (keyword entity-name) :selected-ids] #{})]
+              selected-ids (get-in db (paths/entity-selected-ids (keyword entity-name)) #{})]
           (str "<div>"
             "<div class=\"custom-wrapper-class selection-counter test-content\">"
             (when (string? page-title) (str page-title " "))

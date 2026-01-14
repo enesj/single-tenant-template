@@ -1,4 +1,6 @@
-(ns app.admin.frontend.events.user-settings.utils)
+(ns app.admin.frontend.events.user-settings.utils
+  (:require
+    [app.shared.model-naming :as model-naming]))
 
 (def ^:const user-ui-config-uri
   "/admin/api/settings/user-ui-config")
@@ -12,6 +14,14 @@
     (keyword? x) x
     (string? x) (keyword x)
     :else (keyword (str x))))
+
+(defn normalize-entity-kw
+  "Normalize an entity identifier to the canonical app keyword.
+
+  This is intentionally entity-key only (top-level). Nested config keys and
+  column ids are handled elsewhere to avoid unintended wide-reaching changes." 
+  [x]
+  (model-naming/ensure-app-keyword x))
 
 (defn normalize-cols [xs]
   (->> (or xs [])
@@ -40,7 +50,7 @@
   [m]
   (reduce-kv
     (fn [acc entity-k entity-v]
-      (if-let [entity-kw (normalize-kw entity-k)]
+      (if-let [entity-kw (normalize-entity-kw entity-k)]
         (assoc acc entity-kw (if (map? entity-v) (normalize-map-keys entity-v) entity-v))
         acc))
     {}
@@ -56,7 +66,7 @@
   [view-options]
   (reduce-kv
     (fn [acc entity-k entity-v]
-      (if-let [entity-kw (normalize-kw entity-k)]
+      (if-let [entity-kw (normalize-entity-kw entity-k)]
         (let [cfg (if (map? entity-v) (normalize-map-keys entity-v) {})
               cfg (cond-> cfg
                     (contains? cfg :display-defaults) (update :display-defaults normalize-map-keys)

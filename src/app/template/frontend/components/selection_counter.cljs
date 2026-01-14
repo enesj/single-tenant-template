@@ -78,20 +78,3 @@
                           "btn btn-xs")
                  :on-click on-clear-selection}
                 "Clear Selection"))))))))
-
-;; Convenience functions for common use cases
-
-#_ (defn admin-selection-counter
-  "Convenience function for admin-themed selection counter."
-  [& args]
-  ($ selection-counter (merge {:variant :admin} (first args))))
-
-#_ (defn tenant-selection-counter
-  "Convenience function for tenant-themed selection counter."
-  [& args]
-  ($ selection-counter (merge {:variant :tenant} (first args))))
-
-#_ (defn customer-selection-counter
-  "Convenience function for customer-themed selection counter."
-  [& args]
-  ($ selection-counter (merge {:variant :customer} (first args))))

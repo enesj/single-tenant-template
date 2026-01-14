@@ -99,7 +99,8 @@
                                                      {:kind :inherit}
                                                      {:kind :lock :value next-val})]
                                     (on-display-settings-bulk entity-name setting-keys next-state)))})))
-          (for [setting-key setting-keys]
+          (for [setting-key setting-keys
+                :when (not= setting-key :per-page)]
             (let [default-val (when (contains? defaults setting-key) (get defaults setting-key))
                   lock-val (when (contains? locks setting-key) (get locks setting-key))]
               ($ rows/display-setting-row
@@ -110,7 +111,18 @@
                  :lock-val lock-val
                  :lock-style :admin
                  :editing? editing?
-                 :on-change on-change}))))
+                 :on-change on-change})))
+          ;; Per-page setting (uses select instead of toggle)
+          (let [per-page-default (get defaults :per-page)
+                per-page-lock (get locks :per-page)]
+            ($ rows/per-page-setting-row
+              {:key (str entity-name "-per-page")
+               :entity-kw entity-name
+               :default-val per-page-default
+               :lock-val per-page-lock
+               :lock-style :admin
+               :editing? editing?
+               :on-change on-change})))
 
         (when (seq available-cols)
           ($ :div {:class "mt-4"}
@@ -297,7 +309,8 @@
                                                          {:kind :lock :value next-val})]
                                         (on-display-settings-bulk entity-kw editable-setting-keys next-state)))})))
 
-              (for [setting-key setting-keys]
+              (for [setting-key setting-keys
+                    :when (not= setting-key :per-page)]
                 (let [default-val (when (contains? defaults setting-key) (get defaults setting-key))
                       lock-val (when (contains? locks setting-key) (get locks setting-key))
                       immutable? (contains? immutable setting-key)
@@ -312,7 +325,18 @@
                      :immutable-val immutable-val
                      :lock-style :user
                      :editing? editing?
-                     :on-change on-change}))))))
+                     :on-change on-change})))
+              ;; Per-page setting (uses select instead of toggle)
+              (let [per-page-default (get defaults :per-page)
+                    per-page-lock (get locks :per-page)]
+                ($ rows/per-page-setting-row
+                  {:key (str (name entity-kw) "-per-page")
+                   :entity-kw entity-kw
+                   :default-val per-page-default
+                   :lock-val per-page-lock
+                   :lock-style :user
+                   :editing? editing?
+                   :on-change on-change})))))
 
         (when (seq available-cols)
           ($ :div {:class "mt-4"}

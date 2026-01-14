@@ -161,6 +161,11 @@
   "Stop all services"
   [services]
   (when services
+    (when-let [di-container (:di-container services)]
+      (try
+        (container/shutdown-system! di-container)
+        (catch Exception e
+          (log/warn e "Failed to stop DI container services"))))
     (cleanup-services! services)))
 
 ;; =============================================================================

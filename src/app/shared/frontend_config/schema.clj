@@ -5,10 +5,69 @@
   plus allowlist normalization for field validation."
   (:require
     [clojure.set :as set]
+    [clojure.java.io :as io]
     [app.shared.frontend-config.discovery :as discovery]))
+
+(defn- read-models-edn-or-empty
+  "Read an EDN file if it exists; otherwise return {}.
+
+  We intentionally treat missing hierarchical source files as empty so callers
+  can support partial setups (e.g., no domain models yet) while still allowing
+  a single directory path to represent the canonical model inputs." 
+  [path]
+  (let [f (io/file path)]
+    (if (and f (.exists f))
+      (discovery/read-edn-file path)
+      {})))
+
+(defn- domain-subdirs
+  "Return a seq of domain subdirectory names under `<base>/domain/`.
+
+  Supports the optional layout:
+  - resources/db/domain/<domain-name>/models.edn"
+  [^java.io.File base-dir]
+  (let [domain-dir (io/file base-dir "domain")
+        files (when (and domain-dir (.exists domain-dir) (.isDirectory domain-dir))
+                (.listFiles domain-dir))]
+    (->> (or files [])
+      (filter (fn [^java.io.File f]
+                (and f (.isDirectory f))))
+      (map #(.getName ^java.io.File %))
+      (remove nil?)
+      sort)))
+
+(defn- read-hierarchical-models
+  "Read models.edn from a hierarchical `resources/db/` directory structure.
+
+  Sources (all optional):
+  - <base>/template/models.edn
+  - <base>/domain/models.edn
+  - <base>/domain/*/models.edn
+  - <base>/shared/models.edn
+
+  Merge order matches the migration pipeline (template → domain → shared)."
+  [^java.io.File base-dir]
+  (let [template-path (str (io/file base-dir "template" "models.edn"))
+        domain-direct-path (str (io/file base-dir "domain" "models.edn"))
+        shared-path (str (io/file base-dir "shared" "models.edn"))
+        template-data (read-models-edn-or-empty template-path)
+        domain-direct-data (read-models-edn-or-empty domain-direct-path)
+        domain-subdir-data (reduce
+                             (fn [acc domain-name]
+                               (let [p (str (io/file base-dir "domain" domain-name "models.edn"))]
+                                 (merge acc (read-models-edn-or-empty p))))
+                             {}
+                             (domain-subdirs base-dir))
+        domain-data (merge domain-direct-data domain-subdir-data)
+        shared-data (read-models-edn-or-empty shared-path)]
+    (merge template-data domain-data shared-data)))
 
 (defn models-index
   "Load resources/db/models.edn and return a normalized schema index.
+
+  `path` may be either:
+  - a file path to a consolidated models.edn (e.g. resources/db/models.edn)
+  - a directory path to a hierarchical models root (e.g. resources/db)
 
   Output:
   {:entities #{\"users\" ...}
@@ -18,7 +77,10 @@
              :raw-by-canonical {\"id\" \"id\" ...}}}}"
   ([] (models-index "resources/db/models.edn"))
   ([path]
-   (let [data (discovery/read-edn-file path)
+   (let [f (io/file path)
+         data (if (and f (.exists f) (.isDirectory f))
+                (read-hierarchical-models f)
+                (discovery/read-edn-file path))
          entities (keys data)
          entity->fields
          (reduce

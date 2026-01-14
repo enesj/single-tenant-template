@@ -14,11 +14,6 @@
   (fn [db _]
     (true? (get-in db (conj base-path :loading?)))))
 
-#_(rf/reg-sub
-    :expenses/payers-error
-    (fn [db _]
-      (get-in db (conj base-path :error))))
-
 (rf/reg-sub
   :expenses/payer
   (fn [db [_ payer-id]]

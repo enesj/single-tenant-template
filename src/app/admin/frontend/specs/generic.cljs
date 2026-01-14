@@ -14,6 +14,8 @@
     [app.admin.frontend.specs.form-components :as form-components]
     [app.admin.frontend.utils.vector-config :as vector-config]
     [app.shared.field-specs :as field-specs]
+    [app.shared.model-naming :as model-naming]
+    [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -415,15 +417,6 @@
     (get-in db [:domain :config :form-fields entity-keyword])
     editing?))
 
-;; Admin form entity specs subscription - uses form-fields.edn when available
-#_(rf/reg-sub
-    :admin/form-entity-specs-by-name
-    (fn [db [_ entity-name editing?]]
-      (or (generate-admin-form-entity-spec-from-db db entity-name editing?)
-          ;; Fallback to standard form entity specs from models-data
-        (when-let [md (:models-data db)]
-          (get (field-specs/form-entity-specs md) entity-name)))))
-
 ;; Override the template :form-entity-specs/by-name subscription for both admin + user routes.
 ;;
 ;; Admin routes:
@@ -438,9 +431,11 @@
 (rf/reg-sub
   :form-entity-specs/by-name
   (fn [db [_ entity-name editing?]]
-    (let [entity-name (->kw entity-name)
+    (let [entity-name (-> entity-name
+                        ->kw
+                        model-naming/db-keyword->app)
           editing? (boolean editing?)
-          route-name (get-in db [:current-route :data :name])
+          route-name (get-in db (paths/current-route-name))
           ;; Prefer explicit route context when available; otherwise infer from config presence.
           ;; This keeps non-router contexts (notably Node tests) working as expected.
           admin-route? (cond

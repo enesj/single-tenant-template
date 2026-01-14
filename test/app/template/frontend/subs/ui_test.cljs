@@ -146,6 +146,31 @@
             :notes false}
           @(rf/subscribe [::ui-subs/visible-columns :expenses])))))
 
+(deftest visible-columns-normalizes-snake-case-entity-id-test
+  (testing "visible-columns normalizes snake_case entity identifiers to kebab-case"
+    (reset-db!
+      {:domain {:config {:table-columns {:price-observations {:available-columns [:a :b]
+                                                              :default-visible-columns [:a]}}}}
+       :ui {}})
+    (let [kebab @(rf/subscribe [::ui-subs/visible-columns :price-observations])
+          snake-kw @(rf/subscribe [::ui-subs/visible-columns :price_observations])
+          snake-str @(rf/subscribe [::ui-subs/visible-columns "price_observations"])]
+      (is (= kebab snake-kw))
+      (is (= kebab snake-str)))))
+
+(deftest entity-display-settings-normalizes-snake-case-entity-id-test
+  (testing "entity-display-settings normalizes snake_case entity identifiers to kebab-case"
+    (reset-db!
+      {:domain {:config {:entities {:price-observations {:display-settings {:show-edit? false}}}
+                         :view-options {}}}
+       :ui {}})
+    (let [kebab @(rf/subscribe [::ui-subs/entity-display-settings :price-observations])
+          snake-kw @(rf/subscribe [::ui-subs/entity-display-settings :price_observations])
+          snake-str @(rf/subscribe [::ui-subs/entity-display-settings "price_observations"])]
+      (is (= kebab snake-kw))
+      (is (= kebab snake-str))
+      (is (= false (:show-edit? kebab))))))
+
 (deftest filterable-fields-vector-config-test
   (testing "filterable-fields reads from app-db config"
     ;; Set up app-db with table-columns config

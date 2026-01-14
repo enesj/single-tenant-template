@@ -97,13 +97,6 @@
                  (and (= mode :edit) (nil? selected-entity))
                  (assoc-in [:admin :unified-settings :selected-entity] default-entity)))})))
 
-#_(rf/reg-event-fx
-  ::toggle-mode
-  (fn [{:keys [db]} _]
-    (let [current-mode (get-in db [:admin :unified-settings :mode] :view)
-          new-mode (if (= current-mode :view) :edit :view)]
-      {:dispatch [::set-mode new-mode]})))
-
 ;; =============================================================================
 ;; Scope Switching
 ;; =============================================================================
@@ -255,12 +248,3 @@
   ::user-view-options
   (fn [db _]
     (get-in db [:admin :user-settings :draft :view-options] {})))
-
-;; All configs for overview mode
-#_(rf/reg-sub
-  ::overview-configs
-  :<- [::admin-view-options]
-  :<- [::user-view-options]
-  (fn [[admin-config user-config] _]
-    {:admin admin-config
-     :user user-config}))

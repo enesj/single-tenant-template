@@ -18,40 +18,44 @@
    Events read from both paths during migration, write to new path only."
   (:require
     [clojure.string]
+    [app.shared.model-naming :as model-naming]
+    [app.template.frontend.db.paths :as paths]
     [app.template.frontend.interceptors.persistence :as persistence]
     [re-frame.core :as rf]))
 
 (rf/reg-sub
   ::filterable-fields
   (fn [db [_ entity-key]]
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)]
     ;; Read from new path first, fall back to legacy path
-    (or (get-in db [:ui :entity-prefs entity-key :filters :fields])
-      (get-in db [:ui :entity-configs entity-key :filterable-fields])
-      {})))
+    (or (get-in db (paths/entity-prefs-filters-fields entity-key))
+      (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
+      {}))))
 
 (rf/reg-sub
   ::table-width
   (fn [db [_ entity-key]]
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)]
     ;; Read from new path first, fall back to legacy path
-    (or (get-in db [:ui :entity-prefs entity-key :columns :width])
-      (get-in db [:ui :entity-configs entity-key :table-width])
-      2800)))
+    (or (get-in db (paths/entity-prefs-columns-width entity-key))
+      (get-in db (conj (paths/entity-display-settings entity-key) :table-width))
+      2800))))
 
 (rf/reg-event-db
   ::toggle-field-filtering
   [persistence/persist-entity-prefs]
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
-      (let [entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
-            field-key (if (keyword? field-name) field-name (keyword field-name))
+      (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            field-key (model-naming/ensure-app-keyword field-name)
             ;; Read from new path first, fall back to legacy
-            current-map (or (get-in db [:ui :entity-prefs entity-key :filters :fields])
-                          (get-in db [:ui :entity-configs entity-key :filterable-fields])
+            current-map (or (get-in db (paths/entity-prefs-filters-fields entity-key))
+                          (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
                           {})
             current-setting (get current-map field-key true)
             updated-map (assoc current-map field-key (not current-setting))]
         ;; Write to new path only
-        (assoc-in db [:ui :entity-prefs entity-key :filters :fields] updated-map))
+        (assoc-in db (paths/entity-prefs-filters-fields entity-key) updated-map))
       db)))
 
 (rf/reg-event-db
@@ -59,9 +63,9 @@
   [persistence/persist-entity-prefs]
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
-      (let [entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
-            field-key (if (keyword? field-name) field-name (keyword field-name))
-            route-name (get-in db [:current-route :data :name])
+      (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            field-key (model-naming/ensure-app-keyword field-name)
+            route-name (get-in db (paths/current-route-name))
             admin-route? (and route-name
                            (clojure.string/starts-with? (name route-name) "admin"))
             entity-view-options (if admin-route?
@@ -70,28 +74,23 @@
                                    (get-in db [:admin :settings :view-options entity-key]))
                                  (get-in db [:domain :config :view-options entity-key]))
             locked-cols (:column-locks entity-view-options)
-            locked? (and (map? locked-cols) (contains? locked-cols field-key))
+              locked? (and (map? locked-cols)
+                        (contains? (into #{} (keep model-naming/ensure-app-keyword (keys locked-cols))) field-key))
             table-config (if admin-route?
                            (get-in db [:admin :config :table-columns entity-key])
                            (get-in db [:domain :config :table-columns entity-key]))
-            always-visible? (contains?
-                             (into #{} (map (fn [k]
-                                              (cond
-                                                (keyword? k) k
-                                                (string? k) (keyword k)
-                                                :else (keyword (str k)))))
-                               (or (:always-visible table-config) []))
-                             field-key)
+              always-visible? (contains? (into #{} (keep model-naming/ensure-app-keyword (or (:always-visible table-config) [])))
+                               field-key)
             ;; Read from new path first, fall back to legacy
-            current-map (or (get-in db [:ui :entity-prefs entity-key :columns :visible])
-                          (get-in db [:ui :entity-configs entity-key :visible-columns])
+            current-map (or (get-in db (paths/entity-prefs-columns-visible entity-key))
+                          (get-in db (conj (paths/entity-display-settings entity-key) :visible-columns))
                           {})
             current-setting (get current-map field-key true)
             updated-map (assoc current-map field-key (not current-setting))]
         (if (or locked? always-visible?)
           db
           ;; Write to new path only
-          (assoc-in db [:ui :entity-prefs entity-key :columns :visible] updated-map)))
+          (assoc-in db (paths/entity-prefs-columns-visible entity-key) updated-map)))
       db)))
 
 (rf/reg-event-db
@@ -99,8 +98,8 @@
   [persistence/persist-entity-prefs]
   (fn [db [_ entity-name width]]
     (if (and entity-name width)
-      (let [entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
+      (let [entity-key (model-naming/ensure-app-keyword entity-name)
             width-num (if (string? width) (js/parseInt width) width)]
         ;; Write to new path only
-        (assoc-in db [:ui :entity-prefs entity-key :columns :width] width-num))
+        (assoc-in db (paths/entity-prefs-columns-width entity-key) width-num))
       db)))

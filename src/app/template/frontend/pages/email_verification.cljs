@@ -194,15 +194,6 @@
   (fn [db _]
     (assoc-in db [:auth :verification-email-sent-modal] false)))
 
-#_(rf/reg-event-fx
-  :auth/fetch-verification-status
-  (fn [_ _]
-    {:http-xhrio {:method :get
-                  :uri "/api/v1/auth/verification-status"
-                  :response-format (ajax/json-response-format {:keywords? true})
-                  :on-success [:auth/verification-status-loaded]
-                  :on-failure [:auth/verification-status-failed]}}))
-
 (rf/reg-event-db
   :auth/verification-status-loaded
   (fn [db [_ status]]
@@ -231,8 +222,3 @@
   :auth/verification-email-sent-modal
   (fn [db _]
     (get-in db [:auth :verification-email-sent-modal] false)))
-
-#_(rf/reg-sub
-  :auth/verification-error
-  (fn [db _]
-    (get-in db [:auth :verification-error])))

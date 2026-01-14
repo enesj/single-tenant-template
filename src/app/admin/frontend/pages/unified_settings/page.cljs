@@ -206,6 +206,8 @@
 
         ;; Admin config
         admin-config (use-subscribe [::unified-events/admin-view-options])
+        admin-scope-entities (defs/entities-for-scope :admin)
+        admin-config-scoped (select-keys (or admin-config {}) admin-scope-entities)
         admin-form-fields (use-subscribe [::admin-settings-events/form-fields])
         admin-table-columns (use-subscribe [::admin-settings-events/table-columns])
         admin-tab (use-subscribe [::admin-settings-events/config-tab])
@@ -221,8 +223,7 @@
 
         ;; Available entities for current scope (union of configured + known groups)
         available-entities (case scope
-                             :admin (set/union (defs/entities-for-scope :admin)
-                                      (set (keys (or admin-config {}))))
+                             :admin admin-scope-entities
                              :user (set/union (defs/entities-for-scope :user)
                                      (set (keys (or (get user-draft :view-options) {}))))
                              (defs/entities-for-scope page-scope))
@@ -281,17 +282,17 @@
           {:mode mode
            :scope scope
            :selected-entity selected-entity
-           :admin-config-entities (keys admin-config)})
+           :admin-config-entities (keys admin-config-scoped)})
         (if (= mode :view)
           ($ view-mode/view-mode-content
             {:page-scope page-scope
-             :admin-config admin-config
+             :admin-config admin-config-scoped
              :user-config (get user-draft :view-options {})
              :user-draft user-draft})
           ($ edit-mode-content
             {:scope scope
              :selected-entity selected-entity
-             :admin-config admin-config
+             :admin-config admin-config-scoped
              :admin-form-fields admin-form-fields
              :admin-table-columns admin-table-columns
              :user-draft user-draft

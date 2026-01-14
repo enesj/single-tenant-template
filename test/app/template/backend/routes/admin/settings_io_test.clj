@@ -1,5 +1,6 @@
 (ns app.template.backend.routes.admin.settings-io-test
   (:require
+    [app.domain.backend.registry :as domain-registry]
     [app.template.backend.routes.admin.settings-io :as settings-io]
     [app.shared.specs.form-fields :as form-fields-spec]
     [app.shared.specs.table-columns :as table-columns-spec]
@@ -27,7 +28,7 @@
       (write-edn! admin-path {:receipts {:display-locks {:show-edit? true}}})
       (write-edn! domain-path {:receipts {:display-locks {:show-edit? false}}})
       (clojure.core/with-redefs-fn {#'settings-io/view-options-path admin-path
-                                    #'settings-io/domain-admin-config-paths [{:view-options domain-path}]
+                                    #'domain-registry/get-admin-ui-config-paths (constantly [{:view-options domain-path}])
                                     #'view-options-spec/validate-view-options-strict (constantly {:valid? true})}
         (fn []
           (is (= true (get-in (settings-io/read-view-options)
@@ -41,7 +42,7 @@
       (write-edn! admin-path {:receipts {:create [:admin]}})
       (write-edn! domain-path {:receipts {:create [:domain]}})
       (clojure.core/with-redefs-fn {#'settings-io/form-fields-path admin-path
-                                    #'settings-io/domain-admin-config-paths [{:form-fields domain-path}]
+                                    #'domain-registry/get-admin-ui-config-paths (constantly [{:form-fields domain-path}])
                                     #'form-fields-spec/validate-form-fields-strict (constantly {:valid? true})}
         (fn []
           (is (= [:admin] (get-in (settings-io/read-form-fields) [:receipts :create]))))))))
@@ -54,7 +55,7 @@
       (write-edn! admin-path {:receipts {:available-columns [:id]}})
       (write-edn! domain-path {:receipts {:available-columns [:domain-id]}})
       (clojure.core/with-redefs-fn {#'settings-io/table-columns-path admin-path
-                                    #'settings-io/domain-admin-config-paths [{:table-columns domain-path}]
+                                    #'domain-registry/get-admin-ui-config-paths (constantly [{:table-columns domain-path}])
                                     #'table-columns-spec/validate-table-columns-strict (constantly {:valid? true})}
         (fn []
           (is (= [:id] (get-in (settings-io/read-table-columns)

@@ -76,6 +76,8 @@
         ;; Vector-config is only enabled once admin config is loaded.
         ;; We still use the unified visible-columns subscription underneath so policy defaults/locks apply.
         admin-config-loaded? (use-subscribe [:admin/config-loaded?])
+        ;; Domain/template config loaded? (for user routes like /expenses/*)
+        template-config-loaded? (use-subscribe [::ui-subs/template-config-loaded?])
         vector-mode? (and admin-config-loaded?
                        (column-config/vector-config? entity-kw))
         visible-columns-raw (use-subscribe (column-config/visible-columns-source vector-mode? entity-kw))
@@ -87,17 +89,17 @@
         ;; Keep form-entity-spec for the add/edit form only. Table rendering
         ;; uses the provided entity-spec (vector-config) exclusively.
         form-entity-spec (use-subscribe [:form-entity-specs/by-name (keyword entity-name)])
-        configured-per-page (let [raw (or per-page (:per-page display-settings))
-                parsed (cond
-                   (number? raw) raw
-                   (string? raw) (js/parseInt raw 10)
-                   :else nil)]
-                  (when (and (number? parsed) (pos? parsed)) parsed))
+        configured-per-page (let [raw (or per-page (:per-page merged-display-settings))
+                                  parsed (cond
+                                           (number? raw) raw
+                                           (string? raw) (js/parseInt raw 10)
+                                           :else nil)]
+                              (when (and (number? parsed) (pos? parsed)) parsed))
         existing-per-page (or (:per-page ui-state)
-                  (get-in ui-state [:pagination :per-page]))
+                            (get-in ui-state [:pagination :per-page]))
         effective-per-page (or existing-per-page
-                 configured-per-page
-                 10)
+                             configured-per-page
+                             10)
         {:keys [show-highlights?]} merged-display-settings
         ;; Subscribe to table width configuration for header alignment
         table-width (use-subscribe [::settings-events/table-width (some-> entity-name keyword)])
@@ -139,13 +141,18 @@
       [entity-name])
 
     ;; Seed per-page once per entity when the list has no existing per-page.
-    ;; This makes entities.edn (:display-settings {:per-page ...}) actually work.
+    ;; Wait until the relevant config is loaded so we don't lock in fallback defaults (e.g., 25).
     (use-effect
       (fn []
-        (when (and configured-per-page (nil? existing-per-page))
-          (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page]))
+        (let [legacy-default? (or (nil? existing-per-page)
+                                   (= existing-per-page 10)
+                                   (= existing-per-page 25))]
+          (when (and configured-per-page legacy-default?
+                  ;; On admin routes, admin-config-loaded? gates; on user routes, template-config-loaded? gates.
+                  (or admin-config-loaded? template-config-loaded?))
+            (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page])))
         (fn [] nil))
-      [entity-name configured-per-page existing-per-page])
+      [entity-name configured-per-page existing-per-page admin-config-loaded? template-config-loaded?])
 
     ;; Sync inline filter value with active filters when they change
     (use-effect
@@ -388,7 +395,7 @@
                        ;; otherwise fall back to the modal-mode handler when using custom add forms.
                        :on-add-click (or (:on-add-click props)
                                        (when (and use-modal-forms? has-custom-add-form?)
-                                         handle-add-click))}) 
+                                         handle-add-click))})
 
                     ($ :div {:class "ds-divider"})                    ;; Divider after header
                     ($ table
@@ -407,7 +414,7 @@
                          ;; Pass rows per page props to table for settings panel
                        :per-page effective-per-page
                        :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])
-                         :rows-per-page-options [5 10 20 25 50 100]})
+                       :rows-per-page-options [5 10 20 25 50 100]})
                       ;; Display pagination controls within same container as table
                       ;; Check both pagination display setting and whether there are multiple pages
                     (when (and (get merged-display-settings :show-pagination? true)

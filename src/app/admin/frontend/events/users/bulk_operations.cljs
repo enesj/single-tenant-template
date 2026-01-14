@@ -10,18 +10,6 @@
 ;; Bulk Update User Status Events
 ;; ============================================================================
 
-#_(rf/reg-event-fx
-  :admin/bulk-update-user-status
-  (fn [{:keys [db]} [_ user-ids new-status]]
-    (utils/log-user-operation "Bulk updating user status" (count user-ids) "users to" new-status)
-    {:db (state-utils/create-loading-state db :admin/bulk-updating-users :admin/bulk-update-error)
-     :http-xhrio (admin-http/admin-request
-                   {:method :put
-                    :uri "/admin/api/users/actions/bulk-status"
-                    :params {:user-ids user-ids :status new-status}
-                    :on-success [:admin/bulk-update-user-status-success user-ids new-status]
-                    :on-failure [:admin/bulk-update-user-status-failure]})}))
-
 (rf/reg-event-fx
   :admin/bulk-update-user-status-success
   (fn [{:keys [db]} [_ user-ids new-status _response]]
@@ -46,18 +34,6 @@
 ;; Bulk Update User Role Events
 ;; ============================================================================
 
-#_(rf/reg-event-fx
-  :admin/bulk-update-user-role
-  (fn [{:keys [db]} [_ user-ids new-role]]
-    (utils/log-user-operation "Bulk updating user role" (count user-ids) "users to" new-role)
-    {:db (state-utils/create-loading-state db :admin/bulk-updating-users :admin/bulk-update-error)
-     :http-xhrio (admin-http/admin-request
-                   {:method :put
-                    :uri "/admin/api/users/actions/bulk-role"
-                    :params {:user-ids user-ids :role new-role}
-                    :on-success [:admin/bulk-update-user-role-success user-ids new-role]
-                    :on-failure [:admin/bulk-update-user-role-failure]})}))
-
 (rf/reg-event-fx
   :admin/bulk-update-user-role-success
   (fn [{:keys [db]} [_ user-ids new-role _response]]
@@ -81,17 +57,6 @@
 ;; ============================================================================
 ;; Export Users Events
 ;; ============================================================================
-
-#_(rf/reg-event-fx
-  :admin/export-users
-  (fn [{:keys [db]} [_ user-ids]]
-    (utils/log-user-operation "Exporting users" (count user-ids) "users")
-    {:db (state-utils/create-loading-state db :admin/exporting-users :admin/export-error)
-     :http-xhrio (admin-http/admin-post
-                   {:uri "/admin/api/users/actions/export"
-                    :params {:user-ids (or user-ids [])}
-                    :on-success [:admin/export-users-success]
-                    :on-failure [:admin/export-users-failure]})}))
 
 (rf/reg-event-fx
   :admin/export-users-success

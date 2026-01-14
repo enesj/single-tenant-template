@@ -34,7 +34,7 @@
    :show-filtering? true,
    :show-batch-edit? true,
    :show-batch-delete? true},
-  :display-defaults {}},
+  :display-defaults {:per-page 100}},
  :price-observations
  {:display-locks
   {:show-delete? false,
@@ -54,7 +54,7 @@
    :show-select? true,
    :show-add-button? false,
    :show-batch-edit? false},
-  :display-defaults {:show-batch-delete? true}},
+  :display-defaults {:show-batch-delete? true, :per-page 50}},
  :receipts
  {:display-locks
   {:show-select? true,
@@ -79,7 +79,8 @@
    :show-pagination? true,
    :show-filtering? true}},
  :users
- {:display-defaults {:show-add-button? true, :show-edit? true},
+ {:display-defaults
+  {:show-add-button? true, :show-edit? true, :per-page 25},
   :display-locks {:show-batch-edit? true},
   :column-defaults {},
   :column-locks {:full-name true}}}

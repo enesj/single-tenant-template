@@ -32,7 +32,7 @@
   (into [:enum] display-toggle-keys))
 
 (def DisplayTogglesMap
-  "Schema for a map of display toggles (all optional booleans)."
+  "Schema for a map of display toggles (all optional booleans, plus per-page integer)."
   [:map {:closed false}
    [:show-timestamps? {:optional true} :boolean]
    [:show-edit? {:optional true} :boolean]
@@ -43,7 +43,8 @@
    [:show-pagination? {:optional true} :boolean]
    [:show-add-button? {:optional true} :boolean]
    [:show-batch-edit? {:optional true} :boolean]
-   [:show-batch-delete? {:optional true} :boolean]])
+   [:show-batch-delete? {:optional true} :boolean]
+   [:per-page {:optional true} [:int {:min 1 :max 1000}]]])
 
 ;; =============================================================================
 ;; Column Visibility Policy (defaults/locks)
@@ -111,9 +112,9 @@
    [:display-locks {:optional true} DisplayTogglesMap]
 
     ;; Column visibility policy (defaults + locks)
-    [:column-defaults {:optional true} ColumnVisibilityMap]
-    [:column-locks {:optional true} ColumnVisibilityMap]
-   
+   [:column-defaults {:optional true} ColumnVisibilityMap]
+   [:column-locks {:optional true} ColumnVisibilityMap]
+
    ;; Legacy schema - flat display toggles at top level
    ;; These are treated as locks when present
    [:show-timestamps? {:optional true} :boolean]
@@ -126,7 +127,7 @@
    [:show-add-button? {:optional true} :boolean]
    [:show-batch-edit? {:optional true} :boolean]
    [:show-batch-delete? {:optional true} :boolean]
-   
+
    ;; Non-display view options
    [:search-fields {:optional true} [:vector :string]]
    [:filters {:optional true} FiltersMap]
@@ -220,14 +221,14 @@
       ;; Schema validation failed
       (not (:valid? schema-result))
       schema-result
-      
+
       ;; Consistency check found issues
       consistency-result
       {:valid? false
        :errors [(str "Schema consistency issues: " (:warnings consistency-result))]
        :warnings (:warnings consistency-result)
        :data data}
-      
+
       ;; All good
       :else
       schema-result)))

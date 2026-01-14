@@ -9,11 +9,6 @@
   (fn [db _]
     (get-in db (conj base-path :items))))
 
-#_(rf/reg-sub
-  :expenses/entries-loading?
-  (fn [db _]
-    (true? (get-in db (conj base-path :loading?)))))
-
 (rf/reg-sub
   :expenses/entries-error
   (fn [db _]
@@ -33,13 +28,3 @@
   :expenses/form-loading?
   (fn [db _]
     (true? (get-in db (conj form-path :loading?)))))
-
-#_(rf/reg-sub
-  :expenses/form-error
-  (fn [db _]
-    (get-in db (conj form-path :error))))
-
-#_(rf/reg-sub
-  :expenses/form-last-created
-  (fn [db _]
-    (get-in db (conj form-path :last-created))))

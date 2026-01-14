@@ -7,7 +7,8 @@
      - :admin-api - fn (fn [db service-container] reitit-routes) for admin API
      - :user-api - fn (fn [db wrap-auth-mw app-config] reitit-routes) for user API
    - :ui-config
-     - :user - map with paths to domain-owned UI config EDN files
+     - :admin - map with paths to domain-owned ADMIN UI config EDN files
+     - :user - map with paths to domain-owned USER UI config EDN files
    - :redirects
      - :post-login-path - default redirect after OAuth login
    - :spa-routes - vector of SPA paths to serve index.html
@@ -27,11 +28,15 @@
     :user-api (fn [db wrap-user-auth app-config]
                 (expenses-user-routes/routes db wrap-user-auth app-config))}
    :ui-config
-   {:user {:root-dir "src/app/domain/frontend/expenses/config"
-           :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
-                   :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
-                   :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
-                   :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
+    {:admin {:root-dir "src/app/domain/frontend/expenses/admin/config"
+       :paths {:view-options "src/app/domain/frontend/expenses/admin/config/view-options.edn"
+         :form-fields "src/app/domain/frontend/expenses/admin/config/form-fields.edn"
+         :table-columns "src/app/domain/frontend/expenses/admin/config/table-columns.edn"}}
+     :user {:root-dir "src/app/domain/frontend/expenses/config"
+      :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
+        :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
+        :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
+        :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
    :redirects
    {:post-login-path "/expenses"}
    :spa-routes
@@ -95,6 +100,36 @@
   (into {}
     (map (fn [manifest]
            [(:id manifest) (get-in manifest [:ui-config :user :paths])]))
+    enabled-domains))
+
+(defn primary-user-ui-config-paths
+  "Return user-facing UI config paths for the primary domain.
+
+   This is a backwards-compat helper for call sites that still treat domain UI
+   config as a single flat structure (single-domain setups).
+
+   When multiple domains are enabled, this returns the first domain's paths
+   (treating it as the primary domain).
+
+   Returns nil when no domains are enabled."
+  []
+  (let [all-paths (get-ui-config-paths)]
+    (when (seq all-paths)
+      (val (first all-paths)))))
+
+(defn get-admin-ui-config-paths
+  "Get the ADMIN UI config path maps for all enabled domains.
+
+   This is used by admin settings I/O to merge domain-provided admin defaults
+   (e.g. domain-owned admin view-options/table-columns/form-fields) with the
+   template/admin core settings.
+
+     Returns a vector of maps like:
+     [{:view-options <path> :form-fields <path> :table-columns <path>} ...]"
+  []
+  (into []
+    (keep (fn [manifest]
+            (get-in manifest [:ui-config :admin :paths])))
     enabled-domains))
 
 (defn get-post-login-path

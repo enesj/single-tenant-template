@@ -202,14 +202,6 @@
 ;; Batch Actions UI
 ;; =============================================================================
 
-#_(rf/reg-event-db
-  :admin/show-batch-login-event-actions
-  (fn [db [_ selected-ids]]
-    (log/info "Showing batch login event actions for:" (count selected-ids) "events")
-    (-> db
-      (assoc-in [:admin :login-events :batch-actions :visible?] true)
-      (assoc-in [:admin :login-events :batch-actions :selected-ids] selected-ids))))
-
 (rf/reg-event-db
   :admin/hide-batch-login-event-actions
   (fn [db [_]]

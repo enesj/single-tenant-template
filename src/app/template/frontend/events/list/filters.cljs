@@ -26,7 +26,7 @@
             field-key (if (keyword? field-id) field-id (keyword field-id))
 
             ;; Get entity config to access field definitions
-            entity-config (get-in db [:ui :entity-configs entity-type])
+            entity-config (get-in db (paths/entity-display-settings entity-type))
             field-defs (:fields entity-config)
             field-def (first (filter #(= (:id %) (name field-key)) field-defs))
             input-type (get field-def :input-type)
@@ -83,7 +83,7 @@
                            value)
 
             ;; Update filters map by adding/updating this field's filter
-            current-filters (get-in db (conj (paths/list-ui-state entity-type) :filters) {})
+            current-filters (get-in db (paths/list-filters entity-type) {})
             existing (get current-filters field-key)
 
             ;; Helper to normalize filter value for equality checks
@@ -116,9 +116,7 @@
 
             updated-db (if (identical? updated-filters current-filters)
                          db
-                         (assoc-in db
-                           (conj (paths/list-ui-state entity-type) :filters)
-                           updated-filters))]
+                         (assoc-in db (paths/list-filters entity-type) updated-filters))]
         ;; Only close modal if explicitly NOT keeping it open
         (if should-keep-open?
           updated-db
@@ -134,9 +132,9 @@
       (if field-id
         ;; Clear specific field filter
         (let [field-key (if (keyword? field-id) field-id (keyword field-id))
-              current-filters (get-in db (conj (paths/list-ui-state entity-type) :filters) {})
+              current-filters (get-in db (paths/list-filters entity-type) {})
               updated-filters (dissoc current-filters field-key)]
-          (assoc-in db (conj (paths/list-ui-state entity-type) :filters) updated-filters))
+          (assoc-in db (paths/list-filters entity-type) updated-filters))
         ;; Clear all filters - when field-id is nil
         (let [updated-db (update-in db
                            (paths/list-ui-state entity-type)

@@ -7,15 +7,6 @@
 ;; Draft editing: form-fields config
 ;; =============================================================================
 
-#_(rf/reg-event-db
-    :app.admin.frontend.events.user-settings/set-form-field-list-draft
-    (fn [db [_ entity field-type fields]]
-      (let [entity-kw (u/normalize-kw entity)
-            field-type-kw (u/normalize-kw field-type)]
-        (if (or (nil? entity-kw) (nil? field-type-kw))
-          db
-          (assoc-in db [:admin :user-settings :draft :form-fields entity-kw field-type-kw] (vec fields))))))
-
 (rf/reg-event-db
   :app.admin.frontend.events.user-settings/toggle-form-field-draft
   (fn [db [_ entity field-type field-name]]

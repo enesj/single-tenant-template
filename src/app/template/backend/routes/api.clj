@@ -58,7 +58,7 @@
   (let [all-paths (domain-registry/get-ui-config-paths)]
     (if (= 1 (count all-paths))
       ;; Single domain - return flat structure for backwards compatibility
-      (let [[_domain-id paths] (first all-paths)]
+      (let [paths (domain-registry/primary-user-ui-config-paths)]
         (into {}
           (map (fn [[k path]]
                  [k (safe-read-edn-file k path)]))

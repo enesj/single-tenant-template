@@ -4,31 +4,6 @@
     [app.template.frontend.components.button :refer [button]]
     [uix.core :refer [$ defui]]))
 
-;; ============================================================================
-;; Card Layout Components
-;; ============================================================================
-
-#_(defui glassmorphism-wrapper
-    "Reusable glassmorphism card wrapper with gradient background and backdrop blur.
-
-   Props:
-   - :children - Content to wrap
-   - :gradient-from - Starting gradient color (default: 'from-transparent')
-   - :gradient-via - Middle gradient color (default: 'via-primary/10')
-   - :gradient-to - End gradient color (default: 'to-transparent')
-   - :container-class - Additional classes for outer container
-   - :card-class - Additional classes for the glassmorphism card"
-    [{:keys [children gradient-from gradient-via gradient-to container-class card-class]
-      :or {gradient-from "from-transparent"
-           gradient-via "via-primary/10"
-           gradient-to "to-transparent"
-           container-class ""
-           card-class ""}}]
-    ($ :div {:class (str "relative " container-class)}
-      ($ :div {:class (str "absolute inset-0 bg-gradient-to-r " gradient-from " " gradient-via " " gradient-to " rounded-3xl")})
-      ($ :div {:class (str "relative bg-base-100/30 backdrop-blur-sm rounded-3xl p-8 border border-base-300/50 shadow-xl " card-class)}
-        children)))
-
 (defui quick-actions-card
   "Reusable quick actions card with gradient styling and action buttons.
 
@@ -84,35 +59,6 @@
           ($ :span {:class "text-base-content/60"} (:label footer-stats))
           ($ :span {:class "text-base-content font-medium"} (:value footer-stats)))))))
 
-#_(defui overview-metrics-card
-    "Four-metric overview card with color-coded stats.
-   Enhanced to use template stats-card where appropriate.
-
-   Props:
-   - :title - Card title (default: 'Overview')
-   - :subtitle - Card subtitle
-   - :metrics - Vector of metric maps with :label, :value, :sub-value, :bg-color, :text-color, :sub-color
-   - :container-class - Additional classes for the container"
-    [{:keys [title subtitle metrics container-class]
-      :or {title "Overview"
-           metrics []
-           container-class ""}}]
-    ($ :div {:class (str "ds-card bg-base-100 shadow-xl p-6 " container-class)}
-      ($ :div {:class "mb-4"}
-        ($ :h3 {:class "text-lg font-semibold text-gray-900"} title)
-        (when subtitle
-          ($ :p {:class "text-sm text-gray-600"} subtitle)))
-
-      ($ :div {:class "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"}
-        (for [metric metrics]
-          ($ :div {:key (:label metric) :class (str (:bg-color metric "bg-gray-50") " p-4 rounded-lg")}
-            ($ :div {:class (str "text-2xl font-bold " (:text-color metric "text-gray-900"))}
-              (:value metric))
-            ($ :div {:class (str "text-sm " (:sub-text-color metric "text-gray-600"))} (:label metric))
-            (when (:sub-value metric)
-              ($ :div {:class (str "text-xs " (:sub-color metric "text-gray-500"))}
-                (:sub-value metric))))))))
-
 (defui chart-list-card
   "Consistent card wrapper for charts and lists with optional scrolling.
 
@@ -136,60 +82,3 @@
                       (when max-height max-height)
                       (when scroll-y "overflow-y-auto"))}
       children)))
-
-#_(defui performance-trends-card
-    "Performance trends card with frequency data and error rates.
-
-   Props:
-   - :title - Card title (default: 'Performance Trends')
-   - :subtitle - Card subtitle
-   - :frequency-data - Vector of frequency items with :key, :label, :value, :sub-value
-   - :frequency-title - Title for frequency section (default: 'Activity Frequency')
-   - :error-data - Vector of error items with :key, :label, :total, :errors, :error-threshold
-   - :error-title - Title for error section (default: 'Error Rates')
-   - :container-class - Additional classes for the container"
-    [{:keys [title subtitle frequency-data frequency-title error-data error-title container-class]
-      :or {title "Performance Trends"
-           frequency-title "Activity Frequency"
-           error-title "Error Rates"
-           container-class ""}}]
-    ($ chart-list-card
-      {:title title
-       :subtitle subtitle
-       :container-class container-class
-       :children
-       ($ :div {:class "space-y-4"}
-         ;; Frequency Section
-         (when (seq frequency-data)
-           ($ :div
-             ($ :h4 {:class "font-medium text-gray-900 mb-2"} frequency-title)
-             (if (empty? frequency-data)
-               ($ :p {:class "text-sm text-gray-500"} "No activity recorded")
-               ($ :div {:class "space-y-2"}
-                 (for [item frequency-data]
-                   ($ :div {:key (:key item) :class "flex items-center justify-between p-2 bg-gray-50 rounded"}
-                     ($ :div {:class "text-sm text-gray-600"} (:label item))
-                     ($ :div {:class "flex items-center space-x-4"}
-                       ($ :div {:class "text-sm font-medium"} (:value item))
-                       (when (:sub-value item)
-                         ($ :div {:class "text-xs text-gray-500"} (:sub-value item))))))))))
-
-         ;; Error Rates Section
-         (when (seq error-data)
-           ($ :div
-             ($ :h4 {:class "font-medium text-gray-900 mb-2"} error-title)
-             (if (empty? error-data)
-               ($ :p {:class "text-sm text-gray-500"} "No errors recorded")
-               ($ :div {:class "space-y-2"}
-                 (for [error error-data]
-                   (let [total (:total error 0)
-                         errors (:errors error 0)
-                         error-rate (if (pos? total) (* 100 (/ errors total)) 0)
-                         threshold (:error-threshold error 5)]
-                     ($ :div {:key (:key error) :class "flex items-center justify-between p-2 bg-gray-50 rounded"}
-                       ($ :div {:class "text-sm font-medium text-gray-900"} (:label error))
-                       ($ :div {:class "flex items-center space-x-4"}
-                         ($ :div {:class "text-sm"} (str total " calls"))
-                         ($ :div {:class (str "text-sm font-medium "
-                                           (if (> error-rate threshold) "text-red-600" "text-green-600"))}
-                           (str (.toFixed error-rate 1) "% errors")))))))))))}))

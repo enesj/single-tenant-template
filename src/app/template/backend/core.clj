@@ -29,9 +29,14 @@
 ;; Closeable Wrapper for Data Structures
 ;; ============================================================================
 
-(defrecord CloseableData [data]
+(defrecord CloseableData [data close-fn]
   java.io.Closeable
-  (close [_] nil)  ; No-op close for data structures
+  (close [_]
+    (when close-fn
+      (try
+        (close-fn)
+        (catch Exception e
+          (log/warn e "Error during CloseableData close")))))
 
   ;; Make it behave like the wrapped data for most operations
   clojure.lang.IDeref
@@ -39,8 +44,10 @@
 
 (defn closeable-data
   "Wrap data in a closeable container"
-  [data]
-  (CloseableData. data))
+  ([data]
+   (CloseableData. data nil))
+  ([data close-fn]
+   (CloseableData. data close-fn)))
 
 ;; ============================================================================
 ;; Replacement Functions for Deleted Dependencies
@@ -141,8 +148,10 @@
    Now uses the DI container for proper lifecycle management."
   [database models-data config]
   (log/info "Creating service container using DI container...")
-  ;; Use the new DI-based service container and wrap it for closeable compatibility
-  (closeable-data (template-di/create-service-container config database models-data nil)))
+  ;; Use the new DI-based service container and wrap it for closeable compatibility.
+  ;; Ensure the system actually stops services when the system shuts down.
+  (let [services (template-di/create-service-container config database models-data nil)]
+    (closeable-data services #(template-di/stop-services! services))))
 
 (defn my-system [config-options]
   (fn [do-with-state]

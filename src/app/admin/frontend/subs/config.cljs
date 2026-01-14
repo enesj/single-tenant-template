@@ -24,14 +24,6 @@
       (get-in db [:admin :config :table-columns entity-name :default-visible-columns])
       [])))
 
-;; Check if a specific column is visible
-#_(rf/reg-sub
-  ::column-visible?
-  (fn [[_ entity-name _column-name]]
-    (rf/subscribe [::visible-columns entity-name]))
-  (fn [visible-columns [_ _ column-name]]
-    (some #{column-name} visible-columns)))
-
 ;; Get all columns for an entity (ordered)
 (rf/reg-sub
   ::all-columns
@@ -53,28 +45,6 @@
   ::column-metadata
   (fn [db [_ entity-name column-name]]
     (get-in db [:admin :config :table-columns entity-name :column-metadata column-name])))
-
-;; Get formatted column label
-#_(rf/reg-sub
-  ::column-label
-  (fn [[_ entity-name column-name]]
-    (rf/subscribe [::column-metadata entity-name column-name]))
-  (fn [metadata [_ _ column-name]]
-    (or (:label metadata)
-       ;; Auto-format column name if no label specified
-      (-> column-name
-        name
-        (str/replace #"[_-]" " ")
-        str/capitalize))))
-
-;; Check if column visibility has been customized
-#_(rf/reg-sub
-  ::columns-customized?
-  (fn [[_ entity-name]]
-    [(rf/subscribe [::visible-columns entity-name])
-     (rf/subscribe [::default-visible-columns entity-name])])
-  (fn [[visible default] _]
-    (not= visible default)))
 
 ;; =============================================================================
 ;; Legacy Compatibility (for existing components)
@@ -116,23 +86,6 @@
 ;; Column Statistics and Utilities
 ;; =============================================================================
 
-;; Count visible columns
-#_(rf/reg-sub
-  ::visible-column-count
-  (fn [[_ entity-name]]
-    (rf/subscribe [::visible-columns entity-name]))
-  (fn [visible-columns _]
-    (count visible-columns)))
-
-;; Count hidden columns
-#_(rf/reg-sub
-  ::hidden-column-count
-  (fn [[_ entity-name]]
-    [(rf/subscribe [::all-columns entity-name])
-     (rf/subscribe [::visible-columns entity-name])])
-  (fn [[all-columns visible-columns] _]
-    (- (count all-columns) (count visible-columns))))
-
 ;; =============================================================================
 ;; Configuration Loading State
 ;; =============================================================================
@@ -150,23 +103,6 @@
 ;; =============================================================================
 ;; Entity Specs (Simplified)
 ;; =============================================================================
-
-;; Generate entity specs dynamically from column config
-#_(rf/reg-sub
-  ::entity-spec
-  (fn [[_ entity-name]]
-    [(rf/subscribe [::all-columns entity-name])
-     (rf/subscribe [::entity-config entity-name])])
-  (fn [[all-columns entity-config] [_ entity-name]]
-    (when (and all-columns entity-config)
-      {:id (keyword entity-name)
-       :fields (mapv (fn [column-key]
-                       {:id column-key
-                        :label (or (get-in entity-config [:column-metadata column-key :label])
-                                 (-> column-key name (str/replace #"[_-]" " ") str/capitalize))
-                        :type (get-in entity-config [:column-metadata column-key :type] :text)})
-                 all-columns)
-       :vector-config entity-config})))
 
 ;; Removed legacy fixed proxies (:entity-specs/<entity>, :form-entity-specs/<entity>).
 ;; Admin pages should use [:admin/entity-specs-by-name <entity>] which is generated
@@ -189,14 +125,6 @@
     (rf/subscribe [::entity-config entity-name]))
   (fn [config _]
     (:sortable-columns config [])))
-
-;; Backward compatibility
-#_(rf/reg-sub
-  :admin/filterable-columns
-  (fn [[_ entity-keyword]]
-    (rf/subscribe [::filterable-columns entity-keyword]))
-  (fn [filterable-columns _]
-    filterable-columns))
 
 (rf/reg-sub
   :admin/sortable-columns

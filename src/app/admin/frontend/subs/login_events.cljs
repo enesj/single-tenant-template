@@ -12,17 +12,3 @@
   :admin/login-events-error
   (fn [db _]
     (get-in db [:admin :login-events :error])))
-
-;; Template compatibility aliases so use-entity-state can use :login-events
-
-#_(rf/reg-sub
-  :admin/login-events-logs-loading?
-  :<- [:admin/login-events-loading?]
-  (fn [loading? _]
-    loading?))
-
-#_(rf/reg-sub
-  :admin/login-events-logs-error
-  :<- [:admin/login-events-error]
-  (fn [error _]
-    error))

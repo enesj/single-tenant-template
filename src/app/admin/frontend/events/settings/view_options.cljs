@@ -65,8 +65,8 @@
 
 ;; new-state schema:
 ;; - {:kind :inherit}
-;; - {:kind :default :value boolean}
-;; - {:kind :lock :value boolean}
+;; - {:kind :default :value boolean|int}  (int for :per-page)
+;; - {:kind :lock :value boolean|int}     (int for :per-page)
 (rf/reg-event-db
   :app.admin.frontend.events.settings/set-display-setting-draft
   (fn [db [_ entity-name setting-key new-state]]
@@ -75,7 +75,11 @@
           kind (:kind new-state)
           value (:value new-state)
           defaults-path [:admin :settings :view-options entity-kw :display-defaults]
-          locks-path [:admin :settings :view-options entity-kw :display-locks]]
+          locks-path [:admin :settings :view-options entity-kw :display-locks]
+          ;; For :per-page, accept integer values; for other settings, accept booleans
+          valid-value? (if (= setting-kw :per-page)
+                         (and (integer? value) (pos? value))
+                         (boolean? value))]
       (cond
         (or (nil? entity-kw) (nil? setting-kw) (not (utils/display-setting-key? setting-kw)))
         db
@@ -85,13 +89,13 @@
           (update-in defaults-path (fnil dissoc {}) setting-kw)
           (update-in locks-path (fnil dissoc {}) setting-kw))
 
-        (and (= kind :default) (boolean? value))
+        (and (= kind :default) valid-value?)
         (-> db
           ;; A default only applies when not locked.
           (update-in locks-path (fnil dissoc {}) setting-kw)
           (assoc-in (conj defaults-path setting-kw) value))
 
-        (and (= kind :lock) (boolean? value))
+        (and (= kind :lock) valid-value?)
         (-> db
           ;; A lock supersedes any default.
           (update-in defaults-path (fnil dissoc {}) setting-kw)
@@ -295,28 +299,6 @@
 ;; Update Single View Option Setting
 ;; =============================================================================
 
-#_(rf/reg-event-fx
-    :app.admin.frontend.events.settings/update-entity-setting
-    (fn [{:keys [db]} [_ entity-name setting-key new-value]]
-      (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-            setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
-            display? (utils/display-setting-key? setting-kw)
-            base-path [:admin :settings :view-options entity-kw]
-            db' (cond
-                  display?
-                  (assoc-in db (conj base-path :display-locks setting-kw) new-value)
-
-                  :else
-                  (assoc-in db (conj base-path setting-kw) new-value))]
-        {:db (assoc-in db' [:admin :settings :saving?] true)
-         :http-xhrio (admin-http/admin-patch
-                       {:uri "/admin/api/settings/entity"
-                        :params {:entity-name (name entity-kw)
-                                 :setting-key (name setting-kw)
-                                 :setting-value new-value}
-                        :on-success [:app.admin.frontend.events.settings/update-setting-success entity-kw setting-kw new-value]
-                        :on-failure [:app.admin.frontend.events.settings/update-setting-failure entity-kw setting-kw]})})))
-
 (rf/reg-event-fx
   :app.admin.frontend.events.settings/update-setting-success
   (fn [{:keys [db]} [_ entity-kw setting-kw new-value _response]]
@@ -348,27 +330,6 @@
 ;; =============================================================================
 ;; Remove Setting (make user-configurable)
 ;; =============================================================================
-
-#_(rf/reg-event-fx
-    :app.admin.frontend.events.settings/remove-entity-setting
-    (fn [{:keys [db]} [_ entity-name setting-key]]
-      (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-            setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
-            display? (utils/display-setting-key? setting-kw)
-            base-path [:admin :settings :view-options entity-kw]
-            db' (cond
-                  display?
-                  (update-in db (conj base-path :display-locks) (fnil dissoc {}) setting-kw)
-
-                  :else
-                  (update-in db base-path dissoc setting-kw))]
-        {:db (assoc-in db' [:admin :settings :saving?] true)
-         :http-xhrio (admin-http/admin-delete
-                       {:uri "/admin/api/settings/entity"
-                        :params {:entity-name (name entity-kw)
-                                 :setting-key (name setting-kw)}
-                        :on-success [:app.admin.frontend.events.settings/remove-setting-success entity-kw setting-kw]
-                        :on-failure [:app.admin.frontend.events.settings/remove-setting-failure entity-kw setting-kw]})})))
 
 (rf/reg-event-fx
   :app.admin.frontend.events.settings/remove-setting-success

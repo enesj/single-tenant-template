@@ -39,23 +39,6 @@
       (log/warn "Failed to load user preferences:" e "for entity:" entity-keyword "admin-id:" admin-id)
       nil)))
 
-;; NOTE: Unused - preferences now persisted via ui-entity-prefs system
-#_(defn save-user-preferences!
-    "Save user preferences to localStorage"
-    [entity-keyword admin-id preferences]
-    (try
-      (when (and entity-keyword admin-id)
-        (let [entity-name (if (keyword? entity-keyword)
-                            (name entity-keyword)
-                            (str entity-keyword))
-              key (str "admin-table-prefs-" entity-name "-" admin-id)
-              json (.stringify js/JSON (clj->js preferences))]
-          (js/localStorage.setItem key json)
-          true))
-      (catch js/Error e
-        (log/error "Failed to save user preferences:" e "for entity:" entity-keyword "admin-id:" admin-id)
-        false)))
-
 (defn get-effective-column-config
   "Get effective column configuration with three-layer merge:
    1. Default config from files
@@ -84,26 +67,6 @@
      :always-visible (:always-visible default-config [])
      :column-config (:column-config default-config {})
      :computed-fields (:computed-fields default-config {})}))
-
-;; NOTE: Unused - toggle logic now handled via events in config.cljs
-#_(defn toggle-column-visibility
-    "Toggle column visibility and return updated config"
-    [current-config column-key always-visible]
-    (let [visible-columns (:visible-columns current-config)
-          always-visible-set (set always-visible)]
-
-      ;; Don't allow toggling always-visible columns
-      (if (contains? always-visible-set column-key)
-        (do
-          (log/warn "Cannot hide always-visible column:" column-key)
-          current-config)
-
-        ;; Toggle visibility
-        (let [currently-visible? (some #(= % column-key) visible-columns)
-              updated-visible (if currently-visible?
-                                (filterv #(not= % column-key) visible-columns)
-                                (conj visible-columns column-key))]
-          (assoc current-config :visible-columns updated-visible)))))
 
 (defn reorder-columns
   "Reorder columns based on drag and drop"

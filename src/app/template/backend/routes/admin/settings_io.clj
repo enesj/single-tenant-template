@@ -20,36 +20,24 @@
 (def ^:private form-fields-path "src/app/admin/frontend/config/form-fields.edn")
 (def ^:private table-columns-path "src/app/admin/frontend/config/table-columns.edn")
 
-;; Domain admin config paths - expenses entities for admin UI
-;; These are merged with the admin core config files above
-(def ^:private domain-admin-config-paths
-  [{:view-options "src/app/domain/frontend/expenses/admin/config/view-options.edn"
-    :form-fields "src/app/domain/frontend/expenses/admin/config/form-fields.edn"
-    :table-columns "src/app/domain/frontend/expenses/admin/config/table-columns.edn"}])
-
 (defn- read-domain-admin-configs
   "Read and merge all domain admin config files of a given type.
    config-key is one of :view-options, :form-fields, :table-columns"
   [config-key]
-  (reduce
-    (fn [acc domain-paths]
-      (merge acc (frontend-config-io/read-edn-or-empty (get domain-paths config-key)
-                   {:log-message "Failed to read domain admin config EDN"
-                    :log-context {:scope :admin-settings
-                                  :config config-key}})))
-    {}
-    domain-admin-config-paths))
+  (let [domain-admin-config-paths (domain-registry/get-admin-ui-config-paths)]
+    (reduce
+      (fn [acc domain-paths]
+        (merge acc (frontend-config-io/read-edn-or-empty (get domain-paths config-key)
+                     {:log-message "Failed to read domain admin config EDN"
+                      :log-context {:scope :admin-settings
+                                    :config config-key}})))
+      {}
+      domain-admin-config-paths)))
 
 ;; User-facing (domain-owned) UI config - paths come from domain registry.
-;; Helper to get the first domain's user config paths (for backwards compatibility).
-(defn- get-user-config-paths
-  "Get user config paths from the first enabled domain."
-  []
-  (let [all-paths (domain-registry/get-ui-config-paths)]
-    (if (= 1 (count all-paths))
-      (val (first all-paths))
-      ;; For multiple domains, return the first one (primary domain)
-      (val (first all-paths)))))
+;; Use domain-registry/primary-user-ui-config-paths for backwards compatibility.
+(defn- get-user-config-paths []
+  (domain-registry/primary-user-ui-config-paths))
 
 (defn- user-entities-path []
   (get (get-user-config-paths) :entities))

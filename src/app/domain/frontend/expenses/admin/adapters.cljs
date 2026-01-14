@@ -9,6 +9,11 @@
     app.domain.frontend.expenses.admin.form-components
     [app.domain.frontend.expenses.admin.adapters.ui-state :as ui-state]))
 
+  ;; Generic init helpers (preferred)
+  (def init-entity-adapter! ui-state/init-entity-adapter!)
+  (def entity-init-fns ui-state/entity-init-fns)
+  (def init-all-adapters! ui-state/init-all-adapters!)
+
 ;; Re-export adapter init functions
 (def init-expenses-adapter! ui-state/init-expenses-adapter!)
 (def init-receipts-adapter! ui-state/init-receipts-adapter!)

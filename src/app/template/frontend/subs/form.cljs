@@ -10,11 +10,6 @@
   (fn [db [_ form-id]]
     (get-in db (paths/form-errors form-id))))
 
-#_(rf/reg-sub
-  ::submitting?
-  (fn [db [_ form-id]]
-    (get-in db (paths/form-submitting? form-id))))
-
 (rf/reg-sub
   ::form-success
   (fn [db [_ form-id]]

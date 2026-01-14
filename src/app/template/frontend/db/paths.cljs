@@ -6,6 +6,11 @@
   []
   [:current-route])
 
+(defn current-route-name
+  "Returns [:current-route :data :name] path vector for the current route name."
+  []
+  [:current-route :data :name])
+
 (defn current-page
   "Returns [:ui :current-page] path vector for the current page in the UI state."
   []
@@ -38,25 +43,35 @@
   [:entities entity-type :metadata :error])
 
 (defn entity-last-updated
-  "Returns [:entities entity-type :metadata :last-updated] path vector for the last updated timestamp of a specific entity type."
+  "Returns [:entities entity-type :metadata :last-updated] path vector for the last-updated marker of a specific entity type."
   [entity-type]
   [:entities entity-type :metadata :last-updated])
 
 (defn entity-success
-  "Returns [:entities entity-type :metadata :success] path vector for success state of a specific entity type."
+  "Returns [:entities entity-type :metadata :success] path vector for the success state of a specific entity type."
   [entity-type]
   [:entities entity-type :metadata :success])
 
 ;; Form paths
-(defn form-data
-  "Returns [:forms entity-type :data] path vector for form data of a specific entity type."
+(defn form-values
+  "Returns [:forms entity-type :values] path vector for form values of a specific entity type."
   [entity-type]
-  [:forms entity-type :data])
+  [:forms entity-type :values])
+
+(defn form-data
+  "Returns the canonical form data path for an entity.
+
+  NOTE: `:values` is the canonical storage key (Fork-compatible). This helper is
+  kept as a compatibility alias for older code/tests that used `form-data`."
+  [entity-type]
+  (form-values entity-type))
 
 (defn form-field
-  "Returns [:forms entity-type :data field] path vector for a specific field in the form data of an entity type."
+  "Returns [:forms entity-type :values field] path vector for a single form field.
+
+  Compatibility alias for older code that used `:data` under forms." 
   [entity-type field]
-  [:forms entity-type :data field])
+  (conj (form-data entity-type) field))
 
 (defn form-errors
   "Returns [:forms entity-type :errors] path vector for form validation errors of a specific entity type."
@@ -83,15 +98,15 @@
   [entity-type]
   [:forms entity-type :dirty-fields])
 
-(defn form-server-errors-all
-  "Returns [:forms entity-type :server-errors] path vector for all server-side errors for a specific entity type form."
-  [entity-type]
-  [:forms entity-type :server-errors])
-
 (defn form-server-errors
   "Returns [:forms entity-type :server-errors field] path vector for server-side errors of a specific field in an entity type form."
   [entity-type field]
   [:forms entity-type :server-errors field])
+
+(defn form-server-errors-all
+  "Returns [:forms entity-type :server-errors] path vector for all server-side errors in an entity type form."
+  [entity-type]
+  [:forms entity-type :server-errors])
 
 (defn form-success-all
   "Returns [:forms entity-type :success] path vector for all success states in a specific entity type form."
@@ -120,9 +135,9 @@
   [:ui :lists entity-type :sort])
 
 (defn list-current-page
-  "Returns [:ui :lists entity-type :pagination :current-page] path vector for current page number of a list for a specific entity type."
+  "Returns [:ui :lists entity-type :current-page] path vector for current page number of a list for a specific entity type."
   [entity-type]
-  [:ui :lists entity-type :pagination :current-page])
+  [:ui :lists entity-type :current-page])
 
 (defn list-total-items
   "Returns [:ui :lists entity-type :total-items] path vector for total items count in a list for a specific entity type."
@@ -139,7 +154,43 @@
   [entity-type]
   [:ui :lists entity-type :selected-ids])
 
+(defn list-filters
+  "Returns [:ui :lists entity-type :filters] path vector for filter state of a list."
+  [entity-type]
+  [:ui :lists entity-type :filters])
+
 (defn entity-display-settings
   "Returns [:ui :entity-configs entity-name] path vector for the display settings of a specific entity."
   [entity-name]
   [:ui :entity-configs entity-name])
+
+(defn entity-prefs-display
+  "Returns [:ui :entity-prefs entity-name :display] path vector for display preferences."
+  [entity-name]
+  [:ui :entity-prefs entity-name :display])
+
+(defn entity-prefs-columns-visible
+  "Returns [:ui :entity-prefs entity-name :columns :visible] path vector for visible columns."
+  [entity-name]
+  [:ui :entity-prefs entity-name :columns :visible])
+
+(defn entity-prefs-columns-visible-order
+  "Returns [:ui :entity-prefs entity-name :columns :visible-order] path vector for column order."
+  [entity-name]
+  [:ui :entity-prefs entity-name :columns :visible-order])
+
+(defn entity-prefs-columns-width
+  "Returns [:ui :entity-prefs entity-name :columns :width] path vector for column width."
+  [entity-name]
+  [:ui :entity-prefs entity-name :columns :width])
+
+(defn entity-prefs-filters-fields
+  "Returns [:ui :entity-prefs entity-name :filters :fields] path vector for filterable fields."
+  [entity-name]
+  [:ui :entity-prefs entity-name :filters :fields])
+
+;; Entity fetch paths
+(defn entity-fetches
+  "Returns [:entity-fetches entity-type] path vector for in-flight entity fetch tracking."
+  [entity-type]
+  [:entity-fetches entity-type])

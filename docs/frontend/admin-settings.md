@@ -156,6 +156,10 @@ Settings writes are validated against Malli specs under `src/app/shared/specs/*`
 
 Frontend config EDNs are also validated against the consolidated DB schema in `resources/db/models.edn`.
 
+Note: the validation/sync tooling also accepts `--schema <path>` where `<path>` can be either:
+- a consolidated schema file (e.g. `resources/db/models.edn`), or
+- the hierarchical schema directory (e.g. `resources/db`), which merges `template/domain/shared` sources in-memory.
+
 - `bb validate-frontend-config` checks both **shape** (Malli) and **schema alignment** (entities/fields exist).
 - `bb sync-frontend-config` computes a patch plan to align configs with the DB schema.
   - Default is **dry-run** + **fail-on-mismatch** (no files written).

@@ -298,24 +298,6 @@
 
       {:db (assoc-in db [:admin :success-message] "Audit log exported successfully")})))
 
-#_(rf/reg-event-fx
-    :admin/export-selected-audit-logs
-    (fn [{:keys [db]} [_ audit-ids format]]
-      (let [token (or (get-in db [:admin :token])
-                    (.getItem js/localStorage "admin-token"))]
-        (log/info "Exporting selected audit logs, count:" (count audit-ids) "format:" format)
-
-        (if token
-          {:db (assoc-in db [:admin :audit :exporting?] true)
-           :http-xhrio {:method          :post
-                        :uri             "/admin/api/audit/export"
-                        :params          {:ids audit-ids :format format}
-                        :headers         (when token {"x-admin-token" token})
-                        :response-format (ajax/json-response-format {:keywords? true})
-                        :on-success      [:admin/audit-logs-exported format (count audit-ids)]
-                        :on-failure      [:admin/audit-logs-export-failed]}}
-          {:db (assoc-in db [:admin :audit :error] "Authentication required")}))))
-
 (rf/reg-event-fx
   :admin/export-all-audit-logs
   (fn [{:keys [db]} [_]]
@@ -365,10 +347,3 @@
 ;; ============================================================================
 ;; Sorting
 ;; ============================================================================
-
-#_(rf/reg-event-fx
-    :admin/audit-sort-by
-    (fn [_ [_ field direction]]
-      (log/info "Sorting audit logs by:" field direction)
-      (let [new-sort {:field field :direction direction}]
-        {:dispatch [:admin/load-audit-logs {:sort new-sort}]})))

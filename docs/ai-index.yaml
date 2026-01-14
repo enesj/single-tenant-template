@@ -7,6 +7,17 @@ namespaces:
   app.template.backend.routes:
     - docs/backend/http-api.md
     - docs/architecture/routing.md
+  app.domain.backend.expenses.routes.user-api:
+    - docs/backend/http-api.md
+    - docs/expenses/index.md
+  app.domain.backend.expenses.routes.receipts:
+    - docs/backend/http-api.md
+    - docs/expenses/index.md
+  app.domain.backend.expenses.handlers.user-expenses.settings:
+    - docs/backend/http-api.md
+    - docs/expenses/index.md
+  app.domain.backend.expenses.services.suppliers:
+    - docs/expenses/index.md
   app.template.backend.webserver:
     - docs/architecture/backend-runtime.md
   app.template.backend.middleware.security:

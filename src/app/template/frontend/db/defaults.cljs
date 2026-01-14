@@ -13,10 +13,12 @@
 (defn make-default-list-state
   []
   {:current-page 1
-   :per-page 10
+   ;; Start per-page unset so pages can seed from config defaults
+   :per-page nil
    :total-items 0
    :pagination {:current-page 1
-                :per-page 10
+                ;; Unset here as well; components fall back to pagination/default-page-size
+                :per-page nil
                 :total-items 0}
    :sort {:field :id
           :direction :asc}
@@ -109,11 +111,13 @@
         :defaults {}
         :controls {}
         :entity-configs {}
+        :entity-prefs {}
         :lists {}
         :notifications []
         :sidebar {:collapsed? false}
         :modals {}
         :toasts []}
+   :entity-fetches {}
    :csrf-token nil})
 
 (defn make-db-with-models-data

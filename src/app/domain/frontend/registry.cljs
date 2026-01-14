@@ -16,36 +16,13 @@
    Use app.domain.frontend.pages instead."
   (:require
     [app.domain.frontend.expenses.routes.user :as expenses-user-routes]
+    ;; Domain-local init: loads events/subs via side effects
+    app.domain.frontend.expenses.init
     ;; Domain adapters - admin (loads all adapter modules)
     [app.domain.frontend.expenses.adapters :as expenses-adapter]
     [app.domain.frontend.expenses.admin.components.detail-modals :as detail-modals]
     [app.domain.frontend.expenses.admin.components.entity-actions :as entity-actions]
-    ;; Domain admin subs (expenses-specific loading/error subs)
-    app.domain.frontend.expenses.admin.subs
-    ;; Load admin events/subs for side effects (safe to require)
-    app.domain.frontend.expenses.events.article-alias-bulk
-    app.domain.frontend.expenses.events.expenses
-    app.domain.frontend.expenses.events.payers
-    app.domain.frontend.expenses.events.receipts
-    app.domain.frontend.expenses.events.suppliers
-    app.domain.frontend.expenses.events.articles
-    app.domain.frontend.expenses.events.expense-items
-    app.domain.frontend.expenses.events.article-aliases
-    app.domain.frontend.expenses.events.price-observations
-    app.domain.frontend.expenses.events.unmapped-items
-    app.domain.frontend.expenses.subs.article-alias-bulk
-    app.domain.frontend.expenses.subs.expenses
-    app.domain.frontend.expenses.subs.payers
-    app.domain.frontend.expenses.subs.suppliers
-    app.domain.frontend.expenses.subs.receipts
-    app.domain.frontend.expenses.subs.articles
-    app.domain.frontend.expenses.subs.expense-items
-    app.domain.frontend.expenses.subs.article-aliases
-    app.domain.frontend.expenses.subs.price-observations
-    app.domain.frontend.expenses.subs.unmapped-items
-    ;; User-expenses events and subs (domain-owned)
-    app.domain.frontend.expenses.events.user-expenses
-    app.domain.frontend.expenses.subs.user-expenses))
+    ))
 
 (def ^:private expenses-manifest
   {:id :expenses
@@ -80,20 +57,20 @@
     :price-observations {:init-fn expenses-adapter/init-price-observations-adapter!
                          :custom-actions entity-actions/admin-price-observations-actions
                          :modals [detail-modals/admin-price-observation-detail-modal]}}
-   :admin-domain-groups
-   {:expenses-admin
-    {:title "Expenses Admin"
-     :description "Admin management of expenses, suppliers, and related data"
-     :icon "💼"
-    :entities #{:expenses :receipts :suppliers :payers :articles :expense-items :article-aliases :price-observations}
-     :color "accent"
-     :scope :admin}}
+   :admin-domain-groups {}
    :user-domain-groups
    {:expenses-user
-    {:title "User Expenses"
+    {:title "Expenses"
      :description "User-facing expense tracking and management"
      :icon "💰"
-     :entities #{:expenses}
+     :entities #{:expenses
+                 :receipts
+                 :suppliers
+                 :payers
+                 :expense-items
+                 :articles
+                 :article-aliases
+                 :price-observations}
      :color "accent"
      :scope :user}}})
 

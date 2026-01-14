@@ -23,10 +23,3 @@
         :registered?
         :verification-required?))))
 
-;; Event to set authentication error (for form validation)
-#_(rf/reg-event-db
-    :app.template.frontend.events.auth/set-auth-error
-    common-interceptors
-    (fn [db [_ error-message]]
-      (assoc-in db [:session :error] error-message)))
-

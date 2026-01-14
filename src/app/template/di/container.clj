@@ -180,73 +180,75 @@
 (defn start-services!
   "Start all initialized services"
   [container]
-  (let [instances @(:instances container)
-        init-order (->> instances
-                     (filter #(= :initialized (get-in % [1 :status])))
-                     (map first))]
+  ;; IMPORTANT: do not rely on hash-map iteration order for lifecycle.
+  ;; Start services in topological dependency order for deterministic behavior.
+  (let [active-ids (get-active-services container)
+        dep-graph (build-dependency-graph container active-ids)
+        start-order (topological-sort dep-graph)]
 
-    ;;(log/info "Starting services:" init-order)
+    ;;(log/info "Starting services in order:" start-order)
 
-    (doseq [service-id init-order]
-      (try
-        (let [service-def (get-in container [:defs service-id])
-              service-instance (get-in instances [service-id :instance])
-              ;; If service implements Lifecycle, call start
-              started (if (satisfies? Lifecycle service-instance)
-                        (start service-instance container)
-                        service-instance)
-              _ (swap! (:instances container)
-                  assoc-in [service-id :instance] started)
-              _ (swap! (:instances container)
-                  assoc-in [service-id :status] :started)
-              ;; Call start hook if provided
-              _ (when-let [hook (get-in service-def [:hooks :on-start])]
-                  (hook service-id started))
-              _ (notify-listeners container :started service-id started nil)
-              _ (log/info "Started service" service-id)])
+    (doseq [service-id start-order]
+      (let [{:keys [status instance]} (get @(:instances container) service-id)]
+        (when (= :initialized status)
+          (try
+            (let [service-def (get-in container [:defs service-id])
+                  ;; If service implements Lifecycle, call start
+                  started (if (satisfies? Lifecycle instance)
+                            (start instance container)
+                            instance)
+                  _ (swap! (:instances container)
+                      assoc-in [service-id :instance] started)
+                  _ (swap! (:instances container)
+                      assoc-in [service-id :status] :started)
+                  ;; Call start hook if provided
+                  _ (when-let [hook (get-in service-def [:hooks :on-start])]
+                      (hook service-id started))
+                  _ (notify-listeners container :started service-id started nil)
+                  _ (log/info "Started service" service-id)]
+              started)
 
-        (catch Exception e
-          (log/error e "Failed to start service" service-id)
-          (swap! (:instances container)
-            assoc-in [service-id :status] :start-failed)
-          (notify-listeners container :start-failed service-id nil e))))
+            (catch Exception e
+              (log/error e "Failed to start service" service-id)
+              (swap! (:instances container)
+                assoc-in [service-id :status] :start-failed)
+              (notify-listeners container :start-failed service-id nil e))))))
 
     container))
 
 (defn stop-services!
   "Stop all running services in reverse order"
   [container]
-  (let [instances @(:instances container)
-        started-ids (->> instances
-                      (filter #(= :started (get-in % [1 :status])))
-                      (map first)
-                      reverse)]
+  ;; IMPORTANT: stop in reverse topological order, not reverse hash-map order.
+  (let [active-ids (get-active-services container)
+        dep-graph (build-dependency-graph container active-ids)
+        stop-order (reverse (topological-sort dep-graph))]
 
-    (log/info "Stopping services:" started-ids)
+    (log/info "Stopping services:" stop-order)
 
-    (doseq [service-id started-ids]
-      (try
-        (let [service-def (get-in container [:defs service-id])
-              service-instance (get-in instances [service-id :instance])]
+    (doseq [service-id stop-order]
+      (let [{:keys [status instance]} (get @(:instances container) service-id)]
+        (when (= :started status)
+          (try
+            (let [service-def (get-in container [:defs service-id])]
+              ;; If service implements Lifecycle, call stop
+              (when (satisfies? Lifecycle instance)
+                (stop instance container))
 
-          ;; If service implements Lifecycle, call stop
-          (when (satisfies? Lifecycle service-instance)
-            (stop service-instance container))
+              (swap! (:instances container)
+                assoc-in [service-id :status] :stopped)
 
-          (swap! (:instances container)
-            assoc-in [service-id :status] :stopped)
+              ;; Call stop hook if provided
+              (when-let [hook (get-in service-def [:hooks :on-stop])]
+                (hook service-id instance))
 
-          ;; Call stop hook if provided
-          (when-let [hook (get-in service-def [:hooks :on-stop])]
-            (hook service-id service-instance))
+              (notify-listeners container :stopped service-id instance nil)
 
-          (notify-listeners container :stopped service-id service-instance nil)
+              (log/info "Stopped service" service-id))
 
-          (log/info "Stopped service" service-id))
-
-        (catch Exception e
-          (log/error e "Error stopping service" service-id)
-          (notify-listeners container :stop-failed service-id nil e))))
+            (catch Exception e
+              (log/error e "Error stopping service" service-id)
+              (notify-listeners container :stop-failed service-id nil e))))))
 
     container))
 

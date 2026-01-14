@@ -99,11 +99,11 @@
    :task (apply shell "bb" "scripts/bb/config_audit.clj" *command-line-args*)},
 
   validate-frontend-config
-  {:doc "Validate frontend config EDN files against Malli specs. Usage: bb validate-frontend-config",
+  {:doc "Validate frontend config EDN files against Malli specs + DB schema alignment. Usage: bb validate-frontend-config [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
    :task (apply shell "bb" "scripts/bb/validate_frontend_config.clj" *command-line-args*)},
 
   sync-frontend-config
-  {:doc "Sync frontend config EDNs with DB schema (dry-run by default). Usage: bb sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>]",
+  {:doc "Sync frontend config EDNs with DB schema (dry-run by default). Usage: bb sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
    :task (apply shell "bb" "scripts/bb/sync_frontend_config.clj" *command-line-args*)},
 
   migrate-and-sync-frontend-config

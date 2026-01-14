@@ -33,7 +33,7 @@
              (when (nil? db-connection)
                (log/error "Database connection is nil when creating adapter!"))
              (let [relationship-mappings (get-in domain-config [:relationship-mappings])]
-               (db-adapter/->PostgresAdapter db-connection relationship-mappings)))))
+                (db-adapter/create-postgres-adapter db-connection relationship-mappings)))))
 
        (container/register-service!
          (container/create-simple-service

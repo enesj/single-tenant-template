@@ -214,3 +214,72 @@
               ""
               (utils/tristate-hint {:kind :lock :current-val lock-val :lock-style lock-style}))))))))
 
+;; =============================================================================
+;; Per-Page Select Setting Row
+;; =============================================================================
+
+(defui per-page-setting-row
+  "Render a per-page setting row with select dropdown for Default and Lock.
+
+   Props:
+   - :entity-kw
+   - :default-val (nil or integer)
+   - :lock-val (nil or integer)
+   - :editing? boolean
+   - :lock-style :admin | :user
+   - :on-change fn [entity-kw :per-page new-state] where new-state is {:kind :inherit} | {:kind :default :value int} | {:kind :lock :value int}"
+  [{:keys [entity-kw default-val lock-val editing? lock-style on-change]}]
+  (let [help-text (defs/setting-help :per-page)
+        options defs/per-page-options
+        lock-style (or lock-style :user)
+        editing? (boolean editing?)
+        clickable? (and editing? (fn? on-change))]
+    ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
+             :data-tip help-text}
+      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+        ($ :span {:class "text-sm font-medium min-w-[120px]"}
+          (defs/setting-label :per-page))
+
+        ;; Default control
+        ($ :div {:class "flex items-center gap-1"}
+          ($ :span {:class "text-xs text-base-content/60"} "Default:")
+          (if clickable?
+            ($ :select
+              {:id (str "per-page-default-" (name entity-kw))
+               :class "w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+               :value (or default-val "")
+               :on-change (fn [e]
+                            (let [v (.. e -target -value)]
+                              (if (= v "")
+                                (on-change entity-kw :per-page {:kind :inherit})
+                                (on-change entity-kw :per-page {:kind :default :value (js/parseInt v)}))))}
+              ($ :option {:value ""} "—")
+              (for [opt options]
+                ($ :option {:key opt :value opt} opt)))
+            ($ :span {:class "ds-badge ds-badge-sm ds-badge-info"}
+              (if default-val (str default-val) "—"))))
+
+        ($ :span {:class "mx-1 text-base-content/30"} "|")
+
+        ;; Lock control
+        ($ :div {:class "flex items-center gap-1"}
+          ($ :span {:class "text-xs text-base-content/60"} "Lock:")
+          (if clickable?
+            ($ :select
+              {:id (str "per-page-lock-" (name entity-kw))
+               :class "w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+               :value (or lock-val "")
+               :on-change (fn [e]
+                            (let [v (.. e -target -value)]
+                              (if (= v "")
+                                (on-change entity-kw :per-page {:kind :inherit})
+                                (on-change entity-kw :per-page {:kind :lock :value (js/parseInt v)}))))}
+              ($ :option {:value ""} "—")
+              (for [opt options]
+                ($ :option {:key opt :value opt} opt)))
+            ($ :span {:class (str "ds-badge ds-badge-sm "
+                               (if lock-val
+                                 (if (= lock-style :admin) "ds-badge-warning" "ds-badge-primary")
+                                 "ds-badge-ghost"))}
+              (if lock-val (str "🔒 " lock-val) "—"))))))))
+

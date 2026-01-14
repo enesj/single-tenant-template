@@ -27,11 +27,6 @@
   (fn [db _]
     (:admin/success-message db nil)))
 
-#_(rf/reg-sub
-    :admin/has-success-message?
-    (fn [db _]
-      (some? (:admin/success-message db))))
-
 ;; ============================================================================
 ;; Error Message Management
 ;; ============================================================================
@@ -50,8 +45,3 @@
   :admin/error-message
   (fn [db _]
     (:admin/error-message db nil)))
-
-#_(rf/reg-sub
-    :admin/has-error-message?
-    (fn [db _]
-      (some? (:admin/error-message db))))

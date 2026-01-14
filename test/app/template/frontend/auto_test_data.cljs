@@ -91,7 +91,7 @@
 ;; Public API
 ;; =============================================================================
 
-#_{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn get-auto-generated-data
   "Main entry point for getting auto-generated test data"
   ([]
@@ -99,7 +99,7 @@
   ([options]
    (generate-test-data-fixed options)))
 
-#_{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn reset-id-counter!
   "Reset the ID counter for test isolation"
   []

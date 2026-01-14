@@ -6,6 +6,11 @@
   (:require
     [app.domain.frontend.expenses.admin.adapters :as domain-adapters]))
 
+;; Generic init helpers (preferred)
+(def init-entity-adapter! domain-adapters/init-entity-adapter!)
+(def entity-init-fns domain-adapters/entity-init-fns)
+(def init-all-adapters! domain-adapters/init-all-adapters!)
+
 ;; Re-export adapter init functions from domain adapters
 (def init-expenses-adapter! domain-adapters/init-expenses-adapter!)
 (def init-receipts-adapter! domain-adapters/init-receipts-adapter!)

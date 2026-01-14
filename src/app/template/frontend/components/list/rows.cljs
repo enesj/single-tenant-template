@@ -2,7 +2,7 @@
   "Row rendering components for list views.
    
    This module uses reactive cell components from the cells module for selection
-   and actions. Components are re-exported for backward compatibility."
+   and actions."
   (:require
     [app.template.frontend.utils.id :as id-utils]
     [app.shared.keywords :as kw]
@@ -13,22 +13,6 @@
     [app.template.frontend.events.list.crud :as crud-events]
     [re-frame.core :as rf]
     [uix.core :as uix :refer [$]]))
-
-;; =============================================================================
-;; Re-exports from cells module for backward compatibility
-;; =============================================================================
-
-;; Re-export select-checkbox for existing code that imports from rows
-#_(def select-checkbox cells/select-checkbox)
-
-;; Re-export select-all-checkbox for existing code that imports from rows
-#_(def select-all-checkbox cells/select-all-checkbox)
-
-;; Re-export reactive-selection-cell for existing code that imports from rows
-#_(def reactive-selection-cell cells/reactive-selection-cell)
-
-;; Re-export action-buttons for existing code that imports from rows
-#_(def action-buttons cells/action-buttons)
 
 ;; =============================================================================
 ;; Row Content Generation

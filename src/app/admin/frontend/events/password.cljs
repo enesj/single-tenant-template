@@ -159,12 +159,3 @@
       :admin/password-reset-error
       :admin/password-reset-success?
       :admin/password-reset-token-verified?)))
-
-#_(rf/reg-event-db
-  :admin/init-reset-password
-  (fn [db _]
-    (dissoc db
-      :admin/password-reset-loading?
-      :admin/password-reset-error
-      :admin/password-reset-success?
-      :admin/password-reset-token-verified?)))

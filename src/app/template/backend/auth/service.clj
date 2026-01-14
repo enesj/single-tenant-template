@@ -269,10 +269,6 @@
 
 (defrecord AuthenticationService [db metadata oauth-providers session-manager password-manager email-service]
   core-protocols/BusinessService
-  #_(initialize [this]
-      (log/info "Initializing authentication service")
-      this)
-
   (cleanup [this]
     (log/info "Cleaning up authentication service")
     (auth-protocols/cleanup-expired-sessions session-manager)

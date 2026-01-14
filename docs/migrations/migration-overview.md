@@ -164,6 +164,13 @@ bb migrate-and-sync-frontend-config
 
 Note: these commands **do not** modify the database. They keep UI config aligned with `resources/db/models.edn`.
 
+Tip: Both commands accept `--schema <path>`. You can pass `resources/db` to validate against the hierarchical schema sources (`template/domain/shared`) directly:
+
+```bash
+bb validate-frontend-config --schema resources/db
+bb sync-frontend-config --schema resources/db
+```
+
 ## 📊 Migration File Types
 
 ### 1. Schema Migrations (.edn)

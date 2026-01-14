@@ -1,6 +1,7 @@
 (ns app.template.frontend.events.list.ui-state
   "UI state management for list views - pagination, sorting, and toggles"
   (:require
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.interceptors.persistence :as persistence]
@@ -11,11 +12,8 @@
   "Normalize incoming entity identifiers to keywords."
   [entity-type]
   (cond
-    (keyword? entity-type) entity-type
-    (string? entity-type) (keyword entity-type)
     (map? entity-type) (recur (:value entity-type))
-    (nil? entity-type) nil
-    :else (keyword (str entity-type))))
+    :else (model-naming/ensure-app-keyword entity-type)))
 
 (defn- current-per-page
   [db entity-key]
@@ -101,9 +99,9 @@
    Reads from new path first, falls back to legacy, writes to new path only."
   [db entity-key path default-value]
   (let [;; New path: [:ui :entity-prefs <entity> :display <setting>]
-        new-path (into [:ui :entity-prefs entity-key :display] path)
+        new-path (into (paths/entity-prefs-display entity-key) path)
         ;; Legacy path: [:ui :entity-configs <entity> <setting>]
-        legacy-path (into [:ui :entity-configs entity-key] path)
+        legacy-path (into (paths/entity-display-settings entity-key) path)
         ;; Read from new path first
         new-value (get-in db new-path)
         legacy-value (get-in db legacy-path)
@@ -133,7 +131,7 @@
     (if-let [entity-key (->entity-key entity-type)]
       (let [result (toggle-entity-flag db entity-key [:show-select?] false)]
         (log/info "toggle-select result" {:entity-key entity-key
-                                          :new-value (get-in result [:ui :entity-configs entity-key :show-select?])})
+                                          :new-value (get-in result (conj (paths/entity-display-settings entity-key) :show-select?))})
         result)
       (update-in db [:ui :show-select?] not))))
 
@@ -153,7 +151,7 @@
     (if-let [entity-key (->entity-key entity-type)]
       (let [result (toggle-entity-flag db entity-key [:show-edit?] true)]
         (log/info "toggle-edit result" {:entity-key entity-key
-                                        :new-value (get-in result [:ui :entity-configs entity-key :show-edit?])})
+                                        :new-value (get-in result (conj (paths/entity-display-settings entity-key) :show-edit?))})
         result)
       (update-in db [:ui :show-edit?] not))))
 

@@ -13,7 +13,6 @@
 (def max-page-size 100)
 
 ;; Common page size options
-#_(def page-size-options [5 10 20 50 100])
 
 ;; -------------------------
 ;; Core Pagination Functions
@@ -23,11 +22,12 @@
   "Calculate total number of pages given total items and page size"
   [total-items page-size]
   (let [items (or total-items 0)
-        size (or page-size default-page-size)]
-    (if (pos? items)
-      #?(:clj (long (Math/ceil (/ items size)))
-         :cljs (js/Math.ceil (/ items size)))
-      1)))
+      size (or page-size default-page-size)
+      size (if (pos? size) size default-page-size)]
+   (if (pos? items)
+    #?(:clj (long (Math/ceil (/ items size)))
+      :cljs (js/Math.ceil (/ items size)))
+    1)))
 
 (defn calculate-offset
   "Calculate offset (starting index) for a given page and page size"
@@ -36,10 +36,6 @@
         size (or page-size default-page-size)]
     (* (dec page) size)))
 
-#_(defn calculate-limit
-    "Calculate limit (number of items) for pagination queries"
-    [page-size]
-    (or page-size default-page-size))
 
 (defn calculate-start-end
   "Calculate start and end indices for pagination"
@@ -152,30 +148,6 @@
     (let [normalized-page (normalize-page-number page-number (:total-pages pagination-state))]
       (update-pagination-state pagination-state {:current-page normalized-page}))))
 
-#_(defn go-to-previous-page
-    "Navigate to previous page"
-    [pagination-state]
-    (when (and pagination-state (can-go-previous? pagination-state))
-      (go-to-page pagination-state (dec (:current-page pagination-state)))))
-
-#_(defn go-to-next-page
-    "Navigate to next page"
-    [pagination-state]
-    (when (and pagination-state (can-go-next? pagination-state))
-      (go-to-page pagination-state (inc (:current-page pagination-state)))))
-
-#_(defn go-to-first-page
-    "Navigate to first page"
-    [pagination-state]
-    (when pagination-state
-      (go-to-page pagination-state min-page-number)))
-
-#_(defn go-to-last-page
-    "Navigate to last page"
-    [pagination-state]
-    (when pagination-state
-      (go-to-page pagination-state (:total-pages pagination-state))))
-
 ;; -------------------------
 ;; Data Slicing Functions
 ;; -------------------------
@@ -222,37 +194,6 @@
 ;; Pagination Info Functions
 ;; -------------------------
 
-#_(defn get-pagination-info
-    "Get pagination information for display"
-    [pagination-state]
-    (when pagination-state
-      (let [{:keys [current-page page-size total-items total-pages offset]} pagination-state
-            start-item (if (pos? total-items) (inc offset) 0)
-            end-item (min (+ offset page-size) total-items)]
-        {:current-page current-page
-         :total-pages total-pages
-         :page-size page-size
-         :total-items total-items
-         :start-item start-item
-         :end-item end-item
-         :showing-count (- end-item start-item -1)
-         :has-previous? (can-go-previous? pagination-state)
-         :has-next? (can-go-next? pagination-state)})))
-
-#_(defn get-page-range
-    "Get range of page numbers for pagination display"
-    [pagination-state & {:keys [max-visible-pages] :or {max-visible-pages 5}}]
-    (when pagination-state
-      (let [{:keys [current-page total-pages]} pagination-state
-            half-visible (quot max-visible-pages 2)
-            _start-page (max min-page-number (- current-page half-visible))
-            end-page (min total-pages (+ current-page half-visible))
-          ;; Adjust start if we're near the end
-            adjusted-start (max min-page-number (- end-page max-visible-pages -1))
-          ;; Adjust end if we're near the beginning
-            adjusted-end (min total-pages (+ adjusted-start max-visible-pages -1))]
-        (range adjusted-start (inc adjusted-end)))))
-
 ;; -------------------------
 ;; Backend Query Helpers
 ;; -------------------------
@@ -263,15 +204,6 @@
   (when pagination-state
     {:limit (:page-size pagination-state)
      :offset (:offset pagination-state)}))
-
-#_(defn pagination-params-with-sort
-    "Generate pagination and sort parameters for database queries"
-    [pagination-state sort-field sort-direction]
-    (when pagination-state
-      (merge (pagination-params pagination-state)
-        (when sort-field
-          {:order-by sort-field
-           :order-direction (or sort-direction :asc)}))))
 
 ;; -------------------------
 ;; Frontend UI Helpers
@@ -308,3 +240,71 @@
 ;; Legacy function removed - use calculate-total-pages directly
 
 ;; Legacy function removed - use paginate-collection directly
+
+;; =============================================================================
+;; Public API aliases (docs/shared/pagination-utilities.md)
+;; =============================================================================
+
+(defn page->offset
+  "Convert a (1-indexed) UI page number into a 0-indexed offset.
+
+  Alias for `calculate-offset`.
+
+  Args:
+  - page: 1-indexed page number
+  - per-page: items per page"
+  [page per-page]
+  (calculate-offset page per-page))
+
+(defn offset->page
+  "Convert an offset into a (1-indexed) UI page number.
+
+  Args:
+  - offset: 0-indexed offset
+  - per-page: items per page"
+  [offset per-page]
+  (let [offset (max 0 (long (or offset 0)))
+        per-page (max 1 (long (or per-page default-page-size)))]
+    (inc (quot offset per-page))))
+
+(defn within-range?
+  "Return true when page/per-page are within valid bounds for a given total.
+
+  This is intended as a guard for user-provided inputs.
+
+  Args:
+  - page: 1-indexed page number
+  - per-page: items per page
+  - total: total items"
+  [page per-page total]
+  (let [per-page (or per-page default-page-size)]
+    (if (valid-page-size? per-page)
+      (let [total-pages (calculate-total-pages total per-page)]
+        (valid-page-number? page total-pages))
+      false)))
+
+(defn paginate
+  "Produce a pagination map for API responses / UI state.
+
+  Returns:
+  {:page :per-page :offset :limit :total :total-pages}
+
+  Arity:
+  - (paginate {:page p :per-page n :total t})
+  - (paginate p n t)"
+  ([{:keys [page per-page total]
+     :or {page default-page-number
+          per-page default-page-size
+          total 0}}]
+   (paginate page per-page total))
+  ([page per-page total]
+   (let [per-page (normalize-page-size per-page)
+         total-pages (calculate-total-pages total per-page)
+         page (normalize-page-number page total-pages)
+         offset (page->offset page per-page)]
+     {:page page
+      :per-page per-page
+      :offset offset
+      :limit per-page
+      :total (or total 0)
+      :total-pages total-pages})))

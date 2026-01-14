@@ -3,6 +3,7 @@
    Verifies that the registry provides correct domain manifests and aggregated data."
   (:require
     [clojure.test :refer [deftest is testing]]
+    [clojure.java.io :as io]
     [app.domain.backend.registry :as domain-registry]))
 
 (deftest enabled-domains-test
@@ -77,6 +78,42 @@
       (doseq [[_ path] expenses-paths]
         (is (string? path))
         (is (.endsWith path ".edn"))))))
+
+(deftest primary-user-ui-config-paths-test
+  (testing "primary-user-ui-config-paths returns paths map for single-domain setups"
+    (let [paths (domain-registry/primary-user-ui-config-paths)]
+      (is (map? paths))
+      (is (contains? paths :entities))
+      (is (contains? paths :view-options))
+      (is (contains? paths :form-fields))
+      (is (contains? paths :table-columns))))
+
+  (testing "primary-user-ui-config-paths returns nil when no domains are enabled"
+    (clojure.core/with-redefs-fn {#'domain-registry/enabled-domains []}
+      (fn []
+        (is (nil? (domain-registry/primary-user-ui-config-paths)))))))
+
+(deftest get-admin-ui-config-paths-test
+  (testing "get-admin-ui-config-paths returns vector of path maps"
+    (let [paths (domain-registry/get-admin-ui-config-paths)]
+      (is (vector? paths))
+      (is (pos? (count paths)))
+      (is (every? map? paths))))
+
+  (testing "admin config path maps include expected keys"
+    (let [paths (domain-registry/get-admin-ui-config-paths)
+          first-domain-paths (first paths)]
+      (is (contains? first-domain-paths :view-options))
+      (is (contains? first-domain-paths :form-fields))
+      (is (contains? first-domain-paths :table-columns))))
+
+  (testing "admin config paths are .edn files and exist on disk"
+    (let [paths (domain-registry/get-admin-ui-config-paths)]
+      (doseq [domain-paths paths
+              [_k path] domain-paths]
+        (is (string? path))
+        (is (.endsWith path ".edn"))
+        (is (.exists (io/file path)) (str "Missing admin config EDN: " path))))))
 
 (deftest get-post-login-path-test
   (testing "get-post-login-path returns valid path"

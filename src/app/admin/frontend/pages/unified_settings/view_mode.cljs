@@ -60,7 +60,9 @@
 (defui view-mode-content
   "Content for view mode - shows overview of both scopes."
   [{:keys [page-scope admin-config user-draft]}]
-  (let [user-view-options (or (:view-options user-draft) {})
+  (let [user-entity-keys (defs/entities-for-scope :user)
+        user-view-options (merge (zipmap user-entity-keys (repeat {}))
+                                 (or (:view-options user-draft) {}))
         user-entities (or (:entities user-draft) {})]
     ($ :div {:class "space-y-8"}
       (case page-scope
@@ -88,4 +90,3 @@
                                    {:key (name entity-kw)
                                     :entity-kw entity-kw
                                     :settings (get admin-config entity-kw)}))})))))
-

@@ -14,15 +14,6 @@
 ;; Delete Confirmation and UI State
 ;; ============================================================================
 
-#_(rf/reg-event-db
-  :admin/show-delete-confirmation
-  (fn [db [_ entity-type entity-id entity-name]]
-    (-> db
-      (assoc :admin/delete-confirmation-visible? true)
-      (assoc :admin/delete-confirmation-entity {:type entity-type
-                                                :id entity-id
-                                                :name entity-name}))))
-
 (rf/reg-event-db
   :admin/hide-delete-confirmation
   (fn [db _]

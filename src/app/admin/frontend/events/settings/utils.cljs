@@ -11,13 +11,16 @@
   (= 401 (or (:status error) (get-in error [:response :status]))))
 
 (defn display-setting-key?
-  "True when the key is one of the list-view display toggles.
+  "True when the key is one of the list-view display settings.
 
   In the new schema, these live under :display-defaults / :display-locks.
-  (Historically they were top-level keys in view-options.edn.)"
+  (Historically they were top-level keys in view-options.edn.)
+  
+  Includes :per-page for rows-per-page configuration."
   [k]
   (and (keyword? k)
-    (re-matches #"show-.*\?" (name k))))
+    (or (re-matches #"show-.*\?" (name k))
+      (= k :per-page))))
 
 (defn normalize-kw
   [x]

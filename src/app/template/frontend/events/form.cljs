@@ -133,30 +133,6 @@
              (println "📤 FORM UPDATE-FAILURE: Dispatching fetch-entities for:" entity-type "type:" (type entity-type) "stack:" (.-stack (js/Error.)))
              [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
 
-;; --------------------------------------------------------------------------
-;; Default success events used by admin overrides to fall back to template
-;; behavior when not in admin context. These delegate to the existing
-;; template success handlers above.
-;; --------------------------------------------------------------------------
-
-#_(rf/reg-event-fx
-    :app.template.frontend.events.form/default-create-success
-    common-interceptors
-    (fn [{:keys [db]} [entity-type response]]
-      (let [new-db (crud-success/handle-create-success db entity-type response)]
-        {:db new-db
-         :fx (when (and entity-type (keyword? entity-type))
-               [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
-
-#_(rf/reg-event-fx
-    :app.template.frontend.events.form/default-update-success
-    common-interceptors
-    (fn [{:keys [db]} [entity-type provided-id response]]
-      (let [new-db (crud-success/handle-update-success db entity-type provided-id response)]
-        {:db new-db
-         :fx (when (and entity-type (keyword? entity-type))
-               [[:dispatch [::crud-events/fetch-entities entity-type]]])})))
-
 (rf/reg-event-db
   ::set-submitted
   common-interceptors

@@ -22,7 +22,7 @@
   (fn [db [_ entity-type]]
     (let [entity-key (if (string? entity-type) (keyword entity-type) entity-type)
           ;; Get UI configuration for this entity
-          ui-config (get-in db [:ui :entity-configs entity-key])
+          ui-config (get-in db (paths/entity-display-settings entity-key))
           ;; Get field specifications for this entity
           entity-specs @(rf/subscribe [:entity-specs])
           ;; Get fields and add filterable flag to each

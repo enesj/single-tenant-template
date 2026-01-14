@@ -59,12 +59,12 @@
       (cond
         ;; Admin bridge entity edit
         (and use-bridge? editing in-admin?)
-        {:db (assoc-in db [:forms entity-k :submitting?] true)
+        {:db (assoc-in db (paths/form-submitting? entity-k) true)
          :dispatch [:app.template.frontend.events.list.crud/update-entity entity-k (:id values) (dissoc db-values :id)]}
 
         ;; Admin bridge entity create
         (and use-bridge? (not editing) in-admin?)
-        {:db (assoc-in db [:forms entity-k :submitting?] true)
+        {:db (assoc-in db (paths/form-submitting? entity-k) true)
          :dispatch [:app.template.frontend.events.list.crud/create-entity entity-k db-values]}
 
         ;; Fallback to template default - inline the logic directly 

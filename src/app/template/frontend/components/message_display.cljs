@@ -91,20 +91,3 @@
                               "btn-sm ml-auto")
                      :on-click on-clear-error}
             "✕"))))))
-
-;; Convenience functions for common use cases
-
-#_ (defn admin-message-display
-  "Convenience function for admin-themed message display."
-  [& args]
-  ($ message-display (merge {:variant :admin} (first args))))
-
-#_ (defn tenant-message-display
-  "Convenience function for tenant-themed message display."
-  [& args]
-  ($ message-display (merge {:variant :tenant} (first args))))
-
-#_ (defn customer-message-display
-  "Convenience function for customer-themed message display."
-  [& args]
-  ($ message-display (merge {:variant :customer} (first args))))

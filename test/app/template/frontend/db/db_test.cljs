@@ -27,7 +27,7 @@
   (mapv (fn [[k v]] [(name k) v]) complex-models-data))
 
 (def sample-user-form-state
-  {:data {:full_name "Ada Lovelace" :role "admin"}
+  {:values {:full_name "Ada Lovelace" :role "admin"}
    :dirty-fields #{:full_name}
    :submitting? false
    :submitted? true
@@ -212,15 +212,15 @@
 (deftest form-paths-test
   (testing "form-data path generation"
     (are [entity-type expected] (= expected (paths/form-data entity-type))
-      :expenses [:forms :expenses :data]
-      :suppliers [:forms :suppliers :data]
-      :receipts [:forms :receipts :data]))
+      :expenses [:forms :expenses :values]
+      :suppliers [:forms :suppliers :values]
+      :receipts [:forms :receipts :values]))
 
   (testing "form-field path generation"
     (are [entity-type field expected] (= expected (paths/form-field entity-type field))
-      :expenses :total_amount [:forms :expenses :data :total_amount]
-      :suppliers :display_name [:forms :suppliers :data :display_name]
-      :receipts :status [:forms :receipts :data :status]))
+      :expenses :total_amount [:forms :expenses :values :total_amount]
+      :suppliers :display_name [:forms :suppliers :values :display_name]
+      :receipts :status [:forms :receipts :values :status]))
 
   (testing "form-errors path generation"
     (are [entity-type expected] (= expected (paths/form-errors entity-type))
@@ -291,9 +291,9 @@
 
   (testing "list-current-page path generation"
     (are [entity-type expected] (= expected (paths/list-current-page entity-type))
-      :expenses [:ui :lists :expenses :pagination :current-page]
-      :suppliers [:ui :lists :suppliers :pagination :current-page]
-      :receipts [:ui :lists :receipts :pagination :current-page]))
+      :expenses [:ui :lists :expenses :current-page]
+      :suppliers [:ui :lists :suppliers :current-page]
+      :receipts [:ui :lists :receipts :current-page]))
 
   (testing "list-total-items path generation"
     (are [entity-type expected] (= expected (paths/list-total-items entity-type))
@@ -342,9 +342,10 @@
                                                   2 {:id 2 :total_amount 200}}
                                            :ids [1 2]
                                            :metadata {:loading? false}}}
-                     :forms {:expenses {:data {:total_amount 150}
+                     :forms {:expenses {:values {:total_amount 150}
                                         :errors {:total_amount "Must be positive"}}}
-                     :ui {:lists {:expenses {:pagination {:current-page 1}
+                     :ui {:lists {:expenses {:current-page 1
+                                             :pagination {:current-page 1}
                                              :per-page 10}}}}]
 
       ;; Test entity data access

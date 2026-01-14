@@ -62,7 +62,7 @@
             changed (:changed report)
             skipped (:skipped report)]
         (println "\n--- APPLY MODE ---")
-        (println (format "Commented out: %d registrations" (count changed)))
+        (println (format "Applied changes: %d registrations" (count changed)))
         (println (format "Skipped: %d registrations" (count skipped)))
         (when (seq skipped)
           (println "\nSkipped details (first 25):")

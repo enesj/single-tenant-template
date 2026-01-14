@@ -96,14 +96,6 @@
     (let [db' (handle-admin-api-error db error :admin/loading-admin-details :admin/admin-details-error "load admin details")]
       (assoc db' :admin/admin-details-modal-open? true))))
 
-#_(rf/reg-event-db
-  :admin/hide-admin-details
-  (fn [db _]
-    (-> (clear-loading-db-state db :admin/loading-admin-details)
-      (assoc :admin/admin-details-modal-open? false)
-      (dissoc :admin/current-admin-details)
-      (dissoc :admin/admin-details-error))))
-
 ;; ============================================================================
 ;; Update Admin Role Events
 ;; ============================================================================
@@ -255,15 +247,6 @@
 ;; ============================================================================
 ;; Fetch Entities Integration (for template system)
 ;; ============================================================================
-
-#_(rf/reg-event-fx
-  :admin/fetch-admins-entities
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/entity-loading? :admins) true)
-     :http-xhrio (admin-http/admin-get
-                   {:uri "/admin/api/admins"
-                    :on-success [:admin/fetch-admins-entities-success]
-                    :on-failure [:admin/fetch-admins-entities-failure]})}))
 
 (rf/reg-event-fx
   :admin/fetch-admins-entities-success

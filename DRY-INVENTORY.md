@@ -142,6 +142,11 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 **Where:**
 - `src/app/domain/backend/registry.clj`
 - `src/app/domain/frontend/registry.cljs`
+**Notes:**
+- Backend registry now also exposes **domain-owned admin UI config paths** (used by admin settings I/O) so template code doesn’t hardcode per-domain file paths.
+- Backend registry also centralizes **primary-domain user UI config path selection** (`primary-user-ui-config-paths`) to avoid duplicated single-domain/back-compat logic across routes and settings I/O.
+- Verified via focused Kaocha run: `/tmp/be-test-dry22-domain-registry-focus.txt`.
+- Frontend registry keeps event/sub loading domain-local via init aggregators (e.g. `src/app/domain/frontend/expenses/init.cljs`) to avoid the registry growing a huge require list.
 
 ### 15) Domain Adapter Aggregation (Expenses)
 **Pattern:** Adapter aggregator namespaces load/initialize multiple domain adapters in one place.  
@@ -149,6 +154,10 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 **Where:**
 - `src/app/domain/frontend/expenses/adapters.cljs`
 - `src/app/domain/frontend/expenses/admin/adapters.cljs`
+
+**Notes:**
+- Expenses adapters now expose a generic init API (`init-entity-adapter!`) plus a lookup map (`entity-init-fns`) and a bulk initializer (`init-all-adapters!`).
+- Per-entity init vars (e.g. `init-expenses-adapter!`) remain for backwards compatibility, but are backed by the shared map to avoid drift.
 
 ### 16) Schema as Single Source of Truth (DB + UI Config Alignment)
 **Pattern:** Canonical schema in `resources/db/{template,shared,domain}` merged into `resources/db/models.edn`; UI config validation aligns with schema.  
@@ -158,13 +167,27 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 - Frontend config validation: `src/app/shared/frontend_config/validation.clj`
 - Docs: `docs/backend/single-tenant-template.md`, `docs/frontend/admin-settings.md`
 
+**Notes:**
+- `app.shared.frontend-config.schema/models-index` accepts either a consolidated `models.edn` file path (default) **or** a hierarchical schema directory like `resources/db` (template/domain/shared, including `resources/db/domain/*/models.edn`).
+- This lets `bb validate-frontend-config --schema resources/db` validate against the canonical **source** model inputs without requiring regeneration of `resources/db/models.edn` first.
+
 ### 17) Centralized Field/Model Metadata
 **Pattern:** Shared model naming, field metadata/specs, and type casting utilities used across layers.  
 **Why DRY:** One place for key normalization, field typing, and casting logic.  
 **Where:**
-- `src/app/shared/model_naming.cljc`
+- `src/app/shared/model_naming.cljc` (notably `db-keyword->app`, `ensure-app-keyword`, `app-map-keys->db`)
 - `src/app/shared/field_metadata.cljc`, `src/app/shared/field_specs.cljc`, `src/app/shared/field_types.cljc`
 - `src/app/shared/type_conversion_db.cljc`
+
+**Progress (2026-01-14):**
+- Centralized field label derivation as `app.shared.labels/field-name->label` and delegated both validation metadata + field-spec generation to it.
+- Added `app.shared.model-naming/ensure-app-keyword` so callers can normalize entity/field identifiers in one step (best-effort keyword coercion + snake_case → kebab-case).
+- Normalized entity identifier inputs (snake_case → kebab-case) at key lookup boundaries:
+  - entity specs (`:entity-specs/by-name`, `:form-entity-specs/by-name`)
+  - template UI subscriptions (display settings + visible columns)
+  - list settings events and admin column visibility persistence
+  - persisted `ui-entity-prefs` localStorage keys are migrated on load to avoid “shadow prefs” under snake_case keys (entity keys + nested field/column identifiers).
+- Added CLJS regression tests to lock behavior.
 
 ## DRY Conventions to Enforce During Audits
 - Prefer template components (`src/app/template/frontend/components/**`) before adding new UI.
@@ -172,6 +195,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 - Use CRUD bridges for overrides rather than reimplementing CRUD flows.
 - Use shared HTTP/pagination/query helpers instead of ad hoc logic.
 - Keep normalization and sync logic in adapters + shared utils.
+- Normalize entity/field identifiers at boundaries using `app.shared.model-naming/ensure-app-keyword` (instead of scattering `keyword` / `_→-` fixes across call sites).
 - Use domain registries for routing/config wiring instead of manual requires scattered across modules.
 - Keep schema definitions in `resources/db/{template,shared,domain}/**` and regenerate; do not copy schema in code.
 
@@ -181,6 +205,21 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 - ✅ `app.shared.adapters.database` exists (JVM-only) and centralizes PostgreSQL JDBC object conversion; template backend delegates to it (2026-01-13).
 
 ## Non-DRY Code Snippets (Candidates for Consolidation)
+
+- **Entity key normalization drift (frontend prefs + subs)** — **Resolved (2026-01-14)**.
+  - Fixed snake_case vs kebab-case mismatches by normalizing entity identifiers at subscription/event boundaries and migrating persisted prefs keys.
+  - Key files:
+    - `src/app/template/frontend/subs/ui.cljs`
+    - `src/app/template/frontend/events/list/settings.cljs`
+    - `src/app/template/frontend/events/list/ui_state.cljs`
+    - `src/app/template/frontend/interceptors/persistence.cljs`
+    - `src/app/admin/frontend/events/config.cljs`
+    - `src/app/template/frontend/db/entity_specs.cljs`
+  - Tests:
+    - `test/app/template/frontend/db/entity_specs_test.cljs`
+    - `test/app/template/frontend/subs/ui_test.cljs`
+  - Verification: `npm run test:cljs` (output: `/tmp/fe-test-dry18-entity-key-normalization-prefs.txt`, `/tmp/fe-test-dry17-entity-spec-normalization-2.txt`).
+  - Verification (refactor): `npm run test:cljs` (output: `/tmp/fe-test-dry19-ensure-app-keyword.txt`).
 
 - **Duplicate model customization extraction** — **Resolved (2026-01-13)**.
   - `app.template.backend.utils.model-customizations` now delegates extraction helpers to `app.shared.model-customizations` to avoid drift.
@@ -263,6 +302,12 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
     - `src/app/domain/frontend/expenses/**`
   - Verified via ClojureScript test run:
     - `/tmp/fe-test-dry12-template-shared-utils-2.txt` (270 tests, 0 failures)
+
+- **Duplicate formatting helpers (admin vs template)** — **Resolved (2026-01-14)**.
+  - Removed the remaining duplication by delegating the admin formatting helpers to the template implementation:
+    - `src/app/admin/frontend/components/format.cljs` now delegates `react-element?`, `format-value`, `format-date`, `format-relative-time`, `user-initials`, `tenant-label` to `app.template.frontend.utils.display`.
+  - Verified via ClojureScript test run:
+    - `/tmp/fe-test-dry13-admin-format-delegates-1.txt` (270 tests, 0 failures)
 
 - **Query builder duplication (backend)** — both template admin and domain services implement their own query builders.
 - **Query builder duplication (backend)** — **Resolved (2026-01-13)**.

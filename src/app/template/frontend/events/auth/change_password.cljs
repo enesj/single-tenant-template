@@ -71,17 +71,3 @@
               "Change Failed"
               error-message]]]})))
 
-;; Event to clear change password state
-#_(rf/reg-event-db
-    :app.template.frontend.events.auth/clear-change-password-state
-    common-interceptors
-    (fn [db _]
-      (update db :change-password dissoc :loading? :error :success? :message)))
-
-;; Event to clear password reset state
-#_(rf/reg-event-db
-    :app.template.frontend.events.auth/clear-password-reset-state
-    common-interceptors
-    (fn [db _]
-      (dissoc db :password-reset)))
-

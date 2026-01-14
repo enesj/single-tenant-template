@@ -133,37 +133,6 @@
        :on-click handle-delete-click}
       ($ delete-icon))))
 
-#_(defui reactive-action-cell
-    "A reactive cell that subscribes to show-edit? and show-delete? settings.
-   
-   Renders edit/delete buttons based on current display settings,
-   plus any custom actions provided.
-   
-   Props:
-   - entity-name: keyword for the entity type
-   - item: the row item data
-   - custom-actions: (optional) fn that receives item and returns additional action buttons
-   - on-edit-click: (optional) custom edit handler fn (for modal edit)"
-    [{:keys [entity-name item custom-actions on-edit-click]}]
-    (let [{:keys [show-edit? show-delete?]} (use-action-visibility entity-name)
-          item-id (id-utils/extract-entity-id item)]
-      ($ :div {:class "flex items-center gap-2"}
-        ;; Edit button (when enabled)
-        (when show-edit?
-          ($ edit-button
-            {:entity-name entity-name
-             :item-id item-id
-             :item item
-             :on-edit-click on-edit-click}))
-        ;; Delete button (when enabled)
-        (when show-delete?
-          ($ delete-button
-            {:entity-name entity-name
-             :item-id item-id}))
-        ;; Custom actions (when provided) - rendered alongside default buttons
-        (when custom-actions
-          (custom-actions item)))))
-
 (defui action-buttons
   "Legacy action buttons component for backward compatibility.
    Renders action buttons using explicit show-edit?/show-delete? props.
@@ -214,29 +183,3 @@
   [{:keys [value]}]
   ($ :span {:class "whitespace-nowrap"}
     (format-timestamp value)))
-
-#_(defui reactive-timestamps-cell
-    "A reactive cell that subscribes to show-timestamps? and visible-columns settings.
-   Renders created_at and/or updated_at values based on visibility settings.
-   
-   Props:
-   - entity-name: keyword for the entity type
-   - item: the row item data
-   - visible-columns: map of column visibility settings"
-    [{:keys [entity-name item visible-columns]}]
-    (let [{:keys [show-timestamps?]} (use-display-settings entity-name)]
-      (when show-timestamps?
-        (let [;; Helper to check column visibility
-              column-visible? (fn [key]
-                                (let [value (get visible-columns key ::not-found)]
-                                  (if (= value ::not-found) true value)))
-              ;; Extract timestamp values
-              created-at (or (:created-at item)
-                           (get item (keyword (str (kw/ensure-name entity-name) "/created-at"))))
-              updated-at (or (:updated-at item)
-                           (get item (keyword (str (kw/ensure-name entity-name) "/updated-at"))))]
-          ($ :<>
-            (when (column-visible? :created-at)
-              ($ timestamp-cell {:value created-at}))
-            (when (column-visible? :updated-at)
-              ($ timestamp-cell {:value updated-at})))))))

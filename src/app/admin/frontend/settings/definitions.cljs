@@ -33,6 +33,14 @@
    :show-batch-edit?
    :show-batch-delete?])
 
+(def per-page-options
+  "Available options for rows per page setting."
+  [5 10 20 25 50 100])
+
+(def default-per-page
+  "Default rows per page value."
+  25)
+
 (def all-setting-keys
   "Combined list of all display and action setting keys."
   (into display-setting-keys action-setting-keys))
@@ -45,34 +53,49 @@
   "Map of setting key to definition with label, tooltip help text, and default value."
   {:show-edit?        {:label "Edit"
                        :help "When enabled, shows an Edit button on each row allowing users to modify the record. When disabled or locked off, records are read-only in the list view."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-delete?      {:label "Delete"
                        :help "When enabled, shows a Delete button on each row allowing users to remove the record. When disabled, records cannot be deleted from the list view."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-select?      {:label "Selection"
                        :help "When enabled, shows checkboxes on each row for selecting multiple records. Used for batch operations like bulk delete or export."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-filtering?   {:label "Filtering"
                        :help "When enabled, shows filter controls above the table allowing users to filter data by column values. Supports text search and dropdown filters."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-pagination?  {:label "Pagination"
                        :help "When enabled, shows pagination controls (page numbers, prev/next) below the table. When disabled, all records are shown on a single page."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-highlights?  {:label "Highlights"
                        :help "When enabled, rows can be visually highlighted based on certain conditions (e.g., new records, important items). Adds color coding to the table."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-timestamps?  {:label "Timestamps"
                        :help "When enabled, shows 'Created At' and 'Updated At' timestamp columns in the table. Useful for auditing when records were modified."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-add-button?  {:label "Add Button"
                        :help "When enabled, shows an 'Add' or 'New' button in the table header allowing users to create new records. When disabled, new records cannot be created from this view."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-batch-edit?  {:label "Batch Edit"
                        :help "When enabled, allows editing multiple selected records at once. Requires row selection to be enabled. Useful for bulk updates."
-                       :default true}
+                       :default true
+                       :type :toggle}
    :show-batch-delete? {:label "Batch Delete"
                         :help "When enabled, allows deleting multiple selected records at once. Requires row selection to be enabled. Shows a 'Delete Selected' action."
-                        :default true}})
+                        :default true
+                        :type :toggle}
+   :per-page          {:label "Rows per page"
+                       :help "Default number of rows to display per page in the list view. Users can change this at runtime, but this sets the initial value."
+                       :default 25
+                       :type :select
+                       :options [5 10 20 25 50 100]}})
 
 ;; =============================================================================
 ;; Domain Groups - organization of entities by functional area
@@ -114,17 +137,6 @@
 ;; Scope Definitions
 ;; =============================================================================
 
-#_(def scopes
-    "Available settings scopes with metadata."
-    {:admin {:title "Admin Settings"
-             :description "System-wide settings for admin panel entities"
-             :domain-groups admin-domain-groups
-             :icon "⚙️"}
-     :user  {:title "User Settings"
-             :description "Domain-owned defaults for user-facing pages"
-             :domain-groups user-domain-groups
-             :icon "👤"}})
-
 ;; =============================================================================
 ;; Helper Functions
 ;; =============================================================================
@@ -145,11 +157,6 @@
   [setting-key]
   (get-in setting-definitions [setting-key :help]))
 
-#_(defn setting-default
-    "Get default value for a setting key."
-    [setting-key]
-    (get-in setting-definitions [setting-key :default] true))
-
 (defn entity-title
   "Get human-readable title for an entity keyword."
   [entity-kw]
@@ -167,15 +174,6 @@
           (when (contains? (:entities domain-config) entity-kw)
             domain-key))
     all-domain-groups))
-
-#_(defn get-entity-scope
-    "Get the scope (:admin or :user) for an entity.
-   Returns nil if entity is not found in any domain."
-    [entity-kw]
-    (some (fn [[_domain-key domain-config]]
-            (when (contains? (:entities domain-config) entity-kw)
-              (:scope domain-config)))
-      all-domain-groups))
 
 (defn group-entities-by-domain
   "Group a collection of entity entries by their domain.

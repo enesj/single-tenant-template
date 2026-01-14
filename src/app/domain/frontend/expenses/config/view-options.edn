@@ -3,7 +3,8 @@
   {:show-add-button? false,
    :show-highlights? true,
    :show-timestamps? true,
-   :show-pagination? true},
+   :show-pagination? true,
+   :per-page 25},
   :display-locks {:show-batch-delete? true, :show-batch-edit? true},
   :column-locks
   {:receipt_id false, :id false, :is_posted false, :created_at true},
@@ -15,14 +16,15 @@
    :show-add-button? true,
    :show-filtering? true,
    :show-highlights? true,
-   :show-timestamps? true},
+   :show-timestamps? true,
+   :per-page 50},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
  :suppliers
  {:display-locks {:show-batch-edit? false, :show-batch-delete? false},
-  :display-defaults {}},
+  :display-defaults {:per-page 100}},
  :payers
  {:display-locks
   {:show-select? false,
    :show-batch-edit? false,
    :show-batch-delete? false},
-  :display-defaults {}}}
+  :display-defaults {:per-page 50}}}

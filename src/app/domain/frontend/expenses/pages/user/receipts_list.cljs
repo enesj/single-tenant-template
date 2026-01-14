@@ -142,8 +142,7 @@
                           :show-highlights? true
                           :show-add-button? can-ocr?
                           :show-batch-edit? false
-                          :show-batch-delete? false
-                          :per-page 25}]
+                          :show-batch-delete? false}]
 
     ;; Initial load
     (use-effect
@@ -197,7 +196,6 @@
                  :entity-spec receipts-entity-spec
                  :title title
                  :display-settings display-settings
-                 :per-page 25
                  :custom-actions (fn [receipt]
                                    (receipt-actions can-ocr? receipt))
                  :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])})))))

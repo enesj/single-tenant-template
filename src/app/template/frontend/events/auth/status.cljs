@@ -3,6 +3,7 @@
     [app.admin.frontend.adapters.users :as admin-users-adapter]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
+    [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.auth.ids :as ids]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -42,7 +43,7 @@
                          (sequential? permissions) (set permissions)
                          (coll? permissions) (set permissions)
                          :else #{permissions})
-          current-page (get-in db [:ui :current-page])
+          current-page (get-in db (paths/current-page))
           user-role (:role user)]
 
       ;; Log authentication details
@@ -104,4 +105,3 @@
       (assoc-in [:session :loading?] false)
       (assoc-in [:session :authenticated?] false)
       (assoc-in [:session :error] "Failed to fetch authentication status"))))
-

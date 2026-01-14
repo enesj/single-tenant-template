@@ -137,6 +137,7 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 - `/payers` - Payers reference data
 - `/expenses/:expense-id` - Expense detail
 - `/expenses/reports` - Personal spending reports
+- `/expenses/settings` - User expense settings (defaults such as currency/payer, notifications)
 
 ### Key Features
 
@@ -147,6 +148,15 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 5. **Receipts Inbox**: Review receipts and approve into expenses (`receipts_list.cljs`, `receipt_detail.cljs`)
 6. **Reference Data**: Browse/manage suppliers and payers (`suppliers.cljs`, `payers.cljs`)
 7. **Reports**: Visual breakdown of expenses by category and supplier (`expense_reports.cljs`)
+8. **User Settings**: Persisted per-user settings (`expense_settings.cljs`) backed by `/api/v1/expenses/settings`
+
+### Role/capability gating (user-facing)
+
+User-facing expenses endpoints and pages are role-gated:
+
+- **Read**: `viewer|member|admin|owner` can view expenses/receipts/reference data.
+- **Write**: `member|admin|owner` can create/update/delete expenses, upload receipts, review/approve receipts, and modify reference data.
+- **Danger zone / power tools**: `admin|owner` only (e.g. supplier purge and power-user reference management pages).
 
 ## Backend Implementation
 
@@ -161,6 +171,10 @@ User-facing APIs are mounted under `/api/v1/expenses` (upload, receipts inbox, s
 - Full CRUD: create, read, update, delete
 - Search and autocomplete functionality
 - Reference checking before deletion
+
+Notes:
+- Supplier deletion is **archiving** (soft delete via `archived_at`) rather than hard delete.
+- Permanent deletion is available via a separate **purge** operation (requires supplier archived first and no active expenses).
 
 **Payers**
 - Type-based categorization
@@ -269,6 +283,8 @@ Key services in `src/app/domain/backend/expenses/services/`:
  :line_total :decimal
  :created_at :timestamp}
 
+Note: line item quantity supports **3-decimal precision** (e.g. weights/volumes).
+
 ;; Articles
 {:id :uuid
  :canonical_name :string
@@ -305,16 +321,28 @@ Key services in `src/app/domain/backend/expenses/services/`:
 
 1. **Upload**: User uploads receipt image/file (creates a `receipts` row with status `uploaded`)
 2. **OCR (async)**: Receipt OCR worker processes pending receipts and stores markdown/extraction + guess fields (status transitions toward `extracted` / `review_required`)
-3. **Review**: User/admin reviews receipt detail and adjusts extracted data as needed
+3. **Review**: User/admin reviews receipt detail and adjusts extracted data as needed (saved via a dedicated “review” action that does **not** create an expense)
 4. **Mapping**: Map items to articles (create if needed)
 5. **Approval**: Approve receipt and create expense
 6. **Posting**: Receipt becomes `posted` after expense creation
+
+Notes:
+- The system may mark a receipt as `review_required` when extracted totals look inconsistent (e.g. header total vs sum of extracted line totals).
+- Review is intentionally separate from approve so users can save incremental corrections before committing to expense creation.
 
 ### Receipt OCR Worker (Mistral)
 
 - Run one-shot processing: `bb receipt-ocr-worker dev`
 - Run continuously: `bb receipt-ocr-worker dev --loop` (polls every 30s by default)
 - Requires `MISTRAL_API_KEY` (disable with `MISTRAL_OCR_ENABLED=false`); see `PLAN-mistral-ocr-pos-receipts.md` for details.
+
+### POS integration: auto-matching + unmapped items
+
+When POS receipts produce item labels that don’t match your canonical article names, the domain provides a workflow to reduce manual mapping:
+
+1. **Auto-matching**: expense items can be auto-linked to articles via **supplier-specific aliases**.
+2. **Unmapped items**: view the “unmapped items” list and map items to articles.
+3. **Batch alias creation**: create multiple aliases in one action to improve future auto-matching.
 
 ### Price Tracking Flow
 

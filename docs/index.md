@@ -14,6 +14,14 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 
 **New (2025-12-26):** Mistral OCR integration for POS receipts with an async worker (`bb receipt-ocr-worker`) plus user receipt upload/inbox/approval endpoints. See `PLAN-mistral-ocr-pos-receipts.md` and `docs/expenses/index.md`.
 
+**New (2026-01-07):** Receipt review workflow improvements (separate “review” vs “approve”, better receipt preview, and preserving original extraction guesses). See `docs/expenses/index.md` and `docs/backend/http-api.md`.
+
+**New (2026-01-08):** POS integration upgrades: auto-matching expense items to articles via supplier aliases, unmapped items management + batch alias creation, and 3-decimal precision support for line-item quantities. See `docs/expenses/index.md`.
+
+**New (2026-01-11):** Supplier enhancements (archiving + detail view support) and improved delete error handling for FK violations. See `docs/expenses/index.md` and `docs/backend/http-api.md`.
+
+**New (2026-01-13):** Expenses role/capability gating (frontend + API) and persisted user expense settings (`/api/v1/expenses/settings`). See `docs/expenses/index.md` and `docs/backend/http-api.md`.
+
 ## Quick Start
 
 1. **Dev setup** → `docs/operations/README.md#initial-setup`

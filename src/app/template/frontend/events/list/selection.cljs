@@ -61,7 +61,7 @@
     (when (and entity-type item-id)
       ;; IDs should already be normalized upstream, but we'll convert to string for consistent tracking
       (let [fetch-key (str item-id)
-            already-fetching? (get-in db [:entity-fetches entity-type fetch-key])]
+            already-fetching? (get-in db (conj (paths/entity-fetches entity-type) fetch-key))]
 
         (println "FETCH REQUEST - Entity:" entity-type "ID:" item-id "(type:" (type item-id) ")" "Already fetching?" already-fetching?)
 
@@ -74,7 +74,7 @@
           {:db (-> db
                  (assoc-in (paths/entity-loading? entity-type) true)
                  ;; Mark as fetching to prevent duplicates
-                 (assoc-in [:entity-fetches entity-type fetch-key] true))
+                 (assoc-in (conj (paths/entity-fetches entity-type) fetch-key) true))
            :http-xhrio (http/get-entity
                          {:entity-name (name entity-type)
                           :id item-id
@@ -93,7 +93,7 @@
 
       {:db (-> db
              ;; Clear the fetch-in-progress flag
-             (update-in [:entity-fetches entity-type] dissoc fetch-key)
+             (update-in (paths/entity-fetches entity-type) dissoc fetch-key)
              ;; Add the item to the entity data
              (assoc-in (conj (paths/entity-data entity-type) item-id) response)
              ;; Ensure the item ID is in the list of IDs
@@ -115,4 +115,4 @@
   ::initialize-form-with-item
   common-interceptors
   (fn [db [entity-type item]]
-    (assoc-in db [:forms (keyword entity-type) :values] item)))
+    (assoc-in db (paths/form-values (keyword entity-type)) item)))

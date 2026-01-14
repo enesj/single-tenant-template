@@ -29,50 +29,56 @@
   (fn [db [_ entity-key opts]]
     (initialize-entity-ui-state db entity-key opts)))
 
-(defn init-expenses-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :expenses
-                {:sort-field :purchased-at :sort-direction :desc}]))
+;; =============================================================================
+;; Adapter init helpers
+;; =============================================================================
 
-(defn init-receipts-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :receipts
-                {:sort-field :created-at :sort-direction :desc}]))
+(def ^:private default-init-opts
+  {:expenses {:sort-field :purchased-at :sort-direction :desc}
+   :receipts {:sort-field :created-at :sort-direction :desc}
+   :suppliers {:sort-field :created-at :sort-direction :desc}
+   :payers {:sort-field :label :sort-direction :asc}
+   :articles {:sort-field :created-at :sort-direction :desc}
+   :article-aliases {:sort-field :created-at :sort-direction :desc}
+   :price-observations {:sort-field :observed-at :sort-direction :desc}
+   :expense-items {:sort-field :created-at :sort-direction :desc}})
 
-(defn init-suppliers-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :suppliers
-                {:sort-field :created-at :sort-direction :desc}]))
+(defn init-entity-adapter!
+  "Initialize list UI state for a single domain entity.
 
-(defn init-payers-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :payers
-                {:sort-field :label :sort-direction :asc}]))
+  Allows optional overrides for things like default sort.
+  Example:
+    (init-entity-adapter! :expenses {:sort-direction :asc})"
+  ([entity-key]
+   (init-entity-adapter! entity-key nil))
+  ([entity-key opts]
+   (rf/dispatch [::initialize-entity
+                 entity-key
+                 (merge (get default-init-opts entity-key {}) (or opts {}))])))
 
-(defn init-articles-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :articles
-                {:sort-field :created-at :sort-direction :desc}]))
+(def entity-init-fns
+  "Map of entity-key -> no-arg init fn.
 
-(defn init-article-aliases-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :article-aliases
-                {:sort-field :created-at :sort-direction :desc}]))
+  This is useful for registries and preloading code that needs a stable lookup
+  instead of a long list of per-entity vars."
+  (into {}
+    (map (fn [entity-key]
+           [entity-key (partial init-entity-adapter! entity-key)])
+      (keys default-init-opts))))
 
-(defn init-price-observations-adapter!
+(defn init-all-adapters!
+  "Initialize list UI state for all expenses domain entities." 
   []
-  (rf/dispatch [::initialize-entity
-                :price-observations
-                {:sort-field :observed-at :sort-direction :desc}]))
+  (doseq [[_ init-fn] entity-init-fns]
+    (when (fn? init-fn)
+      (init-fn))))
 
-(defn init-expense-items-adapter!
-  []
-  (rf/dispatch [::initialize-entity
-                :expense-items
-                {:sort-field :created-at :sort-direction :desc}]))
+;; Backwards-compatible per-entity vars (consumed by domain registry today)
+(def init-expenses-adapter! (get entity-init-fns :expenses))
+(def init-receipts-adapter! (get entity-init-fns :receipts))
+(def init-suppliers-adapter! (get entity-init-fns :suppliers))
+(def init-payers-adapter! (get entity-init-fns :payers))
+(def init-articles-adapter! (get entity-init-fns :articles))
+(def init-article-aliases-adapter! (get entity-init-fns :article-aliases))
+(def init-price-observations-adapter! (get entity-init-fns :price-observations))
+(def init-expense-items-adapter! (get entity-init-fns :expense-items))

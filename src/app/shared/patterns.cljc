@@ -6,6 +6,8 @@
     [app.shared.patterns.common :as common]
     [app.shared.patterns.date-time :as date-time]
     [app.shared.patterns.email :as email]
+    [app.shared.patterns.phone :as phone]
+    [app.shared.patterns.slug :as slug]
     [app.shared.patterns.url :as url]))
 
 ;; Re-export core validation utility
@@ -29,6 +31,16 @@
 (def http-url-pattern url/http-url-pattern)
 (def valid-url? url/valid-url?)
 (def valid-http-url? url/valid-http-url?)
+
+;; Re-export Slug Patterns
+(def slug-pattern slug/slug-pattern)
+(def valid-slug? slug/valid-slug?)
+
+;; Re-export Phone Patterns
+(def phone-e164-pattern phone/phone-e164-pattern)
+(def phone-loose-pattern phone/phone-loose-pattern)
+(def valid-phone-e164? phone/valid-phone-e164?)
+(def valid-phone? phone/valid-phone?)
 
 ;; Re-export Auth Patterns
 (def username-pattern auth/username-pattern)

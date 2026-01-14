@@ -4,251 +4,113 @@
    Provides common string manipulation functions that work consistently
    across Clojure and ClojureScript environments."
   (:require
-    [clojure.string]))
+    [clojure.string :as str]))
 
 ;; ========================================
 ;; String Case Conversion
 ;; ========================================
 
-#_(defn kebab-case
-  "Convert string to kebab-case (e.g., 'Hello World' -> 'hello-world')"
-  [s]
-  (when s
-    (-> s
-      str
-      (.toLowerCase)
-      (clojure.string/replace #"[^a-zA-Z0-9]+" "-")
-      (clojure.string/replace #"^-|-$" ""))))
+(defn kebab-case
+  "Convert a value to a kebab-case string.
 
-#_(defn snake-case
-  "Convert string to snake_case (e.g., 'Hello World' -> 'hello_world')"
+  Examples:
+  - 'Hello World' -> 'hello-world'
+  - 'hello_world' -> 'hello-world'"
   [s]
-  (when s
-    (-> s
-      str
-      (.toLowerCase)
-      (clojure.string/replace #"[^a-zA-Z0-9]+" "_")
-      (clojure.string/replace #"^_|_$" ""))))
+  (when (some? s)
+    (-> (str s)
+      (str/lower-case)
+      (str/replace #"[_\s]+" "-")
+      (str/replace #"[^a-z0-9-]+" "-")
+      (str/replace #"-+" "-")
+      (str/replace #"^-|-$" ""))))
+
+(defn snake-case
+  "Convert a value to a snake_case string.
+
+  Examples:
+  - 'Hello World' -> 'hello_world'
+  - 'hello-world' -> 'hello_world'"
+  [s]
+  (when (some? s)
+    (-> (str s)
+      (str/lower-case)
+      (str/replace #"[-\s]+" "_")
+      (str/replace #"[^a-z0-9_]+" "_")
+      (str/replace #"_+" "_")
+      (str/replace #"^_|_$" ""))))
 
 (defn camel-case
   "Convert string to camelCase (e.g., 'hello-world' -> 'helloWorld')"
   [s]
   (when s
-    (let [words (clojure.string/split (str s) #"[^a-zA-Z0-9]+")]
+    (let [words (str/split (str s) #"[^a-zA-Z0-9]+")]
       (if (empty? words)
         ""
-        (str (clojure.string/lower-case (first words))
-          (clojure.string/join ""
-            (map clojure.string/capitalize (rest words))))))))
-
-#_(defn pascal-case
-  "Convert string to PascalCase (e.g., 'hello-world' -> 'HelloWorld')"
-  [s]
-  (when s
-    (let [words (clojure.string/split (str s) #"[^a-zA-Z0-9]+")]
-      (clojure.string/join "" (map clojure.string/capitalize words)))))
+        (str (str/lower-case (first words))
+          (str/join ""
+            (map str/capitalize (rest words))))))))
 
 ;; ========================================
 ;; String Cleaning and Normalization
 ;; ========================================
 
-#_(defn slugify
-  "Convert string to URL-friendly slug"
+(defn slugify
+  "Convert a value to a URL-friendly slug (kebab-case, alnum + dash)."
   [s]
-  (when s
-    (-> s
-      str
-      (.toLowerCase)
-      (clojure.string/replace #"[^\w\s-]" "")
-      (clojure.string/replace #"[\s_-]+" "-")
-      (clojure.string/replace #"^-|-$" ""))))
+  (when (some? s)
+    (-> (str s)
+      (str/lower-case)
+      (str/replace #"[^a-z0-9\s_-]" "")
+      (str/replace #"[\s_]+" "-")
+      (str/replace #"-+" "-")
+      (str/replace #"^-|-$" ""))))
 
-#_(defn clean-whitespace
-  "Clean up whitespace in string (trim and normalize internal whitespace)"
+(defn clean-whitespace
+  "Clean up whitespace in a value (trim and normalize internal whitespace)."
   [s]
-  (when s
-    (-> s
-      str
-      clojure.string/trim
-      (clojure.string/replace #"\s+" " "))))
-
-#_(defn remove-non-alphanumeric
-  "Remove all non-alphanumeric characters except spaces"
-  [s]
-  (when s
-    (clojure.string/replace (str s) #"[^a-zA-Z0-9\s]" "")))
-
-#_(defn normalize-phone
-  "Normalize phone number to digits only"
-  [phone]
-  (when phone
-    (clojure.string/replace (str phone) #"[^\d]" "")))
-
-;; ========================================
-;; String Truncation and Ellipsis
-;; ========================================
-
-#_(defn truncate
-  "Truncate string to max-length, optionally adding suffix"
-  ([s max-length]
-   (truncate s max-length "..."))
-  ([s max-length suffix]
-   (when s
-     (let [s-str (str s)]
-       (if (<= (count s-str) max-length)
-         s-str
-         (str (subs s-str 0 (- max-length (count suffix))) suffix))))))
-
-#_(defn truncate-words
-  "Truncate string to max number of words"
-  ([s max-words]
-   (truncate-words s max-words "..."))
-  ([s max-words suffix]
-   (when s
-     (let [words (clojure.string/split (str s) #"\s+")]
-       (if (<= (count words) max-words)
-         (clojure.string/join " " words)
-         (str (clojure.string/join " " (take max-words words)) suffix))))))
-
-#_(defn ellipsis-middle
-  "Add ellipsis in middle of string if too long"
-  [s max-length]
-  (when s
-    (let [s-str (str s)]
-      (if (<= (count s-str) max-length)
-        s-str
-        (let [side-length (quot (- max-length 3) 2)
-              start (subs s-str 0 side-length)
-              end (subs s-str (- (count s-str) side-length))]
-          (str start "..." end))))))
-
-;; ========================================
-;; String Interpolation and Templates
-;; ========================================
-
-#_(defn interpolate
-  "Safe string interpolation using a map of replacements.
-
-   Example: (interpolate 'Hello {{name}}!' {:name 'World'})
-   Returns: 'Hello World!'"
-  [template replacements]
-  (when template
-    (reduce-kv
-      (fn [s k v]
-        (clojure.string/replace s (str "{{" (name k) "}}") (str v)))
-      (str template)
-      (or replacements {}))))
-
-#_(defn template-vars
-  "Extract template variable names from a string.
-
-   Example: (template-vars 'Hello {{name}} {{surname}}!')
-   Returns: ['name' 'surname']"
-  [template]
-  (when template
-    (mapv #(second %)
-      (re-seq #"\{\{([^}]+)\}\}" (str template)))))
+  (when (some? s)
+    (-> (str s)
+      (str/trim)
+      (str/replace #"\s+" " "))))
 
 ;; ========================================
 ;; String Validation Helpers
 ;; ========================================
 
-#_(defn blank?
-  "Check if string is nil, empty, or contains only whitespace"
+(defn blank?
+  "True when s is nil, empty, or contains only whitespace.
+
+  Non-string values are treated as non-blank." 
   [s]
   (or (nil? s)
-    (and (string? s) (clojure.string/blank? s))))
+    (and (string? s) (str/blank? s))))
 
-#_(defn not-blank?
-  "Check if string is not blank"
+(defn not-blank?
+  "Negation of `blank?`." 
   [s]
   (not (blank? s)))
 
-#_(defn non-empty-string?
-  "Check if value is a non-empty string"
+(defn non-empty-string?
+  "True when s is a non-blank string." 
   [s]
-  (and (string? s) (not (clojure.string/blank? s))))
-
-#_(defn starts-with-any?
-  "Check if string starts with any of the given prefixes"
-  [s prefixes]
-  (when (and s (seq prefixes))
-    (some #(clojure.string/starts-with? (str s) (str %)) prefixes)))
-
-#_(defn ends-with-any?
-  "Check if string ends with any of the given suffixes"
-  [s suffixes]
-  (when (and s (seq suffixes))
-    (some #(clojure.string/ends-with? (str s) (str %)) suffixes)))
-
-#_(defn contains-any?
-  "Check if string contains any of the given substrings"
-  [s substrings]
-  (when (and s (seq substrings))
-    (some #(clojure.string/includes? (str s) (str %)) substrings)))
-
-;; ========================================
-;; String Comparison Utilities
-;; ========================================
-
-#_(defn similarity-score
-  "Calculate similarity score between two strings (0.0 to 1.0)
-   Using simple character overlap ratio"
-  [s1 s2]
-  (when (and s1 s2)
-    (let [str1 (str s1)
-          str2 (str s2)
-          chars1 (set str1)
-          chars2 (set str2)
-          intersection (clojure.set/intersection chars1 chars2)
-          union (clojure.set/union chars1 chars2)]
-      (if (empty? union)
-        1.0
-        (double (/ (count intersection) (count union)))))))
-
-#_(defn fuzzy-match?
-  "Check if strings are similar within threshold (0.0 to 1.0)"
-  [s1 s2 threshold]
-  (>= (similarity-score s1 s2) threshold))
-
-;; ========================================
-;; Number and Currency Formatting
-;; ========================================
-
-#_(defn format-currency
-  "Format number as currency string"
-  ([amount] (format-currency amount "$"))
-  ([amount symbol]
-   (when amount
-     #?(:clj (format "%s%.2f" symbol (double amount))
-        :cljs (str symbol (.toFixed (js/Number amount) 2))))))
-
-#_(defn format-number
-  "Format number with thousands separators"
-  [n]
-  (when n
-    #?(:clj (format "%,d" (long n))
-       :cljs (.toLocaleString (js/Number n)))))
-
-#_(defn format-percentage
-  "Format number as percentage"
-  ([ratio] (format-percentage ratio 1))
-  ([ratio decimals]
-   (when ratio
-     #?(:clj (format (str "%." decimals "f%%") (* ratio 100))
-        :cljs (str (.toFixed (* (js/Number ratio) 100) decimals) "%")))))
+  (and (string? s) (not (str/blank? s))))
 
 ;; ========================================
 ;; Platform-specific String Operations
 ;; ========================================
 
-#_(defn safe-parse-int
-  "Safely parse string to integer, returning nil on failure"
+(defn safe-parse-int
+  "Safely parse a string to an integer, returning nil on failure.
+
+  Notes:
+  - Accepts leading/trailing whitespace
+  - Rejects empty/blank strings" 
   [s]
-  (when (and s (string? s))
+  (when (and (string? s) (not (str/blank? s)))
     (try
-      #?(:clj (Integer/parseInt (clojure.string/trim s))
-         :cljs (let [n (js/parseInt (clojure.string/trim s))]
+      #?(:clj (Long/parseLong (str/trim s))
+         :cljs (let [n (js/parseInt (str/trim s) 10)]
                  (when-not (js/isNaN n) n)))
       (catch #?(:clj Exception :cljs js/Error) _
         nil))))
@@ -258,8 +120,8 @@
   [s]
   (when (and s (string? s))
     (try
-      #?(:clj (Double/parseDouble (clojure.string/trim s))
-         :cljs (let [n (js/parseFloat (clojure.string/trim s))]
+      #?(:clj (Double/parseDouble (str/trim s))
+         :cljs (let [n (js/parseFloat (str/trim s))]
                  (when-not (js/isNaN n) n)))
       (catch #?(:clj Exception :cljs js/Error) _
         nil))))
@@ -268,4 +130,4 @@
 ;; Legacy Deprecation Warnings
 ;; ========================================
 
-;; Function removed - use appropriate function from app.shared.string
+;; (intentionally empty)

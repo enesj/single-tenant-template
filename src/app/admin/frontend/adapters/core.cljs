@@ -11,6 +11,7 @@
     [app.template.frontend.shared.bridges.crud :as shared-bridges]
     [app.template.frontend.shared.utils.db :as db-utils]
     [app.template.frontend.shared.utils.entity :as entity-utils]
+    [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]))
 
 ;; Ensure template CRUD bridge event handlers are registered during adapter load in tests
@@ -22,7 +23,7 @@
 (defn admin-context?
   "Return true when the current runtime indicates the admin UI context."
   [db]
-  (let [route-name (get-in db [:current-route :data :name])
+  (let [route-name (get-in db (paths/current-route-name))
         admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
         pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))]

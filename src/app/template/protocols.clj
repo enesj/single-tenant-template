@@ -6,47 +6,15 @@
 
 (defprotocol BusinessService
   "Generic business service lifecycle management"
-  #_(initialize [this]
-      "Initialize service with required dependencies
-      Returns: initialized service instance")
   (cleanup [this]
     "Cleanup service resources and connections
     Returns: service instance"))
 
-;; Removed duplicate
-
 (defprotocol ^:private AuthenticationService
   "Template authentication service interface"
   (authenticate [this credentials]
-  "Authenticate user with various credential types (email/password, OAuth token)
-  Returns: {:success? boolean :user map :token string :error string}")
-  #_(create-session [this user-id tenant-id]
-    "Create new user session with tenant context
-    Returns: {:token string :expires-at instant}")
-  #_(validate-session [this token]
-    "Validate session token and return user/tenant context
-    Returns: {:valid? boolean :user map :tenant map :error string}")
-  #_(logout [this token]
-    "Invalidate session token
-    Returns: {:success? boolean}"))
-
-#_(defprotocol TenantService
-    "Template tenant management interface"
-    (create-tenant [this tenant-data]
-      "Create new tenant with default settings
-      Returns: {:success? boolean :tenant map :error string}")
-    (get-tenant [this tenant-id]
-      "Retrieve tenant by ID
-      Returns: tenant map or nil")
-    (update-tenant [this tenant-id updates]
-      "Update tenant information
-      Returns: {:success? boolean :tenant map :error string}")
-    (delete-tenant [this tenant-id]
-      "Delete tenant and all associated data
-      Returns: {:success? boolean :error string}")
-    (list-tenants [this filters pagination]
-      "List tenants with filtering and pagination
-      Returns: {:tenants [map] :total int :page int}"))
+    "Authenticate user with various credential types (email/password, OAuth token)
+    Returns: {:success? boolean :user map :token string :error string}"))
 
 (defprotocol ^:private EntityCRUDService
   "Generic entity CRUD interface for metadata-driven operations"
@@ -55,31 +23,13 @@
     Returns: {:success? boolean :entity map :error string}")
   (get-entity [this entity-type id context]
     "Retrieve entity by ID within tenant context
-    Returns: entity map or nil")
-  #_(update-entity [this entity-type id updates context]
-      "Update entity with validation and casting
-      Returns: {:success? boolean :entity map :error string}")
-  #_(delete-entity [this entity-type id context]
-      "Delete entity by ID
-      Returns: {:success? boolean :error string}")
-  #_(list-entities [this entity-type filters pagination context]
-      "List entities with filtering, pagination, and joins
-      Returns: {:entities [map] :total int :page int}")
-  #_(validate-entity-crud [this entity-type data context]
-      "Validate entity data against metadata schema
-      Returns: {:valid? boolean :errors [string] :validated-data map}"))
+    Returns: entity map or nil"))
 
 (defprotocol ^:private ValidationService
   "Template validation service interface"
   (validate-entity [this entity-type data context]
     "Validate complete entity data
-    Returns: {:valid? boolean :errors map :validated-data map}")
-  #_(validate-field [this entity-type field-name value context]
-      "Validate individual field value
-      Returns: {:valid? boolean :error string :coerced-value any}")
-  #_(get-validation-schema [this entity-type]
-      "Get validation schema for entity type
-      Returns: validation schema map"))
+    Returns: {:valid? boolean :errors map :validated-data map}"))
 
 (comment
   ;; Keep these protocol vars referenced so clojure-lsp/clj-kondo doesn't flag
@@ -87,18 +37,3 @@
   AuthenticationService
   EntityCRUDService
   ValidationService)
-
-#_(defprotocol MetadataService
-    "Template metadata service interface"
-    (get-entity-schema [this entity-type]
-      "Get complete schema definition for entity type
-      Returns: schema map with fields, constraints, relations")
-    (get-field-metadata [this entity-type field-name]
-      "Get metadata for specific field
-      Returns: field metadata map")
-    (list-entity-types [this]
-      "List all available entity types
-      Returns: [keyword]")
-    (get-ui-metadata [this entity-type view-type]
-      "Get UI metadata for entity (form, list, detail views)
-      Returns: UI configuration map"))

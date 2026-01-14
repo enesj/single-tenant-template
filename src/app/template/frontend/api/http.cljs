@@ -7,8 +7,7 @@
     [app.shared.http.core :as shared-http-core]
     [app.template.frontend.api :as api]
     [clojure.string :as str]
-    [re-frame.db :as rf-db]
-    #_[taoensso.timbre :as log]))
+    [re-frame.db :as rf-db]))
 
 ;;; -------------------------
 ;;; Request Formats
@@ -21,14 +20,6 @@
 (def json-response-format
   "Standard JSON response format with keyword keys"
   (ajax/json-response-format {:keywords? true}))
-
-#_(def transit-request-format
-    "Transit request format for rich data types"
-    (ajax/transit-request-format))
-
-#_(def transit-response-format
-    "Transit response format with keyword keys"
-    (ajax/transit-response-format {:keywords? true}))
 
 ;;; -------------------------
 ;;; Core Request Builder
@@ -77,11 +68,6 @@
   "Create a DELETE request configuration"
   [{:keys [_uri _on-success _on-failure] :as opts}]
   (api-request (assoc opts :method :delete)))
-
-#_(defn patch-request
-    "Create a PATCH request configuration"
-    [{:keys [_uri params _on-success _on-failure] :as opts}]
-    (api-request (assoc opts :method :patch :params params)))
 
 ;;; -------------------------
 ;;; Entity CRUD Operations
@@ -224,14 +210,6 @@
        :on-success on-success
        :on-failure on-failure})))
 
-;; Legacy function names for compatibility
-#_(def entity-get-all get-entities)
-#_(def entity-get-by-id get-entity)
-#_(def entity-create create-entity)
-#_(def entity-update update-entity)
-#_(def entity-delete delete-entity)
-#_(def entity-batch-update batch-update-entities)
-
 ;;; -------------------------
 ;;; Error Handling
 ;;; -------------------------
@@ -240,43 +218,3 @@
   "Extract error message from various response formats - delegates to shared utilities"
   [response]
   (shared-http/extract-error-message response))
-
-#_(defn log-request-error
-    "Log request errors with context"
-    [context response]
-    (log/error (str "Request failed - " context ": ")
-      (extract-error-message response)))
-
-;;; -------------------------
-;;; Request Interceptors
-;;; -------------------------
-
-#_(defn with-loading-state
-    "Add loading state management to request - Loading is now handled by fetch events"
-    [_entity-type config]
-  ;; Loading state is now managed by fetch-entities/fetch-success/fetch-failure events
-  ;; This function is kept for backwards compatibility but is effectively a no-op
-    config)
-
-#_(defn with-error-handling
-    "Add error handling to request"
-    [entity-type config]
-    (update config :on-failure
-      #(vec (concat [:app.template.frontend.events.list.crud/fetch-failure entity-type]
-              (if (vector? %) % [%])))))
-
-#_(defn with-error-state
-    "Add error state management to request"
-    [request error-path]
-    (-> request
-      (update :on-failure #(into [[:db/assoc-in error-path (extract-error-message %)]] %))))
-
-#_(defn add-auth-header
-    "Add authorization header to request"
-    [request token]
-    (assoc-in request [:headers "Authorization"] (str "Bearer " token)))
-
-#_(defn add-csrf-token
-    "Add CSRF token to request headers"
-    [request token]
-    (assoc-in request [:headers "X-CSRF-Token"] token))
