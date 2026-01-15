@@ -29,6 +29,7 @@ node_modules
 # IDE specific
 *.ipr
 *.iws
+*.iml
 
 # Other
 .cpcache/
