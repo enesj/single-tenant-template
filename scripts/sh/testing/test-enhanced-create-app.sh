@@ -24,7 +24,7 @@ trap cleanup EXIT
 # Test 1: Basic project creation with validation
 echo -e "\n📋 Test 1: Basic project creation with validation"
 echo "------------------------------------------------"
-bb scripts/create-new-app.clj test-app-basic \
+bb create-new-app test-app-basic \
     --title "Test Application" \
     --db-name "test_db" \
     --package-name "test-app"
@@ -47,7 +47,7 @@ cat > test-config.edn << 'EOF'
  :target-dir "./test-app-config"}
 EOF
 
-bb scripts/create-new-app.clj test-app-config --config test-config.edn
+bb create-new-app test-app-config --config test-config.edn
 
 # Verify the configuration was applied correctly
 if grep -q "Config Test App" test-app-config/resources/public/index.html; then
@@ -64,7 +64,7 @@ echo "-----------------------------"
 echo "{:invalid edn file" > test-app-config/test-invalid.edn
 
 # Run the create script on an existing project to test validation
-OUTPUT=$(bb scripts/create-new-app.clj test-app-validation 2>&1 || true)
+OUTPUT=$(bb create-new-app test-app-validation 2>&1 || true)
 if echo "$OUTPUT" | grep -q "Project validation"; then
     echo "✅ Test 3 passed: Validation system working"
 else
@@ -108,7 +108,7 @@ cat > test-invalid-config.edn << 'EOF'
  :db-name "test_db"}
 EOF
 
-OUTPUT=$(bb scripts/create-new-app.clj test-app-invalid --config test-invalid-config.edn 2>&1 || true)
+OUTPUT=$(bb create-new-app test-app-invalid --config test-invalid-config.edn 2>&1 || true)
 if echo "$OUTPUT" | grep -q "Error reading config file"; then
     echo "✅ Test 5 passed: Invalid EDN handled gracefully"
 else

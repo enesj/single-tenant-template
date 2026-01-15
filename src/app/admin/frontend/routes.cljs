@@ -95,7 +95,7 @@
            :view unified-settings/admin-settings-page
            :controllers [(guarded-start nil)]}]
 
-         ;; User Settings (per-user preferences)
+         ;; User Settings (domain-owned user UI config)
          ["/user-settings"
           {:name :admin-user-settings
            :view unified-settings/user-settings-page

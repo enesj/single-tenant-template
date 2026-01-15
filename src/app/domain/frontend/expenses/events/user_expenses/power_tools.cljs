@@ -94,6 +94,74 @@
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 
+(rf/reg-event-fx
+  :user-expenses/update-article-modal
+  common-interceptors
+  (fn [{:keys [db]} [article-id form-data on-success]]
+    (let [article-id-str (some-> article-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :put
+                      :uri (str endpoints/articles-endpoint "/" article-id-str)
+                      :admin-uri (str endpoints/admin-articles-endpoint "/" article-id-str)
+                      :params (or form-data {})
+                      :on-success [:user-expenses/update-article-modal-success article-id-str on-success]
+                      :on-failure [:user-expenses/update-article-modal-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/update-article-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [article-id on-success _response]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] false)
+           (assoc-in [:user-expenses :form :error] nil)
+           (cond-> (seq article-id)
+             (crud-success/track-recently-updated :articles article-id)))
+     :dispatch-n [[:user-expenses/fetch-articles]]
+     :fx [(when on-success
+            [:dispatch-later {:ms 100
+                              :dispatch [:user-expenses/call-modal-callback on-success]}])]}))
+
+(rf/reg-event-db
+  :user-expenses/update-article-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/delete-article
+  common-interceptors
+  (fn [{:keys [db]} [article-id]]
+    (let [article-id-str (some-> article-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :delete
+                      :uri (str endpoints/articles-endpoint "/" article-id-str)
+                      :admin-uri (str endpoints/admin-articles-endpoint "/" article-id-str)
+                      :on-success [:user-expenses/delete-article-success]
+                      :on-failure [:user-expenses/delete-article-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/delete-article-success
+  common-interceptors
+  (fn [{:keys [db]} [_response]]
+    {:db (assoc-in db [:user-expenses :form :loading?] false)
+     :dispatch [:user-expenses/fetch-articles]}))
+
+(rf/reg-event-db
+  :user-expenses/delete-article-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Expense items (power-user only; admin/owner)
 ;; ---------------------------------------------------------------------------
@@ -125,7 +193,6 @@
   common-interceptors
   (fn [db [error]]
     (finish-entity-load db :expense-items error)))
-
 
 (rf/reg-event-fx
   :user-expenses/update-expense-item-modal
@@ -164,7 +231,6 @@
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
-
 
 (rf/reg-event-fx
   :user-expenses/delete-expense-item
@@ -333,3 +399,71 @@
   common-interceptors
   (fn [db [error]]
     (finish-entity-load db :price-observations error)))
+
+(rf/reg-event-fx
+  :user-expenses/update-price-observation-modal
+  common-interceptors
+  (fn [{:keys [db]} [price-observation-id form-data on-success]]
+    (let [price-observation-id-str (some-> price-observation-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :put
+                      :uri (str endpoints/price-observations-endpoint "/" price-observation-id-str)
+                      :admin-uri (str endpoints/admin-price-observations-endpoint "/" price-observation-id-str)
+                      :params (or form-data {})
+                      :on-success [:user-expenses/update-price-observation-modal-success price-observation-id-str on-success]
+                      :on-failure [:user-expenses/update-price-observation-modal-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/update-price-observation-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [price-observation-id on-success _response]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] false)
+           (assoc-in [:user-expenses :form :error] nil)
+           (cond-> (seq price-observation-id)
+             (crud-success/track-recently-updated :price-observations price-observation-id)))
+     :dispatch-n [[:user-expenses/fetch-price-observations]]
+     :fx [(when on-success
+            [:dispatch-later {:ms 100
+                              :dispatch [:user-expenses/call-modal-callback on-success]}])]}))
+
+(rf/reg-event-db
+  :user-expenses/update-price-observation-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/delete-price-observation
+  common-interceptors
+  (fn [{:keys [db]} [price-observation-id]]
+    (let [price-observation-id-str (some-> price-observation-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :delete
+                      :uri (str endpoints/price-observations-endpoint "/" price-observation-id-str)
+                      :admin-uri (str endpoints/admin-price-observations-endpoint "/" price-observation-id-str)
+                      :on-success [:user-expenses/delete-price-observation-success]
+                      :on-failure [:user-expenses/delete-price-observation-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/delete-price-observation-success
+  common-interceptors
+  (fn [{:keys [db]} [_response]]
+    {:db (assoc-in db [:user-expenses :form :loading?] false)
+     :dispatch [:user-expenses/fetch-price-observations]}))
+
+(rf/reg-event-db
+  :user-expenses/delete-price-observation-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))

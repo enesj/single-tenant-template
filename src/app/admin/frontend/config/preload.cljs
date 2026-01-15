@@ -5,15 +5,16 @@
    form-fields.edn, table-columns.edn). Those are edited at runtime via /admin/admin-settings;
    inlining them makes shadow-cljs treat them as build inputs, which triggers full
    page reloads on save.
-   
-   Domain entity configs are loaded via domain config preloaders
-   (e.g., app.domain.frontend.expenses.admin.config.preload)."
+
+   Domain admin entity configs can also be preloaded via domain config preloaders
+   when the admin panel exposes domain pages.
+
+   This repo currently does not preload any domain admin entity configs (Expenses
+   admin pages removed)."
   (:require
     [app.admin.frontend.system.entity-registry :as entity-registry]
     [cljs.reader :as reader]
-    [shadow.resource :as resource]
-    ;; Load domain entity configs - they self-register during namespace load
-    app.domain.frontend.expenses.admin.config.preload))
+    [shadow.resource :as resource]))
 
 (defonce ^:private preloaded-entities
   (let [resource-content (resource/inline "app/admin/frontend/config/entities.edn")]

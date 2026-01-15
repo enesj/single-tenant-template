@@ -1,8 +1,9 @@
 #!/usr/bin/env bb
 
-(require
-  '[clojure.java.io :as io]
-  '[clojure.string :as str])
+(ns analyze-longest-files
+  (:require
+    [clojure.java.io :as io]
+    [clojure.string :as str]))
 
 (defn clojure-file?
   "Check if a file has a Clojure extension (.clj, .cljs, .cljc)."

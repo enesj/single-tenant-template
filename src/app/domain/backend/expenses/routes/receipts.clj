@@ -130,7 +130,7 @@
         (if-let [receipt (receipts/get-receipt db id)]
           (let [receipt* (->> receipt to-app (enrich-receipt-for-detail db))
                 download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt*))
-                               (str "/admin/api/expenses/receipts/" (str id) "/download"))]
+                               (str "/admin/api/expenses/receipts/" id "/download"))]
             (utils/success-response
               {:receipt (cond-> receipt*
                           download-url (assoc :download-url download-url))}))

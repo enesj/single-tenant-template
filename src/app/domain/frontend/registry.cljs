@@ -3,63 +3,17 @@
   (:require
     [app.domain.frontend.expenses.routes.user :as expenses-user-routes]
     ;; Domain-local init: loads events/subs via side effects
-    app.domain.frontend.expenses.init
-    ;; Domain adapters - admin (loads all adapter modules)
-    [app.domain.frontend.expenses.adapters :as expenses-adapter]
-    [app.domain.frontend.expenses.admin.components.detail-modals :as detail-modals]
-    [app.domain.frontend.expenses.admin.components.entity-actions :as entity-actions]))
+    app.domain.frontend.expenses.init))
 
 (def ^:private expenses-manifest
   {:id :expenses
-   :routes
-   {:user expenses-user-routes/routes}  ;; User routes are safe to include
-   ;; NOTE: Pages are NOT included here to avoid circular dependencies.
-   ;; Use app.domain.frontend.pages for page components.
-   :init! (fn []
-            ;; All events/subs are loaded via require above
-            ;; No additional initialization needed
-            nil)
-   :admin-entities
-   {:expenses {:init-fn expenses-adapter/init-expenses-adapter!}
-    :receipts {:init-fn expenses-adapter/init-receipts-adapter!
-               :custom-actions entity-actions/admin-receipts-actions
-               :modals [detail-modals/admin-receipt-detail-modal]}
-    :suppliers {:init-fn expenses-adapter/init-suppliers-adapter!
-                :custom-actions entity-actions/admin-suppliers-actions
-                :modals [detail-modals/admin-supplier-detail-modal]}
-    :payers {:init-fn expenses-adapter/init-payers-adapter!
-             :custom-actions entity-actions/admin-payers-actions
-             :modals [detail-modals/admin-payer-detail-modal]}
-    :articles {:init-fn expenses-adapter/init-articles-adapter!
-               :custom-actions entity-actions/admin-articles-actions
-               :modals [detail-modals/admin-article-detail-modal]}
-    :expense-items {:init-fn expenses-adapter/init-expense-items-adapter!
-                    :custom-actions entity-actions/admin-expense-items-actions
-                    :modals [detail-modals/admin-expense-item-detail-modal]}
-    :article-aliases {:init-fn expenses-adapter/init-article-aliases-adapter!
-                      :custom-actions entity-actions/admin-article-aliases-actions
-                      :modals [detail-modals/admin-article-alias-detail-modal]}
-    :price-observations {:init-fn expenses-adapter/init-price-observations-adapter!
-                         :custom-actions entity-actions/admin-price-observations-actions
-                         :modals [detail-modals/admin-price-observation-detail-modal]}}
-    :admin-domain-groups
-    {:expenses-admin
-     {:title "Expenses Admin"
-      :description "Admin-facing expense management and configuration"
-      :icon "💰"
-      :entities #{:expenses
-              :receipts
-              :suppliers
-              :payers
-              :expense-items
-              :articles
-              :article-aliases
-              :price-observations}
-      :color "accent"
-      :scope :admin}}
+   :routes {:user expenses-user-routes/routes}
+   :init! (fn [] nil)
+   :admin-entities {}
+   :admin-domain-groups {}
    :user-domain-groups
    {:expenses-user
-     {:title "User Expenses"
+    {:title "User Expenses"
      :description "User-facing expense tracking and management"
      :icon "💰"
      :entities #{:expenses

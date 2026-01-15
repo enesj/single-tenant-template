@@ -3,7 +3,6 @@
 
    Implements admin-like UX (modal add/edit) while using user-scoped endpoints."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal
                                                                        user-expense-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]

@@ -5,9 +5,7 @@
 
 ;; Constants and templates (extracted from lines 8-15)
 (def ^:private ERROR-TEMPLATE
-  (str "-- %s -------------------------------------\n\n%s\n"))
-
-(def ^:private INDEX-FIELD-NAME-IN-SPEC 2)
+  "-- %s -------------------------------------\n\n%s\n")
 
 ;; Error hierarchy definition (extracted from lines 112-118)
 (def ^:private error-hierarchy

@@ -172,7 +172,12 @@
    "unit_price"
    "line_total"
    "created_at"],
-  :always-visible ["raw_label"]},
+  :always-visible ["raw_label"],
+  :computed-fields
+  {:expense_purchased_at {},
+   :supplier_display_name {},
+   :payer_label {},
+   :article_canonical_name {}}},
  :price-observations
  {:available-columns
   ["article_canonical_name"
@@ -214,7 +219,9 @@
   ["article_canonical_name"
    "supplier_display_name"
    "observed_at"
-   "line_total"]},
+   "line_total"],
+  :computed-fields
+  {:article_canonical_name {}, :supplier_display_name {}}},
  :article-aliases
  {:available-columns
   ["supplier_display_name"
@@ -236,4 +243,6 @@
    "raw_label_normalized"
    "confidence"
    "created_at"],
-  :always-visible []}}
+  :always-visible [],
+  :computed-fields
+  {:supplier_display_name {}, :article_canonical_name {}}}}

@@ -1,10 +1,15 @@
 (ns system.core
   (:require
    [app.template.backend.core :refer [await-scheduler init with-my-system]]
+   [clojure.stacktrace :as stacktrace]
    [clojure.tools.namespace.repl :refer [refresh refresh-all set-refresh-dirs]]
-   [io.aviso.exception :refer [write-exception]]
    [system.state :refer [instance state]]
    [taoensso.timbre :as log]))
+
+(defn write-exception
+  "Pretty-print an exception stacktrace to stdout (dev convenience)."
+  [e]
+  (stacktrace/print-stack-trace e))
 
 (set-refresh-dirs "src" "dev" "config")
 

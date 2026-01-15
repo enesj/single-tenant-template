@@ -175,7 +175,7 @@
                                  (receipts/get-user-receipt db user-id id))]
                 (let [receipt-app (to-app receipt)
                       download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt-app))
-                                     (str "/api/v1/expenses/receipts/" (str id) "/download"))
+                         (str "/api/v1/expenses/receipts/" id "/download"))
                       receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                     download-url (assoc :download-url download-url))]
                   (h/json-response {:data receipt-app} 200))
@@ -315,7 +315,7 @@
                                     (receipts/get-user-receipt db user-id id))
                           receipt-app (to-app receipt)
                           download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt-app))
-                                         (str "/api/v1/expenses/receipts/" (str id) "/download"))
+                               (str "/api/v1/expenses/receipts/" id "/download"))
                           receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                         download-url (assoc :download-url download-url))]
                       (h/json-response {:data {:receipt receipt-app}} 200)))))

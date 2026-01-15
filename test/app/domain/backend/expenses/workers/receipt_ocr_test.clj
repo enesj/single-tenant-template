@@ -37,26 +37,26 @@
   (let [reconcile #'extraction/reconcile-extraction-with-markdown
         markdown (str "FISKALNI RACUN\n"
                    "| MLIJEKO MEGGLE 3,2% 657 | 3,000x | 2,25 | 6,75E |\n")
-        extraction {:items [{:raw_label "NIKE AIR MAX 1"
-                             :qty 1
-                             :unit_price 6.75
-                             :line_total 6.75}]}]
-    (let [{:keys [extraction changed? changes]} (reconcile extraction markdown)]
-      (is (true? changed?))
-      (is (= [{:from "NIKE AIR MAX 1" :to "MLIJEKO MEGGLE 3,2% 657" :match :ocr-markdown}] changes))
-      (is (= "MLIJEKO MEGGLE 3,2% 657" (get-in extraction [:items 0 :raw_label])))
-      (is (= 3.000M (get-in extraction [:items 0 :qty])))
-      (is (= 2.25M (get-in extraction [:items 0 :unit_price])))
-      (is (= 6.75M (get-in extraction [:items 0 :line_total]))))))
+        extraction-in {:items [{:raw_label "NIKE AIR MAX 1"
+                                :qty 1
+                                :unit_price 6.75
+                                :line_total 6.75}]}
+        {:keys [extraction changed? changes]} (reconcile extraction-in markdown)]
+    (is (true? changed?))
+    (is (= [{:from "NIKE AIR MAX 1" :to "MLIJEKO MEGGLE 3,2% 657" :match :ocr-markdown}] changes))
+    (is (= "MLIJEKO MEGGLE 3,2% 657" (get-in extraction [:items 0 :raw_label])))
+    (is (= 3.000M (get-in extraction [:items 0 :qty])))
+    (is (= 2.25M (get-in extraction [:items 0 :unit_price])))
+    (is (= 6.75M (get-in extraction [:items 0 :line_total])))))
 
 (deftest reconcile-extraction-noop-when-label-already-present
   (let [reconcile #'extraction/reconcile-extraction-with-markdown
         markdown "| NIKE AIR MAX 1 | 1x | 6,75 | 6,75 |\n"
-        extraction {:items [{:raw_label "NIKE AIR MAX 1" :line_total 6.75}]}]
-    (let [{:keys [extraction changed? changes]} (reconcile extraction markdown)]
-      (is (false? changed?))
-      (is (= [] changes))
-      (is (= "NIKE AIR MAX 1" (get-in extraction [:items 0 :raw_label]))))))
+        extraction-in {:items [{:raw_label "NIKE AIR MAX 1" :line_total 6.75}]}
+        {:keys [extraction changed? changes]} (reconcile extraction-in markdown)]
+    (is (false? changed?))
+    (is (= [] changes))
+    (is (= "NIKE AIR MAX 1" (get-in extraction [:items 0 :raw_label])))))
 
 (deftest markdown-line-item-candidates-supports-qty-lines
   (let [candidates #'markdown/markdown->line-item-candidates
@@ -130,7 +130,7 @@
 
 (deftest markdown-line-item-candidates-does-not-treat-dimensions-as-qty
   (let [candidates #'markdown/markdown->line-item-candidates
-        markdown (str "60963601 Torba papirna velika 32 x 16 x 45 - bez /pc 0,70E\n")
+  markdown "60963601 Torba papirna velika 32 x 16 x 45 - bez /pc 0,70E\n"
         items (candidates markdown)]
     (is (= 1 (count items)))
     (is (= {:raw_label "Torba papirna velika 32 x 16 x 45 - bez /pc"

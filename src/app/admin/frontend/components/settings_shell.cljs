@@ -158,15 +158,32 @@
 (defui edit-mode-instructions
   "Instructions displayed when in edit mode."
   [{:keys [scope tab]}]
-  ($ :div {:class "ds-alert ds-alert-warning mb-6"}
-    ($ :div
-      ($ :h4 {:class "font-bold"} "Edit Mode Active")
-      ($ :p {:class "text-sm"}
-        (case tab
-          "view-options" (str "Editing " (if (= scope :admin) "admin" "user") " view options. Click on any setting to cycle through states. Click 'Save settings' to persist.")
-          "form-fields" "Click fields to toggle them in each list. Click 'Save Changes' to persist."
-          "table-columns" "Click columns to toggle them in each list. Click 'Save Changes' to persist."
-          "Click settings to modify. Save to persist changes.")))))
+  (let [admin? (= scope :admin)]
+    ($ :div {:class "ds-alert ds-alert-warning mb-6"}
+      ($ :div
+        ($ :h4 {:class "font-bold"} "Edit Mode Active")
+        ($ :p {:class "text-sm"}
+          (cond
+            (and admin? (= tab "view-options"))
+            "Editing admin view options (policy defaults/locks). Click a setting to cycle through states, then click 'Save settings' to persist."
+
+            (and admin? (= tab "form-fields"))
+            "Editing admin form fields. Changes are saved immediately."
+
+            (and admin? (= tab "table-columns"))
+            "Editing admin table columns. Changes are saved immediately."
+
+            (and (not admin?) (= tab "view-options"))
+            "Editing domain-owned user UI defaults/locks. Click a setting to cycle through states, then click 'Save settings' to persist."
+
+            (and (not admin?) (= tab "form-fields"))
+            "Editing domain-owned form fields. Toggle fields, then click 'Save settings' to persist."
+
+            (and (not admin?) (= tab "table-columns"))
+            "Editing domain-owned table columns. Toggle columns, then click 'Save settings' to persist."
+
+            :else
+            "Click settings to modify. Save to persist changes."))))))
 
 ;; =============================================================================
 ;; Main Settings Shell Component

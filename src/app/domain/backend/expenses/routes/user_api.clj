@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
+    [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
     [app.domain.backend.expenses.handlers.user-expenses :as user-expenses-handlers]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
@@ -55,7 +56,13 @@
 
    ;; Supplier detail related lists (used by user Suppliers "View Details" modal)
    ["/article-aliases" {:get {:handler (supplier-detail/list-article-aliases-handler db)}}]
-   ["/price-observations" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]
+
+   ["/price-observations"
+    ["" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]
+
+    ["/:id"
+     {:put {:handler (user-price-observations/update-price-observation-handler db)}
+      :delete {:handler (user-price-observations/delete-price-observation-handler db)}}]]
 
    ["/payers"
     {:get {:handler (user-expenses-handlers/list-payers-handler db)}
@@ -96,7 +103,10 @@
 
     ["/items/:item-id/map" {:post {:handler (user-articles/map-item-to-article-handler db)}}]
 
-    ["/:id/aliases" {:post {:handler (user-articles/batch-create-aliases-handler db)}}]]
+    ["/:id/aliases" {:post {:handler (user-articles/batch-create-aliases-handler db)}}]
+
+    ["/:id" {:put {:handler (user-articles/update-article-handler db)}
+             :delete {:handler (user-articles/delete-article-handler db)}}]]
 
    ;; Expenses CRUD
    ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}

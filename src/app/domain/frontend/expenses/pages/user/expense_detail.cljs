@@ -1,7 +1,6 @@
 (ns app.domain.frontend.expenses.pages.user.expense-detail
   "User-facing expense detail view."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.template.frontend.components.button :refer [button]]
     [clojure.string :as str]
     [re-frame.core :as rf]

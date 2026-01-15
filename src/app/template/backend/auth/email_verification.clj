@@ -2,7 +2,7 @@
   "Email verification service for single-tenant authentication"
   (:require
     [app.template.backend.db.protocols :as db-protocols]
-    [java-time :as time]
+    [java-time.api :as time]
     [taoensso.timbre :as log])
   (:import
     [java.security SecureRandom]

@@ -5,7 +5,7 @@ This folder contains scripts for project creation, automation, and general proje
 ## Scripts
 
 ### Project Creation
-- **create-new-app.clj** - Enhanced Clojure project creation script with proper EDN parsing
+- **create_new_app.clj** - Enhanced Clojure project creation script with proper EDN parsing
 - **README-create-new-app.md** - Documentation for the project creation process
 
 ### Automation
@@ -19,7 +19,7 @@ This folder contains scripts for project creation, automation, and general proje
 
 ```bash
 # Create a new Clojure application
-bb project-management/create-new-app.clj my-new-app
+bb project-management/create_new_app.clj my-new-app
 
 # Combine files for analysis
 bb project-management/file_combiner.clj src/**/*.clj > combined-source.txt
@@ -30,7 +30,7 @@ bb project-management/md-to-pdf.clj README.md
 
 ## Project Creation Features
 
-The `create-new-app.clj` script provides:
+The `create_new_app.clj` script provides:
 - Proper EDN configuration parsing
 - Database setup with multi-tenant support
 - Docker Compose configuration

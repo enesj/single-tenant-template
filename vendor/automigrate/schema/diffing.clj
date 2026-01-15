@@ -7,7 +7,6 @@
     [automigrate.util.spec :as spec-util]
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
-    [clojure.string :as str]
     [differ.core :as differ]
     [weavejester.dependency :as dep]))
 

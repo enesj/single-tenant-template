@@ -66,15 +66,16 @@
         chosen-role (choose-enum-value role-labels [role] role)
         chosen-status (choose-enum-value status-labels [status] status)
         admin-id (UUID/randomUUID)
-        sql (format (str "insert into admins (id, email, full_name, password_hash, role, status, created_at, updated_at)
+        sql (format "insert into admins (id, email, full_name, password_hash, role, status, created_at, updated_at)
                            values (?, ?, ?, ?, ?::%s, ?::%s, now(), now())
                            on conflict (email) do update
                              set full_name = excluded.full_name,
                                  password_hash = excluded.password_hash,
                                  role = excluded.role,
                                  status = excluded.status,
-                                 updated_at = now()")
-                    role-type status-type)]
+                                 updated_at = now()"
+                    role-type
+                    status-type)]
     (jdbc/execute! ds [sql admin-id email full-name password-hash chosen-role chosen-status])
     {:id admin-id
      :role chosen-role

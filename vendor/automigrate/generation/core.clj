@@ -16,7 +16,6 @@
     [clojure.java.io :as io]
     [clojure.pprint :as pprint]
     [clojure.string :as str]
-    [clojure.spec.alpha :as s]
     [next.jdbc :as jdbc]
     [slingshot.slingshot :refer [throw+ try+]]))
 
@@ -219,7 +218,7 @@
         {:schema-migration-created schema-created?
          :extended-migrations-created true}))
 
-    (catch [:type ::s/invalid] e
+    (catch [:type :clojure.spec.alpha/invalid] e
       (file-util/prn-err e))
     (catch #(contains? #{:automigrate.models/missing-referenced-model
                          :automigrate.models/missing-referenced-field
@@ -270,7 +269,7 @@
           sql-migration-template (format "-- FORWARD\n\n\n-- BACKWARD\n")]
       (spit migration-file-name-full-path sql-migration-template)
       (println (str "Created migration: " migration-file-name-full-path)))
-    (catch [:type ::s/invalid] e
+    (catch [:type :clojure.spec.alpha/invalid] e
       (file-util/prn-err e))
     (catch #(contains? #{::missing-migration-name
                          :automigrate.files.management/duplicated-migration-numbers} (:type %)) e
@@ -310,7 +309,7 @@
                 (exec/save-migration! db migration-name migrations-table)
                 (exec/delete-migration! db migration-name migrations-table)))))
         (println "Nothing to migrate.")))
-    (catch [:type ::s/invalid] e
+    (catch [:type :clojure.spec.alpha/invalid] e
       (file-util/prn-err e))
     (catch #(contains? #{:automigrate.files.management/duplicated-migration-numbers
                          ::invalid-target-migration-number} (:type %)) e

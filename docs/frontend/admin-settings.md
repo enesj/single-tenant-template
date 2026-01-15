@@ -25,10 +25,11 @@ The “User UI Config” scope is **domain-owned configuration** (currently the 
 
 ### Configuration Files
 
-Admin settings are stored as EDN and loaded as a merge of:
+Admin settings are stored as EDN and loaded from:
 
 - **System/admin-owned** config under `src/app/admin/frontend/config/`
-- **Domain-owned** admin config under `src/app/domain/**/admin/config/` (for Expenses: `src/app/domain/frontend/expenses/admin/config/`)
+
+The backend supports an optional domain-admin overlay merge from `src/app/domain/**/admin/config/`, but the Expenses domain does not currently provide admin UI config (admin pages removed).
 
 Both scopes use the same EDN file types:
 

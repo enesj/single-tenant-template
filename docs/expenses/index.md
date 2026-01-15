@@ -4,7 +4,7 @@
 
 ## Overview
 
-The expenses domain provides comprehensive financial management functionality for tracking business expenses, receipts, suppliers, and price monitoring. It integrates with the admin panel to provide full CRUD operations and reporting capabilities.
+The expenses domain provides comprehensive financial management functionality for tracking expenses, receipts, suppliers, and price monitoring. It includes user-facing pages plus admin API endpoints for operational tooling and reporting.
 
 ## Domain Architecture
 
@@ -39,41 +39,35 @@ Articles ───► Article Aliases   │
 
 ### Routes and Pages
 
-The expenses domain contributes the following routes under `/admin` (see `src/app/domain/frontend/expenses/routes.cljs`):
+The expenses domain contributes the following user-facing routes under `/` (see `src/app/domain/frontend/expenses/routes/user.cljs`):
 
-- `/expenses` - List and manage expenses
-- `/expenses/:id` - Expense detail / edit view
-- `/expense-items` - List and manage individual expense line items (new 2025-12-25; create/edit via modal)
-- `/receipts` - Receipt inbox
-- `/receipts/:id` - Receipt detail / processing view
-- `/suppliers` - Supplier list
-- `/suppliers/:id` - Supplier detail / edit view
-- `/payers` - Payer list
-- `/payers/:id` - Payer detail / edit view
-- `/articles` - Article list
-- `/articles/:id` - Article detail / edit view
-- `/article-aliases` - Article alias list
-- `/article-aliases/:id` - Article alias detail / edit view
-- `/price-observations` - Price observations list
-- `/price-observations/:id` - Price observation detail / edit view
+- `/waiting-room` - Waiting room for unassigned users
+- `/expenses` - Expense dashboard
+- `/dashboard` - Alias for dashboard
+- `/unmapped-items` - Admin/owner-only power-user page
+- `/expenses/dashboard` - Dashboard alias
+- `/expenses/list` - Expense list/history
+- `/expenses/upload` - Receipt upload wizard
+- `/receipts` - Receipts inbox
+- `/receipts/:receipt-id` - Receipt detail
+- `/expenses/new` - New expense entry
+- `/expenses/reports` - Reports
+- `/expenses/settings` - User expense settings
+- `/suppliers` - Suppliers catalog
+- `/payers` - Payers list
+- `/expense-items` - Expense items (admin/owner only)
+- `/articles` - Articles (admin/owner only)
+- `/article-aliases` - Article aliases (admin/owner only)
+- `/price-observations` - Price observations (admin/owner only)
+- `/expenses/:expense-id` - Expense detail
 
 ### Components and Features
 
-#### Generic Admin Entity Pattern
+#### List/Page Pattern
 
-All expense entities use the generic admin entity page pattern:
+User-facing pages reuse the template `list-view` component plus domain events/subs to load data from `/api/v1/expenses/*`.
 
-```clojure
-;; Example: Suppliers page
-(defui suppliers-page []
-  ($ generic-admin-entity-page :suppliers))
-```
-
-This provides:
-- Standard list view with filtering and sorting
-- Create/edit forms with validation
-- Delete operations with confirmation
-- Batch operations where supported
+When the same user pages are rendered inside the admin shell, requests switch to `/admin/api/expenses/*` based on runtime context (see `app.domain.frontend.expenses.events.user-expenses.xhrio`).
 
 #### List View Controls
 
@@ -85,20 +79,13 @@ Each entity supports configurable list view controls:
 
 #### Form Configuration
 
-Admin forms (the `/admin/...` pages) are configured per entity via the **Admin scope** settings, merged from:
-
-- **System/admin-owned** config: `src/app/admin/frontend/config/*.edn`
-- **Domain-owned** admin config: `src/app/domain/**/admin/config/*.edn` (for Expenses: `src/app/domain/frontend/expenses/admin/config/*`)
-
-These are edited via `/admin/admin-settings`.
+The Expenses domain is not currently exposed in the admin panel UI. User-facing forms (the `/expenses/...` pages) use the domain-owned UI config under `src/app/domain/frontend/expenses/config/` (editable via `/admin/user-settings`).
 
 The form fields configuration lives in `form-fields.edn` and defines:
 - Create field lists
 - Edit field lists
 - Required field validation
 - Field-specific configuration (type, validation rules)
-
-User-facing forms (the `/expenses/...` pages) use the domain-owned UI config under `src/app/domain/frontend/expenses/config/` (editable via `/admin/user-settings`).
 
 #### Master/Detail Edit Forms (Expense + Line Items)
 
@@ -356,19 +343,14 @@ When POS receipts produce item labels that don’t match your canonical article 
 
 ### UI Configuration
 
-This domain has two related configuration locations:
+This domain uses domain-owned user UI config (user-facing defaults/locks):
 
-**Admin UI (admin list pages)**
-- Merged from:
-  - system config in `src/app/admin/frontend/config/`
-  - domain config in `src/app/domain/**/admin/config/` (for Expenses: `src/app/domain/frontend/expenses/admin/config/`)
-- Edited via `/admin/admin-settings`
-
-**User UI config (domain-owned, user-facing defaults/locks)**
 - Stored in `src/app/domain/frontend/expenses/config/`
 - Edited via `/admin/user-settings`
 
-Both use the same EDN file types:
+(Expenses admin pages were removed; `src/app/domain/frontend/expenses/admin/config/*` is no longer used.)
+
+The user UI config uses these EDN file types:
 - **entities.edn** - Entity definitions and metadata
 - **table-columns.edn** - Structural column configuration (incl. `:always-visible` enforcement)
 - **form-fields.edn** - Create/edit field lists + required fields
@@ -377,13 +359,10 @@ Both use the same EDN file types:
 ### Example Configuration
 
 ```clojure
-;; entities.edn (admin scope)
-;; For domain entities, the EDN is *metadata only*; the effective :adapter-init-fn
-;; is injected at preload time from the domain registry.
+;; entities.edn (user UI config)
 {:articles {:entity-key :articles
             :page-title "Articles"
             :page-description "Canonical expense items"
-            ;; see `app.domain.frontend.expenses.admin.config.preload`
             :display-settings {:show-add-button? true
                                :per-page 50}}}
 
@@ -404,12 +383,7 @@ Both use the same EDN file types:
 
 ### Admin Panel Integration
 
-The expenses domain integrates seamlessly with the admin panel:
-
-- **Navigation**: Sidebar links under "Expenses" section
-- **Entity Registry**: Automatic registration with admin system
-- **Generic Components**: Reuse of admin table and form components
-- **Settings**: Configurable through admin settings interface
+The expenses domain is not currently exposed in the admin panel UI. Admin endpoints still exist under `/admin/api/expenses/*` and are used when the same user pages are rendered in an admin context.
 
 ### Template Infrastructure
 

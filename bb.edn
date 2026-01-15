@@ -273,8 +273,8 @@
          bb create-new-app invoice-system --config ./custom-config.edn",
    :task (let [args *command-line-args*]
            (if (empty? args)
-             (shell "bb" "scripts/bb/project-management/create-new-app.clj" "--help")
-             (apply shell "bb" "scripts/bb/project-management/create-new-app.clj" args)))},
+             (shell "bb" "scripts/bb/project-management/create_new_app.clj" "--help")
+             (apply shell "bb" "scripts/bb/project-management/create_new_app.clj" args)))},
 
   clear-folder
   {:doc "Clear temporary project folders.\n\n       Options:\n         --tmp              Clear the tmp folder\n         --projectstmp      Clear the projectstmp folder\n         --test-screenshots Clear the test-screenshots folder\n         --all              Clear all above folders (default if no option given)\n\n       Usage:\n         bb clear-temp --tmp\n         bb clear-temp --all\n       ",
@@ -322,7 +322,7 @@
                non-flag-args (filter (fn [arg] (not (.startsWith arg "--"))) args)
                backup-file (last non-flag-args)]
            (if (and env backup-file)
-             (shell "clj" "-M" "scripts/bb/database/restore_db.clj" env backup-file)
+             (shell "clj" "-M" "scripts/bb/database/restore_db_legacy.clj" env backup-file)
              (do (println "Usage: bb restore-db --dev backup_file.sql or bb restore-db --test backup_file.sql")
                (println "  --dev   Restore to development database")
                (println "  --test  Restore to test database")

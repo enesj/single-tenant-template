@@ -55,45 +55,20 @@
       (is (contains? paths "/expenses/upload")))))
 
 (deftest all-admin-entities-test
-  (testing "all-admin-entities returns map of entity registrations"
+  (testing "all-admin-entities returns a map (may be empty)"
     (let [entities (domain-registry/all-admin-entities)]
-      (is (map? entities))
-      (is (pos? (count entities)))))
+      (is (map? entities))))
 
-  (testing "admin entities include expected expense entities"
-    (let [entity-keys (set (keys (domain-registry/all-admin-entities)))]
-      (is (contains? entity-keys :expenses))
-      (is (contains? entity-keys :receipts))
-      (is (contains? entity-keys :suppliers))
-      (is (contains? entity-keys :payers))
-      (is (contains? entity-keys :articles))))
-
-  (testing "each admin entity has init-fn"
-    (let [entities (domain-registry/all-admin-entities)]
-      (doseq [[k v] entities]
-        (is (contains? v :init-fn) (str "Entity " k " missing :init-fn"))
-        (is (fn? (:init-fn v)) (str "Entity " k " :init-fn is not a function"))))))
+  (testing "expenses domain currently does not register admin entities"
+    (is (empty? (domain-registry/all-admin-entities)))))
 
 (deftest all-admin-domain-groups-test
-  (testing "all-admin-domain-groups returns map of domain groups"
+  (testing "all-admin-domain-groups returns a map (may be empty)"
     (let [groups (domain-registry/all-admin-domain-groups)]
-      (is (map? groups))
-      (is (pos? (count groups)))))
+      (is (map? groups))))
 
-  (testing "admin domain groups have correct structure"
-    (let [groups (domain-registry/all-admin-domain-groups)]
-      (doseq [[k v] groups]
-        (is (contains? v :title) (str "Group " k " missing :title"))
-        (is (contains? v :entities) (str "Group " k " missing :entities"))
-        (is (set? (:entities v)) (str "Group " k " :entities is not a set")))))
-
-  (testing "expenses-admin group exists with correct entities"
-    (let [groups (domain-registry/all-admin-domain-groups)
-          expenses-group (:expenses-admin groups)]
-      (is (some? expenses-group))
-      (is (= "Expenses Admin" (:title expenses-group)))
-      (is (contains? (:entities expenses-group) :expenses))
-      (is (contains? (:entities expenses-group) :suppliers)))))
+  (testing "expenses domain currently does not register admin domain groups"
+    (is (empty? (domain-registry/all-admin-domain-groups)))))
 
 (deftest all-user-domain-groups-test
   (testing "all-user-domain-groups returns map of domain groups"

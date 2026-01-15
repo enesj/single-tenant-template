@@ -13,18 +13,17 @@
                    (expenses-admin-routes/routes db app-config)))
     :user-api (fn [db wrap-user-auth app-config]
                 (expenses-user-routes/routes db wrap-user-auth app-config))}
+
    :ui-config
-   {:admin {:root-dir "src/app/domain/frontend/expenses/admin/config"
-            :paths {:view-options "src/app/domain/frontend/expenses/admin/config/view-options.edn"
-                    :form-fields "src/app/domain/frontend/expenses/admin/config/form-fields.edn"
-                    :table-columns "src/app/domain/frontend/expenses/admin/config/table-columns.edn"}}
-    :user {:root-dir "src/app/domain/frontend/expenses/config"
+   {:user {:root-dir "src/app/domain/frontend/expenses/config"
            :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
                    :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
                    :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
                    :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
+
    :redirects
    {:post-login-path "/expenses"}
+
    :spa-routes
    ["/waiting-room"
     "/dashboard"

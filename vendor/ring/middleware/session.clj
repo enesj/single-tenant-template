@@ -21,13 +21,14 @@
                          :http-only true}
                    (options :cookie-attrs)
                    (if-let [root (options :root)]
-                     {:path root}))})
+                     {:path root}
+                     nil))})
 
 (defn- bare-session-request
   [request {:keys [store cookie-name]}]
   (let [req-key (get-in request [:cookies cookie-name :value])
         session (store/read-session store req-key)
-        session-key (if session req-key)]
+      session-key (if session req-key nil)]
     (merge request {:session (or session {})
                     :session/key session-key})))
 
@@ -53,7 +54,9 @@
                                   (store/write-session store nil)))
                               (store/write-session store session-key session))
                             (if session-key
-                              (store/delete-session store session-key))))
+                              (store/delete-session store session-key)
+                              nil))
+                          nil)
         session-attrs (:session-cookie-attrs response)
         cookie {cookie-name
                 (merge cookie-attrs
@@ -74,7 +77,8 @@
    (if response
      (-> response
        (bare-session-response request options)
-       (cond-> (:set-cookies? options true) cookies/cookies-response)))))
+       (cond-> (:set-cookies? options true) cookies/cookies-response))
+     nil)))
 
 (defn wrap-session
   "Reads in the current HTTP session map, and adds it to the :session key on

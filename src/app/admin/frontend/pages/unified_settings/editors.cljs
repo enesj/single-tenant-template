@@ -3,8 +3,12 @@
     [app.admin.frontend.components.settings-views :as views]
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.settings.definitions :as defs]
+    [app.template.frontend.events.list.ui-state :as list-ui-events]
     [app.template.frontend.settings.resolver :as resolver]
-    [uix.core :refer [$ defui]]))
+    [app.template.frontend.subs.ui :as ui-subs]
+    [re-frame.core :as rf]
+    [uix.core :refer [$ defui]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 ;; =============================================================================
 ;; Config Tabs and Editors for User Scope
@@ -236,12 +240,17 @@
   [{:keys [entity-kw view-options entity-config on-change on-display-settings-bulk on-reset]}]
   (let [immutable-locks (resolver/feature-constraints->locks (:features entity-config))
         draft-defaults (or (:display-defaults view-options) {})
-        draft-locks (or (:display-locks view-options) {})]
+        draft-locks (or (:display-locks view-options) {})
+        local-display-prefs (use-subscribe [::ui-subs/entity-display-prefs entity-kw])
+        clear-local-display-prefs! (fn [entity-kw]
+                                     (rf/dispatch [::list-ui-events/clear-display-prefs entity-kw]))]
     ($ views/user-entity-settings-card
       {:entity-kw entity-kw
        :draft-defaults draft-defaults
        :draft-locks draft-locks
        :immutable-locks immutable-locks
+       :local-display-prefs local-display-prefs
+       :on-clear-local-display-prefs clear-local-display-prefs!
        :editing? true
        :on-change on-change
        :on-display-settings-bulk on-display-settings-bulk

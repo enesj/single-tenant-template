@@ -26,5 +26,9 @@
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false}},
  :article-aliases
- {:display-defaults {}, :display-locks {:show-edit? false}},
- :articles {:display-locks {}, :display-defaults {:show-edit? false}}}
+ {:display-defaults {:show-edit? false}, :display-locks {}},
+ :articles
+ {:display-locks {},
+  :display-defaults {:show-edit? false, :show-delete? false}},
+ :price-observations
+ {:display-locks {:show-edit? true}, :display-defaults {}}}

@@ -188,7 +188,7 @@
 
         (if (empty? post-errors)
           (do
-            (println (str "   ✅ File processed successfully - no errors introduced"))
+            (println "   ✅ File processed successfully - no errors introduced")
             ;; Clean up backup
             (.delete (io/file backup-file))
             {:success true :warnings-before (count file-warnings) :warnings-after (count post-warnings)})
@@ -222,7 +222,7 @@
               (swap! results update :total-warnings-after + (:warnings-after result 0))))
 
           (let [final-results @results]
-            (println (str "\\n🎉 Processing complete!"))
+            (println "\\n🎉 Processing complete!")
             (println (str "   Files processed: " (:total-files final-results)))
             (println (str "   Files fixed: " (:fixed-files final-results)))
             (println (str "   Warnings before: " (:total-warnings-before final-results)))

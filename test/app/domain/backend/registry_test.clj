@@ -3,7 +3,6 @@
    Verifies that the registry provides correct domain manifests and aggregated data."
   (:require
     [clojure.test :refer [deftest is testing]]
-    [clojure.java.io :as io]
     [app.domain.backend.registry :as domain-registry]))
 
 (deftest enabled-domains-test
@@ -94,26 +93,12 @@
         (is (nil? (domain-registry/primary-user-ui-config-paths)))))))
 
 (deftest get-admin-ui-config-paths-test
-  (testing "get-admin-ui-config-paths returns vector of path maps"
+  (testing "get-admin-ui-config-paths returns a vector (may be empty)"
     (let [paths (domain-registry/get-admin-ui-config-paths)]
-      (is (vector? paths))
-      (is (pos? (count paths)))
-      (is (every? map? paths))))
+      (is (vector? paths))))
 
-  (testing "admin config path maps include expected keys"
-    (let [paths (domain-registry/get-admin-ui-config-paths)
-          first-domain-paths (first paths)]
-      (is (contains? first-domain-paths :view-options))
-      (is (contains? first-domain-paths :form-fields))
-      (is (contains? first-domain-paths :table-columns))))
-
-  (testing "admin config paths are .edn files and exist on disk"
-    (let [paths (domain-registry/get-admin-ui-config-paths)]
-      (doseq [domain-paths paths
-              [_k path] domain-paths]
-        (is (string? path))
-        (is (.endsWith path ".edn"))
-        (is (.exists (io/file path)) (str "Missing admin config EDN: " path))))))
+  (testing "expenses domain currently does not provide admin UI config paths"
+    (is (empty? (domain-registry/get-admin-ui-config-paths)))))
 
 (deftest get-post-login-path-test
   (testing "get-post-login-path returns valid path"

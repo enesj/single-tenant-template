@@ -9,7 +9,7 @@
     [app.shared.patterns :as patterns]
     [buddy.hashers :as hashers]
     [clojure.string :as str]
-    [java-time :as time]
+    [java-time.api :as time]
     [taoensso.timbre :as log])
   (:import
     [java.security SecureRandom]

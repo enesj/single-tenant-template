@@ -210,7 +210,7 @@
 
             ;; Print summary
             (let [{:keys [successful skipped failed]} @results]
-              (println (str "\n📊 Migration Summary:"))
+              (println "\n📊 Migration Summary:")
               (println (str "  ✅ Successful: " (count successful)))
               (println (str "  ⏭️  Skipped: " (count skipped)))
               (println (str "  ❌ Failed: " (count failed)))
@@ -284,7 +284,7 @@
 
     ;; Print summary
     (let [{:keys [total issues suggestions]} @analysis-results]
-      (println (str "\n📊 Migration Health Report:"))
+      (println "\n📊 Migration Health Report:")
       (println (str "  📁 Total migrations analyzed: " total))
       (println (str "  ⚠️  Issues found: " (count issues)))
       (println (str "  💡 Suggestions: " (count suggestions)))

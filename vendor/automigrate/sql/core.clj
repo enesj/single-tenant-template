@@ -4,9 +4,6 @@
    [automigrate.util.db :as db-util]
    [clojure.spec.alpha :as s]))
 
-;; Constants
-(def ^:private DEFAULT-INDEX :btree)
-
 ;; Multimethod declarations
 (defmulti action->sql :action)
 

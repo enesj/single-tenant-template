@@ -260,7 +260,7 @@
                      :user "User Settings"
                      "Admin Settings")
        :page-description (case page-scope
-                           :user "Manage defaults and locks for user-facing pages"
+                           :user "Manage domain-owned defaults and locks for user-facing pages"
                            "Manage defaults and locks for admin pages")
        :mode mode
        :on-mode-change on-mode-change

@@ -120,7 +120,7 @@
   (model-naming/ensure-app-keyword k))
 
 (defn- normalize-col-map
-  "Normalize a column visibility map so all keys are keywords." 
+  "Normalize a column visibility map so all keys are keywords."
   [m]
   (when (map? m)
     (into {}
@@ -155,6 +155,14 @@
                    entity-kw
                    (gather-resolver-sources db entity-kw))))
       ;; Return empty map if no entity name provided
+      {})))
+
+(rf/reg-sub
+  ::entity-display-prefs
+  (fn [db [_ entity-name]]
+    (if entity-name
+      (let [entity-kw (model-naming/ensure-app-keyword entity-name)]
+        (or (get-in db (paths/entity-prefs-display entity-kw)) {}))
       {})))
 
 (rf/reg-sub
@@ -235,12 +243,12 @@
           derived-from-vector (when (and (seq available)
                                       (not (map? explicit-map))
                                       (or (seq explicit-order) (seq admin-visible-vector)))
-                               (let [visible-set (into #{} (or explicit-order admin-visible-vector))]
-                                 (into {}
-                                   (map (fn [k]
-                                          [k (or (contains? always-visible-set k)
-                                               (contains? visible-set k))]))
-                                   available)))
+                                (let [visible-set (into #{} (or explicit-order admin-visible-vector))]
+                                  (into {}
+                                    (map (fn [k]
+                                           [k (or (contains? always-visible-set k)
+                                                (contains? visible-set k))]))
+                                    available)))
           legacy (when entity-kw
                    (normalize-col-map (get-in db (conj (paths/entity-display-settings entity-kw) :visible-columns))))
 

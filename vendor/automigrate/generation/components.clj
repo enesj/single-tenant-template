@@ -1,8 +1,7 @@
 (ns automigrate.generation.components
   "Component-specific migration generation for functions, triggers, policies, and views."
   (:require
-    [automigrate.db.introspection :as db-intro]
-    [clojure.string :as str]))
+    [automigrate.db.introspection :as db-intro]))
 
 (defn generate-function-migrations
   "Generate migrations for database functions"

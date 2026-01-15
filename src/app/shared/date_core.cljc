@@ -1,7 +1,7 @@
 (ns app.shared.date-core
   "Fundamental date utilities used by other date namespaces."
   (:require
-    #?(:clj [java-time :as time]
+    #?(:clj [java-time.api :as time]
        :cljs [clojure.string :as str])
     [taoensso.timbre :as log]))
 

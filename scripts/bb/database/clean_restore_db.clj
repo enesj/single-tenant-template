@@ -98,7 +98,7 @@
                   "-f" backup-file]
         env-vars {"PGPASSWORD" (:password db-config)}]
 
-    (println (str "🚀 Executing restore..."))
+    (println "🚀 Executing restore...")
     (let [result (apply shell/sh (concat psql-cmd [:env env-vars]))]
       (if (= 0 (:exit result))
         (do

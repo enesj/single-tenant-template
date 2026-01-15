@@ -5,7 +5,6 @@
     [automigrate.util.db :as db-util]
     [automigrate.errors :as errors]
     [automigrate.util.file :as file-util]
-    [clojure.spec.alpha :as s]
     [slingshot.slingshot :refer [throw+ try+]]))
 
 (def ^:private LIST-SIGN-COMPLETED "x")
@@ -57,7 +56,7 @@
                                " ")]]
             (println (format "[%s] %s" sign file-name))))
         (println "Migrations not found.")))
-    (catch [:type ::s/invalid] e
+    (catch [:type :clojure.spec.alpha/invalid] e
       (file-util/prn-err e))
     (catch [:type :automigrate.files.management/duplicated-migration-numbers] e
       (-> e

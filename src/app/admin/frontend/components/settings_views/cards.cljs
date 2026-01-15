@@ -252,27 +252,48 @@
    - :draft-defaults - map of default settings
    - :draft-locks - map of locked settings
    - :immutable-locks - map of immutable (feature constraint) locks
+   - :local-display-prefs - current browser's local overrides ([:ui :entity-prefs <entity> :display])
+   - :on-clear-local-display-prefs - fn [entity-kw]
    - :on-change - fn [entity-kw setting-key new-state]
    - :on-display-settings-bulk - fn [entity-kw setting-keys new-state]
    - :on-reset - fn [entity-kw] - reset to saved values
    - :setting-keys - which setting keys to show"
   [{:keys [entity-kw entity-title draft-defaults draft-locks
-           immutable-locks on-change on-display-settings-bulk
+           immutable-locks local-display-prefs on-clear-local-display-prefs
+           on-change on-display-settings-bulk
            on-reset setting-keys editing?]}]
   (let [setting-keys (or setting-keys defs/all-setting-keys)
-        editing? (boolean editing?)]
+        editing? (boolean editing?)
+        local-display-prefs (or local-display-prefs {})
+        local-overrides-count (count local-display-prefs)]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
           ($ :h3 {:class "ds-card-title text-lg"}
             (or entity-title (defs/entity-title entity-kw)))
-          (when on-reset
-            ($ :button {:type "button"
-                        :class "ds-btn ds-btn-xs ds-btn-ghost"
-                        :on-click (fn [e]
-                                    (.preventDefault e)
-                                    (on-reset entity-kw))}
-              "Reset")))
+          ($ :div {:class "flex items-center gap-2"}
+            (when (and (seq local-display-prefs) (fn? on-clear-local-display-prefs))
+              ($ :button {:type "button"
+                          :id (str "btn-clear-local-display-prefs-" (name entity-kw))
+                          :class "ds-btn ds-btn-xs ds-btn-ghost"
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (on-clear-local-display-prefs entity-kw))}
+                (str "Clear local overrides" (when (pos? local-overrides-count)
+                                               (str " (" local-overrides-count ")")))))
+            (when on-reset
+              ($ :button {:type "button"
+                          :id (str "btn-reset-user-settings-" (name entity-kw))
+                          :class "ds-btn ds-btn-xs ds-btn-ghost"
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (on-reset entity-kw))}
+                "Reset"))))
+
+        (when (seq local-display-prefs)
+          ($ :div {:class "text-xs text-base-content/60 mb-2"}
+            "This browser has local list display overrides for this entity; they can override Defaults until cleared."))
+
         ($ :div {:class "grid grid-cols-1 gap-2"}
           (let [defaults (or draft-defaults {})
                 locks (or draft-locks {})

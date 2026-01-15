@@ -202,3 +202,41 @@
     (if-let [entity-key (->entity-key entity-type)]
       (toggle-entity-flag db entity-key [:show-batch-delete?] false)
       (update-in db [:ui :show-batch-delete?] not))))
+
+(def ^:private display-setting-keys
+  [:show-timestamps? :show-edit? :show-delete? :show-highlights?
+   :show-select? :show-filtering? :show-pagination? :show-add-button?
+   :show-batch-edit? :show-batch-delete? :per-page])
+
+;; Remove the current browser's entity-level display preferences.
+;;
+;; This is useful when testing changes to view-options defaults/locks: local
+;; overrides stored in localStorage can otherwise make defaults appear ignored.
+;;
+;; Clears:
+;; - New prefs path: [:ui :entity-prefs <entity> :display]
+;; - Legacy path keys: [:ui :entity-configs <entity> :show-*?]
+(rf/reg-event-db
+  ::clear-display-prefs
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (let [legacy-path (paths/entity-display-settings entity-key)
+            legacy (get-in db legacy-path)
+            db* (update-in db [:ui :entity-prefs]
+                  (fn [prefs]
+                    (let [prefs (or prefs {})
+                          current (get prefs entity-key)]
+                      (if (map? current)
+                        (let [updated (dissoc current :display)]
+                          (if (seq updated)
+                            (assoc prefs entity-key updated)
+                            (dissoc prefs entity-key)))
+                        prefs))))]
+        (if (map? legacy)
+          (let [cleaned (apply dissoc legacy display-setting-keys)]
+            (if (empty? cleaned)
+              (update-in db* [:ui :entity-configs] dissoc entity-key)
+              (assoc-in db* legacy-path cleaned)))
+          db*))
+      db)))

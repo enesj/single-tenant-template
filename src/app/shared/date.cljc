@@ -4,7 +4,7 @@
     [app.shared.date-core :as core]
     [app.shared.date-arithmetic :as arithmetic]
     [app.shared.date-range :as range]
-    #?(:clj [java-time :as time])
+    #?(:clj [java-time.api :as time])
     #?(:clj [taoensso.timbre :as log])))
 
 ;; Re-export core functions

@@ -69,8 +69,8 @@
            (assoc-value :error nil))
      :http-xhrio (x/xhrio db
                    {:method :get
-                    :uri (str endpoints/suppliers-endpoint "/" (str supplier-id))
-                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" (str supplier-id))
+                    :uri (str endpoints/suppliers-endpoint "/" supplier-id)
+                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id)
                     :on-success [:user-expenses/fetch-supplier-detail-success supplier-id]
                     :on-failure [:user-expenses/fetch-supplier-detail-failure]})}))
 

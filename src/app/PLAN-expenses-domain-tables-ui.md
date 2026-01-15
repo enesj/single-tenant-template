@@ -8,41 +8,17 @@ This plan upgrades the “stub” admin pages for Expenses-domain reference enti
 
 ## 1) Current State (Verified)
 
-### Admin UI (already working as “stub pages”)
+### Admin UI (removed)
 
-The following pages exist and already render via `generic-admin-entity-page`, providing:
-table + pagination + column toggles + default CRUD (via the admin pipeline and domain adapters/config).
+The Expenses domain is no longer exposed in the admin panel UI; admin pages/routes were deleted.
 
-- `src/app/domain/frontend/expenses/pages/admin/suppliers.cljs`
-- `src/app/domain/frontend/expenses/pages/admin/articles.cljs`
-- `src/app/domain/frontend/expenses/pages/admin/payers.cljs`
-- `src/app/domain/frontend/expenses/pages/admin/receipts.cljs`
-- `src/app/domain/frontend/expenses/pages/admin/article_aliases.cljs`
-- `src/app/domain/frontend/expenses/pages/admin/price_observations.cljs`
+### Domain-owned admin config (removed)
 
-Expenses is already “custom” (list + detail) and should remain the reference implementation:
-- `src/app/domain/frontend/expenses/pages/admin/expense_list.cljs`
-- `src/app/domain/frontend/expenses/pages/admin/expense_detail.cljs`
+`src/app/domain/frontend/expenses/admin/config/*` was deleted on 2026-01-15.
 
-### Domain-owned admin config (already present)
+### User routes
 
-These files already define most of what Phase 1 originally proposed to “add”:
-
-- `src/app/domain/frontend/expenses/admin/config/entities.edn`
-- `src/app/domain/frontend/expenses/admin/config/form-fields.edn`
-- `src/app/domain/frontend/expenses/admin/config/table-columns.edn`
-- `src/app/domain/frontend/expenses/admin/config/view-options.edn`
-
-### Admin routes (list + detail routes exist)
-
-- Admin routes exist in `src/app/domain/frontend/expenses/routes.cljs` for list + detail flows:
-  `/expenses`, `/expenses/:id`, `/expense-items`,
-  `/receipts`, `/receipts/:id`,
-  `/suppliers`, `/suppliers/:id`,
-  `/articles`, `/articles/:id`,
-  `/payers`, `/payers/:id`,
-  `/article-aliases`, `/article-aliases/:id`,
-  `/price-observations`, `/price-observations/:id`.
+User routes live in `src/app/domain/frontend/expenses/routes/user.cljs`.
 
 ### Backend API (verified)
 
@@ -290,12 +266,11 @@ Note: the backend must serve the SPA (index.html) for `/suppliers` and `/payers`
 
 ## 4) File/Module Map (Where Changes Should Land)
 
-Admin UI:
+Admin/shared adapters (still used by user pages):
 - Entity specs fallback: `src/app/domain/frontend/expenses/admin/adapters/specs.cljs`
 - Adapter init: `src/app/domain/frontend/expenses/admin/adapters/ui_state.cljs`
-- Admin pages: `src/app/domain/frontend/expenses/pages/admin/*`
-- Admin routes: `src/app/domain/frontend/expenses/routes.cljs`
-- Domain admin config: `src/app/domain/frontend/expenses/admin/config/*.edn`
+
+(Admin pages/routes/config were removed; see note at top.)
 
 Events/data:
 - Event factory + configs: `src/app/domain/frontend/expenses/events/events_factory.cljs`, `src/app/domain/frontend/expenses/events/entity_configs.cljs`

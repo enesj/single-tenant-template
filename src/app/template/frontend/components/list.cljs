@@ -159,7 +159,7 @@
                   ;; Otherwise wait until the relevant config is loaded so we don't lock in fallback defaults.
                   (or (= configured-per-page-source :prop)
                     ;; On admin routes, admin-config-loaded? gates; on user routes, template-config-loaded? gates.
-                    (or admin-config-loaded? template-config-loaded?)))
+                    admin-config-loaded? template-config-loaded?))
             (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page])))
         (fn [] nil))
       [entity-name configured-per-page configured-per-page-source existing-per-page admin-config-loaded? template-config-loaded?])

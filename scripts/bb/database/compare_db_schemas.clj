@@ -111,7 +111,7 @@
 (defn print-comparison [comparison]
   (let [{:keys [label dev-only test-only common-count total-dev total-test equal?]} comparison]
     (println (str "\n🔍 " label " Comparison"))
-    (println (str "═══════════════════════════════════"))
+    (println "═══════════════════════════════════")
     (println (str "Dev: " total-dev " | Test: " total-test " | Common: " common-count))
 
     (if equal?
@@ -193,7 +193,7 @@
             (println "\n💡 Only DEV database is available. Showing DEV schema information:")
 
             (let [dev-schema (get-schema-info dev-spec)]
-              (println (str "\n📊 DEV Database Schema Summary:"))
+              (println "\n📊 DEV Database Schema Summary:")
               (println (str "   Tables: " (count (:tables dev-schema))))
               (println (str "   Columns: " (count (:columns dev-schema))))
               (println (str "   Indexes: " (count (:indexes dev-schema))))

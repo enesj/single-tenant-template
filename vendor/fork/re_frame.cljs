@@ -113,9 +113,9 @@
                      (set-state (fn [_]
                                   (merge
                                     (when (:keywordize-keys props)
-                                      {:keywordize-keys true}
-                                      {:values {} :touched #{}}
-                                      m))))
+                                      {:keywordize-keys true})
+                                    {:values {} :touched #{}}
+                                    m)))
                      (rf/dispatch [::clean path]))
                    [props path])
 

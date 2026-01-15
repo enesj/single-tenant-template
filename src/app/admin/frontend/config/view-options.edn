@@ -1,86 +1,28 @@
-{:expense-items
- {:display-locks
-  {:show-delete? true,
-   :show-edit? true,
-   :show-select? true,
-   :show-pagination? true,
-   :show-filtering? true,
-   :show-batch-delete? true,
-   :show-add-button? true},
-  :display-defaults {}},
- :suppliers
- {:display-locks
-  {:show-select? true,
-   :show-pagination? true,
-   :show-filtering? true,
-   :show-batch-delete? true},
-  :display-defaults {}},
- :admins
- {:column-locks {},
+{:admins
+ {:column-locks {}
   :display-locks
-  {:show-select? true, :show-pagination? true, :show-filtering? true},
-  :column-defaults {:id true, :email false}},
- :articles
- {:display-locks
-  {:show-delete? true,
-   :show-edit? true,
-   :show-select? true,
-   :show-pagination? true,
-   :show-filtering? true}},
- :expenses
- {:display-locks
-  {:show-select? true,
-   :show-pagination? true,
-   :show-filtering? true,
-   :show-batch-edit? true,
-   :show-batch-delete? true},
-  :display-defaults {:per-page 100}},
- :price-observations
- {:display-locks
-  {:show-delete? false,
-   :show-edit? false,
-   :show-select? true,
-   :show-pagination? true,
-   :show-filtering? true}},
- :payers
- {:display-locks
-  {:show-delete? false,
-   :show-select? true,
-   :show-pagination? true,
-   :show-filtering? true}},
+  {:show-select? true
+   :show-pagination? true
+   :show-filtering? true}
+  :column-defaults {:id true :email false}}
+
  :audit-logs
  {:display-locks
-  {:show-edit? false,
-   :show-select? true,
-   :show-add-button? false,
-   :show-batch-edit? false},
-  :display-defaults {:show-batch-delete? true, :per-page 50}},
- :receipts
- {:display-locks
-  {:show-select? true,
-   :show-pagination? true,
-   :show-filtering? true,
-   :show-edit? true,
-   :show-delete? true,
-   :show-highlights? true,
-   :show-batch-delete? true},
-  :display-defaults {}},
+  {:show-edit? false
+   :show-select? true
+   :show-add-button? false
+   :show-batch-edit? false}
+  :display-defaults {:show-batch-delete? true :per-page 50}}
+
  :login-events
  {:display-locks
-  {:show-add-button? false,
-   :show-edit? false,
-   :show-batch-edit? false},
-  :display-defaults {:show-batch-delete? false}},
- :article-aliases
- {:display-locks
-  {:show-select? true,
-   :show-edit? true,
-   :show-delete? true,
-   :show-pagination? true,
-   :show-filtering? true}},
+  {:show-add-button? false
+   :show-edit? false
+   :show-batch-edit? false}
+  :display-defaults {:show-batch-delete? false}}
+
  :users
- {:display-defaults
-  {:show-add-button? true, :show-edit? true, :per-page 25},
-  :display-locks {:show-batch-edit? true},
-  :column-defaults {},
+ {:display-defaults {:show-add-button? true :show-edit? true :per-page 25}
+  :display-locks {:show-batch-edit? true}
+  :column-defaults {}
   :column-locks {:full-name true}}}

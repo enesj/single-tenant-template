@@ -31,6 +31,19 @@ Related references already in repo:
   - new list-view option `:disallowed-action-mode :disable` plus `:allow-add?` / `:allow-edit?` / `:allow-delete?`.
   - updated user pages: Expenses list, Suppliers, Payers.
   - Files: `src/app/template/frontend/components/list.cljs`, `src/app/template/frontend/components/list/rows.cljs`, `src/app/template/frontend/components/list/cells.cljs`, `src/app/domain/frontend/expenses/pages/user/expenses_list.cljs`, `src/app/domain/frontend/expenses/pages/user/suppliers.cljs`, `src/app/domain/frontend/expenses/pages/user/payers.cljs`
+- [x] **Make Articles + Price Observations Edit/Delete settings actually work**:
+  - Previously these pages passed `:render-actions (fn [_] nil)`, which suppressed row actions entirely.
+  - Added modal edit forms + user-scoped PUT/DELETE endpoints so `show-edit?` / `show-delete?` toggles can be validated end-to-end.
+  - Files: `src/app/domain/frontend/expenses/pages/user/articles.cljs`, `src/app/domain/frontend/expenses/pages/user/price_observations.cljs`, `src/app/domain/frontend/expenses/components/user_power_forms.cljs`, `src/app/domain/frontend/expenses/events/user_expenses/power_tools.cljs`, `src/app/domain/backend/expenses/handlers/user_articles.clj`, `src/app/domain/backend/expenses/handlers/user_price_observations.clj`, `src/app/domain/backend/expenses/routes/user_api.clj`
+- [x] **Make default/lock changes easier to validate by clearing local overrides**:
+  - User-facing list toggles can be overridden by browser-stored prefs (`[:ui :entity-prefs <entity> :display]`), making Defaults look “ignored”.
+  - Added `Clear local overrides` action in `/admin/user-settings` and a `::clear-display-prefs` event to remove only display overrides.
+  - Files: `src/app/admin/frontend/pages/unified_settings/editors.cljs`, `src/app/admin/frontend/components/settings_views/cards.cljs`, `src/app/template/frontend/events/list/ui_state.cljs`, `src/app/template/frontend/subs/ui.cljs`
+- [x] **Remove stale “Expenses Admin” entities from admin scope** (admin pages removed):
+  - remove Expenses admin groups/entities from the frontend domain registry
+  - stop merging domain-admin config into admin settings in the backend
+  - clean stale admin-owned `view-options.edn` keys for those entities
+  - Files: `src/app/domain/frontend/registry.cljs`, `src/app/domain/backend/registry.clj`, `src/app/admin/frontend/config/view-options.edn`
 
 ---
 
@@ -56,7 +69,8 @@ Config types in the UI:
 - Admin settings (admin-owned config):
   - GET `"/admin/api/settings"` → `src/app/template/backend/routes/admin/settings.clj` `get-view-options-handler`
     - Reads via `src/app/template/backend/routes/admin/settings_io.clj` `read-view-options`
-    - Merges domain-admin config + admin-owned config (admin “wins”).
+    - Supports merging domain-admin config + admin-owned config (admin “wins”).
+    - In this repo, the Expenses domain no longer provides admin UI config (admin pages removed).
   - PUT `"/admin/api/settings"` → `update-view-options-handler`
     - Writes via `write-view-options!` to `src/app/admin/frontend/config/view-options.edn`
 
@@ -150,12 +164,11 @@ Recommendation: preserve layering explicitly:
 
 ### Still open
 
-5) Admin settings still shows removed “Expenses Admin” entities
-   - Symptom: `/admin/admin-settings` includes Expenses Admin entities/settings even though those admin pages no longer exist.
-   - Likely sources:
-     - backend merges domain-admin config into the admin scope response (see `read-view-options` merge note above)
-     - settings UI includes domain-admin entities via `defs/entities-for-scope :admin`
-   - Fix direction: remove/disable the Expenses admin domain group + config files, and/or filter admin-scope entities to only those that have real admin pages/adapters.
+5) (Resolved 2026-01-15) Admin settings showed removed “Expenses Admin” entities
+   - Fix: Expenses domain no longer registers admin entities/groups in `src/app/domain/frontend/registry.cljs`.
+   - Fix: backend no longer merges expenses domain-admin config into admin settings (`src/app/domain/backend/registry.clj`).
+   - Fix: removed stale expenses entries from admin-owned `src/app/admin/frontend/config/view-options.edn`.
+   - Note: removed unused `src/app/domain/frontend/expenses/admin/config/*` (2026-01-15).
 
 6) Backend `display-setting-key?` does not include `:per-page`
    - File: `src/app/template/backend/routes/admin/settings.clj`
@@ -183,16 +196,16 @@ Recommendation: preserve layering explicitly:
 
 ### Phase 1 — Correctness + clarity (small, low risk)
 
-- [ ] Remove stale “Expenses Admin” entities from admin scope (since those admin pages were removed)
-  - [ ] Audit where they enter the admin scope:
-    - domain registry `:admin-domain-groups`
-    - `src/app/domain/**/admin/config/*` (entities/view-options/form-fields/table-columns)
-    - backend merge in `GET /admin/api/settings`
-  - [ ] Remove/disable the group/entities and stop merging their config into admin settings.
-  - [ ] Optional: clean any already-persisted admin-owned `view-options.edn` keys for those entities.
+- [x] Remove stale “Expenses Admin” entities from admin scope (admin pages removed)
+  - [x] Remove expenses admin groups/entities from frontend domain registry (`src/app/domain/frontend/registry.cljs`).
+  - [x] Stop merging expenses domain-admin config into admin settings (`src/app/domain/backend/registry.clj`).
+  - [x] Clean stale admin-owned `view-options.edn` keys for those entities (`src/app/admin/frontend/config/view-options.edn`).
+  - [x] Delete unused `src/app/domain/frontend/expenses/admin/config/*`.
 
-- [ ] Fix `/admin/user-settings` route comments/text to reflect domain-owned config (not “per-user preferences”).
-- [ ] Update settings shell copy to match real save behavior (draft vs immediate-save tabs).
+- [x] Fix `/admin/user-settings` route comments/text to reflect domain-owned config (not “per-user preferences”).
+  - Files: `src/app/admin/frontend/routes.cljs`, `src/app/admin/frontend/pages/unified_settings/page.cljs`
+- [x] Update settings shell copy to match real save behavior (draft vs immediate-save tabs).
+  - File: `src/app/admin/frontend/components/settings_shell.cljs`
 - [ ] Decide whether PATCH/DELETE endpoints for single-setting changes are still used; if they are:
   - [ ] Align backend “display key” detection with the canonical display keys (incl. `:per-page` only if we keep it as policy).
 

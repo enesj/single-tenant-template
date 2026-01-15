@@ -39,9 +39,9 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/admin-settings` (`app.admin.frontend.pages.unified-settings/admin-settings-page`)
   - `/admin/user-settings` (`app.admin.frontend.pages.unified-settings/user-settings-page`)
 - Data sources:
-  - Admin scope (merged):
+  - Admin scope:
     - system config: `src/app/admin/frontend/config/{view-options,form-fields,table-columns,entities}.edn`
-    - domain admin config: `src/app/domain/**/admin/config/*.edn` (currently `src/app/domain/frontend/expenses/admin/config/*`)
+    - optional domain-admin overlay: `src/app/domain/**/admin/config/*.edn` (none currently; Expenses admin pages removed)
   - User UI config: `src/app/domain/**/config/*.edn` (currently `src/app/domain/frontend/expenses/config/*`)
 - Use it to set defaults/locks per-entity; locked display toggles are hidden in list-view controls while remaining effective.
 

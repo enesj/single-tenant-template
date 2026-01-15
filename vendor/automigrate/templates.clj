@@ -54,7 +54,7 @@
   [view-name view-sql]
   (if (str/includes? view-sql "CREATE")
     (str "-- Original view definition:\n" (comment-out-sql view-sql))
-    (str "-- Unable to generate recreation SQL automatically")))
+    "-- Unable to generate recreation SQL automatically"))
 
 
 ;; Template functions

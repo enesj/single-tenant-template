@@ -6,7 +6,7 @@ This folder contains scripts for managing PostgreSQL databases in the single-ten
 
 ### Backup & Restore
 - **backup_db.clj** - Creates timestamped database backups
-- **restore-db.clj** / **restore_db.clj** - Restores database from backup files
+- **restore-db.clj** / **restore_db_legacy.clj** - Restores database from backup files
 - **clean_restore_db.clj** - Cleans and restores database in one operation
 
 ### Database Maintenance
