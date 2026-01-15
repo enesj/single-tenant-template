@@ -1,13 +1,5 @@
 (ns app.template.backend.middleware.security
-  "Security middleware for production-grade HTTP security enforcement.
-
-   This middleware provides HTTPS enforcement while maintaining smooth local development.
-   Key features:
-   - Automatic HTTP to HTTPS redirection in production
-   - Local development exemptions (localhost, 127.0.0.1, private IPs)
-   - Environment-based override capabilities
-   - Admin route prioritization for enhanced security
-   - Rate limiting integration"
+  "Security headers/HTTPS policies; keep changes config-driven."
   (:require
     [app.template.backend.middleware.rate-limiting :as rate-limiting]
     [clojure.string :as str]

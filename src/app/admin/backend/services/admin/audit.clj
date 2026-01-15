@@ -1,10 +1,5 @@
 (ns app.admin.backend.services.admin.audit
-  "Admin audit logging and compliance tracking.
-
-   This namespace handles:
-   - Audit log creation with proper change tracking
-   - Audit log retrieval with filtering capabilities
-   - Compliance and security audit trails"
+  "Audit log service; append/query audit events here."
   (:require
     [app.template.backend.utils.adapters.database :as db-adapter]
     [app.template.backend.utils.query-builders :as qb]

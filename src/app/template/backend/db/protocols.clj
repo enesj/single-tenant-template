@@ -1,5 +1,5 @@
 (ns app.template.backend.db.protocols
-  "Database access protocols for template infrastructure")
+  "DB protocol definitions; keep core DB API stable.")
 
 (defprotocol DatabaseAdapter
   "Generic database operations interface"

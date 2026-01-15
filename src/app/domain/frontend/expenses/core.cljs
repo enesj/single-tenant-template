@@ -1,5 +1,5 @@
 (ns app.domain.frontend.expenses.core
-  "Bootstrap for expenses domain frontend"
+  "Expenses frontend bootstrap; wire page and feature init."
   (:require
     [app.domain.frontend.expenses.events.article-alias-bulk]
     [app.domain.frontend.expenses.events.article-aliases]

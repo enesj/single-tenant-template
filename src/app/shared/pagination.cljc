@@ -1,7 +1,5 @@
 (ns app.shared.pagination
-  "Cross-platform pagination utilities for the hosting application.
-   Provides consistent pagination calculations and utilities
-   that work in both Clojure and ClojureScript environments.")
+  "Pagination math and shapes; reuse for list endpoints.")
 
 ;; -------------------------
 ;; Pagination Constants
@@ -22,12 +20,12 @@
   "Calculate total number of pages given total items and page size"
   [total-items page-size]
   (let [items (or total-items 0)
-      size (or page-size default-page-size)
-      size (if (pos? size) size default-page-size)]
-   (if (pos? items)
-    #?(:clj (long (Math/ceil (/ items size)))
-      :cljs (js/Math.ceil (/ items size)))
-    1)))
+        size (or page-size default-page-size)
+        size (if (pos? size) size default-page-size)]
+    (if (pos? items)
+      #?(:clj (long (Math/ceil (/ items size)))
+         :cljs (js/Math.ceil (/ items size)))
+      1)))
 
 (defn calculate-offset
   "Calculate offset (starting index) for a given page and page size"
@@ -35,7 +33,6 @@
   (let [page (or page-number default-page-number)
         size (or page-size default-page-size)]
     (* (dec page) size)))
-
 
 (defn calculate-start-end
   "Calculate start and end indices for pagination"

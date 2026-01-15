@@ -1,5 +1,5 @@
 (ns app.template.backend.auth.service
-  "Template authentication service implementation"
+  "Auth service implementation; maintain token/session workflows."
   (:require
     [app.template.backend.auth.protocols :as auth-protocols]
     [app.template.backend.auth.email-verification :as email-verification]

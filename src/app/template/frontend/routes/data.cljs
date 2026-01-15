@@ -1,6 +1,5 @@
 (ns app.template.frontend.routes.data
-  "Route data generation for the template application.
-   Defines the structure and parameters for various route groups."
+  "Route data composition (template + domain + admin); keep registry integration here."
   (:require
     [app.template.frontend.routes.controllers :as controllers]
     [app.admin.frontend.routes :as admin-routes]

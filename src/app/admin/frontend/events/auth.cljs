@@ -1,4 +1,5 @@
 (ns app.admin.frontend.events.auth
+  "Auth events (login/logout); keep token flow consistent."
   (:require
     [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.utils.http :as admin-http]
@@ -24,7 +25,7 @@
   - many event vectors: [[:event/a] [:event/b ...]]
 
   IMPORTANT: An empty vector ([]) means no events and must NOT be dispatched,
-  otherwise re-frame treats it as an event with event-id nil." 
+  otherwise re-frame treats it as an event with event-id nil."
   [on-auth-success]
   (let [events (cond
                  (nil? on-auth-success) []
@@ -218,8 +219,8 @@
                (assoc :admin/auth-checking? true))
          :http-xhrio (admin-http/dashboard-request
                        {;; Pass-through payload with the original on-auth-success callbacks
-              :on-success (conj [:admin/auth-valid] (when (seq (normalize-dispatch-events on-auth-success))
-                            on-auth-success))
+                        :on-success (conj [:admin/auth-valid] (when (seq (normalize-dispatch-events on-auth-success))
+                                                                on-auth-success))
                         :on-failure [:admin/auth-invalid]})}
 
         ;; No token, redirect to login
@@ -263,8 +264,8 @@
   :admin/init-auth-persistence
   (fn [{:keys [db]} _]
     (let [auth-state (auth-persist/init-auth-persistence!
-                     (fn [restored-state]
-                       (rf/dispatch [:admin/restore-auth-state restored-state])))]
+                       (fn [restored-state]
+                         (rf/dispatch [:admin/restore-auth-state restored-state])))]
       (if (:valid? auth-state)
         ;; Has valid persisted state, wait for async restoration
         {:db (assoc db :admin/auth-checking? true)}
@@ -276,9 +277,9 @@
   (fn [{:keys [db]} [_ auth-state]]
     (let [{:keys [token user authenticated?]} auth-state]
       (log/info "Restoring authentication state"
-               {:token-present (boolean token)
-                :user-present (boolean user)
-                :authenticated? authenticated?})
+        {:token-present (boolean token)
+         :user-present (boolean user)
+         :authenticated? authenticated?})
       {:db (-> db
              (cond-> token (assoc :admin/token token))
              (cond-> user (assoc :admin/current-user user))

@@ -1,4 +1,5 @@
 (ns app.template.backend.core
+  "Backend entry point; adjust system startup wiring and lifecycle only."
   (:require
     [aero.core :as aero]
     [app.template.backend.webserver :as webserver]
@@ -97,14 +98,14 @@
 
         ;; Build JDBC URL strictly from provided config (or environment)
         db-name         (or (:dbname db-config)
-                            (throw (ex-info "Database name missing in config" {:database db-config})))
+                          (throw (ex-info "Database name missing in config" {:database db-config})))
         jdbc-url        (or (:jdbc-url db-config)
-                           (when (every? db-config [:host :port :dbname :user])
-                             (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
-                               (:host db-config) (:port db-config) db-name (:user db-config)
-                               (if-let [pwd (:password db-config)] (str "&password=" pwd) "")))
-                           (throw (ex-info "Provide :jdbc-url or host/port/dbname/user in :database config"
-                                    {:database db-config})))
+                          (when (every? db-config [:host :port :dbname :user])
+                            (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
+                              (:host db-config) (:port db-config) db-name (:user db-config)
+                              (if-let [pwd (:password db-config)] (str "&password=" pwd) "")))
+                          (throw (ex-info "Provide :jdbc-url or host/port/dbname/user in :database config"
+                                   {:database db-config})))
 
         ;; Validate that we're not using the system username as database name
         _               (when (re-find #"database.*enes" (str jdbc-url))
@@ -117,10 +118,10 @@
                            :adapter       "postgresql"
                            :jdbc-url      jdbc-url
                            :database-name db-name
-                            :server-name   (:host db-config)
-                            :port-number   (:port db-config)
-                            :username      (:user db-config)
-                            :password      (:password db-config)})]
+                           :server-name   (:host db-config)
+                           :port-number   (:port db-config)
+                           :username      (:user db-config)
+                           :password      (:password db-config)})]
     (cp/make-datasource hikari-config)))
 
 (defn new-scheduler

@@ -1,11 +1,5 @@
 (ns app.admin.backend.services.admin.auth
-  "Admin authentication and session management.
-
-   This namespace handles:
-   - Password hashing and verification (bcrypt with SHA-256 migration)
-   - Admin user authentication
-   - Session creation and management
-   - Security token generation"
+  "Admin auth orchestration; bridge auth service to routes."
   (:require
     [app.shared.type-conversion :as tc]
     [buddy.core.codecs :as codecs]

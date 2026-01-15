@@ -1,4 +1,5 @@
 (ns app.template.backend.routes.auth
+  "Auth HTTP routes; keep request/response shape consistent."
   (:require
     [app.template.shared.auth :as shared-auth]
     [app.shared.data :as shared-data]

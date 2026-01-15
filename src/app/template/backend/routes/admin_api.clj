@@ -1,5 +1,5 @@
 (ns app.template.backend.routes.admin-api
-  "Refactored admin API routes - now composed from focused namespaces"
+  "Compose /admin/api routes and middleware; add admin endpoints via focused route namespaces."
   (:require
     [app.template.backend.middleware.admin :as admin-middleware]
     [app.template.backend.routes.admin.admins :as admin-admins]

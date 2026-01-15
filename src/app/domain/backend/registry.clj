@@ -1,19 +1,5 @@
 (ns app.domain.backend.registry
-  "Backend domain registry - provides domain manifests to template/admin.
-   
-   Each domain manifest contains:
-   - :id - domain keyword identifier
-   - :routes
-     - :admin-api - fn (fn [db service-container] reitit-routes) for admin API
-     - :user-api - fn (fn [db wrap-auth-mw app-config] reitit-routes) for user API
-   - :ui-config
-     - :admin - map with paths to domain-owned ADMIN UI config EDN files
-     - :user - map with paths to domain-owned USER UI config EDN files
-   - :redirects
-     - :post-login-path - default redirect after OAuth login
-   - :spa-routes - vector of SPA paths to serve index.html
-   
-   Template/admin import this registry to dynamically compose routes."
+  "Domain backend registry; register domain services/routes."
   (:require
     [app.domain.backend.expenses.routes.core :as expenses-admin-routes]
     [app.domain.backend.expenses.routes.user-api :as expenses-user-routes]))
@@ -28,15 +14,15 @@
     :user-api (fn [db wrap-user-auth app-config]
                 (expenses-user-routes/routes db wrap-user-auth app-config))}
    :ui-config
-    {:admin {:root-dir "src/app/domain/frontend/expenses/admin/config"
-       :paths {:view-options "src/app/domain/frontend/expenses/admin/config/view-options.edn"
-         :form-fields "src/app/domain/frontend/expenses/admin/config/form-fields.edn"
-         :table-columns "src/app/domain/frontend/expenses/admin/config/table-columns.edn"}}
-     :user {:root-dir "src/app/domain/frontend/expenses/config"
-      :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
-        :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
-        :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
-        :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
+   {:admin {:root-dir "src/app/domain/frontend/expenses/admin/config"
+            :paths {:view-options "src/app/domain/frontend/expenses/admin/config/view-options.edn"
+                    :form-fields "src/app/domain/frontend/expenses/admin/config/form-fields.edn"
+                    :table-columns "src/app/domain/frontend/expenses/admin/config/table-columns.edn"}}
+    :user {:root-dir "src/app/domain/frontend/expenses/config"
+           :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
+                   :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
+                   :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
+                   :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
    :redirects
    {:post-login-path "/expenses"}
    :spa-routes

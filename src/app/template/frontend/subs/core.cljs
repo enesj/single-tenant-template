@@ -1,4 +1,5 @@
 (ns app.template.frontend.subs.core
+  "Subscription registration entrypoint; ensure subs are loaded."
   (:require
     [re-frame.core :as rf]))
 

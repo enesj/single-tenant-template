@@ -1,11 +1,5 @@
 (ns app.admin.backend.services.admin.users.bulk
-  "Admin bulk user operations and data export.
-
-   This namespace handles:
-   - Bulk status updates for multiple users
-   - Bulk role updates for multiple users
-   - CSV export functionality for user data
-   - User impersonation capabilities for admin access"
+  "Bulk user ops; keep batch validation and side effects centralized."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.auth :as auth]

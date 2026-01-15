@@ -1,4 +1,5 @@
 (ns app.domain.backend.expenses.routes.core
+  "Expenses backend route assembly; add new expense endpoints here."
   (:require
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.routes.articles :as articles]

@@ -1,4 +1,5 @@
 (ns app.template.frontend.core
+  "Template frontend bootstrap; wire init, routes, root view."
   (:require
     [app.admin.frontend.core :as admin-core]
     [app.admin.frontend.pages.audit :as admin-audit]

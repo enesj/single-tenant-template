@@ -1,459 +1,178 @@
 # Single-Tenant SaaS Template - Project Summary
+Last updated: 2026-01-14
 
-## Project Overview
+## Overview
+This repo is a single-tenant SaaS template extracted from a multi-tenant hosting platform. It provides:
 
-This is a **single-tenant SaaS template** extracted from a multi-tenant hosting platform. It provides a complete Clojure/ClojureScript web application foundation with:
+- Backend: Ring + http-kit with PostgreSQL (next.jdbc + HoneySQL)
+- Frontend: shadow-cljs SPA using re-frame + Uix
+- Admin panel with admin-only API and UI
+- Authentication with local password auth and optional OAuth flows (see config/base.edn)
+- Database schema and migrations in resources/db
+- Babashka tooling for dev, DB, and config workflows
+- Tests: Kaocha (backend), cljs-test-runner (Node), Karma (browser)
 
-- **Backend**: Ring-based Clojure server with PostgreSQL database
-- **Frontend**: Shadow-CLJS compiled ClojureScript SPA using re-frame and Uix
-- **Admin Panel**: Complete administrative interface for user and system management
-- **Authentication**: Multi-provider auth system (local password, OAuth, email verification)
-- **Database**: PostgreSQL with Row Level Security (RLS) for tenant isolation
-- **Testing**: Comprehensive test suite (Kaocha for backend, Karma/Shadow-CLJS for frontend)
-- **Tooling**: Extensive babashka-based development tooling and automation
-
-**Architecture Pattern**: Single-tenant with admin/user separation, suitable for SaaS products that need user management, audit trails, and subscription billing.
-
-## Key File Paths & Their Purpose
-
-### Core Application Files
+## High-Level Architecture
 ```
-src/
-├── app/backend/core.clj                    # Main application entry point, system initialization
-├── app/backend/webserver.clj              # Ring web server configuration and startup
-├── app/backend/routes.clj                 # Main HTTP route definitions and middleware setup
-├── app/backend/middleware/               # Security, rate limiting, and request processing
-├── app/backend/services/                 # Business logic layer (users, auth, audit, etc.)
-├── app/template/frontend/core.cljs          # Frontend application entry point and routing
-├── app/template/frontend/routes.cljs      # Re-frame event routing and page dispatch
-├── app/shared/                          # Cross-platform utilities and shared components
-├── app/migrations/simple_repl.clj         # Database migration management REPL
-└── app/di/                          # Dependency injection container
-```
-
-### Configuration Files
-```
-config/
-├── base.edn                              # Main configuration with profile support (dev/test/prod)
-├── .secrets.edn                         # Sensitive configuration (API keys, passwords)
-└── .claude/                              # Claude Code skills, commands, and agent definitions
+┌──────────────────────────────────────────────────────────────────┐
+│                           Web Browser                            │
+│            Admin UI (shadow-cljs + re-frame + Uix)               │
+└──────────────────────────────────────────────────────────────────┘
+                    │ HTTP/JSON
+                    ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                 Ring + http-kit Web Server                       │
+│  Routes + Middleware (auth, rate limiting, security)             │
+│  Services (admin, users, audit, domain modules)                  │
+│  Data access (HoneySQL + next.jdbc)                              │
+└──────────────────────────────────────────────────────────────────┘
+                    │ JDBC
+                    ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                     PostgreSQL Database                          │
+│  models.edn + migrations + policies + triggers + views           │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### Database Schema & Models
+## Project Layout
 ```
+src/app/
+  admin/
+    backend/
+    frontend/
+  template/
+    backend/
+    frontend/
+    di/
+    shared/
+  domain/
+    ... feature modules
+  shared/          # cross-platform utilities
+  frontend/        # global frontend assets
 resources/db/
-├── models.edn                            # Canonical database models definition
-├── migrations/                             # Auto-generated database migrations
-└── policies/                              # Row Level Security (RLS) policies
+  models.edn
+  migrations/
+  domain/
+  shared/
+  template/
+  functions/
+  policies/
+  triggers/
+  views/
+config/
+  base.edn
+  .secrets.edn (local)
+scripts/bb/        # babashka tasks
+scripts/           # shell helpers
+
+# Root configs
+Deps and tooling:
+  deps.edn
+  shadow-cljs.edn
+  bb.edn
+  karma.conf.cjs
 ```
 
-### Build & Development Configuration
-```
-deps.edn                                    # Clojure dependencies and aliases
-shadow-cljs.edn                              # ClojureScript compilation configuration
-bb.edn                                       # Babashka task definitions and development automation
-scripts/                                      # Development scripts, database management, and deployment
-```
+## Admin Module Notes
+- Backend setup: `src/app/admin/backend/setup.clj`
+- Service entry: `src/app/admin/backend/services/admin.clj`
+- Service modules: `admins.clj`, `auth.clj`, `audit.clj`, `dashboard.clj`, `monitoring/{integrations,shared}.clj`, `users.clj` and `users/{management,security,validation,bulk,deletion}.clj`
+- Frontend entry: `src/app/admin/frontend/core.cljs` + `src/app/admin/frontend/routes.cljs`
+- Frontend areas: adapters, auth, components, config, events, handlers, pages, renderers, security, services, settings, shared, specs, subs, system, utils
 
-### Testing Infrastructure
-```
-test/                                         # Test files mirroring src/ structure
-├── backend/                                # Kaocha backend tests
-├── frontend/                               # ClojureScript/JavaScript tests
-└── karma.conf.js                           # Frontend test runner configuration
-```
+## Domain Module Notes
+- Registries: `src/app/domain/backend/registry.clj`, `src/app/domain/frontend/registry.cljs`
+- Domain pages entry: `src/app/domain/frontend/pages.cljs`
+- Current domain: `expenses`
+  - Backend: `src/app/domain/backend/expenses/{handlers,integrations,routes,services,workers}`
+  - Frontend: `src/app/domain/frontend/expenses/{adapters,admin,authz,components,config,events,pages,routes,subs,ui}` plus `core.cljs` and `init.cljs`
 
-## Important Dependencies & Their Roles
+## Runtime and Build
+- Project type: deps.edn + Babashka
+- Clojure: 1.12.0
+- Java: 21.0.8
+- Source paths: scripts/bb, src, test
 
-### Backend Dependencies
-- **Ring** (v1.15.3): HTTP server abstraction and middleware
-- **next.jdbc** (v1.3.1070): Database connection and query building
-- **HikariCP** (v3.3.0): Connection pooling and performance
-- **PostgreSQL** (v42.7.7): Primary database with RLS support
-- **aero** (v1.1.6): Configuration management with profile support
-- **buddy** (v1.12.0): Security (password hashing, JWT)
-- **reitit** (v0.9.2): Data validation and coercion
-- **timbre** (v6.8.0): Structured logging
-- **http-kit** (v2.8.1): HTTP client for external API calls
-- **cheshire** (v6.1.0): JSON serialization and parsing
-- **malli** (v0.20.0): Data schema validation
-- **spec-tools** (v0.10.8): Spec instrumentation and validation
-- **nREPL** (v1.5.1): Network REPL for Clojure development
-- **stripe-clojure** (v1.1.0): Stripe payment processing integration
+## Key Dependencies (snapshot)
+### Backend
+- ring 1.15.3 (ring-defaults 0.7.0, ring-json 0.5.1, ring-anti-forgery 1.4.0, ring-session-timeout 0.3.0)
+- http-kit 2.8.1
+- reitit 0.9.2 (+ reitit-ring 0.9.2)
+- muuntaja 0.6.11
+- next.jdbc 1.3.1070
+- honeysql 2.7.1364
+- hikari-cp 3.3.0
+- postgresql 42.7.7
+- buddy-core 1.12.0-430 + buddy-hashers 2.0.167
+- timbre 6.8.0
+- cheshire 6.1.0
+- clj-http 3.13.1
+- postal 2.0.5
+- java-time 1.4.3
+- ring-oauth2 0.3.0
+- automigrate 0.3.3
+- aero 1.1.6
 
-### Frontend Dependencies
-- **Shadow-CLJS** (v3.3.4): ClojureScript compilation and hot reload
-- **re-frame** (v1.4.3): Frontend state management and event handling
-- **Uix** (v1.4.8): Modern ClojureScript UI library (React-like)
-- **Tailwind CSS** (v4.0.0+): Utility-first CSS framework
-- **DaisyUI** (v4.0.0+): Component library built on Tailwind
+### Frontend
+- shadow-cljs 3.3.4
+- re-frame 1.4.3
+- uix.core/uix.dom 1.4.8
+- cljs-ajax 0.8.4
+- day8.re-frame/http-fx 0.2.4
+- tailwindcss 4.0.0
+- daisyui 5.0.4
 
-### Development & Testing Tools
-- **Babashka** (v1.12.213): Fast Clojure scripting for automation
-- **Kaocha** (v1.91.1392): Backend test runner
-- **clj-kondo** (v2025.10.23): Static analysis and linting
-- **cljfmt** (v0.9.2): Code formatting
-- **Chrome DevTools MCP**: Browser automation and debugging integration
-- **Playwright** (v1.52.0): E2E browser testing
-- **Etaoin** (v1.1.43): Browser automation (alternative to Playwright)
+### Tooling and testing
+- clj-kondo 2025.10.23
+- cljfmt 0.9.2
+- kaocha 1.91.1392 (alias :test)
+- cljs-test-runner 3.8.1 (alias :cljs-test)
+- playwright 1.52.0
+- etaoin 1.1.43
+- babashka 1.12.213 (alias :dev)
 
-### Specialized MCP Skills
-- **app-db-inspect**: Inspect re-frame app-db state safely for debugging frontend state issues
-- **reframe-events-analysis**: Analyze re-frame event history and performance using browser tracing tools
-- **system-logs**: Monitor and analyze server logs and shadow-cljs build output
-- **clojure-mcp:create-update-project-summary**: Automatically creates or updates LLM-friendly project documentation
-
-### Custom Slash Commands
-- **/clear**: Clears the terminal screen for better visibility during development sessions
-
-## Available Tools/APIs with Usage Examples
-
-### Babashka Development Tasks
+## Common Commands
 ```bash
-# Start full development stack
+# Dev
 bb run-app
 
-# Run backend tests
+# Tests
 bb be-test
+npm run test:cljs
+npm run test:cljs:karma
 
-# Run frontend tests
-bb fe-test
-
-# Database operations
-bb backup-db --dev
-bb restore-db --dev backup_file.sql
-bb clean-db --dev
-
-# Code quality
-bb lint                    # Run clj-kondo linting
-bb cljfmt-check           # Check formatting
-bb cljfmt-fix             # Fix formatting issues
-
-# Create new application from template
-bb create-new-app my-invoice-app --title "Invoice Management System"
-```
-
-### Database Migration System
-```clojure
-;; Apply migrations via REPL
-(require '[app.template.backend.migrations.simple-repl :as mig])
-(mig/migrate!)
-
-;; Run the server
-bb run-app
-```
-
-### Application APIs
-```clojure
-;; Backend service calls
-(require '[app.backend.services.admin.users :as users])
-(users/create-user! {:email "test@example.com" :full_name "Test User"})
-
-;; Frontend re-frame events
-(require '[re-frame.core :as rf])
-(rf/dispatch [:admin/users/load])
-(rf/dispatch [:admin/users/create {:email "new@example.com"}])
-
-;; Authentication
-(require '[app.backend.services.admin.auth :as auth])
-(auth/authenticate-user! "admin@example.com" "password123")
-
-;; Database queries with HoneySQL
-(require '[app.shared.query-builders :as qb])
-(qb/select :users {:where [:= :email "test@example.com"]})
-```
-
-### Frontend Component System
-```clojure
-;; Using Uix components (React-like)
-(require '[uix.core :as uix])
-
-($ :div {:class "p-4"}
-  ($ :h1 {:class "text-2xl font-bold"} "Welcome")
-  ($ :button {:class "ds-btn ds-btn-primary"
-                :on-click #(rf/dispatch [:some-event])}
-            "Click me"))
-
-;; Re-frame subscriptions
-(rf/subscribe [:admin/users]
-  (fn [users-db]
-    (println "Users updated:" users-db)))
-```
-
-## Overall Architecture & Component Interaction
-
-### High-Level Architecture
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Web Browser (Chrome/Firefox)              │
-├─────────────────────────────────────────────────────────────────┤
-│                 Frontend (Shadow-CLJS + Uix)            │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ re-frame State Management + Event System        │    │
-│  │ Uix UI Components (React-like)            │    │
-│  │ Template Components (Auth, Forms, Tables)   │    │
-│  └─────────────────────────────────────────────────────┘    │
-├─────────────────────────────────────────────────────────────────┤
-│              Backend API (Ring + Reitit)               │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ HTTP Routes + Middleware                  │    │
-│  │ Business Services (Users, Auth, Audit)       │    │
-│  │ Security (Rate Limiting, Admin Access)      │    │
-│  │ Data Access Layer (HoneySQL + JDBC)        │    │
-│  └─────────────────────────────────────────────────────┘    │
-├─────────────────────────────────────────────────────────────────┤
-│           PostgreSQL Database with RLS                  │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Users, Admins, Audit Logs, Login Events     │    │
-│  │ Row Level Security Policies                     │    │
-│  │ Auto-generated Migrations                     │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Request Flow
-1. **Browser Request** → Nginx/Apache → Ring Handler
-2. **Security Middleware** → Rate limiting → Admin authentication → Database context
-3. **Route Handler** → Business service → Database query → JSON response
-4. **Frontend Event** → re-frame dispatcher → Event handler → State update → UI re-render
-
-### Data Flow
-- **Configuration**: Aero loads profile-specific config from `config/base.edn`
-- **Database**: HikariCP connection pool → next.jdbc → PostgreSQL with prepared statements
-- **State Management**: re-frame app-db with subscriptions for reactive UI updates
-- **Security**: Multi-layer (Rate limiting → Admin auth → RLS policies in database)
-
-### Admin Panel Structure
-```
-Frontend Routes (admin-only):
-├── /admin/login          # Admin authentication
-├── /admin/users          # User management (CRUD + bulk operations)
-├── /admin/dashboard       # System overview and metrics
-├── /admin/audit          # Activity logs and security monitoring
-├── /admin/entities        # Generic entity management
-└── /admin/subscription    # Subscription/billing management
-
-Backend API Routes (/admin/api/*):
-├── Authentication endpoints (login, logout, session management)
-├── User management (CRUD, bulk operations, search)
-├── Audit logging (login events, user actions, system changes)
-├── Dashboard data (system stats, user counts, activity metrics)
-└── Entity management (dynamic entity handling with validation)
-```
-
-## Implementation Patterns & Conventions
-
-### Naming Conventions
-- **Database**: `snake_case` for tables/columns (`users`, `created_at`)
-- **Code**: `kebab-case` for namespaces and functions (`app.backend.services.admin`)
-- **API Routes**: `/admin/api/*` for admin endpoints, RESTful resource patterns
-- **Frontend Events**: `:domain/action` pattern (`:admin/users/create`, `:auth/login`)
-- **Configuration**: Profile-based with EDN format (`:dev`, `:test`, `:prod`)
-
-### Code Organization Patterns
-- **Protocols-first**: Define interfaces in `protocols/` directories
-- **Services Layer**: Business logic in `services/` with dependency injection
-- **Middleware Composition**: Security and request processing in `middleware/`
-- **CRUD Pattern**: Standard operations using `app.backend.crud.service` helpers
-- **Event-Driven Frontend**: re-frame for state management with event handlers
-- **Component Reuse**: Template components in `app.template.frontend.components/`
-
-### Security Patterns
-- **Admin Authentication**: Middleware-based with session management
-- **Rate Limiting**: In-memory tracking with Redis/database fallback
-- **Database RLS**: Row Level Security for tenant data isolation
-- **Input Validation**: reitit schemas with Malli specifications
-- **Audit Logging**: Comprehensive action and authentication event tracking
-
-### Error Handling Patterns
-- **Backend**: Ring middleware with exception handling and JSON error responses
-- **Frontend**: re-frame effects for error states and user feedback
-- **Database**: Transaction rollback with detailed error logging
-- **API**: Consistent error response format with proper HTTP status codes
-
-## Development Workflow Recommendations
-
-### Local Development Setup
-```bash
-# 1. Start PostgreSQL services
-brew services start postgresql@14
-
-# 2. Clone and setup
-git clone <repository>
-cd single-tenant-template
-npm install
-
-# 3. Run database migrations via REPL
-# (require '[app.template.backend.migrations.simple-repl :as mig])
-# (mig/migrate!)
-
-# 4. Start development stack
-bb run-app    # Starts backend + frontend + opens browser to localhost:8080
-```
-
-### Development Tools Integration
-- **Hot Reload**: Automatic frontend compilation on file changes
-- **REPL Integration**: Live code evaluation with `bb dev` or Clojure tools
-- **Browser DevTools**: Chrome MCP integration for UI debugging
-- **Test Watchers**: Auto-rerun tests on file changes
-- **Code Quality**: Pre-commit hooks with cljfmt and clj-kondo
-
-### Database Development Workflow
-```bash
-# Generate new migrations after model changes
-bb clean-db --dev && # Run migrations via REPL: (mig/migrate!)
-
-# Create seed data for testing
-bb seed-admin
-
-# Backup before major changes
-bb backup-db --dev
-
-# Test migrations on separate database
-bb restore-db --test backup_file.sql
-```
-
-### Frontend Development Workflow
-```bash
-# Start frontend test runner
-npm run test:cljs:watch
-
-# Run Karma tests once
-bb fe-test
-
-# Admin panel development
-open http://localhost:8085/admin/users
-# Backend hot-reloads automatically
-```
-
-## Extension Points for Future Development
-
-### New Domain Areas
-**Pattern**: Create new domain under `src/app/` following existing structure:
-```
-src/app/your-domain/
-├── backend/
-│   ├── protocols.clj           # Domain-specific interfaces
-│   ├── crud/service.clj       # Standard CRUD operations
-│   ├── routes.clj              # HTTP route handlers
-│   └── services/              # Business logic implementation
-├── frontend/
-│   ├── pages/                  # Re-frame page components
-│   ├── components/             # Reusable UI components
-│   ├── events.clj              # Domain-specific events
-│   └── subs.cljs               # Data subscriptions
-└── shared/
-    ├── schemas.clj             # Domain data models
-    ├── validation.clj          # Reitit validation schemas
-    └── crud/                 # Shared CRUD utilities
-```
-
-### Adding New API Endpoints
-1. **Define routes** in `src/app/your-domain/backend/routes.clj`
-2. **Implement services** in `src/app/your-domain/backend/services/`
-3. **Add event handlers** in `src/app/your-domain/frontend/events.clj`
-4. **Create frontend components** in `src/app/your-domain/frontend/pages/`
-5. **Register routes** in main route configuration
-
-### Database Model Extensions
-```clojure
-;; Add to resources/db/models.edn
-{:your-entity
- {:fields
-  [[:id :uuid {:primary-key true}]
-   [:name :varchar 255 {:null false}]
-   [:description :text]
-   [:created_at :timestamptz {:default "NOW()"}]
-   [:updated_at :timestamptz {:default "NOW()"}]],
-  :indexes
-  [[:idx_your_entity_created_at :btree {:fields [:created_at]}]}}
-
-;; Then regenerate migrations
-;; (mig/make-all-migrations!)
-;; (mig/migrate!)
-```
-
-### Admin Panel Extensions
-- **New Pages**: Add to `src/app/admin/frontend/pages/` following existing patterns
-- **Navigation**: Update `src/app/template/frontend/routes.cljs` route table
-- **API Integration**: Add corresponding backend routes under `/admin/api/`
-- **Bulk Operations**: Use existing bulk operation patterns for efficiency
-
-### Authentication Extensions
-- **OAuth Providers**: Add new providers to `config/base.edn` and implement in `src/app/backend/routes/oauth.clj`
-- **Role-based Access**: Extend RLS policies and middleware for fine-grained permissions
-- **Session Management**: Enhance existing session handling in `src/app/backend/middleware/user.clj`
-
-### Security Enhancements
-- **Advanced Rate Limiting**: Multi-window rate limiting with Redis backend
-- **API Key Authentication**: Add API key system for external integrations
-- **Audit Trail Expansion**: More granular activity logging and reporting
-- **Data Encryption**: Field-level encryption for sensitive data
-
-### Monitoring & Observability
-- **Metrics Integration**: Extend Micrometer metrics in `src/app/backend/middleware/rate_limiting.clj`
-- **Health Checks**: Add comprehensive health check endpoints
-- **Performance Monitoring**: Database query performance tracking
-- **Error Tracking**: Integration with external error tracking services
-
-### Testing Extensions
-- **Integration Tests**: Add end-to-end test scenarios
-- **Browser Tests**: Expand Etaoin/Playwright test coverage
-- **Performance Tests**: Database and API performance benchmarking
-- **Security Tests**: Authentication bypass and permission escalation testing
-
-## Quick Reference
-
-### Essential Commands
-```bash
-# Development
-bb run-app              # Start full stack
-bb be-test              # Backend tests
-bb fe-test              # Frontend tests
-bb lint                 # Code quality check
+# Frontend config validation
+bb validate-frontend-config
+bb config-audit --strict
+bb sync-frontend-config --apply
+bb migrate-and-sync-frontend-config
 
 # Database
-# Run migrations via REPL (mig/migrate!)
-bb backup-db --dev       # Backup dev database
-bb clean-db --dev         # Clear all tables
+bb backup-db --dev
+bb restore-db --dev path/to/backup.sql
 
-# Production
-bb build-prod           # Production build
-./scripts/sh/deployment/deploy.sh  # Deploy (if present)
+# Code quality
+bb lint
+bb cljfmt-check
+bb cljfmt-fix
 ```
 
-### Environment Profiles
-- **:dev**: Development (localhost:8080, PostgreSQL:5432)
-- **:test**: Testing (localhost:8081, PostgreSQL:5433)
-- **:prod**: Production (environment-specific configuration)
+## Migrations (REPL)
+```clojure
+(require '[app.template.backend.migrations.simple-repl :as mig] :reload)
+(mig/migrate!)
+```
 
-### Port Allocation
-- **Main App**: 8080 (development) / Environment-specific (production)
-- **Admin Panel**: 8085 (development) / Same as main app in production
-- **Shadow-CLJS**: 9630 (development, watch mode)
-- **Test Runner**: 9095 (Karma test server)
+## Development Notes
+- Dev server auto-reloads; no manual restart needed for FE or BE changes.
+- Admin UI dev URL: http://localhost:8085
+- Admin settings pages: /admin/admin-settings, /admin/user-settings (legacy: /admin/settings)
+- DEV_SUPPRESS_STDERR=false (or 0/no) keeps stderr visible in dev.
+- Dev watchers ignore runtime-edited config EDNs under:
+  - src/app/admin/frontend/config/*.edn
+  - src/app/domain/**/config/*.edn
 
-### Multi-tenant to Single-tenant Migration Notes
-This template removes:
-- Multi-tenant routing and database switching
-- Tenant-specific authentication and authorization
-- Per-tenant subscription management
-- Tenant isolation infrastructure and middleware
-
-It retains:
-- User role management (admin vs regular users)
-- Subscription/billing framework structure
-- Audit logging and security patterns
-- Template-based component system for easy extension
-
-## Documentation Index
-
-Comprehensive documentation available in `/docs/` covering:
-- **Architecture**: System design and component interaction
-- **Backend**: API reference, security middleware, services
-- **Frontend**: Component integration, state management, routing
-- **Database**: Schema reference, migration patterns
-- **Development**: Environment setup, testing, debugging
-- **Operations**: Deployment, monitoring, maintenance
-
-Refer to specific documentation files for detailed implementation guidance and examples.
+## Ports and Profiles
+- App port (dev): 8085 (config/base.edn)
+- Postgres dev/test: 55432 / 55433 (config/base.edn)
+- shadow-cljs devtools HTTP: 9650; nREPL: 8777 (shadow-cljs.edn)

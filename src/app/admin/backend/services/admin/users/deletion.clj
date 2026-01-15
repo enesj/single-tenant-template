@@ -1,11 +1,5 @@
 (ns app.admin.backend.services.admin.users.deletion
-  "User deletion operations with comprehensive validation and audit trails.
-
-   This namespace handles:
-   - Complex user deletion logic
-   - Business constraint validation
-   - Audit trail maintenance
-   - Force deletion capabilities"
+  "User deletion/cleanup; ensure audit/logging is preserved."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.users.validation :as validation]

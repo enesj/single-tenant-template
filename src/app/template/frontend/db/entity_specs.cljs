@@ -1,4 +1,5 @@
 (ns app.template.frontend.db.entity-specs
+  "Entity specs; keep field configs in sync with backend."
   (:require
     [app.shared.field-specs :as field-specs]
     [app.shared.keywords :as kw]

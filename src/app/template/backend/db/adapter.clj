@@ -1,5 +1,5 @@
 (ns app.template.backend.db.adapter
-  "Database adapter implementation for template infrastructure"
+  "DB adapter helpers; normalize results and PG types here."
   (:require
     [app.template.backend.utils.adapters.database :refer [convert-pg-objects]]
     [app.shared.field-casting :as field-casting]

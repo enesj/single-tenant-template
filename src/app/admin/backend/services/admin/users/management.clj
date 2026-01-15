@@ -1,13 +1,13 @@
 (ns app.admin.backend.services.admin.users.management
-  "User management CRUD operations (single-tenant)."
+  "User management helpers (roles/status); reuse in admin flows."
   (:require
-   [app.admin.backend.services.admin.users.validation :as validation]
-   [app.shared.type-conversion :as tc]
-   [honey.sql :as hsql]
-   [java-time.api :as time]
-   [next.jdbc :as jdbc])
+    [app.admin.backend.services.admin.users.validation :as validation]
+    [app.shared.type-conversion :as tc]
+    [honey.sql :as hsql]
+    [java-time.api :as time]
+    [next.jdbc :as jdbc])
   (:import
-   [java.util UUID]))
+    [java.util UUID]))
 
 (defn update-user!
   "Update user information as admin with proper casting and validation (single-tenant)."
@@ -69,7 +69,7 @@
                                 :email email
                                 :full_name full_name
                                 :role (tc/cast-for-database :user-role (or role "member"))
-                              :status (tc/cast-for-database :user-status (or status "active"))
+                                :status (tc/cast-for-database :user-status (or status "active"))
                                 :auth_provider (tc/cast-for-database :text (or auth_provider "email"))
                                 :provider_user_id provider_user_id
                                 :created_at now

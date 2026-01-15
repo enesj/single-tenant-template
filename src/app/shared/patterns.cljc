@@ -1,6 +1,5 @@
 (ns app.shared.patterns
-  "Cross-platform regex patterns for the hosting application.
-   Provides a consolidated entry point for domain-specific patterns."
+  "Shared regex/patterns; extend for validation needs."
   (:require
     [app.shared.patterns.auth :as auth]
     [app.shared.patterns.common :as common]

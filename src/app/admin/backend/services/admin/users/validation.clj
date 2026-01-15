@@ -1,11 +1,5 @@
 (ns app.admin.backend.services.admin.users.validation
-  "User validation logic and business rule constraints.
-
-   This namespace handles:
-   - User update validation
-   - User deletion constraint checking
-   - Batch constraint validation
-   - Business rule enforcement"
+  "User validation rules; keep constraints in one place."
   (:require
     [app.shared.field-metadata :as field-meta]
     [clojure.edn :as edn]

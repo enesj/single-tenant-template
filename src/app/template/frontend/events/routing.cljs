@@ -1,4 +1,5 @@
 (ns app.template.frontend.events.routing
+  "Routing events; update for navigation side effects."
   (:require
     [app.template.frontend.db.db :as db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]

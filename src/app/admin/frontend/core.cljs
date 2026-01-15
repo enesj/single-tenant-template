@@ -1,5 +1,5 @@
 (ns app.admin.frontend.core
-  "Core namespace for admin frontend - single-tenant setup"
+  "Admin SPA bootstrap; integrate admin routes and layout."
   (:require
     [app.admin.frontend.adapters.users]
     [app.admin.frontend.config.preload]

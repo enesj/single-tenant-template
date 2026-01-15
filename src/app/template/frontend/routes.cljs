@@ -1,4 +1,5 @@
 (ns app.template.frontend.routes
+  "Client routes; update when adding pages."
   (:require
     [app.admin.frontend.core :as admin-core]
     [app.template.frontend.events.bootstrap :as bootstrap-events]
@@ -24,7 +25,7 @@
 ;; Define the router instance early so it's available to usages below
 (def router
   (rtf/router routes {:data {:coercion rcm/coercion}
-                       :conflicts prefer-literal-route-conflicts}))
+                      :conflicts prefer-literal-route-conflicts}))
 
 (defn on-navigate
   "Handle navigation to new routes with proper error handling"

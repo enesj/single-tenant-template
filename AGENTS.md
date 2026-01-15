@@ -1,13 +1,16 @@
-# PRINCIPLES
 
-[phi fractal euler tao pi mu] | [Δ λ ∞/0 | ε⚡φ Σ⚡μ c⚡h] | REPL
-Human ⊗ AI
 
 # Repository Guidelines
 
 ## Overview & Architecture
 - Single-tenant SaaS template built with Clojure/ClojureScript and PostgreSQL.
 - Core structure: Admin (admin panel), Template (shared SaaS infrastructure), Domain (feature modules), Shared (cross-platform utilities).
+
+## Instruction Scope & Precedence
+
+- `AGENTS.md` is canonical for repo-wide policy and workflow (scripting, dev commands, testing discipline, skills usage).
+- `.github/copilot-instructions.md` is canonical for implementation guidance (coding patterns, migrations, common issues, security checks).
+- If instructions conflict, follow the more specific one; otherwise prefer `AGENTS.md` for policy/workflow and `.github/copilot-instructions.md` for implementation details.
 
 ## 🚨 SCRIPTING POLICY: NO PYTHON - Babashka/Bash Only
 
@@ -53,6 +56,8 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 
 This project includes specialized AI skills for debugging and development. Use **Morph MCP (Warp Grep)** to quickly discover relevant docs and skills.
 
+- At the beginning of any new task, use Morph MCP (Warp Grep) to find and read relevant documentation before writing code.
+
 ### Available Skills
 
 | Skill | Purpose | When to Use |
@@ -63,7 +68,7 @@ This project includes specialized AI skills for debugging and development. Use *
 
 **Search with Morph MCP (Warp Grep)** by querying for skill names or topics (e.g., “app-db-inspect”, “system-logs”, “re-frame events”).
 
-See `.claude/skills/*/SKILL.md` for detailed documentation, patterns, and implementation guides.
+See `.claude/skills/*/SKILL.md` (repo) or `.codex/skills/*/SKILL.md` (Codex) for detailed documentation, patterns, and implementation guides.
 
 ## Agent Debugging & Testing Workflow
 
@@ -156,7 +161,7 @@ All form fields in `src/app/template/frontend/components/form/fields/` now auto-
 
 ## Documentation & AI Search
 
-Use **Morph MCP (Warp Grep)** as the standard way to search project documentation (`docs/**`) and skill docs (`.claude/skills/**`).
+Use **Morph MCP (Warp Grep)** as the standard way to search project documentation (`docs/**`) and skill docs (`.claude/skills/**`, `.codex/skills/**`).
 
 **Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
 
@@ -178,49 +183,9 @@ Use **Morph MCP (Warp Grep)** as the standard way to search project documentatio
 - `npm run test:cljs:karma` — Browser tests (Karma/Chrome)
 - `npm run test:cljs:watch` — Watch mode for development
 
-**🚨 IMPORTANT: Always save test output before analysis:**
-```bash
-# Frontend - save and analyze
-npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
-# Backend - save and analyze
-bb be-test 2>&1 | tee /tmp/be-test.txt
-# Then grep/search the saved files - NEVER re-run tests!
-```
+See "Agent Debugging & Testing Workflow" above for the save-output-first pattern and the "run only relevant tests" rule.
 
-**🚨 NEW RULE:** When working on a concrete problem, do NOT run the entire test suite — run only the relevant test(s) (single test file, focused suite, or tagged tests). This reduces turnaround time and avoids noisy output; save the full output before analysis as above.
-
-# Clojure REPL Evaluation
-
-Use the **clojure-mcp** MCP server tools for evaluating code:
-
-- **Backend (Clojure `.clj`)**: Use `mcp__clojure-mcp__clojure_eval` to run code and verify behavior.
-- **Frontend (ClojureScript `.cljs`)**: Use `mcp__clojure-mcp__clojurescript_eval` for frontend evaluation.
-
-The MCP tools provide persistent REPL sessions - namespaces and state are maintained between evaluations.
-Always use `:reload` when requiring namespaces to pick up changes.
-
-**Troubleshooting ClojureScript REPL**:
-If you get a `FileNotFoundException` when requiring `.cljs` files, it means the REPL is in Clojure (JVM) mode. Switch to the ClojureScript runtime by evaluating:
-```clojure
-(shadow.cljs.devtools.api/nrepl-select :app)
-```
-(Replace `:app` with `:admin` if working on the admin panel).
-
-# Clojure Parenthesis Repair
-
-The command `clj-paren-repair` is installed on your path.
-
-Examples:
-`clj-paren-repair <files>`
-`clj-paren-repair path/to/file1.clj path/to/file2.clj path/to/file3.clj`
-
-**IMPORTANT:** Do NOT try to manually repair parenthesis errors.
-If you encounter unbalanced delimiters, run `clj-paren-repair` on the file
-instead of attempting to fix them yourself. If the tool doesn't work,
-report to the user that they need to fix the delimiter error manually.
-
-The tool automatically formats files with cljfmt when it processes them.
 
 IMPORTANT: If you need to explore the codebase to gather context, and the task does not involve a single file or function which is provided by name, use `mcp__morph-mcp__warpgrep_codebase_search` instead of other search tools. If you have an exact string, include it in your Warp Grep query; for semantic/vague searches, phrase the query in natural language. If given a complex task, best practice is to run multiple (no more than 2) parallel Warp Grep searches to understand code paths and features (e.g., “where is the code for <vague feature/code flow>”).
 
-Finally read `.github/copilot-instructions.md` for general coding instructions.
+Also read `.github/copilot-instructions.md` for implementation guidance (coding patterns, migrations, common issues, security checks).

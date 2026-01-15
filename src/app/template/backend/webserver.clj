@@ -1,4 +1,5 @@
 (ns app.template.backend.webserver
+  "Ring server setup; change server options and handler wiring here."
   (:require
     [app.template.backend.routes :as routes]
     [org.httpkit.server :as http-kit]

@@ -1,7 +1,5 @@
 (ns app.shared.date
-  "Aggregator namespace for date utilities.
-   Maintains backward compatibility by providing aliases to functions moved
-   to date-core, date-arithmetic, and date-range namespaces."
+  "Date/time helpers; keep parsing/formatting consistent."
   (:require
     [app.shared.date-core :as core]
     [app.shared.date-arithmetic :as arithmetic]

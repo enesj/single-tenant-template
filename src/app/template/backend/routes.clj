@@ -1,4 +1,5 @@
 (ns app.template.backend.routes
+  "Top-level route composition; mount new route trees here."
   (:require
     [app.domain.backend.registry :as domain-registry]
     [app.template.backend.middleware.security :as security]

@@ -1,7 +1,5 @@
 (ns app.shared.http
-  "Cross-platform HTTP constants and utilities for consistent API communication.
-   Provides status codes, content types, and common response patterns
-   that work in both Clojure and ClojureScript environments."
+  "HTTP response helpers/status codes; keep shapes stable."
   (:require
     [clojure.string :as str]
     #?(:clj [cheshire.core :as json])))
@@ -15,7 +13,6 @@
 (def status-created 201)
 
 ;; 3xx Redirection
-
 
 ;; 4xx Client Error
 (def status-bad-request 400)
@@ -85,7 +82,6 @@
      ([status data]
       (encode-json-body (json-response status data)))))
 
-
 ;; -------------------------
 ;; Error Response Structures
 ;; -------------------------
@@ -138,7 +134,6 @@
   ([message]
    (error-response status-forbidden message)))
 
-
 ;; -------------------------
 ;; Request/Response Utilities
 ;; -------------------------
@@ -173,25 +168,25 @@
     status-internal-server-error))
 
 (defn success?
-  "True when the response status is in the 2xx range." 
+  "True when the response status is in the 2xx range."
   [response]
   (let [status (get-status response)]
     (and (number? status) (<= 200 status 299))))
 
 (defn client-error?
-  "True when the response status is in the 4xx range." 
+  "True when the response status is in the 4xx range."
   [response]
   (let [status (get-status response)]
     (and (number? status) (<= 400 status 499))))
 
 (defn server-error?
-  "True when the response status is in the 5xx range." 
+  "True when the response status is in the 5xx range."
   [response]
   (let [status (get-status response)]
     (and (number? status) (<= 500 status 599))))
 
 (defn create-json-headers
-  "Create a headers map that declares JSON (UTF-8)." 
+  "Create a headers map that declares JSON (UTF-8)."
   ([]
    {header-content-type content-type-json-utf8})
   ([headers]
@@ -214,7 +209,7 @@
      {})))
 
 (defn merge-headers
-  "Nil-safe merge for header maps." 
+  "Nil-safe merge for header maps."
   ([a b]
    (merge (or a {}) (or b {})))
   ([a b & more]
@@ -238,14 +233,14 @@
           (str/includes? ct "application/vnd.api+json"))))))
 
 (defn create-success-response
-  "Alias for `json-response` (stable doc-level API)." 
+  "Alias for `json-response` (stable doc-level API)."
   ([data]
    (json-response data))
   ([status data]
    (json-response status data)))
 
 (defn create-error-response
-  "Alias for `error-response` (stable doc-level API)." 
+  "Alias for `error-response` (stable doc-level API)."
   ([message]
    (error-response message))
   ([status message]

@@ -1,12 +1,5 @@
 (ns app.template.frontend.events.core
-  "Main events orchestration layer for template frontend.
-
-   Requires all domain-specific event namespaces for side effects
-   (Re-frame event registration) and provides a central coordination point.
-
-   This namespace acts as the entry point for the events system,
-   ensuring all event handlers are properly registered through
-   namespace requires."
+  "Event registration entrypoint; ensure event namespaces are required."
   (:require
     ;; Template event namespaces (loaded for side effects)
     ;; These requires are essential for Re-frame event registration

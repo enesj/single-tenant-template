@@ -1,5 +1,5 @@
 (ns app.admin.frontend.events.users
-  "Main entry point for user management events - loads all modular user events"
+  "User management events; sync with admin services."
   (:require
     [app.admin.frontend.events.users.activity]
     [app.admin.frontend.events.users.bulk-operations]

@@ -1,4 +1,5 @@
 (ns app.template.frontend.db.db
+  "App-db schema/initial state; update for new state keys."
   (:require
     [app.template.frontend.db.defaults :as defaults]
     [app.template.frontend.db.flags :as flags]

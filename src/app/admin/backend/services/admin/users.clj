@@ -1,5 +1,5 @@
 (ns app.admin.backend.services.admin.users
-  "Admin user management and operations - single-tenant simplified."
+  "User management service entry; centralize user CRUD."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.users.deletion :as deletion]

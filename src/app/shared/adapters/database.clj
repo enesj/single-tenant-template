@@ -1,10 +1,5 @@
 (ns app.shared.adapters.database
-  "JVM-only database adapter utilities.
-
-  This namespace contains helpers for converting PostgreSQL JDBC objects (such as
-  PgArray and PGobject) into JSON-serializable Clojure data structures.
-
-  Cross-platform key normalization helpers live in `app.shared.adapters.normalization`."
+  "Convert PG objects/keys; call before JSON responses."
   (:require
     [app.shared.adapters.normalization :as norm]
     [cheshire.core :as json]
@@ -22,7 +17,7 @@
   - PgArray -> Clojure vector
   - PGobject(json/jsonb) -> parsed Clojure data
 
-  Other values are returned unchanged." 
+  Other values are returned unchanged."
   [data]
   (walk/postwalk
     (fn [x]
@@ -34,12 +29,12 @@
             (log/warn "Failed to convert PgArray, using string representation:" (.getMessage e))
             (let [array-str (.toString x)]
               (if (and (> (count array-str) 2)
-                       (= (first array-str) \{)
-                       (= (last array-str) \}))
+                    (= (first array-str) \{)
+                    (= (last array-str) \}))
                 (-> array-str
-                    (subs 1 (dec (count array-str)))
-                    (str/split #",")
-                    (->> (mapv str/trim)))
+                  (subs 1 (dec (count array-str)))
+                  (str/split #",")
+                  (->> (mapv str/trim)))
                 []))))
 
         (instance? PGobject x)
@@ -64,8 +59,8 @@
   - `convert-pg-objects` (PGobject/PgArray → JSON-safe Clojure values)
   - `norm/convert-db-keys->app-keys` (snake_case → kebab-case keywords)
 
-  Intended for backend handlers returning data to the frontend." 
+  Intended for backend handlers returning data to the frontend."
   [data]
   (-> data
-      convert-pg-objects
-      norm/convert-db-keys->app-keys))
+    convert-pg-objects
+    norm/convert-db-keys->app-keys))

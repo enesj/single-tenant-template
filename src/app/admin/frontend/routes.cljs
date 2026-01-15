@@ -1,4 +1,5 @@
 (ns app.admin.frontend.routes
+  "Admin routes; update when adding admin pages."
   (:require
     [app.admin.frontend.pages.admins :as admins]
     [app.admin.frontend.pages.dashboard :as dashboard]

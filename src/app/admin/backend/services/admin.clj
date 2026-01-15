@@ -1,18 +1,5 @@
 (ns app.admin.backend.services.admin
-  "Admin services - refactored into focused namespaces.
-
-   This namespace serves as a compatibility layer that delegates to the new
-   focused admin service namespaces:
-
-   - auth: Authentication and session management
-   - audit: Audit logging and compliance tracking
-   - dashboard: Dashboard statistics and metrics
-   - users: User management and operations
-   - users.bulk: Bulk user operations and export
-   - admins: Admin management (owner-only operations)
-   - monitoring.integrations: Integration monitoring
-
-   All functions maintain the same signature for backward compatibility."
+  "Admin service facade; orchestrate admin service calls."
   (:require
     [app.admin.backend.services.admin.admins :as admins]
     [app.admin.backend.services.admin.audit :as audit]

@@ -1,8 +1,5 @@
 (ns app.template.backend.security.entity-access
-  "Entity access control for generic CRUD routes.
-
-   This module defines which entities are allowed through generic CRUD endpoints
-   vs. which must be accessed only through specific admin or protected routes."
+  "Entity-level access rules; reuse for permission gating."
   (:require
     [clojure.set :as set]
     [taoensso.timbre :as log]))

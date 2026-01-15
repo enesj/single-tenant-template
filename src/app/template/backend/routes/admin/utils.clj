@@ -1,5 +1,5 @@
 (ns app.template.backend.routes.admin.utils
-  "Shared utilities for admin API routes"
+  "Shared admin route helpers (JSON/middleware); keep utilities reusable."
   (:require
     [app.shared.http :as shared-http]
     [app.shared.type-conversion :as type-conv]
@@ -72,7 +72,7 @@
   "Get a parameter from params map, trying both keyword and string keys."
   [params key]
   (or (get params key)
-      (get params (if (keyword? key) (name key) (keyword key)))))
+    (get params (if (keyword? key) (name key) (keyword key)))))
 
 (defn parse-int-param
   "Parse integer parameter with default value.

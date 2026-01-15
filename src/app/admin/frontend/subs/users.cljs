@@ -1,5 +1,5 @@
 (ns app.admin.frontend.subs.users
-  "User-related subscriptions for admin panel"
+  "User-related subscriptions; keep selectors narrow."
   (:require
     [re-frame.core :as rf]))
 

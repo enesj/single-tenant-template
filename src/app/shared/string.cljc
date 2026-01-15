@@ -1,8 +1,5 @@
 (ns app.shared.string
-  "Cross-platform string utilities for both frontend and backend.
-
-   Provides common string manipulation functions that work consistently
-   across Clojure and ClojureScript environments."
+  "String casing/slug/email helpers; avoid ad hoc logic."
   (:require
     [clojure.string :as str]))
 
@@ -81,18 +78,18 @@
 (defn blank?
   "True when s is nil, empty, or contains only whitespace.
 
-  Non-string values are treated as non-blank." 
+  Non-string values are treated as non-blank."
   [s]
   (or (nil? s)
     (and (string? s) (str/blank? s))))
 
 (defn not-blank?
-  "Negation of `blank?`." 
+  "Negation of `blank?`."
   [s]
   (not (blank? s)))
 
 (defn non-empty-string?
-  "True when s is a non-blank string." 
+  "True when s is a non-blank string."
   [s]
   (and (string? s) (not (str/blank? s))))
 
@@ -105,7 +102,7 @@
 
   Notes:
   - Accepts leading/trailing whitespace
-  - Rejects empty/blank strings" 
+  - Rejects empty/blank strings"
   [s]
   (when (and (string? s) (not (str/blank? s)))
     (try

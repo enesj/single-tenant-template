@@ -1,18 +1,12 @@
 (ns app.admin.backend.services.admin.users.security
-  "User security operations including email verification and password management.
-
-   This namespace handles:
-   - Email verification management
-   - Password reset operations
-   - Security-related user operations
-   - Audit logging for security actions"
+  "Password/reset/lockout helpers; enforce security rules."
   (:require
-   [app.admin.backend.services.admin.audit :as audit]
-   [app.shared.type-conversion :as tc]
-   [honey.sql :as hsql]
-   [java-time.api :as time]
-   [next.jdbc :as jdbc]
-   [next.jdbc.sql :as sql]))
+    [app.admin.backend.services.admin.audit :as audit]
+    [app.shared.type-conversion :as tc]
+    [honey.sql :as hsql]
+    [java-time.api :as time]
+    [next.jdbc :as jdbc]
+    [next.jdbc.sql :as sql]))
 
 ;; ============================================================================
 ;; Email Verification Management

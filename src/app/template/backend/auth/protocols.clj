@@ -1,5 +1,5 @@
 (ns app.template.backend.auth.protocols
-  "Authentication service protocols")
+  "Auth service contracts; update only when API changes.")
 
 (defprotocol OAuthProvider
   "OAuth provider interface"

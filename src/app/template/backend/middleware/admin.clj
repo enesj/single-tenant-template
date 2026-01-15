@@ -1,4 +1,5 @@
 (ns app.template.backend.middleware.admin
+  "Admin auth middleware; update authentication checks here."
   (:require
     [app.admin.backend.services.admin :as admin-service]
     [app.template.backend.routes.admin.utils :as utils]

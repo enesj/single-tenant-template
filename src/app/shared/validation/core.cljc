@@ -1,7 +1,5 @@
 (ns app.shared.validation.core
-  "Core validation functions used across all validation namespaces.
-   This namespace provides the fundamental validation operations without
-   any platform-specific code or external dependencies."
+  "Validation core; compose constraints here."
   (:require
     [malli.core :as m]
     [malli.error :as me]))

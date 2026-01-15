@@ -1,19 +1,5 @@
 (ns app.domain.frontend.registry
-  "Frontend domain registry - provides domain manifests to template/admin.
-
-   Each domain manifest contains:
-   - :id - domain keyword identifier
-   - :routes
-     - :user - fn returning reitit frontend route vectors for user-facing pages
-   - :init! - fn that ensures domain events/subs are loaded (side effects)
-   - :admin-entities - map of entity keywords to admin entity registry entries
-   - :admin-domain-groups - map of group keywords to admin domain group configs
-   - :user-domain-groups - map of group keywords to user domain group configs
-   
-   Template/admin import this registry to dynamically compose routes and UI.
-   
-   NOTE: Pages are NOT included in the manifest to avoid circular dependencies.
-   Use app.domain.frontend.pages instead."
+  "Domain frontend registry; register domain routes/components."
   (:require
     [app.domain.frontend.expenses.routes.user :as expenses-user-routes]
     ;; Domain-local init: loads events/subs via side effects
@@ -21,8 +7,7 @@
     ;; Domain adapters - admin (loads all adapter modules)
     [app.domain.frontend.expenses.adapters :as expenses-adapter]
     [app.domain.frontend.expenses.admin.components.detail-modals :as detail-modals]
-    [app.domain.frontend.expenses.admin.components.entity-actions :as entity-actions]
-    ))
+    [app.domain.frontend.expenses.admin.components.entity-actions :as entity-actions]))
 
 (def ^:private expenses-manifest
   {:id :expenses
