@@ -175,11 +175,6 @@
                  (conj ids item-id))]
       (assoc-in db path ids'))))
 
-(rf/reg-event-db
-  ::clear-selection
-  (fn [db _]
-    (assoc-in db (conj base-path :selection :item-ids) #{})))
-
 ;; -----------------------------------------------------------------------------
 ;; Map modal
 ;; -----------------------------------------------------------------------------

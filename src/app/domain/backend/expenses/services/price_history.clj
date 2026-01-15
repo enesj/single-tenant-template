@@ -37,7 +37,7 @@
 ;; Queries
 ;; ============================================================================
 
-(defn get-price-history
+(defn ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]} get-price-history
   "Return recent price observations for an article.
    opts: :supplier-id (filter), :limit (default 50)."
   [db article-id {:keys [supplier-id limit] :or {limit 50}}]
@@ -50,7 +50,7 @@
                             :limit limit))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn get-latest-prices
+(defn ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]} get-latest-prices
   "Return the latest price observation per supplier for the given article.
    Post-processes a sorted query to avoid DISTINCT ON complexity."
   [db article-id]
@@ -68,7 +68,7 @@
        vals
        vec))
 
-(defn get-price-comparison
+(defn ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]} get-price-comparison
   "Return price observations for an article across suppliers within optional :from timestamp."
   [db article-id {:keys [from limit] :or {limit 100}}]
   (let [where-clause (cond-> [:and [:= :article_id article-id]]

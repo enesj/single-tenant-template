@@ -15,6 +15,7 @@
     "test:config-audit:keys": "bb config-audit --strict",
     "test:config-audit": "npm-run-all --serial test:domain-guard test:config-audit:keys",
     "test:cljs": "npx shadow-cljs compile test-node && node target/test-node.cjs",
+    "test:cljs:parallel": "bb fe-test-parallel",
     "test:cljs:ci": "npm-run-all --serial test:config-audit test:cljs",
     "test:cljs:watch": "npx shadow-cljs watch test",
     "test:cljs:karma:compile": "shadow-cljs compile karma-test",

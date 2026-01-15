@@ -50,15 +50,6 @@
   [s]
   (type-conv/try-parse-uuid s))
 
-(defn parse-and-validate-uuid
-  "Parse and validate UUID with descriptive error"
-  [id-str param-name]
-  (if id-str
-    (if-let [uuid (parse-uuid-custom id-str)]
-      {:success true :uuid uuid}
-      {:success false :error (str "Invalid " param-name)})
-    {:success false :error (str "Missing " param-name)}))
-
 (defn extract-uuid-param
   "Extract and validate UUID from request parameters"
   [request param-key]

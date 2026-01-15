@@ -28,6 +28,7 @@
     {}
     (normalize-field-specs spec)))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defui entity-form-modal
   [{:keys [entity-name entity-spec editing? initial-values on-success on-cancel button-text]}]
   (let [entity-key (if (keyword? entity-name) entity-name (keyword entity-name))

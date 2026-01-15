@@ -13,29 +13,11 @@
 ;; Authentication & Session Management (auth namespace)
 ;; ============================================================================
 
-(defn generate-session-token []
-  (auth/generate-session-token))
-
-(defn hash-password [password]
-  (auth/hash-password password))
-
-(defn verify-password [password stored-hash]
-  (auth/verify-password password stored-hash))
-
-(defn migrate-admin-password! [db admin-id password]
-  (auth/migrate-admin-password! db admin-id password))
-
 (defn create-admin! [db admin-data]
   (auth/create-admin! db admin-data))
 
 (defn find-admin-by-email [db email]
   (auth/find-admin-by-email db email))
-
-(defn verify-bcrypt-password [password password-hash]
-  (auth/verify-bcrypt-password password password-hash))
-
-(defn verify-sha256-password [password password-hash]
-  (auth/verify-sha256-password password password-hash))
 
 (defn authenticate-admin [db email password]
   (auth/authenticate-admin db email password))
@@ -52,18 +34,12 @@
 (defn invalidate-session! [db token]
   (auth/invalidate-session! db token))
 
-(defn invalidate-all-admin-sessions! [db admin-id]
-  (auth/invalidate-all-admin-sessions! db admin-id))
-
 ;; ============================================================================
 ;; Audit Logging (audit namespace)
 ;; ============================================================================
 
 (defn log-audit! [db audit-data]
   (audit/log-audit! db audit-data))
-
-(defn get-audit-logs [db filters]
-  (audit/get-audit-logs db filters))
 
 ;; ============================================================================
 ;; Dashboard Statistics (dashboard namespace)

@@ -7,8 +7,8 @@ Practical guide for developers and AI agents on writing, running, and debugging 
 ### Running Tests
 
 ```bash
-# Run all tests (Node.js - fast, primary)
-npm run test:cljs
+# Run all tests (Node.js - fast, parallel)
+bb fe-test-parallel
 
 # Run browser tests (Karma/Chrome - real browser)
 npm run test:cljs:karma
@@ -328,7 +328,7 @@ For components that depend on specific app-db state:
 
 ```bash
 # Run tests and save output
-npm run test:cljs 2>&1 | tee /tmp/test-output.txt
+bb fe-test-parallel 2>&1 | tee /tmp/test-output.txt
 
 # Search for failures
 grep -A 5 "FAIL in" /tmp/test-output.txt
@@ -424,7 +424,7 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 
 1. **Save test output first** - Don't re-run tests repeatedly:
    ```bash
-   npm run test:cljs 2>&1 | tee /tmp/test-output.txt
+   bb fe-test-parallel 2>&1 | tee /tmp/test-output.txt
    ```
 
 2. **Isolate the failing test** - Run or analyze one test at a time
@@ -466,7 +466,7 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 
 | Command | Description | When to Use |
 |---------|-------------|-------------|
-| `npm run test:cljs` | Node.js tests (fast) | Primary development testing |
+| `bb fe-test-parallel` | Node.js tests (fast, parallel) | Primary development testing |
 | `npm run test:cljs:karma` | Karma browser tests | Real browser verification |
 | `npm run test:cljs:watch` | Watch mode | Continuous testing during dev |
 | `npm run test:cljs:karma:compile` | Compile only | Debugging build issues |
@@ -478,7 +478,7 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 
 ```bash
 # Run full test suite
-npm run test:cljs
+bb fe-test-parallel
 
 # Optionally run browser tests
 npm run test:cljs:karma
@@ -491,7 +491,7 @@ npm run test:cljs:karma
 npm run test:cljs:watch
 
 # Or run tests manually after changes
-npm run test:cljs
+bb fe-test-parallel
 ```
 
 ### CI/CD Pipeline

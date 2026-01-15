@@ -34,8 +34,8 @@ clj -M:test -m kaocha.runner --focus app.backend.routes.admin.auth-test
 ### Quick Reference
 
 ```bash
-# Run Node.js tests (fast, primary)
-npm run test:cljs
+# Run Node.js tests (fast, parallel by default)
+bb fe-test-parallel
 
 # Validate frontend config EDNs (fast, recommended when changing config)
 bb validate-frontend-config
@@ -67,7 +67,7 @@ npm run test:cljs:watch
 ```bash
 # ✅ GOOD - Save once, analyze many times
 bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt
-npm run test:cljs 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
+bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
 
 # Then analyze the saved files:
 grep "FAIL" /tmp/backend-test-*.txt

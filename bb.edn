@@ -229,6 +229,10 @@
                (throw (ex-info "Frontend tests exited with non-zero code" {:exit-code (.exitValue proc)}))))
            (println (str "✅ Test output processed (start: " start-int ", lines: " lines-int ")")))},
 
+  fe-test-parallel
+  {:doc "Run frontend CLJS tests in parallel (Node workers, sharded). Pass through args to scripts/bb/fe_test_parallel.clj.\n\nUsage:\n  bb fe-test-parallel [--workers N] [--grep REGEX] [--randomize] [--skip-compile] [--dry-run]",
+   :task (apply shell "bb" "scripts/bb/fe_test_parallel.clj" *command-line-args*)}
+
   stage
   {:doc "Stage all changes for git commit",
    :task (shell "git" "add" ".")},
@@ -401,7 +405,7 @@
   check-migrations
   {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "-e" (format "(do (require '[app.template.backend.migrations.alignment :as al]) (System/exit (al/exit-code-for-profile :%s)))" env)))},
+           (shell "clj" "-M" "-e" (format "(do (require '[app.template.backend.migrations.alignment.report :as al]) (System/exit (al/exit-code-for-profile :%s)))" env)))},
 
   seed-admin
   {:doc "Seed or refresh the admin user (default env: dev). Usage: bb seed-admin [dev|test]",

@@ -25,6 +25,10 @@ Architecture: [φ fractal euler] | [Δ λ] → λreqs. self_referential(scalable
 ### Workflow (See `AGENTS.md`)
 
 - Follow `AGENTS.md` for documentation-first search (Warp Grep), debugging/testing discipline, and phased execution planning.
+- Frontend tests: prefer `bb fe-test-parallel` (Node.js, fast, parallel). NPM alias: `npm run test:cljs:parallel`. Browser tests: `npm run test:cljs:karma`.
+- Save output first when running suites:
+  - `bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt`
+  - `bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt`
 
 ### Coding & Migrations
 

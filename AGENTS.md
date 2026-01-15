@@ -77,18 +77,18 @@ See `.claude/skills/*/SKILL.md` (repo) or `.codex/skills/*/SKILL.md` (Codex) for
 	- **Clojure (backend)**: Use the `mcp__clojure-mcp__clojure_eval` MCP tool to run code and verify behavior.
 	- **ClojureScript (frontend)**: Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool.
 - Run automated tests to verify changes:
-		- **Frontend tests**: `npm run test:cljs` (Node.js, fast) or `npm run test:cljs:karma` (browser)
+		- **Frontend tests**: `bb fe-test-parallel` (Node.js, fast, parallel) or `npm run test:cljs:karma` (browser). NPM alias: `npm run test:cljs:parallel`.
 		- **Frontend config checks (fast)**: `bb validate-frontend-config`, `bb config-audit --strict` (CI uses `npm run test:config-audit`)
 		- See `docs/testing/fe/` for testing patterns, utilities, and debugging guides.
 	- **🚨 CRITICAL: ALWAYS save full test output FIRST - never run tests multiple times:**
 		```bash
 		# ✅ GOOD - run once, analyze many times
-		npm run test:cljs 2>&1 | tee /tmp/test-output.txt
+		bb fe-test-parallel 2>&1 | tee /tmp/test-output.txt
 		grep "FAIL" /tmp/test-output.txt
 
 		# ❌ BAD - runs tests multiple times (wasteful)
-		npm run test:cljs | grep FAIL
-		npm run test:cljs | grep ERROR
+		bb fe-test-parallel | grep FAIL
+		bb fe-test-parallel | grep ERROR
 		```
 	- Never run the entire test suite when you're working on a concrete problem. Run only the relevant test(s): a single test file, a focused test suite, or tagged/filtered tests (use your test runner's selector/filter options). This speeds feedback and avoids noise.
 - Use skills when relevant:
@@ -178,8 +178,9 @@ Use **Morph MCP (Warp Grep)** as the standard way to search project documentatio
 | `docs/testing/fe/development-guide.md` | How to write, run, and debug FE tests |
 
 **Test commands**:
-- `bb be-test` — Backend tests (Kaocha, 121 tests)
-- `npm run test:cljs` — Node.js tests (fast, primary)
+- `bb be-test` — Backend tests (Kaocha)
+- `bb fe-test-parallel` — Frontend tests (Node.js, fast, parallel)
+- `npm run test:cljs:parallel` — NPM alias to `bb fe-test-parallel`
 - `npm run test:cljs:karma` — Browser tests (Karma/Chrome)
 - `npm run test:cljs:watch` — Watch mode for development
 

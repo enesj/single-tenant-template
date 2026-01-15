@@ -8,7 +8,7 @@ The frontend testing stack supports two test execution environments:
 
 | Environment | Command | Use Case |
 |-------------|---------|----------|
-| **Node.js** | `npm run test:cljs` | Fast local development, CI/CD |
+| **Node.js** | `bb fe-test-parallel` | Fast local development (parallel), CI/CD |
 | **Karma (Chrome)** | `npm run test:cljs:karma` | Real browser testing |
 
 Both environments run the same test suite but use different rendering strategies.
@@ -338,7 +338,7 @@ Tests must follow this naming pattern to be included:
 
 ```bash
 # Node.js tests with verbose output
-npm run test:cljs 2>&1 | tee test-output.txt
+bb fe-test-parallel 2>&1 | tee test-output.txt
 
 # Karma tests with console output
 npm run test:cljs:karma 2>&1 | tee karma-output.txt
