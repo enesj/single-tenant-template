@@ -10,10 +10,7 @@
 ;; NOTE: Models metadata may arrive in snake_case (db) or kebab-case (app).
 ;; Keep these exclusions resilient to either representation.
 (def excluded-fields
-  #{:id
-    :created_at :created-at
-    :updated_at :updated-at
-    :tenant_id :tenant-id})
+  #{:tenant_id :tenant-id})
 
 ;; Fields to exclude from forms but keep in tables
 ;; Fields to exclude from forms but keep in tables
@@ -185,10 +182,20 @@
   [field-name field-def]
   (let [admin-meta (:admin field-def)
         field-type (:type field-def :string)
-         label (:label field-def (labels/field-name->label field-name))]
+        ;; Computed field names often arrive in db/snake_case (e.g. :supplier_display_name).
+        ;; Normalize them to app/kebab-case so they line up with:
+        ;; - table-columns.edn (normalized via model-naming/ensure-app-keyword)
+        ;; - view-options.edn column locks/defaults
+        ;; - normalized entities in the template store (alias-keys)
+        field-kw (cond
+                   (keyword? field-name) field-name
+                   (string? field-name) (keyword field-name)
+                   :else (keyword (str field-name)))
+        field-app-kw (model-naming/db-keyword->app field-kw)
+        label (:label field-def (labels/field-name->label field-app-kw))]
     ;; Debug log
     (log/info "Processing computed field:" field-name "with admin meta:" admin-meta)
-    {:id (name field-name)
+    {:id (name field-app-kw)
      :label label
      :type field-type
      :admin (merge {:visible-in-table? true

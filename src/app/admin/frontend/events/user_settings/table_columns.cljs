@@ -3,6 +3,50 @@
     [app.admin.frontend.events.user-settings.utils :as u]
     [re-frame.core :as rf]))
 
+(defn- col->str [c]
+  (cond
+    (nil? c) nil
+    (keyword? c) (name c)
+    (string? c) c
+    :else (str c)))
+
+(defn- prune-cols-to-available
+  "Keep only columns whose string form is present in avail-set.
+
+  Returns a distinct vector of strings, preserving input order." 
+  [avail-set xs]
+  (->> (or xs [])
+       (map col->str)
+       (filter avail-set)
+       distinct
+       vec))
+
+(defn- prune-map-to-available
+  "Prune a map keyed by column identifiers (keywords/strings), keeping entries
+  whose key string form is present in avail-set." 
+  [avail-set m]
+  (reduce-kv
+    (fn [acc k v]
+      (if (contains? avail-set (col->str k))
+        (assoc acc k v)
+        acc))
+    {}
+    (or m {})))
+
+(defn- cleanup-entity-table-columns
+  "Ensure the entity table-columns config stays valid when :available-columns
+  changes by pruning dependent lists/maps to be subsets of :available-columns." 
+  [entity-config]
+  (let [avail-set (set (map col->str (or (:available-columns entity-config) [])))]
+    (-> entity-config
+        (update :available-columns #(->> (or % []) (map col->str) (remove nil?) distinct vec))
+        (update :always-visible #(prune-cols-to-available avail-set %))
+        (update :default-visible-columns #(prune-cols-to-available avail-set %))
+        (update :filterable-columns #(prune-cols-to-available avail-set %))
+        (update :sortable-columns #(prune-cols-to-available avail-set %))
+        (update :computed-fields #(prune-map-to-available avail-set %))
+        (update :column-config #(prune-map-to-available avail-set %)))))
+
 ;; =============================================================================
 ;; Draft editing: table-columns defaults
 ;; =============================================================================
@@ -64,21 +108,28 @@
           list-type-kw (u/normalize-kw list-type)]
       (if (or (nil? entity-kw) (nil? list-type-kw))
         db
-        (assoc-in db [:admin :user-settings :draft :table-columns entity-kw list-type-kw] (vec columns))))))
+        (let [path [:admin :user-settings :draft :table-columns entity-kw list-type-kw]
+              db' (assoc-in db path (vec columns))]
+          (if (= list-type-kw :available-columns)
+            (update-in db' [:admin :user-settings :draft :table-columns entity-kw] cleanup-entity-table-columns)
+            db'))))))
 
 (rf/reg-event-db
   :app.admin.frontend.events.user-settings/toggle-table-column-in-list-draft
   (fn [db [_ entity list-type column-name]]
     (let [entity-kw (u/normalize-kw entity)
           list-type-kw (u/normalize-kw list-type)
-          col-str (if (keyword? column-name) (name column-name) (str column-name))
+          col-str (col->str column-name)
           path [:admin :user-settings :draft :table-columns entity-kw list-type-kw]
           current-cols (vec (or (get-in db path) []))
-          col-set (set current-cols)]
+          col-set (set (map col->str current-cols))]
       (if (or (nil? entity-kw) (nil? list-type-kw))
         db
         (let [new-cols (if (contains? col-set col-str)
-                         (vec (remove #{col-str} current-cols))
-                         (conj current-cols col-str))]
-          (assoc-in db path new-cols))))))
+                         (vec (remove #{col-str} (map col->str current-cols)))
+                         (conj (vec (map col->str current-cols)) col-str))
+              db' (assoc-in db path new-cols)]
+          (if (= list-type-kw :available-columns)
+            (update-in db' [:admin :user-settings :draft :table-columns entity-kw] cleanup-entity-table-columns)
+            db'))))))
 

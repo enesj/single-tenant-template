@@ -2,8 +2,11 @@
   "Entity specs; keep field configs in sync with backend."
   (:require
     [app.shared.field-specs :as field-specs]
+    [app.shared.labels :as labels]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
+    [app.template.frontend.db.paths :as paths]
+    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (defn- normalize-entity-name
@@ -35,9 +38,61 @@
 ;; Subscription to get specs for a specific entity
 (rf/reg-sub
   :entity-specs/by-name
-  :<- [:entity-specs]
-  (fn [specs [_ entity-name]]
-    (get specs (normalize-entity-name entity-name))))
+  (fn [db [_ entity-name]]
+    (let [entity-kw (normalize-entity-name entity-name)
+          specs (get-in db [:entities :specs])
+          base-spec (get specs entity-kw)
+          base-fields (cond
+                        (sequential? base-spec) base-spec
+                        (map? base-spec) (vals base-spec)
+                        :else [])
+          ;; Route-aware table-columns config (admin vs user routes).
+          route-name (get-in db (paths/current-route-name))
+          admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+          table-config (when entity-kw
+                         (if admin-route?
+                           (get-in db [:admin :config :table-columns entity-kw])
+                           (get-in db [:domain :config :table-columns entity-kw])))
+          normalize-col (fn [col] (model-naming/ensure-app-keyword col))
+          available-cols (->> (or (:available-columns table-config) [])
+                           (keep normalize-col)
+                           vec)
+          computed-cols (->> (or (:computed-fields table-config) {})
+                          keys
+                          (keep normalize-col)
+                          set)
+          field-id->kw (fn [field]
+                         (when (map? field)
+                           (some-> (:id field) keyword normalize-col)))
+          base-by-id (into {}
+                       (keep (fn [f]
+                               (when-let [k (field-id->kw f)]
+                                 [k f])))
+                       base-fields)
+          computed-field-spec (fn [col-kw]
+                                {:id (name col-kw)
+                                 :label (labels/field-name->label col-kw)
+                                 :type :string
+                                 :admin {:visible-in-table? true
+                                         :filterable? true
+                                         :sortable? true}})
+          ;; Computed field specs should be overridden by real field specs when both exist.
+          merged-by-id (merge
+                         (into {} (map (fn [k] [k (computed-field-spec k)]) computed-cols))
+                         base-by-id)]
+      ;; If table-columns provides an explicit order, use it as the canonical
+      ;; list-view field order AND filter set (so config/locks/defaults apply
+      ;; to the same columns the table renders).
+      (if (seq available-cols)
+        (mapv (fn [k]
+                (or (get merged-by-id k)
+                  (computed-field-spec k)))
+          available-cols)
+        ;; Fallback: preserve backend/models-derived field order, and append any
+        ;; computed fields not already present.
+        (let [base-ids (set (keep field-id->kw base-fields))
+              missing-computed (remove base-ids computed-cols)]
+          (vec (concat base-fields (map computed-field-spec missing-computed))))))))
 
 (rf/reg-sub
   :form-entity-specs

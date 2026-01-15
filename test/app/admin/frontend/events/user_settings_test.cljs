@@ -129,6 +129,67 @@
         (is (= [:notes]
           (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-visible-columns])))))
 
+(deftest removing-available-column-prunes-dependent-lists-and-maps
+  (testing "Changing :available-columns prunes dependent table-columns config"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+
+    (rf/dispatch-sync [::user-settings/init])
+    (setup/respond-success!
+      (example-response
+        {:table-columns
+         {:expenses {:available-columns [:purchased_at :notes :supplier_display_name]
+                     :default-visible-columns [:purchased_at :supplier_display_name]
+                     :filterable-columns [:notes :supplier_display_name]
+                     :sortable-columns [:supplier_display_name]
+                     :always-visible [:purchased_at]
+                     :computed-fields {:supplier_display_name {:type "join"}}
+                     :column-config {:supplier_display_name {:width "100px"}
+                                    :notes {:width "80px"}}}}}))
+
+    ;; Remove supplier_display_name from :available-columns
+    (rf/dispatch-sync [::user-settings/toggle-table-column-in-list-draft
+                       :expenses :available-columns :supplier_display_name])
+
+    (let [cfg (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses])]
+      (is (= ["purchased_at" "notes"] (:available-columns cfg)))
+      (is (= ["purchased_at"] (:default-visible-columns cfg)))
+      (is (= ["notes"] (:filterable-columns cfg)))
+      (is (= [] (:sortable-columns cfg)))
+      (is (= ["purchased_at"] (:always-visible cfg)))
+      (is (= {} (:computed-fields cfg)))
+      (is (= {:notes {:width "80px"}} (:column-config cfg))))))
+
+(deftest setting-available-columns-prunes-dependent-lists-and-maps
+  (testing "::set-table-column-list-draft cleans up when list-type is :available-columns"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+
+    (rf/dispatch-sync [::user-settings/init])
+    (setup/respond-success!
+      (example-response
+        {:table-columns
+         {:expenses {:available-columns [:purchased_at :notes]
+                     :default-visible-columns [:purchased_at :notes]
+                     :filterable-columns [:notes]
+                     :sortable-columns [:purchased_at]
+                     :always-visible [:purchased_at]
+                     :computed-fields {:notes {:type "noop"}}
+                     :column-config {:notes {:width "80px"}
+                                    :purchased_at {:width "120px"}}}}}))
+
+    (rf/dispatch-sync [::user-settings/set-table-column-list-draft
+                       :expenses :available-columns [:notes]])
+
+    (let [cfg (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses])]
+      (is (= ["notes"] (:available-columns cfg)))
+      (is (= ["notes"] (:default-visible-columns cfg)))
+      (is (= ["notes"] (:filterable-columns cfg)))
+      (is (= [] (:sortable-columns cfg)))
+      (is (= [] (:always-visible cfg)))
+      (is (= {:notes {:type "noop"}} (:computed-fields cfg)))
+      (is (= {:notes {:width "80px"}} (:column-config cfg))))))
+
 (deftest save-sends-put-and-updates-state-on-success
   (testing "::save sends PUT and syncs state on success"
     (setup/reset-db!)

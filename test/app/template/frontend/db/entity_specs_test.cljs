@@ -23,6 +23,31 @@
      [:created_at :timestamptz {:null false}]
      [:foo_bar [:varchar 255] {:null false}]]}})
 
+(def ^:private article-aliases-models-data
+  {:article_aliases
+   {:fields
+    [[:id :uuid {:null false}]
+     [:created_at :timestamptz {:null false}]
+     [:updated_at :timestamptz {:null false}]
+     [:supplier_id :uuid {:null false
+                          :foreign-key :suppliers/id}]
+     [:article_id :uuid {:null false
+                         :foreign-key :articles/id}]
+     [:raw_label_normalized [:varchar 255] {:null false}]
+     [:confidence :integer {:null false}]]}})
+
+(def ^:private article-aliases-table-columns
+  {:available-columns
+   ["supplier_display_name"
+    "article_canonical_name"
+    "raw_label_normalized"
+    "confidence"
+    "created_at"
+    "id"]
+   :computed-fields
+   {"supplier_display_name" {}
+    "article_canonical_name" {}}})
+
 (deftest entity-specs-by-name-normalizes-entity-key
   (testing ":entity-specs/by-name resolves the same spec for snake_case and kebab-case entity identifiers"
     (reset-db! {:models-data models-data})
@@ -49,3 +74,27 @@
       (is (= spec-kebab spec-str) "snake_case string should resolve to the same form spec")
       (is (some #(= "foo-bar" (:id %)) spec-kebab)
         "Field ids should be normalized to kebab-case"))))
+
+(deftest entity-specs-by-name-includes-config-computed-fields-and-orders-by-available
+  (testing ":entity-specs/by-name merges computed fields from table-columns and filters/orders by :available-columns"
+    (reset-db!
+      {:models-data article-aliases-models-data
+       :domain {:config {:table-columns {:article-aliases article-aliases-table-columns}}}})
+    (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
+
+    (let [spec @(rf/subscribe [:entity-specs/by-name :article-aliases])
+          ids (mapv :id spec)]
+      ;; Computed fields should exist (data provides these keys even though models metadata doesn't).
+      (is (some #{"supplier-display-name"} ids))
+      (is (some #{"article-canonical-name"} ids))
+      ;; Base foreign-key fields should be filtered out because they're not in :available-columns.
+      (is (not (some #{"supplier-id"} ids)))
+      (is (not (some #{"article-id"} ids)))
+      ;; Ordering should follow :available-columns exactly.
+      (is (= ["supplier-display-name"
+              "article-canonical-name"
+              "raw-label-normalized"
+              "confidence"
+              "created-at"
+              "id"]
+            ids)))))

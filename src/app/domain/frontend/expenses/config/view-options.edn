@@ -24,9 +24,17 @@
   :display-defaults {:per-page 100, :show-edit? false}},
  :payers
  {:display-locks {},
-  :display-defaults {:per-page 50, :show-edit? false}},
+  :display-defaults {:per-page 50, :show-edit? false},
+  :column-defaults {},
+  :column-locks {:type true}},
  :article-aliases
- {:display-defaults {:show-edit? false}, :display-locks {}},
+ {:display-defaults {:show-edit? false},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks
+  {:supplier_display_name true,
+   :id false,
+   :article_canonical_name false}},
  :articles
  {:display-locks {},
   :display-defaults {:show-edit? false, :show-delete? false}},

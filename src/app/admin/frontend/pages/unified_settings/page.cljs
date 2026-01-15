@@ -108,21 +108,82 @@
                    :table-columns-config table-columns-config
                    :on-toggle (fn [entity-kw list-type col-name]
                                 ;; Admin table-columns use immediate save via PATCH
-                                (let [current-config (get table-columns-config entity-kw {})
-                                      current-cols (set (or (get current-config list-type) []))
-                                      col-str (if (keyword? col-name) (name col-name) (str col-name))
+                                (let [col->str (fn [c]
+                                                (cond
+                                                  (nil? c) nil
+                                                  (keyword? c) (name c)
+                                                  (string? c) c
+                                                  :else (str c)))
+                                      cleanup-available (fn [cfg]
+                                                          (let [avail-set (set (map col->str (or (:available-columns cfg) [])))
+                                                                prune (fn [xs]
+                                                                        (->> (or xs [])
+                                                                          (map col->str)
+                                                                          (filter avail-set)
+                                                                          distinct
+                                                                          vec))
+                                                                prune-map (fn [m]
+                                                                            (reduce-kv
+                                                                              (fn [acc k v]
+                                                                                (if (contains? avail-set (col->str k))
+                                                                                  (assoc acc k v)
+                                                                                  acc))
+                                                                              {}
+                                                                              (or m {})))]
+                                                            (-> cfg
+                                                              (update :always-visible prune)
+                                                              (update :default-visible-columns prune)
+                                                              (update :filterable-columns prune)
+                                                              (update :sortable-columns prune)
+                                                              (update :computed-fields prune-map)
+                                                              (update :column-config prune-map))))
+                                      current-config (get table-columns-config entity-kw {})
+                                      current-cols (set (map col->str (or (get current-config list-type) [])))
+                                      col-str (col->str col-name)
                                       new-cols (if (contains? current-cols col-str)
                                                  (vec (remove #{col-str} current-cols))
                                                  (conj (vec current-cols) col-str))
-                                      new-config (assoc current-config list-type new-cols)]
+                                      new-config (cond-> (assoc current-config list-type new-cols)
+                                                   (= list-type :available-columns) cleanup-available)]
                                   (rf/dispatch [::admin-settings-events/update-table-columns-entity
                                                 entity-kw new-config])))
                    :on-set-list (fn [entity-kw list-type cols]
-                                  (let [current-config (get table-columns-config entity-kw {})
+                                  (let [col->str (fn [c]
+                                                  (cond
+                                                    (nil? c) nil
+                                                    (keyword? c) (name c)
+                                                    (string? c) c
+                                                    :else (str c)))
+                                        cleanup-available (fn [cfg]
+                                                          (let [avail-set (set (map col->str (or (:available-columns cfg) [])))
+                                                                prune (fn [xs]
+                                                                        (->> (or xs [])
+                                                                          (map col->str)
+                                                                          (filter avail-set)
+                                                                          distinct
+                                                                          vec))
+                                                                prune-map (fn [m]
+                                                                            (reduce-kv
+                                                                              (fn [acc k v]
+                                                                                (if (contains? avail-set (col->str k))
+                                                                                  (assoc acc k v)
+                                                                                  acc))
+                                                                              {}
+                                                                              (or m {})))]
+                                                            (-> cfg
+                                                              (update :always-visible prune)
+                                                              (update :default-visible-columns prune)
+                                                              (update :filterable-columns prune)
+                                                              (update :sortable-columns prune)
+                                                              (update :computed-fields prune-map)
+                                                              (update :column-config prune-map))))
+                                        current-config (get table-columns-config entity-kw {})
                                         cols' (->> (or cols [])
-                                                (map (fn [c] (if (keyword? c) (name c) (str c))))
+                                                (map col->str)
+                                                (remove nil?)
                                                 vec)
-                                        new-config (assoc current-config list-type cols')]
+                                        new-config (cond-> (assoc current-config list-type cols')
+                                                     (= list-type :available-columns) cleanup-available)]
                                     (rf/dispatch [::admin-settings-events/update-table-columns-entity
                                                   entity-kw new-config])))}))
 
