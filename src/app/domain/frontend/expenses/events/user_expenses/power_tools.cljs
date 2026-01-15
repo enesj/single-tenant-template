@@ -196,7 +196,7 @@
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
-;; Article aliases (read-only list for now; supplier detail also uses the same endpoint)
+;; Article aliases (power-user list + basic edit/delete)
 ;; ---------------------------------------------------------------------------
 
 (rf/reg-event-fx
@@ -226,6 +226,81 @@
   common-interceptors
   (fn [db [error]]
     (finish-entity-load db :article-aliases error)))
+
+(rf/reg-event-fx
+  :user-expenses/update-article-alias-modal
+  common-interceptors
+  (fn [{:keys [db]} [article-alias-id form-data on-success]]
+    (let [article-alias-id-str (some-> article-alias-id str)
+          {:keys [raw_label_normalized raw-label-normalized confidence]} (or form-data {})
+          payload (cond-> {}
+                    (some? raw_label_normalized) (assoc :raw_label_normalized raw_label_normalized)
+                    (some? raw-label-normalized) (assoc :raw_label_normalized raw-label-normalized)
+                    (some? confidence) (assoc :confidence confidence))
+          payload* (if (seq payload) payload (or form-data {}))]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :put
+                      :uri (str endpoints/article-aliases-endpoint "/" article-alias-id-str)
+                      :admin-uri (str endpoints/admin-article-aliases-endpoint "/" article-alias-id-str)
+                      :params payload*
+                      :on-success [:user-expenses/update-article-alias-modal-success article-alias-id-str on-success]
+                      :on-failure [:user-expenses/update-article-alias-modal-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/update-article-alias-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [article-alias-id on-success _response]]
+    (let [highlight-id (some-> article-alias-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] false)
+             (assoc-in [:user-expenses :form :error] nil)
+             (cond-> highlight-id
+               (crud-success/track-recently-updated :article-aliases highlight-id)))
+       :dispatch-n [[:user-expenses/fetch-article-aliases]]
+       :fx [(when on-success
+              [:dispatch-later {:ms 100
+                                :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
+
+(rf/reg-event-db
+  :user-expenses/update-article-alias-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/delete-article-alias
+  common-interceptors
+  (fn [{:keys [db]} [article-alias-id]]
+    (let [article-alias-id-str (some-> article-alias-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :delete
+                      :uri (str endpoints/article-aliases-endpoint "/" article-alias-id-str)
+                      :admin-uri (str endpoints/admin-article-aliases-endpoint "/" article-alias-id-str)
+                      :on-success [:user-expenses/delete-article-alias-success]
+                      :on-failure [:user-expenses/delete-article-alias-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/delete-article-alias-success
+  common-interceptors
+  (fn [{:keys [db]} [_response]]
+    {:db (assoc-in db [:user-expenses :form :loading?] false)
+     :dispatch [:user-expenses/fetch-article-aliases]}))
+
+(rf/reg-event-db
+  :user-expenses/delete-article-alias-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Price observations (read-only list for now; supplier detail also uses the same endpoint)

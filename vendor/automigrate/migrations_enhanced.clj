@@ -5,6 +5,7 @@
    [automigrate.util.db :as db-util]
    [automigrate.util.extensions :as extensions]
    [automigrate.util.sql-validation :as sql-validation]
+  [clojure.set :as set]
    [clojure.string :as str]
    [slingshot.slingshot :refer [try+]]))
 
@@ -369,7 +370,7 @@
       (println (str "    ✅ " ext)))
 
     (println (str "  Available (" (count available) "):"))
-    (doseq [ext (sort (clojure.set/difference available installed))]
+    (doseq [ext (sort (set/difference available installed))]
       (println (str "    ⚪ " ext)))))
 
 (defn check-extension-compatibility

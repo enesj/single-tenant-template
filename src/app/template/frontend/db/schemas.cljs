@@ -201,7 +201,7 @@
 (def ui-pagination-schema
   [:map {:closed false}
    [:current-page {:optional true} :int]
-   [:per-page {:optional true} :int]
+  [:per-page {:optional true} [:maybe :int]]
    [:total-items {:optional true} :int]])
 
 (def ui-filter-modal-schema
@@ -244,7 +244,7 @@
 (def list-ui-state
   [:map {:closed false}
    [:current-page {:optional true} :int]
-   [:per-page {:optional true} :int]
+  [:per-page {:optional true} [:maybe :int]]
    [:total-items {:optional true} :int]
    [:pagination {:optional true} ui-pagination-schema]
    [:sort {:optional true}

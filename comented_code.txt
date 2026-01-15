@@ -1,0 +1,5 @@
+This file used to contain a working inventory of reader-discarded forms.
+
+It is intentionally kept small now to avoid re-introducing reader-discard tokens into the repository.
+
+If you need the historical inventory, use git history and/or the saved ripgrep output files under /tmp from earlier sessions.

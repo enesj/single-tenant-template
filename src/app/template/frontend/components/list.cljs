@@ -89,6 +89,10 @@
         ;; Keep form-entity-spec for the add/edit form only. Table rendering
         ;; uses the provided entity-spec (vector-config) exclusively.
         form-entity-spec (use-subscribe [:form-entity-specs/by-name (keyword entity-name)])
+        configured-per-page-source (cond
+                  (some? per-page) :prop
+                  (some? (:per-page merged-display-settings)) :display-settings
+                  :else nil)
         configured-per-page (let [raw (or per-page (:per-page merged-display-settings))
                                   parsed (cond
                                            (number? raw) raw
@@ -144,15 +148,16 @@
     ;; Wait until the relevant config is loaded so we don't lock in fallback defaults (e.g., 25).
     (use-effect
       (fn []
-        (let [legacy-default? (or (nil? existing-per-page)
-                                   (= existing-per-page 10)
-                                   (= existing-per-page 25))]
-          (when (and configured-per-page legacy-default?
-                  ;; On admin routes, admin-config-loaded? gates; on user routes, template-config-loaded? gates.
-                  (or admin-config-loaded? template-config-loaded?))
+        (let [missing-per-page? (nil? existing-per-page)]
+          (when (and configured-per-page missing-per-page?
+                  ;; If :per-page comes in explicitly as a prop (admin pages), seed immediately.
+                  ;; Otherwise wait until the relevant config is loaded so we don't lock in fallback defaults.
+                  (or (= configured-per-page-source :prop)
+                    ;; On admin routes, admin-config-loaded? gates; on user routes, template-config-loaded? gates.
+                    (or admin-config-loaded? template-config-loaded?)))
             (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page])))
         (fn [] nil))
-      [entity-name configured-per-page existing-per-page admin-config-loaded? template-config-loaded?])
+      [entity-name configured-per-page configured-per-page-source existing-per-page admin-config-loaded? template-config-loaded?])
 
     ;; Sync inline filter value with active filters when they change
     (use-effect

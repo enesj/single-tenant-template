@@ -17,7 +17,8 @@
             token is expensive to compute. The var should therefore be
             realized with clojure.core/force before use."
        :dynamic true}
-  *anti-forgery-token*)
+          *anti-forgery-token*
+          nil)
 
 (defn- form-params [request]
   (merge (:form-params request)

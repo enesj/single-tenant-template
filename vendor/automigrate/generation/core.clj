@@ -1,6 +1,7 @@
 (ns automigrate.generation.core
   "High-level migration generation and coordination - Main API"
   (:require [automigrate.db.introspection :as db-intro]
+    [automigrate.models :as models]
     [automigrate.files.management :as files]
     [automigrate.generation.extended :as gen-ext]
     [automigrate.schema.actions :as schema-actions]
@@ -44,7 +45,7 @@
         (->> models-file
           (io/resource)
           (file-util/read-edn)
-          (automigrate.models/->internal-models)))
+          (models/->internal-models)))
       ;; Fallback to hierarchical structure if consolidated doesn't exist
       (let [db-path "db"]
         (println "Using hierarchical model structure from" db-path)
@@ -53,7 +54,7 @@
     (->> models-file
       (io/resource)
       (file-util/read-edn)
-      (automigrate.models/->internal-models))))
+      (models/->internal-models))))
 
 (defn- extract-item-name
   [action]

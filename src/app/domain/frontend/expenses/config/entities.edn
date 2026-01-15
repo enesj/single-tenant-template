@@ -1,8 +1,8 @@
-{:expenses {:title "My Expenses"}
- :receipts {:title "Receipts"}
- :suppliers {:title "Suppliers"}
- :payers {:title "Payers"}
- :expense-items {:title "Expense Items"}
- :articles {:title "Articles"}
- :article-aliases {:title "Article Aliases"}
+{:expenses {:title "My Expenses"},
+ :receipts {:title "Receipts"},
+ :suppliers {:title "Suppliers"},
+ :payers {:title "Payers"},
+ :expense-items {:title "Expense Items"},
+ :articles {:title "Articles"},
+ :article-aliases {:title "Article Aliases"},
  :price-observations {:title "Price Observations"}}

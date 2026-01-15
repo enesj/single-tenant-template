@@ -1,6 +1,7 @@
 (ns automigrate.migrations.enhanced
   "Enhanced migration support for consolidated EDN files"
   (:require
+  [automigrate.migrations :as migrations]
    [automigrate.util.file :as file-util]
    [clojure.java.io :as io]
    [clojure.string :as str]))
@@ -51,8 +52,7 @@
   "Enhanced version that supports both individual files and consolidated EDN files"
   [{:keys [resources-dir migrations-dir]}]
   ;; Monkey-patch the original function to use our enhanced reader
-  (let [original-fn (resolve 'automigrate.migrations/read-edn-files)]
-    (with-redefs [automigrate.migrations/read-edn-files
+  (with-redefs [migrations/read-edn-files
                   (fn [dir-path]
                     ;; Extract the type from the path (e.g., "db/functions" -> "functions")
                     (if-let [type-match (re-find #"db/(.+)$" dir-path)]
@@ -61,6 +61,6 @@
                         (read-edn-files-enhanced base-path type-name))
                       []))]
       ;; Call the original function
-      ((resolve 'automigrate.migrations/generate-extended-migrations-from-edn!)
-       {:resources-dir resources-dir
-        :migrations-dir migrations-dir}))))
+      (migrations/generate-extended-migrations-from-edn!
+        {:resources-dir resources-dir
+         :migrations-dir migrations-dir})))

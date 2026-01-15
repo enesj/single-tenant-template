@@ -19,9 +19,6 @@
     (tabs/tab-link {:label "📋 View Options"
                     :active? (= tab "view-options")
                     :on-select #(on-tab-change "view-options")})
-    (tabs/tab-link {:label "📝 Entities"
-                    :active? (= tab "entities")
-                    :on-select #(on-tab-change "entities")})
     (tabs/tab-link {:label "📄 Form Fields"
                     :active? (= tab "form-fields")
                     :on-select #(on-tab-change "form-fields")})
@@ -301,4 +298,3 @@
        :on-reset on-reset
        :setting-keys defs/all-setting-keys
        :table-config table-config})))
-

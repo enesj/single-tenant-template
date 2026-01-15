@@ -10,25 +10,24 @@
 ;; Entity Settings Card (Admin Style)
 ;; =============================================================================
 
-(defui admin-entity-settings-card
-  "Card displaying all hardcoded settings for a single entity (admin style).
+(defui columns-policy-card
+  "Card for column visibility policy (defaults + locks).
 
-   Props:
-   - :entity-name - entity keyword
-   - :settings - map with :display-locks etc.
-   - :editing? - whether in edit mode
-   - :on-change - fn [entity-name setting-key new-value]
-   - :setting-keys - which setting keys to show (default: display-setting-keys)"
-  [{:keys [entity-name settings editing? on-change on-display-settings-bulk
-           setting-keys table-config
+  Props:
+  - :entity-kw
+  - :table-config (from table-columns.edn)
+  - :column-defaults map
+  - :column-locks map
+  - :editing? boolean
+  - :lock-style :admin | :user
+  - :on-column-change fn [entity-kw column-key new-state]
+  - :on-column-visibility-bulk fn [entity-kw column-keys new-state]"
+  [{:keys [entity-kw table-config column-defaults column-locks editing? lock-style
            on-column-change on-column-visibility-bulk]}]
-  (let [setting-keys (or setting-keys defs/display-setting-keys)
-        defaults (or (:display-defaults settings) {})
-        locks (or (:display-locks settings) {})
-        has-any-defaults? (seq (select-keys defaults setting-keys))
-        has-any-locks? (seq (select-keys locks setting-keys))
-        col-defaults (or (:column-defaults settings) {})
-        col-locks (or (:column-locks settings) {})
+  (let [lock-style (or lock-style :user)
+        editing? (boolean editing?)
+        col-defaults (or column-defaults {})
+        col-locks (or column-locks {})
         available-cols (->> (or (:available-columns table-config) [])
                          (map (fn [k]
                                 (cond
@@ -49,6 +48,122 @@
         policy-col-defaults (apply dissoc col-defaults always-visible)
         policy-col-locks (apply dissoc col-locks always-visible)
         col-metadata (or (:column-metadata table-config) {})]
+    ($ :div {:class "ds-card bg-base-100 shadow-md hover:shadow-lg transition-shadow"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-2"}
+          ($ :h3 {:class "ds-card-title text-lg"}
+            "Columns")
+          ($ :div {:class "flex items-center gap-2"}
+            ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
+              (str (count policy-col-defaults) " defaults"))
+            ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
+              (str (count policy-col-locks) " locks"))
+            (when (seq enforced-cols)
+              ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"}
+                (str (count enforced-cols) " enforced")))))
+
+        ($ :div {:class "text-xs text-base-content/60 mb-4"}
+          ($ :div
+            "Policy controls visibility defaults/locks (from "
+            ($ :span {:class "font-mono"} "view-options.edn")
+            "). Structural column behavior lives in "
+            ($ :span {:class "font-mono"} "table-columns.edn")
+            "."))
+
+        (if-not (seq available-cols)
+          ($ :div {:class "ds-alert ds-alert-info"}
+            ($ :span (str "No columns configured for " (defs/entity-title entity-kw) ".")))
+          ($ :div {:class "grid grid-cols-1 gap-2"}
+            (when (seq enforced-cols)
+              ($ :div {:class "mb-3 text-xs text-base-content/60"}
+                "Some columns are marked as "
+                ($ :span {:class "font-semibold"} "always visible")
+                " in "
+                ($ :span {:class "font-mono"} "table-columns.edn")
+                ". They are enforced and cannot be changed here."))
+
+            (when (and editing? (seq policy-cols) (fn? on-column-visibility-bulk))
+              (let [bulk-default (utils/uniform-or-mixed
+                                   (map (fn [c]
+                                          (if (contains? col-defaults c) (get col-defaults c) nil))
+                                     policy-cols))
+                    bulk-lock (utils/uniform-or-mixed
+                                (map (fn [c]
+                                       (if (contains? col-locks c) (get col-locks c) nil))
+                                  policy-cols))]
+                ($ rows/bulk-tristate-row
+                  {:label "All columns"
+                   :default-val bulk-default
+                   :lock-val bulk-lock
+                   :editing? true
+                   :lock-style lock-style
+                   :help-text "Apply Default/Lock visibility to all configurable columns (always-visible columns are excluded)."
+                   :on-default-click (fn []
+                                      ;; cycle the current aggregate state
+                                       (let [current (if (= bulk-default :mixed) nil bulk-default)
+                                             next-val (utils/next-tristate current)
+                                             next-state (if (nil? next-val)
+                                                          {:kind :inherit}
+                                                          {:kind :default :value next-val})]
+                                         (on-column-visibility-bulk entity-kw policy-cols next-state)))
+                   :on-lock-click (fn []
+                                   ;; cycle the current aggregate lock state
+                                    (let [current (if (= bulk-lock :mixed) nil bulk-lock)
+                                          next-val (utils/next-tristate current)
+                                          next-state (if (nil? next-val)
+                                                       {:kind :inherit}
+                                                       {:kind :lock :value next-val})]
+                                      (on-column-visibility-bulk entity-kw policy-cols next-state)))})))
+
+            (when (seq enforced-cols)
+              (for [col enforced-cols
+                    :when col]
+                (let [label (or (get-in col-metadata [col :label])
+                              (-> col name (str/replace #"[_-]" " ") str/capitalize))
+                      tip "This column is always visible (enforced by table-columns.edn)."]
+                  ($ :div {:key (str (name entity-kw) "-col-enforced-" (name col))
+                           :class "ds-tooltip ds-tooltip-top w-full"
+                           :data-tip tip}
+                    ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+                      ($ :span {:class "text-sm font-medium min-w-[160px]"} label)
+                      ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Always visible")
+                      ($ :span {:class "text-xs text-base-content/50 ml-auto"} "configured in table-columns"))))))
+
+            (for [col policy-cols
+                  :when col]
+              (let [default-val (when (contains? col-defaults col) (get col-defaults col))
+                    lock-val (when (contains? col-locks col) (get col-locks col))
+                    label (or (get-in col-metadata [col :label])
+                            (-> col name (str/replace #"[_-]" " ") str/capitalize))
+                    tip (str "Controls the default and lock visibility for the '" label "' column.")]
+                ($ rows/column-visibility-row
+                  {:key (str (name entity-kw) "-col-" (name col))
+                   :entity-kw entity-kw
+                   :column-key col
+                   :column-label label
+                   :default-val default-val
+                   :lock-val lock-val
+                   :lock-style lock-style
+                   :editing? editing?
+                   :help-text tip
+                   :on-change on-column-change})))))))))
+
+(defui admin-entity-settings-card
+  "Card displaying all hardcoded settings for a single entity (admin style).
+
+   Props:
+   - :entity-name - entity keyword
+   - :settings - map with :display-locks etc.
+   - :editing? - whether in edit mode
+   - :on-change - fn [entity-name setting-key new-value]
+   - :setting-keys - which setting keys to show (default: display-setting-keys)"
+  [{:keys [entity-name settings editing? on-change on-display-settings-bulk
+           setting-keys]}]
+  (let [setting-keys (or setting-keys defs/display-setting-keys)
+        defaults (or (:display-defaults settings) {})
+        locks (or (:display-locks settings) {})
+        has-any-defaults? (seq (select-keys defaults setting-keys))
+        has-any-locks? (seq (select-keys locks setting-keys))]
     ($ :div {:class "ds-card bg-base-100 shadow-md hover:shadow-lg transition-shadow"}
       ($ :div {:class "ds-card-body p-4"}
         ;; Entity header
@@ -122,94 +237,7 @@
                :lock-val per-page-lock
                :lock-style :admin
                :editing? editing?
-               :on-change on-change})))
-
-        (when (seq available-cols)
-          ($ :div {:class "mt-4"}
-            ($ :div {:class "flex items-center justify-between mb-2"}
-              ($ :h4 {:class "text-sm font-semibold"} "Columns")
-              ($ :div {:class "flex items-center gap-2"}
-                ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
-                  (str (count policy-col-defaults) " defaults"))
-                ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
-                  (str (count policy-col-locks) " locks"))
-                (when (seq enforced-cols)
-                  ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"}
-                    (str (count enforced-cols) " enforced")))))
-
-            (when (seq enforced-cols)
-              ($ :div {:class "mb-3 text-xs text-base-content/60"}
-                "Some columns are marked as "
-                ($ :span {:class "font-semibold"} "always visible")
-                " in "
-                ($ :span {:class "font-mono"} "table-columns.edn")
-                ". They are enforced and cannot be changed here."))
-
-            ($ :div {:class "grid grid-cols-1 gap-2"}
-              (when (and editing? (seq policy-cols) (fn? on-column-visibility-bulk))
-                (let [bulk-default (utils/uniform-or-mixed
-                                     (map (fn [c]
-                                            (if (contains? col-defaults c) (get col-defaults c) nil))
-                                       policy-cols))
-                      bulk-lock (utils/uniform-or-mixed
-                                  (map (fn [c]
-                                         (if (contains? col-locks c) (get col-locks c) nil))
-                                    policy-cols))]
-                  ($ rows/bulk-tristate-row
-                    {:label "All columns"
-                     :default-val bulk-default
-                     :lock-val bulk-lock
-                     :editing? true
-                     :lock-style :admin
-                     :help-text "Apply Default/Lock visibility to all configurable columns (always-visible columns are excluded)."
-                     :on-default-click (fn []
-                                        ;; cycle the current aggregate state
-                                         (let [current (if (= bulk-default :mixed) nil bulk-default)
-                                               next-val (utils/next-tristate current)
-                                               next-state (if (nil? next-val)
-                                                            {:kind :inherit}
-                                                            {:kind :default :value next-val})]
-                                           (on-column-visibility-bulk entity-name policy-cols next-state)))
-                     :on-lock-click (fn []
-                                     ;; cycle the current aggregate lock state
-                                      (let [current (if (= bulk-lock :mixed) nil bulk-lock)
-                                            next-val (utils/next-tristate current)
-                                            next-state (if (nil? next-val)
-                                                         {:kind :inherit}
-                                                         {:kind :lock :value next-val})]
-                                        (on-column-visibility-bulk entity-name policy-cols next-state)))})))
-              (when (seq enforced-cols)
-                (for [col enforced-cols
-                      :when col]
-                  (let [label (or (get-in col-metadata [col :label])
-                                (-> col name (str/replace #"[_-]" " ") str/capitalize))
-                        tip "This column is always visible (enforced by table-columns.edn)."]
-                    ($ :div {:key (str (name entity-name) "-col-enforced-" (name col))
-                             :class "ds-tooltip ds-tooltip-top w-full"
-                             :data-tip tip}
-                      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
-                        ($ :span {:class "text-sm font-medium min-w-[160px]"} label)
-                        ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Always visible")
-                        ($ :span {:class "text-xs text-base-content/50 ml-auto"} "configured in table-columns"))))))
-
-              (for [col policy-cols
-                    :when col]
-                (let [default-val (when (contains? col-defaults col) (get col-defaults col))
-                      lock-val (when (contains? col-locks col) (get col-locks col))
-                      label (or (get-in col-metadata [col :label])
-                              (-> col name (str/replace #"[_-]" " ") str/capitalize))
-                      tip (str "Controls the default and lock visibility for the '" label "' column.")]
-                  ($ rows/column-visibility-row
-                    {:key (str (name entity-name) "-col-" (name col))
-                     :entity-kw entity-name
-                     :column-key col
-                     :column-label label
-                     :default-val default-val
-                     :lock-val lock-val
-                     :lock-style :admin
-                     :editing? editing?
-                     :help-text tip
-                     :on-change on-column-change}))))))))))
+               :on-change on-change})))))))
 
 ;; =============================================================================
 ;; Entity Settings Card (User Style)
@@ -230,29 +258,9 @@
    - :setting-keys - which setting keys to show"
   [{:keys [entity-kw entity-title draft-defaults draft-locks draft-column-defaults draft-column-locks
            immutable-locks on-change on-display-settings-bulk on-column-visibility-bulk
-           on-reset setting-keys editing? table-config on-column-change]}]
+           on-reset setting-keys editing?]}]
   (let [setting-keys (or setting-keys defs/all-setting-keys)
-        editing? (boolean editing?)
-        col-defaults (or draft-column-defaults {})
-        col-locks (or draft-column-locks {})
-        available-cols (->> (or (:available-columns table-config) [])
-                         (map (fn [k]
-                                (cond
-                                  (keyword? k) k
-                                  (string? k) (keyword k)
-                                  :else (keyword (str k)))))
-                         vec)
-        always-visible (set (map (fn [k]
-                                   (cond
-                                     (keyword? k) k
-                                     (string? k) (keyword k)
-                                     :else (keyword (str k))))
-                              (or (:always-visible table-config) [])))
-        enforced-cols (->> available-cols (filter always-visible) vec)
-        policy-cols (->> available-cols (remove always-visible) vec)
-        policy-col-defaults (apply dissoc col-defaults always-visible)
-        policy-col-locks (apply dissoc col-locks always-visible)
-        col-metadata (or (:column-metadata table-config) {})]
+        editing? (boolean editing?)]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -336,91 +344,5 @@
                    :lock-val per-page-lock
                    :lock-style :user
                    :editing? editing?
-                   :on-change on-change})))))
+                   :on-change on-change})))))))))
 
-        (when (seq available-cols)
-          ($ :div {:class "mt-4"}
-            ($ :div {:class "flex items-center justify-between mb-2"}
-              ($ :h4 {:class "text-sm font-semibold"} "Columns")
-              ($ :div {:class "flex items-center gap-2"}
-                ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
-                  (str (count policy-col-defaults) " defaults"))
-                ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
-                  (str (count policy-col-locks) " locks"))
-                (when (seq enforced-cols)
-                  ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"}
-                    (str (count enforced-cols) " enforced")))))
-
-            (when (seq enforced-cols)
-              ($ :div {:class "mb-3 text-xs text-base-content/60"}
-                "Some columns are marked as "
-                ($ :span {:class "font-semibold"} "always visible")
-                " in "
-                ($ :span {:class "font-mono"} "table-columns.edn")
-                ". They are enforced and cannot be changed here."))
-
-            ($ :div {:class "grid grid-cols-1 gap-2"}
-              (when (and editing? (seq policy-cols) (fn? on-column-visibility-bulk))
-                (let [bulk-default (utils/uniform-or-mixed
-                                     (map (fn [c]
-                                            (if (contains? col-defaults c) (get col-defaults c) nil))
-                                       policy-cols))
-                      bulk-lock (utils/uniform-or-mixed
-                                  (map (fn [c]
-                                         (if (contains? col-locks c) (get col-locks c) nil))
-                                    policy-cols))]
-                  ($ rows/bulk-tristate-row
-                    {:label "All columns"
-                     :default-val bulk-default
-                     :lock-val bulk-lock
-                     :editing? true
-                     :lock-style :user
-                     :help-text "Apply Default/Lock visibility to all configurable columns (always-visible columns are excluded)."
-                     :on-default-click (fn []
-                                        ;; cycle the current aggregate state
-                                         (let [current (if (= bulk-default :mixed) nil bulk-default)
-                                               next-val (utils/next-tristate current)
-                                               next-state (if (nil? next-val)
-                                                            {:kind :inherit}
-                                                            {:kind :default :value next-val})]
-                                           (on-column-visibility-bulk entity-kw policy-cols next-state)))
-                     :on-lock-click (fn []
-                                     ;; cycle the current aggregate lock state
-                                      (let [current (if (= bulk-lock :mixed) nil bulk-lock)
-                                            next-val (utils/next-tristate current)
-                                            next-state (if (nil? next-val)
-                                                         {:kind :inherit}
-                                                         {:kind :lock :value next-val})]
-                                        (on-column-visibility-bulk entity-kw policy-cols next-state)))})))
-              (when (seq enforced-cols)
-                (for [col enforced-cols
-                      :when col]
-                  (let [label (or (get-in col-metadata [col :label])
-                                (-> col name (str/replace #"[_-]" " ") str/capitalize))
-                        tip "This column is always visible (enforced by table-columns.edn)."]
-                    ($ :div {:key (str (name entity-kw) "-col-enforced-" (name col))
-                             :class "ds-tooltip ds-tooltip-top w-full"
-                             :data-tip tip}
-                      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
-                        ($ :span {:class "text-sm font-medium min-w-[160px]"} label)
-                        ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"} "Always visible")
-                        ($ :span {:class "text-xs text-base-content/50 ml-auto"} "configured in table-columns"))))))
-
-              (for [col policy-cols
-                    :when col]
-                (let [default-val (when (contains? col-defaults col) (get col-defaults col))
-                      lock-val (when (contains? col-locks col) (get col-locks col))
-                      label (or (get-in col-metadata [col :label])
-                              (-> col name (str/replace #"[_-]" " ") str/capitalize))
-                      tip (str "Controls the default and lock visibility for the '" label "' column.")]
-                  ($ rows/column-visibility-row
-                    {:key (str (name entity-kw) "-col-" (name col))
-                     :entity-kw entity-kw
-                     :column-key col
-                     :column-label label
-                     :default-val default-val
-                     :lock-val lock-val
-                     :lock-style :user
-                     :editing? editing?
-                     :help-text tip
-                     :on-change on-column-change}))))))))))

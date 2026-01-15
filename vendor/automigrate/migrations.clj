@@ -8,7 +8,9 @@
    [automigrate.generation.extended :as gen-ext]
   [automigrate.schema.actions :as schema-actions]
   [automigrate.schema.diffing :as diffing]
-   [automigrate.status.tracking :as status]))
+  [automigrate.status.tracking :as status]
+  [clojure.java.io :as io]
+  [clojure.string :as str]))
 
 ;; Print deprecation notice
 (println "⚠️  WARNING: automigrate.migrations is deprecated.")
@@ -49,7 +51,7 @@
               ;; Read the actual migration file content
               migration-content (try
                                   (some-> (str "db/migrations/" file-name)
-                                    clojure.java.io/resource
+                                    io/resource
                                     slurp)
                                   (catch Exception e
                                     (println "Error reading migration file:" (.getMessage e))
@@ -59,7 +61,7 @@
               actions (if migration-content
                         (cond
                           (= migration-type-kw :fn) [migration-content]
-                          (= migration-type-kw :sql) (let [parts (clojure.string/split migration-content #"-- BACKWARD")]
+                          (= migration-type-kw :sql) (let [parts (str/split migration-content #"-- BACKWARD")]
                                                        [(first parts)])
                           :else [migration-content])
                         ["-- Migration content not available --"])]
@@ -151,7 +153,7 @@
 (defn create-migrations-dir!
   "Create migrations root dir if it does not exist."
   [migrations-dir]
-  (when-not (.isDirectory (clojure.java.io/file migrations-dir))
+  (when-not (.isDirectory (io/file migrations-dir))
     (.mkdir (java.io.File. migrations-dir))))
 
 ;; SQL migration parsing functions

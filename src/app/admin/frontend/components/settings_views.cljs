@@ -17,8 +17,8 @@
 (def admin-setting-badge badges/admin-setting-badge)
 (def admin-entity-settings-card cards/admin-entity-settings-card)
 (def user-entity-settings-card cards/user-entity-settings-card)
+(def columns-policy-card cards/columns-policy-card)
 (def domain-section overview/domain-section)
 (def scope-overview-section overview/scope-overview-section)
 (def settings-overview overview/settings-overview)
 (def entity-settings-editor editor/entity-settings-editor)
-

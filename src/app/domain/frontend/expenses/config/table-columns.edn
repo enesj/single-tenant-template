@@ -78,8 +78,7 @@
    "supplier-guess"
    "created-at"
    "updated-at"],
-  :always-visible ["original-filename" "status"]}
-
+  :always-visible ["original-filename" "status"]},
  :suppliers
  {:available-columns
   ["display_name"
@@ -89,32 +88,18 @@
    "created_at"
    "id"],
   :default-visible-columns
-  ["display_name"
-   "normalized_key"
-   "address"
-   "tax_id"
-   "created_at"],
+  ["display_name" "normalized_key" "address" "tax_id" "created_at"],
   :filterable-columns
-  ["display_name"
-   "normalized_key"
-   "address"
-   "tax_id"
-   "created_at"],
+  ["display_name" "normalized_key" "address" "tax_id" "created_at"],
   :sortable-columns
-  ["display_name"
-   "normalized_key"
-   "address"
-   "tax_id"
-   "created_at"],
-  :always-visible ["display_name"]}
-
+  ["display_name" "normalized_key" "address" "tax_id" "created_at"],
+  :always-visible ["display_name"]},
  :payers
  {:available-columns ["label" "type" "is_default" "id"],
   :default-visible-columns ["label" "type" "is_default"],
   :filterable-columns ["label" "type" "is_default"],
   :sortable-columns ["label" "type" "is_default"],
-  :always-visible ["label"]}
-
+  :always-visible ["label"]},
  :articles
  {:available-columns
   ["canonical_name"
@@ -140,8 +125,7 @@
    "normalized_key"
    "created_at"
    "updated_at"],
-  :always-visible ["canonical_name"]}
-
+  :always-visible ["canonical_name"]},
  :expense-items
  {:available-columns
   ["expense_purchased_at"
@@ -188,8 +172,7 @@
    "unit_price"
    "line_total"
    "created_at"],
-  :always-visible ["raw_label"]}
-
+  :always-visible ["raw_label"]},
  :price-observations
  {:available-columns
   ["article_canonical_name"
@@ -231,8 +214,7 @@
   ["article_canonical_name"
    "supplier_display_name"
    "observed_at"
-   "line_total"]}
-
+   "line_total"]},
  :article-aliases
  {:available-columns
   ["supplier_display_name"
@@ -259,4 +241,4 @@
    "raw_label_normalized"
    "confidence"
    "created_at"],
-  :always-visible ["supplier_display_name" "raw_label_normalized"]}}
+  :always-visible []}}

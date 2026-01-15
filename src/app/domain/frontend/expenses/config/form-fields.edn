@@ -27,4 +27,10 @@
    {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]},
    :total_amount {:type "number", :step 0.01},
    :notes {:type "textarea"},
-   :is_posted {:type "checkbox"}}}}
+   :is_posted {:type "checkbox"}}},
+ :article-aliases
+ {:edit-fields
+  ["supplier_display_name"
+   "article_canonical_name"
+   "raw_label_normalized"
+   "confidence"]}}

@@ -27,4 +27,7 @@
   {:show-select? false,
    :show-batch-edit? false,
    :show-batch-delete? false},
-  :display-defaults {:per-page 50}}}
+  :display-defaults {:per-page 50}},
+ :article-aliases
+ {:display-defaults {:show-edit? false, :show-delete? false},
+  :display-locks {:show-batch-delete? true}}}

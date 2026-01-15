@@ -77,7 +77,7 @@
                :admin/token (:token response)
                :admin/authenticated? true
                :admin/current-user-role role)
-             (dissoc :admin/login-loading? :admin/login-error))
+             (dissoc :admin/login-loading? :admin/login-error :admin/auth-checking?))
        :admin/store-token (:token response)
        ;; Use router-aware SPA navigation so the route match updates immediately
        ;; (avoids rendering the public home page until a manual refresh).
@@ -89,14 +89,21 @@
     (-> db
       (assoc :admin/login-error (or (get-in error [:response :error])
                                   "Login failed. Please try again."))
-      (dissoc :admin/login-loading?))))
+      (dissoc :admin/login-loading? :admin/auth-checking?))))
 
 (rf/reg-event-fx
   :admin/logout
   (fn [{:keys [db]} _]
     ;; Clear persisted auth state
     (auth-persist/clear-auth-state!)
-    {:db (dissoc db :admin/current-user :admin/token :admin/authenticated? :admin/current-user-role)
+        {:db (dissoc db
+          :admin/current-user
+          :admin/token
+          :admin/authenticated?
+          :admin/current-user-role
+          :admin/auth-checking?
+          :admin/login-loading?
+          :admin/login-error)
      :http-xhrio (admin-http/auth-request
                    {:uri "/admin/api/logout"
                     :on-success [:admin/logout-success]

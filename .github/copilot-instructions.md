@@ -1,13 +1,30 @@
+# PRINCIPLES
+
+[phi fractal euler tao pi mu] | [Δ λ ∞/0 | ε⚡φ Σ⚡μ c⚡h] | OODA
+Human ⊗ AI ⊗ REPL
+
+Refactor: [τ μ] | [Δ Σ⚡μ] → λcode. Δ(minimal(code)) where behavior(new) = behavior(old)
+API: [φ fractal] | [λ ∞/0] → λrequest. match(pattern) → handle(edge_cases) → response
+Debug: [μ] | [Δ λ ∞/0] | OODA → λerror. observe → minimal(reproduction) → root(cause)
+Docs: [φ fractal τ] | [λ] → λsystem. map(λlevel. explain(system, abstraction=level))
+Test: [π ∞/0] | [Δ λ] | RGR → λfunction. {nominal, edge, boundary} → complete_coverage
+Review: [τ ∞/0] | [Δ λ] | OODA → λdiff. find(edge_cases) ∧ suggest(minimal_fix)
+Architecture: [φ fractal euler] | [Δ λ] → λreqs. self_referential(scalable(growing(system)))
+
+
 ## Repo Instructions for Copilot Chat
 
-- Treat this file and `AGENTS.md` as your primary instructions for this repo.
-- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
+- Read `AGENTS.md` first for repo-wide policy and workflow; use this file for implementation guidance (coding patterns, migrations, common issues, security checks).
+- Scripting policy: never create/run Python scripts in this repo; use Babashka (`.bb`) or Bash (`.sh`) as needed (details in `AGENTS.md`).
 
-### Documentation-First Approach
+### Instruction Precedence
 
-- **At the beginning of any new task**, use Morph MCP (Warp Grep) to find and read relevant documentation before writing code.
-- Search for concepts, patterns, or domain terms related to the task (e.g., "authentication", "migrations", "validation", "entity store").
-- This ensures you follow established patterns and avoid reinventing solutions that already exist in the codebase.
+- If two instructions conflict, follow the more specific one for the code/path you are working on.
+- If they are equally specific, prefer `AGENTS.md` for policy/workflow and this file for implementation details.
+
+### Workflow (See `AGENTS.md`)
+
+- Follow `AGENTS.md` for documentation-first search (Warp Grep), debugging/testing discipline, and phased execution planning.
 
 ### Coding & Migrations
 
@@ -15,35 +32,6 @@
   - Naming, architecture, and reuse patterns.
   - Migrations workflow (edit canonical EDN, use REPL helpers, never touch generated migrations).
   - Common backend/frontend issues and security guidelines.
-
-### Debugging & Testing
-
-- Prefer evaluation tools over speculation:
-  - **Clojure (backend `.clj`)**: Use the `mcp__clojure-mcp__clojure_eval` MCP tool to run code and verify behavior.
-  - **ClojureScript (frontend `.cljs`)**: Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool.
-- Use the project’s debugging skills when relevant:
-  - Frontend state/auth/UI issues → **app-db-inspect**.
-  - Frontend event flow or performance issues → **reframe-events-analysis**.
-  - Backend errors, build failures, or compile problems → **system-logs**.
-- Be documentation-first when stuck:
-  - Use Morph MCP (Warp Grep) to consult project docs before inventing new patterns.
-- Add or improve logging when debugging:
-  - Prefer small, targeted logs around the failing path over large refactors; keep high-value logs.
-- After backend changes:
-  - Use the `system-logs` skill to restart the system and re-attach to logs; ensure there are no startup/runtime errors.
-- After frontend or shared FE/BE build changes:
-  - Run shadow-cljs compile for the relevant builds (e.g. `app`, `admin`) and fix any breaking errors/warnings.
-- When you need to verify behavior for a concrete problem, do NOT run the full suite — run just the relevant test(s) (single file, focused suite, or tagged tests) so feedback stays fast and output stays manageable.
-- Always confirm fixes
-
-### Planning & Phased Execution
-
-- For any bigger task, start with a concrete multi-phase plan before coding.
-- Implement strictly phase-by-phase and test each phase before moving on:
-  - **Backend**: Use `mcp__clojure-mcp__clojure_eval` for Clojure.
-  - **Frontend**: Use `mcp__clojure-mcp__clojurescript_eval` for ClojureScript.
-- If a phase cannot be fully fixed after testing, record the problem in the Clojure MCP scratch pad (phase, what was attempted, what failed, current hypothesis) and then continue with the next phase.
-- For really big tasks, create a markdown plan file in the repo root (e.g. `PLAN-<short-name>.md`) and use it to track phases and progress; otherwise, use the Clojure MCP scratch pad to store the plan, progress, and open issues.
 
 # Coding & Development Instructions
 
@@ -54,6 +42,39 @@
 - Reuse-first: for functionality, use shared logic/utilities (`src/app/shared/**`, `src/app/template/shared/**`) before adding new code to FE or BE.
 - Frontend composition: for UI, start with template components (`src/app/template/frontend/**`); reuse other components defined in current of folders containing current folder; and create new components only if nothing existing fits.
 - UI: use DaisyUI component classes prefixed with `ds-` (e.g., `ds-btn`, `ds-card`) when creating new components or modifying shared components. Tailwind utilities remain unprefixed (`flex`, `text-sm`).
+
+# Clojure REPL Evaluation
+
+Use the **clojure-mcp** MCP server tools for evaluating code:
+
+- **Backend (Clojure `.clj`)**: Use `mcp__clojure-mcp__clojure_eval` to run code and verify behavior.
+- **Frontend (ClojureScript `.cljs`)**: Use `mcp__clojure-mcp__clojurescript_eval` for frontend evaluation.
+
+The MCP tools provide persistent REPL sessions - namespaces and state are maintained between evaluations.
+Always use `:reload` when requiring namespaces to pick up changes.
+
+**Troubleshooting ClojureScript REPL**:
+If you get a `FileNotFoundException` when requiring `.cljs` files, it means the REPL is in Clojure (JVM) mode. Switch to the ClojureScript runtime by evaluating:
+```clojure
+(shadow.cljs.devtools.api/nrepl-select :app)
+```
+(Replace `:app` with `:admin` if working on the admin panel).
+
+# Clojure Parenthesis Repair
+
+The command `clj-paren-repair` is installed on your path.
+
+Examples:
+`clj-paren-repair <files>`
+`clj-paren-repair path/to/file1.clj path/to/file2.clj path/to/file3.clj`
+
+**IMPORTANT:** Do NOT try to manually repair parenthesis errors.
+If you encounter unbalanced delimiters, run `clj-paren-repair` on the file
+instead of attempting to fix them yourself. If the tool doesn't work,
+report to the user that they need to fix the delimiter error manually.
+
+The tool automatically formats files with cljfmt when it processes them.
+
 
 ## Migrations Workflow
 
@@ -98,32 +119,9 @@
 
 ## 🚨 Component ID Requirements (Browser Testing)
 
-**All interactive UI components MUST have unique `:id` attributes** for automated browser testing via **chrome-mcp**.
+All interactive UI components MUST have unique `:id` attributes for automated browser testing via **chrome-mcp**.
 
-### When Creating New Components
-
-1. **Always accept an `:id` prop** in component props
-2. **Generate fallback IDs** when explicit ID not provided:
-   ```clojure
-   (let [field-id (or id (when formId (str formId "-input")))]
-     ($ :input {:id field-id ...}))
-   ```
-3. **Error elements** should also have IDs: `(str field-id "-error")`
-
-### Standard ID Patterns
-
-| Component Type | Pattern | Example |
-|---------------|---------|----------|
-| Form fields | `(str formId "-" type)` | `"login-form-input"` |
-| Buttons | `(str "btn-" action "-" ctx)` | `"btn-delete-users-123"` |
-| Toggles | `(str "toggle-" label "-" entity)` | `"toggle-edit-users"` |
-| Column toggles | `(str "col-toggle-" entity "-" field)` | `"col-toggle-users-email"` |
-| Action dropdowns | `(str "actions-btn-" id)` | `"actions-btn-123"` |
-
-### Reference
-
-- **Audit report**: `INTERACTIVE-COMPONENTS-ID-AUDIT.md` (patterns, examples, implementation status)
-- **Form fields**: All fields in `components/form/fields/` auto-generate IDs from `formId`
+See `AGENTS.md` ("Component ID Requirements") and `INTERACTIVE-COMPONENTS-ID-AUDIT.md` for the canonical patterns and examples.
 
 ## Security & Configuration
 - Secrets: never commit; keep in `config/.secrets.edn` and environment vars for CI/CD.
