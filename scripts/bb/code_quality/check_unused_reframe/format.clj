@@ -1,7 +1,8 @@
 (ns code-quality.check-unused-reframe.format)
 
-(defn format-results [results]
-  "Format results for display"
+(defn format-results
+  "Format results for display."
+  [results]
   (let [unused (filter (complement :used?) results)
         used (filter :used? results)
         dynamic (filter :used-dynamically? results)]
@@ -12,8 +13,9 @@
      :used (map #(select-keys % [:keyword :file :type :usages :used-dynamically?]) used)
      :unused (map #(select-keys % [:keyword :file :type]) unused)}))
 
-(defn print-results [formatted]
-  "Print results to console"
+(defn print-results
+  "Print results to console."
+  [formatted]
   (println "\n=== Re-frame Unused Keyword Analysis ===\n")
   (println (format "Total keywords analyzed: %d" (get-in formatted [:summary :total])))
   (println (format "Actually used: %d" (get-in formatted [:summary :used])))
@@ -37,8 +39,9 @@
     (println (format "\n✗ %s (%s)" (:keyword item) (:type item)))
     (println (format "  Defined in: %s" (:file item)))))
 
-(defn group-by-file [unused-items]
-  "Group unused items by their definition file"
+(defn group-by-file
+  "Group unused items by their definition file."
+  [unused-items]
   (->> unused-items
        (group-by :file)
        (sort-by key)))

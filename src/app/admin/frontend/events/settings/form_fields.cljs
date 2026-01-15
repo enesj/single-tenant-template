@@ -27,6 +27,7 @@
       {:db (-> db
              (assoc-in [:admin :settings :form-fields-loading?] false)
              (assoc-in [:admin :settings :form-fields] form-fields)
+             (assoc-in [:admin :config :form-fields] form-fields)
              (assoc-in [:admin :settings :error] nil))})))
 
 (rf/reg-event-fx
@@ -52,7 +53,8 @@
       {:db (-> db
              (assoc-in [:admin :settings :saving?] true)
              ;; Optimistically update
-             (assoc-in [:admin :settings :form-fields entity-kw] entity-config))
+             (assoc-in [:admin :settings :form-fields entity-kw] entity-config)
+             (assoc-in [:admin :config :form-fields entity-kw] entity-config))
        :http-xhrio (admin-http/admin-patch
                      {:uri "/admin/api/settings/form-fields/entity"
                       :params {:entity-name (name entity-kw)
@@ -69,6 +71,7 @@
     {:db (-> db
            (assoc-in [:admin :settings :saving?] false)
            (assoc-in [:admin :settings :last-saved] (js/Date.now))
+           (assoc-in [:admin :config :form-fields entity-kw] entity-config)
            (assoc-in [:admin :settings :error] nil))}))
 
 (rf/reg-event-fx

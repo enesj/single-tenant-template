@@ -18,8 +18,9 @@
        (:out result)
        (str (:out result) "\n" (:err result))))))
 
-(defn parse-lint-output [lint-output]
+(defn parse-lint-output
   "Parse lint output to extract file paths and warning types"
+  [lint-output]
   (let [lines (str/split-lines lint-output)
         warnings (atom [])]
     (doseq [line lines]
@@ -53,8 +54,9 @@
      :stderr (:err result)
      :success? (zero? (:exit result))}))
 
-(defn fix-unused-binding-in-line [line unused-binding]
+(defn fix-unused-binding-in-line
   "Fix a specific unused binding in a line by prefixing with _"
+  [line unused-binding]
   (try
     (let [escaped-binding (java.util.regex.Pattern/quote unused-binding)]
       (cond
@@ -138,15 +140,14 @@
     (println "   ❌ File does not exist")
     (System/exit 1))
 
-  ;; Create backup
-  (let [backup-file (create-backup file-path)]
-
-    ;; Separate unused bindings from namespace issues
-    (let [unused-binding-warnings (filter #(str/includes? (:message %) "unused binding") file-warnings)
-          namespace-warnings (filter #(or (str/includes? (:message %) "is required but never used")
-                                        (str/includes? (:message %) "is referred but never used")
-                                        (str/includes? (:message %) "Unused import")
-                                        (str/includes? (:message %) "duplicate require")) file-warnings)]
+  ;; Create backup + separate unused bindings from namespace issues
+    (let [backup-file (create-backup file-path)
+      unused-binding-warnings (filter #(str/includes? (:message %) "unused binding") file-warnings)
+      namespace-warnings (filter #(or (str/includes? (:message %) "is required but never used")
+                                    (str/includes? (:message %) "is referred but never used")
+                                    (str/includes? (:message %) "Unused import")
+                                    (str/includes? (:message %) "duplicate require"))
+                               file-warnings)]
 
       ;; Fix namespace issues using clojure-lsp clean-ns
       (when (seq namespace-warnings)
@@ -159,22 +160,21 @@
                 (println "   ❌ clojure-lsp clean-ns failed:")
                 (when (not (str/blank? (:stderr result)))
                   (println (str "   Error: " (:stderr result)))))))
-          (do
-            ;; Show what clean-ns would do
-            (let [dry-result (clean-ns-with-clojure-lsp file-path true)]
-              (when (not (str/blank? (:stdout dry-result)))
-                (println "   Preview of changes clojure-lsp clean-ns would make:")
-                (println (:stdout dry-result)))
-              (print "   Apply clojure-lsp clean-ns? (y/N): ")
-              (flush)
-              (when (= (str/lower-case (str/trim (or (read-line) "n"))) "y")
-                (let [result (clean-ns-with-clojure-lsp file-path false)]
-                  (if (:success? result)
-                    (println "   ✅ clojure-lsp clean-ns completed successfully")
-                    (do
-                      (println "   ❌ clojure-lsp clean-ns failed:")
-                      (when (not (str/blank? (:stderr result)))
-                        (println (str "   Error: " (:stderr result))))))))))))
+          ;; Show what clean-ns would do
+          (let [dry-result (clean-ns-with-clojure-lsp file-path true)]
+            (when (not (str/blank? (:stdout dry-result)))
+              (println "   Preview of changes clojure-lsp clean-ns would make:")
+              (println (:stdout dry-result)))
+            (print "   Apply clojure-lsp clean-ns? (y/N): ")
+            (flush)
+            (when (= (str/lower-case (str/trim (or (read-line) "n"))) "y")
+              (let [result (clean-ns-with-clojure-lsp file-path false)]
+                (if (:success? result)
+                  (println "   ✅ clojure-lsp clean-ns completed successfully")
+                  (do
+                    (println "   ❌ clojure-lsp clean-ns failed:")
+                    (when (not (str/blank? (:stderr result)))
+                      (println (str "   Error: " (:stderr result)))))))))))
 
       ;; Fix unused bindings with our custom logic (clojure-lsp doesn't handle this)
       (when (seq unused-binding-warnings)
@@ -196,7 +196,7 @@
             (println "   ❌ Errors introduced - reverting changes")
             (io/copy (io/file backup-file) (io/file file-path))
             (.delete (io/file backup-file))
-            {:success false :message "Errors introduced - reverted"}))))))
+            {:success false :message "Errors introduced - reverted"})))))
 
 (defn process-warnings-automatically
   "Process all warnings automatically using clojure-lsp clean-ns and custom unused binding fixes"
@@ -248,8 +248,9 @@
         (println "\\n🎉 Interactive processing complete!")
         (println "💡 Run 'bb lint' again to see remaining issues")))))
 
-(defn main []
+(defn main
   "Main function to fix lint warnings"
+  []
   (println "🧹 Lint Warning Fixer using clojure-lsp clean-ns")
   (println "This script uses clojure-lsp clean-ns for namespace issues and custom logic for unused bindings.")
   (println "")

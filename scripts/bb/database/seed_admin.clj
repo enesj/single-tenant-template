@@ -50,7 +50,7 @@
       fallback))
 
 (defn seed-admin!
-  [{:keys [host port dbname user password] :as db} {:keys [email full-name password-hash role status]}]
+  [{:keys [host port dbname user password]} {:keys [email full-name password-hash role status]}]
   (let [ds (jdbc/get-datasource {:dbtype "postgresql"
                                  :host host
                                  :port port

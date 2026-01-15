@@ -3,12 +3,13 @@
 ;; Enhanced Clojure project creation script with proper EDN parsing
 ;; This replaces the bash script with a more robust Babashka implementation
 
-(require '[clojure.edn :as edn]
-  '[clojure.java.io :as io]
-  '[clojure.string :as str]
-  '[clojure.java.shell :as shell]
+(require
   '[babashka.fs :as fs]
-  '[cheshire.core :as json])
+  '[cheshire.core :as json]
+  '[clojure.edn :as edn]
+  '[clojure.java.io :as io]
+  '[clojure.java.shell :as shell]
+  '[clojure.string :as str])
 
 ;; Configuration manifest for file updates
 (def config-manifest

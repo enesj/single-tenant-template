@@ -23,9 +23,9 @@
   (let [;; Render the page with authentication info
         html-content (slurp "resources/public/index.html")
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
-        html-content-with-csrf (if (bound? #'*anti-forgery-token*)
-                                 (str/replace html-content "{{csrf-token}}" *anti-forgery-token*)
-                                 (str/replace html-content "{{csrf-token}}" ""))]
+  csrf-token (when (bound? #'*anti-forgery-token*)
+         *anti-forgery-token*)
+  html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))
@@ -36,9 +36,9 @@
   (let [;; Use the same index.html as the main app
         html-content (slurp "resources/public/index.html")
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
-        html-content-with-csrf (if (bound? #'*anti-forgery-token*)
-                                 (str/replace html-content "{{csrf-token}}" *anti-forgery-token*)
-                                 (str/replace html-content "{{csrf-token}}" ""))]
+  csrf-token (when (bound? #'*anti-forgery-token*)
+         *anti-forgery-token*)
+  html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))

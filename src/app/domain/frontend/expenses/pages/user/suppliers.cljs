@@ -171,7 +171,7 @@
           (fn [item]
             (let [supplier-id (id-utils/extract-entity-id item)
                   supplier-id-str (some-> supplier-id str)
-                  item-data (dissoc item :show-edit? :show-delete? :on-edit-click)
+                  item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)
 
                   archived? (some? (or (:archived_at item)
                                      (:suppliers/archived_at item)
@@ -186,11 +186,11 @@
                                   (str "Cannot purge: supplier has " active-expenses " active expense(s)."))
 
                   on-edit-click (:on-edit-click item)
-                  show-edit? (and can-modify?
-                               (not archived?)
+                  edit-disabled? (true? (:edit-disabled? item))
+                  delete-disabled? (true? (:delete-disabled? item))
+                  show-edit? (and (not archived?)
                                (not (false? (:show-edit? item))))
-                  show-archive? (and can-modify?
-                                  (not archived?)
+                  show-archive? (and (not archived?)
                                   (not (false? (:show-delete? item))))]
               ($ :div {:class "flex items-center justify-center gap-2"}
                 (when show-edit?
@@ -198,9 +198,10 @@
                     {:id (str "btn-edit-suppliers-" supplier-id-str)
                      :btn-type :primary
                      :shape "circle"
+                     :disabled edit-disabled?
                      :on-click (fn [e]
                                  (.stopPropagation e)
-                                 (when on-edit-click
+                                 (when (and (not edit-disabled?) on-edit-click)
                                    (on-edit-click item-data)))}
                     ($ edit-icon)))
 
@@ -213,13 +214,15 @@
                     {:id (str "btn-archive-suppliers-" supplier-id-str)
                      :btn-type :danger
                      :shape "circle"
+                     :disabled delete-disabled?
                      :on-click (fn [e]
                                  (.stopPropagation e)
-                                 (confirm-dialog/show-confirm
-                                   {:title "Archive supplier"
-                                    :message "Do you want to archive this supplier?"
-                                    :on-confirm #(rf/dispatch [:user-expenses/delete-supplier supplier-id-str])
-                                    :on-cancel nil}))}
+                                 (when-not delete-disabled?
+                                   (confirm-dialog/show-confirm
+                                     {:title "Archive supplier"
+                                      :message "Do you want to archive this supplier?"
+                                      :on-confirm #(rf/dispatch [:user-expenses/delete-supplier supplier-id-str])
+                                      :on-cancel nil})))}
                     ($ delete-icon)))
 
                 (when (and can-purge? (seq supplier-id-str))
@@ -320,7 +323,10 @@
              :entity-spec entity-spec
              :title "Suppliers"
              :form-display :modal
+             :disallowed-action-mode :disable
              :allow-add? can-modify?
+             :allow-edit? can-modify?
+             :allow-delete? can-modify?
              :render-add-form render-add-form
              :render-edit-form render-edit-form
              :render-actions render-actions}))))))

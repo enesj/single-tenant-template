@@ -1,17 +1,20 @@
 #!/usr/bin/env bb
 
-(require '[clojure.java.io :as io]
+(require
+  '[clojure.java.io :as io]
   '[clojure.string :as str])
 
-(defn clojure-file? [file]
-  "Check if a file has a Clojure extension (.clj, .cljs, .cljc)"
+(defn clojure-file?
+  "Check if a file has a Clojure extension (.clj, .cljs, .cljc)."
+  [file]
   (let [name (.getName file)]
     (or (str/ends-with? name ".clj")
       (str/ends-with? name ".cljs")
       (str/ends-with? name ".cljc"))))
 
-(defn count-lines [file]
-  "Count the number of lines in a file"
+(defn count-lines
+  "Count the number of lines in a file."
+  [file]
   (try
     (with-open [reader (io/reader file)]
       (count (line-seq reader)))
@@ -19,8 +22,9 @@
       (println (str "Error reading file " (.getPath file) ": " (.getMessage e)))
       0)))
 
-(defn analyze-file [file]
-  "Create a map with file info and line count"
+(defn analyze-file
+  "Create a map with file info and line count."
+  [file]
   (let [line-count (count-lines file)
         path (.getPath file)
         size (.length file)]
@@ -29,8 +33,9 @@
      :size-kb (Math/round (/ size 1024.0))
      :name (.getName file)}))
 
-(defn find-clojure-files [root-dir exclusions]
-  "Recursively find all Clojure files, excluding specified directories"
+(defn find-clojure-files
+  "Recursively find all Clojure files, excluding specified directories."
+  [root-dir exclusions]
   (->> (file-seq (io/file root-dir))
     (filter #(.isFile %))
     (filter clojure-file?)
@@ -38,36 +43,40 @@
               (let [path (.getPath file)]
                 (some #(str/includes? path %) exclusions))))))
 
-(defn format-file-info [{:keys [path lines size-kb name]}]
-  "Format file information for display"
+(defn format-file-info
+  "Format file information for display."
+  [{:keys [path lines size-kb]}]
   (format "%4d lines | %4d KB | %s" lines size-kb path))
 
-(println "🔍 Analyzing Clojure files (.clj, .cljs, .cljc) in project...")
+(defn -main
+  "Print a quick report of the top 10 longest Clojure source files."
+  [& _args]
+  (println "🔍 Analyzing Clojure files (.clj, .cljs, .cljc) in project...")
+  (let [root-dir "."
+        exclusions #{"/.git/" "/node_modules/" "/target/" "/.shadow-cljs/" "/.cpcache/" "/out/" "/tmp/"}]
 
-(let [root-dir "."
-      exclusions #{"/.git/" "/node_modules/" "/target/" "/.shadow-cljs/" "/.cpcache/" "/out/" "/tmp/"}
+    (println "📁 Root directory:" (.getCanonicalPath (io/file root-dir)))
+    (println "🚫 Excluding directories with:" (str/join ", " exclusions))
+    (println)
 
-      _ (println "📁 Root directory:" (.getCanonicalPath (io/file root-dir)))
-      _ (println "🚫 Excluding directories with:" (str/join ", " exclusions))
-      _ (println)
+    (let [files (find-clojure-files root-dir exclusions)
+          analyzed-files (->> files
+                           (map analyze-file)
+                           (sort-by :lines >)
+                           (take 10))
+          total-files (count files)
+          total-lines (reduce + (map :lines analyzed-files))]
 
-      files (find-clojure-files root-dir exclusions)
-      _ (println (format "Found %d total Clojure files, analyzing..." (count files)))
+      (println (format "Found %d total Clojure files, analyzing..." total-files))
+      (println (format "📊 Found %d Clojure files total" total-files))
+      (println (format "📏 Top 10 longest files (total: %d lines):" total-lines))
+      (println (str/join "" (repeat 70 "─")))
 
-      analyzed-files (->> files
-                       (map analyze-file)
-                       (sort-by :lines >)
-                       (take 10))
+      (doseq [[idx file-info] (map-indexed vector analyzed-files)]
+        (println (format "%2d. %s" (inc idx) (format-file-info file-info))))
 
-      total-files (count files)
-      total-lines (reduce + (map :lines analyzed-files))]
+      (println)
+      (println "✨ Analysis complete!"))))
 
-  (println (format "📊 Found %d Clojure files total" total-files))
-  (println (format "📏 Top 10 longest files (total: %d lines):" total-lines))
-  (println (str/join "" (repeat 70 "─")))
-
-  (doseq [[idx file-info] (map-indexed vector analyzed-files)]
-    (println (format "%2d. %s" (inc idx) (format-file-info file-info))))
-
-  (println)
-  (println "✨ Analysis complete!"))
+(when (= *file* (System/getProperty "babashka.file"))
+  (apply -main *command-line-args*))

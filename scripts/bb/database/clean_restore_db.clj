@@ -1,8 +1,10 @@
 #!/usr/bin/env clj
 
-(require '[clojure.java.shell :as shell]
-  '[aero.core :as aero]
-  '[clojure.string :as str])
+(ns scripts.bb.database.clean-restore-db
+  (:require
+   [aero.core :as aero]
+   [clojure.java.shell :as shell]
+   [clojure.string :as str]))
 
 (defn get-db-config [profile]
   (let [config (aero/read-config "config/base.edn" {:profile profile})

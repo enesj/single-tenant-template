@@ -1,18 +1,36 @@
-# PLAN — Simplify `/admin/admin-settings` + `/admin/user-settings` (list-view “hardcoded” policy)
+# PLAN — Simplify `/admin/admin-settings` + `/admin/user-settings` (list-view policy + config)
 Date: 2026-01-15
+Last updated: 2026-01-15
 
-This is an audit + improvement plan for the two settings pages that manage **list-view policy** (defaults/locks) and related config for:
+This is an audit + improvement plan for the two settings pages that manage list-view policy (defaults/locks) and related config for:
 
 - Admin scope: `/admin/admin-settings` → `src/app/admin/frontend/config/*`
 - User scope (domain-owned): `/admin/user-settings` → `src/app/domain/**/config/*`
 
-It focuses on simplifying the “hardcoded” list-view settings (i.e., **policy locks**) and eliminating drift/inconsistencies between backend, frontend editor UI, and runtime resolver behavior.
+It focuses on simplifying the “hardcoded” list-view settings (i.e., policy defaults/locks), eliminating drift/inconsistencies between backend, frontend editor UI, and runtime resolver behavior, and making permission-driven UI behavior predictable.
 
 Related references already in repo:
 
-- `PLAN-settings-ui-parity.md` (UI parity refactor; marked complete)
-- `docs/frontend/list-view-controls-configuration.md` (current intended behavior)
 - `docs/frontend/admin-settings.md` (architecture overview)
+- `docs/frontend/list-view-controls-configuration.md` (intended list-view behavior)
+- `PLAN-settings-ui-parity.md` (prior UI parity work)
+
+---
+
+## Status (implemented in this patch)
+
+- [x] **Merge “Columns” policy UI into the Table Columns tab** by introducing a dedicated `columns-policy-card` (policy lives in `view-options`, structural config lives in `table-columns`).
+  - Files: `src/app/admin/frontend/pages/unified_settings/page.cljs`, `src/app/admin/frontend/components/settings_views/cards.cljs`
+- [x] **Remove the Entities tab** from `/admin/*-settings` because it was effectively a no-op (entity title wasn’t used anywhere in the settings UI/runtime).
+  - Files: `src/app/admin/frontend/pages/unified_settings/page.cljs`, `src/app/admin/frontend/pages/unified_settings/editors.cljs`
+- [x] **Make Form Fields affect the edit form**:
+  - list edit forms now use the edit-form spec (`[:form-entity-specs/by-name <entity> true]`) instead of the table/vector spec.
+  - admin settings events now sync `form-fields` + `table-columns` into `[:admin :config ...]` so runtime subscriptions update immediately.
+  - Files: `src/app/template/frontend/components/list.cljs`, `src/app/template/frontend/components/list/rows.cljs`, `src/app/admin/frontend/events/settings/form_fields.cljs`, `src/app/admin/frontend/events/settings/table_columns.cljs`
+- [x] **Show role-gated list buttons as visible-but-disabled** (instead of disappearing) where desired:
+  - new list-view option `:disallowed-action-mode :disable` plus `:allow-add?` / `:allow-edit?` / `:allow-delete?`.
+  - updated user pages: Expenses list, Suppliers, Payers.
+  - Files: `src/app/template/frontend/components/list.cljs`, `src/app/template/frontend/components/list/rows.cljs`, `src/app/template/frontend/components/list/cells.cljs`, `src/app/domain/frontend/expenses/pages/user/expenses_list.cljs`, `src/app/domain/frontend/expenses/pages/user/suppliers.cljs`, `src/app/domain/frontend/expenses/pages/user/payers.cljs`
 
 ---
 
@@ -23,15 +41,22 @@ Related references already in repo:
 - Both routes use the unified UIX page:
   - `src/app/admin/frontend/pages/unified_settings/page.cljs`
   - Shell/layout: `src/app/admin/frontend/components/settings_shell.cljs`
-  - Editors/cards/rows: `src/app/admin/frontend/pages/unified_settings/editors.cljs`,
-    `src/app/admin/frontend/components/settings_views/*`
+  - Editors/cards/rows:
+    - `src/app/admin/frontend/pages/unified_settings/editors.cljs`
+    - `src/app/admin/frontend/components/settings_views/*`
+
+Config types in the UI:
+
+- View options (policy defaults/locks): `view-options.edn`
+- Form fields (create/edit field lists): `form-fields.edn`
+- Table columns (structural column config): `table-columns.edn`
 
 ### 2) Backend persistence
 
 - Admin settings (admin-owned config):
   - GET `"/admin/api/settings"` → `src/app/template/backend/routes/admin/settings.clj` `get-view-options-handler`
     - Reads via `src/app/template/backend/routes/admin/settings_io.clj` `read-view-options`
-    - **Merges** domain-admin config + admin-owned config (admin “wins”).
+    - Merges domain-admin config + admin-owned config (admin “wins”).
   - PUT `"/admin/api/settings"` → `update-view-options-handler`
     - Writes via `write-view-options!` to `src/app/admin/frontend/config/view-options.edn`
 
@@ -41,7 +66,7 @@ Related references already in repo:
 
 ### 3) Runtime behavior in list-view
 
-- Display-toggle “hardcoded” policy (locks) is enforced at runtime by:
+- Display-toggle policy (defaults/locks) is enforced at runtime by:
   - Resolver: `src/app/template/frontend/settings/resolver.cljs`
   - UI subs: `src/app/template/frontend/subs/ui.cljs` `::locked-display-settings`
 - List settings panel hides toggle controls when a key is locked:
@@ -55,39 +80,33 @@ Related references already in repo:
 
 Right now the codebase mixes these concepts for some settings (notably `:per-page`).
 
-Recommendation: **restrict `view-options.edn` to things the resolver + UI actually enforce as policy**:
+Recommendation: restrict `view-options.edn` to things the resolver + UI actually enforce as policy:
 
 - Display toggles (show/edit/delete/select/filtering/etc.)
 - Column visibility policy (`:column-defaults` / `:column-locks`)
 
-For anything else (notably **rows-per-page**), pick *one* model and remove the other:
+For anything else (notably rows-per-page), pick one model and remove the other:
 
-Option A (simpler): treat rows-per-page as **per-user list UI state only**, seeded by entity defaults (e.g., from `entities.edn`), and **remove `:per-page` from `view-options.edn` + settings editors**.
+Option A (simpler): treat rows-per-page as per-user list UI state only, seeded by entity defaults (e.g., from `entities.edn`), and remove `:per-page` from policy.
 
-Option B (more powerful): treat rows-per-page as a **policy-controlled display setting**, fully lockable, and integrate it into:
-
-- where per-user prefs are stored
-- how `list-view` derives effective per-page
-- how the settings panel hides/disables per-page when locked
-
-Pick one and remove the half-supported hybrid.
+Option B (more powerful): treat rows-per-page as a policy-controlled display setting, fully lockable, and enforce it end-to-end.
 
 ### B) Make “display setting key detection” canonical and shared
 
-There are currently multiple independent implementations of “is this a display setting key?” (backend + frontend), which is already drifting.
+There are currently multiple independent implementations of “is this a display setting key?” (backend + frontend), which can drift.
 
 Recommendation:
 
-- Introduce a single canonical “display keys” source based on `src/app/shared/specs/view_options.cljc` (and an explicit decision about `:per-page`).
+- Introduce a single canonical display-keys source based on `src/app/shared/specs/view_options.cljc`.
 - Use it in:
   - backend routes (PATCH/DELETE behavior)
   - admin settings events (draft updates)
   - user settings events (draft updates)
-  - settings panel hide/disable logic (if needed)
+  - settings panel hide/disable logic
 
 ### C) Remove duplicated tri-state mutation logic (admin vs user settings)
 
-The admin settings and user settings event namespaces duplicate the same tri-state “inherit/default/lock” mutations for:
+Admin settings and user settings duplicate the same tri-state “inherit/default/lock” mutations for:
 
 - `:display-defaults` / `:display-locks`
 - `:column-defaults` / `:column-locks`
@@ -96,86 +115,111 @@ Recommendation: extract shared pure helpers (functions that take a config map an
 
 ### D) Fix the admin “merge + write” layering problem (domain-admin configs)
 
-Today the admin config read path **merges** domain-admin config + admin-owned config, but the write path persists whatever the UI sends back to the admin-owned file.
+Today the admin config read path merges domain-admin config + admin-owned config, but the write path persists whatever the UI sends back to the admin-owned file.
 
 This can accidentally “import” domain config into admin-owned files and then silently shadow future domain changes.
 
 Recommendation: preserve layering explicitly:
 
 - Read: `effective = merge(domain-base, admin-overrides)`
-- Write: update **only** admin overrides (not the merged effective map)
-
-This likely requires either:
-
-- computing and persisting only the overrides (diff) on save, or
-- splitting API endpoints/semantics so the UI edits the overlay explicitly.
+- Write: update only admin overrides (not the merged effective map)
 
 ---
 
 ## Inconsistencies / issues found (concrete)
 
-1) **Backend `display-setting-key?` does not include `:per-page`**
+### Fixed
+
+1) Entities tab was effectively a no-op
+   - Cause: entity title editing wasn’t used; UI titles come from `app.admin.frontend.settings.definitions/entity-title`.
+   - Fix: removed the Entities tab entirely.
+
+2) “Columns” policy UI lived under View Options (mixed responsibilities)
+   - Cause: column visibility policy (`view-options.edn`) and structural column config (`table-columns.edn`) were edited in the same place.
+   - Fix: extracted a dedicated `columns-policy-card` and moved it into the Table Columns tab.
+
+3) Form Fields edits didn’t affect inline edit forms
+   - Causes:
+     - list row edit forms used the table spec (`entity-spec`) instead of the form spec.
+     - admin settings updates didn’t propagate into `[:admin :config]` (runtime spec generation reads from there).
+   - Fix: list rows now use edit-form spec; admin settings events sync `:form-fields` + `:table-columns` into `[:admin :config]`.
+
+4) Role-gated list buttons disappeared
+   - Cause: user pages were overriding `:show-edit?` / `:show-delete?` to false based on role (hiding instead of disabling).
+   - Fix: list-view now supports `:disallowed-action-mode :disable` with `:allow-*?` flags; user pages updated to use disabled instead of hidden.
+
+### Still open
+
+5) Admin settings still shows removed “Expenses Admin” entities
+   - Symptom: `/admin/admin-settings` includes Expenses Admin entities/settings even though those admin pages no longer exist.
+   - Likely sources:
+     - backend merges domain-admin config into the admin scope response (see `read-view-options` merge note above)
+     - settings UI includes domain-admin entities via `defs/entities-for-scope :admin`
+   - Fix direction: remove/disable the Expenses admin domain group + config files, and/or filter admin-scope entities to only those that have real admin pages/adapters.
+
+6) Backend `display-setting-key?` does not include `:per-page`
    - File: `src/app/template/backend/routes/admin/settings.clj`
-   - Frontend + spec treat `:per-page` as a display setting; backend PATCH/DELETE logic does not.
-   - Outcome: PATCH/DELETE semantics can write/remove per-page in the wrong place (or not at all), depending on how it’s called.
+   - Frontend + specs treat `:per-page` as a display setting; backend routing logic does not.
 
-2) **Admin settings writes can persist merged (domain + admin) config into admin-owned files**
+7) Admin settings writes can persist merged (domain + admin) config into admin-owned files
    - Files: `src/app/template/backend/routes/admin/settings_io.clj`, `src/app/template/backend/routes/admin/settings.clj`
-   - Outcome: domain-admin config can become shadowed by admin-owned config unintentionally.
 
-3) **Rows-per-page “policy lock” is not enforced in the list settings UI**
+8) Rows-per-page “policy lock” is not enforced in the list settings UI
    - File: `src/app/template/frontend/components/settings/list_view_settings.cljs`
-   - Outcome: even if `:per-page` is locked, the user can still change per-page in the settings panel.
 
-4) **Rows-per-page is not part of the same per-user prefs system as other display settings**
-   - Files: `src/app/template/frontend/events/list/ui_state.cljs`, `src/app/template/frontend/settings/resolver.cljs`
-   - Outcome: `:per-page` lives in list UI state paths, not `[:ui :entity-prefs <entity> :display]`, so resolver locks/defaults won’t reliably control it after initial seeding.
-
-5) **Settings shell “edit mode instructions” don’t match persistence semantics**
-   - File: `src/app/admin/frontend/components/settings_shell.cljs`
-   - In admin scope, `form-fields` and `table-columns` are saved immediately via PATCH; instructions still reference “Save changes”.
-
-6) **Route comment drift**
-   - File: `src/app/admin/frontend/routes.cljs`
-   - `/admin/user-settings` comment currently describes “per-user preferences”, but it edits domain-owned config.
+9) Settings shell edit-mode instructions don’t match persistence semantics
+   - In admin scope, `form-fields` and `table-columns` are saved immediately via PATCH, while view-options is draft+Save.
 
 ---
 
 ## Plan (phased)
 
+### Phase 0 — Done (2026-01-15)
+
+- [x] Remove Entities tab
+- [x] Move Columns policy UI into Table Columns tab
+- [x] Make form-fields affect edit forms (incl. admin runtime sync)
+- [x] Add visible-but-disabled role gating (`:disallowed-action-mode :disable`)
+
 ### Phase 1 — Correctness + clarity (small, low risk)
 
-- [ ] Fix the `/admin/user-settings` route comment to reflect domain-owned config.
-- [ ] Update edit-mode instructions to match real save behavior (draft vs immediate-save tabs).
+- [ ] Remove stale “Expenses Admin” entities from admin scope (since those admin pages were removed)
+  - [ ] Audit where they enter the admin scope:
+    - domain registry `:admin-domain-groups`
+    - `src/app/domain/**/admin/config/*` (entities/view-options/form-fields/table-columns)
+    - backend merge in `GET /admin/api/settings`
+  - [ ] Remove/disable the group/entities and stop merging their config into admin settings.
+  - [ ] Optional: clean any already-persisted admin-owned `view-options.edn` keys for those entities.
+
+- [ ] Fix `/admin/user-settings` route comments/text to reflect domain-owned config (not “per-user preferences”).
+- [ ] Update settings shell copy to match real save behavior (draft vs immediate-save tabs).
 - [ ] Decide whether PATCH/DELETE endpoints for single-setting changes are still used; if they are:
   - [ ] Align backend “display key” detection with the canonical display keys (incl. `:per-page` only if we keep it as policy).
 
 Acceptance:
 
-- No user-facing behavior change, but the UI and code comments match reality.
+- UI and code comments match reality; no user-facing behavior change.
 
 ### Phase 2 — Choose and enforce the `:per-page` model (simplify)
 
 - [ ] Choose one:
-  - [ ] **Option A (recommended)**: remove `:per-page` from view-options policy (spec + settings UI + any backend key routing), keep it as a per-user list preference seeded from entity defaults.
+  - [ ] Option A (recommended): remove `:per-page` from view-options policy (spec + editor UI + backend key routing), keep it as per-user list preference seeded from entity defaults.
   - [ ] Option B: fully support policy defaults/locks for per-page, including enforcement in list-view and settings panel.
 - [ ] Update docs to reflect the chosen model (`docs/frontend/list-view-controls-configuration.md`).
 
 Acceptance:
 
 - There is a single, well-defined source of truth for rows-per-page.
-- If policy locking is supported for per-page, it is actually enforced end-to-end; otherwise, it is not offered in policy UI/spec.
 
 ### Phase 3 — Canonical key classification + shared mutation helpers
 
 - [ ] Introduce shared helpers for tri-state mutations (pure functions) and reuse in:
   - `src/app/admin/frontend/events/settings/view_options.cljs`
   - `src/app/admin/frontend/events/user_settings/view_options.cljs`
-- [ ] Replace scattered regex key checks with canonical key sets from `src/app/shared/specs/view_options.cljc` (plus any deliberate extras).
+- [ ] Replace scattered key checks with canonical key sets from `src/app/shared/specs/view_options.cljc`.
 
 Acceptance:
 
-- No more duplicated “display key” detection logic across scopes.
 - Admin and user settings draft behavior stays in sync by construction.
 
 ### Phase 4 — Fix admin overlay persistence (domain-admin merge safety)
@@ -193,15 +237,11 @@ Acceptance:
 ### Phase 5 — Tests + verification hooks
 
 - [ ] Add/adjust focused tests around:
-  - [ ] canonical display key classification (incl. per-page decision)
-  - [ ] per-page lock/default behavior (if supported)
-  - [ ] overlay write safety for merged admin configs
-- [ ] Run fast checks:
-  - `bb validate-frontend-config`
-  - `bb config-audit --strict`
-  - plus the most relevant CLJS test subset.
+  - [ ] Form-fields edit/create spec selection for list edit forms.
+  - [ ] `:disallowed-action-mode` behavior (hide vs disable) for add/edit/delete.
+  - [ ] Canonical display key classification (incl. per-page decision).
+  - [ ] Overlay write safety for merged admin configs.
 
 Acceptance:
 
 - Tests prevent the same class of drift from reappearing.
-

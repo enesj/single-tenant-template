@@ -37,7 +37,7 @@
             (Integer/parseInt (second match))
             8080))
         8080)) ; fallback to default
-    (catch Exception e
+    (catch Exception _e
       (println "Warning: Could not read config file, using default port 8080")
       8080)))
 
@@ -55,10 +55,10 @@
         (try
           ;; For now, we'll get basic stats. Could be enhanced with a dedicated stats endpoint
           {:stats {:status "api-available"} :entries {}}
-          (catch Exception e
+          (catch Exception _e
             {:stats {:error "api-parse-failed"} :entries {}}))
         {:stats {:error "api-unavailable"} :entries {}}))
-    (catch Exception e
+    (catch Exception _e
       {:stats {:error "api-exception"} :entries {}})))
 
 (defn get-rate-limit-data-via-http
@@ -74,10 +74,10 @@
             (if (:success response)
               {:stats (:stats response) :entries (:data response)}
               {:stats {:error "endpoint-error"} :entries {}}))
-          (catch Exception e
+          (catch Exception _e
             {:stats {:error "parse-failed"} :entries {}}))
         {:stats {:error "http-failed"} :entries {}}))
-    (catch Exception e
+    (catch Exception _e
       {:stats {:error "exception"} :entries {}})))
 
 (defn get-rate-limit-data
@@ -90,14 +90,16 @@
       ;; Fallback to basic API check
       (get-rate-limit-data-via-api))))
 
-(defn format-timestamp [ts]
+(defn format-timestamp
   "Format a timestamp for display."
+  [ts]
   (if ts
     (-> ts str (subs 0 19))
     "N/A"))
 
-(defn format-rate-limit-key [key-str]
+(defn format-rate-limit-key
   "Parse and format a rate limiting key for display."
+  [key-str]
   (let [key-string (if (keyword? key-str) (name key-str) (str key-str))
         parts (str/split key-string #":")]
     (if (>= (count parts) 3)
@@ -106,8 +108,9 @@
         (str route-type " from " ip))
       key-string)))
 
-(defn display-rate-limit-data [data title]
+(defn display-rate-limit-data
   "Display rate limiting data in a formatted way."
+  [data title]
   (println)
   (println (str "📊 " title))
   (println (str (apply str (repeat (+ 4 (count title)) "="))))
@@ -216,8 +219,9 @@
       (println "❌ Error making HTTP request:" (.getMessage e))
       false)))
 
-(defn compare-rate-limit-data [before-data after-data]
+(defn compare-rate-limit-data
   "Compare before and after rate limiting data to show what changed."
+  [before-data after-data]
   (println)
   (println "🔄 COMPARISON ANALYSIS")
   (println "======================")

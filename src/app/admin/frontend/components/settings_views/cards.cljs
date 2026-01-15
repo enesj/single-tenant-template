@@ -253,11 +253,11 @@
    - :draft-locks - map of locked settings
    - :immutable-locks - map of immutable (feature constraint) locks
    - :on-change - fn [entity-kw setting-key new-state]
-     - :on-display-settings-bulk - fn [entity-kw setting-keys new-state]
+   - :on-display-settings-bulk - fn [entity-kw setting-keys new-state]
    - :on-reset - fn [entity-kw] - reset to saved values
    - :setting-keys - which setting keys to show"
-  [{:keys [entity-kw entity-title draft-defaults draft-locks draft-column-defaults draft-column-locks
-           immutable-locks on-change on-display-settings-bulk on-column-visibility-bulk
+  [{:keys [entity-kw entity-title draft-defaults draft-locks
+           immutable-locks on-change on-display-settings-bulk
            on-reset setting-keys editing?]}]
   (let [setting-keys (or setting-keys defs/all-setting-keys)
         editing? (boolean editing?)]

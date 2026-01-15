@@ -27,6 +27,7 @@
       {:db (-> db
              (assoc-in [:admin :settings :table-columns-loading?] false)
              (assoc-in [:admin :settings :table-columns] table-columns)
+             (assoc-in [:admin :config :table-columns] table-columns)
              (assoc-in [:admin :settings :error] nil))})))
 
 (rf/reg-event-fx
@@ -52,7 +53,8 @@
       {:db (-> db
              (assoc-in [:admin :settings :saving?] true)
              ;; Optimistically update
-             (assoc-in [:admin :settings :table-columns entity-kw] entity-config))
+             (assoc-in [:admin :settings :table-columns entity-kw] entity-config)
+             (assoc-in [:admin :config :table-columns entity-kw] entity-config))
        :http-xhrio (admin-http/admin-patch
                      {:uri "/admin/api/settings/table-columns/entity"
                       :params {:entity-name (name entity-kw)
@@ -69,6 +71,7 @@
     {:db (-> db
            (assoc-in [:admin :settings :saving?] false)
            (assoc-in [:admin :settings :last-saved] (js/Date.now))
+           (assoc-in [:admin :config :table-columns entity-kw] entity-config)
            (assoc-in [:admin :settings :error] nil))}))
 
 (rf/reg-event-fx

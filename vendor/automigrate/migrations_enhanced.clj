@@ -142,9 +142,9 @@
                 ;; Execute using base migration system with fixed content
                 ;; This is a simplified approach - in reality we'd need to integrate
                 ;; more deeply with the base system
-                (base-migrations/exec-action!
+                (base-migrations/exec-actions!
                   {:db db
-                   :action (:sql validation-result)
+                   :actions [(:sql validation-result)]
                    :migration-type migration-type})
 
                 {:status :success :migration migration-name})))))

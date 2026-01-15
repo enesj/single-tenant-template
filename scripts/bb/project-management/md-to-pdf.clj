@@ -1,21 +1,24 @@
 #!/usr/bin/env bb
 
-(require '[babashka.process :as process]
-         '[clojure.java.io :as io]
-         '[clojure.string :as str])
+(require
+  '[babashka.process :as process]
+  '[clojure.java.io :as io]
+  '[clojure.string :as str])
 
-(defn check-dependencies []
-  "Check if required tools are installed"
+(defn check-dependencies
+  "Check if required tools are installed."
+  []
   (let [tools ["pandoc"]]
     (doseq [tool tools]
       (try
         (process/shell {:out :string :err :string} "which" tool)
         (println (str "✓ " tool " is available"))
-        (catch Exception e
+        (catch Exception _e
           (println (str "✗ " tool " not found. Install with: brew install " tool)))))))
 
-(defn pandoc-to-pdf [input-file output-file]
-  "Convert markdown to PDF using pandoc"
+(defn pandoc-to-pdf
+  "Convert markdown to PDF using pandoc."
+  [input-file output-file]
   (try
     (let [result (process/shell {:out :string :err :string}
                                "pandoc" input-file
@@ -32,8 +35,9 @@
     (catch Exception e
       (println (str "❌ Failed to run pandoc: " (.getMessage e))))))
 
-(defn create-css-file []
-  "Create a simple CSS file for better PDF styling"
+(defn create-css-file
+  "Create a simple CSS file for better PDF styling."
+  []
   (let [css-content "
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -110,8 +114,9 @@ li {
     (spit "style.css" css-content)
     (println "✓ CSS file created")))
 
-(defn cleanup-temp-files []
-  "Remove temporary CSS file"
+(defn cleanup-temp-files
+  "Remove temporary CSS file."
+  []
   (when (.exists (io/file "style.css"))
     (io/delete-file "style.css")
     (println "✓ Temporary files cleaned up")))
@@ -131,8 +136,9 @@ li {
   (println "  bb md-to-pdf.clj article.md")
   (println "  bb md-to-pdf.clj docs/readme.md output/readme.pdf"))
 
-(defn generate-output-filename [input-file]
-  "Generate output filename by replacing .md with .pdf"
+(defn generate-output-filename
+  "Generate output filename by replacing .md with .pdf."
+  [input-file]
   (if (str/ends-with? input-file ".md")
     (str/replace input-file #"\.md$" ".pdf")
     (str input-file ".pdf")))

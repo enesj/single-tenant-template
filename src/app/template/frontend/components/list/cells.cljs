@@ -90,73 +90,89 @@
 
 (defui edit-button
   "Edit button for a single row.
-   
+
    Props:
    - entity-name: Entity type keyword
    - item-id: ID of the item
    - item: Full item data (optional, for custom edit handlers)
+   - disabled?: When true, renders disabled
    - on-edit-click: Optional custom click handler fn that receives the item"
-  [{:keys [entity-name item-id item on-edit-click]}]
+  [{:keys [entity-name item-id item disabled? on-edit-click]}]
   (let [entity-name-lower (kw/lower-name entity-name)
-        handle-edit-click (fn [_e]
-                            (rf/dispatch [::crud-events/clear-error (kw/ensure-keyword entity-name)])
-                            (rf/dispatch [::form-events/clear-form-errors (kw/ensure-keyword entity-name)])
-                            (if on-edit-click
-                              ;; Use custom handler (for modal edit)
-                              (on-edit-click item)
-                              ;; Default inline edit behavior
-                              (rf/dispatch [::config-events/set-editing item-id])))]
+        disabled? (boolean disabled?)
+        handle-edit-click (fn [e]
+                            (.stopPropagation e)
+                            (when-not disabled?
+                              (rf/dispatch [::crud-events/clear-error (kw/ensure-keyword entity-name)])
+                              (rf/dispatch [::form-events/clear-form-errors (kw/ensure-keyword entity-name)])
+                              (if on-edit-click
+                                ;; Use custom handler (for modal edit)
+                                (on-edit-click item)
+                                ;; Default inline edit behavior
+                                (rf/dispatch [::config-events/set-editing item-id]))))]
     ($ button
       {:id (str "btn-edit-" entity-name-lower "-" item-id)
        :btn-type :primary
        :shape "circle"
+       :disabled disabled?
        :on-click handle-edit-click}
       ($ edit-icon))))
 
 (defui delete-button
   "Delete button for a single row with confirmation dialog."
-  [{:keys [entity-name item-id]}]
+  [{:keys [entity-name item-id disabled?]}]
   (let [entity-name-lower (kw/lower-name entity-name)
+        disabled? (boolean disabled?)
         handle-delete-confirm (fn []
                                 (rf/dispatch [::crud-events/delete-entity entity-name item-id]))
         handle-delete-click (fn [e]
                               (.stopPropagation e)
-                              (confirm-dialog/show-confirm
-                                {:message "Do you want to delete this record?"
-                                 :title "Confirm Delete"
-                                 :on-confirm handle-delete-confirm
-                                 :on-cancel nil}))]
+                              (when-not disabled?
+                                (confirm-dialog/show-confirm
+                                  {:message "Do you want to delete this record?"
+                                   :title "Confirm Delete"
+                                   :on-confirm handle-delete-confirm
+                                   :on-cancel nil})))]
     ($ button
       {:id (str "btn-delete-" entity-name-lower "-" item-id)
        :btn-type :danger
        :shape "circle"
+       :disabled disabled?
        :on-click handle-delete-click}
       ($ delete-icon))))
 
 (defui action-buttons
   "Legacy action buttons component for backward compatibility.
    Renders action buttons using explicit show-edit?/show-delete? props.
-   
+
    Props:
    - entity-name: Entity type keyword
    - item: Full item data
    - show-edit?: Whether to show edit button
    - show-delete?: Whether to show delete button
+   - edit-disabled?: Whether to disable edit button
+   - delete-disabled?: Whether to disable delete button
    - custom-actions: Optional custom actions render fn
    - on-edit-click: Optional custom edit handler fn (for modal edit)"
-  [{:keys [entity-name item show-edit? show-delete? custom-actions on-edit-click]}]
-  (let [item-id (id-utils/extract-entity-id item)]
+  [{:keys [entity-name item show-edit? show-delete? edit-disabled? delete-disabled? custom-actions on-edit-click]}]
+  (let [item-id (id-utils/extract-entity-id item)
+        show-edit? (boolean show-edit?)
+        show-delete? (boolean show-delete?)
+        edit-disabled? (boolean edit-disabled?)
+        delete-disabled? (boolean delete-disabled?)]
     ($ :div {:class "flex items-center gap-2"}
       (when show-edit?
         ($ edit-button
           {:entity-name entity-name
            :item-id item-id
            :item item
+           :disabled? edit-disabled?
            :on-edit-click on-edit-click}))
       (when show-delete?
         ($ delete-button
           {:entity-name entity-name
-           :item-id item-id}))
+           :item-id item-id
+           :disabled? delete-disabled?}))
       (when custom-actions
         (custom-actions item)))))
 

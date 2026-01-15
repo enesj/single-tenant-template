@@ -50,18 +50,21 @@
             (let [payer-id (id-utils/extract-entity-id item)
                   payer-id-str (some-> payer-id str)
                   on-edit-click (:on-edit-click item)
-                  show-edit? (and can-modify? (not (false? (:show-edit? item))))
-                  show-delete? (and can-modify? (not (false? (:show-delete? item))))
-                  item-data (dissoc item :show-edit? :show-delete? :on-edit-click)]
+                  show-edit? (not (false? (:show-edit? item)))
+                  show-delete? (not (false? (:show-delete? item)))
+                  edit-disabled? (true? (:edit-disabled? item))
+                  delete-disabled? (true? (:delete-disabled? item))
+                  item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)]
               ($ :div {:class "flex items-center justify-center gap-2"}
                 (when show-edit?
                   ($ button
                     {:id (str "btn-edit-payers-" payer-id-str)
                      :btn-type :primary
                      :shape "circle"
+                     :disabled edit-disabled?
                      :on-click (fn [e]
                                  (.stopPropagation e)
-                                 (when on-edit-click
+                                 (when (and (not edit-disabled?) on-edit-click)
                                    (on-edit-click item-data)))}
                     ($ edit-icon)))
 
@@ -70,13 +73,15 @@
                     {:id (str "btn-delete-payers-" payer-id-str)
                      :btn-type :danger
                      :shape "circle"
+                     :disabled delete-disabled?
                      :on-click (fn [e]
                                  (.stopPropagation e)
-                                 (confirm-dialog/show-confirm
-                                   {:title "Delete payer"
-                                    :message "Do you want to delete this payer?"
-                                    :on-confirm #(rf/dispatch [:user-expenses/delete-payer payer-id-str])
-                                    :on-cancel nil}))}
+                                 (when-not delete-disabled?
+                                   (confirm-dialog/show-confirm
+                                     {:title "Delete payer"
+                                      :message "Do you want to delete this payer?"
+                                      :on-confirm #(rf/dispatch [:user-expenses/delete-payer payer-id-str])
+                                      :on-cancel nil})))}
                     ($ delete-icon))))))]
 
       ($ :div {:class "min-h-screen bg-base-100"}
@@ -104,7 +109,10 @@
              :entity-spec entity-spec
              :title "Payers"
              :form-display :modal
+             :disallowed-action-mode :disable
              :allow-add? can-modify?
+             :allow-edit? can-modify?
+             :allow-delete? can-modify?
              :render-add-form render-add-form
              :render-edit-form render-edit-form
              :render-actions render-actions}))))))

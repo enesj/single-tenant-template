@@ -51,7 +51,7 @@
                        (recur more2 (update opts :pass-args into ["--schema" v])))
           (die! (str "Unknown arg: " a)))))))
 
-(defn- run!
+(defn- run-cmd!
   [& cmd]
   (let [result (process/shell {:out :inherit :err :inherit} cmd)]
     (when-not (zero? (:exit result))
@@ -61,17 +61,17 @@
   [profile]
   (println "=== Running migrations ===")
   (let [form (format "(require '[app.template.backend.migrations.simple-repl :as mig]) (mig/migrate! :%s)" profile)]
-    (run! "clj" "-M" "-e" form)))
+    (run-cmd! "clj" "-M" "-e" form)))
 
 (defn- sync-frontend-config!
   [pass-args]
   (println "=== Applying frontend config sync ===")
-  (apply run! "bb" "sync-frontend-config" "--apply" pass-args))
+  (apply run-cmd! "bb" "sync-frontend-config" "--apply" pass-args))
 
 (defn- validate-frontend-config!
   [pass-args]
   (println "=== Validating frontend config ===")
-  (apply run! "bb" "validate-frontend-config" pass-args))
+  (apply run-cmd! "bb" "validate-frontend-config" pass-args))
 
 (defn -main
   [& args]

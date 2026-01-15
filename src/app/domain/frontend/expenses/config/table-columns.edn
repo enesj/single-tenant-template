@@ -223,12 +223,7 @@
    "confidence"
    "created_at"
    "id"],
-  :default-visible-columns
-  ["supplier_display_name"
-   "article_canonical_name"
-   "raw_label_normalized"
-   "confidence"
-   "created_at"],
+  :default-visible-columns [],
   :filterable-columns
   ["supplier_display_name"
    "article_canonical_name"

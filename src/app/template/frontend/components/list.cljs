@@ -42,12 +42,16 @@
    - :render-edit-form - fn that receives (item props) and returns edit form UI
    
    Permissions:
-   - :allow-add? - When false, hides the add (+) button (useful for role-gating)
-   
+   - :allow-add? - When false, hides add by default (see :disallowed-action-mode)
+   - :allow-edit? - When false, hides edit by default (see :disallowed-action-mode)
+   - :allow-delete? - When false, hides delete by default (see :disallowed-action-mode)
+   - :disallowed-action-mode - :hide (default) or :disable (show disabled)
+
    Modal callbacks:
    - :on-add-success - Called after successful add (closes modal, can trigger refresh)
    - :on-edit-success - Called after successful edit (closes modal, can trigger refresh)"
-  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page allow-add?
+  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page
+           allow-add? allow-edit? allow-delete? disallowed-action-mode
            ;; New props for custom forms and modal support
            render-add-form render-edit-form form-display on-add-success on-edit-success]
     :as props}]
@@ -86,13 +90,14 @@
         active-filters (use-subscribe [::list-subs/active-filters entity-name])
         batch-edit-inline-state (use-subscribe [::list-subs/batch-edit-inline entity-name])
         ui-state (use-subscribe [::list-subs/entity-ui-state entity-name])
-        ;; Keep form-entity-spec for the add/edit form only. Table rendering
+        ;; Keep form-entity-specs for add/edit forms only. Table rendering
         ;; uses the provided entity-spec (vector-config) exclusively.
         form-entity-spec (use-subscribe [:form-entity-specs/by-name (keyword entity-name)])
+        form-entity-spec-edit (use-subscribe [:form-entity-specs/by-name (keyword entity-name) true])
         configured-per-page-source (cond
-                  (some? per-page) :prop
-                  (some? (:per-page merged-display-settings)) :display-settings
-                  :else nil)
+                                     (some? per-page) :prop
+                                     (some? (:per-page merged-display-settings)) :display-settings
+                                     :else nil)
         configured-per-page (let [raw (or per-page (:per-page merged-display-settings))
                                   parsed (cond
                                            (number? raw) raw
@@ -262,8 +267,9 @@
                               :show-add-form? show-add-form?
                               :set-show-add-form! #(rf/dispatch [::config-events/set-show-add-form %])
                               :visible-columns visible-columns
-                              ;; Pass the form-entity-spec as a prop to avoid hooks in loops
+                              ;; Pass form-entity-specs as props to avoid hooks in loops
                               :form-entity-spec form-entity-spec
+                              :form-entity-spec-edit form-entity-spec-edit
                               ;; Allow callers (e.g., admin pages) to fully override row actions.
                               ;; When provided, rows will render only this component for actions,
                               ;; and will not show the template's default action-buttons.
@@ -385,7 +391,13 @@
                 ;; If show-add-form? is true (inline mode), display the add item section
                 ($ add-item-section base-props)
                 ;; Otherwise, display the table with pagination in same container
-                (let [items-vec (vec (or items []))]
+                (let [items-vec (vec (or items []))
+                      disallowed-mode (or disallowed-action-mode :hide)
+                      disable-mode? (= disallowed-mode :disable)
+                      policy-show-add-button? (not (false? (:show-add-button? merged-display-settings)))
+                      allowed-add? (not (false? allow-add?))
+                      show-add-button? (and policy-show-add-button? (or allowed-add? disable-mode?))
+                      add-disabled? (and policy-show-add-button? disable-mode? (not allowed-add?))]
                   ($ :div {:class "w-full" :style {:max-width (str table-width "px")}}  ;; Wrapper to contain header, table and pagination together with table width constraint
                       ;; Header section moved inside table wrapper for proper alignment
                     ($ header-section
@@ -394,8 +406,8 @@
                        :set-show-add-form! #(rf/dispatch [::config-events/set-show-add-form %])
                        :set-editing! #(rf/dispatch [::config-events/set-editing %])
                        :entity-name entity-name
-                       :show-add-button? (and (not (false? allow-add?))
-                                           (:show-add-button? merged-display-settings))
+                       :show-add-button? show-add-button?
+                       :add-disabled? add-disabled?
                        ;; Allow callers to provide a direct add click handler (e.g., navigate to upload),
                        ;; otherwise fall back to the modal-mode handler when using custom add forms.
                        :on-add-click (or (:on-add-click props)

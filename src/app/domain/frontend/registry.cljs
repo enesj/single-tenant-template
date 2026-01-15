@@ -42,10 +42,24 @@
     :price-observations {:init-fn expenses-adapter/init-price-observations-adapter!
                          :custom-actions entity-actions/admin-price-observations-actions
                          :modals [detail-modals/admin-price-observation-detail-modal]}}
-   :admin-domain-groups {}
+    :admin-domain-groups
+    {:expenses-admin
+     {:title "Expenses Admin"
+      :description "Admin-facing expense management and configuration"
+      :icon "💰"
+      :entities #{:expenses
+              :receipts
+              :suppliers
+              :payers
+              :expense-items
+              :articles
+              :article-aliases
+              :price-observations}
+      :color "accent"
+      :scope :admin}}
    :user-domain-groups
    {:expenses-user
-    {:title "Expenses"
+     {:title "User Expenses"
      :description "User-facing expense tracking and management"
      :icon "💰"
      :entities #{:expenses

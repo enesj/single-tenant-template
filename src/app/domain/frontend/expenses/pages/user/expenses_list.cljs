@@ -48,27 +48,29 @@
   "Row action dropdown (admin-style) for user expenses.
 
    Uses list-view's modal edit handler when available, and user-scoped delete.
-   Edit/delete buttons are hidden for viewers (show-edit?/show-delete? from row data)."
+   Edit/delete buttons remain visible but disabled when disallowed (edit-disabled?/delete-disabled?)."
   [item]
   (let [expense-id (id-utils/extract-entity-id item)
         on-edit-click (:on-edit-click item)
         show-edit? (not (false? (:show-edit? item)))
         show-delete? (not (false? (:show-delete? item)))
-        item-data (dissoc item :show-edit? :show-delete? :on-edit-click)
+        item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)
         deleted? (some? (or (:deleted-at item-data)
                           (:deleted_at item-data)
                           (:expenses/deleted-at item-data)
-                          (:expenses/deleted_at item-data)))]
+                          (:expenses/deleted_at item-data)))
+        edit-disabled? (or deleted? (true? (:edit-disabled? item)))
+        delete-disabled? (or deleted? (true? (:delete-disabled? item)))]
     ($ :div {:class "flex items-center justify-center gap-2"}
       (when show-edit?
         ($ button
           {:id (str "btn-edit-expenses-" expense-id)
            :btn-type :primary
            :shape "circle"
-           :disabled deleted?
+           :disabled edit-disabled?
            :on-click (fn [e]
                        (.stopPropagation e)
-                       (when-not deleted?
+                       (when-not edit-disabled?
                          (if on-edit-click
                            (on-edit-click item-data)
                            (rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")]))))}
@@ -79,10 +81,10 @@
           {:id (str "btn-delete-expenses-" expense-id)
            :btn-type :danger
            :shape "circle"
-           :disabled deleted?
+           :disabled delete-disabled?
            :on-click (fn [e]
                        (.stopPropagation e)
-                       (when-not deleted?
+                       (when-not delete-disabled?
                          (confirm-dialog/show-confirm
                            {:title "Delete expense"
                             :message "Do you want to delete this expense?"
@@ -116,14 +118,7 @@
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]))
-                       [])
-        ;; Wrap render-actions to inject show-edit?/show-delete? based on role
-        render-actions-gated (use-callback
-                               (fn [item]
-                                 (render-actions (assoc item
-                                                   :show-edit? can-write?
-                                                   :show-delete? can-write?)))
-                               [can-write?])]
+                       [])]
 
     ;; Ensure we kick off a user-scoped fetch so that the shared
     ;; template entity store for :expenses and its FK references is
@@ -165,9 +160,12 @@
            :entity-spec entity-spec
            :title "Expense"
            :form-display :modal
+           :disallowed-action-mode :disable
            :allow-add? can-write?
+           :allow-edit? can-write?
+           :allow-delete? can-write?
            :render-add-form render-add-form
            :render-edit-form render-edit-form
            :on-add-success refresh-list
            :on-edit-success refresh-list
-           :render-actions render-actions-gated})))))
+           :render-actions render-actions})))))

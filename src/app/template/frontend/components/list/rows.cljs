@@ -137,6 +137,11 @@
         ;; Do not fall back to form-entity-spec to avoid label drift.
         effective-entity-spec entity-spec
 
+        ;; Use the edit form spec (from form-fields config) when available.
+        form-entity-spec-edit (or (:form-entity-spec-edit props-map)
+                                (:form-entity-spec props-map))
+        effective-form-entity-spec (or form-entity-spec-edit effective-entity-spec)
+
         ;; FIX: Keep item as ClojureScript data structure instead of converting to JS
         item-clj (if (map? item) item (js->clj item :keywordize-keys true))
 
@@ -149,7 +154,7 @@
                                                                  k)]
                                                 [simple-key v]))
                                          item-clj))
-                     :entity-spec effective-entity-spec
+                     :entity-spec effective-form-entity-spec
                      :on-cancel #(do
                                    (rf/dispatch [::crud-events/clear-error (keyword (:entity-name props))])
                                    (rf/dispatch [::form-events/clear-form-errors (keyword (:entity-name props))])
@@ -205,7 +210,17 @@
         recently-created? (and (set? created-ids)
                             (or (contains? created-ids item-id)
                               (contains? created-ids item-id-int)
-                              (contains? created-ids item-id-str)))]
+                              (contains? created-ids item-id-str)))
+        disallowed-mode (or (:disallowed-action-mode props) :hide)
+        disable-mode? (= disallowed-mode :disable)
+        allowed-edit? (not (false? (:allow-edit? props)))
+        allowed-delete? (not (false? (:allow-delete? props)))
+        policy-show-edit? (not (false? (:show-edit? props)))
+        policy-show-delete? (not (false? (:show-delete? props)))
+        show-edit? (and policy-show-edit? (or allowed-edit? disable-mode?))
+        show-delete? (and policy-show-delete? (or allowed-delete? disable-mode?))
+        edit-disabled? (and policy-show-edit? disable-mode? (not allowed-edit?))
+        delete-disabled? (and policy-show-delete? disable-mode? (not allowed-delete?))]
 
     (if is-editing
       ;; If the item is being edited, render the edit form
@@ -218,16 +233,20 @@
                             ;; which can optionally include custom actions.
                             :actions (if-let [override (:actions-override props)]
                                        (override (assoc item-clj
-                                                   :show-edit? (:show-edit? props)
-                                                   :show-delete? (:show-delete? props)
+                                                   :show-edit? show-edit?
+                                                   :show-delete? show-delete?
+                                                   :edit-disabled? edit-disabled?
+                                                   :delete-disabled? delete-disabled?
                                                    ;; Allow action overrides to trigger modal edit when list-view
                                                    ;; is in :form-display :modal mode (list-view passes :on-edit-click).
                                                    :on-edit-click (:on-edit-click props)))
                                        ($ cells/action-buttons
                                          {:item item-clj
                                           :entity-name (:entity-name props)
-                                          :show-edit? (:show-edit? props)
-                                          :show-delete? (:show-delete? props)
+                                          :show-edit? show-edit?
+                                          :show-delete? show-delete?
+                                          :edit-disabled? edit-disabled?
+                                          :delete-disabled? delete-disabled?
                                           :custom-actions (:custom-actions props)
                                           :on-edit-click (:on-edit-click props)}))
                             :show-timestamps? (:show-timestamps? props)

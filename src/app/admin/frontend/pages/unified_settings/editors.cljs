@@ -2,11 +2,9 @@
   (:require
     [app.admin.frontend.components.settings-views :as views]
     [app.admin.frontend.components.tabs :as tabs]
-    [app.admin.frontend.events.settings :as admin-settings-events]
     [app.admin.frontend.settings.definitions :as defs]
     [app.template.frontend.settings.resolver :as resolver]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]))
+    [uix.core :refer [$ defui]]))
 
 ;; =============================================================================
 ;; Config Tabs and Editors for User Scope
@@ -25,32 +23,6 @@
     (tabs/tab-link {:label "📊 Table Columns"
                     :active? (= tab "table-columns")
                     :on-select #(on-tab-change "table-columns")})))
-
-(defui entity-config-editor
-  "Editor for entities.edn - entity title."
-  [{:keys [entity-kw entities-config on-title-change on-reset]}]
-  (let [entity-config (get entities-config entity-kw {})
-        title (or (:title entity-config) "")]
-    ($ :div {:class "ds-card bg-base-100 shadow-md"}
-      ($ :div {:class "ds-card-body p-4"}
-        ($ :div {:class "flex items-center justify-between mb-4"}
-          ($ :h3 {:class "ds-card-title text-lg"} "Entity Configuration")
-          (when on-reset
-            ($ :button {:type "button"
-                        :class "ds-btn ds-btn-xs ds-btn-ghost"
-                        :on-click #(on-reset entity-kw)}
-              "Reset")))
-        ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
-                 :data-tip "Controls the display name used in headings/navigation for this entity."}
-          ($ :div {:class "form-control"}
-            ($ :label {:class "label"}
-              ($ :span {:class "label-text"} "Display Title"))
-            ($ :input {:type "text"
-                       :class "ds-input ds-input-bordered w-full"
-                       :value title
-                       :on-change (fn [e]
-                                    (on-title-change entity-kw (-> e .-target .-value)))})))))))
-
 (defui form-fields-editor
   "Editor for form-fields.edn - create/edit field lists."
   [{:keys [entity-kw form-fields-config table-columns-config on-toggle on-reset]}]
@@ -250,51 +222,28 @@
 
 (defui admin-entity-editor
   "Editor for a single admin entity's settings."
-  [{:keys [entity-kw settings on-change on-display-settings-bulk
-           on-column-change on-column-visibility-bulk]}]
-  (let [table-config-from-ui (use-subscribe [:admin/table-config entity-kw])
-        table-configs-from-settings (use-subscribe [::admin-settings-events/table-columns])
-        table-config-from-settings (get table-configs-from-settings entity-kw)
-        ;; Merge both sources:
-        ;; - UI cache often has richer metadata (labels, formatters)
-        ;; - settings payload is the authoritative structural config (incl. :always-visible)
-        ;;
-        ;; This also prevents regressions where "always visible" columns show up as
-        ;; policy defaults ("Default On") because the UI cache didn't include :always-visible.
-        table-config (merge (or table-config-from-ui {}) (or table-config-from-settings {}))]
-    ($ views/admin-entity-settings-card
-      {:entity-name entity-kw
-       :settings settings
-       :editing? true
-       :on-change on-change
-       :on-display-settings-bulk on-display-settings-bulk
-       :setting-keys defs/all-setting-keys
-       :table-config table-config
-       :on-column-change on-column-change
-       :on-column-visibility-bulk on-column-visibility-bulk})))
+  [{:keys [entity-kw settings on-change on-display-settings-bulk]}]
+  ($ views/admin-entity-settings-card
+    {:entity-name entity-kw
+     :settings settings
+     :editing? true
+     :on-change on-change
+     :on-display-settings-bulk on-display-settings-bulk
+     :setting-keys defs/all-setting-keys}))
 
 (defui user-entity-editor
   "Editor for a single user entity's settings."
-  [{:keys [entity-kw view-options entity-config table-config on-change on-display-settings-bulk
-           on-column-change on-column-visibility-bulk
-           on-reset]}]
+  [{:keys [entity-kw view-options entity-config on-change on-display-settings-bulk on-reset]}]
   (let [immutable-locks (resolver/feature-constraints->locks (:features entity-config))
         draft-defaults (or (:display-defaults view-options) {})
-        draft-locks (or (:display-locks view-options) {})
-        draft-col-defaults (or (:column-defaults view-options) {})
-        draft-col-locks (or (:column-locks view-options) {})]
+        draft-locks (or (:display-locks view-options) {})]
     ($ views/user-entity-settings-card
       {:entity-kw entity-kw
        :draft-defaults draft-defaults
        :draft-locks draft-locks
-       :draft-column-defaults draft-col-defaults
-       :draft-column-locks draft-col-locks
        :immutable-locks immutable-locks
        :editing? true
        :on-change on-change
        :on-display-settings-bulk on-display-settings-bulk
-       :on-column-change on-column-change
-       :on-column-visibility-bulk on-column-visibility-bulk
        :on-reset on-reset
-       :setting-keys defs/all-setting-keys
-       :table-config table-config})))
+       :setting-keys defs/all-setting-keys})))

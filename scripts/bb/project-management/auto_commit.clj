@@ -1,8 +1,9 @@
 #!/usr/bin/env bb
 
-(require '[babashka.process :as p])
-(require '[clojure.string :as str])
-(require '[cheshire.core :as json])
+(require
+  '[babashka.process :as p]
+  '[cheshire.core :as json]
+  '[clojure.string :as str])
 
 (defn get-openai-api-key
   "Get OpenAI API key from environment or .api_credentials.sh"
@@ -11,7 +12,7 @@
     (try
       (let [result (p/shell {:out :string} "bash" "-c" "source .api_credentials.sh && echo $OPENAI_API_KEY")]
         (str/trim (:out result)))
-      (catch Exception e
+      (catch Exception _e
         (throw (Exception. "Could not load OpenAI API key from .api_credentials.sh"))))))
 
 (defn call-openai-api
@@ -34,36 +35,35 @@
                    "4. Mentions specific functions/components that were added or modified\n"
                    "5. Focuses on the business value or technical benefit\n"
                    "6. Uses professional, technical language appropriate for a development team\n\n"
-                   "Return ONLY the commit message text with no additional commentary, markdown formatting, or code blocks.")
+                   "Return ONLY the commit message text with no additional commentary, markdown formatting, or code blocks.")]
 
-          ;; Debug output
-          _ (do
-              (println "\n=== DEBUG: FILES LIST ===")
-              (doseq [file files-list]
-                (println "  " file))
-              (println "\n=== DEBUG: DIFF INFO ===")
-              (println (str "Total diff length: " (count diff-content) " chars"))
-              (println (str "Sending to API: " (min 8000 (count diff-content)) " chars"))
-              (println "\n=== DEBUG: DIFF CONTENT (first 15000 chars) ===")
-              (println (subs diff-content 0 (min 8000 (count diff-content))))
-              (println "...\n"))
+      ;; Debug output
+      (println "\n=== DEBUG: FILES LIST ===")
+      (doseq [file files-list]
+        (println "  " file))
+      (println "\n=== DEBUG: DIFF INFO ===")
+      (println (str "Total diff length: " (count diff-content) " chars"))
+      (println (str "Sending to API: " (min 8000 (count diff-content)) " chars"))
+      (println "\n=== DEBUG: DIFF CONTENT (first 15000 chars) ===")
+      (println (subs diff-content 0 (min 8000 (count diff-content))))
+      (println "...\n")
 
-          api-key (get-openai-api-key)
+      (let [api-key (get-openai-api-key)
 
-          ;; Prepare request body
-          request-body (json/generate-string
-                         {:model "gpt-4.1"
-                          :messages [{:role "user" :content prompt}]
-                          :max_tokens 1000
-                          :temperature 0.3})
+            ;; Prepare request body
+            request-body (json/generate-string
+                           {:model "gpt-4.1"
+                            :messages [{:role "user" :content prompt}]
+                            :max_tokens 1000
+                            :temperature 0.3})
 
-          ;; Call OpenAI API
-          result (p/shell {:out :string :err :string :continue true :in request-body}
-                   "curl" "-s" "-X" "POST"
-                   "https://api.openai.com/v1/chat/completions"
-                   "-H" "Content-Type: application/json"
-                   "-H" (str "Authorization: Bearer " api-key)
-                   "-d" "@-")]
+            ;; Call OpenAI API
+            result (p/shell {:out :string :err :string :continue true :in request-body}
+                     "curl" "-s" "-X" "POST"
+                     "https://api.openai.com/v1/chat/completions"
+                     "-H" "Content-Type: application/json"
+                     "-H" (str "Authorization: Bearer " api-key)
+                     "-d" "@-")]
 
       (if (= 0 (:exit result))
         (let [response (json/parse-string (:out result) true)
@@ -73,7 +73,7 @@
             (do
               (println "✅ AI analysis completed successfully!")
               ai-response)))
-        (throw (Exception. (str "OpenAI API failed: " (:err result))))))
+        (throw (Exception. (str "OpenAI API failed: " (:err result)))))))
 
     (catch Exception e
       (let [error-msg (str "⚠️  OpenAI API failed: " (.getMessage e))]

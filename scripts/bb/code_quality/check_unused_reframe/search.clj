@@ -56,7 +56,7 @@
     ::column-visible? (inside that ns) or ::admin-subs/column-visible? (outside).
   "
   [keyword-str]
-  (let [{:keys [qualified? ns name full]} (parse-keyword-str keyword-str)
+  (let [{:keys [qualified? name full]} (parse-keyword-str keyword-str)
         escaped-full (java.util.regex.Pattern/quote (str ":" full))
         ;; For unqualified keywords, full is the name.
         escaped-unqualified (java.util.regex.Pattern/quote (str ":" (if qualified? full name)))

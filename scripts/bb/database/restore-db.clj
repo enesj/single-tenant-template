@@ -1,7 +1,8 @@
 #!/usr/bin/env clj
 
-(require '[clojure.java.shell :as shell]
+(require
   '[aero.core :as aero]
+  '[clojure.java.shell :as shell]
   '[clojure.string :as str])
 
 (defn get-db-config [profile]

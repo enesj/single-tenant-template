@@ -2,15 +2,16 @@
   (:require
     [app.admin.frontend.components.layout :as layout]
     [app.admin.frontend.components.settings-shell :as shell]
+    [app.admin.frontend.components.settings-views :as views]
     [app.admin.frontend.events.settings :as admin-settings-events]
     [app.admin.frontend.events.unified-settings :as unified-events]
     [app.admin.frontend.events.user-settings :as user-settings-events]
     [app.admin.frontend.pages.unified-settings.editors :as editors]
     [app.admin.frontend.pages.unified-settings.view-mode :as view-mode]
     [app.admin.frontend.settings.definitions :as defs]
-    [taoensso.timbre :as timbre]
     [clojure.set :as set]
     [re-frame.core :as rf]
+    [taoensso.timbre :as timbre]
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
 
@@ -49,11 +50,7 @@
                                                        entity-kw column-keys new-state]))
         on-user-reset (fn [entity-kw]
                         (rf/dispatch [::user-settings-events/reset-entity-display-draft entity-kw]))
-        ;; User entity/form-fields/table-columns handlers
-        on-user-title-change (fn [entity-kw title]
-                               (rf/dispatch [::user-settings-events/set-entity-title-draft entity-kw title]))
-        on-user-entity-reset (fn [entity-kw]
-                               (rf/dispatch [::user-settings-events/reset-entity-draft entity-kw]))
+        ;; User form-fields/table-columns handlers
         on-user-form-field-toggle (fn [entity-kw field-type field-name]
                                     (rf/dispatch [::user-settings-events/toggle-form-field-draft
                                                   entity-kw field-type field-name]))
@@ -70,17 +67,14 @@
       (case scope
         :admin
         (let [table-columns-config (or admin-table-columns {})
-              form-fields-config (or admin-form-fields {})]
+              form-fields-config (or admin-form-fields {})
+              settings (get admin-config selected-entity)]
           ($ :div {:class "max-w-4xl"}
             ;; Tab bar for admin scope
             ($ editors/config-tabs {:tab tab :on-tab-change on-tab-change})
 
             ;; Tab content
             (case tab
-              "entities"
-              ($ :div {:class "ds-alert ds-alert-info"}
-                ($ :span "Entity configuration is not available for admin scope. Admin entities are defined in code."))
-
               "form-fields"
               ($ editors/form-fields-editor
                 {:entity-kw selected-entity
@@ -99,43 +93,50 @@
                                               entity-kw new-config])))})
 
               "table-columns"
-              ($ editors/table-columns-editor
-                {:entity-kw selected-entity
-                 :table-columns-config table-columns-config
-                 :on-toggle (fn [entity-kw list-type col-name]
-                              ;; Admin table-columns use immediate save via PATCH
-                              (let [current-config (get table-columns-config entity-kw {})
-                                    current-cols (set (or (get current-config list-type) []))
-                                    col-str (if (keyword? col-name) (name col-name) (str col-name))
-                                    new-cols (if (contains? current-cols col-str)
-                                               (vec (remove #{col-str} current-cols))
-                                               (conj (vec current-cols) col-str))
-                                    new-config (assoc current-config list-type new-cols)]
-                                (rf/dispatch [::admin-settings-events/update-table-columns-entity
-                                              entity-kw new-config])))
-                 :on-set-list (fn [entity-kw list-type cols]
+              ($ :<>
+                ($ views/columns-policy-card
+                  {:entity-kw selected-entity
+                   :table-config (get table-columns-config selected-entity)
+                   :column-defaults (:column-defaults settings)
+                   :column-locks (:column-locks settings)
+                   :editing? true
+                   :lock-style :admin
+                   :on-column-change on-admin-column-change
+                   :on-column-visibility-bulk on-admin-column-visibility-bulk})
+                ($ editors/table-columns-editor
+                  {:entity-kw selected-entity
+                   :table-columns-config table-columns-config
+                   :on-toggle (fn [entity-kw list-type col-name]
+                                ;; Admin table-columns use immediate save via PATCH
                                 (let [current-config (get table-columns-config entity-kw {})
-                                      cols' (->> (or cols [])
-                                              (map (fn [c] (if (keyword? c) (name c) (str c))))
-                                              vec)
-                                      new-config (assoc current-config list-type cols')]
+                                      current-cols (set (or (get current-config list-type) []))
+                                      col-str (if (keyword? col-name) (name col-name) (str col-name))
+                                      new-cols (if (contains? current-cols col-str)
+                                                 (vec (remove #{col-str} current-cols))
+                                                 (conj (vec current-cols) col-str))
+                                      new-config (assoc current-config list-type new-cols)]
                                   (rf/dispatch [::admin-settings-events/update-table-columns-entity
-                                                entity-kw new-config])))})
+                                                entity-kw new-config])))
+                   :on-set-list (fn [entity-kw list-type cols]
+                                  (let [current-config (get table-columns-config entity-kw {})
+                                        cols' (->> (or cols [])
+                                                (map (fn [c] (if (keyword? c) (name c) (str c))))
+                                                vec)
+                                        new-config (assoc current-config list-type cols')]
+                                    (rf/dispatch [::admin-settings-events/update-table-columns-entity
+                                                  entity-kw new-config])))}))
 
               ;; default: view-options
               ($ editors/admin-entity-editor
                 {:entity-kw selected-entity
-                 :settings (get admin-config selected-entity)
+                 :settings settings
                  :on-change on-admin-change
-                 :on-display-settings-bulk on-admin-display-settings-bulk
-                 :on-column-change on-admin-column-change
-                 :on-column-visibility-bulk on-admin-column-visibility-bulk}))))
+                 :on-display-settings-bulk on-admin-display-settings-bulk}))))
 
         :user
         (let [view-options (get-in user-draft [:view-options selected-entity])
               entity-config (get-in user-draft [:entities selected-entity])
               table-config (get-in user-draft [:table-columns selected-entity])
-              entities-config (:entities user-draft)
               form-fields-config (:form-fields user-draft)
               table-columns-config (:table-columns user-draft)]
           ($ :div {:class "max-w-4xl"}
@@ -144,13 +145,6 @@
 
             ;; Tab content
             (case tab
-              "entities"
-              ($ editors/entity-config-editor
-                {:entity-kw selected-entity
-                 :entities-config entities-config
-                 :on-title-change on-user-title-change
-                 :on-reset on-user-entity-reset})
-
               "form-fields"
               ($ editors/form-fields-editor
                 {:entity-kw selected-entity
@@ -160,28 +154,35 @@
                  :on-reset on-user-form-fields-reset})
 
               "table-columns"
-              ($ editors/table-columns-editor
-                {:entity-kw selected-entity
-                 :table-columns-config table-columns-config
-                 :on-toggle on-user-table-column-toggle
-                 :on-reset on-user-table-columns-reset
-                 :on-set-list (fn [entity-kw list-type cols]
-                                (let [cols' (->> (or cols [])
-                                              (map (fn [c] (if (keyword? c) (name c) (str c))))
-                                              vec)]
-                                  (rf/dispatch [::user-settings-events/set-table-column-list-draft
-                                                entity-kw list-type cols'])))})
+              ($ :<>
+                ($ views/columns-policy-card
+                  {:entity-kw selected-entity
+                   :table-config table-config
+                   :column-defaults (:column-defaults view-options)
+                   :column-locks (:column-locks view-options)
+                   :editing? true
+                   :lock-style :user
+                   :on-column-change on-user-column-change
+                   :on-column-visibility-bulk on-user-column-visibility-bulk})
+                ($ editors/table-columns-editor
+                  {:entity-kw selected-entity
+                   :table-columns-config table-columns-config
+                   :on-toggle on-user-table-column-toggle
+                   :on-reset on-user-table-columns-reset
+                   :on-set-list (fn [entity-kw list-type cols]
+                                  (let [cols' (->> (or cols [])
+                                                (map (fn [c] (if (keyword? c) (name c) (str c))))
+                                                vec)]
+                                    (rf/dispatch [::user-settings-events/set-table-column-list-draft
+                                                  entity-kw list-type cols'])))}))
 
               ;; default: view-options
               ($ editors/user-entity-editor
                 {:entity-kw selected-entity
                  :view-options view-options
                  :entity-config entity-config
-                 :table-config table-config
                  :on-change on-user-change
-                 :on-column-change on-user-column-change
                  :on-display-settings-bulk on-user-display-settings-bulk
-                 :on-column-visibility-bulk on-user-column-visibility-bulk
                  :on-reset on-user-reset}))))
 
         ($ :div {:class "ds-alert ds-alert-warning"}
