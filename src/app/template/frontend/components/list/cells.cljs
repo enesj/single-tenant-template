@@ -175,27 +175,3 @@
            :disabled? delete-disabled?}))
       (when custom-actions
         (custom-actions item)))))
-
-;; =============================================================================
-;; Timestamp Cell Components
-;; =============================================================================
-
-(defn format-timestamp
-  "Format a timestamp value for display."
-  [value]
-  (when value
-    (let [date (js/Date. value)
-          month (.toLocaleString date "en-US" #js {:month "short"})
-          day (.getDate date)
-          hours (.getHours date)
-          minutes (.getMinutes date)
-          formatted-time (str (when (< hours 10) "0") hours ":" (when (< minutes 10) "0") minutes)]
-      ($ :div
-        ($ :span {:class "text-primary"} (str month " " day))
-        ($ :span {:class "ml-1"} formatted-time)))))
-
-(defui timestamp-cell
-  "Display a timestamp value."
-  [{:keys [value]}]
-  ($ :span {:class "whitespace-nowrap"}
-    (format-timestamp value)))

@@ -14,23 +14,6 @@
 ;; Display Toggle Keys
 ;; =============================================================================
 
-(def display-toggle-keys
-  "All known display toggle keys."
-  [:show-timestamps?
-   :show-edit?
-   :show-delete?
-   :show-highlights?
-   :show-select?
-   :show-filtering?
-   :show-pagination?
-   :show-add-button?
-   :show-batch-edit?
-   :show-batch-delete?])
-
-(def DisplayToggleKey
-  "Schema for a single display toggle key."
-  (into [:enum] display-toggle-keys))
-
 (def DisplayTogglesMap
   "Schema for a map of display toggles (all optional booleans, plus per-page integer)."
   [:map {:closed false}
@@ -161,26 +144,6 @@
     {:valid? true :data data}
     {:valid? false
      :errors (me/humanize (m/explain ViewOptionsFile data))}))
-
-(defn validate-entity-view-options
-  "Validate a single entity's view-options against the schema.
-   
-   Returns:
-   - {:valid? true :data data} on success
-   - {:valid? false :errors [...]} on failure"
-  [entity-key data]
-  (if (m/validate EntityViewOptions data)
-    {:valid? true :entity entity-key :data data}
-    {:valid? false
-     :entity entity-key
-     :errors (me/humanize (m/explain EntityViewOptions data))}))
-
-(defn explain-view-options
-  "Get detailed explanation of validation errors.
-   Returns nil if valid, otherwise returns explanation map."
-  [data]
-  (when-not (m/validate ViewOptionsFile data)
-    (m/explain ViewOptionsFile data)))
 
 ;; =============================================================================
 ;; Schema Compliance Checks

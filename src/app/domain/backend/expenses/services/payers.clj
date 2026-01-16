@@ -51,23 +51,6 @@
 ;; Custom Operations
 ;; ============================================================================
 
-(defn list-payers-by-type
-  "List payers filtered by type.
-   
-   Args:
-     db - Database connection
-     payer-type - One of: 'cash', 'card', 'account', 'person'
-   
-   Returns: Vector of payer maps"
-  [db payer-type]
-  (jdbc/execute!
-    db
-    (sql/format {:select [:*]
-                 :from [:payers]
-                 :where [:= :type [:cast payer-type :payer_type]]
-                 :order-by [[:type :asc] [:label :asc]]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
-
 (defn get-default-payer
   "Get the default payer if one is set."
   [db]

@@ -54,8 +54,3 @@
   []
   (when-not (exists? js/document)
     (println "Warning: js/document not available. Tests may fail.")))
-
-(defn reset-test-environment!
-  "Clean up the test environment after component tests."
-  []
-  nil)

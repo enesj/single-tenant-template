@@ -66,22 +66,6 @@
     {:valid? false
      :errors (me/humanize (m/explain FormFieldsFile data))}))
 
-(defn ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]} validate-entity-form-fields
-  "Validate a single entity's form-fields config." 
-  [entity-key data]
-  (if (m/validate EntityFormFields data)
-    {:valid? true :entity entity-key :data data}
-    {:valid? false
-     :entity entity-key
-     :errors (me/humanize (m/explain EntityFormFields data))}))
-
-(defn ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]} explain-form-fields
-  "Get a detailed explanation of validation errors.
-  Returns nil if valid." 
-  [data]
-  (when-not (m/validate FormFieldsFile data)
-    (m/explain FormFieldsFile data)))
-
 ;; =============================================================================
 ;; Strict checks
 ;; =============================================================================

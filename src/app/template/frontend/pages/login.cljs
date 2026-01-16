@@ -173,13 +173,3 @@
                     "Don't have an account? "
                     ($ :a {:href "/register" :class "ds-link ds-link-primary"}
                       "Sign up")))))))))))
-
-;; Helper component for authentication loading state
-(defui auth-loading-component
-  []
-  ($ :div {:class "min-h-screen flex items-center justify-center bg-base-200"}
-    ($ :div {:class "max-w-md w-full bg-base-100 shadow-xl rounded-lg p-8"}
-      ($ :div {:class "text-center space-y-4"}
-        ($ :div {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"})
-        ($ :h2 {:class "text-xl font-semibold"} "Authenticating...")
-        ($ :p {:class "text-base-content/70"} "Please wait while we sign you in")))))

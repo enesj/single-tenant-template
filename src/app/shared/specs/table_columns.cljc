@@ -59,20 +59,6 @@
     {:valid? false
      :errors (me/humanize (m/explain TableColumnsFile data))}))
 
-(defn validate-entity-table-columns
-  "Validate a single entity's table-columns config." 
-  [entity-key data]
-  (if (m/validate EntityTableColumns data)
-    {:valid? true :entity entity-key :data data}
-    {:valid? false
-     :entity entity-key
-     :errors (me/humanize (m/explain EntityTableColumns data))}))
-
-(defn explain-table-columns
-  [data]
-  (when-not (m/validate TableColumnsFile data)
-    (m/explain TableColumnsFile data)))
-
 ;; =============================================================================
 ;; Strict checks
 ;; =============================================================================

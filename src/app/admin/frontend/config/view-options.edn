@@ -1,28 +1,24 @@
 {:admins
- {:column-locks {}
+ {:column-locks {},
   :display-locks
-  {:show-select? true
-   :show-pagination? true
-   :show-filtering? true}
-  :column-defaults {:id true :email false}}
-
+  {:show-select? true, :show-pagination? true, :show-filtering? true},
+  :column-defaults {:id true}},
  :audit-logs
  {:display-locks
-  {:show-edit? false
-   :show-select? true
-   :show-add-button? false
-   :show-batch-edit? false}
-  :display-defaults {:show-batch-delete? true :per-page 50}}
-
+  {:show-edit? false,
+   :show-select? true,
+   :show-add-button? false,
+   :show-batch-edit? false},
+  :display-defaults {:show-batch-delete? true, :per-page 50}},
  :login-events
  {:display-locks
-  {:show-add-button? false
-   :show-edit? false
-   :show-batch-edit? false}
-  :display-defaults {:show-batch-delete? false}}
-
+  {:show-add-button? false,
+   :show-edit? false,
+   :show-batch-edit? false},
+  :display-defaults {:show-batch-delete? false}},
  :users
- {:display-defaults {:show-add-button? true :show-edit? true :per-page 25}
-  :display-locks {:show-batch-edit? true}
-  :column-defaults {}
+ {:display-defaults
+  {:show-add-button? true, :show-edit? true, :per-page 25},
+  :display-locks {:show-batch-edit? true},
+  :column-defaults {},
   :column-locks {:full-name true}}}

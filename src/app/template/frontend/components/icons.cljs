@@ -173,12 +173,6 @@
              :stroke-linejoin "round"}
       ($ :polygon {:points "22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"}))))
 
-(defui crown [{:keys [class] :or {class "w-5 h-5"}}]
-  ($ :svg {:class class
-           :fill "currentColor"
-           :viewBox "0 0 24 24"
-           :xmlns "http://www.w3.org/2000/svg"}
-    ($ :path {:d "M5 16L3 4l5.5 3.5L12 4l3.5 3.5L21 4l-2 12H5z"})))
 
 (defui chart-bar [{:keys [class] :or {class "w-5 h-5"}}]
   ($ :svg {:class class
@@ -202,27 +196,6 @@
               :stroke-width "2"
               :d "M7 14l5-5 5 5"})))
 
-(defui credit-card [{:keys [class] :or {class "w-5 h-5"}}]
-  ($ :svg {:class class
-           :fill "none"
-           :stroke "currentColor"
-           :viewBox "0 0 24 24"
-           :xmlns "http://www.w3.org/2000/svg"}
-    ($ :path {:stroke-linecap "round"
-              :stroke-linejoin "round"
-              :stroke-width "2"
-              :d "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"})))
-
-(defui x-mark [{:keys [class] :or {class "w-5 h-5"}}]
-  ($ :svg {:class class
-           :fill "none"
-           :stroke "currentColor"
-           :viewBox "0 0 24 24"
-           :xmlns "http://www.w3.org/2000/svg"}
-    ($ :path {:stroke-linecap "round"
-              :stroke-linejoin "round"
-              :stroke-width "2"
-              :d "M6 18L18 6M6 6l12 12"})))
 
 (defui exclamation-triangle [{:keys [class] :or {class "w-5 h-5"}}]
   ($ :svg {:class class

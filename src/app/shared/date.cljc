@@ -45,11 +45,6 @@
     (let [date-obj (core/ensure-date value)]
       (core/valid-date? date-obj))))
 
-(defn format-date-range-display
-  "Format a date range for display. Alias for format-date-range."
-  [from to]
-  (range/format-date-range {:from from :to to}))
-
 (defn format-date-for-api
   "Format a date value for API submission.
    Handles various date objects and returns YYYY-MM-DD format or nil if not a valid date."

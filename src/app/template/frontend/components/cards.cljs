@@ -58,27 +58,3 @@
         ($ :div {:class "flex items-center justify-between text-sm"}
           ($ :span {:class "text-base-content/60"} (:label footer-stats))
           ($ :span {:class "text-base-content font-medium"} (:value footer-stats)))))))
-
-(defui chart-list-card
-  "Consistent card wrapper for charts and lists with optional scrolling.
-
-   Props:
-   - :title - Card title
-   - :subtitle - Card subtitle
-   - :max-height - Optional max height class for scrollable content (e.g. 'max-h-96')
-   - :scroll-y - Enable vertical scrolling (default: false)
-   - :children - Card content
-   - :container-class - Additional classes for the container"
-  [{:keys [title subtitle max-height scroll-y children container-class]
-    :or {scroll-y false
-         container-class ""}}]
-  ($ :div {:class (str "ds-card bg-base-100 shadow-xl p-6 " container-class)}
-    ($ :div {:class "mb-4"}
-      ($ :h3 {:class "text-lg font-semibold text-gray-900"} title)
-      (when subtitle
-        ($ :p {:class "text-sm text-gray-600"} subtitle)))
-
-    ($ :div {:class (str "space-y-3 "
-                      (when max-height max-height)
-                      (when scroll-y "overflow-y-auto"))}
-      children)))

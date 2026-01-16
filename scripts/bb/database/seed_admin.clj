@@ -23,7 +23,7 @@
 (defn column-type [ds table column]
   (-> (jdbc/execute-one!
         ds
-        ["select format_type(a.atttypid, a.atttymod) as type
+        ["select format_type(a.atttypid, a.atttypmod) as type
             from pg_attribute a
             join pg_class c on a.attrelid = c.oid
             join pg_namespace n on c.relnamespace = n.oid

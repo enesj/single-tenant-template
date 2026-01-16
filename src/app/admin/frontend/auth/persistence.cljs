@@ -156,11 +156,3 @@
   (boolean (and token (or (nil? timestamp) (is-session-valid? timestamp))))))
 
 ;; Export for debugging
-(defn debug-auth-storage
-  "Debug function to inspect auth storage state"
-  []
-  {:token-present (boolean (.getItem js/localStorage token-key))
-   :user-present (boolean (.getItem js/localStorage user-key))
-   :auth-status (.getItem js/localStorage auth-status-key)
-   :timestamp (.getItem js/localStorage timestamp-key)
-   :session-valid? (has-valid-session?)})

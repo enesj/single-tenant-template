@@ -95,20 +95,6 @@
 
   (log/info "Services cleanup complete"))
 
-(defn wire-services
-  "Wire all services with dependency injection"
-  [config db-connection metadata]
-  (log/info "Wiring services with dependency injection...")
-
-  (let [template-services (create-template-services config db-connection metadata)
-        domain-services (create-domain-services template-services config db-connection metadata)
-        app-services (create-application-services template-services domain-services config)
-
-        ;; Merge all services
-        all-services (merge template-services domain-services app-services)]
-
-    (log/info "Service wiring complete")
-    all-services))
 
 (defn create-service-container
   "Create and boot a DI container with all services"
@@ -167,18 +153,3 @@
         (catch Exception e
           (log/warn e "Failed to stop DI container services"))))
     (cleanup-services! services)))
-
-;; =============================================================================
-;; Configuration Helpers (Getters)
-;; =============================================================================
-
-(defn get-auth-service [services] (:auth-service services))
-(defn get-crud-service [services] (:crud-service services))
-(defn get-metadata-service [services] (:metadata-service services))
-(defn get-validation-service [services] (:validation-service services))
-(defn get-auth-routes [services] (:auth-routes services))
-(defn get-oauth-routes [services] (:oauth-routes services))
-(defn get-crud-routes [services] (:crud-routes services))
-(defn get-db-adapter [services] (:db-adapter services))
-(defn get-config [services] (:config services))
-(defn get-models-data [services] (:models-data services))
