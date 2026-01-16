@@ -8,6 +8,7 @@
                                                                  line-items-total
                                                                  new-line-item
                                                                  safe-parse-number]]
+    [app.shared.adapters.normalization :as normalization]
     [clojure.string :as str]))
 
 (def ^:private amount-tolerance 0.01)
@@ -51,19 +52,20 @@
 (defn normalize-receipt-data
   "Normalize extracted receipt data into form initial values."
   [receipt]
-  (let [debug? (and (exists? js/window)
+  (let [receipt (normalization/convert-db-keys->app-keys receipt)
+        debug? (and (exists? js/window)
                  (boolean (.-__DEBUG_RECEIPT_PREFILL__ js/window)))
         extract0 (or (:raw-extract-json receipt)
-                   (:raw_extract_json receipt)
-                   (:receipts/raw-extract-json receipt)
-                   (:receipts/raw_extract_json receipt))
+                   (:receipts/raw-extract-json receipt))
         raw-extract (cond
-                      (map? extract0) extract0
+                      (map? extract0) (normalization/convert-db-keys->app-keys extract0)
                       (nil? extract0) {}
                       (string? extract0) (try
-                                           (js->clj (js/JSON.parse extract0) :keywordize-keys true)
+                                           (normalization/convert-db-keys->app-keys
+                                             (js->clj (js/JSON.parse extract0) :keywordize-keys true))
                                            (catch :default _ {}))
-                      :else (js->clj extract0 :keywordize-keys true))
+                      :else (normalization/convert-db-keys->app-keys
+                              (js->clj extract0 :keywordize-keys true)))
 
         ;; Worker persists a wrapper map like:
         ;; {:provider ... :response ... :extraction {:merchant ... :totals ... :items ...}}
@@ -77,42 +79,30 @@
                         :extraction-keys (map str (keys extract))})))
 
         totals (let [t (or (:totals extract)
-                         (:totals_extract extract)
                          (:totals-extract extract)
                          {})]
                  (if (map? t) t {}))
 
         items0 (or (:items extract)
-                 (:line_items extract)
                  (:line-items extract)
-                 (:receipt_items extract)
                  (:receipt-items extract))
         items (when (sequential? items0) items0)
 
-        purchased-at (or (:purchased_at extract)
-                       (:purchased-at extract)
+        purchased-at (or (:purchased-at extract)
                        (:date extract)
-                       (:purchased_at_guess receipt)
                        (:purchased-at-guess receipt)
-                       (:receipts/purchased_at_guess receipt)
                        (:receipts/purchased-at-guess receipt))
 
-        total-amount0 (or (:total_amount totals)
-                        (:total-amount totals)
+        total-amount0 (or (:total-amount totals)
                         (:total totals)
-                        (:total_amount extract)
                         (:total-amount extract)
-                        (:total_amount_guess receipt)
                         (:total-amount-guess receipt)
-                        (:receipts/total_amount_guess receipt)
                         (:receipts/total-amount-guess receipt))
         total-amount (safe-parse-number total-amount0)
 
         currency0 (or (:currency totals)
                     (:currency extract)
-                    (:currency_guess receipt)
                     (:currency-guess receipt)
-                    (:receipts/currency_guess receipt)
                     (:receipts/currency-guess receipt)
                     "BAM")
         currency (cond
@@ -122,19 +112,17 @@
                    :else "BAM")
 
         supplier (or (:supplier-guess-supplier receipt)
-                   (:supplier_guess_supplier receipt)
                    (:receipts/supplier-guess-supplier receipt))
         supplier-id (when (map? supplier) (:id supplier))
 
         normalize-item (fn [item]
                          (let [id (random-uuid)
-                               raw-label (or (:raw_label item)
-                                           (:raw-label item)
+                               raw-label (or (:raw-label item)
                                            (:label item)
                                            (:name item))
                                qty (safe-parse-number (:qty item))
-                               unit-price (safe-parse-number (or (:unit_price item) (:unit-price item)))
-                               line-total (safe-parse-number (or (:line_total item) (:line-total item)))]
+                               unit-price (safe-parse-number (:unit-price item))
+                               line-total (safe-parse-number (:line-total item))]
                            {:id (str id)
                             :raw_label (or (some-> raw-label str) "")
                             :qty (if (number? qty) (str qty) "")
@@ -143,9 +131,7 @@
                             :line_total_auto? true}))
 
         filename (or (:original-filename receipt)
-                   (:original_filename receipt)
                    (:storage-key receipt)
-                   (:storage_key receipt)
                    "(unknown)")]
     {:supplier_id supplier-id
      :payer_id nil
@@ -160,31 +146,29 @@
 (defn receipt-merchant-name
   "Internal helper: best-effort merchant name for receipt approval defaults."
   [receipt]
-  (let [extract0 (or (:raw-extract-json receipt)
-                   (:raw_extract_json receipt)
-                   (:receipts/raw-extract-json receipt)
-                   (:receipts/raw_extract_json receipt))
+  (let [receipt (normalization/convert-db-keys->app-keys receipt)
+        extract0 (or (:raw-extract-json receipt)
+                   (:receipts/raw-extract-json receipt))
         raw-extract (cond
-                      (map? extract0) extract0
+                      (map? extract0) (normalization/convert-db-keys->app-keys extract0)
                       (nil? extract0) {}
                       (string? extract0) (try
-                                           (js->clj (js/JSON.parse extract0) :keywordize-keys true)
+                                           (normalization/convert-db-keys->app-keys
+                                             (js->clj (js/JSON.parse extract0) :keywordize-keys true))
                                            (catch :default _ {}))
-                      :else (js->clj extract0 :keywordize-keys true))
+                      :else (normalization/convert-db-keys->app-keys
+                              (js->clj extract0 :keywordize-keys true)))
         extraction (or (:extraction raw-extract)
                      (:receipt-extraction raw-extract))
         extract (if (map? extraction) extraction raw-extract)
         merchant (or (:merchant extract)
-                   (:merchant_info extract)
                    (:merchant-info extract))
         merchant-name0 (cond
                          (map? merchant) (:name merchant)
                          (string? merchant) merchant
                          :else nil)
         merchant-name (some-> merchant-name0 str str/trim not-empty)
-        supplier-guess (or (:supplier_guess receipt)
-                         (:supplier-guess receipt)
-                         (:receipts/supplier_guess receipt)
+        supplier-guess (or (:supplier-guess receipt)
                          (:receipts/supplier-guess receipt))]
     (or merchant-name (some-> supplier-guess str str/trim not-empty))))
 
@@ -211,54 +195,54 @@
 (defn normalize-initial-data
   "Normalize an expense entity (from the entity store or detail fetch) into form initial values."
   [expense]
-  (letfn [(normalize-line-item [item]
-            (let [item (if (map? item) item {})
-                  id (or (:id item)
-                       (:expense_item_id item)
-                       (:expense-item-id item)
-                       (random-uuid))
-                  raw-label (or (:raw_label item) (:raw-label item) "")
-                  qty (:qty item)
-                  unit-price (or (:unit_price item) (:unit-price item))
-                  line-total (or (:line_total item) (:line-total item))
-                  auto? (if (contains? item :line_total_auto?)
-                          (not (false? (:line_total_auto? item)))
-                          true)]
-              {:id (str id)
-               :raw_label (if (some? raw-label) (str raw-label) "")
-               :qty (cond
-                      (string? qty) qty
-                      (number? qty) (str qty)
-                      (nil? qty) ""
-                      :else (str qty))
-               :unit_price (cond
-                             (string? unit-price) unit-price
-                             (number? unit-price) (format-decimal unit-price)
-                             (nil? unit-price) ""
-                             :else (str unit-price))
-               :line_total (cond
-                             (string? line-total) line-total
-                             (number? line-total) (format-decimal line-total)
-                             (nil? line-total) ""
-                             :else (str line-total))
-               :line_total_auto? auto?}))]
-    (let [supplier-id (or (:supplier_id expense) (:supplier-id expense) (:expenses/supplier_id expense))
-          payer-id (or (:payer_id expense) (:payer-id expense) (:expenses/payer_id expense))
-          purchased-at (or (:purchased_at expense) (:purchased-at expense) (:expenses/purchased_at expense))
-          total-amount (or (:total_amount expense) (:total-amount expense) (:expenses/total_amount expense))
-          currency (or (:currency expense) "BAM")
-          notes (or (:notes expense) "")
-          items (or (:items expense) (:expenses/items expense) [])
-          normalized-items (if (seq items)
-                             (mapv normalize-line-item items)
-                             [(new-line-item)])]
-      {:supplier_id supplier-id
-       :payer_id payer-id
-       :purchased_at (datetime-local purchased-at true)
-       :total_amount total-amount
-       :currency currency
-       :notes notes
-       :items normalized-items})))
+  (let [expense (normalization/convert-db-keys->app-keys expense)]
+    (letfn [(normalize-line-item [item]
+              (let [item (if (map? item) item {})
+                    id (or (:id item)
+                         (:expense-item-id item)
+                         (random-uuid))
+                    raw-label (or (:raw-label item) "")
+                    qty (:qty item)
+                    unit-price (:unit-price item)
+                    line-total (:line-total item)
+                    auto? (if (contains? item :line-total-auto?)
+                            (not (false? (:line-total-auto? item)))
+                            true)]
+                {:id (str id)
+                 :raw_label (if (some? raw-label) (str raw-label) "")
+                 :qty (cond
+                        (string? qty) qty
+                        (number? qty) (str qty)
+                        (nil? qty) ""
+                        :else (str qty))
+                 :unit_price (cond
+                               (string? unit-price) unit-price
+                               (number? unit-price) (format-decimal unit-price)
+                               (nil? unit-price) ""
+                               :else (str unit-price))
+                 :line_total (cond
+                               (string? line-total) line-total
+                               (number? line-total) (format-decimal line-total)
+                               (nil? line-total) ""
+                               :else (str line-total))
+                 :line_total_auto? auto?}))]
+      (let [supplier-id (or (:supplier-id expense) (:expenses/supplier-id expense))
+            payer-id (or (:payer-id expense) (:expenses/payer-id expense))
+            purchased-at (or (:purchased-at expense) (:expenses/purchased-at expense))
+            total-amount (or (:total-amount expense) (:expenses/total-amount expense))
+            currency (or (:currency expense) "BAM")
+            notes (or (:notes expense) "")
+            items (or (:items expense) (:expenses/items expense) [])
+            normalized-items (if (seq items)
+                               (mapv normalize-line-item items)
+                               [(new-line-item)])]
+        {:supplier_id supplier-id
+         :payer_id payer-id
+         :purchased_at (datetime-local purchased-at true)
+         :total_amount total-amount
+         :currency currency
+         :notes notes
+         :items normalized-items}))))
 
 (defn validate-expense-values
   "Validate expense form values. Returns {:ok? true} or {:ok? false :error \"...\"}."

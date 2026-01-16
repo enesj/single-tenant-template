@@ -3,6 +3,7 @@
   (:require
     [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.utils.id :as id-utils]
+    [app.shared.adapters.normalization :as normalization]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
@@ -53,9 +54,9 @@
 (defui user-article-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
+        item (normalization/convert-db-keys->app-keys item)
         article-id (id-utils/extract-entity-id item)
-        initial-values {:canonical_name (or (:canonical_name item)
-                                          (:canonical-name item)
+        initial-values {:canonical_name (or (:canonical-name item)
                                           (:canonicalName item)
                                           "")
                         :barcode (or (:barcode item) "")
@@ -95,9 +96,9 @@
 (defui user-article-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
+        item (normalization/convert-db-keys->app-keys item)
         article-alias-id (id-utils/extract-entity-id item)
-        initial-values {:raw_label_normalized (or (:raw_label_normalized item)
-                                                (:raw-label-normalized item)
+        initial-values {:raw_label_normalized (or (:raw-label-normalized item)
                                                 "")
                         :confidence (or (:confidence item) "")}]
     ($ :div {:class "space-y-4"}
@@ -177,10 +178,11 @@
 (defui user-price-observation-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        price-observation-id (id-utils/extract-entity-id item)
-        observed-at (or (:observed_at item) (:observed-at item))
-        unit-price (or (:unit_price item) (:unit-price item))
-        line-total (or (:line_total item) (:line-total item))
+  item (normalization/convert-db-keys->app-keys item)
+  price-observation-id (id-utils/extract-entity-id item)
+  observed-at (:observed-at item)
+  unit-price (:unit-price item)
+  line-total (:line-total item)
         initial-values {:observed_at (datetime-local observed-at)
                         :qty (or (:qty item) "")
                         :unit_price (or unit-price "")
