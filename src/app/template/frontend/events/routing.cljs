@@ -325,11 +325,9 @@
       (let [old-match (:current-route db)
             controllers (rtfc/apply-controllers (:controllers old-match) new-match)
             location (.-location js/globalThis)
-            path (str (or (some-> location .-pathname) "")
-                   (or (some-> location .-search) ""))
-            admin-path? (str/starts-with? path "/admin")]
-        (cond-> {:dispatch [:navigated new-match controllers]}
-          admin-path? (assoc :routing/store-last-admin-path path)))
+             path (str (or (some-> location .-pathname) "")
+               (or (some-> location .-search) ""))]
+         {:dispatch [:navigated new-match controllers]})
 
       ;; Programmatic navigation from UI code (pages, buttons)
       (or (string? new-match) (keyword? new-match) (vector? new-match))
@@ -342,14 +340,6 @@
       (do
         (log/warn "Unsupported :navigate-to target" {:target new-match})
         {}))))
-
-(rf/reg-fx
- :routing/store-last-admin-path
-  (fn [path]
-    (try
-      (js/localStorage.setItem "last-admin-path" path)
-      (catch :default _e
-        (log/warn "Failed to persist last admin path" {:path path})))))
 
 ;; Subscriptions
 (rf/reg-sub

@@ -218,24 +218,6 @@
   (rf/clear-subscription-cache!)
   (mount-ui))
 
-(defn maybe-restore-last-admin-route!
-  "In dev, restore the last non-dashboard admin route after a full reload.
-   This helps when hot-reloads or config edits bounce you to /admin/dashboard."
-  []
-  (when ^boolean goog.DEBUG
-    (let [current-path (str (.-pathname js/window.location) (.-search js/window.location))
-          last-path (.getItem js/localStorage "last-admin-path")]
-      (when (and last-path
-              (str/starts-with? last-path "/admin/")
-              (not= last-path current-path)
-              (or (= current-path "/admin")
-                (= current-path "/admin/")
-                (= current-path "/admin/dashboard")))
-        ;; Defer until after router is started.
-        ;; NOTE: rtfe/push-state expects a route-name keyword, not a string path.
-        ;; Use the shared routing event which supports string paths.
-        (js/setTimeout #(rf/dispatch [:navigate-to last-path]) 50)))))
-
 (defn init-app! []
   ;; Set up logging first so early logs are filtered appropriately
   (setup-logging!)
@@ -244,7 +226,7 @@
   ;; Only initialize admin module when we're on an admin route; on-demand in router for later navigations
   (when (str/starts-with? (.-pathname js/window.location) "/admin")
     (admin-core/init-admin!))
-  (routes/init-routes!) (maybe-restore-last-admin-route!) (mount-ui))
+  (routes/init-routes!) (mount-ui))
 
 ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn init                                                  ;; Your app calls this when it starts. See shadow-cljs.edn :init-fn.
