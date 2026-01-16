@@ -119,7 +119,7 @@
   - {:custom-id <string> :error <map>} on per-request error or non-2xx
   - {:error <map>} if the line can't be attributed to a request"
   [line]
-  (let [custom-id (some-> (or (:custom_id line) (:custom-id line) (:id line)) str)
+  (let [custom-id (some-> (:custom_id line) str)
         err (:error line)
         response (:response line)]
     (cond
@@ -134,7 +134,7 @@
                :line (dissoc line :response)}}
 
       :else
-      (let [status-code (or (:status_code response) (:status-code response))
+      (let [status-code (:status_code response)
             body (:body response)
             body-json (cond
                         (map? body) body
