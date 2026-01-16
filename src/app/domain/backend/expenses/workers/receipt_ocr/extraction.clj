@@ -129,11 +129,13 @@
 
   Returns {:receipt-id .. :stage :extract :result :ok :status extracted|review_required}."
   [db receipt-id extract-result opts]
-  (let [markdown (:parsed-markdown extract-result)
-        markdown-items (markdown/markdown->line-item-candidates markdown)
-        markdown-merchant-header (markdown/markdown->merchant-header markdown)
-        markdown-supplier (or (:merchant_name markdown-merchant-header)
-                            (markdown/markdown->supplier-guess markdown))
+    (let [markdown (:parsed-markdown extract-result)
+      markdown-items (markdown/markdown->line-item-candidates markdown)
+      markdown-merchant-header (markdown/markdown->merchant-header markdown)
+      markdown-merchant-name (some-> (:merchant_name markdown-merchant-header) str/trim not-empty)
+      markdown-supplier (if markdown-merchant-name
+              markdown-merchant-name
+              (markdown/markdown->supplier-guess markdown))
         markdown-total (markdown/markdown->total-amount markdown)
         extraction0 (or (:extraction extract-result) {})
         extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
