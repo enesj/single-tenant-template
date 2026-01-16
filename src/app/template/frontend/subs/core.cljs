@@ -27,22 +27,18 @@
           tenant (get auth-session :tenant)
           permissions (get auth-session :permissions)
 
-          ;; Legacy OAuth token support
-          tokens (or (get-in db [:session :ring.middleware.oauth2/access-tokens])
-                   (get-in db [:session :oauth2/access-tokens]))
           provider (get auth-session :provider)
 
           ;; Loading & error state (for forms/auth flows)
           loading? (get auth-session :loading? false)
           error    (get auth-session :error)
 
-          has-session? (or authenticated? (boolean tokens))]
+          has-session? authenticated?]
 
       {:session auth-session
        :authenticated has-session?
        :session-valid session-valid?
        :provider provider
-       :tokens tokens
        :user user
        :tenant tenant
        :permissions permissions

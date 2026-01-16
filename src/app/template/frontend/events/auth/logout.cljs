@@ -21,7 +21,7 @@
            (assoc-in [:session :user] nil)
            (assoc-in [:session :tenant] nil)
            (assoc-in [:session :permissions] nil)
-           (update :session dissoc :oauth2/access-tokens :provider))
+           (update :session dissoc :provider))
      ;; Call backend logout to clear server session
      :http-xhrio (http/api-request
                    {:method :post

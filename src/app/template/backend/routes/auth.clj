@@ -157,41 +157,22 @@
   (route-utils/with-error-handling "auth-status"
     (let [;; Check for our new auth session first
           auth-session (get-in req [:session :auth-session])
-
-          legacy-oauth-token-format-enabled?
-          (get-in req [:service-container :config :legacy :oauth :token-format-enabled?] true)
-
-          ;; Fall back to old OAuth tokens for backward compatibility
-          session-tokens (get-in req [:session :ring.middleware.oauth2/access-tokens])
-          req-tokens (get-in req [:ring.middleware.oauth2/access-tokens])
-          oauth-tokens-present? (boolean (or session-tokens req-tokens))
-          oauth-tokens (when legacy-oauth-token-format-enabled?
-                        (or session-tokens req-tokens))]
-
-      (when (and oauth-tokens-present? (not legacy-oauth-token-format-enabled?))
-        (log/warn "Legacy OAuth session tokens present but legacy token format support is disabled" {}))
-
+          user (:user auth-session)
+          provider (or (:provider auth-session)
+                     (:auth_provider user)
+                     (:auth-provider user))]
       (cond
         ;; New session format (from our auth service)
         auth-session
-        {:status 200
-         :headers {"Content-Type" "application/json"}
-         :body (json/generate-string
-                 {:authenticated true
-                  :session-valid (not (shared-date/session-expired? auth-session))
-                  :user (:user auth-session)
-                  :tenant (:tenant auth-session)
-                  :permissions (shared-auth/get-user-permissions (:user auth-session))})}
-
-        ;; Legacy OAuth format (for backward compatibility)
-        oauth-tokens
-        (let [provider (-> oauth-tokens keys first)]
+        (let [body (cond-> {:authenticated true
+                            :session-valid (not (shared-date/session-expired? auth-session))
+                            :user user
+                            :tenant (:tenant auth-session)
+                            :permissions (shared-auth/get-user-permissions user)}
+                     provider (assoc :provider (if (keyword? provider) (name provider) (str provider))))]
           {:status 200
            :headers {"Content-Type" "application/json"}
-           :body (json/generate-string
-                   {:authenticated true
-                    :provider (when provider (name provider))
-                    :user nil})})
+           :body (json/generate-string body)})
 
         ;; Not authenticated
         :else

@@ -29,11 +29,12 @@
   ids/fetch-auth-status-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [authenticated? (get response :authenticated false)
+        (let [authenticated? (get response :authenticated false)
           session-valid? (get response :session-valid true)
-          provider (get response :provider)
-          tokens (get response :tokens)
           user (get response :user)
+          provider (or (get response :provider)
+             (:auth-provider user)
+             (:auth_provider user))
           tenant (get response :tenant)
           permissions (get response :permissions)
           permissions* (cond
@@ -57,8 +58,6 @@
                          (assoc-in [:session :authenticated?] authenticated?)
                          (assoc-in [:session :session-valid?] session-valid?)
 
-                         ;; Handle legacy OAuth tokens (backward compatibility)
-                         (assoc-in [:session :oauth2/access-tokens] tokens)
                          (assoc-in [:session :provider] provider)
 
                          ;; Set user information (updated format for multi-tenant)

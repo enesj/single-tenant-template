@@ -136,8 +136,6 @@
     [:authenticated? {:optional true} :boolean]
     [:session-valid? {:optional true} :boolean]
     [:session-valid {:optional true} :boolean]
-    [:oauth2/access-tokens {:optional true} :any]
-    [:ring.middleware.oauth2/access-tokens {:optional true} :any]
     [:provider {:optional true} [:maybe :string]]
     [:user {:optional true} [:maybe [:map-of :any :any]]]
     [:tenant {:optional true} [:maybe [:map-of :any :any]]]
