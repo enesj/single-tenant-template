@@ -37,29 +37,29 @@
         loading? (boolean (use-subscribe [:user-expenses/settings-loading?]))
         saving? (boolean (use-subscribe [:user-expenses/settings-saving?]))
         power-user? (use-subscribe [:expenses/power-user?])
-        [default-currency set-default-currency!] (use-state (or (:default_currency settings) "BAM"))
+        [default-currency set-default-currency!] (use-state (or (:default-currency settings) "BAM"))
         ;; Keep payer-id normalized as (string-or-nil). Avoid "" so we don't mark
         ;; the form dirty when the user re-selects "None".
-        [default-payer set-default-payer!] (use-state (some-> (:default_payer_id settings) str))
-        [notifications set-notifications!] (use-state (if (contains? settings :notifications_enabled)
-                                                        (:notifications_enabled settings)
+        [default-payer set-default-payer!] (use-state (some-> (:default-payer-id settings) str))
+        [notifications set-notifications!] (use-state (if (contains? settings :notifications-enabled)
+                    (:notifications-enabled settings)
                                                         true))
         payers (or (use-subscribe [:user-expenses/payers]) [])
 
         ;; Compute "dirty" state to enable Save only when values differ.
-        current-currency (or (:default_currency settings) "BAM")
-        current-payer (some-> (:default_payer_id settings) str)
-        current-notifications (if (contains? settings :notifications_enabled)
-                                (boolean (:notifications_enabled settings))
+        current-currency (or (:default-currency settings) "BAM")
+        current-payer (some-> (:default-payer-id settings) str)
+        current-notifications (if (contains? settings :notifications-enabled)
+              (boolean (:notifications-enabled settings))
                                 true)
         dirty? (or (not= default-currency current-currency)
                  (not= (some-> default-payer str) current-payer)
                  (not= (boolean notifications) current-notifications))
 
         handle-save (fn []
-                      (let [settings {:default_currency default-currency
-                                      :default_payer_id default-payer
-                                      :notifications_enabled notifications}]
+                      (let [settings {:default-currency default-currency
+                                      :default-payer-id default-payer
+                                      :notifications-enabled notifications}]
                         (rf/dispatch [:user-expenses/save-settings settings])))]
 
     ;; Fetch settings and payers on mount
@@ -75,11 +75,11 @@
       (fn []
         (when (seq settings)
           ;; Always set from settings (including nil payer-id / false notifications).
-          (set-default-currency! (or (:default_currency settings) "BAM"))
-          (set-default-payer! (some-> (:default_payer_id settings) str))
+          (set-default-currency! (or (:default-currency settings) "BAM"))
+          (set-default-payer! (some-> (:default-payer-id settings) str))
           (set-notifications!
-            (if (contains? settings :notifications_enabled)
-              (boolean (:notifications_enabled settings))
+            (if (contains? settings :notifications-enabled)
+              (boolean (:notifications-enabled settings))
               true))))
       [settings])
 
@@ -160,7 +160,7 @@
                     ($ :span {:class "text-xl"} "👤"))
                   ($ :div
                     ($ :p {:class "font-medium"}
-                      (or (:full_name user) (:email user) "User"))
+                      (or (:full-name user) (:email user) "User"))
                     ($ :p {:class "text-sm text-base-content/60"}
                       (:email user))))
                 ($ :p {:class "text-sm text-base-content/60"}

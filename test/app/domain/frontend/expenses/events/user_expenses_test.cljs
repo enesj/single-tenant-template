@@ -238,9 +238,9 @@
 (deftest update-settings-sends-json-params
   (testing "update-settings sends JSON payload in :params (not :body)"
     (reset-db!)
-    (let [settings {:default_currency "EUR"
-                    :default_payer_id ""
-                    :notifications_enabled true}]
+    (let [settings {:default-currency "EUR"
+                    :default-payer-id ""
+                    :notifications-enabled true}]
       (rf/dispatch-sync [:user-expenses/update-settings settings])
       (let [req (last-http-request)]
         (is (= :put (req-method req)))
