@@ -152,14 +152,10 @@
              :error string (if invalid)}"
   [db token]
   (if-let [token-record (find-reset-token db token)]
-    (let [used-at (or (:used_at token-record)
-                      (:password_reset_tokens/used_at token-record))
-          expires-at (or (:expires_at token-record)
-                         (:password_reset_tokens/expires_at token-record))
-          principal-type (or (:principal_type token-record)
-                             (:password_reset_tokens/principal_type token-record))
-          principal-id (or (:principal_id token-record)
-                           (:password_reset_tokens/principal_id token-record))]
+    (let [used-at (:used_at token-record)
+          expires-at (:expires_at token-record)
+          principal-type (:principal_type token-record)
+          principal-id (:principal_id token-record)]
       (cond
         ;; Token already used
         (some? used-at)
@@ -220,16 +216,9 @@
    Returns: {:success boolean :message string}"
   [db email principal-type send-email-fn base-url]
   (let [principal (find-principal-by-email db principal-type email)
-        ;; Normalize keys from namespaced or plain
-        principal-id (or (:id principal)
-                         (:users/id principal)
-                         (:admins/id principal))
-        principal-email (or (:email principal)
-                            (:users/email principal)
-                            (:admins/email principal))
-        full-name (or (:full_name principal)
-                      (:users/full_name principal)
-                      (:admins/full_name principal))]
+      principal-id (:id principal)
+      principal-email (:email principal)
+      full-name (:full_name principal)]
     
     ;; Always return success to prevent email enumeration
     (if principal-id
@@ -315,9 +304,7 @@
    Returns: {:success boolean :error string (if failed)}"
   [db principal-type principal-id current-password new-password]
   (let [principal (find-principal-by-id db principal-type principal-id)
-        password-hash (or (:password_hash principal)
-                          (:users/password_hash principal)
-                          (:admins/password_hash principal))]
+      password-hash (:password_hash principal)]
     (cond
       ;; Principal not found
       (nil? principal)

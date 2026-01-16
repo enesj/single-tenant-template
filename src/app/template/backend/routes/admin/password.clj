@@ -95,8 +95,8 @@
                   (try
                     (let [{:keys [principal-id]} result
                           admin (pwd-reset/find-principal-by-id db :admin principal-id)
-                          email (or (:email admin) (:admins/email admin))
-                          full-name (or (:full_name admin) (:admins/full_name admin))]
+                        email (:email admin)
+                        full-name (:full_name admin)]
                       (gmail-smtp/send-password-changed-email
                         (:smtp-config email-service)
                         (:from-email email-service)
@@ -149,9 +149,9 @@
            :body (json/generate-string {:error "New password is required"})}
           
           :else
-          (let [admin-id (or (:id admin) (:admins/id admin))
-                admin-email (or (:email admin) (:admins/email admin))
-                admin-name (or (:full_name admin) (:admins/full_name admin))
+              (let [admin-id (:id admin)
+                admin-email (:email admin)
+                admin-name (:full_name admin)
                 result (pwd-reset/change-password! 
                          db :admin admin-id current-pwd new-pwd)]
             (if (:success result)

@@ -84,12 +84,8 @@
                   (try
                     (let [{:keys [principal-type principal-id]} result
                           principal (pwd-reset/find-principal-by-id db-adapter principal-type principal-id)
-                          email (or (:email principal) 
-                                    (:users/email principal)
-                                    (:admins/email principal))
-                          full-name (or (:full_name principal)
-                                        (:users/full_name principal)
-                                        (:admins/full_name principal))]
+                        email (:email principal)
+                        full-name (:full_name principal)]
                       (gmail-smtp/send-password-changed-email
                         (:smtp-config email-service)
                         (:from-email email-service)
