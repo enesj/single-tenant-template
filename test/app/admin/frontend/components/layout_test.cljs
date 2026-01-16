@@ -14,7 +14,9 @@
 (test-utils/setup-test-environment!)
 
 ;; Stub current-route subscription expected by sidebar
-(rf/reg-sub :current-route (fn [db _] (:current-route db)))
+(rf/reg-sub
+  :current-route
+  (fn [db _] (:current-route db)))
 
 (deftest layout-shows-spinner-while-loading
   (testing "loading branch renders spinner"

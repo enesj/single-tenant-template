@@ -15,7 +15,9 @@
   (rf/clear-subscription-cache!))
 
 ;; Provide a minimal models-data subscription for tests
-(rf/reg-sub :models-data (fn [db _] (:models-data db)))
+(rf/reg-sub
+  :models-data
+  (fn [db _] (:models-data db)))
 
 (deftest field-state-subs-test
   (testing "field state subs read from db"

@@ -90,7 +90,8 @@
                     (fn [values _] (some identity values))
                     (fn [value _] value)))
         args (concat [sub-id] signal-args [handler])]
-    (apply rf/reg-sub args)
+    (apply rf/reg-sub
+      args)
     sub-id))
 
 (defn register-sync-event!
