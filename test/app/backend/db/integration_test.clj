@@ -66,6 +66,13 @@
                     :from [:users]
                     :where [:= :id user-id]}))))
 
+(defn- plain-keys
+  "Strip namespaces from DB result keys without changing snake_case."
+  [record]
+  (when record
+    (into {}
+      (map (fn [[k v]] [(keyword (name k)) v]) record))))
+
 ;; ============================================================================
 ;; Database Connection Tests
 ;; ============================================================================
@@ -83,8 +90,7 @@
                      ["SELECT table_name FROM information_schema.tables 
                        WHERE table_schema = 'public' 
                        AND table_type = 'BASE TABLE'"])
-            ;; Handle both namespaced and non-namespaced keys from JDBC
-            table-names (set (map #(or (:table_name %) (:tables/table_name %)) tables))]
+            table-names (set (map (comp :table_name plain-keys) tables))]
         (is (contains? table-names "users"))
         (is (contains? table-names "admins"))
         (is (contains? table-names "audit_logs"))
@@ -102,10 +108,11 @@
                                              :password "secure-password-123"
                                              :full_name "Test Admin"
                                              :role "admin"})
-            admin (admin-auth/find-admin-by-email db email)]
+            admin (admin-auth/find-admin-by-email db email)
+            admin-plain (plain-keys admin)]
         (is (some? admin))
-        (is (= email (or (:email admin) (:admins/email admin))))
-        (is (= "Test Admin" (or (:full_name admin) (:admins/full_name admin))))))))
+        (is (= email (:email admin-plain)))
+        (is (= "Test Admin" (:full_name admin-plain)))))))
 
 (deftest admin-authenticate-test
   (testing "admin can authenticate with correct password"
@@ -116,9 +123,10 @@
                                              :password password
                                              :full_name "Auth Test"
                                              :role "admin"})
-            authenticated (admin-auth/authenticate-admin db email password)]
+            authenticated (admin-auth/authenticate-admin db email password)
+            authenticated-plain (plain-keys authenticated)]
         (is (some? authenticated))
-        (is (= email (or (:email authenticated) (:admins/email authenticated)))))))
+        (is (= email (:email authenticated-plain))))))
 
   (testing "admin cannot authenticate with wrong password"
     (when-let [db fixtures/*test-db*]
@@ -134,10 +142,12 @@
   (testing "can find admin by ID"
     (when-let [db fixtures/*test-db*]
       (let [created-admin (create-test-admin! db)
-            admin-id (or (:id created-admin) (:admins/id created-admin))
-            found-admin (admin-auth/find-admin-by-id db admin-id)]
+        created-admin-plain (plain-keys created-admin)
+        admin-id (:id created-admin-plain)
+        found-admin (admin-auth/find-admin-by-id db admin-id)
+        found-admin-plain (plain-keys found-admin)]
         (is (some? found-admin))
-        (is (= admin-id (or (:id found-admin) (:admins/id found-admin))))))))
+        (is (= admin-id (:id found-admin-plain)))))))
 
 ;; ============================================================================
 ;; User CRUD Tests
@@ -147,19 +157,22 @@
   (testing "can create user with valid data"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-            admin-id (or (:id admin) (:admins/id admin))
-            email (str "user-" (UUID/randomUUID) "@example.com")
-            created-user (create-test-user! db admin-id {:email email
-                                                          :full_name "Test User"
-                                                          :role "member"})]
+        admin-plain (plain-keys admin)
+        admin-id (:id admin-plain)
+        email (str "user-" (UUID/randomUUID) "@example.com")
+        created-user (create-test-user! db admin-id {:email email
+                         :full_name "Test User"
+                         :role "member"})
+        created-user-plain (plain-keys created-user)]
         (is (some? created-user))
-        (is (= email (or (:email created-user) (:users/email created-user))))))))
+        (is (= email (:email created-user-plain)))))))
 
 (deftest user-list-test
   (testing "can list users"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-            admin-id (or (:id admin) (:admins/id admin))
+        admin-plain (plain-keys admin)
+        admin-id (:id admin-plain)
             ;; Create some test users
             _ (create-test-user! db admin-id {:email (str "list1-" (UUID/randomUUID) "@test.com")})
             _ (create-test-user! db admin-id {:email (str "list2-" (UUID/randomUUID) "@test.com")})
@@ -170,14 +183,15 @@
   (testing "can search users by email"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-            admin-id (or (:id admin) (:admins/id admin))
+        admin-plain (plain-keys admin)
+        admin-id (:id admin-plain)
             unique-prefix (str "searchable-" (UUID/randomUUID))
             email (str unique-prefix "@test.com")
             _ (create-test-user! db admin-id {:email email :full_name "Searchable User"})
-            results (user-service/list-all-users db {:search unique-prefix})]
+        results (user-service/list-all-users db {:search unique-prefix})
+        result-plain (plain-keys (first results))]
         (is (= 1 (count results)))
-        (is (= email (or (:email (first results)) 
-                         (:users/email (first results)))))))))
+        (is (= email (:email result-plain)))))))
 
 ;; ============================================================================
 ;; Audit Log Tests
@@ -188,7 +202,8 @@
     (when-let [db fixtures/*test-db*]
       ;; First create admin and user to generate audit logs
       (let [admin (create-test-admin! db)
-            admin-id (or (:id admin) (:admins/id admin))
+        admin-plain (plain-keys admin)
+        admin-id (:id admin-plain)
             _ (create-test-user! db admin-id)
             logs (audit-service/get-audit-logs db {:limit 10})]
         ;; Should be able to retrieve logs (may be empty if audit not triggered)
@@ -243,7 +258,8 @@
                                              :full_name "Hash Test"
                                              :role "admin"})
             admin (admin-auth/find-admin-by-email db email)
-            stored-hash (or (:password_hash admin) (:admins/password_hash admin))]
+            admin-plain (plain-keys admin)
+            stored-hash (:password_hash admin-plain)]
         (is (some? stored-hash))
         (is (not= plain-password stored-hash))
         (is (> (count stored-hash) (count plain-password)))))))
@@ -265,7 +281,8 @@
   (testing "pagination works correctly"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-            admin-id (or (:id admin) (:admins/id admin))
+        admin-plain (plain-keys admin)
+        admin-id (:id admin-plain)
             ;; Create 5 users
             _ (dotimes [i 5]
                 (create-test-user! db admin-id 
@@ -277,6 +294,6 @@
         (is (= 2 (count page1)))
         (is (= 2 (count page2)))
         ;; Pages should have different users
-        (let [page1-ids (set (map #(or (:id %) (:users/id %)) page1))
-              page2-ids (set (map #(or (:id %) (:users/id %)) page2))]
+        (let [page1-ids (set (map (comp :id plain-keys) page1))
+              page2-ids (set (map (comp :id plain-keys) page2))]
           (is (empty? (set/intersection page1-ids page2-ids))))))))
