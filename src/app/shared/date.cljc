@@ -63,7 +63,7 @@
    (defn session-expired?
      "Check if session has expired - handles both LocalDateTime objects and string timestamps"
      [session]
-     (let [expires-at (or (:expires_at session) (:expires-at session))]
+     (let [expires-at (:expires-at session)]
        (if expires-at
          (let [expires-time (cond
                               (instance? java.time.LocalDateTime expires-at)
@@ -73,12 +73,12 @@
                               (try
                                 (time/local-date-time expires-at)
                                 (catch Exception e
-                                  (log/warn "Failed to parse expires_at timestamp:" expires-at "error:" (.getMessage e))
+                                  (log/warn "Failed to parse expires-at timestamp:" expires-at "error:" (.getMessage e))
                                   nil))
 
                               :else
                               (do
-                                (log/warn "Unknown expires_at format:" (type expires-at) expires-at)
+                                (log/warn "Unknown expires-at format:" (type expires-at) expires-at)
                                 nil))]
            (if expires-time
              (do
