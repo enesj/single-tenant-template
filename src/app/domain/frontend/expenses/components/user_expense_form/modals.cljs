@@ -15,8 +15,7 @@
 (defn- payer-default?
   [payer]
   (boolean
-    (or (:is_default payer)
-      (:is-default payer)
+    (or (:is-default payer)
       (:isDefault payer))))
 
 (defn- default-payer-id
