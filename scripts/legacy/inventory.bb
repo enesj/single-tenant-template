@@ -44,7 +44,7 @@
    })
 
 (def file-globs
-  { :empty-deprecated-namespaces ["**/entities.clj" "**/entities.cljs"] })
+  { :empty-deprecated-namespaces ["**/admin/frontend/pages/entities.cljs"] })
 
 (defn rg* [& args]
   (let [{:keys [exit out err]} (apply sh/sh "rg" args)]
