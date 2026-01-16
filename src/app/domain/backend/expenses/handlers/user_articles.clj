@@ -59,8 +59,8 @@
       (if-let [forbidden (ensure-admin-or-owner request)]
         forbidden
         (try
-          (let [body (h/read-body-params request)
-                canonical-name (or (:canonical_name body) (:canonical-name body) (:canonicalName body))
+              (let [body (h/read-body-params request)
+                canonical-name (:canonical_name body)
                 article (to-app (articles/create-article! db {:canonical_name canonical-name}))]
             (h/json-response {:success true
                               :article article} 201))
@@ -83,15 +83,11 @@
           (if-not article-id
             (h/json-response {:error "Invalid article id"} 400)
             (try
-              (let [body (h/read-body-params request)
-                    canonical-provided? (or (contains? body :canonical_name)
-                                          (contains? body :canonical-name)
-                                          (contains? body :canonicalName))
+                (let [body (h/read-body-params request)
+                  canonical-provided? (contains? body :canonical_name)
                     updates (cond-> {}
                               canonical-provided?
-                              (assoc :canonical_name (or (:canonical_name body)
-                                                       (:canonical-name body)
-                                                       (:canonicalName body)))
+                    (assoc :canonical_name (:canonical_name body))
 
                               (contains? body :barcode)
                               (assoc :barcode (:barcode body))
