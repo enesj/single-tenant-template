@@ -30,8 +30,7 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [authenticated? (get response :authenticated false)
-          session-valid? (get response :session-valid true) ; default to true for legacy sessions
-          legacy-session? (get response :legacy-session false)
+          session-valid? (get response :session-valid true)
           provider (get response :provider)
           tokens (get response :tokens)
           user (get response :user)
@@ -48,9 +47,7 @@
 
       ;; Log authentication details
       (when user
-        (if legacy-session?
-          (log/debug "Legacy user session:" (:name user))
-          (log/debug "Multi-tenant user session:" (:full-name user) "tenant:" (:name tenant) "role:" user-role)))
+        (log/debug "User session:" (:full-name user) "tenant:" (:name tenant) "role:" user-role))
 
       (let [updated-db (-> db
                          ;; Clear loading state
@@ -59,7 +56,6 @@
                          ;; Set authentication status
                          (assoc-in [:session :authenticated?] authenticated?)
                          (assoc-in [:session :session-valid?] session-valid?)
-                         (assoc-in [:session :legacy-session?] legacy-session?)
 
                          ;; Handle legacy OAuth tokens (backward compatibility)
                          (assoc-in [:session :oauth2/access-tokens] tokens)

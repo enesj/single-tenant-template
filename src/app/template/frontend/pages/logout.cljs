@@ -28,22 +28,14 @@
           (when (:authenticated auth-status)
             ($ :div {:class "mb-6 bg-base-200 rounded-lg p-4"}
               ($ :p {:class "text-sm text-base-content/70 mb-2"} "You are currently signed in as:")
-              (if (:legacy-session auth-status)
-                ;; Legacy session display
+              (when user
                 ($ :div
-                  (when-let [legacy-user (:user auth-status)]
-                    ($ :div
-                      ($ :p {:class "font-medium"} (str (:name legacy-user)))
-                      ($ :p {:class "text-sm text-base-content/70"} (str (:email legacy-user))))))
-                ;; Multi-tenant session display
-                ($ :div
-                  (when user
-                    ($ :div
-                      ($ :p {:class "font-medium"} (str (:full-name user)))
-                      ($ :p {:class "text-sm text-base-content/70"} (str (:email user)))
-                      (when-let [role (:role user)]
-                        ($ :p {:class "text-xs text-base-content/50"}
-                          (str "Role: " (if (keyword? role) (name role) (str role)))))))))))
+                  ($ :p {:class "font-medium"} (str (or (:full-name user) (:name user) (:email user))))
+                  (when-let [email (:email user)]
+                    ($ :p {:class "text-sm text-base-content/70"} (str email)))
+                  (when-let [role (:role user)]
+                    ($ :p {:class "text-xs text-base-content/50"}
+                      (str "Role: " (if (keyword? role) (name role) (str role)))))))))
 
 
           ;; Action buttons

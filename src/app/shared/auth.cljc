@@ -145,7 +145,6 @@
          permissions (:permissions auth-session)]
      {:authenticated (boolean user)
       :session-valid true
-      :legacy-session (boolean (:legacy-session? auth-session))
       :provider (:provider auth-session)
       :tokens oauth-tokens
       :user user

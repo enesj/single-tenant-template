@@ -99,17 +99,6 @@
          ["/user-settings"
           {:name :admin-user-settings
            :view unified-settings-page/user-settings-page
-           :controllers [(guarded-start nil)]}]
+           :controllers [(guarded-start nil)]}]]]
 
-         ;; Legacy: /admin/settings -> /admin/admin-settings
-         ["/settings"
-          {:name :admin-settings-legacy
-           :view unified-settings-page/admin-settings-page
-           :controllers [(guarded-start (fn [_] [[:admin/navigate-client "/admin/admin-settings"]]))]}]
-
-         ;; Legacy typo: /admin/amin-settings -> /admin/admin-settings
-         ["/amin-settings"
-          {:name :admin-amin-settings-legacy
-           :view unified-settings-page/admin-settings-page
-           :controllers [(guarded-start (fn [_] [[:admin/navigate-client "/admin/admin-settings"]]))]}]]]
     [["/admin" base-child-routes]]))

@@ -31,46 +31,36 @@
 
           ;; User info - updated for multi-tenant
           ($ :div {:class "flex flex-col"}
-            ;; User name/initials - FIXED to ensure string output
+            ;; User name/initials - ensure string output
             ($ :span {:class "font-medium text-sm"}
-              (let [user current-user]
-                (str                                        ; ENSURE STRING OUTPUT
-                  (if user
-                    ;; Multi-tenant session format
-                    (if-let [full-name (:full-name user)]
-                      ;; Display initials from full name
-                      (let [name-parts (str/split full-name #"\s+")
-                            first-initial (first (first name-parts))
-                            last-initial (when (> (count name-parts) 1)
-                                           (first (last name-parts)))
-                            initials (str first-initial (when last-initial last-initial))]
-                        initials)
-                      ;; Fallback to email prefix
-                      (first (str/split (str (:email user)) #"@")))
-                    ;; Legacy session format
-                    (let [legacy-user (:user auth-status)]
-                      (if legacy-user
-                        (let [given-name (:given-name legacy-user)
-                              family-name (:family-name legacy-user)
-                              first-initial (when given-name (first given-name))
-                              last-initial (when family-name (first family-name))
-                              initials (str first-initial (when last-initial last-initial))]
-                          (if (empty? initials)
-                            (let [provider (name (:provider auth-status))]
-                              (case provider
-                                "google" "G"
-                                "github" "GH"
-                                (first provider)))
-                            initials))
-                        "U"))))))
+              (let [user current-user
+                    full-name (:full-name user)
+                    email (:email user)
+                    initials (cond
+                               (seq full-name)
+                               (let [parts (str/split full-name #"\s+")
+                                     first-initial (first (first parts))
+                                     last-initial (when (> (count parts) 1)
+                                                    (first (last parts)))]
+                                 (str first-initial (when last-initial last-initial)))
+                               (seq email)
+                               (first (str/split (str email) #"@"))
+                               :else
+                               (let [provider (some-> (:provider auth-status) name)]
+                                 (case provider
+                                   "google" "G"
+                                   "github" "GH"
+                                   (some-> provider first)
+                                   "U")))]
+                (str initials)))
 
-            ;; Tenant info for multi-tenant sessions - FIXED to ensure string output
-            (when (and current-tenant (not (:legacy-session auth-status)))
+            ;; Tenant info for multi-tenant sessions
+            (when current-tenant
               ($ :span {:class "text-xs text-gray-600"}
-                (str (:name current-tenant)))))             ; ENSURE STRING OUTPUT
+                (str (:name current-tenant)))))
 
-          ;; Role badge for multi-tenant - FIXED to ensure string output
-          (when (and current-user (not (:legacy-session auth-status)))
+          ;; Role badge
+          (when current-user
             ($ :span {:class (str "ds-badge ds-badge-sm "
                                (if is-owner? "ds-badge-primary" "ds-badge-secondary"))}
               (str (name (:role current-user))))))          ; ENSURE STRING OUTPUT

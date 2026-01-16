@@ -151,14 +151,6 @@
          :filterable-columns (set (:filterable-columns table-config))})
       visibility-config)))
 
-(defn prepare-template-system-config
-  "Prepare configuration for template system compatibility"
-  [entity-keyword admin-id]
-  (let [effective-config (get-effective-column-visibility entity-keyword admin-id)]
-    (vector-config/prepare-for-template-system
-      (:visible-columns effective-config)
-      (:available-columns effective-config))))
-
 ;; Admin-specific entity spec overrides for vector config entities
 ;; This ensures column visibility panels show correct labels from vector config
 

@@ -190,7 +190,6 @@
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string
                    {:authenticated true
-                    :legacy-session true
                     :provider (when provider (name provider))
                     :user nil})})
 

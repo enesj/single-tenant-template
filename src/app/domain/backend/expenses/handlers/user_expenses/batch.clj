@@ -11,7 +11,7 @@
   Expects JSON body like:
   {:items [{:id \" <uuid> \" :supplier_id ... :notes ...} ...]}
 
-  Returns (template-compatible):
+  Returns:
   {:updated n :results [...] :errors [...]}"
   [db]
   (fn [request]

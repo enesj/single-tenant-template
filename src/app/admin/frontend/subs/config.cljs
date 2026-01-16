@@ -46,26 +46,6 @@
   (fn [db [_ entity-name column-name]]
     (get-in db [:admin :config :table-columns entity-name :column-metadata column-name])))
 
-;; =============================================================================
-;; Legacy Compatibility (for existing components)
-;; =============================================================================
-
-;; Backward compatibility with old naming
-(rf/reg-sub
-  :admin/visible-columns
-  (fn [[_ entity-keyword]]
-    (rf/subscribe [::visible-columns entity-keyword]))
-  (fn [visible-columns _]
-    visible-columns))
-
-;; Backward compatibility for table/config entity
-(rf/reg-sub
-  :admin/table-config
-  (fn [[_ entity-keyword]]
-    (rf/subscribe [::entity-config entity-keyword]))
-  (fn [entity-config _]
-    entity-config))
-
 ;; Admin entity metadata comes from the entity registry (preloaded from entities.edn)
 (rf/reg-sub
   :admin/all-entity-configs

@@ -12,7 +12,7 @@
           body (json/parse-string (:body resp) true)]
       (is (= 200 (:status resp)))
       (is (= true (:authenticated body)))
-      (is (= true (:legacy-session body)))
+      (is (not (contains? body :legacy-session)))
       (is (= "github" (:provider body)))
       (is (nil? (:user body)))))
 

@@ -34,8 +34,7 @@
       {}
       domain-admin-config-paths)))
 
-;; User-facing (domain-owned) UI config - paths come from domain registry.
-;; Use domain-registry/primary-user-ui-config-paths for backwards compatibility.
+;; User-facing (domain-owned) UI config - paths come from the primary domain.
 (defn- get-user-config-paths []
   (domain-registry/primary-user-ui-config-paths))
 

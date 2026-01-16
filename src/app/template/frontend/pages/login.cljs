@@ -55,20 +55,14 @@
                 ;; User info display
               (when-let [user (:user auth-status)]
                 ($ :div {:class "bg-base-200 rounded-lg p-4"}
-                  (if (:legacy-session auth-status)
-                    ;; Legacy session display
-                    ($ :div
-                      ($ :p {:class "font-medium"} (:name user))
-                      ($ :p {:class "text-sm text-base-content/70"} (:email user))
-                      (when (:provider auth-status)
-                        ($ :p {:class "text-xs text-base-content/50"}
-                          (str "via " (name (:provider auth-status))))))
-                    ;; Multi-tenant session display
-                    ($ :div
-                      ($ :p {:class "font-medium"} (:full-name user))
-                      ($ :p {:class "text-sm text-base-content/70"} (:email user))
+                  ($ :div
+                    ($ :p {:class "font-medium"}
+                      (or (:full-name user) (:name user) (:email user)))
+                    (when-let [email (:email user)]
+                      ($ :p {:class "text-sm text-base-content/70"} email))
+                    (when-let [role (:role user)]
                       ($ :p {:class "text-xs text-base-content/50"}
-                        (str "Role: " (:role user)))))))
+                        (str "Role: " role))))))
 
               ;; Tenant info for multi-tenant sessions
               (when tenant

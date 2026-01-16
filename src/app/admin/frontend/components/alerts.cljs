@@ -13,27 +13,18 @@
 
 (defui simple-page-header
   "Simple page header with title and description.
-   Enhanced to optionally use template page-header for consistency.
 
    Props:
    - :title - Page title
    - :description - Page description
-   - :use-template? - Whether to use template page-header (default: false for backward compatibility)
-   - :icon - Icon path for template header (when use-template? is true)
+   - :icon - Icon path for template header
    - :container-class - Additional classes for the container"
-  [{:keys [title description use-template? icon container-class]
-    :or {use-template? false
-         container-class ""}}]
-  (if use-template?
-    ;; Use template page-header for enhanced styling
+  [{:keys [title description icon container-class]
+    :or {container-class ""}}]
+  ($ :div {:class container-class}
     ($ template-stats/page-header {:title title
                                    :subtitle description
-                                   :icon icon})
-    ;; Original simple implementation for backward compatibility
-    ($ :div {:class container-class}
-      ($ :h1 {:class "text-2xl font-bold text-gray-900"} title)
-      (when description
-        ($ :p {:class "text-gray-600"} description)))))
+                                   :icon icon})))
 
 ;; ============================================================================
 ;; Alert Section Components
@@ -47,12 +38,10 @@
    - :title - Section title
    - :items - Vector of alert items with :key, :title, :subtitle, :value, :date, :border-color, :bg-color, :type
    - :empty-message - Message to show when no items (default: 'No items to display')
-   - :use-template-alerts? - Whether to use template alert components (default: false)
    - :container-class - Additional classes for the container"
-  [{:keys [title items empty-message use-template-alerts? container-class]
+  [{:keys [title items empty-message container-class]
     :or {empty-message "No items to display"
          items []
-         use-template-alerts? false
          container-class ""}}]
   ($ :div {:class container-class}
     ($ :h4 {:class "font-medium text-gray-900 mb-2"} title)
@@ -60,7 +49,7 @@
       ($ :p {:class "text-sm text-gray-500"} empty-message)
       ($ :div {:class "space-y-2"}
         (for [item items]
-          (if (and use-template-alerts? (contains? item :type))
+          (if (contains? item :type)
             ;; Use template alerts for error/success types
             (case (:type item)
               :error ($ error-alert {:key (:key item)

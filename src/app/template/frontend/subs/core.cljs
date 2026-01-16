@@ -18,11 +18,9 @@
 (rf/reg-sub
   :auth-status
   (fn [db _]
-    (let [;; Check for new multi-tenant session first
-          auth-session (get-in db [:session])
+    (let [auth-session (get-in db [:session])
           authenticated? (get auth-session :authenticated? false)
           session-valid? (get auth-session :session-valid? true)
-          legacy-session? (get auth-session :legacy-session? false)
 
           ;; Get user and tenant information
           user (get auth-session :user)
@@ -38,15 +36,11 @@
           loading? (get auth-session :loading? false)
           error    (get auth-session :error)
 
-          ;; Determine authentication method
-          has-new-session? (and authenticated? (not legacy-session?))
-          has-legacy-tokens? (boolean tokens)
-          has-legacy-session-with-user? (and legacy-session? authenticated? user)]
+          has-session? (or authenticated? (boolean tokens))]
 
       {:session auth-session
-       :authenticated (or has-new-session? has-legacy-tokens? has-legacy-session-with-user?)
+       :authenticated has-session?
        :session-valid session-valid?
-       :legacy-session legacy-session?
        :provider provider
        :tokens tokens
        :user user

@@ -7,7 +7,6 @@
   {:loading? false
    :authenticated? false
    :session-valid? true
-   :legacy-session? false
    :permissions #{}})
 
 (defn make-default-list-state

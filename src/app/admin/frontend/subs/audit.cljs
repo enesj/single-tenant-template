@@ -119,22 +119,3 @@
   :admin/deleting-audit?
   (fn [db _]
     (get-in db [:admin :audit :deleting?] false)))
-
-;; ============================================================================
-;; Template Compatibility Subscriptions
-;; These subscriptions provide the naming pattern expected by use-entity-state
-;; ============================================================================
-
-;; Template compatibility - error state for audit-logs entity
-(rf/reg-sub
-  :admin/audit-logs-error
-  :<- [:admin/audit-error]
-  (fn [error _]
-    error))
-
-;; Template compatibility - loading state for audit-logs entity
-(rf/reg-sub
-  :admin/audit-logs-loading?
-  :<- [:admin/audit-loading?]
-  (fn [loading? _]
-    loading?))
