@@ -8,8 +8,8 @@
     [app.template.frontend.components.button :refer [button]]))
 
 (defui waiting-room-page []
-  (let [user (use-subscribe [:current-user])
-        user-name (or (:full_name user) (:full-name user) (:email user) "User")]
+    (let [user (use-subscribe [:current-user])
+      user-name (or (:full-name user) (:email user) "User")]
     ($ :div {:class "min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center px-4"}
       ($ :div {:class "max-w-md w-full"}
         ;; Card container
