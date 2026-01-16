@@ -57,14 +57,11 @@
     (fn [request]
       (let [body (:body request)
             _ (log/info "PATCH request body:" body)
-            ;; Support both dash and underscore versions for flexibility
-            entity-name (keyword (or (:entity-name body) (:entity_name body)))
-            setting-key (keyword (or (:setting-key body) (:setting_key body)))
+            entity-name (keyword (:entity-name body))
+            setting-key (keyword (:setting-key body))
             setting-value (if (contains? body :setting-value)
                             (:setting-value body)
-                            (if (contains? body :setting_value)
-                               (:setting_value body)
-                               ::not-found))
+                            ::not-found)
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)
             _ (log/info "Parsed values:" {:entity-name entity-name
@@ -104,9 +101,8 @@
   (utils/with-error-handling
     (fn [request]
       (let [body (:body request)
-            ;; Support both dash and underscore versions for flexibility
-            entity-name (keyword (or (:entity-name body) (:entity_name body)))
-            setting-key (keyword (or (:setting-key body) (:setting_key body)))
+            entity-name (keyword (:entity-name body))
+            setting-key (keyword (:setting-key body))
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
         (if (and entity-name setting-key)
@@ -156,9 +152,9 @@
   (utils/with-error-handling
     (fn [request]
       (let [body (:body request)
-            entity-name (keyword (or (:entity-name body) (:entity_name body)))
+            entity-name (keyword (:entity-name body))
             ;; Accept full entity config or individual field updates
-            entity-config (or (:entity-config body) (:entity_config body))
+            entity-config (:entity-config body)
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
         (if (and entity-name entity-config)
@@ -201,9 +197,9 @@
   (utils/with-error-handling
     (fn [request]
       (let [body (:body request)
-            entity-name (keyword (or (:entity-name body) (:entity_name body)))
+            entity-name (keyword (:entity-name body))
             ;; Accept full entity config
-            entity-config (or (:entity-config body) (:entity_config body))
+            entity-config (:entity-config body)
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
         (if (and entity-name entity-config)

@@ -1,9 +1,8 @@
 (ns app.admin.frontend.pages.dashboard
   (:require
     [app.admin.frontend.components.layout :as layout]
-    [app.admin.frontend.components.stats-components :refer [page-header
-                                                            recent-activity-table
-                                                            stats-card]]
+    [app.admin.frontend.components.tables :refer [recent-activity-table]]
+    [app.template.frontend.components.stats :refer [page-header stats-card]]
     [app.admin.frontend.events.dashboard]
     [app.admin.frontend.subs.dashboard]
     [uix.core :refer [$ defui]]

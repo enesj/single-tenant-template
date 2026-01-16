@@ -4,13 +4,11 @@
   This namespace provides admin-specific context detection and convenience functions
   for registering admin CRUD bridges using the shared bridge infrastructure.
 
-  Generic entity and database utilities have been moved to:
-  - app.shared.frontend.utils.entity
-  - app.shared.frontend.utils.db"
+  Generic entity and database utilities live in the template layer:
+  - app.template.frontend.shared.utils.entity
+  - app.template.frontend.shared.utils.db"
   (:require
     [app.template.frontend.shared.bridges.crud :as shared-bridges]
-    [app.template.frontend.shared.utils.db :as db-utils]
-    [app.template.frontend.shared.utils.entity :as entity-utils]
     [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]))
 
@@ -65,11 +63,7 @@
       (assoc :context-pred (or (:context-pred opts) admin-context?))
       (assoc :priority (or (:priority opts) 200)))))
 
-;; Re-export shared utilities for backward compatibility
-(def normalize-entity entity-utils/normalize-entity)
-(def register-entity-spec-sub! entity-utils/register-entity-spec-sub!)
-(def register-sync-event! entity-utils/register-sync-event!)
-
-(def register-upsert-event! entity-utils/register-upsert-event!)
-(def assoc-paths db-utils/assoc-paths)
-(def maybe-fetch-config db-utils/maybe-fetch-config)
+;; NOTE: Generic entity/db utilities are intentionally NOT re-exported here.
+;; Callers should require the underlying template namespaces directly:
+;; - app.template.frontend.shared.utils.entity
+;; - app.template.frontend.shared.utils.db

@@ -2,7 +2,7 @@
   "Admin authentication handlers"
   (:require
    [app.template.backend.routes.admin.utils :as utils]
-   [app.admin.backend.services.admin :as admin-service]
+  [app.admin.backend.services.admin.auth :as admin-auth]
    [app.template.backend.services.monitoring.login-events :as login-monitoring]))
 
 (defn login-handler
@@ -11,13 +11,15 @@
   (utils/with-error-handling
     (fn [request]
       (let [{:keys [email password]} (:body request)
-            {:keys [ip-address user-agent]} (utils/extract-request-context request)]
-        (if-let [admin (admin-service/authenticate-admin db email password)]
+        {:keys [ip-address user-agent]} (utils/extract-request-context request)
+        legacy-sha256-enabled?
+        (get-in request [:service-container :config :legacy :passwords :sha256-enabled?] true)]
+      (if-let [admin (admin-auth/authenticate-admin db email password {:legacy-sha256-enabled? legacy-sha256-enabled?})]
           (let [admin-id (or (:id admin) (:admins/id admin))
                 admin-email (or (:email admin) (:admins/email admin))
                 admin-name (or (:full_name admin) (:admins/full_name admin))
                 admin-role (or (:role admin) (:admins/role admin))
-                session (admin-service/create-admin-session! db admin-id ip-address user-agent)]
+            session (admin-auth/create-admin-session! db admin-id ip-address user-agent)]
 
             ;; Record successful admin login in monitoring table
             (login-monitoring/record-login-event! db
@@ -42,7 +44,7 @@
               (assoc-in [:session :admin-token] (:token session))))
           (do
             ;; Record failed login attempt when we can resolve admin id
-            (when-let [admin-row (admin-service/find-admin-by-email db email)]
+            (when-let [admin-row (admin-auth/find-admin-by-email db email)]
               (let [admin-id (or (:id admin-row) (:admins/id admin-row))]
                 (when admin-id
                   (login-monitoring/record-login-event! db
@@ -52,7 +54,7 @@
                      :reason "invalid_credentials"
                      :ip ip-address
                      :user-agent user-agent}))))
-            (utils/error-response "Invalid credentials" :status 401)))))
+                      (utils/error-response "Invalid credentials" :status 401)))))
     "Failed to process admin login"))
 
 (defn logout-handler
@@ -64,7 +66,7 @@
                     (get-in request [:headers "x-admin-token"]))
             admin-id (utils/get-admin-id request)]
         (when token
-          (admin-service/invalidate-session! db token))
+          (admin-auth/invalidate-session! db token))
 
         (when admin-id
           (utils/log-admin-action "logout" admin-id "admin" admin-id {}))

@@ -1,6 +1,6 @@
 (ns app.admin.frontend.pages.unified-settings.view-mode
   (:require
-    [app.admin.frontend.components.settings-views :as views]
+    [app.admin.frontend.components.settings-views.cards :as cards]
     [app.admin.frontend.settings.definitions :as defs]
     [app.template.frontend.settings.resolver :as resolver]
     [uix.core :refer [$ defui]]))
@@ -12,7 +12,7 @@
 (defui admin-entity-card-for-overview
   "Entity card for admin overview - shows current settings (read-only)."
   [{:keys [entity-kw settings]}]
-  ($ views/admin-entity-settings-card
+  ($ cards/admin-entity-settings-card
     {:entity-name entity-kw
      :settings settings
      :editing? false
@@ -25,7 +25,7 @@
         immutable-locks (resolver/feature-constraints->locks (:features entity-config))
         draft-defaults (or (get-in view-options [:display-defaults]) {})
         draft-locks (or (get-in view-options [:display-locks]) {})]
-    ($ views/user-entity-settings-card
+      ($ cards/user-entity-settings-card
       {:entity-kw entity-kw
        :draft-defaults draft-defaults
        :draft-locks draft-locks

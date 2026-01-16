@@ -2,7 +2,7 @@
   "DB adapter helpers; normalize results and PG types here."
   (:require
     [app.template.backend.utils.adapters.database :refer [convert-pg-objects]]
-    [app.shared.field-casting :as field-casting]
+    [app.shared.type-conversion :as type-conv]
     [app.template.backend.db.protocols :as db-protocols]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -51,6 +51,34 @@
       (str description " " (str/join ", " dependencies) ". "
         "Please remove or reassign these dependent records before deleting this " (name table-keyword) ".")
       "This record cannot be deleted because it is referenced by other data. Please remove dependent records first.")))
+
+(defn- prepare-insert-data
+  "Legacy-compatible insert preparation.
+
+  - Cast fields using the canonical type conversion pipeline.
+  - Drop nils to avoid SQL issues.
+  - Preserve the historic 'include-nils? true' behavior from the legacy helper." 
+  [models table data]
+  (let [cast-data (type-conv/prepare-data-for-db models table data {:include-nils? true})
+        filtered-data (->> cast-data
+                        (filter (fn [[_k v]] (some? v)))
+                        (into {}))]
+    (when (empty? filtered-data)
+      (log/error "WARNING: Final data is empty! This will cause INSERT syntax error"))
+    filtered-data))
+
+(defn- prepare-update-data
+  "Legacy-compatible update preparation.
+
+  - Cast fields using the canonical type conversion pipeline.
+  - Drop nils and immutable fields.
+  - Always sets updated_at." 
+  [models table data]
+  (-> (type-conv/prepare-data-for-db models table data {:include-nils? true})
+    (dissoc :tenant :owner)
+    (assoc :updated_at [:cast (java.time.LocalDateTime/now) :timestamptz])
+    (->> (filter (fn [[_k v]] (some? v)))
+      (into {}))))
 
 (defrecord PostgresAdapter [connection relationship-mappings]
   db-protocols/DatabaseAdapter
@@ -124,7 +152,7 @@
 
   (create [_this metadata table data]
     (try
-      (let [processed-data (field-casting/prepare-insert-data metadata table data)
+      (let [processed-data (prepare-insert-data metadata table data)
             insert-map     {:insert-into [table]
                             :values      [processed-data]
                             :returning   [:*]}
@@ -149,7 +177,7 @@
 
   (update-record [_this metadata table id data]
     (try
-      (let [processed-data (field-casting/prepare-update-data metadata table data)
+      (let [processed-data (prepare-update-data metadata table data)
             ;; Cast UUID strings to proper UUID type for PostgreSQL
             uuid-id (if (string? id) [:cast id :uuid] id)
             result (next-jdbc/execute-one! connection

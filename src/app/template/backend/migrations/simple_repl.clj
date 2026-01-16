@@ -19,8 +19,11 @@
    See the comment block at the bottom for scenarios."
   (:require
     [aero.core :as aero]
-    [app.shared.frontend-config.core :as fc]
-    [app.template.backend.migrations.alignment :as alignment]
+    [app.shared.frontend-config.discovery :as fc-discovery]
+    [app.shared.frontend-config.schema :as fc-schema]
+    [app.shared.frontend-config.sync :as fc-sync]
+    [app.shared.frontend-config.validation :as fc-validation]
+    [app.template.backend.migrations.alignment.report :as alignment]
     [app.template.backend.migrations.hierarchical-models :as hierarchical-models]
     [app.template.backend.utils.model-customizations :as model-cust]
     [automigrate.core :as am]
@@ -203,7 +206,7 @@
   - basic schema diff (hierarchical models.edn vs DB)
   - extended objects existence (functions/triggers/views/policies)
 
-  Returns the report map (see `app.template.backend.migrations.alignment/report`)."
+  Returns the report map (see `app.template.backend.migrations.alignment.report/report`)."
   ([] (alignment-report :dev))
   ([profile]
    (alignment/report {:jdbc-url (get-jdbc-url profile)})))
@@ -284,16 +287,16 @@
 
   Returns a summary map and prints a human-readable report to the REPL."
   []
-  (let [bundles (fc/config-bundles {})]
+  (let [bundles (fc-discovery/config-bundles {})]
     (if (empty? bundles)
       (do
         (println "=== Frontend config validation (dry-run) ===")
         (println "WARNING: No frontend config bundles found. Skipping.")
         {:status :skipped})
-      (let [schema (fc/models-index "resources/db/models.edn")
-            bundles* (fc/load-bundles bundles)
-            results (fc/validate-bundles bundles* schema nil)
-            patches (fc/plan-sync bundles* schema nil)
+      (let [schema-index (fc-schema/models-index "resources/db/models.edn")
+            bundles* (fc-discovery/load-bundles bundles)
+            results (fc-validation/validate-bundles bundles* schema-index nil)
+            patches (fc-sync/plan-sync bundles* schema-index nil)
             invalid (filter (comp not :valid?) results)
             changes? (some :has-changes? patches)
             unknown-entities (->> patches (mapcat :unknown-entities) vec)]

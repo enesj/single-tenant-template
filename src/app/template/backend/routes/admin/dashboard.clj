@@ -3,7 +3,7 @@
   (:require
     [app.template.backend.middleware.rate-limiting :as rate-limiting]
     [app.template.backend.routes.admin.utils :as utils]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.dashboard :as admin-dashboard]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [taoensso.timbre :as log]))
 
@@ -13,7 +13,7 @@
   (utils/with-error-handling
     (fn [request]
       (let [;; Get dashboard stats
-            stats (admin-service/get-dashboard-stats db)
+        stats (admin-dashboard/get-dashboard-stats db)
             converted-stats (-> stats
                               db-adapter/convert-pg-objects
                               db-adapter/convert-db-keys->app-keys)
@@ -33,7 +33,7 @@
   [db]
   (utils/with-error-handling
     (fn [_request]
-      (let [data (admin-service/get-advanced-dashboard-data db)]
+      (let [data (admin-dashboard/get-advanced-dashboard-data db)]
         (utils/json-response data)))
     "Failed to retrieve advanced dashboard data"))
 

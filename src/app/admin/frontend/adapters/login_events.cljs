@@ -9,8 +9,9 @@
    
    HTTP events are in app.admin.frontend.events.login-events"
   (:require
-    [app.admin.frontend.adapters.core :as adapters.core]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.shared.utils.db :as db-utils]
+    [app.template.frontend.shared.utils.entity :as entity-utils]
     [re-frame.core :as rf]))
 
 ;; =============================================================================
@@ -29,10 +30,10 @@
 ;; Template System Integration
 ;; =============================================================================
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :login-events})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-login-events-to-template
    :entity-key :login-events
    :normalize-fn login-event->template-entity
@@ -68,14 +69,14 @@
     (let [metadata-path (paths/entity-metadata :login-events)
           ui-state-path (paths/list-ui-state :login-events)
           selected-ids-path (paths/entity-selected-ids :login-events)
-          db* (adapters.core/assoc-paths db
+          db* (db-utils/assoc-paths db
                 [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :created-at :direction :desc}
                                  :pagination (merge {:current-page 1}
                                                (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])
-          fetch-config (adapters.core/maybe-fetch-config db)]
+          fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}
         fetch-config (assoc :dispatch-n [fetch-config])))))
 

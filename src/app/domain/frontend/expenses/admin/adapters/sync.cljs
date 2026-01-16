@@ -4,64 +4,64 @@
    These events sync data between admin/user contexts and the shared
    template entity store."
   (:require
-    [app.admin.frontend.adapters.core :as adapters.core]
     [app.admin.frontend.events.entity-sync :as entity-sync]
     [app.admin.frontend.events.users.template.form-interceptors :as form-interceptors]
-    [app.domain.frontend.expenses.admin.adapters.normalize :as normalize]))
+    [app.domain.frontend.expenses.admin.adapters.normalize :as normalize]
+    [app.template.frontend.shared.utils.entity :as entity-utils]))
 
 ;; =============================================================================
 ;; Template sync events
 ;; =============================================================================
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-expenses
    :entity-key :expenses
    :normalize-fn normalize/expense->template-entity
    :log-prefix "[expenses] Syncing expenses to template:"})
 
-(adapters.core/register-upsert-event!
+(entity-utils/register-upsert-event!
   {:event-id ::upsert-expenses
    :entity-key :expenses
    :normalize-fn normalize/expense->template-entity
    :log-prefix "[expenses] Upserting expenses to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-expense-items
    :entity-key :expense-items
    :normalize-fn normalize/expense-item->template-entity
    :log-prefix "[expenses] Syncing expense items to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-receipts
    :entity-key :receipts
    :normalize-fn normalize/receipt->template-entity
    :log-prefix "[expenses] Syncing receipts to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-suppliers
    :entity-key :suppliers
    :normalize-fn normalize/supplier->template-entity
    :log-prefix "[expenses] Syncing suppliers to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-payers
    :entity-key :payers
    :normalize-fn normalize/payer->template-entity
    :log-prefix "[expenses] Syncing payers to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-articles
    :entity-key :articles
    :normalize-fn normalize/article->template-entity
    :log-prefix "[expenses] Syncing articles to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-article-aliases
    :entity-key :article-aliases
    :normalize-fn normalize/article-alias->template-entity
    :log-prefix "[expenses] Syncing article aliases to template:"})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-price-observations
    :entity-key :price-observations
    :normalize-fn normalize/price-observation->template-entity

@@ -43,6 +43,34 @@
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))
 
+(defn- legacy-admin-spa-handler
+  "Serve the admin SPA and emit a warning log for legacy/deprecated routes.
+
+  This is intentionally lightweight telemetry so we can measure usage before
+  removing routes entirely."
+  [route-label]
+  (fn [req]
+    (log/warn "Legacy admin route hit"
+      {:route route-label
+       :uri (:uri req)
+       :method (:request-method req)
+       :ip (or (get-in req [:headers "x-forwarded-for"]) (:remote-addr req))
+       :user-agent (get-in req [:headers "user-agent"])
+       :referer (get-in req [:headers "referer"])})
+    (admin-render-page req)))
+
+(defn- legacy-admin-route-removed-handler
+  "Handler for legacy admin routes once they are disabled/removed." 
+  [route-label]
+  (fn [req]
+    (log/warn "Legacy admin route disabled" {:route route-label
+                                             :uri (:uri req)
+                                             :method (:request-method req)})
+    {:status 410
+     :headers {"Content-Type" "text/plain"}
+     :body (str "This legacy admin route has been removed: " route-label
+             "\nUse /admin/admin-settings instead.")}))
+
 (defn- generate-frontend-entity-routes
   "Generate frontend routes for available entities from models-data"
   [md]
@@ -60,6 +88,9 @@
 (defn app-routes [db service-container]
   ;; Extract models-data from service container instead of taking it as separate parameter
   (let [md (:models-data service-container)
+
+  legacy-admin-settings-enabled?
+  (get-in service-container [:config :legacy :routes :admin-settings :enabled?] true)
 
         ;; Global request debugging middleware
         global-debug-middleware
@@ -158,9 +189,13 @@
          ["/receipts" {:get {:handler admin-render-page}}]
          ["/admin-settings" {:get {:handler admin-render-page}}]
          ;; Legacy: keep serving the SPA for the old settings URL
-         ["/settings" {:get {:handler admin-render-page}}]
+         ["/settings" {:get {:handler (if legacy-admin-settings-enabled?
+                                        (legacy-admin-spa-handler "/admin/settings")
+                                        (legacy-admin-route-removed-handler "/admin/settings"))}}]
          ;; Legacy typo: keep serving the SPA for /admin/amin-settings
-         ["/amin-settings" {:get {:handler admin-render-page}}]
+         ["/amin-settings" {:get {:handler (if legacy-admin-settings-enabled?
+                                            (legacy-admin-spa-handler "/admin/amin-settings")
+                                            (legacy-admin-route-removed-handler "/admin/amin-settings"))}}]
          ;; catch-all for any other admin SPA paths (e.g., /admin/expenses, /admin/suppliers)
          ["/*path" {:get {:handler admin-render-page}}]]
 

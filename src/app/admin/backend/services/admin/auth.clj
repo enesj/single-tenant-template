@@ -104,31 +104,43 @@
 (defn authenticate-admin
   "Authenticate an admin with email and password.
    Automatically migrates from SHA-256 to bcrypt when old format is detected."
-  [db email password]
-  (some-> (find-admin-by-email db email)
-    (as-> admin
-      (when (= (str (or (:status admin) (:admins/status admin))) "active")
-        (let [password-hash (or (:password_hash admin) (:admins/password_hash admin))
-              admin-id (or (:id admin) (:admins/id admin))]
-          (cond
-                  ;; Try bcrypt verification first (new secure format)
-            (verify-bcrypt-password password password-hash)
-            (do
-              (log/info "Admin authentication successful" {:email email})
-              (dissoc admin :password_hash :admins/password_hash))
+  ([db email password]
+   (authenticate-admin db email password {:legacy-sha256-enabled? true}))
+  ([db email password {:keys [legacy-sha256-enabled?]
+                       :or {legacy-sha256-enabled? true}}]
+   (some-> (find-admin-by-email db email)
+     (as-> admin
+       (when (= (str (or (:status admin) (:admins/status admin))) "active")
+         (let [password-hash (or (:password_hash admin) (:admins/password_hash admin))
+               admin-id (or (:id admin) (:admins/id admin))]
+           (cond
+             ;; Try bcrypt verification first (new secure format)
+             (verify-bcrypt-password password password-hash)
+             (do
+               (log/info "Admin authentication successful" {:email email})
+               (dissoc admin :password_hash :admins/password_hash))
 
-                  ;; Fallback to SHA-256 for backwards compatibility
-            (verify-sha256-password password password-hash)
-            (do
-                    ;; Automatically migrate to bcrypt
-              (log/info "Migrating admin password from SHA-256 to bcrypt" {:email email})
-              (migrate-admin-password! db admin-id password)
-              (dissoc admin :password_hash :admins/password_hash))
+             ;; Fallback to SHA-256 for backwards compatibility (flagged)
+             (and legacy-sha256-enabled?
+               (verify-sha256-password password password-hash))
+             (do
+               ;; Automatically migrate to bcrypt
+               (log/warn "Admin login used legacy SHA-256 password hash; migrating to bcrypt"
+                 {:email email})
+               (migrate-admin-password! db admin-id password)
+               (dissoc admin :password_hash :admins/password_hash))
 
-            :else
-            (do
-              (log/warn "Admin authentication failed - invalid password" {:email email})
-              nil)))))))
+             (and (not legacy-sha256-enabled?)
+               (verify-sha256-password password password-hash))
+             (do
+               (log/warn "Admin login attempted with legacy SHA-256 password hash, but legacy support is disabled"
+                 {:email email})
+               nil)
+
+             :else
+             (do
+               (log/warn "Admin authentication failed - invalid password" {:email email})
+               nil))))))))
 
 ;; ============================================================================
 ;; Session Management (DB-backed)

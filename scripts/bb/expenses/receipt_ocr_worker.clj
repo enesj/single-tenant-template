@@ -3,7 +3,7 @@
 (ns scripts.bb.expenses.receipt-ocr-worker
   (:require
     [aero.core :as aero]
-    [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
+    [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [clojure.string :as str]
     [next.jdbc :as jdbc])
   (:import

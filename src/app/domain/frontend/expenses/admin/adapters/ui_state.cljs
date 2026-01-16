@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.admin.adapters.ui-state
   (:require
-    [app.admin.frontend.adapters.core :as adapters.core]
+    [app.template.frontend.shared.utils.db :as db-utils]
     [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]))
 
@@ -17,12 +17,13 @@
         sort-config (cond-> {}
                       sort-field (assoc :field sort-field)
                       sort-direction (assoc :direction sort-direction))]
-    (adapters.core/assoc-paths db
+    (db-utils/assoc-paths db
       [[(conj metadata-path :sort) sort-config]
        [ui-state-path {:sort sort-config
                        :pagination (merge {:current-page 1}
                                      (:pagination (get-in db ui-state-path)))}]
        [selected-path #{}]])))
+
 
 (rf/reg-event-db
   ::initialize-entity

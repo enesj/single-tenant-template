@@ -2,7 +2,7 @@
   "Admin integration management handlers"
   (:require
     [app.template.backend.routes.admin.utils :as utils]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.monitoring.integrations :as admin-integrations]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [taoensso.timbre :as log]))
 
@@ -12,7 +12,7 @@
   (utils/with-error-handling
     (fn [_request]
       (log/info "🔗 Getting integration overview")
-      (let [overview (admin-service/get-integration-overview db)]
+      (let [overview (admin-integrations/get-integration-overview db)]
         (-> overview
           db-adapter/convert-pg-objects
           db-adapter/convert-db-keys->app-keys
@@ -27,7 +27,7 @@
       (let [params (:params request)
             period (keyword (or (:period params) "hour"))
             hours (utils/parse-int-param params :hours 24)
-            performance (admin-service/get-integration-performance db {:period period :hours hours})]
+            performance (admin-integrations/get-integration-performance db {:period period :hours hours})]
         (-> performance
           db-adapter/convert-pg-objects
           db-adapter/convert-db-keys->app-keys
@@ -41,7 +41,7 @@
     (fn [request]
       (let [params (:params request)
             pagination (utils/extract-pagination-params params)
-            webhook-status (admin-service/get-webhook-status db pagination)]
+            webhook-status (admin-integrations/get-webhook-status db pagination)]
         (-> webhook-status
           db-adapter/convert-pg-objects
           db-adapter/convert-db-keys->app-keys

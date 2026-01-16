@@ -2,7 +2,7 @@
   "Admin entity CRUD endpoints for cross-tenant operations"
   (:require
     [app.template.backend.routes.admin.utils :as utils]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.users :as admin-users]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [taoensso.timbre :as log]))
 
@@ -35,7 +35,7 @@
                        "users"
                        ;; Use the new comprehensive user deletion function
                        (try
-                         (let [deletion-result (admin-service/delete-user!
+                         (let [deletion-result (admin-users/delete-user!
                                                  db
                                                  (utils/parse-uuid-custom id)
                                                  (:id admin)
@@ -137,7 +137,7 @@
         (let [result (case entity
                        "users"
                        (try
-                         (admin-service/create-user! db data (:id admin) ip-address user-agent)
+                         (admin-users/create-user! db data (:id admin) ip-address user-agent)
                          (catch Exception e
                            (let [data (ex-data e)]
                              (if (= 400 (:status data))
@@ -146,7 +146,7 @@
                                         {:status 500 :original-error (.getMessage e)}))))))
 
                        ;; For other entity types, add cases here
-                       ;; "tenants" (admin-service/create-tenant! db data (:id admin) ip-address user-agent)
+                       ;; "tenants" (TODO: implement tenant create handler)
                        nil)]
 
           (if result
@@ -177,10 +177,10 @@
         ;; Route to appropriate admin service based on entity type
         (let [result (case entity
                        "users"
-                       (admin-service/get-user-details db (utils/parse-uuid-custom id))
+                       (admin-users/get-user-details db (utils/parse-uuid-custom id))
 
                        ;; For other entity types, add cases here
-                       ;; "tenants" (admin-service/get-tenant-details db id)
+                       ;; "tenants" (TODO: implement tenant details handler)
                        nil)]
 
           (if result
@@ -208,7 +208,7 @@
         (let [result (case entity
                        "users"
                        (try
-                         (admin-service/update-user! db (utils/parse-uuid-custom id) updates
+                         (admin-users/update-user! db (utils/parse-uuid-custom id) updates
                            (:id admin) ip-address user-agent)
                          (catch Exception e
                            (let [data (ex-data e)]
@@ -218,7 +218,7 @@
                                         {:status 500 :original-error (.getMessage e)}))))))
 
                        ;; For other entity types, add cases here
-                       ;; "tenants" (admin-service/update-tenant! db id updates (:id admin) ip-address user-agent)
+                       ;; "tenants" (TODO: implement tenant update handler)
                        nil)]
 
           (if result
@@ -254,7 +254,7 @@
                              filters {:search (:search query-params)
                                       :status (:status query-params)
                                       :email-verified (utils/parse-boolean-param query-params :email-verified)}]
-                         (admin-service/list-all-users db (merge filters pagination)))
+                         (admin-users/list-all-users db (merge filters pagination)))
 
                        ;; Default case - return empty for unsupported entities
                        [])]
@@ -283,7 +283,7 @@
             _ (log/info "Admin" (:email admin) "batch checking deletion constraints for" entity
                 {:count (count entity-ids)})
            result (case entity
-                    "users" (admin-service/check-users-deletion-constraints-batch db entity-ids)
+                    "users" (admin-users/check-users-deletion-constraints-batch db entity-ids)
                     {:error true
                      :status 501
                      :message "Batch deletion constraints not supported for this entity type"

@@ -3,7 +3,7 @@
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
     [app.template.frontend.components.action-components :refer [delete-icon view-details-icon]]
-    [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]

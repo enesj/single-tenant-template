@@ -1,7 +1,7 @@
 (ns app.admin.backend.setup
   "Helper tasks for single-tenant dev setup (seed admin, optional cleanup)."
   (:require
-    [app.admin.backend.services.admin :as admin]
+    [app.admin.backend.services.admin.auth :as admin-auth]
     [app.shared.data :as shared-data]
     [honey.sql :as hsql]
     [next.jdbc :as jdbc]
@@ -20,14 +20,14 @@
   ([db]
    (println "Setting up test admin user...")
    (try
-     (let [existing (admin/find-admin-by-email db "admin@example.com")]
+     (let [existing (admin-auth/find-admin-by-email db "admin@example.com")]
        (if existing
          (println "Admin user already exists: admin@example.com")
          (do
-           (admin/create-admin! db {:email "admin@example.com"
-                                    :password "admin123"
-                                    :full_name "System Administrator"
-                                    :role "owner"})
+           (admin-auth/create-admin! db {:email "admin@example.com"
+                                         :password "admin123"
+                                         :full_name "System Administrator"
+                                         :role "owner"})
            (println "Created admin user:")
            (println "  Email: admin@example.com")
            (println "  Password: admin123")

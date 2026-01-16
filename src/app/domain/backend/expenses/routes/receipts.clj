@@ -2,9 +2,12 @@
   "Admin API routes for receipt ingestion and approval."
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
-    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
-    [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
+    [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.string :as str]
@@ -97,7 +100,7 @@
                   :limit (utils/parse-int-param qp :limit 50)
                   :offset (utils/parse-int-param qp :offset 0)
                   :order-dir (keyword (or (:order-dir qp) "desc"))}
-            results (receipts/list-receipts db opts)]
+            results (receipt-queries/list-receipts db opts)]
         (utils/success-response {:receipts (to-app results)})))
     "Failed to list receipts"))
 
@@ -105,7 +108,7 @@
   (utils/with-error-handling
     (fn [_]
       (utils/success-response
-        {:receipts (to-app (receipts/list-pending-for-processing db))}))
+        {:receipts (to-app (receipt-queries/list-pending-for-processing db))}))
     "Failed to list pending receipts"))
 
 (defn upload-receipt-handler [db]
@@ -117,7 +120,7 @@
           (nil? storage_key) (utils/error-response "storage_key is required" :status 400)
           (and (nil? file_hash) (nil? bytes)) (utils/error-response "file_hash or bytes is required" :status 400)
           :else
-          (let [result (receipts/upload-receipt! db body)]
+          (let [result (receipt-storage/upload-receipt! db body)]
             (utils/success-response
               (-> result
                 (update :receipt to-app)))))))
@@ -127,9 +130,9 @@
   (utils/with-error-handling
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-        (if-let [receipt (receipts/get-receipt db id)]
+        (if-let [receipt (receipt-queries/get-receipt db id)]
           (let [receipt* (->> receipt to-app (enrich-receipt-for-detail db))
-                download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt*))
+                download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt*))
                                (str "/admin/api/expenses/receipts/" id "/download"))]
             (utils/success-response
               {:receipt (cond-> receipt*
@@ -155,9 +158,9 @@
   (utils/with-error-handling
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-        (if-let [receipt (receipts/get-receipt db id)]
+        (if-let [receipt (receipt-queries/get-receipt db id)]
           (let [receipt-app (to-app receipt)
-                file (receipts/resolve-local-receipt-file (:storage-key receipt-app))]
+                file (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))]
             (if-not file
               (utils/error-response "Receipt file not found" :status 404)
               (let [qp (:query-params request)
@@ -177,7 +180,7 @@
   (utils/with-error-handling
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-        (if-let [deleted (receipts/delete-receipt! db id)]
+        (if-let [deleted (receipt-queries/delete-receipt! db id)]
           ;; Return JSON to keep the frontend XHR pipeline happy (empty bodies can fail JSON parsing).
           (utils/success-response {:deleted true
                                    :receipt (to-app deleted)})
@@ -194,7 +197,7 @@
           (if-not new-status
             (utils/error-response "status is required" :status 400)
             (utils/success-response
-              {:receipt (to-app (receipts/update-status! db id new-status))}))
+              {:receipt (to-app (receipt-status/update-status! db id new-status))}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to update receipt status"))
 
@@ -203,7 +206,7 @@
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
         (utils/success-response
-          {:receipt (to-app (receipts/retry-extraction! db id))})
+          {:receipt (to-app (receipt-status/retry-extraction! db id))})
         (utils/error-response "Invalid id" :status 400)))
     "Failed to retry receipt"))
 
@@ -217,7 +220,7 @@
           (if-not message
             (utils/error-response "message is required" :status 400)
             (utils/success-response
-              {:receipt (to-app (receipts/mark-failed! db id message details))}))
+              {:receipt (to-app (receipt-status/mark-failed! db id message details))}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to mark receipt failed"))
 
@@ -227,7 +230,7 @@
       (let [body (:body request)]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (utils/success-response
-            {:receipt (to-app (receipts/store-extraction-results! db id body))})
+            {:receipt (to-app (receipt-status/store-extraction-results! db id body))})
           (utils/error-response "Invalid id" :status 400))))
     "Failed to store extraction results"))
 
@@ -236,8 +239,8 @@
     (fn [request]
       (let [body (:body request)]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [expense (receipts/approve-and-post! db id body)
-                receipt (receipts/get-receipt db id)]
+          (let [expense (receipt-approval/approve-and-post! db id body)
+                receipt (receipt-queries/get-receipt db id)]
             (utils/success-response {:expense (to-app expense)
                                      :receipt (to-app receipt)}))
           (utils/error-response "Invalid id" :status 400))))
@@ -248,7 +251,7 @@
     (fn [request]
       (let [body (:body request)]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [receipt (receipts/save-review! db id body)]
+          (let [receipt (receipt-approval/save-review! db id body)]
             (utils/success-response {:receipt (to-app receipt)}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to save receipt review"))
@@ -264,7 +267,7 @@
   (utils/with-error-handling
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-        (if-let [_receipt (receipts/get-receipt db id)]
+        (if-let [_receipt (receipt-queries/get-receipt db id)]
           (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
             (cond
               (not enabled?)

@@ -2,7 +2,8 @@
   "Admin bulk user operations handlers"
   (:require
     [app.template.backend.routes.admin.utils :as utils]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.users :as admin-users]
+    [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
@@ -14,7 +15,7 @@
       (let [{:keys [user_ids status]} (:body request)
             {:keys [ip-address user-agent admin]} (utils/extract-request-context request)]
         (if (and user_ids status)
-          (let [result (admin-service/bulk-update-user-status! db user_ids status
+          (let [result (admin-users-bulk/bulk-update-user-status! db user_ids status
                          (:id admin)
                          ip-address
                          user-agent)]
@@ -36,7 +37,7 @@
       (let [{:keys [user_ids role]} (:body request)
             {:keys [ip-address user-agent admin]} (utils/extract-request-context request)]
         (if (and user_ids role)
-          (let [result (admin-service/bulk-update-user-role! db user_ids role
+          (let [result (admin-users-bulk/bulk-update-user-role! db user_ids role
                          (:id admin)
                          ip-address
                          user-agent)]
@@ -61,7 +62,7 @@
         (utils/log-admin-action "export_users" admin-id
           "users" user_ids {})
 
-        (let [result (admin-service/export-users-csv db user_ids)]
+        (let [result (admin-users-bulk/export-users-csv db user_ids)]
           (if (:success result)
             (-> (response/response (:content result))
               (response/content-type "text/csv")
@@ -92,7 +93,7 @@
                               :when (and user-id (seq updates))]
                           (try
                             (log/info "Batch updating user" user-id "with" updates)
-                            (admin-service/update-user! db user-id updates admin-id ip-address user-agent)
+                            (admin-users/update-user! db user-id updates admin-id ip-address user-agent)
                             (catch Exception e
                               (log/error e "Failed to update user in batch" user-id)
                               {:error true :user-id user-id :message (.getMessage e)})))

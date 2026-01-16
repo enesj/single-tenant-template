@@ -8,7 +8,11 @@
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
-    [app.domain.backend.expenses.handlers.user-expenses :as user-expenses-handlers]
+    [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
+    [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
+    [app.domain.backend.expenses.handlers.user-expenses.expense-items :as user-expenses-expense-items]
+    [app.domain.backend.expenses.handlers.user-expenses.reference-data :as user-expenses-reference-data]
+    [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
 
@@ -22,9 +26,9 @@
    {:middleware [wrap-user-authentication]}
 
    ;; Dashboard/summary endpoints
-   ["/summary" {:get {:handler (user-expenses-handlers/expense-summary-handler db)}}]
-   ["/by-month" {:get {:handler (user-expenses-handlers/spending-by-month-handler db)}}]
-   ["/by-supplier" {:get {:handler (user-expenses-handlers/spending-by-supplier-handler db)}}]
+  ["/summary" {:get {:handler (user-expenses-summary/expense-summary-handler db)}}]
+  ["/by-month" {:get {:handler (user-expenses-summary/spending-by-month-handler db)}}]
+  ["/by-supplier" {:get {:handler (user-expenses-summary/spending-by-supplier-handler db)}}]
 
    ;; Settings endpoints (must come before /:id routes)
    ["/settings"
@@ -39,20 +43,20 @@
 
    ;; Reference data endpoints (suppliers, payers)
    ["/suppliers"
-    {:get {:handler (user-expenses-handlers/list-suppliers-handler db)}
-     :post {:handler (user-expenses-handlers/create-supplier-handler db)}}]
+    {:get {:handler (user-expenses-reference-data/list-suppliers-handler db)}
+     :post {:handler (user-expenses-reference-data/create-supplier-handler db)}}]
 
    ;; Purge endpoints (admin/owner only) must come before "/suppliers/:id".
    ["/suppliers/:id/purge-preview"
-    {:get {:handler (user-expenses-handlers/purge-supplier-preview-handler db)}}]
+    {:get {:handler (user-expenses-reference-data/purge-supplier-preview-handler db)}}]
 
    ["/suppliers/:id/purge"
-    {:post {:handler (user-expenses-handlers/purge-supplier-handler db)}}]
+    {:post {:handler (user-expenses-reference-data/purge-supplier-handler db)}}]
 
    ["/suppliers/:id"
-    {:get {:handler (user-expenses-handlers/get-supplier-handler db)}
-     :put {:handler (user-expenses-handlers/update-supplier-handler db)}
-     :delete {:handler (user-expenses-handlers/delete-supplier-handler db)}}]
+    {:get {:handler (user-expenses-reference-data/get-supplier-handler db)}
+     :put {:handler (user-expenses-reference-data/update-supplier-handler db)}
+     :delete {:handler (user-expenses-reference-data/delete-supplier-handler db)}}]
 
    ;; Supplier detail related lists (used by user Suppliers "View Details" modal)
    ["/article-aliases" {:get {:handler (supplier-detail/list-article-aliases-handler db)}}]
@@ -65,19 +69,19 @@
       :delete {:handler (user-price-observations/delete-price-observation-handler db)}}]]
 
    ["/payers"
-    {:get {:handler (user-expenses-handlers/list-payers-handler db)}
-     :post {:handler (user-expenses-handlers/create-payer-handler db)}}]
+    {:get {:handler (user-expenses-reference-data/list-payers-handler db)}
+     :post {:handler (user-expenses-reference-data/create-payer-handler db)}}]
 
    ["/payers/:id"
-    {:put {:handler (user-expenses-handlers/update-payer-handler db)}
-     :delete {:handler (user-expenses-handlers/delete-payer-handler db)}}]
+    {:put {:handler (user-expenses-reference-data/update-payer-handler db)}
+     :delete {:handler (user-expenses-reference-data/delete-payer-handler db)}}]
 
    ;; Expense items (power-user only)
-   ["/expense-items" {:get {:handler (user-expenses-handlers/list-expense-items-handler db)}}]
+   ["/expense-items" {:get {:handler (user-expenses-expense-items/list-expense-items-handler db)}}]
 
    ["/expense-items/:id"
-    {:put {:handler (user-expenses-handlers/update-expense-item-handler db)}
-     :delete {:handler (user-expenses-handlers/delete-expense-item-handler db)}}]
+    {:put {:handler (user-expenses-expense-items/update-expense-item-handler db)}
+     :delete {:handler (user-expenses-expense-items/delete-expense-item-handler db)}}]
 
    ;; Receipt upload (creates a receipts row)
    ["/upload" {:post {:handler (receipt-upload/user-upload-handler db)}}]
@@ -109,14 +113,14 @@
              :delete {:handler (user-articles/delete-article-handler db)}}]]
 
    ;; Expenses CRUD
-   ["" {:get {:handler (user-expenses-handlers/list-expenses-handler db)}
-        :post {:handler (user-expenses-handlers/create-expense-handler db)}}]
+     ["" {:get {:handler (user-expenses-crud/list-expenses-handler db)}
+       :post {:handler (user-expenses-crud/create-expense-handler db)}}]
 
    ;; Batch operations
-   ["/batch" {:put {:handler (user-expenses-handlers/batch-update-expenses-handler db)}}]
+  ["/batch" {:put {:handler (user-expenses-batch/batch-update-expenses-handler db)}}]
 
-   ["/batch-delete" {:post {:handler (user-expenses-handlers/batch-delete-expenses-handler db)}}]
+  ["/batch-delete" {:post {:handler (user-expenses-batch/batch-delete-expenses-handler db)}}]
 
-   ["/:id" {:get {:handler (user-expenses-handlers/get-expense-handler db)}
-            :put {:handler (user-expenses-handlers/update-expense-handler db)}
-            :delete {:handler (user-expenses-handlers/delete-expense-handler db)}}]])
+  ["/:id" {:get {:handler (user-expenses-crud/get-expense-handler db)}
+        :put {:handler (user-expenses-crud/update-expense-handler db)}
+        :delete {:handler (user-expenses-crud/delete-expense-handler db)}}]])

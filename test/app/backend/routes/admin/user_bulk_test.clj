@@ -8,7 +8,8 @@
    - Export users to CSV"
   (:require
     [app.template.backend.routes.admin.user-bulk :as user-bulk]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.users :as admin-users]
+    [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -68,7 +69,7 @@
           user-ids [(str test-user-id-1) (str test-user-id-2)]
           request (h/mock-admin-request :put "/admin/api/users/bulk-status" mock-admin
                     {:body {:user_ids user-ids :status "inactive"}})]
-      (with-redefs [admin-service/bulk-update-user-status!
+      (with-redefs [admin-users-bulk/bulk-update-user-status!
                     (fn [_db ids status _admin-id _ip _ua]
                       (is (= 2 (count ids)))
                       (is (= "inactive" status))
@@ -97,7 +98,7 @@
           user-ids [(str test-user-id-1) (str test-user-id-2)]
           request (h/mock-admin-request :put "/admin/api/users/bulk-role" mock-admin
                     {:body {:user_ids user-ids :role "premium"}})]
-      (with-redefs [admin-service/bulk-update-user-role!
+      (with-redefs [admin-users-bulk/bulk-update-user-role!
                     (fn [_db ids role _admin-id _ip _ua]
                       (is (= 2 (count ids)))
                       (is (= "premium" role))
@@ -127,7 +128,7 @@
                  {:id (str test-user-id-2) :name "Updated Name 2"}]
           request (h/mock-admin-request :put "/admin/api/users/batch" mock-admin
                     {:body {:items items}})]
-      (with-redefs [admin-service/update-user!
+      (with-redefs [admin-users/update-user!
                     (fn [_db _user-id updates _admin-id _ip _ua]
                       (is (contains? updates :name))
                       {:success true})]
@@ -156,7 +157,7 @@
           handler (user-bulk/export-users-handler db)
           request (h/mock-admin-request :post "/admin/api/users/export" mock-admin
                     {:body {:user_ids [(str test-user-id-1)]}})]
-      (with-redefs [admin-service/export-users-csv
+      (with-redefs [admin-users-bulk/export-users-csv
                     (fn [_db _ids]
                       {:success true
                        :content "email,name\ntest@example.com,Test User"
@@ -170,7 +171,7 @@
           handler (user-bulk/export-users-handler db)
           request (h/mock-admin-request :post "/admin/api/users/export" mock-admin
                     {:body {:user_ids [(str test-user-id-1)]}})]
-      (with-redefs [admin-service/export-users-csv
+      (with-redefs [admin-users-bulk/export-users-csv
                     (fn [_db _ids]
                       {:success false :message "Export failed"})]
         (let [response (handler request)]

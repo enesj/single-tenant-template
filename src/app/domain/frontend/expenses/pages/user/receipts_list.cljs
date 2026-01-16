@@ -5,7 +5,7 @@
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
     [app.template.frontend.components.action-components :refer [view-details-icon]]
     [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]

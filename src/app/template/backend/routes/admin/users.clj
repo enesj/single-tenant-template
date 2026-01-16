@@ -2,7 +2,7 @@
   "Admin basic user management handlers"
   (:require
     [app.template.backend.routes.admin.utils :as utils]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.users :as admin-users]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [taoensso.timbre :as log]))
 
@@ -16,7 +16,7 @@
             filters {:search (:search params)
                      :status (:status params)
                      :email-verified (utils/parse-boolean-param params :email-verified)}
-            users (admin-service/list-all-users db (merge filters pagination))]
+            users (admin-users/list-all-users db (merge filters pagination))]
         (log/info "👥 Admin list-users returned" (count users) "users"
           {:filters filters :pagination pagination})
         (let [converted-users (-> users
@@ -32,7 +32,7 @@
     (fn [request]
       (utils/handle-uuid-request request :id
         (fn [user-id _request]
-          (if-let [user (admin-service/get-user-details db user-id)]
+          (if-let [user (admin-users/get-user-details db user-id)]
             (let [converted-user (-> user
                                    db-adapter/convert-pg-objects
                                    db-adapter/convert-db-keys->app-keys)]
@@ -47,7 +47,7 @@
     (fn [request]
       (utils/handle-uuid-body-request request :id
         (fn [user-id updates context _request]
-          (let [updated-user (admin-service/update-user! db user-id updates
+          (let [updated-user (admin-users/update-user! db user-id updates
                                (-> context :admin :id)
                                (:ip-address context)
                                (:user-agent context))]
@@ -72,10 +72,10 @@
 
         (log/info "Admin create user request:" user-data)
 
-        (let [created-user (admin-service/create-user! db user-data
-                             (:id admin)
-                             ip-address
-                             user-agent)]
+        (let [created-user (admin-users/create-user! db user-data
+                 (:id admin)
+                 ip-address
+                 user-agent)]
 
           (utils/log-admin-action "create_user" (:id admin) "user"
             (:id created-user) user-data)
@@ -95,7 +95,7 @@
         (fn [user-id _request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
                 {:keys [force-delete]} (:body request)
-                result (admin-service/delete-user! db user-id
+                result (admin-users/delete-user! db user-id
                          (:id admin)
                          ip-address
                          user-agent

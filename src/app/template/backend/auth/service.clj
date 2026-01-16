@@ -5,7 +5,7 @@
     [app.template.backend.auth.email-verification :as email-verification]
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.protocols :as core-protocols]
-    [app.template.shared.auth :as shared-auth]
+    [app.shared.auth :as shared-auth]
     [app.shared.patterns :as patterns]
     [buddy.hashers :as hashers]
     [clojure.string :as str]

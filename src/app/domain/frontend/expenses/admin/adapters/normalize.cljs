@@ -4,7 +4,7 @@
    These functions convert raw API responses to normalized entities
    for the template entity store."
   (:require
-    [app.admin.frontend.adapters.core :as adapters.core]
+    [app.template.frontend.shared.utils.entity :as entity-utils]
     [clojure.string :as str]))
 
 ;; =============================================================================
@@ -49,7 +49,7 @@
 
 (defn expense->template-entity
   [expense]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     expense
     {:entity-ns :expenses
      :id-keys [:id]
@@ -79,7 +79,7 @@
 
 (defn expense-item->template-entity
   [item]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     item
     {:entity-ns :expense-items
      :id-keys [:id]
@@ -100,7 +100,7 @@
 
 (defn receipt->template-entity
   [receipt]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     receipt
     {:entity-ns :receipts
      :id-keys [:id]
@@ -132,7 +132,7 @@
 
 (defn supplier->template-entity
   [supplier]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     supplier
     {:entity-ns :suppliers
      :id-keys [:id]
@@ -144,7 +144,7 @@
 
 (defn payer->template-entity
   [payer]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     payer
     {:entity-ns :payers
      :id-keys [:id]
@@ -153,7 +153,7 @@
 
 (defn article->template-entity
   [article]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     article
     {:entity-ns :articles
      :id-keys [:id]
@@ -166,7 +166,7 @@
 
 (defn article-alias->template-entity
   [alias]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     alias
     {:entity-ns :article-aliases
      :id-keys [:id]
@@ -179,7 +179,7 @@
 
 (defn price-observation->template-entity
   [obs]
-  (adapters.core/normalize-entity
+  (entity-utils/normalize-entity
     obs
     {:entity-ns :price-observations
      :id-keys [:id]

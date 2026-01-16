@@ -102,6 +102,14 @@
   {:doc "Validate frontend config EDN files against Malli specs + DB schema alignment. Usage: bb validate-frontend-config [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
    :task (apply shell "bb" "scripts/bb/validate_frontend_config.clj" *command-line-args*)},
 
+  legacy-inventory
+  {:doc "Generate a machine-readable inventory of legacy patterns. Writes to resources/legacy-inventory.edn.",
+    :task (shell "bb" "scripts/legacy/inventory.bb" "--out" "resources/legacy-inventory.edn" "--quiet")},
+
+  legacy-audit
+  {:doc "Fail if new legacy occurrences are introduced compared to resources/legacy-inventory.edn. Use --strict to require zero occurrences.",
+   :task (apply shell "bb" "scripts/legacy/audit.bb" *command-line-args*)},
+
   sync-frontend-config
   {:doc "Sync frontend config EDNs with DB schema (dry-run by default). Usage: bb sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
    :task (apply shell "bb" "scripts/bb/sync_frontend_config.clj" *command-line-args*)},

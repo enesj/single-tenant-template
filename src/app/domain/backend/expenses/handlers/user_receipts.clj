@@ -11,9 +11,11 @@
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
-    [app.domain.backend.expenses.workers.receipt-ocr :as receipt-ocr]
+    [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [clojure.string :as str]
     [ring.util.response :as response]
@@ -151,8 +153,8 @@
                       :offset (parse-long-param qp :offset 0)
                       :order-dir (keyword (or (:order_dir qp) (:order-dir qp) "desc"))}
                 rows (if (= "admin" role)
-                       (receipts/list-receipts db opts)
-                       (receipts/list-user-receipts db user-id opts))]
+                       (receipt-queries/list-receipts db opts)
+                       (receipt-queries/list-user-receipts db user-id opts))]
             (h/json-response {:data (to-app rows)
                               :limit (:limit opts)
                               :offset (:offset opts)}
@@ -171,10 +173,10 @@
           (let [role (h/get-user-role request)]
             (if-let [id (h/try-parse-uuid (get-in request [:path-params :id]))]
               (if-let [receipt (if (= "admin" role)
-                                 (receipts/get-receipt db id)
-                                 (receipts/get-user-receipt db user-id id))]
+                                 (receipt-queries/get-receipt db id)
+                                 (receipt-queries/get-user-receipt db user-id id))]
                 (let [receipt-app (to-app receipt)
-                      download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt-app))
+                      download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))
                          (str "/api/v1/expenses/receipts/" id "/download"))
                       receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                     download-url (assoc :download-url download-url))]
@@ -208,10 +210,10 @@
           (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (if-let [receipt (if (= "admin" role)
-                                 (receipts/get-receipt db id)
-                                 (receipts/get-user-receipt db user-id id))]
+                                 (receipt-queries/get-receipt db id)
+                                 (receipt-queries/get-user-receipt db user-id id))]
                 (let [receipt-app (to-app receipt)
-                      file (receipts/resolve-local-receipt-file (:storage-key receipt-app))]
+                      file (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))]
                   (if-not file
                     (h/json-response {:error "Receipt file not found"} 404)
                     (let [qp (:query-params request)
@@ -241,15 +243,15 @@
           (let [role (h/get-user-role request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (if (= "admin" role)
-                (if-let [deleted (receipts/delete-receipt! db id)]
+                (if-let [deleted (receipt-queries/delete-receipt! db id)]
                   (h/json-response {:data {:deleted true
                                            :receipt (to-app deleted)}}
                     200)
                   (h/json-response {:error "Receipt not found"} 404))
                 ;; Regular users can only delete receipts visible to them (owned or unassigned).
-                (if-not (receipts/get-user-receipt db user-id id)
+                (if-not (receipt-queries/get-user-receipt db user-id id)
                   (h/json-response {:error "Receipt not found"} 404)
-                  (if-let [deleted (receipts/delete-receipt! db id)]
+                  (if-let [deleted (receipt-queries/delete-receipt! db id)]
                     (h/json-response {:data {:deleted true
                                              :receipt (to-app deleted)}}
                       200)
@@ -274,11 +276,11 @@
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (let [body (h/read-body-params request)
                     expense (if (= "admin" role)
-                              (receipts/approve-and-post-for-user-any! db user-id id body)
-                              (receipts/approve-and-post-for-user! db user-id id body))
+                              (receipt-approval/approve-and-post-for-user-any! db user-id id body)
+                              (receipt-approval/approve-and-post-for-user! db user-id id body))
                     receipt (if (= "admin" role)
-                              (receipts/get-receipt db id)
-                              (receipts/get-user-receipt db user-id id))]
+                              (receipt-queries/get-receipt db id)
+                              (receipt-queries/get-user-receipt db user-id id))]
                 (h/json-response {:data {:expense (to-app expense)
                                          :receipt (to-app receipt)}}
                   200))
@@ -304,17 +306,17 @@
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (let [body (h/read-body-params request)
                     accessible? (if (= "admin" role)
-                                  (some? (receipts/get-receipt db id))
-                                  (some? (receipts/get-user-receipt db user-id id)))]
+                                  (some? (receipt-queries/get-receipt db id))
+                                  (some? (receipt-queries/get-user-receipt db user-id id)))]
                 (if-not accessible?
                   (h/json-response {:error "Receipt not found"} 404)
                   (do
-                    (receipts/save-review! db id body)
+                    (receipt-approval/save-review! db id body)
                     (let [receipt (if (= "admin" role)
-                                    (receipts/get-receipt db id)
-                                    (receipts/get-user-receipt db user-id id))
+                                    (receipt-queries/get-receipt db id)
+                                    (receipt-queries/get-user-receipt db user-id id))
                           receipt-app (to-app receipt)
-                          download-url (when (receipts/resolve-local-receipt-file (:storage-key receipt-app))
+                          download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))
                                (str "/api/v1/expenses/receipts/" id "/download"))
                           receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                         download-url (assoc :download-url download-url))]
@@ -342,8 +344,8 @@
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               ;; Check access: admin can OCR any, users only their own
               (let [receipt (if (= "admin" role)
-                              (receipts/get-receipt db id)
-                              (receipts/get-user-receipt db user-id id))]
+                              (receipt-queries/get-receipt db id)
+                              (receipt-queries/get-user-receipt db user-id id))]
                 (if receipt
                   (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
                     (cond
@@ -406,7 +408,7 @@
               (let [accessible-ids (if (= "admin" role)
                                      all-ids
                                      (->> all-ids
-                                       (filter #(receipts/get-user-receipt db user-id %))
+                                       (filter #(receipt-queries/get-user-receipt db user-id %))
                                        vec))]
                 (if (empty? accessible-ids)
                   (h/json-response {:error "No accessible receipts found"} 404)

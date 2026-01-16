@@ -86,6 +86,56 @@
                 codecs/bytes->hex)]
       (is (not (auth/verify-sha256-password "wrong" correct-hash))))))
 
+;; ==========================================================================
+;; Legacy SHA-256 fallback gating (admin login)
+;; ==========================================================================
+
+(deftest authenticate-admin-sha256-fallback-gating-test
+  (testing "authenticate-admin migrates SHA-256 hashes when legacy support is enabled"
+    (let [email "admin@example.com"
+          password "legacy-pass"
+          sha-hash (-> (hash/sha256 password) codecs/bytes->hex)
+          migrate-called? (atom false)
+          fake-admin {:id (java.util.UUID/randomUUID)
+                      :email email
+                      :status "active"
+                      :password_hash sha-hash}]
+      (with-redefs [auth/find-admin-by-email (fn [_db _email] fake-admin)
+                    auth/migrate-admin-password! (fn [& _]
+                                                 (reset! migrate-called? true)
+                                                 true)]
+        (is (some? (auth/authenticate-admin nil email password {:legacy-sha256-enabled? true})))
+        (is @migrate-called? "Expected migration to be triggered for SHA-256"))))
+
+  (testing "authenticate-admin rejects SHA-256 hashes when legacy support is disabled"
+    (let [email "admin@example.com"
+          password "legacy-pass"
+          sha-hash (-> (hash/sha256 password) codecs/bytes->hex)
+          migrate-called? (atom false)
+          fake-admin {:id (java.util.UUID/randomUUID)
+                      :email email
+                      :status "active"
+                      :password_hash sha-hash}]
+      (with-redefs [auth/find-admin-by-email (fn [_db _email] fake-admin)
+                    auth/migrate-admin-password! (fn [& _]
+                                                 (reset! migrate-called? true)
+                                                 true)]
+        (is (nil? (auth/authenticate-admin nil email password {:legacy-sha256-enabled? false})))
+        (is (false? @migrate-called?) "Should not migrate when legacy SHA-256 is disabled")))))
+
+(deftest authenticate-admin-bcrypt-still-works-test
+  (testing "authenticate-admin accepts bcrypt hashes regardless of legacy flag"
+    (let [email "admin@example.com"
+          password "secure-pass"
+          bcrypt-hash (auth/hash-password password)
+          fake-admin {:id (java.util.UUID/randomUUID)
+                      :email email
+                      :status "active"
+                      :password_hash bcrypt-hash}]
+      (with-redefs [auth/find-admin-by-email (fn [_db _email] fake-admin)]
+        (is (some? (auth/authenticate-admin nil email password {:legacy-sha256-enabled? false})))
+        (is (some? (auth/authenticate-admin nil email password {:legacy-sha256-enabled? true})))))))
+
 ;; ============================================================================
 ;; Integration-like Tests (with stubs)
 ;; ============================================================================

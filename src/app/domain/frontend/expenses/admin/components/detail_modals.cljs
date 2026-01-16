@@ -3,7 +3,12 @@
     [app.template.frontend.components.shared-utils :as shared]
     [app.domain.frontend.expenses.components.expense-form :as expense-form]
     [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
-    [app.domain.frontend.expenses.admin.components.detail-views :as detail-views]
+    [app.domain.frontend.expenses.admin.components.detail-views.article :as article-view]
+    [app.domain.frontend.expenses.admin.components.detail-views.article-alias :as article-alias-view]
+    [app.domain.frontend.expenses.admin.components.detail-views.expense-item :as expense-item-view]
+    [app.domain.frontend.expenses.admin.components.detail-views.payer :as payer-view]
+    [app.domain.frontend.expenses.admin.components.detail-views.price-observation :as price-observation-view]
+    [app.domain.frontend.expenses.admin.components.detail-views.supplier :as supplier-view]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
     [app.domain.frontend.expenses.events.payers :as payers-events]
@@ -53,7 +58,7 @@
        :loading? loading?
        :header header
        :on-close #(rf/dispatch [::suppliers-events/close-detail-modal])
-       :body ($ detail-views/supplier-detail-body {:supplier-id supplier-id})})))
+       :body ($ supplier-view/supplier-detail-body {:supplier-id supplier-id})})))
 
 (defui admin-article-detail-modal []
   (let [open? (use-subscribe [:expenses/article-detail-modal-open?])
@@ -72,7 +77,7 @@
        :loading? loading?
        :header header
        :on-close #(rf/dispatch [::articles-events/close-detail-modal])
-       :body ($ detail-views/article-detail-body {:article-id article-id})})))
+       :body ($ article-view/article-detail-body {:article-id article-id})})))
 
 (defui admin-payer-detail-modal []
   (let [open? (use-subscribe [:expenses/payer-detail-modal-open?])
@@ -91,7 +96,7 @@
        :loading? loading?
        :header header
        :on-close #(rf/dispatch [::payers-events/close-detail-modal])
-       :body ($ detail-views/payer-detail-body {:payer-id payer-id})})))
+       :body ($ payer-view/payer-detail-body {:payer-id payer-id})})))
 
 (defui admin-receipt-detail-modal []
   (let [ctx {:receipt-sub :expenses/receipt
@@ -124,7 +129,7 @@
        :loading? loading?
        :header header
        :on-close #(rf/dispatch [:app.domain.frontend.expenses.events.expense-items/close-detail-modal])
-       :body ($ detail-views/expense-item-detail-body {:expense-item-id expense-item-id})})))
+       :body ($ expense-item-view/expense-item-detail-body {:expense-item-id expense-item-id})})))
 
 (defui admin-article-alias-detail-modal []
   (let [open? (use-subscribe [:expenses/article-alias-detail-modal-open?])
@@ -143,7 +148,7 @@
        :loading? loading?
        :header header
        :on-close #(rf/dispatch [::aliases-events/close-detail-modal])
-       :body ($ detail-views/article-alias-detail-body {:alias-id alias-id})})))
+       :body ($ article-alias-view/article-alias-detail-body {:alias-id alias-id})})))
 
 (defui admin-price-observation-detail-modal []
   (let [open? (use-subscribe [:expenses/price-observation-detail-modal-open?])
@@ -162,4 +167,4 @@
        :loading? loading?
        :header header
        :on-close #(rf/dispatch [::price-obs-events/close-detail-modal])
-       :body ($ detail-views/price-observation-detail-body {:observation-id obs-id})})))
+       :body ($ price-observation-view/price-observation-detail-body {:observation-id obs-id})})))

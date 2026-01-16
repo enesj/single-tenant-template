@@ -8,7 +8,7 @@
   The stored `storage_key` is the generated filename (relative), so the worker
   can resolve it using `--storage-base-dir upload/stripes`."
   (:require
-    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.template.backend.routes.admin.utils :as admin-utils]
     [app.template.backend.utils.adapters.database :as db-adapter]
@@ -92,14 +92,14 @@
                                                              :has-multipart-params? (contains? request :multipart-params)
                                                              :multipart-keys (some-> request :multipart-params keys vec)
                                                              :param-keys (some-> request :params keys vec)})))
-    (let [{:keys [storage_key bytes original_filename content_type file_size]} (store-uploaded-file! file)
+    (let [{:keys [storage_key bytes original_filename content-type file_size]} (store-uploaded-file! file)
           user-id (h/get-user-id request)
-          result (receipts/upload-receipt! db {:user_id user-id
-                                               :storage_key storage_key
-                                               :bytes bytes
-                                               :original_filename original_filename
-                                               :content_type content_type
-                                               :file_size file_size})]
+          result (receipt-storage/upload-receipt! db {:user_id user-id
+                                                      :storage_key storage_key
+                                                      :bytes bytes
+                                                      :original_filename original_filename
+                                                      :content_type content-type
+                                                      :file_size file_size})]
       ;; If the receipt is a duplicate, delete the just-uploaded file so we don't
       ;; accumulate orphaned files under upload/stripes/.
       (when (:duplicate? result)

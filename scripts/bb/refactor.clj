@@ -31,8 +31,12 @@
 ;; Define rules as functions that take an old-ns and return new-ns or nil
 (defn rename-rule [old-ns path]
   (cond
-    ;; Admin: app.backend.services.admin -> app.admin.backend.services.admin
-    (str/starts-with? old-ns "app.backend.services.admin")
+    ;; Admin: app.backend.services.admin.* -> app.admin.backend.services.admin.*
+    ;; NOTE: The facade namespace `app.admin.backend.services.admin` was deleted.
+    ;; We still rename submodules (e.g. admin.users), but we avoid renaming the
+    ;; exact legacy root namespace because it would recreate the deleted facade.
+    (and (str/starts-with? old-ns "app.backend.services.admin")
+         (not= old-ns "app.backend.services.admin"))
     (str/replace-first old-ns "app.backend.services.admin" "app.admin.backend.services.admin")
 
     ;; Admin: app.backend.admin-setup -> app.admin.backend.setup

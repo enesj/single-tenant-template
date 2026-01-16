@@ -8,7 +8,7 @@
   We reconcile these into the shape expected by the receipts workflow and persist
   results + derived guesses."
   (:require
-    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
     [clojure.string :as str]
@@ -103,7 +103,7 @@
     (let [markdown-items (markdown/markdown->line-item-candidates markdown)
           {:keys [items changes]}
           (reduce
-            (fn [{:keys [items changes] :as acc} item]
+            (fn [acc item]
               (let [raw-label (:raw_label item)]
                 (cond
                   (markdown/label-present-in-markdown? markdown raw-label)
@@ -177,7 +177,7 @@
                            changed?
                            (assoc :reconciliation {:changes changes
                                                    :source :parsed_markdown}))]
-    (receipts/store-extraction-results!
+    (receipt-status/store-extraction-results!
       db
       receipt-id
       (merge {:raw_extract_json raw-extract-json
@@ -186,5 +186,5 @@
                               :total_amount_guess
                               :currency_guess
                               :purchased_at_guess])))
-    (receipts/update-status! db receipt-id status {:error_message nil :error_details nil})
+    (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
     {:receipt-id receipt-id :stage :extract :result :ok :status status}))

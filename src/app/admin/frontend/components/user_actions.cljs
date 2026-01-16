@@ -5,7 +5,7 @@
     [app.shared.field-metadata :as field-meta]
     [app.template.frontend.utils.id :as id-utils]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
-    [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui]]

@@ -135,7 +135,7 @@
           (is (:success body))
           (is (= "users" (name (:entity body))))))))
   
-  (testing "update-entity-setting supports underscore field names"
+  (testing "update-entity-setting rejects underscore field names"
     (let [db (h/mock-db)
           handler (settings/update-entity-setting-handler db)
           request (h/mock-admin-request :patch "/admin/api/settings/entity" mock-admin
@@ -145,7 +145,7 @@
       (with-redefs [settings-io/read-view-options (constantly mock-view-options)
                     settings-io/write-view-options! (fn [_] nil)]
         (let [response (handler request)]
-          (is (= 200 (:status response)))))))
+          (is (= 400 (:status response)))))))
   
   (testing "update-entity-setting returns error when fields missing"
     (let [db (h/mock-db)

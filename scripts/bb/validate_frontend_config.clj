@@ -2,7 +2,9 @@
 
 (ns validate-frontend-config
   (:require
-    [app.shared.frontend-config.core :as fc]))
+    [app.shared.frontend-config.discovery :as discovery]
+    [app.shared.frontend-config.schema :as schema]
+    [app.shared.frontend-config.validation :as validation]))
 
 (defn- die!
   [msg]
@@ -73,13 +75,13 @@
   [& args]
   (println "=== Validating frontend config EDNs ===")
   (let [{:keys [only skip allowlist-path schema-path]} (parse-args args)
-        schema (fc/models-index (or schema-path "resources/db/models.edn"))
-        bundles (fc/config-bundles {:only only :skip skip})]
+        schema-index (schema/models-index (or schema-path "resources/db/models.edn"))
+        bundles (discovery/config-bundles {:only only :skip skip})]
     (when (empty? bundles)
       (die! "No frontend config bundles found"))
-    (let [bundles* (fc/load-bundles bundles)
-          allowlist (when allowlist-path (fc/read-edn-file allowlist-path))
-          results (fc/validate-bundles bundles* schema allowlist)
+    (let [bundles* (discovery/load-bundles bundles)
+          allowlist (when allowlist-path (discovery/read-edn-file allowlist-path))
+          results (validation/validate-bundles bundles* schema-index allowlist)
           _ (doseq [res results]
               (print-result! (assoc res :label (result-label res))))
           invalid (filter (comp not :valid?) results)]

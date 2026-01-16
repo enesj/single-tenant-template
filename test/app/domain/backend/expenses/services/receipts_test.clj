@@ -1,7 +1,8 @@
 (ns app.domain.backend.expenses.services.receipts-test
   (:require
     [app.backend.fixtures :as fixtures]
-    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -35,7 +36,7 @@
                                         (reset! captured sql-params)
                                         {:ok true})]
         ;; Only raw_extract_json should be set.
-        (receipts/store-extraction-results! :db receipt-id {:raw_extract_json {:a 1}})
+        (receipt-status/store-extraction-results! :db receipt-id {:raw_extract_json {:a 1}})
         (let [[sql & _] @captured
               sql-lc (str/lower-case sql)]
           (is (str/includes? sql-lc "raw_extract_json"))
@@ -43,7 +44,7 @@
           (is (str/includes? sql-lc "jsonb")))
 
         ;; Currency should be cast to enum.
-        (receipts/store-extraction-results! :db receipt-id {:currency_guess "USD"})
+        (receipt-status/store-extraction-results! :db receipt-id {:currency_guess "USD"})
         (let [[sql & _] @captured
               sql-lc (str/lower-case sql)]
           (is (str/includes? sql-lc "currency_guess"))
@@ -56,7 +57,7 @@
     (with-redefs [jdbc/execute-one! (fn [_db sql-params _opts]
                                       (reset! captured sql-params)
                                       {:ok true})]
-      (receipts/claim-for-parsing! :db receipt-id {:lease-seconds 60})
+      (receipt-status/claim-for-parsing! :db receipt-id {:lease-seconds 60})
       (let [[sql & _] @captured]
         (is (str/includes? sql "NOW() - INTERVAL '60 seconds'"))))))
 
@@ -72,7 +73,7 @@
           items [{:raw_label "Line 1" :line_total "12.00"}]]
 
       (testing "valid review saves reviewed items and keeps total_amount_guess unchanged"
-        (let [updated (receipts/save-review!
+        (let [updated (receipt-approval/save-review!
                         db
                         receipt-id
                         {:supplier_id (:id supplier)
@@ -89,7 +90,7 @@
 
       (testing "invalid currency returns a 400 (no JDBC cast exception/500)"
         (try
-          (receipts/save-review!
+          (receipt-approval/save-review!
             db
             receipt-id
             {:supplier_id (:id supplier)

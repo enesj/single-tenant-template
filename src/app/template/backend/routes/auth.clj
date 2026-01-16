@@ -1,7 +1,7 @@
 (ns app.template.backend.routes.auth
   "Auth HTTP routes; keep request/response shape consistent."
   (:require
-    [app.template.shared.auth :as shared-auth]
+    [app.shared.auth :as shared-auth]
     [app.shared.data :as shared-data]
     [app.shared.date :as shared-date]
     [app.template.backend.auth.service :as auth-service]
@@ -158,10 +158,18 @@
     (let [;; Check for our new auth session first
           auth-session (get-in req [:session :auth-session])
 
+          legacy-oauth-token-format-enabled?
+          (get-in req [:service-container :config :legacy :oauth :token-format-enabled?] true)
+
           ;; Fall back to old OAuth tokens for backward compatibility
           session-tokens (get-in req [:session :ring.middleware.oauth2/access-tokens])
           req-tokens (get-in req [:ring.middleware.oauth2/access-tokens])
-          oauth-tokens (or session-tokens req-tokens)]
+          oauth-tokens-present? (boolean (or session-tokens req-tokens))
+          oauth-tokens (when legacy-oauth-token-format-enabled?
+                        (or session-tokens req-tokens))]
+
+      (when (and oauth-tokens-present? (not legacy-oauth-token-format-enabled?))
+        (log/warn "Legacy OAuth session tokens present but legacy token format support is disabled" {}))
 
       (cond
         ;; New session format (from our auth service)

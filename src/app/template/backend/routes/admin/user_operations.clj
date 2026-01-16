@@ -2,7 +2,8 @@
   "Admin advanced user operations handlers"
   (:require
    [app.template.backend.routes.admin.utils :as utils]
-   [app.admin.backend.services.admin :as admin-service]
+  [app.admin.backend.services.admin.users :as admin-users]
+  [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
    [app.shared.field-metadata :as field-meta]
    [clojure.string :as str]))
 
@@ -22,7 +23,7 @@
               (if-not (contains? allowed-roles role-str)
                 (utils/error-response "Invalid role value" :status 400 :details {:allowed (vec allowed-roles) :value role-str})
                 (do
-                  (admin-service/update-user-role! db user-id role-str (:id admin) ip-address user-agent)
+                  (admin-users/update-user-role! db user-id role-str (:id admin) ip-address user-agent)
 
                   (utils/log-admin-action "update_user_role" (:id admin)
                     "user" user-id {:role role-str})
@@ -38,7 +39,7 @@
       (utils/handle-uuid-request request :id
         (fn [user-id request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)]
-            (admin-service/force-verify-email! db user-id
+            (admin-users/force-verify-email! db user-id
               (:id admin)
               ip-address
               user-agent)
@@ -57,7 +58,7 @@
       (utils/handle-uuid-request request :id
         (fn [user-id request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-                result (admin-service/reset-user-password! db user-id
+                result (admin-users/reset-user-password! db user-id
                          (:id admin)
                          ip-address
                          user-agent)]
@@ -79,7 +80,7 @@
         (fn [user-id request]
           (let [params (:params request)
                 pagination (utils/extract-pagination-params params)
-                activity (admin-service/get-user-activity db user-id pagination)]
+                activity (admin-users/get-user-activity db user-id pagination)]
             (if (:error activity)
               (utils/json-response activity :status 500)
               (utils/json-response {:activity activity}))))))
@@ -93,7 +94,7 @@
       (let [user-id (utils/extract-uuid-param request :id)]
         (if user-id
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-                result (admin-service/create-user-impersonation-session! db user-id
+                result (admin-users-bulk/create-user-impersonation-session! db user-id
                          (:id admin)
                          ip-address
                          user-agent)]
@@ -122,7 +123,7 @@
                      :sort-by (:sort-by params)
                      :sort-order (when (:sort-order params)
                                    (keyword (:sort-order params)))}
-            users (admin-service/search-users-advanced db (merge filters pagination))]
+            users (admin-users/search-users-advanced db (merge filters pagination))]
         (utils/json-response {:users users})))
     "Failed to search users"))
 

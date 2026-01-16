@@ -11,6 +11,8 @@
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.shared.utils.db :as db-utils]
+    [app.template.frontend.shared.utils.entity :as entity-utils]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -33,10 +35,10 @@
         log*))))
 
 ;; Sync normalized audit logs into template entity store (data + ids)
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :audit-logs})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-audit-logs-to-template
    :entity-key :audit-logs
    :normalize-fn audit-log->template-entity
@@ -61,14 +63,14 @@
           selected-ids-path (paths/entity-selected-ids :audit-logs)
           ;; Seed only current-page and preserve existing pagination (including per-page) if present.
           ;; Per-page defaults are seeded by list-view from entities.edn (:display-settings :per-page).
-          db* (adapters.core/assoc-paths db
+          db* (db-utils/assoc-paths db
                 [[(conj metadata-path :sort) {:field :timestamp :direction :desc}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :timestamp :direction :desc}
                                  :pagination (merge {:current-page 1}
                                                (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])
-          fetch-config (adapters.core/maybe-fetch-config db)]
+          fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}
         fetch-config (assoc :dispatch-n [fetch-config])))))
 

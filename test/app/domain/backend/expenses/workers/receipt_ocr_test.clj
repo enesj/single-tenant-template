@@ -1,7 +1,8 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr-test
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
-    [app.domain.backend.expenses.services.receipts :as receipts]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as core]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
@@ -253,7 +254,7 @@
   (let [process-extract! #'core/process-extract!
         receipt-id (java.util.UUID/randomUUID)
         calls (atom {:claim 0 :ocr 0 :persist 0 :retry 0})]
-    (with-redefs [receipts/claim-for-extracting! (fn [_db _rid _opts]
+    (with-redefs [receipt-status/claim-for-extracting! (fn [_db _rid _opts]
                                                    (swap! calls update :claim inc)
                                                    true)
                   common/read-receipt-bytes! (fn [_receipt _opts]
@@ -266,7 +267,7 @@
                                                        (if (= 1 (:persist @calls))
                                                          {:receipt-id receipt-id :stage :extract :result :ok :status "review_required"}
                                                          {:receipt-id receipt-id :stage :extract :result :ok :status "extracted"}))
-                  receipts/retry-extraction! (fn [_db _rid]
+                  receipt-status/retry-extraction! (fn [_db _rid]
                                                (swap! calls update :retry inc)
                                                nil)]
       (let [res (process-extract! nil {:api-key "k"} {:id receipt-id :content_type "image/jpeg"} {:lease-seconds 900})]
@@ -280,9 +281,9 @@
   (let [process-batch! #'core/process-receipts-by-ids-batch!
         receipt-id (java.util.UUID/randomUUID)
         calls (atom {:persist 0 :retry 0 :process-extract 0})]
-    (with-redefs [receipts/get-receipt (fn [_db rid]
+    (with-redefs [receipt-queries/get-receipt (fn [_db rid]
                                          {:id rid :content_type "image/jpeg"})
-                  receipts/claim-for-extracting! (fn [_db _rid _opts] true)
+            receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
                   common/read-receipt-bytes! (fn [_receipt _opts]
                                                {:bytes (.getBytes "x")})
                   mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
@@ -290,7 +291,7 @@
                   extraction/persist-extract-result! (fn [_db rid _extract-result _opts]
                                                        (swap! calls update :persist inc)
                                                        {:receipt-id rid :stage :extract :result :ok :status "review_required"})
-                  receipts/retry-extraction! (fn [_db _rid]
+                  receipt-status/retry-extraction! (fn [_db _rid]
                                                (swap! calls update :retry inc)
                                                nil)
                   core/process-extract! (fn [_db _cfg _receipt opts]

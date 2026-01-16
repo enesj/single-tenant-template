@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.admin.adapters.specs
   (:require
-    [app.admin.frontend.adapters.core :as adapters.core]))
+    [app.template.frontend.shared.utils.entity :as entity-utils]))
 
 ;; =============================================================================
 ;; Entity Specs (fallbacks when UI config not yet loaded)
@@ -78,34 +78,34 @@
             {:id :qty :label "Qty" :type :number}]})
 
 ;; Register entity spec subscriptions with fallback values
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :expenses
    :value-fn (fn [spec _] (or spec expenses-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :expense-items
    :value-fn (fn [spec _] (or spec expense-items-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :receipts
    :value-fn (fn [spec _] (or spec receipts-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :suppliers
    :value-fn (fn [spec _] (or spec suppliers-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :payers
    :value-fn (fn [spec _] (or spec payers-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :articles
    :value-fn (fn [spec _] (or spec articles-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :article-aliases
    :value-fn (fn [spec _] (or spec article-aliases-entity-spec))})
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :price-observations
    :value-fn (fn [spec _] (or spec price-observations-entity-spec))})

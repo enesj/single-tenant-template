@@ -2,7 +2,9 @@
 
 (ns sync-frontend-config
   (:require
-    [app.shared.frontend-config.core :as fc]
+    [app.shared.frontend-config.discovery :as discovery]
+    [app.shared.frontend-config.schema :as schema]
+    [app.shared.frontend-config.sync :as sync]
     [rewrite-clj.zip :as z]))
 
 (defn- die!
@@ -93,13 +95,13 @@
   [& args]
   (println "=== Sync frontend config (dry-run by default) ===")
   (let [{:keys [only skip allowlist-path schema-path apply?]} (parse-args args)
-        schema (fc/models-index (or schema-path "resources/db/models.edn"))
-        bundles (fc/config-bundles {:only only :skip skip})]
+        schema-index (schema/models-index (or schema-path "resources/db/models.edn"))
+        bundles (discovery/config-bundles {:only only :skip skip})]
     (when (empty? bundles)
       (die! "No frontend config bundles found"))
-    (let [bundles* (fc/load-bundles bundles)
-          allowlist (when allowlist-path (fc/read-edn-file allowlist-path))
-          patches (fc/plan-sync bundles* schema allowlist)
+    (let [bundles* (discovery/load-bundles bundles)
+          allowlist (when allowlist-path (discovery/read-edn-file allowlist-path))
+          patches (sync/plan-sync bundles* schema-index allowlist)
           changes? (some :has-changes? patches)
           errors? (some (comp seq :unknown-entities) patches)
           _ (doseq [patch patches]

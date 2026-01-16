@@ -1,6 +1,6 @@
 (ns app.admin.frontend.pages.unified-settings.editors
   (:require
-    [app.admin.frontend.components.settings-views :as views]
+    [app.admin.frontend.components.settings-views.cards :as cards]
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.settings.definitions :as defs]
     [app.template.frontend.events.list.ui-state :as list-ui-events]
@@ -329,7 +329,7 @@
 (defui admin-entity-editor
   "Editor for a single admin entity's settings."
   [{:keys [entity-kw settings on-change on-display-settings-bulk]}]
-  ($ views/admin-entity-settings-card
+  ($ cards/admin-entity-settings-card
     {:entity-name entity-kw
      :settings settings
      :editing? true
@@ -346,7 +346,7 @@
         local-display-prefs (use-subscribe [::ui-subs/entity-display-prefs entity-kw])
         clear-local-display-prefs! (fn [entity-kw]
                                      (rf/dispatch [::list-ui-events/clear-display-prefs entity-kw]))]
-    ($ views/user-entity-settings-card
+    ($ cards/user-entity-settings-card
       {:entity-kw entity-kw
        :draft-defaults draft-defaults
        :draft-locks draft-locks

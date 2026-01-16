@@ -7,7 +7,7 @@
     [app.admin.frontend.pages.login :as login]
     [app.admin.frontend.pages.login-events :as login-events]
     [app.admin.frontend.pages.reset-password :as reset-password]
-    [app.admin.frontend.pages.unified-settings :as unified-settings]
+    [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
     [app.admin.frontend.pages.users :as users]
     [app.admin.frontend.pages.audit :as audit]
     [re-frame.core :as rf]))
@@ -92,24 +92,24 @@
          ;; Admin Settings (hardcoded display settings)
          ["/admin-settings"
           {:name :admin-admin-settings
-           :view unified-settings/admin-settings-page
+           :view unified-settings-page/admin-settings-page
            :controllers [(guarded-start nil)]}]
 
          ;; User Settings (domain-owned user UI config)
          ["/user-settings"
           {:name :admin-user-settings
-           :view unified-settings/user-settings-page
+           :view unified-settings-page/user-settings-page
            :controllers [(guarded-start nil)]}]
 
          ;; Legacy: /admin/settings -> /admin/admin-settings
          ["/settings"
           {:name :admin-settings-legacy
-           :view unified-settings/admin-settings-page
+           :view unified-settings-page/admin-settings-page
            :controllers [(guarded-start (fn [_] [[:admin/navigate-client "/admin/admin-settings"]]))]}]
 
          ;; Legacy typo: /admin/amin-settings -> /admin/admin-settings
          ["/amin-settings"
           {:name :admin-amin-settings-legacy
-           :view unified-settings/admin-settings-page
+           :view unified-settings-page/admin-settings-page
            :controllers [(guarded-start (fn [_] [[:admin/navigate-client "/admin/admin-settings"]]))]}]]]
     [["/admin" base-child-routes]]))

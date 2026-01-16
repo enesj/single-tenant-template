@@ -1,7 +1,8 @@
 (ns app.template.backend.middleware.admin
   "Admin auth middleware; update authentication checks here."
   (:require
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.audit :as admin-audit]
+    [app.admin.backend.services.admin.auth :as admin-auth]
     [app.template.backend.routes.admin.utils :as utils]
     [taoensso.timbre :as log]))
 
@@ -17,7 +18,7 @@
         :token-present (boolean token)
         :token-preview (when token (str (subs token 0 (min 8 (count token))) "...")))
       (if token
-        (if-let [admin-raw (admin-service/get-admin-by-session db token)]
+        (if-let [admin-raw (admin-auth/get-admin-by-session db token)]
           (let [;; Handle both namespaced and non-namespaced keys
                 admin {:id (or (:id admin-raw) (:admins/id admin-raw))
                        :email (or (:email admin-raw) (:admins/email admin-raw))
@@ -26,7 +27,7 @@
                        :status (or (:status admin-raw) (:admins/status admin-raw))}]
             (log/info "✅ ADMIN AUTH SUCCESS:" {:admin-id (:id admin) :admin-role (:role admin)})
             ;; Update session activity
-            (admin-service/update-session-activity! db token)
+            (admin-auth/update-session-activity! db token)
             ;; Add normalized admin info to request
             (handler (assoc request :admin admin)))
           (do
@@ -46,7 +47,7 @@
               (#{:post :put :patch :delete} (:request-method request))
               (<= 200 (:status response) 299))
         (try
-          (admin-service/log-audit! db
+          (admin-audit/log-audit! db
             {:admin_id (:id admin)
              :action (str (name (:request-method request)) " " (:uri request))
              :entity-type "admin_action"              ; Provide a default entity type

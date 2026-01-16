@@ -7,7 +7,7 @@
    - Webhook status"
   (:require
     [app.template.backend.routes.admin.integrations :as integrations]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.monitoring.integrations :as admin-integrations]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -81,7 +81,7 @@
     (let [db (h/mock-db)
           handler (integrations/get-integration-overview-handler db)
           request (h/mock-admin-request :get "/admin/api/integrations/overview" mock-admin {})]
-      (with-redefs [admin-service/get-integration-overview
+      (with-redefs [admin-integrations/get-integration-overview
                     (constantly mock-integration-overview)]
         (let [response (handler request)
               body (h/parse-response-body response)]
@@ -100,7 +100,7 @@
           handler (integrations/get-integration-performance-handler db)
           request (h/mock-admin-request :get "/admin/api/integrations/performance" mock-admin
                     {:params {:period "hour" :hours "24"}})]
-      (with-redefs [admin-service/get-integration-performance
+      (with-redefs [admin-integrations/get-integration-performance
                     (fn [_db opts]
                       (is (= :hour (:period opts)))
                       (is (= 24 (:hours opts)))
@@ -112,7 +112,7 @@
     (let [db (h/mock-db)
           handler (integrations/get-integration-performance-handler db)
           request (h/mock-admin-request :get "/admin/api/integrations/performance" mock-admin {})]
-      (with-redefs [admin-service/get-integration-performance
+      (with-redefs [admin-integrations/get-integration-performance
                     (fn [_db opts]
                       (is (= :hour (:period opts)))
                       mock-integration-performance)]
@@ -129,7 +129,7 @@
           handler (integrations/get-webhook-status-handler db)
           request (h/mock-admin-request :get "/admin/api/integrations/webhooks" mock-admin
                     {:params {:limit "50" :offset "0"}})]
-      (with-redefs [admin-service/get-webhook-status
+      (with-redefs [admin-integrations/get-webhook-status
                     (fn [_db pagination]
                       (is (= 50 (:limit pagination)))
                       mock-webhook-status)]

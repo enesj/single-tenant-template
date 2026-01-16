@@ -11,7 +11,7 @@
    - PUT  /admin/api/admins/:id/status - Update admin status"
   (:require
     [app.template.backend.routes.admin.utils :as utils]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.admins :as admin-admins]
     [app.template.backend.utils.adapters.database :as db-adapter]
     [taoensso.timbre :as log]))
 
@@ -29,8 +29,8 @@
             filters {:search (:search params)
                      :status (:status params)
                      :role (:role params)}
-            admins (admin-service/list-all-admins db (merge filters pagination))
-            total (admin-service/get-admin-count db filters)]
+            admins (admin-admins/list-all-admins db (merge filters pagination))
+            total (admin-admins/get-admin-count db filters)]
         (log/info "👥 Admin list-admins returned" (count admins) "admins"
           {:filters filters :pagination pagination})
         (let [converted-admins (-> admins
@@ -51,7 +51,7 @@
     (fn [request]
       (utils/handle-uuid-request request :id
         (fn [admin-id _request]
-          (if-let [admin (admin-service/get-admin-details db admin-id)]
+          (if-let [admin (admin-admins/get-admin-details db admin-id)]
             (let [converted-admin (-> admin
                                     db-adapter/convert-pg-objects
                                     db-adapter/convert-db-keys->app-keys)]
@@ -79,7 +79,7 @@
         (when-not (:password admin-data)
           (throw (ex-info "Password is required" {:status 400 :field :password})))
         
-        (let [created-admin (admin-service/create-admin-with-audit! db admin-data
+        (let [created-admin (admin-admins/create-admin! db admin-data
                               (:id admin)
                               ip-address
                               user-agent)]
@@ -104,7 +104,7 @@
     (fn [request]
       (utils/handle-uuid-body-request request :id
         (fn [admin-id updates context _request]
-          (let [updated-admin (admin-service/update-admin! db admin-id updates
+          (let [updated-admin (admin-admins/update-admin! db admin-id updates
                                 (-> context :admin :id)
                                 (:ip-address context)
                                 (:user-agent context))]
@@ -130,7 +130,7 @@
       (utils/handle-uuid-request request :id
         (fn [admin-id _request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-                result (admin-service/delete-admin! db admin-id
+                result (admin-admins/delete-admin! db admin-id
                          (:id admin)
                          ip-address
                          user-agent)]
@@ -162,7 +162,7 @@
               (throw (ex-info "Invalid role. Must be one of: admin, support, owner" 
                        {:status 400 :field :role :allowed ["admin" "support" "owner"]})))
             
-            (let [updated-admin (admin-service/update-admin-role! db admin-id new-role
+            (let [updated-admin (admin-admins/update-admin-role! db admin-id new-role
                                   (-> context :admin :id)
                                   (:ip-address context)
                                   (:user-agent context))]
@@ -195,7 +195,7 @@
               (throw (ex-info "Invalid status. Must be one of: active, suspended" 
                        {:status 400 :field :status :allowed ["active" "suspended"]})))
             
-            (let [updated-admin (admin-service/update-admin-status! db admin-id new-status
+            (let [updated-admin (admin-admins/update-admin-status! db admin-id new-status
                                   (-> context :admin :id)
                                   (:ip-address context)
                                   (:user-agent context))]

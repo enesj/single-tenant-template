@@ -3,7 +3,7 @@
   (:require
     [app.template.frontend.components.action-components :as shared-actions]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
-    [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui]]

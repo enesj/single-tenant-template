@@ -4,19 +4,21 @@
     [app.admin.frontend.adapters.core :as adapters.core]
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.shared.utils.db :as db-utils]
+    [app.template.frontend.shared.utils.entity :as entity-utils]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
 (defn admin->template-entity
   "Normalize admin data for the template entity store using shared adapter helpers."
   [admin]
-  (adapters.core/normalize-entity admin {:entity-ns :admins
-                                         :id-keys [:admins/id :id]}))
+  (entity-utils/normalize-entity admin {:entity-ns :admins
+                                        :id-keys [:admins/id :id]}))
 
-(adapters.core/register-entity-spec-sub!
+(entity-utils/register-entity-spec-sub!
   {:entity-key :admins})
 
-(adapters.core/register-sync-event!
+(entity-utils/register-sync-event!
   {:event-id ::sync-admins-to-template
    :entity-key :admins
    :normalize-fn admin->template-entity
@@ -79,14 +81,14 @@
     (let [metadata-path (paths/entity-metadata :admins)
           ui-state-path (paths/list-ui-state :admins)
           selected-ids-path (paths/entity-selected-ids :admins)
-          db* (adapters.core/assoc-paths db
+          db* (db-utils/assoc-paths db
                 [[(conj metadata-path :sort) {:field :created_at :direction :desc}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :created_at :direction :desc}
                                  :pagination (merge {:current-page 1}
                                                (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])
-          fetch-config (adapters.core/maybe-fetch-config db)]
+          fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}
         fetch-config (assoc :dispatch-n [fetch-config])))))
 

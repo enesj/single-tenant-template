@@ -10,7 +10,7 @@
    - Advanced user search"
   (:require
     [app.template.backend.routes.admin.user-operations :as user-ops]
-    [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.users :as admin-users]
     [app.backend.test-helpers :as h]
     [app.shared.field-metadata :as field-meta]
     [clojure.test :refer [deftest is testing use-fixtures]]))
@@ -87,7 +87,7 @@
                      :body {:role "premium"}})]
       (with-redefs [field-meta/get-enum-choices
                     (constantly ["user" "premium" "admin"])
-                    admin-service/update-user-role!
+                    admin-users/update-user-role!
                     (fn [_db user-id role _admin-id _ip _ua]
                       (is (= test-user-id user-id))
                       (is (= "premium" role))
@@ -127,7 +127,7 @@
           handler (user-ops/force-verify-email-handler db)
           request (h/mock-admin-request :post (str "/admin/api/users/verify-email/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-service/force-verify-email!
+      (with-redefs [admin-users/force-verify-email!
                     (fn [_db user-id _admin-id _ip _ua]
                       (is (= test-user-id user-id))
                       {:success true})]
@@ -146,7 +146,7 @@
           handler (user-ops/reset-user-password-handler db)
           request (h/mock-admin-request :post (str "/admin/api/users/reset-password/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-service/reset-user-password!
+      (with-redefs [admin-users/reset-user-password!
                     (fn [_db user-id _admin-id _ip _ua]
                       (is (= test-user-id user-id))
                       {:success true :temporary-password "TempPass123!"})]
@@ -160,7 +160,7 @@
           handler (user-ops/reset-user-password-handler db)
           request (h/mock-admin-request :post (str "/admin/api/users/reset-password/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-service/reset-user-password!
+      (with-redefs [admin-users/reset-user-password!
                     (fn [_db _user-id _admin-id _ip _ua]
                       {:success false :message "User not found"})]
         (let [response (handler request)]
@@ -176,7 +176,7 @@
           handler (user-ops/get-user-activity-handler db)
           request (h/mock-admin-request :get (str "/admin/api/users/activity/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-service/get-user-activity
+      (with-redefs [admin-users/get-user-activity
                     (fn [_db user-id _pagination]
                       (is (= test-user-id user-id))
                       [{:action "login" :timestamp "2025-01-01T00:00:00Z"}])]
@@ -195,7 +195,7 @@
           handler (user-ops/advanced-user-search-handler db)
           request (h/mock-admin-request :get "/admin/api/users/search" mock-admin
                     {:params {:search "test" :status "active" :role "user"}})]
-      (with-redefs [admin-service/search-users-advanced
+      (with-redefs [admin-users/search-users-advanced
                     (fn [_db filters]
                       (is (= "test" (:search filters)))
                       (is (= "active" (:status filters)))
@@ -210,7 +210,7 @@
           handler (user-ops/advanced-user-search-handler db)
           request (h/mock-admin-request :get "/admin/api/users/search" mock-admin
                     {:params {:limit "10" :offset "20"}})]
-      (with-redefs [admin-service/search-users-advanced
+      (with-redefs [admin-users/search-users-advanced
                     (fn [_db filters]
                       (is (= 10 (:limit filters)))
                       (is (= 20 (:offset filters)))

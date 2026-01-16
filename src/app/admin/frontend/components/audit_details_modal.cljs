@@ -1,7 +1,8 @@
 (ns app.admin.frontend.components.audit-details-modal
   "Audit log details modal component"
   (:require
-    [app.admin.frontend.components.shared-utils :as utils]
+    [app.admin.frontend.components.format :as fmt]
+    [app.admin.frontend.components.ui :as ui]
     [app.shared.date :as date]
     [app.template.frontend.components.modal :refer [modal]]
     [app.template.frontend.components.button :refer [button]]
@@ -16,8 +17,8 @@
 (defui audit-identity-block
   [{:keys [audit-log]}]
   (let [{:keys [action entity-type created-at timestamp admin-email admin-name ip-address]} audit-log
-        action-label (when action (utils/format-value action))
-        entity-label (when entity-type (utils/format-value entity-type))
+        action-label (when action (fmt/format-value action))
+        entity-label (when entity-type (fmt/format-value entity-type))
         timestamp-primary (when (or created-at timestamp)
                             (let [ts (or created-at timestamp)]
                               (if (string? ts)
@@ -89,7 +90,7 @@
 
       ;; Main Information Cards
       ($ :div {:class "grid lg:grid-cols-2 gap-6"}
-        ($ utils/detail-card
+        ($ ui/detail-card
           {:title "Basic Information"
            :fields [{:label "Audit ID" :value ($ :span {:class "font-mono text-sm"} id)}
                     {:label "Timestamp" :value (if (or created-at timestamp)
@@ -111,25 +112,25 @@
                                                                  :login "ds-badge-info"
                                                                  :logout "ds-badge-ghost"
                                                                  "ds-badge-neutral"))}
-                                              (utils/format-value action))}
+                                              (fmt/format-value action))}
                     {:label "Entity Type" :value (when entity-type
                                                    ($ :span {:class "ds-badge ds-badge-outline ds-badge-sm"} entity-type))}
                     {:label "Entity ID" :value (when entity-id
                                                  ($ :span {:class "font-mono text-sm"} entity-id))}]})
-        ($ utils/detail-card
+        ($ ui/detail-card
           {:title "Administrative Information"
            :fields [{:label "Admin Email" :value ($ :div {:class "flex flex-col"}
                                                    ($ :span {:class "font-medium"} admin-email)
                                                    (when admin-name
                                                      ($ :span {:class "text-sm text-base-content/60"} admin-name)))}
-                    {:label "IP Address" :value (utils/ip-address-badge ip-address)}
+                    {:label "IP Address" :value (ui/ip-address-badge ip-address)}
                     {:label "User Agent" :value ($ :div {:class "text-sm text-base-content/70 max-w-xs break-words"}
                                                   (or user-agent "Unknown"))}]}))
 
       ;; Enhanced Data Changes Section - full width
       (when changes
         (js/console.log "Rendering changes section with data:" changes)
-        ($ utils/detail-card
+        ($ ui/detail-card
           {:title "Data Changes"
            :fields [{:label "Changes"
                      :value ($ :div {:class "relative bg-base-100 border border-base-300 rounded-lg p-4 my-2"}
@@ -242,7 +243,7 @@
             audit-id (when (present? id) id)
             action-str (when (present? action) (str action))
             action-key (when action-str (keyword action-str))
-            action-label (when (present? action) (utils/format-value action))
+            action-label (when (present? action) (fmt/format-value action))
             action-badge (when action-label
                            ($ :span {:class (str "ds-badge ds-badge-lg "
                                               (case action-key
@@ -290,7 +291,7 @@
             header-right (->> [action-badge close-button]
                            (keep identity)
                            (into []))
-            header ($ utils/detail-modal-header
+                header ($ ui/detail-modal-header
                      {:title "Audit Log Details"
                       :subtitle header-subtitle
                       :icon ($ :span {:class "text-lg font-semibold text-primary"}

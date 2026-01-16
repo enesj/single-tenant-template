@@ -2,7 +2,7 @@
   (:require
     [app.admin.frontend.components.layout :as layout]
     [app.admin.frontend.components.settings-shell :as shell]
-    [app.admin.frontend.components.settings-views :as views]
+    [app.admin.frontend.components.settings-views.cards :as cards]
     [app.admin.frontend.events.settings :as admin-settings-events]
     [app.admin.frontend.events.unified-settings :as unified-events]
     [app.admin.frontend.events.user-settings :as user-settings-events]
@@ -94,7 +94,7 @@
 
               "table-columns"
               ($ :<>
-                ($ views/columns-policy-card
+                ($ cards/columns-policy-card
                   {:entity-kw selected-entity
                    :table-config (get table-columns-config selected-entity)
                    :column-defaults (:column-defaults settings)
@@ -216,7 +216,7 @@
 
               "table-columns"
               ($ :<>
-                ($ views/columns-policy-card
+                ($ cards/columns-policy-card
                   {:entity-kw selected-entity
                    :table-config table-config
                    :column-defaults (:column-defaults view-options)

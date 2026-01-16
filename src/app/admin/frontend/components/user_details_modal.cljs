@@ -1,7 +1,8 @@
 (ns app.admin.frontend.components.user-details-modal
   "Rich user details modal built on the shared template modal component."
   (:require
-    [app.admin.frontend.components.shared-utils :as utils]
+    [app.admin.frontend.components.format :as fmt]
+    [app.admin.frontend.components.ui :as ui]
     [app.shared.date :as date]
     [app.template.frontend.components.modal :refer [modal]]
     [app.template.frontend.components.cards :refer [quick-actions-card]]
@@ -21,12 +22,12 @@
         display-name (or (when (present? full-name) full-name)
                        (when (present? email) email)
                        "Unknown user")
-        initials (utils/user-initials full-name email)
+        initials (fmt/user-initials full-name email)
         status-badge (when (present? status)
-                       (utils/status-badge status {:capitalize? true}))
+                       (ui/status-badge status {:capitalize? true}))
         role-badge (when (present? role)
-                     (utils/role-badge role))
-        verification-badge (utils/verification-badge email-verified email-verification-status)
+                     (ui/role-badge role))
+        verification-badge (ui/verification-badge email-verified email-verification-status)
         summary-text (->> [(when (present? display-name) display-name)
                            (when (present? role) (str " · " (-> role str (str/replace "-" " ") str/capitalize)))
                            (when (present? status) (str " · Status: " (-> status str (str/replace "-" " ") str/capitalize)))]
@@ -106,22 +107,22 @@
           ($ :span error)))
       ($ user-identity-block {:user user})
       ($ :div {:class "grid lg:grid-cols-2 gap-4"}
-        ($ utils/detail-card
+        ($ ui/detail-card
           {:title "Account"
            :fields [{:label "Name" :value full-name}
                     {:label "Email" :value ($ :span {:class "ds-badge ds-badge-outline"} (or email "—"))}
                     {:label "User ID" :value id}
-                    {:label "Role" :value (utils/role-badge role)}
-                    {:label "Status" :value (utils/status-badge status)}
+                    {:label "Role" :value (ui/role-badge role)}
+                    {:label "Status" :value (ui/status-badge status)}
                     {:label "Last login" :value (date/format-display-date last-login)}]})
-        ($ utils/detail-card
+        ($ ui/detail-card
           {:title "Verification"
-           :fields [{:label "Email Status" :value (utils/verification-badge email-verified email-verification-status)}
+           :fields [{:label "Email Status" :value (ui/verification-badge email-verified email-verification-status)}
                     {:label "Account Created" :value (date/format-display-date created-at)}
                     {:label "Last Updated" :value (date/format-display-date updated-at)}]}))
-      ($ utils/detail-card
+      ($ ui/detail-card
         {:title "Tenant"
-         :fields [{:label "Organization" :value (utils/tenant-label tenant-name tenant-slug)}]})
+         :fields [{:label "Organization" :value (fmt/tenant-label tenant-name tenant-slug)}]})
       ($ user-actions-card {:user user}))))
 
 (defui user-details-modal
@@ -139,12 +140,12 @@
                          (and (string? value) (str/blank? value)) false
                          :else true))
             {:keys [email full-name]} (or user {})
-            initials (utils/user-initials full-name email)
+                initials (fmt/user-initials full-name email)
             header-subtitle (cond
                               (present? email) email
                               loading? "Loading user information…"
                               :else "User profile overview")
-            header ($ utils/detail-modal-header
+                header ($ ui/detail-modal-header
                      {:title "User Details"
                       :subtitle header-subtitle
                       :icon ($ :span {:class "text-lg font-semibold text-primary"}

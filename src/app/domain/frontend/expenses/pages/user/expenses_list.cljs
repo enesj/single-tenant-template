@@ -7,7 +7,7 @@
                                                                        user-expense-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
-    [app.template.frontend.components.dropdown :as dropdown]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon view-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.utils.id :as id-utils]

@@ -94,7 +94,7 @@
   {:entity-key :receipt
    :entity-plural :receipts
    :route-segment "receipts"
-   :service 'app.domain.backend.expenses.services.receipts
+  :service 'app.domain.backend.expenses.services.receipts.queries
    :default-limit 50
    :default-order-by "receipt_date"
    :required-fields [:file_url]

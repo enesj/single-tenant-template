@@ -10,7 +10,7 @@
    - Role and status management"
   (:require
    [app.template.backend.routes.admin.admins :as admins]
-   [app.admin.backend.services.admin :as admin-service]
+    [app.admin.backend.services.admin.admins :as admin-admins]
    [app.backend.test-helpers :as h]
    [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -55,8 +55,8 @@
     (let [db (h/mock-db)
           handler (admins/list-admins-handler db)
           request (h/mock-admin-request :get "/admin/api/admins" mock-admin {})]
-      (with-redefs [admin-service/list-all-admins (constantly mock-admin-list)
-                    admin-service/get-admin-count (constantly 2)]
+      (with-redefs [admin-admins/list-all-admins (constantly mock-admin-list)
+              admin-admins/get-admin-count (constantly 2)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -68,12 +68,12 @@
           handler (admins/list-admins-handler db)
           request (h/mock-admin-request :get "/admin/api/admins" mock-admin
                     {:params {:limit "10" :offset "0"}})]
-      (with-redefs [admin-service/list-all-admins 
+      (with-redefs [admin-admins/list-all-admins
                     (fn [_db opts]
                       (is (= 10 (:limit opts)))
                       (is (= 0 (:offset opts)))
                       mock-admin-list)
-                    admin-service/get-admin-count (constantly 2)]
+                    admin-admins/get-admin-count (constantly 2)]
         (let [response (handler request)]
           (is (= 200 (:status response)))))))
   
@@ -82,11 +82,11 @@
           handler (admins/list-admins-handler db)
           request (h/mock-admin-request :get "/admin/api/admins" mock-admin
                     {:params {:search "admin1"}})]
-      (with-redefs [admin-service/list-all-admins 
+      (with-redefs [admin-admins/list-all-admins
                     (fn [_db opts]
                       (is (= "admin1" (:search opts)))
                       [(first mock-admin-list)])
-                    admin-service/get-admin-count (constantly 1)]
+                    admin-admins/get-admin-count (constantly 1)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -102,7 +102,7 @@
           handler (admins/get-admin-details-handler db)
           request (h/mock-admin-request :get (str "/admin/api/admins/" test-admin-id) mock-admin
                     {:path-params {:id (str test-admin-id)}})]
-      (with-redefs [admin-service/get-admin-details (constantly mock-admin)]
+      (with-redefs [admin-admins/get-admin-details (constantly mock-admin)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -113,7 +113,7 @@
           handler (admins/get-admin-details-handler db)
           request (h/mock-admin-request :get "/admin/api/admins/nonexistent" mock-admin
                     {:path-params {:id (str (h/random-uuid))}})]
-      (with-redefs [admin-service/get-admin-details (constantly nil)]
+      (with-redefs [admin-admins/get-admin-details (constantly nil)]
         (let [response (handler request)]
           (is (= 404 (:status response))))))))
 
@@ -132,7 +132,7 @@
           created-admin (assoc new-admin-data :id (h/random-uuid))
           request (h/mock-admin-request :post "/admin/api/admins" mock-admin
                     {:body new-admin-data})]
-      (with-redefs [admin-service/create-admin-with-audit! (constantly created-admin)]
+      (with-redefs [admin-admins/create-admin! (constantly created-admin)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 201 (:status response)))
@@ -166,7 +166,7 @@
           request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id) mock-admin
                     {:path-params {:id (str test-admin-id)}
                      :body {:full_name "Updated Name"}})]
-      (with-redefs [admin-service/update-admin! (constantly updated-admin)]
+      (with-redefs [admin-admins/update-admin! (constantly updated-admin)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -182,7 +182,7 @@
           handler (admins/delete-admin-handler db)
           request (h/mock-admin-request :delete (str "/admin/api/admins/" test-admin-id) mock-admin
                     {:path-params {:id (str test-admin-id)}})]
-      (with-redefs [admin-service/delete-admin! (constantly {:success true :message "Admin deleted"})]
+      (with-redefs [admin-admins/delete-admin! (constantly {:success true :message "Admin deleted"})]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -193,7 +193,7 @@
           handler (admins/delete-admin-handler db)
           request (h/mock-admin-request :delete "/admin/api/admins/123" mock-admin
                     {:path-params {:id (str (h/random-uuid))}})]
-      (with-redefs [admin-service/delete-admin! (constantly {:success false :message "Cannot delete admin"})]
+      (with-redefs [admin-admins/delete-admin! (constantly {:success false :message "Cannot delete admin"})]
         (let [response (handler request)]
           (is (= 400 (:status response))))))))
 
@@ -209,7 +209,7 @@
           request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id "/role") mock-admin
                     {:path-params {:id (str test-admin-id)}
                      :body {:role "support"}})]
-      (with-redefs [admin-service/update-admin-role! (constantly updated-admin)]
+      (with-redefs [admin-admins/update-admin-role! (constantly updated-admin)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -245,7 +245,7 @@
           request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id "/status") mock-admin
                     {:path-params {:id (str test-admin-id)}
                      :body {:status "suspended"}})]
-      (with-redefs [admin-service/update-admin-status! (constantly updated-admin)]
+      (with-redefs [admin-admins/update-admin-status! (constantly updated-admin)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
