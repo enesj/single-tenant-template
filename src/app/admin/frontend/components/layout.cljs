@@ -80,7 +80,7 @@
 (defui admin-header []
   (let [current-user (use-subscribe [:admin/current-user])
         current-role (use-subscribe [:admin/current-user-role])
-        admin-name (or (:full_name current-user) (:full-name current-user))
+        admin-name (:full-name current-user)
         admin-email (:email current-user)
         role-str (when current-role (name current-role))
         display-name (if admin-name
