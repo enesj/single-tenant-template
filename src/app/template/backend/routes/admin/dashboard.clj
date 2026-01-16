@@ -20,10 +20,10 @@
             ;; Get current admin info from request (set by auth middleware)
             admin (:admin request)
             admin-info (when admin
-                         {:id (or (:id admin) (:admins/id admin))
-                          :email (or (:email admin) (:admins/email admin))
-                          :full_name (or (:full_name admin) (:admins/full_name admin))
-                          :role (or (:role admin) (:admins/role admin))})]
+                         {:id (:id admin)
+                          :email (:email admin)
+                          :full_name (:full_name admin)
+                          :role (:role admin)})]
         (utils/json-response (cond-> converted-stats
                                admin-info (assoc :current-admin admin-info)))))
     "Failed to retrieve dashboard statistics"))
