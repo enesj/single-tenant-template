@@ -11,10 +11,8 @@
   (utils/with-error-handling
     (fn [request]
       (let [{:keys [email password]} (:body request)
-        {:keys [ip-address user-agent]} (utils/extract-request-context request)
-        legacy-sha256-enabled?
-        (get-in request [:service-container :config :legacy :passwords :sha256-enabled?] true)]
-        (if-let [admin (admin-auth/authenticate-admin db email password {:legacy-sha256-enabled? legacy-sha256-enabled?})]
+        {:keys [ip-address user-agent]} (utils/extract-request-context request)]
+        (if-let [admin (admin-auth/authenticate-admin db email password)]
           (let [admin-id (:id admin)
             admin-email (:email admin)
             admin-name (:full_name admin)

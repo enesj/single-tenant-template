@@ -2,12 +2,11 @@
   "Admin auth orchestration; bridge auth service to routes."
   (:require
     [app.shared.type-conversion :as tc]
-    [buddy.core.codecs :as codecs]
-    [buddy.core.hash :as hash]
     [buddy.hashers :as hashers]
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log])
   (:import
     [java.util UUID]))
@@ -40,13 +39,6 @@
     (hashers/check password password-hash)
     (catch Exception _ false)))
 
-(defn verify-sha256-password
-  "Verify password using SHA-256 (legacy support)."
-  [password password-hash]
-  (= (-> (hash/sha256 password)
-       codecs/bytes->hex)
-    password-hash))
-
 ;; ============================================================================
 ;; Admin User Management
 ;; ============================================================================
@@ -57,7 +49,8 @@
   (jdbc/execute-one! db
     (hsql/format {:select [:*]
                   :from [:admins]
-                  :where [:= :email email]})))
+                  :where [:= :email email]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn find-admin-by-id
   "Find an admin by id"
@@ -65,7 +58,8 @@
   (jdbc/execute-one! db
     (hsql/format {:select [:*]
                   :from [:admins]
-                  :where [:= :id admin-id]})))
+                  :where [:= :id admin-id]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn create-admin!
   "Creates a new admin user with hashed password"
@@ -83,64 +77,25 @@
                                    :created_at now
                                    :updated_at now}]}))))
 
-(defn migrate-admin-password!
-  "Helper function to migrate an admin's password from SHA-256 to bcrypt.
-   Should be called after successful login with old hash to upgrade security."
-  [db admin-id password]
-  (let [new-hash (hash-password password)
-        now (time/instant)]
-    (jdbc/execute-one! db
-      (hsql/format {:update :admins
-                    :set {:password_hash new-hash
-                          :updated_at now}
-                    :where [:= :id admin-id]}))
-    (log/info "Migrated admin password to bcrypt" {:admin-id admin-id})
-    true))
 
 ;; ============================================================================
 ;; Authentication
 ;; ============================================================================
 
 (defn authenticate-admin
-  "Authenticate an admin with email and password.
-   Automatically migrates from SHA-256 to bcrypt when old format is detected."
-  ([db email password]
-   (authenticate-admin db email password {:legacy-sha256-enabled? true}))
-  ([db email password {:keys [legacy-sha256-enabled?]
-                       :or {legacy-sha256-enabled? true}}]
-   (some-> (find-admin-by-email db email)
-     (as-> admin
-       (when (= (str (:status admin)) "active")
-         (let [password-hash (:password_hash admin)
-               admin-id (:id admin)]
-           (cond
-             ;; Try bcrypt verification first (new secure format)
-             (verify-bcrypt-password password password-hash)
-             (do
-               (log/info "Admin authentication successful" {:email email})
-               (dissoc admin :password_hash))
-
-             ;; Fallback to SHA-256 for backwards compatibility (flagged)
-             (and legacy-sha256-enabled?
-               (verify-sha256-password password password-hash))
-             (do
-               ;; Automatically migrate to bcrypt
-               (log/warn "Admin login used legacy SHA-256 password hash; migrating to bcrypt"
-                 {:email email})
-               (migrate-admin-password! db admin-id password)
-               (dissoc admin :password_hash))
-
-             (and (not legacy-sha256-enabled?)
-               (verify-sha256-password password password-hash))
-             (do
-               (log/warn "Admin login attempted with legacy SHA-256 password hash, but legacy support is disabled"
-                 {:email email})
-               nil)
-
-             :else
-             (do
-               (log/warn "Admin authentication failed - invalid password" {:email email})
-               nil))))))))
+  "Authenticate an admin with email and password."
+  [db email password]
+  (some-> (find-admin-by-email db email)
+    (as-> admin
+      (when (= (str (:status admin)) "active")
+        (let [password-hash (:password_hash admin)]
+          (if (verify-bcrypt-password password password-hash)
+            (do
+              (log/info "Admin authentication successful" {:email email})
+              (dissoc admin :password_hash))
+            (do
+              (log/warn "Admin authentication failed - invalid password" {:email email})
+              nil)))))))
 
 ;; ============================================================================
 ;; Session Management (DB-backed)
@@ -162,7 +117,8 @@
                               :last_activity now
                               :expires_at expires-at
                               :ip_address ip-address
-                              :user_agent user-agent}]}))
+                              :user_agent user-agent}]})
+      {:builder-fn rs/as-unqualified-lower-maps})
     {:id session-id
      :token token
      :expires_at expires-at}))
@@ -176,7 +132,8 @@
                                 :from [:admin_sessions]
                                 :where [:and
                                         [:= :token token]
-                                        [:> :expires_at now]]}))]
+                  [:> :expires_at now]]})
+        {:builder-fn rs/as-unqualified-lower-maps})]
     (when session
     (find-admin-by-id db (:admin_id session)))))
 
@@ -186,21 +143,24 @@
   (jdbc/execute-one! db
     (hsql/format {:update :admin_sessions
                   :set {:last_activity (time/instant)}
-                  :where [:= :token token]})))
+                  :where [:= :token token]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn invalidate-session!
   "Invalidate an admin session"
   [db token]
   (jdbc/execute-one! db
     (hsql/format {:delete-from :admin_sessions
-                  :where [:= :token token]})))
+                  :where [:= :token token]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn invalidate-all-admin-sessions!
   "Invalidate all sessions for an admin"
   [db admin-id]
   (jdbc/execute-one! db
     (hsql/format {:delete-from :admin_sessions
-                  :where [:= :admin_id admin-id]})))
+                  :where [:= :admin_id admin-id]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn count-active-sessions
   "Return number of non-expired admin sessions."
@@ -210,7 +170,8 @@
           row (jdbc/execute-one! db
                 (hsql/format {:select [[[:count :*] :count]]
                               :from [:admin_sessions]
-                              :where [:> :expires_at now]}))]
+                              :where [:> :expires_at now]})
+                {:builder-fn rs/as-unqualified-lower-maps})]
       (or (:count row) 0))
     (catch Exception e
       (log/warn e "Failed to count active admin sessions")
