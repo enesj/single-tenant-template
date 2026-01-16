@@ -22,12 +22,10 @@
   archiving? (use-subscribe [:expenses/supplier-archive-loading?])
         expenses (use-subscribe [:expenses/entries])
         aliases (use-subscribe [:expenses/article-aliases])
-  observations (use-subscribe [:expenses/price-observations])
-  archived-at (or (some-> supplier :archived_at)
-          (some-> supplier :suppliers/archived_at)
-          (some-> supplier :archived-at))
-  archived? (some? archived-at)
-  supplier-id-str (some-> supplier-id str)]
+    observations (use-subscribe [:expenses/price-observations])
+    archived-at (some-> supplier :archived-at)
+    archived? (some? archived-at)
+    supplier-id-str (some-> supplier-id str)]
     (use-effect
       (fn []
         (when supplier-id
