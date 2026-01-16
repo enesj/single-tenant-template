@@ -296,9 +296,9 @@
     "Failed to trigger OCR"))
 
 (defn- parse-receipt-ids
-  "Parse receipt_ids from request body. Accepts :receipt_ids or :receipt-ids."
+  "Parse receipt_ids from request body. Accepts :receipt_ids."
   [body]
-  (let [ids (or (:receipt_ids body) (:receipt-ids body))]
+  (let [ids (:receipt_ids body)]
     (when (sequential? ids)
       (->> ids
         (map utils/parse-uuid-custom)
