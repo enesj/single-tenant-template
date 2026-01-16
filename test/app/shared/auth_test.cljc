@@ -62,11 +62,10 @@
 (deftest auth-status-test
   (testing "get-auth-status returns a stable shape"
     (let [auth-session {:user {:id "u1" :role "member"}
-                        :tenant {:id "t1"}
-                        :permissions #{:p1}}
-          status (auth/get-auth-status auth-session {:token "x"} nil)]
+              :tenant {:id "t1"}
+              :permissions #{:p1}}
+        status (auth/get-auth-status auth-session)]
       (is (true? (:authenticated status)))
       (is (= {:id "u1" :role "member"} (:user status)))
       (is (= {:id "t1"} (:tenant status)))
-      (is (= #{:p1} (:permissions status)))
-      (is (= {:token "x"} (:tokens status))))))
+      (is (= #{:p1} (:permissions status))))))

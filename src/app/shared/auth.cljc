@@ -137,16 +137,15 @@
   "Normalize auth/session state into a stable, portable shape.
 
   This is intentionally lightweight (data-only). Callers may attach extra
-  fields (e.g. :provider, :tokens) as needed."
+  fields (e.g. :provider) as needed."
   ([auth-session] (get-auth-status auth-session nil nil))
-  ([auth-session oauth-tokens _get-user-info]
+  ([auth-session _oauth-tokens _get-user-info]
    (let [user (:user auth-session)
          tenant (:tenant auth-session)
          permissions (:permissions auth-session)]
      {:authenticated (boolean user)
       :session-valid true
       :provider (:provider auth-session)
-      :tokens oauth-tokens
       :user user
       :tenant tenant
       :permissions permissions})))
