@@ -101,7 +101,7 @@
   [items]
   (when (sequential? items)
     (let [totals (keep (fn [item]
-                         (parse-money (or (:line_total item) (:line-total item))))
+                         (parse-money (:line-total item)))
                    items)]
       (when (seq totals)
         (reduce + 0M totals)))))

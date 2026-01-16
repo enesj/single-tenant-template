@@ -70,7 +70,7 @@
           _receipt (insert-receipt! db {:id receipt-id
                                         :status "review_required"
                                         :total-amount-guess "10.00"})
-          items [{:raw_label "Line 1" :line_total "12.00"}]]
+          items [{:raw_label "Line 1" :line-total "12.00"}]]
 
       (testing "valid review saves reviewed items and keeps total_amount_guess unchanged"
         (let [updated (receipt-approval/save-review!
