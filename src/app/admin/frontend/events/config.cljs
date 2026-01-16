@@ -5,10 +5,7 @@
    ==============================
    Column visibility is now persisted via the unified ui-entity-prefs system:
    - [:ui :entity-prefs <entity> :columns :visible-order]  Vector for ordering
-   - [:ui :entity-prefs <entity> :columns :visible]        Map for quick lookup
-   
-   Legacy localStorage keys (column-visibility-<entity>) are migrated on load
-   via the persistence interceptor."
+  - [:ui :entity-prefs <entity> :columns :visible]        Map for quick lookup"
   (:require
     [app.admin.frontend.config.loader :as config-loader]
     [app.shared.model-naming :as model-naming]
@@ -99,19 +96,6 @@
 ;; Reset to default columns
 
 ;; =============================================================================
-;; LocalStorage Persistence (legacy effect handlers)
-;; =============================================================================
-(rf/reg-fx
- ::save-to-local-storage
-  (fn [{:keys [key value]}]
-    (js/localStorage.setItem key (js/JSON.stringify (clj->js value)))))
-
-(rf/reg-fx
- ::remove-from-local-storage
-  (fn [{:keys [key]}]
-    (js/localStorage.removeItem key)))
-
-;; =============================================================================
 ;; Fixed Configuration Loading Events
 ;; =============================================================================
 
@@ -144,10 +128,8 @@
                        (assoc :last-started-at now-ts)
                        (assoc :last-requested-at now-ts)
                        (dissoc :last-error))))
-             :fx [[:dispatch [::async-load-configs]]
-                  [:dispatch [::load-entity-configs]]
-                  ;; Trigger migration of legacy column visibility settings
-                  [:dispatch [::persistence/migrate-all-legacy-column-visibility]]]}))))))
+               :fx [[:dispatch [::async-load-configs]]
+                 [:dispatch [::load-entity-configs]]]}))))))
 
 (rf/reg-event-fx
   ::load-entity-configs
