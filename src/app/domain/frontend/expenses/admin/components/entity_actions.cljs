@@ -40,9 +40,7 @@
     (when suppliers
       (let [item-id (id-utils/extract-entity-id suppliers)
             supplier-id-str (some-> item-id str)
-            archived? (some? (or (:archived_at suppliers)
-                                (:suppliers/archived_at suppliers)
-                                (:archived-at suppliers)))
+            archived? (some? (:archived-at suppliers))
             can-purge? (and archived?
                            (contains? #{:admin :owner} current-admin-role))
             actions (cond-> (view-detail-actions "suppliers" suppliers)
