@@ -99,42 +99,46 @@
 ;; Data Export
 ;; ============================================================================
 
+(def ^:private export-user-config
+  "Normalization config for user export rows."
+  {:prefixes ["users-" "user-"]
+   :namespaces #{"users" "user" "u"}
+   :id-fields #{:id}})
+
+(defn- export-users-query
+  [user-ids]
+  (cond-> {:select [:u.id :u.email :u.full_name :u.role :u.status
+                    :u.email_verified :u.auth_provider :u.created_at :u.last_login_at
+                    [:t.name :tenant_name] [:t.slug :tenant_slug]]
+           :from [[:users :u]]
+           :join [[:tenants :t] [:= :u.tenant_id :t.id]]
+           :order-by [[:u.created_at :desc]]}
+    (seq user-ids) (assoc :where [:in :u.id user-ids])
+    (not (seq user-ids)) (assoc :limit 10000)))
+
 (defn export-users-csv
   "Export users data as CSV"
   [db user-ids]
   (try
-    (let [users (if (seq user-ids)
-                  (jdbc/execute! db
-                    (hsql/format {:select [:u.id :u.email :u.full_name :u.role :u.status
-                                           :u.email_verified :u.auth_provider :u.created_at :u.last_login_at
-                                           [:t.name :tenant_name] [:t.slug :tenant_slug]]
-                                  :from [[:users :u]]
-                                  :join [[:tenants :t] [:= :u.tenant_id :t.id]]
-                                  :where [:in :u.id user-ids]
-                                  :order-by [[:u.created_at :desc]]}))
-                  (jdbc/execute! db
-                    (hsql/format {:select [:u.id :u.email :u.full_name :u.role :u.status
-                                           :u.email_verified :u.auth_provider :u.created_at :u.last_login_at
-                                           [:t.name :tenant_name] [:t.slug :tenant_slug]]
-                                  :from [[:users :u]]
-                                  :join [[:tenants :t] [:= :u.tenant_id :t.id]]
-                                  :order-by [[:u.created_at :desc]]
-                                  :limit 10000}))) ;; Reasonable limit
+    (let [users (db-adapter/execute-admin-query
+                  db
+                  (export-users-query user-ids)
+                  export-user-config)
 
           ;; Convert to CSV format
           csv-headers "ID,Email,Full Name,Role,Status,Email Verified,Auth Provider,Created At,Last Login,Tenant Name,Tenant Slug"
           csv-rows (map (fn [user]
                           (str (:id user) ","
                             (or (:email user) "") ","
-                            (or (:full_name user) "") ","
+                            (or (:full-name user) "") ","
                             (or (:role user) "") ","
                             (or (:status user) "") ","
-                            (if (:email_verified user) "Yes" "No") ","
-                            (or (:auth_provider user) "") ","
-                            (or (:created_at user) "") ","
-                            (or (:last_login_at user) "") ","
-                            (or (:tenant_name user) "") ","
-                            (or (:tenant_slug user) ""))) users)
+                            (if (:email-verified user) "Yes" "No") ","
+                            (or (:auth-provider user) "") ","
+                            (or (:created-at user) "") ","
+                            (or (:last-login-at user) "") ","
+                            (or (:tenant-name user) "") ","
+                            (or (:tenant-slug user) ""))) users)
           csv-content (str csv-headers "\n" (str/join "\n" csv-rows))]
 
       {:success true
