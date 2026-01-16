@@ -148,10 +148,10 @@
           (let [role (h/get-user-role request)
                 qp (:query-params request)
                 status (parse-status-param (or (:status qp) (get qp "status")))
-                opts {:status status
+                    opts {:status status
                       :limit (parse-long-param qp :limit 50)
                       :offset (parse-long-param qp :offset 0)
-                      :order-dir (keyword (or (:order_dir qp) (:order-dir qp) "desc"))}
+                      :order-dir (keyword (or (:order_dir qp) "desc"))}
                 rows (if (= "admin" role)
                        (receipt-queries/list-receipts db opts)
                        (receipt-queries/list-user-receipts db user-id opts))]
@@ -377,9 +377,9 @@
     "Failed to trigger OCR"))
 
 (defn- parse-receipt-ids-from-body
-  "Parse receipt_ids from request body. Accepts :receipt_ids or :receipt-ids."
+  "Parse receipt_ids from request body."
   [body]
-  (let [ids (or (:receipt_ids body) (:receipt-ids body))]
+  (let [ids (:receipt_ids body)]
     (when (sequential? ids)
       (->> ids
         (map try-parse-uuid)
