@@ -4,6 +4,7 @@
     [app.template.backend.auth.email-verification :as email-verification]
     [cheshire.core :as json]
     [clj-http.client :as http]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 (def postmark-api-url "https://api.postmarkapp.com/email")
@@ -11,10 +12,11 @@
 (defn create-verification-email-body
   "Create HTML email body for verification email"
   [user token base-url]
-    (let [verify-url (str base-url "/verify-email?token=" token)
-      full-name (some-> (:full_name user) str/trim not-empty)
-      user-name (if full-name full-name (:email user))
-      tenant-name "Your Organization"]
+  (let
+    [verify-url (str base-url "/verify-email?token=" token)
+     full-name (some-> (:full_name user) str/trim not-empty)
+     user-name (if full-name full-name (:email user))
+     tenant-name "Your Organization"]
     {:text (str "Hi " user-name ",\n\n"
              "Welcome to " tenant-name "! Please verify your email address by clicking the link below:\n\n"
              verify-url "\n\n"
@@ -40,10 +42,10 @@
 (defn create-success-email-body
   "Create HTML email body for verification success email"
   [user base-url]
-    (let [full-name (some-> (:full_name user) str/trim not-empty)
-      user-name (if full-name full-name (:email user))
-      tenant-name "Your Organization"
-      login-url (str base-url "/login")]
+  (let [full-name (some-> (:full_name user) str/trim not-empty)
+        user-name (if full-name full-name (:email user))
+        tenant-name "Your Organization"
+        login-url (str base-url "/login")]
     {:text (str "Hi " user-name ",\n\n"
              "Great news! Your email address has been successfully verified.\n\n"
              "You can now access all features of " tenant-name ".\n\n"

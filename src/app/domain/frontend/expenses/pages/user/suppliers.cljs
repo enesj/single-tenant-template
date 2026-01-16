@@ -51,9 +51,7 @@
         expenses (use-subscribe [:user-expenses/supplier-detail-expenses])
         aliases (use-subscribe [:user-expenses/supplier-detail-article-aliases])
         observations (use-subscribe [:user-expenses/supplier-detail-price-observations])
-        archived-at (or (some-> supplier :archived_at)
-                      (some-> supplier :suppliers/archived_at)
-                      (some-> supplier :archived-at))
+        archived-at (some-> supplier :archived-at)
         archived? (some? archived-at)]
     (use-effect
       (fn []
@@ -78,11 +76,11 @@
         :else
         ($ :div {:class "space-y-6"}
           ($ :div {:class "grid gap-3 md:grid-cols-3"}
-            (detail-utils/label-value "Name" (or (:display-name supplier) (:display_name supplier)))
-            (detail-utils/label-value "Normalized Key" (or (:normalized-key supplier) (:normalized_key supplier)))
+            (detail-utils/label-value "Name" (:display-name supplier))
+            (detail-utils/label-value "Normalized Key" (:normalized-key supplier))
             (detail-utils/label-value "Address" (:address supplier))
-            (detail-utils/label-value "Tax ID" (or (:tax-id supplier) (:tax_id supplier)))
-            (detail-utils/label-value "Created At" (shared/format-date (or (:created-at supplier) (:created_at supplier))))
+            (detail-utils/label-value "Tax ID" (:tax-id supplier))
+            (detail-utils/label-value "Created At" (shared/format-date (:created-at supplier)))
             (detail-utils/label-value "Archived At" (when archived-at (shared/format-date archived-at)))
             (detail-utils/label-value "ID" (or (:id supplier) (some-> supplier-id str))))
 
@@ -95,10 +93,10 @@
             ($ detail-utils/related-table
               {:title "Recent Expenses"
                :rows expenses
-               :columns [{:label "Purchased" :value-fn #(shared/format-date (or (:purchased-at %) (:purchased_at %)))}
-                         {:label "Total" :value-fn #(detail-utils/format-money (or (:total-amount %) (:total_amount %)) (or (:currency %) (:currency_code %)))}
-                         {:label "Payer" :value-fn #(or (:payer-label %) (:payer_label %) (:payer %) (:payers/label %))}
-                         {:label "Status" :value-fn #(or (:status %) (:receipt_status %) (:expense_status %))}]
+               :columns [{:label "Purchased" :value-fn #(shared/format-date (:purchased-at %))}
+                         {:label "Total" :value-fn #(detail-utils/format-money (:total-amount %) (or (:currency %) (:currency-code %)))}
+                         {:label "Payer" :value-fn #(or (:payer-label %) (:payer %) (:payers/label %))}
+                         {:label "Status" :value-fn #(or (:status %) (:receipt-status %) (:expense-status %))}]
                :empty-label "No expenses for this supplier yet."
                :view-all-href nil
                :view-all-id (when supplier-id
@@ -106,9 +104,9 @@
             ($ detail-utils/related-table
               {:title "Article Aliases"
                :rows aliases
-               :columns [{:label "Alias" :value-fn #(or (:raw-label-normalized %) (:raw_label_normalized %))}
-                         {:label "Article" :value-fn #(or (:article-canonical-name %) (:article_canonical_name %))}
-                         {:label "Confidence" :value-fn #(or (:confidence %) (:confidence_score %))}]
+               :columns [{:label "Alias" :value-fn #(:raw-label-normalized %)}
+                         {:label "Article" :value-fn #(:article-canonical-name %)}
+                         {:label "Confidence" :value-fn #(or (:confidence %) (:confidence-score %))}]
                :empty-label "No article aliases for this supplier."
                :view-all-href nil
                :view-all-id (when supplier-id
@@ -116,10 +114,10 @@
             ($ detail-utils/related-table
               {:title "Price Observations"
                :rows observations
-               :columns [{:label "Observed" :value-fn #(shared/format-date (or (:observed-at %) (:observed_at %)))}
-                         {:label "Article" :value-fn #(or (:article-canonical-name %) (:article_canonical_name %))}
-                         {:label "Unit Price" :value-fn #(or (:unit-price %) (:unit_price %))}
-                         {:label "Currency" :value-fn #(or (:currency %) (:currency_code %))}]
+               :columns [{:label "Observed" :value-fn #(shared/format-date (:observed-at %))}
+                         {:label "Article" :value-fn #(:article-canonical-name %)}
+                         {:label "Unit Price" :value-fn #(:unit-price %)}
+                         {:label "Currency" :value-fn #(or (:currency %) (:currency-code %))}]
                :empty-label "No price observations for this supplier."
                :view-all-href nil
                :view-all-id (when supplier-id
@@ -173,12 +171,8 @@
                   supplier-id-str (some-> supplier-id str)
                   item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)
 
-                  archived? (some? (or (:archived_at item)
-                                     (:suppliers/archived_at item)
-                                     (:archived-at item)))
-                  active-expenses (long (or (:active_expenses_count item)
-                                          (:active-expenses-count item)
-                                          (:active_expenses item)
+                  archived? (some? (:archived-at item))
+                  active-expenses (long (or (:active-expenses-count item)
                                           (:active-expenses item)
                                           0))
                   purge-disabled? (pos? active-expenses)
@@ -279,9 +273,7 @@
         (when detail-supplier
           (let [supplier-id detail-supplier-id
                 supplier-name (or (:display-name detail-supplier-record)
-                                (:display_name detail-supplier-record)
-                                (:display-name detail-supplier)
-                                (:display_name detail-supplier))
+                                (:display-name detail-supplier))
                 subtitle (or supplier-name
                            (when supplier-id (str "Supplier " supplier-id))
                            "Supplier details")
