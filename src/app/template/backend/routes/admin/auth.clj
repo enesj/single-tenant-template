@@ -14,12 +14,12 @@
         {:keys [ip-address user-agent]} (utils/extract-request-context request)
         legacy-sha256-enabled?
         (get-in request [:service-container :config :legacy :passwords :sha256-enabled?] true)]
-      (if-let [admin (admin-auth/authenticate-admin db email password {:legacy-sha256-enabled? legacy-sha256-enabled?})]
-          (let [admin-id (or (:id admin) (:admins/id admin))
-                admin-email (or (:email admin) (:admins/email admin))
-                admin-name (or (:full_name admin) (:admins/full_name admin))
-                admin-role (or (:role admin) (:admins/role admin))
-            session (admin-auth/create-admin-session! db admin-id ip-address user-agent)]
+        (if-let [admin (admin-auth/authenticate-admin db email password {:legacy-sha256-enabled? legacy-sha256-enabled?})]
+          (let [admin-id (:id admin)
+            admin-email (:email admin)
+            admin-name (:full_name admin)
+            admin-role (:role admin)
+          session (admin-auth/create-admin-session! db admin-id ip-address user-agent)]
 
             ;; Record successful admin login in monitoring table
             (login-monitoring/record-login-event! db
@@ -45,7 +45,7 @@
           (do
             ;; Record failed login attempt when we can resolve admin id
             (when-let [admin-row (admin-auth/find-admin-by-email db email)]
-              (let [admin-id (or (:id admin-row) (:admins/id admin-row))]
+              (let [admin-id (:id admin-row)]
                 (when admin-id
                   (login-monitoring/record-login-event! db
                     {:principal-type :admin
