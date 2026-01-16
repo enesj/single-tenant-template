@@ -90,7 +90,7 @@
     (let [items (or (get-in db [:user-expenses :suppliers :items]) [])]
       (->> items
         (remove (fn [s]
-                  (some? (or (:archived_at s) (:suppliers/archived_at s) (:archived-at s)))))
+                  (some? (:archived-at s))))
         vec))))
 
 (rf/reg-sub
