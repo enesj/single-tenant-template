@@ -9,8 +9,7 @@
     [app.shared.model-naming :as model-naming]
     [app.shared.string :as string]
     [clojure.string :as str]
-    #?(:clj [clojure.walk :as walk]
-       :cljs [cljs.walk :as walk])))
+    [clojure.walk :as walk]))
 
 (defn convert-db-keys->app-keys
   "Convert snake_case database keys to kebab-case for frontend consumption.

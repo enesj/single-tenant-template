@@ -78,7 +78,6 @@
                :admin/authenticated? true
                :admin/current-user-role role)
              (dissoc :admin/login-loading? :admin/login-error :admin/auth-checking?))
-       :admin/store-token (:token response)
        ;; Use router-aware SPA navigation so the route match updates immediately
        ;; (avoids rendering the public home page until a manual refresh).
        :dispatch [:admin/navigate-client "/admin/dashboard"]})))
@@ -108,7 +107,6 @@
                    {:uri "/admin/api/logout"
                     :on-success [:admin/logout-success]
                     :on-failure [:admin/logout-success]}) ; Even on failure, clear local state
-     :admin/clear-token nil
      :admin/navigate "/admin/login"}))
 
 (rf/reg-event-fx
@@ -120,8 +118,7 @@
   :admin/check-auth
   (fn [{:keys [db]} _]
     (let [token (or (:admin/token db)
-                  (auth-persist/get-persisted-token)
-                  (.getItem js/localStorage "admin-token"))]
+                  (auth-persist/get-persisted-token))]
       (if token
         {:db (-> db
                (assoc :admin/token token)
@@ -183,29 +180,16 @@
     (auth-persist/clear-auth-state!)
     {:db (-> db
            (dissoc :admin/authenticated? :admin/token :admin/current-user :admin/current-user-role :admin/auth-checking?))
-     :admin/clear-token nil
      :admin/navigate "/admin/login"}))
 
 ;; Navigation event
-
-;; Effects for localStorage
-(rf/reg-fx
- :admin/store-token
-  (fn [token]
-    (.setItem js/localStorage "admin-token" token)))
-
-(rf/reg-fx
- :admin/clear-token
-  (fn [_]
-    (.removeItem js/localStorage "admin-token")))
 
 ;; Check auth for protected routes (doesn't redirect on login page)
 (rf/reg-event-fx
   :admin/check-auth-protected
   (fn [{:keys [db]} [_ on-auth-success]]
     (let [token (or (:admin/token db)
-                  (auth-persist/get-persisted-token)
-                  (.getItem js/localStorage "admin-token"))
+                  (auth-persist/get-persisted-token))
           already-authenticated? (:admin/authenticated? db)
           auth-checking? (:admin/auth-checking? db)]
 

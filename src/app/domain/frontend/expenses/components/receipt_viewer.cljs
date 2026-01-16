@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.components.receipt-viewer
   "Receipt detail display for admin UI."
   (:require
+    [app.admin.frontend.auth.persistence :as auth-persist]
     [app.template.frontend.components.shared-utils :as shared]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]
     [clojure.string :as str]
@@ -25,7 +26,7 @@
   - Uses same-origin credentials for user-session cookies."
   [url opts]
   (let [opts* (or opts #js {})
-        token (.getItem js/localStorage "admin-token")]
+      token (auth-persist/get-persisted-token)]
     (when (and token (admin-protected-url? url))
       (set! (.-headers opts*) #js {"x-admin-token" token}))
     (set! (.-credentials opts*) "same-origin")

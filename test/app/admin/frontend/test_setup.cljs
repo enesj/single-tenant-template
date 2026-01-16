@@ -152,12 +152,10 @@
                                                    :always-visible [:id :event_type]
                                                    :computed-fields {}}}}})
 
-  ;; Set admin token in localStorage for admin-context detection
-  (when (and (exists? js/globalThis) (.-localStorage js/globalThis))
-    (.setItem (.-localStorage js/globalThis) "admin-token" "test-token")))
+  nil)
 
 (defn put-token! [token]
-  (.setItem js/localStorage "admin-token" (or token "")))
+  (swap! rf-db/app-db assoc :admin/token token))
 
 (defn setup-entity-subscriptions!
   "Set up subscription handlers for admin entities in test environment"

@@ -178,8 +178,7 @@
 (rf/reg-event-fx
   :admin/delete-audit-log
   (fn [{:keys [db]} [_ audit-id]]
-    (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))]
+    (let [token (adapters.core/admin-token db)]
       (log/info "Deleting audit log:" audit-id)
 
       (if token
@@ -235,8 +234,7 @@
 (rf/reg-event-fx
   :admin/bulk-delete-audit-logs
   (fn [{:keys [db]} [_ audit-ids]]
-    (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))
+    (let [token (adapters.core/admin-token db)
           ;; Convert IDs to strings for JSON serialization
           ids-as-strings (mapv str audit-ids)]
       (log/info "Bulk deleting audit logs:" (count ids-as-strings) "entries")
@@ -301,8 +299,7 @@
 (rf/reg-event-fx
   :admin/export-all-audit-logs
   (fn [{:keys [db]} [_]]
-    (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))
+    (let [token (adapters.core/admin-token db)
           current-filters (get-in db [:admin :audit :filters] {})]
       (log/info "Exporting all audit logs with filters:" current-filters)
 

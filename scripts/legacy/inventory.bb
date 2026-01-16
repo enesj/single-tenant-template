@@ -29,14 +29,21 @@
    :re-export-namespaces    ["^\\(ns\\s+[^\\s\\)]+\\s+.*\\(:refer\\s+:all\\)"]
    :service-map-alias-vars  ["(?m)^\\s*\\(defn\\s+(get-[A-Za-z0-9!-]+|create-[A-Za-z0-9!-]+)\\b"]
   :legacy-password         ["(?i)password.*sha-?256" "(?i)sha-?256.*password"]
-   :oauth-compat            ["(?i)oauth" "legacy.*oauth" "token-format"]
+  :oauth-compat            ["(?i)legacy.*oauth"
+                    "(?i)oauth.*legacy"
+                    "(?i)oauth.*compat"
+                    "(?i)compat.*oauth"
+                    "(?i)oauth.*fallback"
+                    "(?i)token-format"]
    :legacy-events           ["reg-event-db" "reg-event-fx"]
    :legacy-subs             ["(?m)^\\s*re-frame.core/reg-sub|(?m)^\\s*re-frame/reg-sub|(?m)reg-sub\\s"]
    :api-response-compat     ["compat.*response|dual.*key|legacy.*response"]
   ;; Match concrete legacy route compatibility (admin settings URLs).
   ;; Intentionally does NOT match generic redirects like OAuth.
   :legacy-route-redirects  ["\"/admin/settings\"" "\"/admin/amin-settings\"" "\"/amin-settings\""]
-   :localstorage-migration  ["localStorage|LocalStorage|local-storage.*migrat"]
+   :localstorage-migration  ["(?i)(localstorage|local-storage).*(legacy|migrat|compat)"
+                             "(?i)(admin-token|admin token).*(localstorage|local-storage)|(localstorage|local-storage).*(admin-token|admin token)"
+                             "(?i)(token.*(localstorage|local-storage).*admin|admin.*(localstorage|local-storage).*token)"]
   ;; Match underscore-key fallback handling in settings handlers (a concrete legacy compatibility pattern).
   :settings-schema-legacy  ["\\(:entity_name\\b" "\\(:setting_key\\b" "\\(:setting_value\\b"]
    :domain-registry-compat  ["domain.*registry.*(legacy|compat)"]

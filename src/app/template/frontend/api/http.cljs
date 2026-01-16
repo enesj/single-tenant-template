@@ -90,15 +90,12 @@
      :on-failure on-failure}))
 
 (defn- admin-token-from-storage
-  "Return the admin token from app-db or localStorage.
+  "Return the admin token from app-db.
 
   NOTE: This helper is only used by the explicit *-admin request builders below.
   Public/template requests must not rely on admin auth state."
   []
-  (or (try (:admin/token @rf-db/app-db) (catch :default _ nil))
-    (try (when (exists? js/localStorage)
-           (.getItem js/localStorage "admin-token"))
-      (catch :default _ nil))))
+  (try (:admin/token @rf-db/app-db) (catch :default _ nil)))
 
 (defn- admin-entity-endpoint
   "Admin entity CRUD endpoint.

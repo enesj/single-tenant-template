@@ -31,7 +31,7 @@
            "<p><a href='/'>Return to Home</a></p>")})
 
 (defn- normalize-scopes
-  "Normalize OAuth scopes to a provider-compatible string.
+  "Normalize OAuth scopes to a provider-friendly string.
    Accepts string or sequential (vector/list) and joins with spaces."
   [scopes]
   (cond

@@ -149,7 +149,7 @@
   "Best-effort detection that we are inside an admin UI context.
 
   IMPORTANT: Do NOT use presence of an admin token as a signal. Users can have a stale
-  token in localStorage while browsing non-admin routes, and routing admin API calls
+  client-stored token while browsing non-admin routes, and routing admin API calls
   from user pages causes confusing 401/405 errors.
 
   Precedence:

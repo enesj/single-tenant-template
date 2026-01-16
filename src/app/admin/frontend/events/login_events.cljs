@@ -118,8 +118,7 @@
 (rf/reg-event-fx
   :admin/delete-login-event
   (fn [{:keys [db]} [_ event-id]]
-    (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))]
+    (let [token (adapters.core/admin-token db)]
       (log/info "Deleting login event:" event-id)
 
       (if token
@@ -159,8 +158,7 @@
 (rf/reg-event-fx
   :admin/bulk-delete-login-events
   (fn [{:keys [db]} [_ event-ids]]
-    (let [token (or (get-in db [:admin :token])
-                  (.getItem js/localStorage "admin-token"))
+    (let [token (adapters.core/admin-token db)
           ;; Convert IDs to strings for JSON serialization
           ids-as-strings (mapv str event-ids)]
       (log/info "Bulk deleting login events:" (count ids-as-strings) "entries")

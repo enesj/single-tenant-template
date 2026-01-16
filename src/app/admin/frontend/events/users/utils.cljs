@@ -3,6 +3,7 @@
   (:require
     [ajax.core :as ajax]
     [clojure.string :as str]
+    [re-frame.db :as rf-db]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -71,12 +72,12 @@
 (defn create-user-http-request
   "Creates standard HTTP request configuration for user operations.
 
-   Automatically includes the admin token from localStorage when available,
+   Automatically includes the admin token from app-db when available,
    unless an explicit `x-admin-token` header is already provided."
   [method uri & {:keys [params on-success on-failure headers]
                  :or {params {}
                       headers {"Content-Type" "application/json"}}}]
-  (let [token (.getItem js/localStorage "admin-token")
+  (let [token (:admin/token @rf-db/app-db)
         headers' (cond-> headers
                    (and token (not (contains? headers "x-admin-token")))
                    (assoc "x-admin-token" token))]

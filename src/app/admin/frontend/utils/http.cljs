@@ -8,6 +8,7 @@
     [app.admin.frontend.auth.persistence :as auth-persist]
     [app.shared.http :as shared-http]
     [app.shared.http.core :as shared-http-core]
+    [re-frame.db :as rf-db]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -25,7 +26,7 @@
   "Creates a standardized HTTP request configuration for admin API calls.
 
   Automatically includes:
-  - Admin token authentication from localStorage (via auth persistence when available)
+  - Admin token authentication from app-db or persisted auth state
    - Proper JSON request/response formatting
    - Timeout protection
    - Standard error handling
@@ -46,8 +47,8 @@
     :or {headers {}
          timeout default-timeout}}]
   (let [admin-token (or token
-                      (auth-persist/get-persisted-token)
-                      (.getItem js/localStorage "admin-token"))
+                      (:admin/token @rf-db/app-db)
+                      (auth-persist/get-persisted-token))
         headers (cond-> headers
                   admin-token (assoc "x-admin-token" admin-token))]
 

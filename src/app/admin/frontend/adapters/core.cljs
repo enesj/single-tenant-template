@@ -29,11 +29,9 @@
                (and pathname (str/includes? pathname "/admin"))))))
 
 (defn admin-token
-  "Return the admin session token from db or browser storage when available."
+  "Return the admin session token from db when available."
   [db]
-  (or (:admin/token db)
-    (when (exists? js/localStorage)
-      (.getItem js/localStorage "admin-token"))))
+  (:admin/token db))
 
 ;; ============================================================================
 ;; Admin Bridge Registration

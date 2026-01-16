@@ -1,5 +1,6 @@
 (ns app.admin.frontend.config.loader
   (:require
+    [app.admin.frontend.auth.persistence :as auth-persist]
     [taoensso.timbre :as log]))
 
 (defonce config-cache (atom {}))
@@ -16,7 +17,7 @@
   "Fetch config data from the admin API and return a Clojure map"
   [config-type]
   (if-let [{:keys [url response-key]} (get config-endpoints config-type)]
-    (let [token (.getItem js/localStorage "admin-token")
+    (let [token (auth-persist/get-persisted-token)
           opts (if token
                  #js {:credentials "include"
                       :headers #js {"x-admin-token" token}}

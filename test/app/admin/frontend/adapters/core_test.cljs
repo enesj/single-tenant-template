@@ -6,13 +6,14 @@
 
 ;; Note: admin-context? is covered implicitly via adapter behavior tests
 
-(deftest admin-token-from-storage
-  (testing "admin-token returns db or localStorage value"
+(deftest admin-token-from-db
+  (testing "admin-token returns db value when present"
     (reset! rf-db/app-db {:admin/token "x"})
-    (is (= "x" (core/admin-token @rf-db/app-db)))
+    (is (= "x" (core/admin-token @rf-db/app-db))))
+
+  (testing "admin-token is nil when missing"
     (reset! rf-db/app-db {})
-    (.setItem js/localStorage "admin-token" "y")
-    (is (= "y" (core/admin-token @rf-db/app-db)))))
+    (is (nil? (core/admin-token @rf-db/app-db)))))
 
 (deftest admin-context-detection
   (testing "admin-context? keys off the active route"
