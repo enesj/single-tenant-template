@@ -104,18 +104,13 @@
     receipt
     {:entity-ns :receipts
      :id-keys [:id]
-     :alias-keys {:original_filename [:original-filename]
-                  :supplier_guess [:supplier-guess]
-                  :created_at [:created-at]
-                  ;; Guess fields used for list/table display.
-                  ;; Note: keep underscore sources for legacy payloads.
-                  :total_amount_guess [:total-amount-guess]
-                  :lines_total_amount_guess [:lines-total-amount-guess]
-                  :currency_guess [:currency-guess]}
+         :alias-keys {:original_filename [:original-filename]
+          :supplier_guess [:supplier-guess]
+          :created_at [:created-at]}
      :post-transform (fn [m]
-                       (let [total (or (:total-amount-guess m) (:total_amount_guess m))
-                             lines-total (or (:lines-total-amount-guess m) (:lines_total_amount_guess m))
-                             currency (or (:currency-guess m) (:currency_guess m))
+               (let [total (:total-amount-guess m)
+                 lines-total (:lines-total-amount-guess m)
+                 currency (:currency-guess m)
                              total-str (fmt-amount total)
                              lines-str (fmt-amount lines-total)
                              currency-str (when (and (string? currency) (not (str/blank? currency))) currency)
