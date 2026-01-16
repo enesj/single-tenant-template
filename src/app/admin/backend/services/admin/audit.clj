@@ -117,13 +117,14 @@
   (when tenant-id
     (try
       (let [sql-query (hsql/format
-                        {:select [:t.name]
+                        {:select [[:t.name :tenant_name]]
                          :from [[:tenants :t]]
                          :where [:= :t.id [:cast tenant-id :uuid]]})
             result (jdbc/execute-one! db sql-query)
-            ;; Handle both namespaced keys (:tenants/name) and simple keys (:name)
-            tenant-name (or (:tenants/name result) (:name result))]
-        tenant-name)
+            normalized (-> result
+                         db-adapter/convert-pg-objects
+                         db-adapter/convert-db-keys->app-keys)]
+        (:tenant-name normalized))
       (catch Exception e
         (log/error "❌ AUDIT BACKEND: Error resolving tenant name for" tenant-id ":" (.getMessage e))
         nil))))
@@ -134,13 +135,14 @@
   (when user-id
     (try
       (let [sql-query (hsql/format
-                        {:select [:u.full_name]
+                        {:select [[:u.full_name :full_name]]
                          :from [[:users :u]]
                          :where [:= :u.id [:cast user-id :uuid]]})
             result (jdbc/execute-one! db sql-query)
-            ;; Handle both namespaced keys (:users/full_name) and simple keys (:full_name)
-            user-name (or (:users/full_name result) (:full_name result))]
-        user-name)
+            normalized (-> result
+                         db-adapter/convert-pg-objects
+                         db-adapter/convert-db-keys->app-keys)]
+        (:full-name normalized))
       (catch Exception e
         (log/error "❌ AUDIT BACKEND: Error resolving user name for" user-id ":" (.getMessage e))
         nil))))
@@ -151,13 +153,14 @@
   (when admin-id
     (try
       (let [sql-query (hsql/format
-                        {:select [:a.full_name]
+                        {:select [[:a.full_name :full_name]]
                          :from [[:admins :a]]
                          :where [:= :a.id [:cast admin-id :uuid]]})
             result (jdbc/execute-one! db sql-query)
-            ;; Handle both namespaced keys (:admins/full_name) and simple keys (:full_name)
-            admin-name (or (:admins/full_name result) (:full_name result))]
-        admin-name)
+            normalized (-> result
+                         db-adapter/convert-pg-objects
+                         db-adapter/convert-db-keys->app-keys)]
+        (:full-name normalized))
       (catch Exception e
         (log/error "❌ AUDIT BACKEND: Error resolving admin name for" admin-id ":" (.getMessage e))
         nil))))
