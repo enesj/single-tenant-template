@@ -110,15 +110,15 @@
                        :or {legacy-sha256-enabled? true}}]
    (some-> (find-admin-by-email db email)
      (as-> admin
-       (when (= (str (or (:status admin) (:admins/status admin))) "active")
-         (let [password-hash (or (:password_hash admin) (:admins/password_hash admin))
-               admin-id (or (:id admin) (:admins/id admin))]
+       (when (= (str (:status admin)) "active")
+         (let [password-hash (:password_hash admin)
+               admin-id (:id admin)]
            (cond
              ;; Try bcrypt verification first (new secure format)
              (verify-bcrypt-password password password-hash)
              (do
                (log/info "Admin authentication successful" {:email email})
-               (dissoc admin :password_hash :admins/password_hash))
+               (dissoc admin :password_hash))
 
              ;; Fallback to SHA-256 for backwards compatibility (flagged)
              (and legacy-sha256-enabled?
@@ -128,7 +128,7 @@
                (log/warn "Admin login used legacy SHA-256 password hash; migrating to bcrypt"
                  {:email email})
                (migrate-admin-password! db admin-id password)
-               (dissoc admin :password_hash :admins/password_hash))
+               (dissoc admin :password_hash))
 
              (and (not legacy-sha256-enabled?)
                (verify-sha256-password password password-hash))
@@ -178,8 +178,7 @@
                                         [:= :token token]
                                         [:> :expires_at now]]}))]
     (when session
-      ;; Handle both namespaced and non-namespaced keys from next.jdbc
-      (find-admin-by-id db (or (:admin_id session) (:admin_sessions/admin_id session))))))
+    (find-admin-by-id db (:admin_id session)))))
 
 (defn update-session-activity!
   "Update last activity timestamp for a session"

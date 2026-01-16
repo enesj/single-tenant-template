@@ -19,12 +19,11 @@
         :token-preview (when token (str (subs token 0 (min 8 (count token))) "...")))
       (if token
         (if-let [admin-raw (admin-auth/get-admin-by-session db token)]
-          (let [;; Handle both namespaced and non-namespaced keys
-                admin {:id (or (:id admin-raw) (:admins/id admin-raw))
-                       :email (or (:email admin-raw) (:admins/email admin-raw))
-                       :role (or (:role admin-raw) (:admins/role admin-raw))
-                       :full_name (or (:full_name admin-raw) (:admins/full_name admin-raw))
-                       :status (or (:status admin-raw) (:admins/status admin-raw))}]
+          (let [admin {:id (:id admin-raw)
+                       :email (:email admin-raw)
+                       :role (:role admin-raw)
+                       :full_name (:full_name admin-raw)
+                       :status (:status admin-raw)}]
             (log/info "✅ ADMIN AUTH SUCCESS:" {:admin-id (:id admin) :admin-role (:role admin)})
             ;; Update session activity
             (admin-auth/update-session-activity! db token)
