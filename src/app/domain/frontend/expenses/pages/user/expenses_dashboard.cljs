@@ -124,7 +124,7 @@
         power-user? (boolean (use-subscribe [:expenses/power-user?]))
         can-upload? (boolean (use-subscribe [:expenses/can? :expenses/upload]))
         can-add-expense? (boolean (use-subscribe [:expenses/can? :expenses/expense.write]))
-        user-name (or (:full_name user) (:full-name user) "there")
+        user-name (or (:full-name user) "there")
         summary (or (use-subscribe [:user-expenses/summary]) {})
         summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
         summary-error (use-subscribe [:user-expenses/summary-error])
@@ -211,14 +211,14 @@
 
                   (seq recent)
                   (for [expense recent]
-                    (let [supplier (or (:supplier_display_name expense)
-                                     (:supplier_normalized_key expense)
+                    (let [supplier (or (:supplier-display-name expense)
+                                     (:supplier-normalized-key expense)
                                      "Unknown supplier")
                           amount (format-money (:total_amount expense)
                                    (or (:currency expense) primary-currency-str))
                           date (format-date (:purchased_at expense))
                           status (status-label expense)
-                          category (or (:payer_type expense) "expense")]
+                          category (or (:payer-type expense) "expense")]
                       ($ expense-row {:key (or (:id expense) (str supplier date))
                                       :supplier supplier
                                       :amount amount
