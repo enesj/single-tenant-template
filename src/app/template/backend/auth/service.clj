@@ -239,11 +239,9 @@
                 :errors {:email ["Invalid email or password"]}})))
 
     ;; Verify password - handle both namespaced and non-namespaced keys
-    (let [user (db-user->plain user-record)
-          password-hash (or (:password_hash user-record)
-                          (:users/password_hash user-record))
-          user-status (or (:status user-record)
-                        (:users/status user-record))]
+        (let [user (db-user->plain user-record)
+          password-hash (:password_hash user)
+          user-status (:status user)]
 
       (when-not password-hash
         (throw (ex-info "Invalid credentials"
@@ -295,14 +293,14 @@
 
       (let [normalized (normalize-oauth-user-data oauth-data provider)
             existing-user (db-protocols/find-by-field db :users :email user-email)
+            existing-user-plain (some-> existing-user db-user->plain)
             now (time/local-date-time)
-            new-user? (nil? existing-user)
+            new-user? (nil? existing-user-plain)
 
             ;; Security check: Prevent OAuth from overwriting password-based accounts
             ;; Handle both namespaced and non-namespaced keys
-            existing-auth-provider (or (:auth_provider existing-user)
-                                     (:users/auth_provider existing-user))
-            _ (when (and existing-user
+            existing-auth-provider (:auth_provider existing-user-plain)
+            _ (when (and existing-user-plain
                       (= "password" existing-auth-provider))
                 (log/warn "OAuth login blocked for password-based account:" user-email)
                 (throw (ex-info "Email already registered with password authentication"
@@ -316,10 +314,9 @@
             placeholder-password (auth-protocols/hash-password
                                    password-manager
                                    (str "oauth-" (name provider) "-user"))
-            user-record (if existing-user
+            user-record (if existing-user-plain
                           ;; Update existing OAuth user (only if auth_provider is already OAuth)
-                          (let [user-id (or (:id existing-user)
-                                          (:users/id existing-user))
+                          (let [user-id (:id existing-user-plain)
                                 update-data {:full_name (:full-name normalized)
                                              :avatar_url (:avatar-url normalized)
                                              :auth_provider (name provider)
