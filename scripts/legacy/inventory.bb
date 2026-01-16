@@ -28,7 +28,7 @@
    :namespaced-key-fallback ["\\(or\\s+\\(:[A-Za-z0-9_-]+_[A-Za-z0-9_-]+" "(get\\s+\\{:[A-Za-z0-9_-]+_[A-Za-z0-9_-]+"]
    :re-export-namespaces    ["^\\(ns\\s+[^\\s\\)]+\\s+.*\\(:refer\\s+:all\\)"]
    :service-map-alias-vars  ["(?m)^\\s*\\(defn\\s+(get-[A-Za-z0-9!-]+|create-[A-Za-z0-9!-]+)\\b"]
-   :legacy-password         ["SHA-256" "sha-256"]
+  :legacy-password         ["(?i)password.*sha-?256" "(?i)sha-?256.*password"]
    :oauth-compat            ["(?i)oauth" "legacy.*oauth" "token-format"]
    :legacy-events           ["reg-event-db" "reg-event-fx"]
    :legacy-subs             ["(?m)^\\s*re-frame.core/reg-sub|(?m)^\\s*re-frame/reg-sub|(?m)reg-sub\\s"]
