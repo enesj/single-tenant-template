@@ -18,21 +18,22 @@
   Recursively walks through data structures and converts keys using
   `app.shared.model-naming/db-keyword->app`."
   [data]
-  (when data
-    (cond
-      (map? data)
-      (into {}
-        (map (fn [[k v]]
-               [(model-naming/db-keyword->app k) (convert-db-keys->app-keys v)]))
-        data)
+  (cond
+    (nil? data) nil
 
-      (vector? data)
-      (mapv convert-db-keys->app-keys data)
+    (map? data)
+    (into {}
+      (map (fn [[k v]]
+             [(model-naming/db-keyword->app k) (convert-db-keys->app-keys v)]))
+      data)
 
-      (seq? data)
-      (map convert-db-keys->app-keys data)
+    (vector? data)
+    (mapv convert-db-keys->app-keys data)
 
-      :else data)))
+    (seq? data)
+    (map convert-db-keys->app-keys data)
+
+    :else data))
 
 (defn app-keyword->camel
   "Convert a kebab-case keyword into camelCase, dropping any namespace."

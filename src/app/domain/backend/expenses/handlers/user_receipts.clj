@@ -138,7 +138,7 @@
   - status (optional, string or comma-separated)
   - limit (default 50)
   - offset (default 0)
-  - order_dir (default desc)"
+  - order-dir (default desc)"
   [db]
   (with-error-handling
     (fn [request]
@@ -151,7 +151,7 @@
                     opts {:status status
                       :limit (parse-long-param qp :limit 50)
                       :offset (parse-long-param qp :offset 0)
-                      :order-dir (keyword (or (:order_dir qp) "desc"))}
+                      :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))}
                 rows (if (= "admin" role)
                        (receipt-queries/list-receipts db opts)
                        (receipt-queries/list-user-receipts db user-id opts))]

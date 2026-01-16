@@ -5,6 +5,7 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
+    [app.shared.adapters.database :as db-adapter]
     [clojure.string :as str]
     [next.jdbc :as jdbc]
     [taoensso.timbre :as log]))
@@ -52,7 +53,7 @@
   "Return {:settings <effective-settings>} or {:error <ring-response>}.
 
   Supports partial updates by applying only keys present in the request body.
-  A blank :default_payer_id (\"\" / whitespace) clears the payer (sets nil)."
+  A blank :default-payer-id (\"\" / whitespace) clears the payer (sets nil)."
   [current body]
   ;; Normalize body keys to keywords (handles JSON string keys)
   (let [body (reduce-kv (fn [m k v]
@@ -60,7 +61,7 @@
                {}
                body)
         _ (log/info "After key normalization" {:body body})
-        supported-keys #{:default_currency :default_payer_id :notifications_enabled}
+        supported-keys #{:default-currency :default-payer-id :notifications-enabled}
         present-keys (->> supported-keys (filter #(contains? body %)) set)]
     (log/info "Settings validation" {:present-keys present-keys :supported-keys supported-keys})
     (cond
@@ -68,41 +69,41 @@
       {:error (h/json-response {:error "No settings fields provided"} 400)}
 
       :else
-      (let [currency (when (contains? body :default_currency)
-                       (blank->nil (:default_currency body)))
-            payer-id-raw (when (contains? body :default_payer_id)
-                           (blank->nil (:default_payer_id body)))
-            payer-id (when (contains? body :default_payer_id)
+      (let [currency (when (contains? body :default-currency)
+                       (blank->nil (:default-currency body)))
+            payer-id-raw (when (contains? body :default-payer-id)
+                           (blank->nil (:default-payer-id body)))
+            payer-id (when (contains? body :default-payer-id)
                        (if (nil? payer-id-raw)
                          nil
                          (h/try-parse-uuid payer-id-raw)))
-            notifications (when (contains? body :notifications_enabled)
-                            (parse-notifications-enabled (:notifications_enabled body)))]
+            notifications (when (contains? body :notifications-enabled)
+                            (parse-notifications-enabled (:notifications-enabled body)))]
         (cond
-          (and (contains? body :default_currency)
+          (and (contains? body :default-currency)
             (nil? currency))
-          {:error (h/json-response {:error "default_currency is required"} 400)}
+          {:error (h/json-response {:error "default-currency is required"} 400)}
 
-          (and (contains? body :default_currency)
+          (and (contains? body :default-currency)
             (not (contains? user-expense-settings/allowed-currencies currency)))
           {:error (h/json-response {:error "Unsupported currency"
                                     :allowed (sort user-expense-settings/allowed-currencies)} 400)}
 
-          (and (contains? body :default_payer_id)
+          (and (contains? body :default-payer-id)
             (some? payer-id-raw)
             (nil? payer-id))
-          {:error (h/json-response {:error "default_payer_id must be a UUID (or blank to clear)"} 400)}
+          {:error (h/json-response {:error "default-payer-id must be a UUID (or blank to clear)"} 400)}
 
-          (and (contains? body :notifications_enabled)
+          (and (contains? body :notifications-enabled)
             (nil? notifications))
-          {:error (h/json-response {:error "notifications_enabled must be a boolean"} 400)}
+          {:error (h/json-response {:error "notifications-enabled must be a boolean"} 400)}
 
           :else
           {:settings
            (cond-> current
-             (contains? body :default_currency) (assoc :default_currency currency)
-             (contains? body :default_payer_id) (assoc :default_payer_id payer-id)
-             (contains? body :notifications_enabled) (assoc :notifications_enabled notifications))})))))
+             (contains? body :default-currency) (assoc :default-currency currency)
+             (contains? body :default-payer-id) (assoc :default-payer-id payer-id)
+             (contains? body :notifications-enabled) (assoc :notifications-enabled notifications))})))))
 
 (defn get-settings-handler
   "GET /api/v1/expenses/settings - fetch user settings.
@@ -160,15 +161,16 @@
       (let [params (:query-params request)
             format (or (h/get-param params :format) "csv")]
         (try
-          (let [expenses (jdbc/execute! db
-                           ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
-                             FROM expenses e
-                             LEFT JOIN suppliers s ON e.supplier_id = s.id
-                             LEFT JOIN payers p ON e.payer_id = p.id
-                             WHERE e.user_id = ? AND e.deleted_at IS NULL
-                             ORDER BY e.purchased_at DESC
-                             LIMIT 1000"
-                            user-id])]
+          (let [expenses (->> (jdbc/execute! db
+                               ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+                                 FROM expenses e
+                                 LEFT JOIN suppliers s ON e.supplier_id = s.id
+                                 LEFT JOIN payers p ON e.payer_id = p.id
+                                 WHERE e.user_id = ? AND e.deleted_at IS NULL
+                                 ORDER BY e.purchased_at DESC
+                                 LIMIT 1000"
+                                user-id])
+                             (map db-adapter/to-app))]
             (if (= format "csv")
               ;; Return CSV data directly
               (let [header "id,purchased_at,supplier,payer,total_amount,currency,notes\n"
@@ -176,10 +178,10 @@
                            (map (fn [e]
                                   (str/join ","
                                     [(str (:expenses/id e))
-                                     (str (:expenses/purchased_at e))
-                                     (str "\"" (or (:supplier_name e) "") "\"")
-                                     (str "\"" (or (:payer_label e) "") "\"")
-                                     (str (:expenses/total_amount e))
+                                     (str (:expenses/purchased-at e))
+                                     (str "\"" (or (:supplier-name e) "") "\"")
+                                     (str "\"" (or (:payer-label e) "") "\"")
+                                     (str (:expenses/total-amount e))
                                      (str (:expenses/currency e))
                                      (str "\"" (str/replace (or (:expenses/notes e) "") "\"" "\"\"") "\"")])))
                            (str/join "\n"))
