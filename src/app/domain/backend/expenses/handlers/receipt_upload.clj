@@ -11,7 +11,7 @@
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.template.backend.routes.admin.utils :as admin-utils]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -110,7 +110,7 @@
             (log/warn e "Failed to delete duplicate uploaded receipt file" {:storage_key storage_key}))))
       result)))
 
-(def ^:private to-app db-adapter/to-app)
+(def ^:private to-app shared-db/to-app)
 
 (defn user-upload-handler
   "POST /api/v1/expenses/upload

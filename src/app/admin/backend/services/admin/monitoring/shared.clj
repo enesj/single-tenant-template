@@ -7,7 +7,7 @@
    - Time-based aggregation helpers
    - Standard monitoring result structure"
   (:require
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
     [honey.sql :as hsql]
     [java-time.api :as time]
@@ -29,7 +29,7 @@
       (let [processed-result (success-data raw-result)]
         (log/info (str "🔄 Processed result for " operation-name ": " (pr-str processed-result)))
         ;; Use the database adapter for normalization instead of non-existent function
-        (db-adapter/convert-pg-objects processed-result)))
+        (shared-db/convert-pg-objects processed-result)))
     (catch Exception e
       (log/error e (str "❌ Failed to " operation-name))
       (log/error (str "❌ Exception type: " (.getName (class e))))
@@ -38,7 +38,7 @@
       (when-let [cause (.getCause e)]
         (log/error (str "❌ Caused by: " (.getName (class cause)) " - " (.getMessage cause))))
       ;; Use the database adapter for normalization instead of non-existent function
-      (db-adapter/convert-pg-objects error-data))))
+      (shared-db/convert-pg-objects error-data))))
 
 (defmacro def-monitoring-fn
   "Macro to define monitoring functions with standardized error handling."
@@ -91,7 +91,7 @@
                  [limit])]
 
     (->> (jdbc/execute! db (into [full-sql] params))
-      (mapv #(db-adapter/convert-pg-objects %)))))
+      (mapv #(shared-db/convert-pg-objects %)))))
 
 (defn time-aggregated-query
   "Standard time-based aggregation query pattern.
@@ -138,7 +138,7 @@
                        :having [:> [:count :al.id] 5]
                        :order-by [[[:count :al.id] :desc]]
                        :limit limit}))
-    (mapv #(db-adapter/convert-pg-objects %))))
+              (mapv #(shared-db/convert-pg-objects %))))
 
 (defn api-usage-summary
   "Get API usage summary from audit logs for a time period.
@@ -149,7 +149,7 @@
                                    [[:count-distinct :tenant_id] :active_tenants]]
                           :from [:audit_logs]
                           :where [:>= :created_at time-threshold]}))
-    db-adapter/convert-pg-objects))
+    shared-db/convert-pg-objects))
 
 (defn high-activity-items-query
   "Generic query for finding high-activity items above a threshold.
@@ -166,7 +166,7 @@
                        :having [:> [:count :*] activity-threshold]
                        :order-by [[[:count :*] :desc]]
                        :limit limit}))
-    (mapv #(db-adapter/convert-pg-objects %))))
+              (mapv #(shared-db/convert-pg-objects %))))
 
 ;; ============================================================================
 ;; Time Period Helpers

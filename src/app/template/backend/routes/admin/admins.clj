@@ -12,7 +12,7 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.admins :as admin-admins]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -33,9 +33,7 @@
             total (admin-admins/get-admin-count db filters)]
         (log/info "👥 Admin list-admins returned" (count admins) "admins"
           {:filters filters :pagination pagination})
-        (let [converted-admins (-> admins
-                                 db-adapter/convert-pg-objects
-                                 db-adapter/convert-db-keys->app-keys)]
+        (let [converted-admins (shared-db/to-app admins)]
           (utils/json-response {:admins converted-admins
                                 :total total}))))
     "Failed to retrieve admins"))
@@ -52,9 +50,7 @@
       (utils/handle-uuid-request request :id
         (fn [admin-id _request]
           (if-let [admin (admin-admins/get-admin-details db admin-id)]
-            (let [converted-admin (-> admin
-                                    db-adapter/convert-pg-objects
-                                    db-adapter/convert-db-keys->app-keys)]
+            (let [converted-admin (shared-db/to-app admin)]
               (utils/json-response {:admin converted-admin}))
             (utils/error-response "Admin not found" :status 404)))))
     "Failed to retrieve admin details"))
@@ -87,9 +83,7 @@
           (utils/log-admin-action "create_admin" (:id admin) "admin"
             (:id created-admin) (dissoc admin-data :password))
           
-          (let [converted-admin (-> created-admin
-                                  db-adapter/convert-pg-objects
-                                  db-adapter/convert-db-keys->app-keys)]
+          (let [converted-admin (shared-db/to-app created-admin)]
             (utils/json-response {:admin converted-admin} :status 201)))))
     "Failed to create admin"))
 
@@ -112,9 +106,7 @@
             (utils/log-admin-action "update_admin" (-> context :admin :id)
               "admin" admin-id updates)
             
-            (let [converted-admin (-> updated-admin
-                                    db-adapter/convert-pg-objects
-                                    db-adapter/convert-db-keys->app-keys)]
+            (let [converted-admin (shared-db/to-app updated-admin)]
               (utils/json-response {:admin converted-admin}))))))
     "Failed to update admin"))
 
@@ -170,9 +162,7 @@
               (utils/log-admin-action "update_admin_role" (-> context :admin :id)
                 "admin" admin-id {:new-role new-role})
               
-              (let [converted-admin (-> updated-admin
-                                      db-adapter/convert-pg-objects
-                                      db-adapter/convert-db-keys->app-keys)]
+                (let [converted-admin (shared-db/to-app updated-admin)]
                 (utils/json-response {:admin converted-admin})))))))
     "Failed to update admin role"))
 
@@ -203,9 +193,7 @@
               (utils/log-admin-action "update_admin_status" (-> context :admin :id)
                 "admin" admin-id {:new-status new-status})
               
-              (let [converted-admin (-> updated-admin
-                                      db-adapter/convert-pg-objects
-                                      db-adapter/convert-db-keys->app-keys)]
+                (let [converted-admin (shared-db/to-app updated-admin)]
                 (utils/json-response {:admin converted-admin})))))))
     "Failed to update admin status"))
 

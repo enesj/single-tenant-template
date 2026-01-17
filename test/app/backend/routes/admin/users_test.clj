@@ -4,7 +4,7 @@
    Tests user listing, search, and data normalization."
   (:require
     [app.admin.backend.services.admin.users :as users]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.normalization :as norm]
     [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================
@@ -20,7 +20,7 @@
                    :users/email "test@example.com"
                    :users/full_name "Test User"
                    :users/status "active"}
-          normalized (db-adapter/normalize-admin-result db-user config)]
+            normalized (norm/normalize-admin-result db-user config)]
       (is (map? normalized))
       (is (= "test@example.com" (:email normalized)))
       (is (= "Test User" (:full-name normalized)))))
@@ -29,12 +29,12 @@
     (let [config {:prefixes [] :namespaces #{} :id-fields #{:id}}
           simple-user {:id #uuid "123e4567-e89b-12d3-a456-426614174000"
                        :email "test@example.com"}
-          normalized (db-adapter/normalize-admin-result simple-user config)]
+            normalized (norm/normalize-admin-result simple-user config)]
       (is (= "test@example.com" (:email normalized)))))
 
   (testing "normalize-admin-result handles nil gracefully"
     (let [config {:prefixes [] :namespaces #{} :id-fields #{}}]
-      (is (nil? (db-adapter/normalize-admin-result nil config))))))
+      (is (nil? (norm/normalize-admin-result nil config))))))
 
 ;; ============================================================================
 ;; List Users Query Building Tests
@@ -129,12 +129,12 @@
     (let [db-map {:created_at "2024-01-01"
                   :full_name "Test User"
                   :email_verified true}
-          app-map (db-adapter/convert-db-keys->app-keys db-map)]
+          app-map (norm/convert-db-keys->app-keys db-map)]
       (is (contains? app-map :created-at))
       (is (contains? app-map :full-name))
       (is (contains? app-map :email-verified))))
 
   (testing "convert-db-keys->app-keys handles nested maps"
     (let [db-map {:user_data {:login_count 5}}
-          app-map (db-adapter/convert-db-keys->app-keys db-map)]
+          app-map (norm/convert-db-keys->app-keys db-map)]
       (is (map? (:user-data app-map))))))

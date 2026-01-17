@@ -9,12 +9,12 @@
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.template.backend.routes.admin.utils :as utils]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
-(def ^:private to-app db-adapter/to-app)
+  (def ^:private to-app shared-db/to-app)
 
 (defn- parse-status-param [status-param]
   (cond

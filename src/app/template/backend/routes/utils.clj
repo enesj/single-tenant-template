@@ -2,7 +2,7 @@
   "Utility functions for reducing duplication in route handlers.
    Provides centralized error handling, request data extraction, and response patterns."
   (:require
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.normalization :as norm]
     [clojure.stacktrace]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
@@ -173,13 +173,13 @@
    Automatically converts snake_case database keys to kebab-case for frontend."
   ([data]
    (-> data
-     db-adapter/convert-db-keys->app-keys
-     db-adapter/convert-app-keys->camel-keys
+     norm/convert-db-keys->app-keys
+     norm/convert-app-keys->camel-keys
      response/response))
   ([data status]
    (-> data
-     db-adapter/convert-db-keys->app-keys
-     db-adapter/convert-app-keys->camel-keys
+     norm/convert-db-keys->app-keys
+     norm/convert-app-keys->camel-keys
      response/response
      (response/status status))))
 

@@ -1,7 +1,7 @@
 (ns app.template.backend.db.adapter
   "DB adapter helpers; normalize results and PG types here."
   (:require
-    [app.template.backend.utils.adapters.database :refer [convert-pg-objects]]
+    [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.shared.type-conversion :as type-conv]
     [app.template.backend.db.protocols :as db-protocols]
     [clojure.string :as str]

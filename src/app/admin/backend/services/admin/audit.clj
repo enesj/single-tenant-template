@@ -1,7 +1,8 @@
 (ns app.admin.backend.services.admin.audit
   "Audit log service; append/query audit events here."
   (:require
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
+    [app.shared.adapters.normalization :as norm]
     [app.template.backend.utils.query-builders :as qb]
     [app.shared.type-conversion :as tc]
     [cheshire.core :as json]
@@ -35,8 +36,8 @@
   [log]
   (when log
     (let [base (-> log
-                 db-adapter/convert-pg-objects
-                 (db-adapter/normalize-admin-result audit-config))
+                 shared-db/convert-pg-objects
+                 (norm/normalize-admin-result audit-config))
           ;; Promote metadata and IP to more descriptive keys for consumers
           base-with-aliases (cond-> base
                               (contains? base :metadata)
@@ -50,7 +51,7 @@
           ;; Normalize nested changes map if present
           converted (if (contains? base-with-aliases :changes)
                       (update base-with-aliases :changes
-                        #(db-adapter/normalize-admin-result % audit-config))
+                        #(norm/normalize-admin-result % audit-config))
                       base-with-aliases)]
       converted)))
 
@@ -76,7 +77,7 @@
           changes-with-initiator (cond-> changes
                                    admin_id (assoc :initiator {:type "admin" :admin-id (str admin_id)}))
           ;; Convert any PG objects to JSON-friendly values before encoding
-          safe-changes (when changes-with-initiator (db-adapter/convert-pg-objects changes-with-initiator))
+          safe-changes (when changes-with-initiator (shared-db/convert-pg-objects changes-with-initiator))
           metadata-value (when safe-changes [:cast (json/generate-string safe-changes) :jsonb])
           ;; Ensure entity-type has a default value if nil
           safe-target-type (some-> (or entity-type "admin_action") str)
@@ -121,9 +122,7 @@
                          :from [[:tenants :t]]
                          :where [:= :t.id [:cast tenant-id :uuid]]})
             result (jdbc/execute-one! db sql-query)
-            normalized (-> result
-                         db-adapter/convert-pg-objects
-                         db-adapter/convert-db-keys->app-keys)]
+            normalized (shared-db/to-app result)]
         (:tenant-name normalized))
       (catch Exception e
         (log/error "❌ AUDIT BACKEND: Error resolving tenant name for" tenant-id ":" (.getMessage e))
@@ -139,9 +138,7 @@
                          :from [[:users :u]]
                          :where [:= :u.id [:cast user-id :uuid]]})
             result (jdbc/execute-one! db sql-query)
-            normalized (-> result
-                         db-adapter/convert-pg-objects
-                         db-adapter/convert-db-keys->app-keys)]
+            normalized (shared-db/to-app result)]
         (:full-name normalized))
       (catch Exception e
         (log/error "❌ AUDIT BACKEND: Error resolving user name for" user-id ":" (.getMessage e))
@@ -157,9 +154,7 @@
                          :from [[:admins :a]]
                          :where [:= :a.id [:cast admin-id :uuid]]})
             result (jdbc/execute-one! db sql-query)
-            normalized (-> result
-                         db-adapter/convert-pg-objects
-                         db-adapter/convert-db-keys->app-keys)]
+            normalized (shared-db/to-app result)]
         (:full-name normalized))
       (catch Exception e
         (log/error "❌ AUDIT BACKEND: Error resolving admin name for" admin-id ":" (.getMessage e))

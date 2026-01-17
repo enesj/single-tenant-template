@@ -2,12 +2,11 @@
   "User management service entry; centralize user CRUD."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
-    [app.admin.backend.services.admin.users.deletion :as deletion]
     [app.admin.backend.services.admin.users.management :as management]
-    [app.admin.backend.services.admin.users.security :as security]
-    [app.admin.backend.services.admin.users.validation :as validation]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
+    [app.shared.adapters.normalization :as norm]
+    [app.template.backend.utils.adapters.persistence :as persist]
     [taoensso.timbre :as log]))
 
 (def ^:private user-config
@@ -19,7 +18,14 @@
 (defn- db-user->app
   "Normalize a user row from the database using shared utilities"
   [user]
-  (db-adapter/normalize-admin-result user user-config))
+  (norm/normalize-admin-result user user-config))
+
+(defn- normalize-user-result
+  "Normalization fn for admin user queries (handles single row or row collections)."
+  [raw]
+  (-> raw
+    shared-db/convert-pg-objects
+    (norm/normalize-admin-result user-config)))
 
 ;; ============================================================================
 ;; User Listing and Search (Core API)
@@ -45,7 +51,7 @@
                                                           (if w [:and w clause] clause))))
                 limit (assoc-in [:limit] limit)
                 offset (assoc-in [:offset] offset))]
-    (db-adapter/execute-admin-query db query user-config
+    (persist/execute-admin-query db query normalize-user-result
       {:audit-context {:action "list-users"}})))
 
 (defn search-users-advanced
@@ -89,7 +95,7 @@
                                                                            (if w [:and w clause] clause))))
                 limit (assoc :limit limit)
                 offset (assoc :offset offset))]
-    (db-adapter/execute-admin-query db query user-config
+    (persist/execute-admin-query db query normalize-user-result
       {:audit-context {:action "search-users-advanced"}})))
 
 ;; ============================================================================
@@ -102,7 +108,7 @@
   (let [query {:select [:u.*]
                :from [[:users :u]]
                :where [:= :u.id user-id]}]
-    (db-adapter/execute-admin-query db query user-config
+    (persist/execute-admin-query db query normalize-user-result
       {:single? true
        :audit-context {:action "get-user-details" :entity-type "user" :entity-id user-id}})))
 
@@ -138,9 +144,7 @@
                         (let [rows (login-monitoring/get-login-history db :user user-id
                                      {:limit limit :offset offset})]
                           (mapv (fn [row]
-                                  (let [converted (-> row
-                                                    db-adapter/convert-pg-objects
-                                                    db-adapter/convert-db-keys->app-keys)
+                                  (let [converted (shared-db/to-app row)
                                         created-at (:created-at converted)]
                                     (cond-> converted
                                       created-at (assoc :created-at (->millis created-at))
@@ -170,21 +174,7 @@
   [db user-id updates admin-id ip-address user-agent]
   (some-> (management/update-user! db user-id updates admin-id ip-address user-agent)
     db-user->app))
-(def update-user-role! management/update-user-role!)
 (defn create-user!
   [db user-data admin-id ip-address user-agent]
   (some-> (management/create-user! db user-data admin-id ip-address user-agent)
     db-user->app))
-
-(def validate-user-updates validation/validate-user-updates)
-(def check-user-deletion-constraints validation/check-user-deletion-constraints)
-(def check-users-deletion-constraints-batch validation/check-users-deletion-constraints-batch)
-
-(def delete-user! deletion/delete-user!)
-
-(def force-verify-email! security/force-verify-email!)
-(def reset-user-password! security/reset-user-password!)
-(def suspend-user! security/suspend-user!)
-(def reactivate-user! security/reactivate-user!)
-(def get-user-security-events security/get-user-security-events)
-(def check-user-security-status security/check-user-security-status)

@@ -3,7 +3,9 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.users :as admin-users]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.admin.backend.services.admin.users.deletion :as user-deletion]
+    [app.admin.backend.services.admin.users.validation :as user-validation]
+    [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
 
 (defn delete-entity-handler
@@ -35,7 +37,7 @@
                        "users"
                        ;; Use the new comprehensive user deletion function
                        (try
-                         (let [deletion-result (admin-users/delete-user!
+                         (let [deletion-result (user-deletion/delete-user!
                                                  db
                                                  (utils/parse-uuid-custom id)
                                                  (:id admin)
@@ -88,9 +90,7 @@
                               entity-key (assoc entity-key (get result entity-key)))]
                 ;; Normalize response so FE constraint checker can consume it easily
                 (utils/success-response
-                  (-> payload
-                    db-adapter/convert-pg-objects
-                    db-adapter/convert-db-keys->app-keys))))
+                  (shared-db/to-app payload))))
 
             ;; Handle successful deletion
             (:success result)
@@ -109,9 +109,7 @@
                                                                          "users" :user
                                                                          nil))))]
                 (utils/success-response
-                  (-> payload
-                    db-adapter/convert-pg-objects
-                    db-adapter/convert-db-keys->app-keys))))
+                  (shared-db/to-app payload))))
 
             ;; Fallback for unexpected result format
             :else
@@ -158,9 +156,7 @@
                 {:entity-type entity :data data :result result}
                 ip-address user-agent)
               (utils/success-response
-                (-> result
-                  db-adapter/convert-pg-objects
-                  db-adapter/convert-db-keys->app-keys)))
+                (shared-db/to-app result)))
             (utils/error-response (str "Failed to create " entity) :status 400)))))
     "Failed to create entity"))
 
@@ -185,9 +181,7 @@
 
           (if result
             (utils/success-response
-              (-> result
-                db-adapter/convert-pg-objects
-                db-adapter/convert-db-keys->app-keys))
+              (shared-db/to-app result))
             (utils/error-response (str (name entity) " not found") :status 404)))))
     "Failed to get entity"))
 
@@ -230,9 +224,7 @@
                 {:entity-type entity :changes updates :result result}
                 ip-address user-agent)
               (utils/success-response
-                (-> result
-                  db-adapter/convert-pg-objects
-                  db-adapter/convert-db-keys->app-keys)))
+                (shared-db/to-app result)))
             (utils/error-response (str (name entity) " not found") :status 404)))))
     "Failed to update entity"))
 
@@ -260,11 +252,10 @@
                        [])]
 
           (utils/success-response
-            (-> (if (= entity "users")
-                  {:users result}
-                  result)
-              db-adapter/convert-pg-objects
-              db-adapter/convert-db-keys->app-keys)))))
+            (shared-db/to-app
+              (if (= entity "users")
+                {:users result}
+                result))))))
     "Failed to list entities"))
 
 (defn check-deletion-constraints-batch-handler
@@ -282,20 +273,18 @@
             entity-ids (->> ids-raw (map utils/parse-uuid-custom) (filter some?) vec)
             _ (log/info "Admin" (:email admin) "batch checking deletion constraints for" entity
                 {:count (count entity-ids)})
-           result (case entity
-                    "users" (admin-users/check-users-deletion-constraints-batch db entity-ids)
-                    {:error true
-                     :status 501
-                     :message "Batch deletion constraints not supported for this entity type"
+            result (case entity
+                 "users" (user-validation/check-users-deletion-constraints-batch db entity-ids)
+                     {:error true
+                      :status 501
+                      :message "Batch deletion constraints not supported for this entity type"
                       :supported-entities ["users"]
                       :requested-entity entity})]
         (if (:error result)
           (utils/error-response (:message result) :status (:status result))
           ;; Ensure FE can access results under :data consistently
           (utils/json-response
-            (-> {:success true :data {:results (:results result)}}
-              db-adapter/convert-pg-objects
-              db-adapter/convert-db-keys->app-keys)))))
+            (shared-db/to-app {:success true :data {:results (:results result)}})))))
     "Failed to batch-check deletion constraints"))
 
 (defn routes

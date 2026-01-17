@@ -3,7 +3,9 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.auth :as auth]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
+    [app.shared.adapters.normalization :as norm]
+    [app.template.backend.utils.adapters.persistence :as persist]
     [app.shared.type-conversion :as tc]
     [clojure.string :as str]
     [honey.sql :as hsql]
@@ -120,10 +122,13 @@
   "Export users data as CSV"
   [db user-ids]
   (try
-    (let [users (db-adapter/execute-admin-query
+    (let [users (persist/execute-admin-query
                   db
                   (export-users-query user-ids)
-                  export-user-config)
+                  (fn [raw]
+                    (-> raw
+                      shared-db/convert-pg-objects
+                      (norm/normalize-admin-result export-user-config))))
 
           ;; Convert to CSV format
           csv-headers "ID,Email,Full Name,Role,Status,Email Verified,Auth Provider,Created At,Last Login,Tenant Name,Tenant Slug"
@@ -169,10 +174,12 @@
                                   :from [:admins]
                                   :where [:= :id admin-id]}))
             normalized-user (when user
-                              (db-adapter/normalize-admin-result
-                                user {:prefixes ["users-" "user-"]
-                                      :namespaces #{"users"}
-                                      :id-fields #{}}))
+                              (-> user
+                                shared-db/convert-pg-objects
+                                (norm/normalize-admin-result
+                                  {:prefixes ["users-" "user-"]
+                                   :namespaces #{"users"}
+                                   :id-fields #{}})))
             tenant-id (or (:tenant-id normalized-user)
                           ;; Fallbacks for unexpected shapes (pre-normalization)
                         (:tenant_id user)

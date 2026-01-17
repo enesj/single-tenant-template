@@ -4,7 +4,7 @@
     [app.template.backend.middleware.rate-limiting :as rate-limiting]
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.dashboard :as admin-dashboard]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
 
 (defn stats-handler
@@ -14,9 +14,7 @@
     (fn [request]
       (let [;; Get dashboard stats
         stats (admin-dashboard/get-dashboard-stats db)
-            converted-stats (-> stats
-                              db-adapter/convert-pg-objects
-                              db-adapter/convert-db-keys->app-keys)
+            converted-stats (shared-db/to-app stats)
             ;; Get current admin info from request (set by auth middleware)
             admin (:admin request)
             admin-info (when admin

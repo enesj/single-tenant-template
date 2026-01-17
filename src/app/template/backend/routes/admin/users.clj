@@ -3,7 +3,8 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.users :as admin-users]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.admin.backend.services.admin.users.deletion :as user-deletion]
+    [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
 
 (defn list-users-handler
@@ -19,9 +20,7 @@
             users (admin-users/list-all-users db (merge filters pagination))]
         (log/info "👥 Admin list-users returned" (count users) "users"
           {:filters filters :pagination pagination})
-        (let [converted-users (-> users
-                                db-adapter/convert-pg-objects
-                                db-adapter/convert-db-keys->app-keys)]
+        (let [converted-users (shared-db/to-app users)]
           (utils/json-response {:users converted-users}))))
     "Failed to retrieve users"))
 
@@ -33,9 +32,7 @@
       (utils/handle-uuid-request request :id
         (fn [user-id _request]
           (if-let [user (admin-users/get-user-details db user-id)]
-            (let [converted-user (-> user
-                                   db-adapter/convert-pg-objects
-                                   db-adapter/convert-db-keys->app-keys)]
+            (let [converted-user (shared-db/to-app user)]
               (utils/json-response {:user converted-user}))
             (utils/error-response "User not found" :status 404)))))
     "Failed to retrieve user details"))
@@ -56,9 +53,7 @@
               "user" user-id updates)
 
             ;; Return the updated user data for frontend processing
-            (let [converted-user (-> updated-user
-                                   db-adapter/convert-pg-objects
-                                   db-adapter/convert-db-keys->app-keys)]
+            (let [converted-user (shared-db/to-app updated-user)]
               (utils/json-response converted-user))))))
     "Failed to update user"))
 
@@ -80,9 +75,7 @@
           (utils/log-admin-action "create_user" (:id admin) "user"
             (:id created-user) user-data)
 
-          (let [converted-user (-> created-user
-                                 db-adapter/convert-pg-objects
-                                 db-adapter/convert-db-keys->app-keys)]
+          (let [converted-user (shared-db/to-app created-user)]
             (utils/json-response {:user converted-user})))))
     "Failed to create user"))
 
@@ -95,7 +88,7 @@
         (fn [user-id _request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
                 {:keys [force-delete]} (:body request)
-                result (admin-users/delete-user! db user-id
+                result (user-deletion/delete-user! db user-id
                          (:id admin)
                          ip-address
                          user-agent

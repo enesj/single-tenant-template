@@ -11,6 +11,8 @@
   (:require
     [app.template.backend.routes.admin.user-operations :as user-ops]
     [app.admin.backend.services.admin.users :as admin-users]
+    [app.admin.backend.services.admin.users.management :as user-management]
+    [app.admin.backend.services.admin.users.security :as user-security]
     [app.backend.test-helpers :as h]
     [app.shared.field-metadata :as field-meta]
     [clojure.test :refer [deftest is testing use-fixtures]]))
@@ -87,7 +89,7 @@
                      :body {:role "premium"}})]
       (with-redefs [field-meta/get-enum-choices
                     (constantly ["user" "premium" "admin"])
-                    admin-users/update-user-role!
+                    user-management/update-user-role!
                     (fn [_db user-id role _admin-id _ip _ua]
                       (is (= test-user-id user-id))
                       (is (= "premium" role))
@@ -127,7 +129,7 @@
           handler (user-ops/force-verify-email-handler db)
           request (h/mock-admin-request :post (str "/admin/api/users/verify-email/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-users/force-verify-email!
+      (with-redefs [user-security/force-verify-email!
                     (fn [_db user-id _admin-id _ip _ua]
                       (is (= test-user-id user-id))
                       {:success true})]
@@ -146,7 +148,7 @@
           handler (user-ops/reset-user-password-handler db)
           request (h/mock-admin-request :post (str "/admin/api/users/reset-password/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-users/reset-user-password!
+      (with-redefs [user-security/reset-user-password!
                     (fn [_db user-id _admin-id _ip _ua]
                       (is (= test-user-id user-id))
                       {:success true :temporary-password "TempPass123!"})]
@@ -160,7 +162,7 @@
           handler (user-ops/reset-user-password-handler db)
           request (h/mock-admin-request :post (str "/admin/api/users/reset-password/" test-user-id) mock-admin
                     {:path-params {:id (str test-user-id)}})]
-      (with-redefs [admin-users/reset-user-password!
+      (with-redefs [user-security/reset-user-password!
                     (fn [_db _user-id _admin-id _ip _ua]
                       {:success false :message "User not found"})]
         (let [response (handler request)]

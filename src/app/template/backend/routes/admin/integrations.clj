@@ -3,7 +3,7 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.monitoring.integrations :as admin-integrations]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
 
 (defn get-integration-overview-handler
@@ -14,8 +14,7 @@
       (log/info "🔗 Getting integration overview")
       (let [overview (admin-integrations/get-integration-overview db)]
         (-> overview
-          db-adapter/convert-pg-objects
-          db-adapter/convert-db-keys->app-keys
+          shared-db/to-app
           utils/json-response)))
     "Failed to get integration overview"))
 
@@ -29,8 +28,7 @@
             hours (utils/parse-int-param params :hours 24)
             performance (admin-integrations/get-integration-performance db {:period period :hours hours})]
         (-> performance
-          db-adapter/convert-pg-objects
-          db-adapter/convert-db-keys->app-keys
+          shared-db/to-app
           utils/json-response)))
     "Failed to get integration performance"))
 
@@ -43,8 +41,7 @@
             pagination (utils/extract-pagination-params params)
             webhook-status (admin-integrations/get-webhook-status db pagination)]
         (-> webhook-status
-          db-adapter/convert-pg-objects
-          db-adapter/convert-db-keys->app-keys
+          shared-db/to-app
           utils/json-response)))
     "Failed to get webhook status"))
 

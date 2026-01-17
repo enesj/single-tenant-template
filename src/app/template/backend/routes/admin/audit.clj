@@ -3,7 +3,7 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.audit :as audit-service]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [next.jdbc :as next-jdbc]
     [taoensso.timbre :as log]))
 
@@ -23,7 +23,7 @@
                      :action (:action params)}
             logs (audit-service/get-audit-logs db (merge filters pagination))]
         ;; Convert any remaining PostgreSQL objects for JSON serialization
-        (utils/json-response {:logs (db-adapter/convert-pg-objects logs)})))
+          (utils/json-response {:logs (shared-db/convert-pg-objects logs)})))
     "Failed to retrieve audit logs"))
 
 (defn delete-audit-log-handler

@@ -329,7 +329,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 
 - **Duplicate DB result → app normalization helpers (backend)** — **Resolved (2026-01-13)**.
   - Centralized as `app.shared.adapters.database/to-app` (PGobject/PgArray conversion + snake_case → kebab-case keys).
-  - Template DB adapter re-exports for backward compatibility: `app.template.backend.utils.adapters.database/to-app`.
+  - Removed the template adapter re-export shim (`app.template.backend.utils.adapters.database/*`); call sites use shared adapters directly.
   - Removed duplicated local `to-app` implementations across expenses backend routes/handlers:
     - `src/app/domain/backend/expenses/routes/routes_factory.clj`
     - `src/app/domain/backend/expenses/routes/receipts.clj`

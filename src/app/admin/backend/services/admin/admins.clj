@@ -3,7 +3,7 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.auth :as auth]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.normalization :as norm]
     [app.shared.type-conversion :as tc]
     [honey.sql :as hsql]
     [java-time.api :as time]
@@ -26,7 +26,7 @@
   "Normalize an admin row from the database using shared utilities"
   [admin]
   (-> admin
-    (db-adapter/normalize-admin-result admin-config)
+    (norm/normalize-admin-result admin-config)
     (dissoc :password_hash :password-hash)))
 
 ;; ============================================================================

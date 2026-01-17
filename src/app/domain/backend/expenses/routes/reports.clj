@@ -3,9 +3,9 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.domain.backend.expenses.services.reports :as reports]
-    [app.template.backend.utils.adapters.database :as db-adapter]))
+    [app.shared.adapters.database :as shared-db]))
 
-(def ^:private to-app db-adapter/to-app)
+(def ^:private to-app shared-db/to-app)
 
 (defn- range-opts [qp]
   {:from (:from qp)

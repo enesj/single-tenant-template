@@ -9,7 +9,7 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit-service]
     [app.admin.backend.services.admin.monitoring.shared :as monitoring-shared]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -52,7 +52,7 @@
                                                             [:>= :created_at (:days-7 time-periods)]]
                                                     :group-by [:action :entity_type]
                                                     :order-by [[[:count :*] :desc]]}))
-                                 (mapv db-adapter/convert-pg-objects))
+                                 (mapv shared-db/convert-pg-objects))
 
             ;; Active integrations using shared tenant activity summary
             active-integrations (monitoring-shared/tenant-activity-summary
@@ -88,7 +88,7 @@
                            GROUP BY date_trunc('hour', created_at)
                            ORDER BY hour DESC"
                                 hours-ago])
-                          (mapv db-adapter/convert-pg-objects))
+                            (mapv shared-db/convert-pg-objects))
 
           ;; Error rates by integration type (using action patterns)
           error-rates (->> (jdbc/execute! db
@@ -104,7 +104,7 @@
                                                    [:>= :created_at hours-ago]]
                                            :group-by [:action]
                                            :order-by [[:action :asc]]}))
-                        (mapv db-adapter/convert-pg-objects))
+                        (mapv shared-db/convert-pg-objects))
 
           ;; Slowest operations (using created_at vs updated_at if available)
           slow-operations (->> (jdbc/execute! db
@@ -161,7 +161,7 @@
                                                 :group-by [:tenant_id]
                                                 :order-by [[[:count :*] :desc]]
                                                 :limit 10}))
-                             (mapv db-adapter/convert-pg-objects))
+                               (mapv shared-db/convert-pg-objects))
 
           ;; Webhook delivery success rate
           success-rate (some-> (jdbc/execute-one! db
@@ -171,7 +171,7 @@
                                                :where [:and
                                                        [:like :action "%webhook%"]
                                                        [:>= :created_at (time/minus (time/instant) (time/days 1))]]}))
-                         db-adapter/convert-pg-objects)]
+                                           shared-db/convert-pg-objects)]
 
       ;; Return kebab-case keys consistently
       {:webhook-events webhook-events

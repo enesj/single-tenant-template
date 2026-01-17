@@ -4,7 +4,7 @@
    Tests audit log structure, filtering, and retrieval."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [clojure.test :refer [deftest is testing]]))
 
 ;; ============================================================================
@@ -129,13 +129,13 @@
 (deftest pg-object-conversion-test
   (testing "convert-pg-objects handles basic values"
     (let [data {:id "123" :name "test"}
-          converted (db-adapter/convert-pg-objects data)]
+          converted (shared-db/convert-pg-objects data)]
       (is (map? converted))
       (is (= "test" (:name converted)))))
 
   (testing "convert-pg-objects handles vectors"
     (let [data [{:id 1} {:id 2}]
-          converted (db-adapter/convert-pg-objects data)]
+          converted (shared-db/convert-pg-objects data)]
       (is (vector? converted))
       (is (= 2 (count converted))))))
 

@@ -6,7 +6,7 @@
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.protocols :as core-protocols]
     [app.shared.auth :as shared-auth]
-    [app.shared.patterns :as patterns]
+    [app.shared.patterns.email :as email-patterns]
     [buddy.hashers :as hashers]
     [clojure.string :as str]
     [java-time.api :as time]
@@ -174,8 +174,8 @@
 
     ;; 0a) Validate email format before hitting the database so we never
     ;; rely on the users_email_check constraint for user-visible errors.
-    (when-not (or (patterns/valid-email? email)
-                (patterns/valid-email-simple? email))
+  (when-not (or (email-patterns/valid-email? email)
+        (email-patterns/valid-email-simple? email))
       (throw (ex-info "Invalid email format"
                {:type :validation-error
                 :errors {:email ["Please enter a valid email address"]}})))

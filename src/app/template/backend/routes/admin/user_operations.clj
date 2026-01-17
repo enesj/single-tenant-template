@@ -1,9 +1,11 @@
 (ns app.template.backend.routes.admin.user-operations
   "Admin advanced user operations handlers"
   (:require
-   [app.template.backend.routes.admin.utils :as utils]
+  [app.template.backend.routes.admin.utils :as utils]
   [app.admin.backend.services.admin.users :as admin-users]
   [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
+  [app.admin.backend.services.admin.users.management :as user-management]
+  [app.admin.backend.services.admin.users.security :as user-security]
    [app.shared.field-metadata :as field-meta]
    [clojure.string :as str]))
 
@@ -23,7 +25,7 @@
               (if-not (contains? allowed-roles role-str)
                 (utils/error-response "Invalid role value" :status 400 :details {:allowed (vec allowed-roles) :value role-str})
                 (do
-                  (admin-users/update-user-role! db user-id role-str (:id admin) ip-address user-agent)
+                  (user-management/update-user-role! db user-id role-str (:id admin) ip-address user-agent)
 
                   (utils/log-admin-action "update_user_role" (:id admin)
                     "user" user-id {:role role-str})
@@ -39,7 +41,7 @@
       (utils/handle-uuid-request request :id
         (fn [user-id request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)]
-            (admin-users/force-verify-email! db user-id
+            (user-security/force-verify-email! db user-id
               (:id admin)
               ip-address
               user-agent)
@@ -58,7 +60,7 @@
       (utils/handle-uuid-request request :id
         (fn [user-id request]
           (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-                result (admin-users/reset-user-password! db user-id
+                result (user-security/reset-user-password! db user-id
                          (:id admin)
                          ip-address
                          user-agent)]

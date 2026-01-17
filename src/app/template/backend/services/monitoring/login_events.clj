@@ -1,7 +1,7 @@
 (ns app.template.backend.services.monitoring.login-events
   "Simple login events recording and querying for admins and users."
   (:require
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [app.shared.type-conversion :as tc]
     [honey.sql :as hsql]
     [java-time.api :as time]
@@ -163,9 +163,7 @@
        :offset offset
        :row-count (count rows)})
     (mapv (fn [row]
-            (let [converted (-> row
-                              db-adapter/convert-pg-objects
-                              db-adapter/convert-db-keys->app-keys)
+            (let [converted (shared-db/to-app row)
                   id-val (or (:id converted)
                              (:login-events/id converted))
                   principal-id-val (or (:principal-id converted)

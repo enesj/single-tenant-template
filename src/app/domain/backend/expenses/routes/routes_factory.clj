@@ -6,7 +6,7 @@
    behavior through configuration."
   (:require
     [app.template.backend.routes.admin.utils :as utils]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [cheshire.core :as json]
     [clojure.string :as str]
     [taoensso.timbre :as log]))
@@ -18,7 +18,7 @@
 (defn to-app
   "Convert DB rows to API-friendly maps."
   [data]
-  (db-adapter/to-app data))
+  (shared-db/to-app data))
 
 (defn resolve-fn
   "Require and resolve a var in the given namespace. Accepts namespaced or bare symbols.

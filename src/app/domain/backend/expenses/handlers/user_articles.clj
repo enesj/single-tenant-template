@@ -10,14 +10,14 @@
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [app.template.backend.utils.adapters.database :as db-adapter]
+    [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
 
 ;; -----------------------------------------------------------------------------
 ;; Helpers
 ;; -----------------------------------------------------------------------------
 
-(def ^:private to-app db-adapter/to-app)
+(def ^:private to-app shared-db/to-app)
 
 (def ^:private allowed-roles
   #{"admin" "owner"})

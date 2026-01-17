@@ -8,6 +8,7 @@
   (:require
     [app.template.backend.routes.admin.entities :as entities]
     [app.admin.backend.services.admin.users :as admin-users]
+    [app.admin.backend.services.admin.users.deletion :as user-deletion]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
@@ -58,7 +59,7 @@
           request (h/mock-admin-request :delete (str "/admin/api/entities/users/" test-user-id) mock-admin
                     {:path-params {:entity "users" :id (str test-user-id)}
                      :body {:dry-run true}})]
-      (with-redefs [admin-users/delete-user!
+      (with-redefs [user-deletion/delete-user!
                     (fn [_db user-id _admin-id _ip _ua & {:keys [dry-run]}]
                       (is (= test-user-id user-id))
                       (is (true? dry-run))
@@ -78,7 +79,7 @@
           request (h/mock-admin-request :delete (str "/admin/api/entities/users/" test-user-id) mock-admin
                     {:path-params {:entity "users" :id (str test-user-id)}
                      :body {}})]
-      (with-redefs [admin-users/delete-user!
+      (with-redefs [user-deletion/delete-user!
                     (fn [_db user-id _admin-id _ip _ua & _opts]
                       (is (= test-user-id user-id))
                       {:success true
@@ -95,7 +96,7 @@
           request (h/mock-admin-request :delete (str "/admin/api/entities/users/" test-user-id) mock-admin
                     {:path-params {:entity "users" :id (str test-user-id)}
                      :body {:force-delete true}})]
-      (with-redefs [admin-users/delete-user!
+      (with-redefs [user-deletion/delete-user!
                     (fn [_db _user-id _admin-id _ip _ua & {:keys [force-delete]}]
                       (is (true? force-delete))
                       {:success true :message "User force deleted"})]
@@ -115,7 +116,7 @@
           handler (entities/delete-entity-handler db mock-crud-service)
           request (h/mock-admin-request :delete (str "/admin/api/entities/users/" test-user-id) mock-admin
                     {:path-params {:entity "users" :id (str test-user-id)}})]
-      (with-redefs [admin-users/delete-user!
+      (with-redefs [user-deletion/delete-user!
                     (fn [_db _user-id _admin-id _ip _ua & _opts]
                       (throw (ex-info "Cannot delete user with active subscriptions"
                                {:status 400
