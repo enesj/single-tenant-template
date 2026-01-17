@@ -18,6 +18,7 @@
    Events read from both paths during migration, write to new path only."
   (:require
     [clojure.string]
+    [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.interceptors.persistence :as persistence]
@@ -47,7 +48,7 @@
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
       (let [entity-key (model-naming/ensure-app-keyword entity-name)
-            field-key (model-naming/ensure-app-keyword field-name)
+            field-key (model-naming/ensure-app-keyword (kw/ensure-name field-name))
             ;; Read from new path first, fall back to legacy
             current-map (or (get-in db (paths/entity-prefs-filters-fields entity-key))
                           (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
@@ -64,7 +65,7 @@
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
       (let [entity-key (model-naming/ensure-app-keyword entity-name)
-            field-key (model-naming/ensure-app-keyword field-name)
+            field-key (model-naming/ensure-app-keyword (kw/ensure-name field-name))
             route-name (get-in db (paths/current-route-name))
             admin-route? (and route-name
                            (clojure.string/starts-with? (name route-name) "admin"))

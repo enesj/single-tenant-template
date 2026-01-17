@@ -83,7 +83,8 @@
         admin-role (or (:admins/role admin) (:role admin))
 
         ;; Get current logged-in admin
-        current-admin (use-subscribe [:admin/current-admin])
+        ;; NOTE: The admin auth subsystem stores identity under :admin/current-user.
+        current-admin (use-subscribe [:admin/current-user])
         current-admin-id (or (:id current-admin) (:admins/id current-admin))
         current-admin-role (or (:role current-admin) (:admins/role current-admin))
         is-current-owner? (= (str current-admin-role) "owner")

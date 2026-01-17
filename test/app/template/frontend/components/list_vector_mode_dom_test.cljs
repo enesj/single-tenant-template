@@ -11,6 +11,7 @@
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.utils.column-config :as column-config]
     [app.template.frontend.utils.shared :as template-utils]
+    [clojure.string :as str]
     [cljs.test :refer-macros [async deftest is]]
     [re-frame.core :as rf]
     [uix.core :refer [$]]
@@ -96,6 +97,45 @@
               (is (= [:admin/toggle-column-visibility :expenses :currency]
                     @dispatched)
                 "Admin pages must dispatch admin vector-config toggle event")
+              (done))))))))
+
+(deftest column-visibility-normalizes-namespaced-field-ids
+  (async done
+    (let [dispatched (atom nil)]
+      (with-redefs [rf/dispatch (fn [evt] (reset! dispatched evt))
+                    column-config/vector-config? (constantly true)
+                    ;; Not used directly by this component, but keep stable.
+                    column-config/get-visible-columns (fn [_vector-mode? _entity-kw raw]
+                                                      (or raw {}))
+                    template-utils/use-entity-spec (fn [_ _] {:entity-spec nil})
+                    uix-rf/use-subscribe (fn [query]
+                                           (cond
+                                             (= query [:admin/config-loaded?]) true
+                                             ;; Unified visible-columns subscription used for UI state.
+                                             (= (first query) :app.template.frontend.subs.ui/visible-columns) {:email false}
+                                             ;; Locks: none.
+                                             (= (first query) :app.template.frontend.subs.ui/locked-visible-columns) {}
+                                             ;; Entity config: no always-visible.
+                                             (= (first query) :app.admin.frontend.subs.config/entity-config) {:always-visible []}
+                                             ;; Filtering deps.
+                                             (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                             (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                             :else nil))]
+        (mount-component!
+          ($ list-view-settings/column-visibility-settings
+            {:entity-name :admins
+             ;; Namespaced id is common in DB-backed specs; we must normalize to :email.
+             :entity-spec {:fields [{:id :admins/email :label "Email"}]}})
+          (fn [container]
+            (let [btn (button-by-text container "Email")]
+              (is (some? btn) "Email toggle button should render")
+              ;; When visible-columns says {:email false}, the button should not be bold.
+              (is (not (str/includes? (.-className btn) "font-semibold"))
+                "Hidden column should not render as visible when id is namespaced")
+              (.click btn)
+              (is (= [:admin/toggle-column-visibility :admins :email]
+                    @dispatched)
+                "Click must dispatch a normalized (non-namespaced) column key")
               (done))))))))
 
 (deftest list-view-gates-vector-mode-by-admin-config-loaded

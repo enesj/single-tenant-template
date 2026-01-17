@@ -2,6 +2,8 @@
   "Simplified helpers for vector-based column configuration."
   (:require
     [app.admin.frontend.config.loader :as admin-config]
+    [app.shared.keywords :as kw]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.events.list.settings :as settings-events]))
 
 (defn vector-config?
@@ -40,11 +42,7 @@
       ;; Vector-config mode: convert vector of keys -> boolean map for all available columns
       :else
       (let [normalize (fn [k]
-                        (cond
-                          (nil? k) nil
-                          (keyword? k) k
-                          (string? k) (keyword k)
-                          :else (keyword (str k))))
+                        (model-naming/ensure-app-keyword (kw/ensure-name k)))
             visible-set (into #{} (keep normalize) (or raw-value []))
             available (or (admin-config/get-available-columns entity-kw) [])
             ;; Build a complete boolean map so table/rows can resolve definitively

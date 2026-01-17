@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.list.table
   (:require
     [app.shared.keywords :as kw]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon
@@ -184,11 +185,9 @@
         ;; vector-config, treat it as "no restriction" (default sortable). Only restrict
         ;; when the config provides a non-empty set of sortable columns.
         normalize-col (fn [col]
-                        (cond
-                          (nil? col) nil
-                          (keyword? col) col
-                          (string? col) (keyword col)
-                          :else (keyword (str col))))
+                        ;; Canonicalize to a simple app keyword (no namespace).
+                        ;; Example: :admins/email -> :email, :created_at -> :created-at
+                        (model-naming/ensure-app-keyword (kw/ensure-name col)))
 
         sortable-set (let [sc (use-subscribe [:admin/sortable-columns entity-name])]
                        ;; Normalize string/keyword column keys and only restrict sorting
@@ -213,8 +212,8 @@
 
                          :else nil)
 
-        base-headers (mapv (fn [field]
-                             (let [field-id (keyword (:id field))
+          base-headers (mapv (fn [field]
+                   (let [field-id (normalize-col (:id field))
                                    ;; Use vector-config driven visibility map directly
                                    is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
                                                         (if (not= user-setting ::not-found) user-setting true))

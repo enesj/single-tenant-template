@@ -21,6 +21,7 @@
    4. Entity config defaults from entities.edn
    5. Fallback defaults (in-code)"
   (:require
+    [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.settings.resolver :as resolver]
@@ -117,7 +118,9 @@
 
 (defn- normalize-col
   [k]
-  (model-naming/ensure-app-keyword k))
+  ;; Canonicalize to a simple app keyword (no namespace).
+  ;; Example: :admins/email -> :email, :created_at -> :created-at
+  (model-naming/ensure-app-keyword (kw/ensure-name k)))
 
 (defn- normalize-col-map
   "Normalize a column visibility map so all keys are keywords."

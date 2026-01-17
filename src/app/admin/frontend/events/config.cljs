@@ -8,6 +8,7 @@
   - [:ui :entity-prefs <entity> :columns :visible]        Map for quick lookup"
   (:require
     [app.admin.frontend.config.loader :as config-loader]
+    [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.interceptors.persistence :as persistence]
@@ -39,7 +40,8 @@
   ::toggle-column-visibility
   [persistence/persist-entity-prefs]
   (fn [{:keys [db]} [_ entity-name column-name]]
-    (let [normalize model-naming/ensure-app-keyword
+    (let [normalize (fn [v]
+                      (model-naming/ensure-app-keyword (kw/ensure-name v)))
           entity-key (model-naming/ensure-app-keyword entity-name)
           policy-locks (merge
                          (get-in db [:admin :config :view-options entity-key :column-locks])
@@ -83,8 +85,23 @@
                                    (into (vec always-visible))
                                    distinct
                                    vec)
-              ;; Build visibility map for quick lookup (for components using map-based access)
-              visibility-map (into {} (map (fn [col] [col true]) normalized-visible))]
+              ;; Build a complete visibility map (true/false for ALL available columns).
+              ;;
+              ;; IMPORTANT:
+              ;; The unified list rendering treats missing keys as visible.
+              ;; If we only store `{col true}` entries, hidden columns disappear from the map and
+              ;; will incorrectly render as visible. So we must write explicit `false` entries
+              ;; for hidden columns.
+              visible-set (set normalized-visible)
+              visibility-map (cond
+                               (seq all-columns)
+                               (into {}
+                                 (map (fn [col]
+                                        [col (contains? visible-set col)]))
+                                 all-columns)
+
+                               :else
+                               (into {} (map (fn [col] [col true]) normalized-visible)))]
           {:db (-> db
                  (assoc-in [:admin :config :table-columns entity-key :visible-columns] normalized-visible)
                    ;; Also store in unified prefs for persistence

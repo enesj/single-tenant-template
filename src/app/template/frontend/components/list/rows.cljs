@@ -6,6 +6,7 @@
   (:require
     [app.template.frontend.utils.id :as id-utils]
     [app.shared.keywords :as kw]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.components.list.cells :as cells]
     [app.template.frontend.components.list.fields :refer [get-field-display-value]] ;; Import reactive cell components from the cells module
@@ -45,19 +46,29 @@
                                  entity-fields)
 
         ;; Process field values, but only for visible columns
-        field-values (mapv (fn [field]
-                             (let [field-id (keyword (:id field))
-                                   ;; Use vector-config driven visibility map directly
-                                   is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
-                                                        (if (not= user-setting ::not-found) user-setting true))]
-                               ;; Only include this field if the column is visible
-                               (when is-column-visible?
-                                 (let [;; Try both namespaced and unnamespaced field lookup
-                                       value (or (get item field-id)
-                                               (get item (keyword (str (kw/ensure-name entity-name)
-                                                                    "/"
-                                                                    (kw/ensure-name field-id)))))]
-                                   (get-field-display-value field value)))))
+          field-values (mapv (fn [field]
+                   (let [raw-id (:id field)
+                     ;; Canonical (non-namespaced) column key used by config/prefs.
+                     ;; Example: :admins/email -> :email
+                     field-id (model-naming/ensure-app-keyword (kw/ensure-name raw-id))
+                     ;; Use vector-config driven visibility map directly.
+                     is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
+                          (if (not= user-setting ::not-found) user-setting true))]
+                 ;; Only include this field if the column is visible
+                 (when is-column-visible?
+                   (let [entity-ns (kw/ensure-name entity-name)
+                     raw-name (kw/ensure-name raw-id)
+                     raw-kw (kw/ensure-keyword raw-id)
+                     namespaced-raw (when (and entity-ns raw-name)
+                         (keyword entity-ns raw-name))
+                     namespaced-canonical (when (and entity-ns (kw/ensure-name field-id))
+                           (keyword entity-ns (kw/ensure-name field-id)))
+                     ;; Try canonical + raw (namespaced) keys for resilience.
+                     value (or (get item field-id)
+                         (when raw-kw (get item raw-kw))
+                         (when namespaced-raw (get item namespaced-raw))
+                         (when namespaced-canonical (get item namespaced-canonical)))]
+                     (get-field-display-value field value)))))
                        filtered-entity-fields)
 
         ;; Filter out nil values (from columns that should be hidden)

@@ -8,6 +8,8 @@
     [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.subs.ui :as ui-subs]
     [app.template.frontend.utils.column-config :as column-config]
+    [app.shared.keywords :as kw]
+    [app.shared.model-naming :as model-naming]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -52,12 +54,15 @@
         ;; Filterable columns come from config (if present). If missing, treat all as filter-configurable.
         filterable-columns (or (use-subscribe [::ui-subs/filterable-fields entity-kw]) [])
         filterable-state (or (use-subscribe [::settings-events/filterable-fields entity-kw]) {})
+        ;; IMPORTANT: Normalize field ids to app-style keywords.
+        ;; Specs and rows sometimes use namespaced keys (e.g. :admins/email),
+        ;; while view-options/table-columns/prefs are keyed by non-namespaced app keys (e.g. :email).
+        ;; If we don't normalize here, toggles dispatch updates but the UI reads a different key,
+        ;; making it look like "nothing toggles".
         normalize-key (fn [k]
-                        (cond
-                          (nil? k) nil
-                          (keyword? k) k
-                          (string? k) (keyword k)
-                          :else (keyword (str k))))
+            ;; Canonicalize to a simple app keyword (no namespace).
+            ;; Example: :admins/email -> :email, :created_at -> :created-at
+            (model-naming/ensure-app-keyword (kw/ensure-name k)))
         filterable-column-set (when (seq filterable-columns)
                                 (into #{} (keep normalize-key) filterable-columns))
         filterable-state-normalized (into {}

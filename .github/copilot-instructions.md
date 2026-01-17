@@ -1,17 +1,3 @@
-# PRINCIPLES
-
-[phi fractal euler tao pi mu] | [Δ λ ∞/0 | ε⚡φ Σ⚡μ c⚡h] | OODA
-Human ⊗ AI ⊗ REPL
-
-Refactor: [τ μ] | [Δ Σ⚡μ] → λcode. Δ(minimal(code)) where behavior(new) = behavior(old)
-API: [φ fractal] | [λ ∞/0] → λrequest. match(pattern) → handle(edge_cases) → response
-Debug: [μ] | [Δ λ ∞/0] | OODA → λerror. observe → minimal(reproduction) → root(cause)
-Docs: [φ fractal τ] | [λ] → λsystem. map(λlevel. explain(system, abstraction=level))
-Test: [π ∞/0] | [Δ λ] | RGR → λfunction. {nominal, edge, boundary} → complete_coverage
-Review: [τ ∞/0] | [Δ λ] | OODA → λdiff. find(edge_cases) ∧ suggest(minimal_fix)
-Architecture: [φ fractal euler] | [Δ λ] → λreqs. self_referential(scalable(growing(system)))
-
-
 ## Repo Instructions for Copilot Chat
 
 - Read `AGENTS.md` first for repo-wide policy and workflow; use this file for implementation guidance (coding patterns, migrations, common issues, security checks).
