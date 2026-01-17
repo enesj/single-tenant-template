@@ -36,14 +36,14 @@ The CRUD system is built with three main layers:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                       Bridge CRUD System                             │
 │   Customizable CRUD handlers with context-aware overrides           │
-│   Location: shared/frontend/bridges/crud.cljs                       │
+│   Location: template/frontend/shared/bridges/crud.cljs              │
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      Shared Success Module                           │
 │   Consistent ID extraction and recently-updated/created tracking    │
-│   Location: shared/frontend/crud/success.cljs                       │
+│   Location: template/frontend/shared/crud/success.cljs              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,7 +58,7 @@ The CRUD system is built with three main layers:
 
 ## Key Modules
 
-### 1. `app.shared.frontend.crud.success`
+### 1. `app.template.frontend.shared.crud.success`
 
 **Purpose**: Single source of truth for CRUD success handling
 
@@ -77,7 +77,7 @@ The CRUD system is built with three main layers:
 ;; - Entity ID tracked in [:ui :recently-updated :users]
 ```
 
-### 2. `app.shared.frontend.bridges.crud`
+### 2. `app.template.frontend.shared.bridges.crud`
 
 **Purpose**: Context-aware CRUD operation customization
 
@@ -137,7 +137,7 @@ User clicks "Create User" button
 ┌─────────────────────────────────────────────────────────────┐
 │ Admin Users Adapter (adapters/users.cljs)                   │
 │ - Uses admin HTTP endpoint: /admin/api/users                │
-│ - Checks for admin token                                    │
+│ - Admin HTTP helpers attach x-admin-token when available    │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -293,48 +293,55 @@ When multiple bridges are registered:
 
 ### Detection
 
-Admin context is detected automatically by the template HTTP layer (`template/frontend/api/http.cljs`):
+Admin context is detected by the CRUD bridge layer (`template/frontend/shared/bridges/crud.cljs`):
 
 ```clojure
-(defn- admin-context?
-  "Best-effort detection that we are inside the admin bundle."
-  []
-  (boolean (or (get-admin-token)                                    ; Token in app-db or localStorage
-               (str/includes? pathname "/admin")                     ; /admin in URL path
-               (str/includes? (str/lower-case hostname) "admin"))))  ; admin subdomain
+(defn- in-admin-context?
+        "Best-effort detection that we are inside an admin UI context.
+
+        IMPORTANT: Token presence is intentionally ignored to avoid routing admin calls
+        from non-admin pages with stale tokens."
+        [db]
+        (let [route-name (get-in db (paths/current-route-name))
+                                admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+                                pathname (when (exists? js/window)
+                                                                         (some-> js/window .-location .-pathname))
+                                in-admin-path? (and pathname (str/includes? pathname "/admin"))]
+                (boolean (or admin-route? in-admin-path?))))
 ```
 
-This detection is used by all CRUD operations (`create-entity`, `update-entity`, `delete-entity`) to automatically route to the correct endpoint.
+This detection is used by the default CRUD request handlers (`create-entity`, `update-entity`, `delete-entity`) to choose admin vs public endpoints.
 
 ### Automatic Admin Routing
 
-The template HTTP helpers now automatically handle admin context:
+The default CRUD request handlers now choose admin vs public endpoints based on `in-admin-context?` and then call the template HTTP helpers:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Template HTTP Layer (http.cljs)                              │
+│ Default CRUD Requests (bridges/crud.cljs)                    │
 │                                                              │
-│ admin-context? = true                                        │
-│ ├── create-entity → POST /admin/api/{entity}                │
-│ ├── update-entity → PUT /admin/api/{entity}/{id}            │
-│ ├── delete-entity → DELETE /admin/api/{entity}/{id}         │
-│ └── + x-admin-token header automatically attached            │
+│ in-admin-context? = true                                     │
+│ ├── create-entity-admin → POST /admin/api/entities/{entity} │
+│ ├── update-entity-admin → PUT /admin/api/entities/{entity}/{id} │
+│ ├── delete-entity-admin → DELETE /admin/api/entities/{entity}/{id} │
+│ └── + x-admin-token header attached by admin HTTP helpers    │
 │                                                              │
-│ admin-context? = false                                       │
-│ ├── create-entity → POST /api/v1/entities/{entity}          │
-│ ├── update-entity → PUT /api/v1/entities/{entity}/{id}      │
-│ └── delete-entity → DELETE /api/v1/entities/{entity}/{id}   │
+│ in-admin-context? = false                                    │
+│ ├── create-entity-public → POST /api/v1/entities/{entity}   │
+│ ├── update-entity-public → PUT /api/v1/entities/{entity}/{id} │
+│ └── delete-entity-public → DELETE /api/v1/entities/{entity}/{id} │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 This means:
 - **Batch operations** (like bulk delete) work correctly in admin context without special handling
 - **Bridge customizations** can focus on success/failure behavior rather than endpoint routing
+- **Routing is based on route name/path** (not token presence)
 - The `x-admin-token` header is always attached when a token is available
 
 ### Admin-Specific Behavior
 
-1. **Automatic endpoint routing**: Template HTTP helpers detect admin context and use `/admin/api/*` endpoints
+1. **Automatic endpoint routing**: Default CRUD request handlers detect admin context via route name/path and use `/admin/api/*` endpoints
 2. **Authentication**: `x-admin-token` header automatically attached when token is present
 3. **Custom refresh**: Adapters dispatch `[:admin/load-users]` instead of generic fetch
 4. **Same highlighting**: Uses shared `crud/success` module
@@ -443,18 +450,17 @@ Use the bridge `on-success` handler:
 **Symptoms**: 404 errors or wrong data returned
 
 **Check**: 
-- Is admin token present? (Check localStorage and app-db)
-- Is the URL path or hostname containing "admin"?
-- The `admin-context?` function in `template/frontend/api/http.cljs` determines routing
+- Is the current reitit route name an admin route?
+- Is the URL path containing "/admin"?
+- The `in-admin-context?` function in `template/frontend/shared/bridges/crud.cljs` determines routing (token presence is ignored)
 
 **Debug**:
 ```clojure
 ;; Check if admin context is detected
-(let [token (or (:admin/token @re-frame.db/app-db)
-                (.getItem js/localStorage "admin-token"))
-      pathname (.-pathname js/window.location)]
-  (js/console.log "Admin token:" token)
-  (js/console.log "Pathname:" pathname))
+(let [route-name (get-in @re-frame.db/app-db (paths/current-route-name))
+                        pathname (.-pathname js/window.location)]
+        (js/console.log "Route name:" route-name)
+        (js/console.log "Pathname:" pathname))
 ```
 
 ### Debug Logging
@@ -477,9 +483,9 @@ To trace which code path is being used:
 1. Check browser Network tab for HTTP endpoint
 2. Add `js/console.log` in form interceptor
 3. Check `bridge-registry-summary` for registered bridges:
-   ```clojure
-   (app.shared.frontend.bridges.crud/bridge-registry-summary)
-   ```
+        ```clojure
+        (app.template.frontend.shared.bridges.crud/bridge-registry-summary)
+        ```
 
 ---
 
@@ -487,9 +493,9 @@ To trace which code path is being used:
 
 | File | Purpose |
 |------|---------|
-| `shared/frontend/crud/success.cljs` | Shared success handling, ID extraction, highlighting |
-| `shared/frontend/bridges/crud.cljs` | Bridge system for context-aware CRUD |
-| `template/frontend/api/http.cljs` | **HTTP helpers with automatic admin context routing** |
+| `template/frontend/shared/crud/success.cljs` | Shared success handling, ID extraction, highlighting |
+| `template/frontend/shared/bridges/crud.cljs` | Bridge system for context-aware CRUD |
+| `template/frontend/api/http.cljs` | HTTP helpers for public/admin entity CRUD |
 | `template/frontend/events/form.cljs` | Template form submission events |
 | `template/frontend/events/list/crud.cljs` | Template list CRUD events |
 | `admin/frontend/events/users/template/form_interceptors.cljs` | Admin form routing |

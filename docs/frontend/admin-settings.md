@@ -8,7 +8,8 @@ The admin settings UI provides a centralized interface for managing UI configura
 
 - **Admin settings**: `/admin/admin-settings` (admin panel behavior + admin entity configuration)
 - **User UI config**: `/admin/user-settings` (domain-owned defaults/locks for the user-facing app)
-- **Legacy**: `/admin/settings` redirects to `/admin/admin-settings`
+
+Legacy `/admin/settings` route has been removed; use `/admin/admin-settings`.
 
 Both pages persist changes by writing EDN config files in-repo via backend endpoints under `/admin/api/settings/*`.
 

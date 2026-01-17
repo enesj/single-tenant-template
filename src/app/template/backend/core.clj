@@ -154,27 +154,6 @@
   (let [services (template-di/create-service-container config database models-data nil)]
     (closeable-data services #(template-di/stop-services! services))))
 
-(defn- legacy-true-flags
-  "Return a seq of keyword paths under (:legacy config) whose value is true.
-
-  Example: {:legacy {:routes {:admin-settings {:enabled? true}}}}
-           => [[:routes :admin-settings :enabled?]]"
-  ([config]
-   (legacy-true-flags [] (:legacy config)))
-  ([path v]
-   (cond
-     (true? v) [path]
-     (map? v) (mapcat (fn [[k v*]] (legacy-true-flags (conj path k) v*)) v)
-     :else [])))
-
-(defn- log-legacy-flags-summary!
-  "Log a one-line summary of any enabled legacy flags at startup." 
-  [config]
-  (let [flags (vec (legacy-true-flags config))]
-    (when (seq flags)
-      (log/info "⚠️  Legacy flags enabled" {:count (count flags)
-                                            :flags flags}))))
-
 (defn my-system [config-options]
   (fn [do-with-state]
     (with-open [config            (load-config config-options)
@@ -192,7 +171,6 @@
                                     @service-container)]
 
       (log/info "🚀 Starting system - host:" (-> @config :webserver :host) ", port:" (-> @config :webserver :port) "- Auto-restart works!")
-      (log-legacy-flags-summary! @config)
       (json-config/init!)
       (do-with-state {:config            @config
                       :database          database

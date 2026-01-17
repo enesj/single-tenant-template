@@ -21,7 +21,7 @@ This should reuse the existing worker logic used by `scripts/bb/expenses/receipt
 
 # Current State (What Exists)
 
-- OCR logic lives in `app.domain.backend.expenses.workers.receipt-ocr`:
+- OCR logic lives in `app.domain.backend.expenses.workers.receipt-ocr.core`:
   - `process-receipt!` (per receipt)
   - `process-pending!` (N pending receipts)
 - Admin receipts page (`/admin/receipts`) is `generic-admin-entity-page :receipts` (config-driven list-view).
@@ -68,7 +68,7 @@ IDs:
 
 ## A) Factor a “process by ids” entrypoint
 
-Add a new function in `app.domain.backend.expenses.workers.receipt-ocr` (or a small adjacent namespace) that reuses the existing worker stages:
+Add a new function in `app.domain.backend.expenses.workers.receipt-ocr.core` (or a small adjacent namespace) that reuses the existing worker stages:
 
 - `process-receipts!` (name TBD)
   - inputs: `db`, `app-config`, `{:receipt-ids [...], :lease-seconds ..., :storage-base-dir ..., :max-file-size-bytes ..., :default-currency ...}`

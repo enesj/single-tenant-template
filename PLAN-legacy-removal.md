@@ -8,6 +8,34 @@ Recent progress (Workstream 2)
 - 2026-01-16: Removed re-export facade `app.domain.backend.expenses.workers.receipt-ocr` (callers now require `app.domain.backend.expenses.workers.receipt-ocr.core` directly).
 - 2026-01-16: Migrated template/admin backend call sites off the facade `app.admin.backend.services.admin` to concrete submodules (auth/audit/users/users.bulk/admins/dashboard/monitoring.integrations) and deleted `src/app/admin/backend/services/admin.clj` (via the bb delete helper due to patch deletion issues). Verified via `rg` and focused Kaocha run (28 tests, 115 assertions, 0 failures).
 - 2026-01-16: Removed unused deprecated namespace `app.admin.frontend.pages.entities` (empty stub).
+- 2026-01-16: Updated `scripts/legacy/inventory.bb` patterns to require explicit legacy markers (`^:legacy-*`, `:legacy/`, `^:legacy-alias`) and regenerated the baseline inventory (now empty).
+- 2026-01-16: Updated `src/app/PLAN-receipts-ocr-ui-integration.md` to reference `app.domain.backend.expenses.workers.receipt-ocr.core`.
+- 2026-01-16: Ran legacy audit after baseline refresh; output saved to `/tmp/legacy-audit-<timestamp>.txt` (0 items).
+
+Current implementation state (as of 2026-01-16)
+
+- Inventory baseline regenerated via `bb legacy-inventory` (explicit legacy markers only); `resources/legacy-inventory.edn` now empty.
+- Inventory audit executed via `bb scripts/legacy/audit.bb`; output captured in `/tmp/legacy-audit-<timestamp>.txt` (0 items).
+- Auth service load sanity check executed via `clojure -M:test -e "(require 'app.template.backend.auth.protocols 'app.template.backend.auth.service :reload)"`; output captured in `/tmp/auth-service-require-<timestamp>.txt`.
+- Admin auth smoke check executed via direct `clojure -e` invocation against dev config.
+- Re-export reference scan (rg exact-match) shows no code/test references to the removed facade namespaces; OCR plan doc updated to concrete namespace.
+
+Workstream status (as of 2026-01-16)
+
+- Re-export namespaces: ✅ completed (facades removed; code/test references cleared).
+- Empty/deprecated namespaces: ✅ completed (admin FE `entities` stub removed; inventory currently empty).
+- Inventory audit/baseline: ✅ completed (baseline regenerated; audit green; inventory empty).
+- Legacy events & subs, service-map alias vars, OAuth compat, LocalStorage shims, namespaced key fallbacks: ✅ completed (no explicit legacy markers remain).
+
+Outstanding tasks (next batch)
+
+- None (inventory empty after explicit-legacy scan). If scope expands to non-annotated patterns, revisit inventory patterns and regenerate the baseline.
+
+Next scheduled checks (save output once)
+
+- `bb scripts/legacy/audit.bb 2>&1 | tee /tmp/legacy-audit-<timestamp>.txt`
+- `bb fe-test-parallel 2>&1 | tee /tmp/fe-legacy-removal-<timestamp>.txt` (after FE-facing deletions)
+- `bb validate-frontend-config && bb config-audit --strict 2>&1 | tee /tmp/fe-config-<timestamp>.txt`
 
 Owners: Platform (Template), Admin, Domain leads
 

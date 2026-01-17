@@ -39,10 +39,6 @@
  :cache     {:size 1000
              :ttl  3600}
 
- ;; Legacy / backward-compat flags (temporary; remove as legacy code sunsets)
-       :legacy    {:routes {:admin-settings {:enabled? true}}
-                                                 :passwords {:sha256-enabled? true}}
-
  ;; OAuth Configuration (optional)
  :oauth     {:google {:client-id         #ref [:secrets :oauth :google :client-id]
                       :client-secret     #ref [:secrets :oauth :google :client-secret]

@@ -15,8 +15,9 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/login-events` → global login events (guarded)
   - `/admin/admin-settings` → admin UI configuration (view options, form fields, table columns)
   - `/admin/user-settings` → domain-owned user UI config (user-facing defaults/locks; currently Expenses)
-  - `/admin/settings` → legacy redirect to `/admin/admin-settings`
 - **Guard**: `guarded-start` dispatches controller events only after admin auth is confirmed. Unauthed users are redirected to `/admin/login`.
+
+Legacy `/admin/settings` route has been removed; use `/admin/admin-settings`.
 
 ## Data Flow (Users + Activity)
 

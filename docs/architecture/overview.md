@@ -24,7 +24,7 @@ Admin SPA (8085) → /admin/api/** (Ring/Reitit)
    - Frontend: routes are composed in `app.template.frontend.routes.data` as: template shell routes + domain user routes from `app.domain.frontend.registry/all-user-routes` + admin routes from `app.admin.frontend.routes`.
    - Domain page components are aggregated in `app.domain.frontend.pages` to avoid circular dependencies.
 - **Middleware**: `app.template.backend.middleware.security` (HTTPS/headers/[optional rate limit]), `app.template.backend.middleware.admin/wrap-admin-authentication`, JSON parsing/helpers in `app.template.backend.routes.admin.utils`.
-- **Services**: `app.admin.backend.services.admin.*` (users, audit, facade, monitoring helpers), `app.template.backend.services.monitoring.login-events` (login history).
+- **Services**: `app.admin.backend.services.admin.*` (users, audit, auth, admins, dashboard, monitoring integrations), `app.template.backend.services.monitoring.login-events` (login history).
 - **Data**: Source EDN in `resources/db/{template,shared,domain}/**` merged into `resources/db/models.edn`; migrations generated/applied via `app.template.backend.migrations.simple-repl`.
   - Frontend config alignment (migration-adjacent): `(mig/migrate! :dev {:sync-frontend-config? true})` or `bb migrate-and-sync-frontend-config`.
 

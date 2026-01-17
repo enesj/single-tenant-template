@@ -22,7 +22,23 @@ namespaces:
     - docs/architecture/backend-runtime.md
   app.template.backend.middleware.security:
     - docs/backend/security-middleware.md
-  app.admin.backend.services.admin:
+  app.admin.backend.services.admin.users:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.audit:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.auth:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.admins:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.dashboard:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.monitoring.integrations:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.users.bulk:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.users.management:
+    - docs/backend/services.md
+  app.admin.backend.services.admin.users.security:
     - docs/backend/services.md
   app.shared.field_metadata:
     - docs/shared/field-metadata.md
