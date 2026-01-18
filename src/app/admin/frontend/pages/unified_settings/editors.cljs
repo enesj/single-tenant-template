@@ -6,9 +6,10 @@
     [app.template.frontend.events.list.ui-state :as list-ui-events]
     [app.template.frontend.settings.resolver :as resolver]
     [app.template.frontend.subs.ui :as ui-subs]
+    [app.template.frontend.utils.column-config :as column-config]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]
+    [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; =============================================================================
@@ -159,6 +160,22 @@
 
         all-cols (vec (concat available* rest-spec rest-config))
 
+        [dragging-col set-dragging-col!] (use-state nil)
+        can-reorder? (and (fn? on-set-list) (seq available*))
+        reorder-available! (fn [from-col to-col]
+                             (when can-reorder?
+                               (let [from-index (.indexOf available* from-col)
+                                     to-index (.indexOf available* to-col)]
+                                 (when (and (>= from-index 0)
+                                         (>= to-index 0)
+                                         (not= from-index to-index))
+                                   (on-set-list entity-kw
+                                     :available-columns
+                                     (column-config/reorder-vector
+                                       available*
+                                       from-index
+                                       to-index))))))
+
         ;; Compute "all selected" states for each column type (for bulk toggles)
         in-table-all? (and (seq all-cols) (= (count available*) (count all-cols)))
         all-always-visible? (and (seq available*) (every? #(contains? always-visible %) available*))
@@ -179,6 +196,8 @@
           ($ :p "“Always Visible” columns are structurally enforced by "
             ($ :code {:class "px-1"} "table-columns.edn")
             ". They will always show up in the table (even if “Default Visible” is unchecked), and they won’t be configurable from the “View Options” policy tab."))
+        ($ :p {:class "text-xs text-base-content/60 mb-3"}
+          "Drag the handle next to a column to set the default column order for the list view.")
 
         (if (empty? all-cols)
           ($ :p {:class "text-sm text-base-content/60"} "No columns found")
@@ -269,10 +288,40 @@
               ($ :tbody
                 (for [col all-cols]
                   (let [in-table? (contains? available-set col)
-                        enforced? (contains? always-visible col)]
-                    ($ :tr {:key col}
+                        enforced? (contains? always-visible col)
+                        row-id (str "table-columns-row-" (name entity-kw) "-" col)]
+                    ($ :tr {:key col
+                            :id row-id
+                            :class (when (= dragging-col col) "opacity-70")
+                            :on-drag-over (when (and can-reorder? in-table?)
+                                            (fn [e] (.preventDefault e)))
+                            :on-drop (when (and can-reorder? in-table?)
+                                       (fn [e]
+                                         (.preventDefault e)
+                                         (let [dt (.-dataTransfer e)
+                                               dragged (or dragging-col
+                                                         (when dt
+                                                           (.getData dt "text/plain")))
+                                               dragged-col (to-style dragged)]
+                                           (when (and (seq dragged-col) (not= dragged-col col))
+                                             (reorder-available! dragged-col col))
+                                           (set-dragging-col! nil))))}
                       ($ :td {:class "font-medium"}
                         ($ :div {:class "flex items-center gap-2"}
+                          (when (and can-reorder? in-table?)
+                            ($ :button {:type "button"
+                                        :id (str "col-order-drag-" (name entity-kw) "-" col)
+                                        :class "cursor-grab select-none text-base-content/40"
+                                        :title "Drag to reorder"
+                                        :draggable true
+                                        :on-click (fn [e] (.stopPropagation e))
+                                        :on-drag-start (fn [e]
+                                                         (set-dragging-col! col)
+                                                         (when-let [dt (.-dataTransfer e)]
+                                                           (.setData dt "text/plain" col)))
+                                        :on-drag-end (fn [_e]
+                                                       (set-dragging-col! nil))}
+                              "⋮⋮"))
                           ($ :span {:class (when-not in-table? "opacity-60")} col)
                           (when-not in-table?
                             ($ :span {:class "ds-badge ds-badge-xs ds-badge-ghost"}

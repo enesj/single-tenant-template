@@ -31,10 +31,7 @@
  {:display-defaults {:show-edit? false},
   :display-locks {},
   :column-defaults {},
-  :column-locks
-  {:supplier_display_name true,
-   :id false,
-   :article_canonical_name false}},
+  :column-locks {:id false}},
  :articles
  {:display-locks {},
   :display-defaults {:show-edit? false, :show-delete? false}},

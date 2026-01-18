@@ -11,6 +11,7 @@
     [app.template.frontend.events.list.batch :as batch-events]
     [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
+    [app.template.frontend.utils.column-config :as column-config]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui] :as uix]
@@ -148,7 +149,10 @@
 ;; Re-export reactive-select-all-header from cells module for backward compatibility
 (def reactive-select-all-header cells/reactive-select-all-header)
 
-(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
+(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete?
+                                   sort-field sort-direction all-items selected-ids on-select-all active-filters
+                                   filterable-fields user-filterable-settings visible-columns column-order
+                                   active-inline-filter on-inline-filter-click]}]
   (let [;; Start with base headers from entity spec fields
         entity-fields (cond
                         (and (map? entity-spec) (contains? entity-spec :fields))
@@ -164,11 +168,13 @@
                         (sequential? entity-spec) entity-spec
                         :else [])
 
+                    ordered-entity-fields (column-config/order-fields entity-fields column-order)
+
 ;; Filter out the raw timestamp fields to avoid duplication
         filtered-entity-fields (remove (fn [field]
                                          (let [field-id (keyword (:id field))]
                                            (#{:created-at :updated-at} field-id)))
-                                 entity-fields)
+                           ordered-entity-fields)
 
         ;; Selection header using reactive component that subscribes to show-select?
         ;; This ensures the header updates immediately when the user toggles the Selection setting
@@ -370,7 +376,10 @@
            filtered-timestamp-headers
            action-header))))
 
-(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete? sort-field sort-direction all-items selected-ids on-select-all active-filters filterable-fields user-filterable-settings visible-columns active-inline-filter on-inline-filter-click]}]
+(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete?
+                                 sort-field sort-direction all-items selected-ids on-select-all active-filters
+                                 filterable-fields user-filterable-settings visible-columns column-order
+                                 active-inline-filter on-inline-filter-click]}]
   (make-table-headers- {:entity-spec entity-spec
                         :entity-name entity-name
                         :show-timestamps? show-timestamps?
@@ -386,5 +395,6 @@
                         :filterable-fields filterable-fields
                         :user-filterable-settings user-filterable-settings
                         :visible-columns visible-columns
+                        :column-order column-order
                         :active-inline-filter active-inline-filter
                         :on-inline-filter-click on-inline-filter-click}))

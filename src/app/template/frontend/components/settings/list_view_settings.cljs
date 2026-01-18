@@ -51,6 +51,7 @@
         visible-columns (use-subscribe [::ui-subs/visible-columns entity-kw])
         locked-columns (use-subscribe [::ui-subs/locked-visible-columns entity-kw])
         locked-column-set (set (keys (or locked-columns {})))
+        column-order (use-subscribe [::settings-events/column-order entity-kw])
         ;; Filterable columns come from config (if present). If missing, treat all as filter-configurable.
         filterable-columns (or (use-subscribe [::ui-subs/filterable-fields entity-kw]) [])
         filterable-state (or (use-subscribe [::settings-events/filterable-fields entity-kw]) {})
@@ -60,9 +61,9 @@
         ;; If we don't normalize here, toggles dispatch updates but the UI reads a different key,
         ;; making it look like "nothing toggles".
         normalize-key (fn [k]
-            ;; Canonicalize to a simple app keyword (no namespace).
-            ;; Example: :admins/email -> :email, :created_at -> :created-at
-            (model-naming/ensure-app-keyword (kw/ensure-name k)))
+                        ;; Canonicalize to a simple app keyword (no namespace).
+                        ;; Example: :admins/email -> :email, :created_at -> :created-at
+                        (model-naming/ensure-app-keyword (kw/ensure-name k)))
         filterable-column-set (when (seq filterable-columns)
                                 (into #{} (keep normalize-key) filterable-columns))
         filterable-state-normalized (into {}
@@ -71,14 +72,35 @@
                                                 [nk v])))
                                       filterable-state)
         ;; Back-compat: always-visible also locks visibility.
-        always-visible-set (set (map normalize-key (or (:always-visible entity-config) [])))]
+        always-visible-set (set (map normalize-key (or (:always-visible entity-config) [])))
+        ordered-entity-fields (column-config/order-fields entity-fields column-order)
+        ordered-field-ids (->> ordered-entity-fields
+                            (map (fn [field]
+                                   (-> (column-config/field->id field)
+                                     normalize-key)))
+                            (remove nil?)
+                            vec)
+        [dragging-field-id set-dragging-field-id!] (use-state nil)
+        dispatch-reorder! (fn [new-order]
+                            (rf/dispatch
+                              (if vector-mode?
+                                [:admin/reorder-columns entity-kw new-order]
+                                [::settings-events/set-column-order entity-kw new-order])))
+        reorder-fields! (fn [from-id to-id]
+                          (let [from-index (.indexOf ordered-field-ids from-id)
+                                to-index (.indexOf ordered-field-ids to-id)]
+                            (when (and (>= from-index 0)
+                                    (>= to-index 0)
+                                    (not= from-index to-index))
+                              (dispatch-reorder!
+                                (column-config/reorder-vector ordered-field-ids from-index to-index)))))]
 
     (when (seq entity-fields)
       ($ :div
         ;; For compact mode, use horizontal layout
         ($ :div {:class "flex flex-row flex-wrap gap-1"}
           ;; For each field in the entity, show a toggle to enable/disable visibility
-          (for [field entity-fields
+          (for [field ordered-entity-fields
                 :let [field-id (-> (cond
                                      (map? field) (:id field)
                                      (keyword? field) field
@@ -92,20 +114,53 @@
                       ;; Disable toggle for locked columns (policy locks + always-visible)
                       is-column-configurable? (and (not (contains? always-visible-set field-id))
                                                 (not (contains? locked-column-set field-id)))
-                        ;; If config doesn't specify filterable columns, treat all columns as filter-configurable.
+                      ;; If config doesn't specify filterable columns, treat all columns as filter-configurable.
                       is-filter-configurable? (if (set? filterable-column-set)
                                                 (contains? filterable-column-set field-id)
                                                 true)
-                        ;; Determine visibility from the (possibly sparse) visible map (defaults to true)
+                      ;; Determine visibility from the (possibly sparse) visible map (defaults to true)
                       is-column-visible? (let [sentinel ::not-found
                                                v (get visible-columns field-id sentinel)]
                                            (if (not= v sentinel) v true))
                       ;; Determine filterable state from per-entity overrides
                       is-field-filterable? (and is-filter-configurable?
-                                             (get filterable-state-normalized field-id true))]
+                                             (get filterable-state-normalized field-id true))
+                      ;; System timestamps should not show drag handles
+                      is-system-column? (#{:created-at :updated-at} field-id)]
                 :when field-id]
             ($ :div {:key (str "column-toggle-" field-name)
-                     :class "relative inline-block"}
+                     :id (str "col-toggle-row-" (name entity-kw) "-" field-name)
+                     :class (str "relative inline-flex items-center gap-1"
+                              (when (= dragging-field-id field-id) " opacity-60"))
+                     :on-drag-over (fn [e]
+                                     (.preventDefault e))
+                     :on-drop (fn [e]
+                                (.preventDefault e)
+                                (let [dt (.-dataTransfer e)
+                                      dragged-id (or dragging-field-id
+                                                   (when dt
+                                                     (.getData dt "text/plain"))
+                                                   nil)
+                                      normalized-dragged (cond
+                                                           (keyword? dragged-id) (normalize-key dragged-id)
+                                                           (string? dragged-id) (normalize-key (keyword dragged-id))
+                                                           :else nil)]
+                                  (when normalized-dragged
+                                    (reorder-fields! normalized-dragged field-id))
+                                  (set-dragging-field-id! nil)))}
+              (when-not is-system-column?
+                ($ :span {:id (str "col-drag-" (name entity-kw) "-" field-name)
+                          :class "cursor-grab select-none text-gray-400 px-1"
+                          :title "Drag to reorder"
+                          :draggable true
+                          :on-click (fn [e] (.stopPropagation e))
+                          :on-drag-start (fn [e]
+                                           (set-dragging-field-id! field-id)
+                                           (when-let [dt (.-dataTransfer e)]
+                                             (.setData dt "text/plain" (name field-id))))
+                          :on-drag-end (fn [_e]
+                                         (set-dragging-field-id! nil))}
+                  "⋮⋮"))
               ;; Main column visibility button
               ($ :button {:id (str "col-toggle-" (name entity-kw) "-" field-name)
                           :key (str "btn-" field-name)

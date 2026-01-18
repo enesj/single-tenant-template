@@ -179,6 +179,11 @@
   [entity-name]
   [:ui :entity-prefs entity-name :columns :visible-order])
 
+(defn entity-prefs-columns-order
+  "Returns [:ui :entity-prefs entity-name :columns :order] path vector for full column order."
+  [entity-name]
+  [:ui :entity-prefs entity-name :columns :order])
+
 (defn entity-prefs-columns-width
   "Returns [:ui :entity-prefs entity-name :columns :width] path vector for column width."
   [entity-name]

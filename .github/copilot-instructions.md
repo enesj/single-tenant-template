@@ -16,13 +16,6 @@
   - `bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt`
   - `bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt`
 
-### Coding & Migrations
-
-- Follow the conventions in `.claude/coding.instructions.md` for:
-  - Naming, architecture, and reuse patterns.
-  - Migrations workflow (edit canonical EDN, use REPL helpers, never touch generated migrations).
-  - Common backend/frontend issues and security guidelines.
-
 # Coding & Development Instructions
 
 ## Coding Style & Patterns

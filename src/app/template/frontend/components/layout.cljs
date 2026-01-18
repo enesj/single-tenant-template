@@ -11,7 +11,6 @@
                                                     price-observations-icon
                                                     payers-icon
                                                     receipts-icon
-                                                    settings-icon
                                                     suppliers-icon
                                                     unmapped-items-icon]]
     [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
@@ -78,38 +77,36 @@
                                      :active? (active? #{:expenses-list
                                                          :expense-detail
                                                          :expense-new})})]
-                         (when can-upload?
-                           [(nav-item {:id "user-sidebar-expenses-upload"
-                                       :label "Upload"
-                                       :href "/expenses/upload"
-                                       :route :expense-upload
-                                       :icon ($ arrow-up {:class "w-6 h-6"})
-                                       :active? (active? #{:expense-upload})})])
-                         [(nav-item {:id "user-sidebar-expenses-reports"
-                                     :label "Reports"
-                                     :href "/expenses/reports"
-                                     :route :expense-reports
-                                     :icon ($ chart-bar {:class "w-6 h-6"})
-                                     :active? (active? #{:expense-reports})})
-                         (nav-item {:id "user-sidebar-expenses-settings"
-                                     :label "Settings"
-                                     :href "/expenses/settings"
-                                     :route :expense-settings
-                                     :icon ($ settings-icon {:class "w-6 h-6"})
-                                     :active? (active? #{:expense-settings})})]
                          (when power-user?
                            [(nav-item {:id "user-sidebar-expense-items"
                                        :label "Expense Items"
                                        :href "/expense-items"
                                        :route :expense-items
                                        :icon ($ expense-items-icon {:class "w-6 h-6"})
-                                       :active? (active? #{:expense-items})})
-                            (nav-item {:id "user-sidebar-unmapped-items"
-                                       :label "Unmapped Items"
-                                       :href "/unmapped-items"
-                                       :route :unmapped-items
-                                       :icon ($ unmapped-items-icon {:class "w-6 h-6"})
-                                       :active? (active? #{:unmapped-items})})])))
+                                       :active? (active? #{:expense-items})})])))
+
+        operations-items (vec
+                           (concat
+                             (when can-upload?
+                               [(nav-item {:id "user-sidebar-expenses-upload"
+                                           :label "Upload"
+                                           :href "/expenses/upload"
+                                           :route :expense-upload
+                                           :icon ($ arrow-up {:class "w-6 h-6"})
+                                           :active? (active? #{:expense-upload})})])
+                             [(nav-item {:id "user-sidebar-expenses-reports"
+                                         :label "Reports"
+                                         :href "/expenses/reports"
+                                         :route :expense-reports
+                                         :icon ($ chart-bar {:class "w-6 h-6"})
+                                         :active? (active? #{:expense-reports})})]
+                             (when power-user?
+                               [(nav-item {:id "user-sidebar-unmapped-items"
+                                           :label "Unmapped Items"
+                                           :href "/unmapped-items"
+                                           :route :unmapped-items
+                                           :icon ($ unmapped-items-icon {:class "w-6 h-6"})
+                                           :active? (active? #{:unmapped-items})})])))
 
         reference-items (vec
                          (concat
@@ -145,43 +142,19 @@
                                          :icon ($ price-observations-icon {:class "w-6 h-6"})
                                          :active? (active? #{:expense-price-observations})})])))
 
-        app-items [(nav-item {:id "user-sidebar-home"
-                              :label "Home"
-                              :href "/"
-                              :route :home
-                              :active? (active? #{:home :home-explicit})})
-                   (nav-item {:id "user-sidebar-entities"
-                              :label "Entities"
-                              :href "/entities"
-                              :route :entities
-                              :active? (active? #{:entities :entities-slash :entity-add :entity-detail :entity-update})})
-
-                   (nav-item {:id "user-sidebar-about"
-                              :label "About"
-                              :href "/about"
-                              :route :about
-                              :active? (active? #{:about :about-slash})})]
-
         sections [{:title "Expenses" :items expense-items}
-                  {:title "Reference" :items reference-items}
-                  {:title "App" :items app-items}]]
+            {:title "Operations" :items operations-items}
+            {:title "Reference" :items reference-items}]]
     ($ sidebar
-      {:title "App"
+      {:title "Expenses"
        :sections sections
        :footer ($ :ul {:class "ds-menu w-full p-0"}
-	                 ($ :li
-	                   ($ :a {:id "user-sidebar-change-password"
-	                          :href "/change-password"
-	                          :on-click (fn [e] (stop-and-push! e :change-password "/change-password"))
-	                          :class (if (= route-name :change-password) "ds-active" "")}
-	                     "Change Password"))
-
-	                 ($ :li
-	                   ($ :a {:id "user-sidebar-logout"
-	                          :href "/logout"
-	                          :on-click (fn [e] (stop-and-push! e :logout "/logout"))
-	                          :class (if (= route-name :logout) "ds-active" "")}
-	                     "Log Out")))})))
+                   ($ :li
+                     ($ :a {:id "user-sidebar-logout"
+                            :href "/logout"
+                            :on-click (fn [e] (stop-and-push! e :logout "/logout"))
+                            :class (if (= route-name :logout) "ds-active" "")}
+                       "Log Out")))})))
 
 (defui user-header []
   ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}

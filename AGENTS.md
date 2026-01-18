@@ -1,5 +1,3 @@
-
-
 # Repository Guidelines
 
 ## Overview & Architecture
@@ -26,11 +24,6 @@
 - Babashka cannot handle the specific requirement
 - Interacting with system-level tools that require shell commands
 - Simple wrapper scripts for existing tools
-
-**Why not Python?**
-- This repository uses Clojure/ClojureScript exclusively
-- Python introduces unnecessary dependencies and complexity
-- Babashka provides better integration with the existing Clojure ecosystem
 
 ## Project Structure (Quick Map)
 ```

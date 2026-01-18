@@ -39,7 +39,7 @@
       {:x 100 :y 100})))
 
 (defui settings-panel
-  "Global settings panel with theme selector and list view settings"
+  "Global settings panel with theme selector and settings links"
   [{:keys [_global-settings?]}]
   (let [[expanded?, set-expanded] (use-state false)
         [panel-position, set-panel-position] (use-state nil)
@@ -81,4 +81,19 @@
                 ($ :div {:class "flex items-center justify-between"}
                   ($ :span {:class "font-medium mr-4 font-bold"} "Theme")
                   ($ change-theme))
-                ($ auth-component)))))))))
+              ;; Settings links (moved from sidebar)
+              ($ :div {:class "flex flex-col gap-2 mb-3 p-2 border-t border-base-200"}
+                ($ :span {:class "text-xs font-semibold uppercase text-gray-500"}
+                  "Settings")
+                ($ :ul {:class "ds-menu ds-menu-sm p-0"}
+                  ($ :li
+                    ($ :a {:id "settings-panel-expenses-settings"
+                           :href "/expenses/settings"
+                           :on-click #(set-expanded false)}
+                      "Expenses Settings"))
+                  ($ :li
+                    ($ :a {:id "settings-panel-change-password"
+                           :href "/change-password"
+                           :on-click #(set-expanded false)}
+                      "Change Password"))))
+              ($ auth-component)))))))))

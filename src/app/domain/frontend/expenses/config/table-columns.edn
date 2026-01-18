@@ -245,4 +245,5 @@
    "created_at"],
   :always-visible [],
   :computed-fields
-  {:supplier_display_name {}, :article_canonical_name {}}}}
+  {:supplier_display_name {}, :article_canonical_name {}},
+  :column-config {}}}

@@ -74,3 +74,47 @@
   "Dispatch vector for updating table width."
   [entity-kw width]
   [::settings-events/update-table-width entity-kw width])
+
+(defn normalize-column-key
+  "Normalize a column key to a simple app keyword (no namespace)."
+  [k]
+  (when k
+    (model-naming/ensure-app-keyword (kw/ensure-name k))))
+
+(defn field->id
+  "Extract a field id from a field spec, keyword, or string." 
+  [field]
+  (cond
+    (map? field) (:id field)
+    (keyword? field) field
+    (string? field) (keyword field)
+    :else field))
+
+(defn order-fields
+  "Order entity fields based on a user-defined column order.
+
+  Unknown fields keep their original relative order." 
+  [fields column-order]
+  (let [normalized-order (->> (or column-order []) (keep normalize-column-key) vec)
+        order-index (zipmap normalized-order (range))]
+    (if (seq normalized-order)
+      (->> fields
+        (map-indexed (fn [idx field]
+                       {:field field
+                        :index idx
+                        :order (get order-index (normalize-column-key (field->id field)) 999999)}))
+        (sort-by (fn [{:keys [order index]}] [order index]))
+        (mapv :field))
+      (vec fields))))
+
+(defn reorder-vector
+  "Move an item inside a vector from one index to another." 
+  [items from-index to-index]
+  (let [items (vec items)
+        item (nth items from-index)
+        without (vec (concat (subvec items 0 from-index)
+                       (subvec items (inc from-index))))
+  insert-index (-> to-index (max 0) (min (count without)))]
+    (vec (concat (subvec without 0 insert-index)
+           [item]
+           (subvec without insert-index)))))

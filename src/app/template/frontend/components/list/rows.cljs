@@ -12,6 +12,7 @@
     [app.template.frontend.components.list.fields :refer [get-field-display-value]] ;; Import reactive cell components from the cells module
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
+    [app.template.frontend.utils.column-config :as column-config]
     [re-frame.core :as rf]
     [uix.core :as uix :refer [$]]))
 
@@ -21,7 +22,7 @@
 
 (defn- row-content
   "Generates the content for a table row."
-  [{:keys [entity-spec item show-timestamps? actions visible-columns entity-name selected-ids on-select-change]}]
+  [{:keys [entity-spec item show-timestamps? actions visible-columns entity-name selected-ids on-select-change column-order]}]
 
   (let [;; Safely get field values from entity-spec - FIXED: Check :fields key first
         entity-fields (cond
@@ -39,11 +40,13 @@
                         (sequential? entity-spec) entity-spec
                         :else [])
 
+        ordered-entity-fields (column-config/order-fields entity-fields column-order)
+
         ;; Filter out the raw timestamp fields to avoid duplication
         filtered-entity-fields (remove (fn [field]
                                          (let [field-id (keyword (:id field))]
                                            (#{:created-at :updated-at} field-id)))
-                                 entity-fields)
+                                 ordered-entity-fields)
 
         ;; Process field values, but only for visible columns
           field-values (mapv (fn [field]
@@ -142,7 +145,7 @@
 
 (defn render-row
   "Renders a single row in the list, either as a form or as a table row."
-  [{:keys [entity-spec editing set-editing! entity-name recently-updated-ids recently-created-ids selected-ids on-select-change visible-columns] :as props} {:keys [item]}]
+  [{:keys [entity-spec editing set-editing! entity-name recently-updated-ids recently-created-ids selected-ids on-select-change visible-columns column-order] :as props} {:keys [item]}]
   (let [props-map (js->clj props :keywordize-keys true)
         ;; Use the explicit entity-spec (vector-config) for table rows.
         ;; Do not fall back to form-entity-spec to avoid label drift.
@@ -262,6 +265,7 @@
                                           :on-edit-click (:on-edit-click props)}))
                             :show-timestamps? (:show-timestamps? props)
                             :visible-columns visible-columns
+                            :column-order column-order
                             :entity-name entity-name
                             ;; Pass selected-ids and on-select-change for reactive-selection-cell
                             :selected-ids (or selected-ids #{})

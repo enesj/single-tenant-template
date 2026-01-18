@@ -42,6 +42,21 @@
       (get-in db (conj (paths/entity-display-settings entity-key) :table-width))
       2800))))
 
+(rf/reg-sub
+  ::column-order
+  (fn [db [_ entity-key]]
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)
+          normalize (fn [k]
+                      (model-naming/ensure-app-keyword (kw/ensure-name k)))
+          stored (get-in db (paths/entity-prefs-columns-order entity-key))
+          legacy (get-in db (conj (paths/entity-display-settings entity-key) :column-order))
+          visible-order (get-in db (paths/entity-prefs-columns-visible-order entity-key))]
+      (cond
+        (seq stored) (->> stored (keep normalize) vec)
+        (seq legacy) (->> legacy (keep normalize) vec)
+        (seq visible-order) (->> visible-order (keep normalize) vec)
+        :else []))))
+
 (rf/reg-event-db
   ::toggle-field-filtering
   [persistence/persist-entity-prefs]
@@ -103,4 +118,16 @@
             width-num (if (string? width) (js/parseInt width) width)]
         ;; Write to new path only
         (assoc-in db (paths/entity-prefs-columns-width entity-key) width-num))
+      db)))
+
+(rf/reg-event-db
+  ::set-column-order
+  [persistence/persist-entity-prefs]
+  (fn [db [_ entity-name column-order]]
+    (if entity-name
+      (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            normalize (fn [k]
+                        (model-naming/ensure-app-keyword (kw/ensure-name k)))
+            normalized (->> (or column-order []) (keep normalize) vec)]
+        (assoc-in db (paths/entity-prefs-columns-order entity-key) normalized))
       db)))

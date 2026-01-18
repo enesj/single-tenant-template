@@ -138,11 +138,12 @@
                                                               (update :computed-fields prune-map)
                                                               (update :column-config prune-map))))
                                       current-config (get table-columns-config entity-kw {})
-                                      current-cols (set (map col->str (or (get current-config list-type) [])))
+                                      current-cols (vec (map col->str (or (get current-config list-type) [])))
+                                      col-set (set current-cols)
                                       col-str (col->str col-name)
-                                      new-cols (if (contains? current-cols col-str)
+                                      new-cols (if (contains? col-set col-str)
                                                  (vec (remove #{col-str} current-cols))
-                                                 (conj (vec current-cols) col-str))
+                                                 (conj current-cols col-str))
                                       new-config (cond-> (assoc current-config list-type new-cols)
                                                    (= list-type :available-columns) cleanup-available)]
                                   (rf/dispatch [::admin-settings-events/update-table-columns-entity

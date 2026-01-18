@@ -113,6 +113,9 @@
         ;; Subscribe to table width configuration for header alignment
         table-width (use-subscribe [::settings-events/table-width (some-> entity-name keyword)])
 
+        ;; Column order preferences (drag-and-drop settings)
+        column-order (use-subscribe [::settings-events/column-order entity-name])
+
         ;; State management for inline filter
         [active-inline-filter, set-active-inline-filter] (use-state nil)
         [inline-filter-field-spec, set-inline-filter-field-spec] (use-state nil)
@@ -267,6 +270,7 @@
                               :show-add-form? show-add-form?
                               :set-show-add-form! #(rf/dispatch [::config-events/set-show-add-form %])
                               :visible-columns visible-columns
+                              :column-order column-order
                               ;; Pass form-entity-specs as props to avoid hooks in loops
                               :form-entity-spec form-entity-spec
                               :form-entity-spec-edit form-entity-spec-edit
@@ -296,6 +300,7 @@
                                               :filterable-fields filterable-fields
                                               :user-filterable-settings user-filterable-settings
                                               :visible-columns visible-columns
+                                              :column-order column-order
                                               :active-inline-filter active-inline-filter
                                               :on-inline-filter-click handle-inline-filter-click
                                               ;; Table should render strictly from the supplied entity-spec

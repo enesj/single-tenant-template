@@ -110,6 +110,18 @@
 
 ;; Reorder columns
 
+(rf/reg-event-db
+  ::reorder-columns
+  [persistence/persist-entity-prefs]
+  (fn [db [_ entity-name column-order]]
+    (if entity-name
+      (let [normalize (fn [v]
+                        (model-naming/ensure-app-keyword (kw/ensure-name v)))
+            entity-key (model-naming/ensure-app-keyword entity-name)
+            normalized (->> (or column-order []) (keep normalize) vec)]
+        (assoc-in db (paths/entity-prefs-columns-order entity-key) normalized))
+      db)))
+
 ;; Reset to default columns
 
 ;; =============================================================================
@@ -196,4 +208,10 @@
   :admin/toggle-column-visibility
   (fn [_ [_ entity-keyword column-key]]
     (rf/dispatch [::toggle-column-visibility entity-keyword column-key])
+    {}))
+
+(rf/reg-event-fx
+  :admin/reorder-columns
+  (fn [_ [_ entity-keyword column-order]]
+    (rf/dispatch [::reorder-columns entity-keyword column-order])
     {}))
