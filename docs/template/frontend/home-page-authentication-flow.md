@@ -9,7 +9,7 @@ Single-tenant app with an admin console served at `http://localhost:8085/admin`.
 ## UX Flow
 
 - Unauthenticated visitor hitting any admin route is redirected to `/admin/login`.
-- Successful admin login stores the bearer token in browser storage (transient) and boots the console (dashboard, users, audit, login events).
+- Successful admin login stores the admin token in browser storage (transient) and boots the console (dashboard, users, audit, login events).
 - Logout clears the token and returns to `/admin/login`.
 
 Optional public landing (`:app` build) can link to `/admin/login`; it no longer offers tenant signup/onboarding.
@@ -30,7 +30,7 @@ Optional public landing (`:app` build) can link to `/admin/login`; it no longer 
 
 - Auth events: `app.admin.frontend.events.auth` handles login, token storage, logout, and session bootstrap.
 - Guard: `:admin/check-auth-protected` runs before route controllers; on missing/invalid token it redirects to `/admin/login`.
-- API calls: use `/admin/api/*` with `Authorization: Bearer <token>`; failures at 401 trigger logout/redirect.
+- API calls: use `/admin/api/*` with `x-admin-token: <token>`; failures at 401 trigger logout/redirect.
 
 ## Implementation Notes
 
@@ -48,7 +48,7 @@ Optional public landing (`:app` build) can link to `/admin/login`; it no longer 
 ## Console Checks
 
 - No `re-frame: no :event handler registered` errors.
-- Requests to `/admin/api/*` include `Authorization` header.
+- Requests to `/admin/api/*` include `x-admin-token` header.
 - On 401 responses, app dispatches logout and redirects to `/admin/login`.
 
 ## Future Enhancements

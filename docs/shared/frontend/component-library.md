@@ -22,21 +22,19 @@ Each page provides different `:entity-spec` and `:render-actions` configurations
 
 Tailwind + DaisyUI; keep `ds-` classes for DaisyUI and plain Tailwind utilities elsewhere.
 
-```clojure
-;; tailwind.config.js
-module.exports = {
-  content: ["./src/**/*.cljs"],
-  theme: {
-    extend: {
-      colors: {
-        primary: "#3b82f6",
-        secondary: "#6b7280"
-      }
-    }
-  },
-  plugins: [require("daisyui")]
+In this repo (Tailwind v4), DaisyUI is configured in the CSS entrypoint via `@plugin`:
+
+```tailwindcss
+/* src/app/frontend/ui/style.css */
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  prefix: ds-;
+  /* themes: ... */
 }
 ```
+
+`tailwind.config.js` still exists for content scanning and theme extension, but plugin configuration lives in `src/app/frontend/ui/style.css`.
 
 ### Component Naming Convention
 

@@ -58,19 +58,22 @@ Single-tenant frontend built with Shadow CLJS, Re-frame, and UIx. The app shell 
 ### Development Workflow
 
 ```bash
-# Public build (rarely touched in single-tenant)
-npm run watch
+# Backend + Shadow CLJS watch (admin + public routes served by the same SPA bundle)
+bb run-app
 
-# Admin console (primary surface, served at http://localhost:8085)
-npm run watch:admin
+# CSS (Tailwind/PostCSS) watcher (optional, run in a second terminal)
+npm run develop
 
 # Tests
 npm run test:cljs
-bb fe-test-node       # node runner
+npm run test:cljs:parallel
 
-# Production bundles
+# Release bundles (ClojureScript)
+npx shadow-cljs release app
+npx shadow-cljs release admin   # optional split bundle
+
+# CSS build
 npm run build
-npm run build:admin
 ```
 
 ## Application Entry Points

@@ -175,18 +175,18 @@ Key routes (see `src/app/admin/frontend/routes.cljs` for the full list):
 
 ## HTTP Client
 
-All admin API calls are under `/admin/api/*` and include the bearer token:
+All admin API calls are under `/admin/api/*`. Prefer the shared helper in `app.admin.frontend.utils.http`, which injects the admin token via the `x-admin-token` header.
 
 ```clojure
-(rf/reg-event-fx :admin/api-request
-  (fn [{:keys [db]} [_ {:keys [uri method params on-success on-failure]}]]
-    {:http-xhrio {:uri uri
-                  :method (or method :get)
-                  :params params
-                  :headers {"Authorization" (str "Bearer " (get-in db [:auth :admin :token]))}
-                  :on-success on-success
-                  :on-failure on-failure}}))
+(:require [app.admin.frontend.utils.http :as admin-http])
+
+(admin-http/admin-get {:uri "/admin/api/audit"
+                       :params {:page 1 :per-page 20}
+                       :on-success [:admin/audit-loaded]
+                       :on-failure [:admin/audit-load-failed]})
 ```
+
+See also: [Frontend HTTP Request Standards](../../shared/frontend/http-standards.md).
 
 ## Performance
 
@@ -196,12 +196,12 @@ All admin API calls are under `/admin/api/*` and include the bearer token:
 ## Testing
 
 - CLJS tests via `npm run test:cljs`, `bb fe-test-node`.
-- Prefer REPL-driven checks for admin events/subs; `shadow-cljs watch :admin` enables hot reload.
+- Prefer REPL-driven checks for admin events/subs; the dev runtime watches `:app` (`shadow-cljs watch :app`) and the admin console is served by the same SPA bundle.
 - When adding list pages, cover adapter transforms with cljs tests. For concrete domains, put domain-specific tests under `test/app/domain/frontend/**`.
 
 ## Security
 
-- Admin token is stored transiently (local/session storage) and injected into `Authorization` headers.
+- Admin token is stored transiently (local/session storage / persisted auth state) and injected into `x-admin-token` headers.
 - All admin routes are guarded in `guarded-start`; unauthenticated access redirects to `/admin/login`.
 - Avoid storing PII in app-db beyond what is needed for table rows; audit/login responses already normalize names/emails.
 

@@ -22,7 +22,6 @@ resources/db/
 │   └── policies.edn  # Optional policies
 ├── template/         # Template infrastructure
 │   ├── models.edn
-│   ├── functions.edn
 │   ├── views.edn
 │   ├── triggers.edn
 │   └── policies.edn
@@ -32,11 +31,12 @@ resources/db/
 │       ├── models.edn
 │       ├── functions.edn
 │       ├── triggers.edn
-│       └── views.edn
+│       ├── views.edn
+│       └── policies.edn
 └── migrations/       # Sequential migration files
     ├── 0001_schema.edn
-    ├── 0002_add_indexes.edn
-    └── 0071_schema.edn
+    ├── 0002_enable_hstore_extension.sql
+    └── 0071_* (and other NNNN_* files)
 ```
 
 `★ Insight ─────────────────────────────────────`
@@ -50,16 +50,30 @@ The system automatically consolidates hierarchical EDN files into a single `mode
 ```clojure
 ;; From: src/app/template/backend/migrations/hierarchical_models.clj
 (defn read-hierarchical-edn
-  "Read EDN files from hierarchical structure and merge them"
+  "Read EDN files from hierarchical structure and merge them.
+   Supports both a direct domain file (domain/models.edn) and domain subdirectories (domain/*/models.edn)."
   [base-path file-name]
-  (let [template-path (str base-path "/template/" file-name)
-        shared-path (str base-path "/shared/" file-name)
-        domain-dirs (discover-domain-directories base-path)]
-    (merge
-      (read-consolidated-edn template-path)
-      (read-all-domain-data domain-dirs file-name)
-      (read-consolidated-edn shared-path))))
+  (let [template-data      (read-consolidated-edn (str base-path "/template/" file-name))
+        shared-data        (read-consolidated-edn (str base-path "/shared/" file-name))
+        domain-direct-data (read-consolidated-edn (str base-path "/domain/" file-name))
+        ;; discover domain subdirectories under (str base-path "/domain")
+        domain-dirs        ...
+        domain-subdir-data (when domain-dirs
+                             (reduce (fn [acc domain-name]
+                                       (merge acc
+                                         (read-consolidated-edn
+                                           (str base-path "/domain/" domain-name "/" file-name))))
+                               {}
+                               domain-dirs))
+        domain-data        (merge domain-direct-data domain-subdir-data)]
+    (merge template-data domain-data shared-data)))
 ```
+
+Note: extended objects (functions/triggers/policies/views) are merged using the vendor hierarchical reader, which reads:
+
+- `resources/db/template/<file>.edn`
+- `resources/db/shared/<file>.edn`
+- `resources/db/domain/*/<file>.edn`
 
 ## Migration Workflow
 
@@ -84,26 +98,32 @@ docker-compose up -d
 ;; resources/db/domain/example/models.edn
 {:properties
  {:fields
-  {:id {:type :uuid :primary-key true}
-   :name {:type [:varchar 255] :null false}
-   :description {:type :text}
-   :price {:type :numeric :precision 10 :scale 2}
-   :status {:type :property-status :null false}
-   :created-at {:type :timestamptz :default :now}
-   :updated-at {:type :timestamptz :default :now}}
-  :table-name "properties"
-  :indexes [{:fields [:status] :unique false}
-            {:fields [:name] :unique true}]}}
+  [[:id :uuid {:primary-key true}]
+   [:name [:varchar 255] {:null false}]
+   [:description :text]
+   [:price-cents :bigint {:null false}]
+   [:status [:enum :property-status] {:null false :default "active"}]
+   [:created-at :timestamptz]
+   [:updated-at :timestamptz]]
+
+  ;; Enum and other custom types live under :types
+  :types
+  [[:property-status :enum {:choices ["active" "inactive" "pending" "maintenance"]}]]
+
+  :indexes
+  [[:idx-properties-status :btree {:fields [:status]}]
+   [:idx-properties-name-unique :btree {:fields [:name] :unique true}]]}}
 ```
 
 #### Creating Custom Types
 
 ```clojure
+;; Custom types are typically defined alongside the model that uses them:
 ;; resources/db/domain/hosting/models.edn
-{:property-status
- {:type :enum
-  :choices ["active" "inactive" "pending" "maintenance"]
-  :model-name :properties}}
+{:properties
+ {:fields [[:id :uuid {:primary-key true}]
+           [:status [:enum :property-status] {:null false}]]
+  :types  [[:property-status :enum {:choices ["active" "inactive" "pending" "maintenance"]}]]}}
 ```
 
 #### Adding Functions
@@ -111,7 +131,7 @@ docker-compose up -d
 ```clojure
 ;; resources/db/domain/hosting/functions.edn
 {:calculate-property-occupancy
- {:sql "CREATE OR REPLACE FUNCTION calculate_property_occupancy(property_uuid UUID)
+ {:up "CREATE OR REPLACE FUNCTION calculate_property_occupancy(property_uuid UUID)
        RETURNS DECIMAL(5,2) AS $$
        BEGIN
          RETURN (
@@ -128,7 +148,7 @@ docker-compose up -d
          );
        END;
        $$ LANGUAGE plpgsql;"
-  :returns :decimal}}
+  :down "DROP FUNCTION IF EXISTS calculate_property_occupancy(UUID);"}}
 ```
 
 ### 3. Migration Commands (REPL-first)
@@ -216,21 +236,21 @@ Sequential migrations in `resources/db/migrations/` handle versioned changes:
 [
  ;; Add new column to existing table
  {:action :add-column
-  :table-name :accounts
-  :column-name :billing-email
-  :column-spec {:type [:varchar 255] :null true}}
+  :model-name :accounts
+  :field-name :billing-email
+  :options {:type [:varchar 255] :null true}}
 
  ;; Create new index
  {:action :create-index
-  :table-name :properties
-  :index-name :idx_properties_status
-  :columns [:status]}
+  :model-name :properties
+  :index-name :idx-properties-status
+  :options {:fields [:status] :type :btree}}
 
  ;; Modify existing column
  {:action :alter-column
-  :table-name :users
-  :column-name :email
-  :new-spec {:type [:varchar 255] :null false :unique true}}
+  :model-name :users
+  :field-name :email
+  :options {:type [:varchar 255] :null false :unique true}}
 ]
 ```
 
@@ -239,12 +259,13 @@ Sequential migrations in `resources/db/migrations/` handle versioned changes:
 Model definitions support comprehensive table specifications:
 
 ```clojure
-{:table-name
- {:fields {:column-name column-spec}
-  :table-name "sql_table_name"
-  :indexes [index-spec]
-  :constraints [constraint-spec]
-  :triggers [trigger-name]}}
+{:users
+ {:fields [[:id :uuid {:primary-key true}]
+           [:email [:varchar 255] {:null false :unique true}]
+           [:created-at :timestamptz]
+           [:updated-at :timestamptz]]
+  :indexes [[:idx-users-created-at :btree {:fields [:created-at]}]]}}
+```
 
 ### Enum Changes (Roles/Statuses)
 
@@ -314,12 +335,13 @@ Policies are optional in the single-tenant template. Use `.pol` files when you n
 ```clojure
 ;; resources/db/shared/functions.edn
 {:normalize-name
- {:sql "CREATE OR REPLACE FUNCTION normalize_name(name text)
+ {:up "CREATE OR REPLACE FUNCTION normalize_name(name text)
        RETURNS text AS $$
        BEGIN
          RETURN trim(lower(name));
        END;
-       $$ LANGUAGE plpgsql IMMUTABLE;"}}
+       $$ LANGUAGE plpgsql IMMUTABLE;"
+  :down "DROP FUNCTION IF EXISTS normalize_name(text);"}}
 ```
 
 ### Automated Triggers
@@ -327,7 +349,9 @@ Policies are optional in the single-tenant template. Use `.pol` files when you n
 In the template we model timestamp automation via the **extended EDN pipeline**:
 
 - Shared functions live in `resources/db/shared/functions.edn`
-- Table-specific triggers live in `resources/db/{template,shared,domain}/*/triggers.edn`
+- Triggers live in:
+  - `resources/db/{template,shared}/triggers.edn`
+  - `resources/db/domain/*/triggers.edn`
 - Each entry is a map of `:name {:up \"FORWARD SQL\" :down \"BACKWARD SQL\"}`
 
 ```clojure
@@ -366,7 +390,7 @@ After editing these EDN files, regenerate and apply extended migrations from a R
 ```clojure
 ;; resources/db/domain/example/views.edn
 {:property-summary-view
- {:sql "CREATE MATERIALIZED VIEW property_summary AS
+ {:up "CREATE MATERIALIZED VIEW property_summary AS
        SELECT
          p.id,
          p.name,
@@ -376,8 +400,10 @@ After editing these EDN files, regenerate and apply extended migrations from a R
        FROM properties p
        LEFT JOIN bookings b ON b.property_id = p.id
        GROUP BY p.id, p.name, p.created_at;"
-  :indexes [{:fields [:name] :unique false}]}}
+  :down "DROP MATERIALIZED VIEW IF EXISTS property_summary;"}}
 ```
+
+If you need indexes on a materialized view, add them in a separate manual SQL migration (`.sql`) or include additional `CREATE INDEX ...;` statements in the `:up` string and the corresponding `DROP INDEX ...;` in `:down`.
 
 ### Refresh Strategies
 
@@ -494,8 +520,8 @@ WHERE state = 'active'
 #### Manual SQL Execution
 
 ```bash
-# Execute migration SQL manually
-psql -d bookkeeping -f resources/db/migrations/0001_schema.edn
+# Execute a manual SQL migration file
+psql -d bookkeeping -f resources/db/migrations/0002_enable_hstore_extension.sql
 ```
 
 ```clojure
@@ -510,18 +536,12 @@ psql -d bookkeeping -f resources/db/migrations/0001_schema.edn
 #### Large Tables
 
 ```clojure
-;; Add indexes after data migration
-{:action :add-column
- :table-name :properties
- :column-name :search_vector
- :column-spec {:type :tsvector}}
-
- {:action :create-index
-  :table-name :properties
-  :index-name :idx_properties_search
-  :columns [:search-vector]
-  :method :gin
-  :concurrently true}  ; Non-blocking index creation
+;; Prefer a manual SQL migration for advanced index options like CONCURRENTLY.
+;; Automigrate supports index type selection (e.g. :gin) but not every PostgreSQL index option.
+{:action :create-index
+ :model-name :properties
+ :index-name :idx-properties-search
+ :options {:fields [:search_vector] :type :gin}}
 ```
 
 #### Batch Operations

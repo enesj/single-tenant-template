@@ -20,14 +20,21 @@ This folder contains scripts for managing PostgreSQL databases in the single-ten
 ## Usage Examples
 
 ```bash
-# Create backup
-bb database/backup_db.clj dev
+# Create a backup
+bb backup-db --dev
 
-# Clean and restore development database
-bb database/clean_restore_db.clj dev backup_dev_2023-01-01_12-00-00.sql
+# Restore from a backup file
+bb restore-db --dev backups/backup_dev_2025-06-27_19-58-16.sql
 
-# Compare schemas
-bb database/compare_db_schemas.clj dev prod
+# Clean restore (drop DB completely, then restore)
+bb clean-restore-db --dev backups/backup_dev_2025-06-27_19-58-16.sql
+
+# Clean database (destructive)
+bb clean-db --dev
+
+# Compare schemas (advanced)
+# These helpers are still in this folder, but prefer the bb.edn tasks when available.
+# If you run scripts directly, invoke them via clojure and pass the env/profile expected by the script.
 ```
 
 ## Safety Notes

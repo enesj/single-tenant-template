@@ -20,13 +20,11 @@ Architecture and workflows for the **single-tenant template** migration system.
 
 ```
 ┌─ Source Model Definitions ✅ EDIT THESE
-│  ├─ resources/db/template/models.edn (app-specific entities)
-│  ├─ resources/db/shared/models.edn (shared models)
-│  ├─ resources/db/domain/models.edn (domain models, optional)
-│  ├─ resources/db/template/triggers.edn (trigger definitions)
-│  ├─ resources/db/template/views.edn (view definitions)
-│  ├─ resources/db/shared/functions.edn (DB functions)
-│  └─ resources/db/shared/policies.edn (RLS policies)
+│  ├─ resources/db/{template,shared}/models.edn (model sources)
+│  ├─ resources/db/domain/models.edn (optional flat domain models)
+│  ├─ resources/db/domain/*/models.edn (optional per-domain modules)
+│  ├─ resources/db/{template,shared}/{functions,triggers,views,policies}.edn (extended sources; each file optional)
+│  └─ resources/db/domain/*/{functions,triggers,views,policies}.edn (extended sources; optional per-domain modules)
 │
 ├─ Generated Files ❌ DO NOT EDIT
 │  └─ resources/db/models.edn (merged from template/shared/domain)
@@ -39,7 +37,7 @@ Architecture and workflows for the **single-tenant template** migration system.
 │
 ├─ Migration Files (resources/db/migrations/) ❌ AUTO-GENERATED
 │  ├─ 0001_schema.edn (base schema)
-│  ├─ 0002_enable_hstore_extension.sql (extension)
+│  ├─ NNNN_enable_hstore_extension.sql (extension; typically 0002, but the generator will pick the next available number if missing)
 │  ├─ NNNN_function_*.fn (database functions)
 │  ├─ NNNN_trigger_*.trg (triggers for audit/usage)
 │  ├─ NNNN_policy_*.pol (policy SQL blocks, optional)
@@ -56,7 +54,7 @@ Architecture and workflows for the **single-tenant template** migration system.
 
 ```mermaid
 graph TD
-    A["Edit Source Files<br/>(template/shared/domain/*.edn)"] --> B["Generate Migrations<br/>(mig/make-all-migrations!)"]
+    A["Edit Source Files<br/>(template/shared/*.edn + domain/*/*.edn)"] --> B["Generate Migrations<br/>(mig/make-all-migrations!)"]
     B --> C["Merges to models.edn<br/>+ Creates migration files"]
     C --> D["Review Generated Files"]
     D --> E["Apply Migrations<br/>(mig/migrate!)"]
@@ -97,7 +95,7 @@ The system uses centralized field type handling (`app.shared.field-casting`):
 ### 1. Model-Driven Development
 
 ```edn
-;; resources/db/models.edn
+;; resources/db/template/models.edn (source; do not edit resources/db/models.edn)
 {:new-entity
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -176,10 +174,11 @@ bb sync-frontend-config --schema resources/db
 ### 1. Schema Migrations (.edn)
 Auto-generated from model changes:
 ```edn
-{:create-table
- {:table-name :new-entity
-  :columns [...columns...]
-  :indexes [...indexes...]}}
+({:action :create-table
+    :model-name :new-entity
+    :fields
+    {:id {:type :uuid :primary-key true}
+     :name {:type [:varchar 255] :null false}}})
 ```
 
 ### 2. SQL Migrations (.sql)
@@ -237,11 +236,11 @@ bb clean-db --dev
 # 2. Make model changes in SOURCE files:
 #    ✅ resources/db/template/models.edn
 #    ✅ resources/db/shared/models.edn
-#    ✅ resources/db/domain/models.edn
-#
+     [:created-at :timestamptz]
+     [:updated-at :timestamptz]]
 #    ❌ DO NOT edit resources/db/models.edn (it's auto-generated)
 
-# 3. From a REPL, generate and apply migrations
+    [[:idx-new-entity-created :btree {:fields [:created-at]}]]}}
 # (require '[app.template.backend.migrations.simple-repl :as mig])
 # (mig/make-all-migrations!)  ; Merges template/shared/domain → models.edn, generates migrations
 # (mig/migrate!)              ; Applies migrations to database
