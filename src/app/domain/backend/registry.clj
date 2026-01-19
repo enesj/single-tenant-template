@@ -41,6 +41,7 @@
     "/payers"
     "/payer-types"
     "/expense-items"
+    "/raw-labels"
     "/articles"
     "/article-aliases"
     "/price-observations"]})

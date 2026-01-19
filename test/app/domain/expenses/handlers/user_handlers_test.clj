@@ -6,6 +6,7 @@
   session-based and :identity-based request shapes."
   (:require
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
+    [app.domain.backend.expenses.handlers.user-raw-labels :as user-raw-labels]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]])
@@ -43,3 +44,19 @@
           body (parse-json-body resp)]
       (is (= 403 (:status resp)))
       (is (= "Role assignment required" (:error body))))))
+
+(deftest user-raw-labels-unauthorized-when-no-user
+  (testing "user raw labels handlers return 401 when request has no user"
+    (let [handler (user-raw-labels/list-raw-labels-handler nil)
+          resp (handler {})
+          body (parse-json-body resp)]
+      (is (= 401 (:status resp)))
+      (is (= "Authentication required" (:error body))))))
+
+(deftest user-raw-labels-forbidden-when-role-missing-even-with-identity
+  (testing "user raw labels handlers accept :identity but require admin/owner role"
+    (let [handler (user-raw-labels/list-raw-labels-handler nil)
+          resp (handler {:identity {:id (UUID/randomUUID)}})
+          body (parse-json-body resp)]
+      (is (= 403 (:status resp)))
+      (is (= "Only admins and owners can access this page." (:error body))))))

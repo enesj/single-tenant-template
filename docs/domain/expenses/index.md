@@ -20,6 +20,7 @@ The expenses domain consists of several interconnected entities:
 6. **Articles** (`articles`) - Product/item catalog with pricing
 7. **Article Aliases** (`article_aliases`) - Alternative names for articles
 8. **Price Observations** (`price_observations`) - Historical price tracking
+9. **Raw Labels** (`raw_labels`) - Deduped raw line-item labels (stored on `expense_items` via `raw_label_id` FK)
 
 ### Entity Relationships
 
@@ -56,6 +57,7 @@ The expenses domain contributes the following user-facing routes under `/` (see 
 - `/suppliers` - Suppliers catalog
 - `/payers` - Payers list
 - `/expense-items` - Expense items (admin/owner only)
+- `/raw-labels` - Raw labels (admin/owner only)
 - `/articles` - Articles (admin/owner only)
 - `/article-aliases` - Article aliases (admin/owner only)
 - `/price-observations` - Price observations (admin/owner only)
@@ -144,6 +146,10 @@ User-facing expenses endpoints and pages are role-gated:
 - **Read**: `viewer|member|admin|owner` can view expenses/receipts/reference data.
 - **Write**: `member|admin|owner` can create/update/delete expenses, upload receipts, review/approve receipts, and modify reference data.
 - **Danger zone / power tools**: `admin|owner` only (e.g. supplier purge and power-user reference management pages).
+
+#### Raw labels + unmapped items note
+
+`expense_items` stores a `raw_label_id` FK to `raw_labels`. Responses still include the human text `raw_label` via joins, and the Unmapped Items API provides `raw_label_normalized` (sourced from `raw_labels.normalized_key`).
 
 ## Backend Implementation
 

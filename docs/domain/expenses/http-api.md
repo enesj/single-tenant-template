@@ -11,6 +11,17 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 ## Admin API (mounted at `/admin/api/expenses`)
 
+### Raw Labels (admin/owner only)
+
+- `GET /admin/api/expenses/raw-labels` – list deduped raw labels.
+  - Query params:
+    - `limit` (default 200), `offset` (default 0)
+    - `search` (matches `raw_label` or `normalized_key`)
+    - `order_by` one of: `raw_label`, `normalized_key`, `created_at`, `updated_at`
+    - `order_dir` one of: `asc`, `desc`
+  - Response:
+    - `{ "success": true, "raw-labels": [ {"id": ..., "raw-label": ..., "normalized-key": ..., "created-at": ..., "updated-at": ...}, ... ] }`
+
 ### Suppliers
 - `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by). Query: `include_archived=true` to include archived suppliers.
 - `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
@@ -58,10 +69,10 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 ### Expense Items (new 2025-12-25)
 - `GET /admin/api/expenses/expense-items` – list expense items with pagination and filters.
-- `POST /admin/api/expenses/expense-items` – create standalone expense item; requires `expense_id`, `raw_label`, `line_total` (optional `qty`, `unit_price`, `article_id`).
+- `POST /admin/api/expenses/expense-items` – create standalone expense item; requires `expense_id`, `line_total` and **either** `raw_label` (text) **or** `raw_label_id` (UUID). (Optional: `qty`, `unit_price`, `article_id`.)
 - `GET /admin/api/expenses/expense-items/count` – total count with optional search.
 - `GET /admin/api/expenses/expense-items/:id` – fetch single expense item.
-- `PUT /admin/api/expenses/expense-items/:id` – update expense item (e.g. `raw_label`, `qty`, `unit_price`, `line_total`, `article_id`).
+- `PUT /admin/api/expenses/expense-items/:id` – update expense item (e.g. `raw_label` or `raw_label_id`, `qty`, `unit_price`, `line_total`, `article_id`).
 - `DELETE /admin/api/expenses/expense-items/:id` – delete expense item.
 
 ### Articles / Price History
@@ -140,6 +151,15 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `PUT /api/v1/expenses/expense-items/:id` – update expense item.
 - `DELETE /api/v1/expenses/expense-items/:id` – delete expense item.
 
+- `GET /api/v1/expenses/raw-labels` – list deduped raw labels.
+  - Query params:
+    - `limit` (default 200), `offset` (default 0)
+    - `search` (matches `raw_label` or `normalized_key`)
+    - `order_by` one of: `raw_label`, `normalized_key`, `created_at`, `updated_at`
+    - `order_dir` one of: `asc`, `desc`
+  - Response:
+    - `{ "success": true, "raw-labels": [ ... ] }`
+
 ### Receipts
 - `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`).
 - `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit/offset`, `order_dir`).
@@ -155,6 +175,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /api/v1/expenses/articles` – list/search articles.
 - `POST /api/v1/expenses/articles` – create article.
 - `GET /api/v1/expenses/articles/unmapped-items` – list unmapped expense items.
+  - Includes `raw_label_normalized` (from `raw_labels.normalized_key`) to support the Unmapped Items UI.
 - `POST /api/v1/expenses/articles/items/:item-id/map` – map an expense item to an article (optional alias creation).
 - `POST /api/v1/expenses/articles/:id/aliases` – batch create aliases (supplier/raw labels) for an article.
 

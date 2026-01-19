@@ -130,6 +130,18 @@
       (is (= :get (req-method req)))
       (is (= "/api/v1/expenses/receipts?limit=500&offset=0" (req-uri req))))))
 
+(deftest fetch-raw-labels-uses-expenses-api
+  (testing "user-expenses/fetch-raw-labels uses /api/v1/expenses/raw-labels"
+    (reset-db!)
+
+    (rf/dispatch-sync [:user-expenses/fetch-raw-labels])
+
+    (let [req (last-http-request)]
+      (is (= :get (req-method req)))
+      (is (= "/api/v1/expenses/raw-labels" (req-uri req)))
+      (is (= {:limit 200 :offset 0}
+        (select-keys (req-params req) [:limit :offset]))))))
+
 (deftest upload-receipt-sends-file-in-formdata
   (testing "upload-receipt sends multipart file (guards against trim-v arg loss)"
     (reset-db!)
