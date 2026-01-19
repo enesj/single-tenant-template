@@ -74,9 +74,13 @@
   The returned map is suitable for `ocr-parse!` / `ocr-extract!` and the Batch API helpers.
 
   NOTE: Batch support is currently used only in the receipt worker's batch-by-ids flow."
-  [app-config]
-  (let [cfg (or (:mistral app-config) {})
-        getenv (fn [k] (some-> (System/getenv k) str/trim (not-empty)))
+  ([app-config]
+   (build-config app-config nil))
+  ([app-config {:keys [getenv]
+                :or {getenv (fn [k] (System/getenv k))}}]
+   (let [cfg (or (:mistral app-config) {})
+         ;; Allow `getenv` injection for tests; normalize blanks to nil.
+         getenv* (fn [k] (some-> (getenv k) str/trim (not-empty)))
         parse-bool (fn [s]
                      (when s
                        (let [s (str/lower-case (str/trim s))]
@@ -87,47 +91,47 @@
         parse-int (fn [s]
                     (when (and s (re-matches #"\\d+" s))
                       (Long/parseLong s)))
-        env-enabled (some-> (getenv "MISTRAL_OCR_ENABLED") parse-bool)
+        env-enabled (some-> (getenv* "MISTRAL_OCR_ENABLED") parse-bool)
         enabled? (if (some? env-enabled)
                    env-enabled
                    (if (contains? cfg :ocr-enabled?)
                      (:ocr-enabled? cfg)
                      true))
-        env-batch-enabled (some-> (getenv "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
+        env-batch-enabled (some-> (getenv* "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
         batch-enabled? (if (some? env-batch-enabled)
                          env-batch-enabled
                          (if (contains? cfg :ocr-batch-enabled?)
                            (:ocr-batch-enabled? cfg)
                            true))
-        batch-poll-ms (or (some-> (getenv "MISTRAL_OCR_BATCH_POLL_MS") parse-int)
+        batch-poll-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_POLL_MS") parse-int)
                         (:ocr-batch-poll-ms cfg)
                         2000)
-        batch-timeout-ms (or (some-> (getenv "MISTRAL_OCR_BATCH_TIMEOUT_MS") parse-int)
+        batch-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_TIMEOUT_MS") parse-int)
                            (:ocr-batch-timeout-ms cfg)
                            600000)
-        batch-max-requests (or (some-> (getenv "MISTRAL_OCR_BATCH_MAX_REQUESTS") parse-int)
+        batch-max-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MAX_REQUESTS") parse-int)
                              (:ocr-batch-max-requests cfg)
                              50)]
-    {:enabled? enabled?
-     :batch-enabled? batch-enabled?
-     :batch-poll-ms batch-poll-ms
-     :batch-timeout-ms batch-timeout-ms
-     :batch-max-requests batch-max-requests
-     :api-key (or (getenv "MISTRAL_API_KEY") (:api-key cfg))
-     :base-url (or (getenv "MISTRAL_OCR_BASE_URL") (:base-url cfg) default-base-url)
-     :model (or (getenv "MISTRAL_OCR_MODEL") (:ocr-model cfg) default-model)
-     :conn-timeout-ms (or (some-> (getenv "MISTRAL_OCR_CONN_TIMEOUT_MS") parse-int)
-                        (:conn-timeout-ms cfg)
-                        default-conn-timeout-ms)
-     :socket-timeout-ms (or (some-> (getenv "MISTRAL_OCR_SOCKET_TIMEOUT_MS") parse-int)
-                          (:socket-timeout-ms cfg)
-                          default-socket-timeout-ms)
-     :max-retries (or (some-> (getenv "MISTRAL_OCR_MAX_RETRIES") parse-int)
-                    (:max-retries cfg)
-                    default-max-retries)
-     :retry-sleep-ms (or (some-> (getenv "MISTRAL_OCR_RETRY_SLEEP_MS") parse-int)
-                       (:retry-sleep-ms cfg)
-                       default-retry-sleep-ms)}))
+     {:enabled? enabled?
+      :batch-enabled? batch-enabled?
+      :batch-poll-ms batch-poll-ms
+      :batch-timeout-ms batch-timeout-ms
+      :batch-max-requests batch-max-requests
+      :api-key (or (getenv* "MISTRAL_API_KEY") (:api-key cfg))
+      :base-url (or (getenv* "MISTRAL_OCR_BASE_URL") (:base-url cfg) default-base-url)
+      :model (or (getenv* "MISTRAL_OCR_MODEL") (:ocr-model cfg) default-model)
+      :conn-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_CONN_TIMEOUT_MS") parse-int)
+                         (:conn-timeout-ms cfg)
+                         default-conn-timeout-ms)
+      :socket-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_SOCKET_TIMEOUT_MS") parse-int)
+                           (:socket-timeout-ms cfg)
+                           default-socket-timeout-ms)
+      :max-retries (or (some-> (getenv* "MISTRAL_OCR_MAX_RETRIES") parse-int)
+                     (:max-retries cfg)
+                     default-max-retries)
+      :retry-sleep-ms (or (some-> (getenv* "MISTRAL_OCR_RETRY_SLEEP_MS") parse-int)
+                        (:retry-sleep-ms cfg)
+                        default-retry-sleep-ms)})))
 
 (defn default-model-name []
   default-model)

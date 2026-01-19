@@ -141,7 +141,6 @@
         ($ :div {:class "space-y-6"}
           ($ :div {:class "grid gap-3 md:grid-cols-3"}
             (utils/label-value "Name" (:canonical-name article))
-            (utils/label-value "Barcode" (:barcode article))
             (utils/label-value "Category" (:category article))
             (utils/label-value "Normalized Key" (:normalized-key article))
             (utils/label-value "Created At" (shared/format-date (:created-at article)))

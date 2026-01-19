@@ -40,11 +40,6 @@
     :label "Canonical name"
     :required true
     :placeholder "e.g. Coffee Beans"}
-   {:id :barcode
-    :type :text
-    :label "Barcode"
-    :required false
-    :placeholder "Optional"}
    {:id :category
     :type :text
     :label "Category"
@@ -59,7 +54,6 @@
         initial-values {:canonical_name (or (:canonical-name item)
                                           (:canonicalName item)
                                           "")
-                        :barcode (or (:barcode item) "")
                         :category (or (:category item) "")}]
     ($ :div {:class "space-y-4"}
       (when form-error

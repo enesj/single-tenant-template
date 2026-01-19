@@ -89,9 +89,6 @@
                               canonical-provided?
                     (assoc :canonical_name (:canonical_name body))
 
-                              (contains? body :barcode)
-                              (assoc :barcode (:barcode body))
-
                               (contains? body :category)
                               (assoc :category (:category body)))
                     updated (articles/update-article! db article-id updates)]

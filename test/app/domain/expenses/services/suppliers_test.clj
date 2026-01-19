@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.payers :as payers]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
@@ -30,7 +31,7 @@
       (let [supplier-name (unique-supplier-name)
             {:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-name {})
             supplier-id (:id supplier)
-            payer (payers/create-payer! db {:type "cash" :label "Cash"})
+        payer (th/create-payer! db {:type "cash" :label "Cash"})
             _expense (expenses/create-expense!
                        db
                        {:supplier_id supplier-id
@@ -58,7 +59,7 @@
       (let [supplier-name (unique-supplier-name)
             {:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-name {})
             supplier-id (:id supplier)
-            payer (payers/create-payer! db {:type "cash" :label "Cash"})
+        payer (th/create-payer! db {:type "cash" :label "Cash"})
             expense (expenses/create-expense!
                       db
                       {:supplier_id supplier-id

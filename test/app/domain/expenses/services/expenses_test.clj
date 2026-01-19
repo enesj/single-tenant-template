@@ -6,6 +6,7 @@
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.payers :as payers]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]]
     [honey.sql :as hsql]
     [next.jdbc :as jdbc])
@@ -25,7 +26,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "DM" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article-name (str "Toothpaste-" (UUID/randomUUID))
           article (articles/create-article! db {:canonical_name article-name})
           before (count-table db :price_observations)
@@ -46,7 +47,7 @@
 (deftest expenses-auto-links-article-when-alias-exists
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Walmart" {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article-name (str "Gala Apples-" (UUID/randomUUID))
           article (articles/create-article! db {:canonical_name article-name})
           _ (articles/create-alias! db (:id supplier) "APPLES G" (:id article))
@@ -65,7 +66,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-a (:supplier (suppliers/find-or-create-supplier! db "Supplier A" {}))
           supplier-b (:supplier (suppliers/find-or-create-supplier! db "Supplier B" {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article-a (articles/create-article! db {:canonical_name (str "ArticleA-" (UUID/randomUUID))})
           _ (articles/create-alias! db (:id supplier-a) "MILK" (:id article-a))
           expense (expenses/create-expense! db
@@ -82,7 +83,7 @@
 (deftest expenses-auto-linking-does-not-override-explicit-article-id
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Override Supplier" {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article-aliased (articles/create-article! db {:canonical_name (str "Aliased-" (UUID/randomUUID))})
           article-explicit (articles/create-article! db {:canonical_name (str "Explicit-" (UUID/randomUUID))})
           _ (articles/create-alias! db (:id supplier) "TP" (:id article-aliased))
@@ -101,7 +102,7 @@
 (deftest expenses-auto-linking-skips-blank-or-short-labels
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "BlankLabel Supplier" {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article (articles/create-article! db {:canonical_name (str "ShouldNotMatch-" (UUID/randomUUID))})
           _ (articles/create-alias! db (:id supplier) "  " (:id article))
 
@@ -134,7 +135,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "TwoArity Supplier" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           expense (expenses/create-expense! db
                     {:supplier_id (:id supplier)
                      :payer_id (:id payer)
@@ -151,7 +152,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "Coerce Supplier" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article-name (str "CoerceArticle-" (UUID/randomUUID))
           article (articles/create-article! db {:canonical_name article-name})
           expense (expenses/create-expense! db
@@ -175,7 +176,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "UpdateItems Supplier" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article-name (str "UpdateItemsArticle-" (UUID/randomUUID))
           article (articles/create-article! db {:canonical_name article-name})
           expense (expenses/create-expense! db
@@ -220,7 +221,7 @@
 (deftest expenses-update-auto-links-only-newly-inserted-items
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "UpdateAutoLink Supplier " (UUID/randomUUID)) {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
 
           expense (expenses/create-expense! db
                     {:supplier_id (:id supplier)
@@ -259,7 +260,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "Pharmacy" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "account" :label "Bank"})
+          payer (th/create-payer! db {:type "account" :label "Bank"})
           exp (expenses/create-expense! db
                 {:supplier_id (:id supplier)
                  :payer_id (:id payer)
@@ -274,7 +275,7 @@
 (deftest expenses-soft-delete-soft-deletes-expense-items
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "DeleteExpenseItems Supplier " (UUID/randomUUID)) {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           exp (expenses/create-expense! db
                 {:supplier_id (:id supplier)
                  :payer_id (:id payer)

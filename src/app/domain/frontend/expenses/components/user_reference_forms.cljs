@@ -16,11 +16,6 @@
     :type :textarea
     :label "Address"
     :required false
-    :placeholder "Optional"}
-   {:id :tax_id
-    :type :text
-    :label "Tax ID"
-    :required false
     :placeholder "Optional"}])
 
 (defn- payer-form-spec
@@ -70,7 +65,7 @@
 (defui user-supplier-edit-form-modal
   [{:keys [supplier-id initial-data on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        initial-values (select-keys (or initial-data {}) [:display_name :address :tax_id])]
+        initial-values (select-keys (or initial-data {}) [:display_name :address])]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}

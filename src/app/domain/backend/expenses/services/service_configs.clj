@@ -150,7 +150,7 @@
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :canonical_name
-   :search-fields [:canonical_name :normalized_key :barcode]
+   :search-fields [:canonical_name :normalized_key]
    :field-transformers {:normalized_key articles/normalize-article-key}
    :before-insert (fn [data]
                     (let [canonical-name (:canonical_name data)]

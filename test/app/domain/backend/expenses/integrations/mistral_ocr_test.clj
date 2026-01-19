@@ -19,7 +19,10 @@
                          :conn-timeout-ms 1
                          :socket-timeout-ms 2
                          :max-retries 3
-                         :retry-sleep-ms 4}})]
+                         :retry-sleep-ms 4}}
+              ;; Avoid leaking developer machine env vars (e.g. MISTRAL_API_KEY)
+              ;; into test expectations.
+              {:getenv (constantly nil)})]
     (is (= false (:enabled? cfg)))
     (is (= false (:batch-enabled? cfg)))
     (is (= 11 (:batch-poll-ms cfg)))

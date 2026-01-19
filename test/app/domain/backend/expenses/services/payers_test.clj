@@ -2,6 +2,7 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.payers :as payers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
@@ -22,12 +23,12 @@
   (testing "creating a payer with is_default=true unsets any previous default"
     (let [db fixtures/*test-db*
           get-payer (:get payers/service)
-          p1 (payers/create-payer!
+      p1 (th/create-payer!
                db
                {:type "cash"
                 :label (str "cash-" (UUID/randomUUID))
                 :is_default true})
-          p2 (payers/create-payer!
+      p2 (th/create-payer!
                db
                {:type "card"
                 :label (str "card-" (UUID/randomUUID))
@@ -48,12 +49,12 @@
   (testing "updating a payer to is_default=true unsets any previous default"
     (let [db fixtures/*test-db*
           get-payer (:get payers/service)
-          p1 (payers/create-payer!
+      p1 (th/create-payer!
                db
                {:type "cash"
                 :label (str "cash-" (UUID/randomUUID))
                 :is_default true})
-          p2 (payers/create-payer!
+      p2 (th/create-payer!
                db
                {:type "account"
                 :label (str "acct-" (UUID/randomUUID))

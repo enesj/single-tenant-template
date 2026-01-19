@@ -278,7 +278,6 @@ Note: line item quantity supports **3-decimal precision** (e.g. weights/volumes)
 {:id :uuid
  :canonical_name :string
  :normalized_key :string
- :barcode :string?
  :category :string?
  :created_at :timestamp
  :updated_at :timestamp}
@@ -369,15 +368,15 @@ The user UI config uses these EDN file types:
                                :per-page 50}}}
 
 ;; table-columns.edn
-{:articles {:available-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at :id]
-            :default-visible-columns [:canonical-name :barcode :category :created-at]
-            :filterable-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at]
-            :sortable-columns [:canonical-name :barcode :category :normalized-key :created-at :updated-at]
+{:articles {:available-columns [:canonical-name :category :normalized-key :created-at :updated-at :id]
+            :default-visible-columns [:canonical-name :category :created-at]
+            :filterable-columns [:canonical-name :category :normalized-key :created-at :updated-at]
+            :sortable-columns [:canonical-name :category :normalized-key :created-at :updated-at]
             :always-visible [:canonical-name]}}
 
 ;; form-fields.edn
-{:articles {:create-fields [:canonical-name :barcode :category]
-            :edit-fields [:canonical-name :barcode :category]
+{:articles {:create-fields [:canonical-name :category]
+            :edit-fields [:canonical-name :category]
             :required-fields [:canonical-name]}}
 ```
 

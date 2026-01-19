@@ -21,20 +21,18 @@
 
 (defonce ^:private migrations-ensured? (atom false))
 
-(defn- column-exists?
-  "Check whether a given column exists in the public schema."
-  [db table-name column-name]
-  (boolean
-    (:exists
-     (jdbc/execute-one!
-       db
-       [(str "select exists (select 1 "
-          "from information_schema.columns "
-          "where table_schema = 'public' "
-          "and table_name = ? "
-          "and column_name = ?) as exists")
-        table-name
-        column-name]))))
+(defn- current-test-jdbc-url
+  "Best-effort JDBC URL for the DB the test system is *actually* using.
+
+  Why: tests use the running system's pooled datasource from `system.state`, but
+  `automigrate.core/migrate` runs against a JDBC URL. If an env var like
+  DATABASE_URL points elsewhere, using `mig/get-jdbc-url` can migrate the wrong
+  database and leave the test DB stale (e.g. missing payer_types)."
+  []
+  (let [db (get @state/state :database)]
+    (or (when (instance? com.zaxxer.hikari.HikariDataSource db)
+          (.getJdbcUrl ^com.zaxxer.hikari.HikariDataSource db))
+      (mig/get-jdbc-url :test))))
 
 (defn- ensure-test-schema!
   "Ensure the test DB schema is migrated.
@@ -44,15 +42,12 @@
   []
   (when (compare-and-set! migrations-ensured? false true)
     (try
-      (when-let [db (get @state/state :database)]
-        (let [missing-suppliers-archived? (not (column-exists? db "suppliers" "archived_at"))
-              missing-user-settings? (not (column-exists? db "user_expense_settings" "user_id"))]
-          (when (or missing-suppliers-archived? missing-user-settings?)
-            (log/warn "⚠️ Test DB schema looks stale; running migrations for :test profile..."
-              {:missing {:suppliers.archived_at missing-suppliers-archived?
-                         :user_expense_settings.user_id missing-user-settings?}})
-          (am/migrate {:jdbc-url (mig/get-jdbc-url :test)})
-            (log/info "✅ Test DB migrations complete"))))
+      ;; Always attempt to migrate. When already up-to-date, automigrate should be a no-op.
+      ;; This avoids schema drift when new migrations are introduced but the DB happens to
+      ;; include older "sentinel" columns.
+      (log/info "🛠️ Ensuring test DB migrations are applied...")
+      (am/migrate {:jdbc-url (current-test-jdbc-url)})
+      (log/info "✅ Test DB migrations complete")
       (catch Throwable t
         ;; Allow retries if migration fails.
         (reset! migrations-ensured? false)
@@ -112,6 +107,9 @@
                  {:attempts attempts}))
 
         (nil? @state/state)
+        (do (Thread/sleep 100) (recur (inc attempts)))
+
+        (nil? (get-test-db))
         (do (Thread/sleep 100) (recur (inc attempts)))
 
         :else

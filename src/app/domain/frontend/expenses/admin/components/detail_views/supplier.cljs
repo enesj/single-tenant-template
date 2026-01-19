@@ -54,7 +54,6 @@
             (utils/label-value "Name" (:display-name supplier))
             (utils/label-value "Normalized Key" (:normalized-key supplier))
             (utils/label-value "Address" (:address supplier))
-            (utils/label-value "Tax ID" (:tax-id supplier))
             (utils/label-value "Created At" (shared/format-date (:created-at supplier)))
             (utils/label-value "Archived At" (when archived-at (shared/format-date archived-at)))
             (utils/label-value "ID" (:id supplier)))

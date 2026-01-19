@@ -20,7 +20,6 @@
    [:display_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
-   [:tax_id [:varchar 50]]
    [:archived_at :timestamptz]
    [:created_at :timestamptz {:default "NOW()"}]
    [:updated_at :timestamptz {:default "NOW()"}]],
@@ -54,7 +53,6 @@
   [[:id :uuid {:primary-key true}]
    [:canonical_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
-   [:barcode [:varchar 50]]
    [:category [:varchar 100]]
    [:created_at :timestamptz {:default "NOW()"}]
    [:updated_at :timestamptz {:default "NOW()"}]],

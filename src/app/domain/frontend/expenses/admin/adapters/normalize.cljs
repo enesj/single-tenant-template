@@ -134,7 +134,6 @@
      :alias-keys {:display_name [:display-name]
                   :normalized_key [:normalized-key]
                   :address [:address]
-                  :tax_id [:tax-id]
                   :created_at [:created-at]}}))
 
 (defn payer->template-entity
@@ -167,7 +166,6 @@
      :id-keys [:id]
      :alias-keys {:canonical_name [:canonical-name]
                   :normalized_key [:normalized-key]
-                  :barcode [:barcode]
                   :category [:category]
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))

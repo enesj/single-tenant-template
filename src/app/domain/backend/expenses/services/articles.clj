@@ -39,14 +39,13 @@
 
 (defn create-article!
   "Create a canonical article."
-  [db {:keys [canonical_name barcode category] :as data}]
+  [db {:keys [canonical_name category] :as data}]
   (when-not canonical_name
     (throw (ex-info "canonical_name is required" {:data data})))
   (let [normalized (normalize-article-key canonical_name)
         row {:id (UUID/randomUUID)
              :canonical_name canonical_name
              :normalized_key normalized
-             :barcode barcode
              :category category}
         sql-map {:insert-into :articles
                  :values [row]
@@ -71,17 +70,15 @@
         query (cond-> base
                 search (assoc :where [:or
                                       [:ilike :canonical_name (str "%" search "%")]
-                                      [:ilike :normalized_key (str "%" search "%")]
-                                      [:ilike :barcode (str "%" search "%")]]))]
+                  [:ilike :normalized_key (str "%" search "%")]]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn update-article!
   "Update a canonical article. Recomputes normalized_key when canonical_name is provided."
-  [db id {:keys [canonical_name barcode category] :as data}]
+  [db id {:keys [canonical_name category] :as data}]
   (let [update-map (cond-> {}
                      canonical_name (assoc :canonical_name canonical_name
                                       :normalized_key (normalize-article-key canonical_name))
-                     (contains? data :barcode) (assoc :barcode barcode)
                      (contains? data :category) (assoc :category category)
                      true (assoc :updated_at [:now]))]
     (when (seq update-map)
@@ -110,8 +107,7 @@
         final-query (if search
                       (assoc base-query :where [:or
                                                 [:ilike :canonical_name (str "%" search "%")]
-                                                [:ilike :normalized_key (str "%" search "%")]
-                                                [:ilike :barcode (str "%" search "%")]])
+                                                [:ilike :normalized_key (str "%" search "%")]])
                       base-query)]
     (:total (jdbc/execute-one! db (sql/format final-query)
               {:builder-fn rs/as-unqualified-lower-maps}))))
@@ -127,8 +123,7 @@
                      :from [:articles]
                      :where [:or
                              [:ilike :canonical_name search-pattern]
-                             [:ilike :normalized_key search-pattern]
-                             [:ilike :barcode search-pattern]]
+                             [:ilike :normalized_key search-pattern]]
                      :order-by [[:canonical_name :asc]]
                      :limit limit})
         {:builder-fn rs/as-unqualified-lower-maps}))))

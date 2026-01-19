@@ -150,7 +150,7 @@
         forbidden
         (try
           (let [body (h/read-json-body request)
-                supplier-data (select-keys body [:display_name :address :tax_id])
+                 supplier-data (select-keys body [:display_name :address])
                 create-supplier! (resolve-service-op-fn
                                    'app.domain.backend.expenses.services.suppliers
                                    :create!
@@ -179,7 +179,7 @@
           (if supplier-id
             (try
               (let [body (h/read-json-body request)
-                    updates (select-keys body [:display_name :address :tax_id])
+                   updates (select-keys body [:display_name :address])
                     update-supplier! (resolve-service-op-fn
                                        'app.domain.backend.expenses.services.suppliers
                                        :update!

@@ -3,6 +3,7 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.payers :as payers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]]))
 
 (use-fixtures :each fixtures/with-transaction-rollback)
@@ -10,8 +11,8 @@
 (deftest payers-default-per-type-test
   (when-let [db fixtures/*test-db*]
     (let [get-payer (:get payers/service)
-          p1 (payers/create-payer! db {:type "cash" :label "Cash Wallet" :is_default true})
-          p2 (payers/create-payer! db {:type "cash" :label "Cash Jar" :is_default false})
+          p1 (th/create-payer! db {:type "cash" :label "Cash Wallet" :is_default true})
+          p2 (th/create-payer! db {:type "cash" :label "Cash Jar" :is_default false})
           _ (payers/set-default-payer! db (:id p2))
           p1* (get-payer db (:id p1))
           p2* (get-payer db (:id p2))

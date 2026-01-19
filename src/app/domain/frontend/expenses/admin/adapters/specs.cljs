@@ -43,7 +43,6 @@
    :fields [{:id :display-name :label "Name" :type :text}
             {:id :normalized-key :label "Normalized key" :type :text}
             {:id :address :label "Address" :type :text}
-            {:id :tax-id :label "Tax ID" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
 (def payers-entity-spec
@@ -55,7 +54,6 @@
 (def articles-entity-spec
   {:id :articles
    :fields [{:id :canonical-name :label "Name" :type :text}
-            {:id :barcode :label "Barcode" :type :text}
             {:id :category :label "Category" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 

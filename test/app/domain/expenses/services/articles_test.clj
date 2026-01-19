@@ -6,6 +6,7 @@
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.payers :as payers]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]])
   (:import
     (java.util UUID)))
@@ -59,7 +60,7 @@
 (deftest articles-map-item-to-article-creates-alias-when-enabled
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "MapItem Supplier " (UUID/randomUUID)) {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           article (articles/create-article! db {:canonical_name (str "MapItem Article " (UUID/randomUUID))})
           expense (expenses/create-expense!
                     db
@@ -85,7 +86,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-a (:supplier (suppliers/find-or-create-supplier! db (str "Unmapped Supplier A " (UUID/randomUUID)) {}))
           supplier-b (:supplier (suppliers/find-or-create-supplier! db (str "Unmapped Supplier B " (UUID/randomUUID)) {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           exp-a (expenses/create-expense!
                   db
                   {:supplier_id (:id supplier-a)

@@ -9,6 +9,7 @@
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is use-fixtures]]
     [honey.sql :as hsql]
@@ -46,7 +47,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "Konzum" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
+          payer (th/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
           upload (receipt-storage/upload-receipt! db {:storage_key "s3://bucket/r1.jpg"
                                                       :bytes (.getBytes "hello world")})
           receipt-id (:id (:receipt upload))
@@ -67,7 +68,7 @@
 (deftest receipts-soft-delete-expense-reverts-receipt
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier" {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           upload (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "del-" (UUID/randomUUID)))})
           receipt-id (:id (:receipt upload))
@@ -92,7 +93,7 @@
 (deftest receipts-soft-delete-expense-clears-link-even-if-receipt-already-reverted
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier (reverted receipt)" {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           upload (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "del-" (UUID/randomUUID)))})
           receipt-id (:id (:receipt upload))
@@ -122,7 +123,7 @@
 (deftest receipts-delete-allows-stale-expense-link-when-expense-soft-deleted
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "DeleteReceipt stale expense link " (UUID/randomUUID)) {}))
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           upload (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/r-del-stale-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "del-stale-" (UUID/randomUUID)))})
           receipt-id (:id (:receipt upload))
@@ -160,7 +161,7 @@
       (try
         (Files/write (.toPath src-file) bytes (into-array java.nio.file.OpenOption []))
         (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Konzum" {}))
-              payer (payers/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
+              payer (th/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
             upload (receipt-storage/upload-receipt! db {:storage_key storage-key
                             :bytes bytes})
               receipt-id (:id (:receipt upload))
@@ -190,7 +191,7 @@
           user-2 (create-test-user! db "member")
           supplier-result (suppliers/find-or-create-supplier! db "UserReceipt Supplier" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
 
           upload-owned (receipt-storage/upload-receipt! db {:user_id user-1
                                                             :storage_key (str "s3://bucket/u1-" (UUID/randomUUID) ".jpg")
@@ -248,7 +249,7 @@
           member-user (create-test-user! db "member")
           supplier-result (suppliers/find-or-create-supplier! db "AdminReceipt Supplier" {})
           supplier (:supplier supplier-result)
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
 
           upload (receipt-storage/upload-receipt! db {:user_id member-user
                                                       :storage_key (str "s3://bucket/member-" (UUID/randomUUID) ".jpg")

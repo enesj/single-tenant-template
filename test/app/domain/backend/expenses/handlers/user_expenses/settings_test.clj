@@ -3,6 +3,7 @@
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.services.payers :as payers]
+    [app.domain.expenses.test-helpers :as th]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is use-fixtures]]
     [honey.sql :as hsql]
@@ -59,7 +60,7 @@
 (deftest settings-put-persists-and-get-reflects
   (when-let [db fixtures/*test-db*]
     (let [user-id (create-test-user! db "member")
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           payer-id (:id payer)
           get-handler (settings/get-settings-handler db)
           put-handler (settings/update-settings-handler db)
@@ -85,7 +86,7 @@
 (deftest settings-put-blank-payer-clears
   (when-let [db fixtures/*test-db*]
     (let [user-id (create-test-user! db "member")
-          payer (payers/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
           payer-id (:id payer)
           put-handler (settings/update-settings-handler db)
           get-handler (settings/get-settings-handler db)

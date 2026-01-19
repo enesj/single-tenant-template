@@ -79,7 +79,6 @@
             (detail-utils/label-value "Name" (:display-name supplier))
             (detail-utils/label-value "Normalized Key" (:normalized-key supplier))
             (detail-utils/label-value "Address" (:address supplier))
-            (detail-utils/label-value "Tax ID" (:tax-id supplier))
             (detail-utils/label-value "Created At" (shared/format-date (:created-at supplier)))
             (detail-utils/label-value "Archived At" (when archived-at (shared/format-date archived-at)))
             (detail-utils/label-value "ID" (or (:id supplier) (some-> supplier-id str))))

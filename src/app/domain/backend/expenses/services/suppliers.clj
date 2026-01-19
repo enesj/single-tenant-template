@@ -392,14 +392,13 @@
 (defn find-or-create-supplier!
   "Find supplier by normalized name or create new one.
    Returns {:existing? bool :supplier {...}}"
-  [db display-name & [{:keys [address tax_id]}]]
+  [db display-name & [{:keys [address]}]]
   (let [normalized (normalize-supplier-key display-name)]
     (if-let [existing (find-by-normalized-key db normalized)]
       {:existing? true :supplier existing}
       {:existing? false
        :supplier ((:create! service) db {:display_name display-name
-                                         :address address
-                                         :tax_id tax_id})})))
+                                         :address address})})))
 
 (defn search-suppliers-autocomplete
   "Search suppliers for autocomplete with fuzzy matching."
