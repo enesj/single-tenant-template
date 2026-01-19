@@ -34,9 +34,21 @@
         can-modify? (authz/can? role :expenses/reference.write)
         entity-name :payers
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
+        payers-entity-spec (mapv (fn [field]
+                                   (let [fid (:id field)
+                                         fid-name (cond
+                                                    (keyword? fid) (name fid)
+                                                    (string? fid) fid
+                                                    :else (str fid))]
+                                     (if (#{"payer_type_id" "payer-type-id"}
+                                           fid-name)
+                                       (assoc field :type "select" :options [:payer-types :label])
+                                       field)))
+                             (or entity-spec []))
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:user-expenses/fetch-payers]))
+                         (rf/dispatch [:user-expenses/fetch-payers])
+                         (rf/dispatch [:user-expenses/fetch-payer-types]))
                        [])]
 
     (use-effect
@@ -106,7 +118,7 @@
         ($ :main {:class "w-full px-4 py-6"}
           ($ list-view
             {:entity-name entity-name
-             :entity-spec entity-spec
+             :entity-spec payers-entity-spec
              :title "Payers"
              :form-display :modal
              :disallowed-action-mode :disable

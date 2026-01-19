@@ -26,7 +26,12 @@
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},
   :column-defaults {},
-  :column-locks {:type true}},
+  :column-locks {}},
+ :payer-types
+ {:display-locks {},
+  :display-defaults {:per-page 50, :show-edit? false},
+  :column-defaults {},
+  :column-locks {}},
  :article-aliases
  {:display-defaults {:show-edit? false},
   :display-locks {},

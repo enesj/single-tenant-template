@@ -23,23 +23,28 @@
     :required false
     :placeholder "Optional"}])
 
-(def ^:private payer-type-options
-  [{:label "Cash" :value "cash"}
-   {:label "Card" :value "card"}
-   {:label "Account" :value "account"}
-   {:label "Person" :value "person"}])
-
-(def ^:private payer-form-spec
+(defn- payer-form-spec
+  [payer-type-options]
   [{:id :label
     :type :text
     :label "Label"
     :required true
     :placeholder "e.g. Visa 1234"}
-   {:id :type
+   {:id :payer_type_id
     :type :select
     :label "Type"
     :required true
     :options payer-type-options}
+   {:id :is_default
+    :type :checkbox
+    :label "Default"}])
+
+(def ^:private payer-type-form-spec
+  [{:id :label
+    :type :text
+    :label "Label"
+    :required true
+    :placeholder "e.g. Family"}
    {:id :is_default
     :type :checkbox
     :label "Default"}])
@@ -83,7 +88,19 @@
 
 (defui user-payer-add-form-modal
   [{:keys [on-success on-cancel]}]
-  (let [form-error (use-subscribe [:user-expenses/form-error])]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        payer-types (or (use-subscribe [:user-expenses/payer-types]) [])
+        payer-type-options (mapv (fn [{:keys [id label]}]
+                                   {:label label :value (str id)})
+                             payer-types)
+        default-type-id (or (some->> payer-types
+                              (some (fn [pt]
+                                      (when (true? (:is_default pt))
+                                        (:id pt))))
+                              str)
+                          (get-in payer-type-options [0 :value]))
+        initial-values (cond-> {:is_default false}
+                         default-type-id (assoc :payer_type_id default-type-id))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -91,9 +108,9 @@
 
       ($ form
         {:entity-name "user-payer"
-         :entity-spec payer-form-spec
+         :entity-spec (payer-form-spec payer-type-options)
          :editing false
-         :initial-values {:type "cash" :is_default false}
+         :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
                       (rf/dispatch [:user-expenses/create-payer-modal values on-success]))
@@ -102,8 +119,19 @@
 (defui user-payer-edit-form-modal
   [{:keys [payer-id initial-data on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        initial-values (-> (select-keys (or initial-data {}) [:label :type :is_default])
-                         (update :is_default #(boolean %)))]
+        payer-types (or (use-subscribe [:user-expenses/payer-types]) [])
+        payer-type-options (mapv (fn [{:keys [id label]}]
+                                   {:label label :value (str id)})
+                             payer-types)
+        default-type-id (or (some->> payer-types
+                              (some (fn [pt]
+                                      (when (true? (:is_default pt))
+                                        (:id pt))))
+                              str)
+                          (get-in payer-type-options [0 :value]))
+        initial-values (-> (select-keys (or initial-data {}) [:label :payer_type_id :is_default])
+                         (update :payer_type_id #(or (when % (str %)) default-type-id))
+                         (update :is_default boolean))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -111,10 +139,48 @@
 
       ($ form
         {:entity-name "user-payer"
-         :entity-spec payer-form-spec
+         :entity-spec (payer-form-spec payer-type-options)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
                       (rf/dispatch [:user-expenses/update-payer-modal payer-id values on-success]))
          :button-text "Update Payer"}))))
+
+(defui user-payer-type-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "user-payer-type"
+         :entity-spec payer-type-form-spec
+         :editing false
+         :initial-values {:is_default false}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-payer-type-modal values on-success]))
+         :button-text "Save Payer Type"}))))
+
+(defui user-payer-type-edit-form-modal
+  [{:keys [payer-type-id initial-data on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        initial-values (-> (select-keys (or initial-data {}) [:label :is_default])
+                         (update :is_default #(boolean %)))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "user-payer-type"
+         :entity-spec payer-type-form-spec
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-payer-type-modal payer-type-id values on-success]))
+         :button-text "Update Payer Type"}))))

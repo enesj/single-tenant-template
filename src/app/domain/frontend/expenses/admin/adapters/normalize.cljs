@@ -104,13 +104,13 @@
     receipt
     {:entity-ns :receipts
      :id-keys [:id]
-         :alias-keys {:original_filename [:original-filename]
-          :supplier_guess [:supplier-guess]
-          :created_at [:created-at]}
+     :alias-keys {:original_filename [:original-filename]
+                  :supplier_guess [:supplier-guess]
+                  :created_at [:created-at]}
      :post-transform (fn [m]
-               (let [total (:total-amount-guess m)
-                 lines-total (:lines-total-amount-guess m)
-                 currency (:currency-guess m)
+                       (let [total (:total-amount-guess m)
+                             lines-total (:lines-total-amount-guess m)
+                             currency (:currency-guess m)
                              total-str (fmt-amount total)
                              lines-str (fmt-amount lines-total)
                              currency-str (when (and (string? currency) (not (str/blank? currency))) currency)
@@ -143,8 +143,21 @@
     payer
     {:entity-ns :payers
      :id-keys [:id]
-     :alias-keys {:is_default [:is-default]
+     :stringify-keys [:payer_type_id]
+     :alias-keys {:payer_type_id [:payer-type-id :payers/payer-type-id]
+                  :payer_type_label [:payer-type]
+                  :is_default [:is-default]
                   :created_at [:created-at]}}))
+
+(defn payer-type->template-entity
+  [payer-type]
+  (entity-utils/normalize-entity
+    payer-type
+    {:entity-ns :payer-types
+     :id-keys [:id]
+     :alias-keys {:is_default [:is-default]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
 
 (defn article->template-entity
   [article]

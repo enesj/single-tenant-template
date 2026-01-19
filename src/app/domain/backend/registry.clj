@@ -39,6 +39,7 @@
     "/expenses/:expense-id"
     "/suppliers"
     "/payers"
+    "/payer-types"
     "/expense-items"
     "/articles"
     "/article-aliases"

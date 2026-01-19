@@ -227,10 +227,11 @@
                           [:s.display_name :supplier_display_name]
                           [:s.normalized_key :supplier_normalized_key]
                           [:p.label :payer_label]
-                          [:p.type :payer_type]]
+                          [:pt.label :payer_type]]
                  :from [[:expenses :e]]
                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                             [:payers :p] [:= :p.id :e.payer_id]]
+                             [:payers :p] [:= :p.id :e.payer_id]
+                             [:payer_types :pt] [:= :pt.id :p.payer_type_id]]
                  :where base-where
                  :order-by [[:e.purchased_at order-dir]]
                  :limit limit

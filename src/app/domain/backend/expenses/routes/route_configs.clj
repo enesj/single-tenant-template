@@ -1,7 +1,8 @@
 (ns app.domain.backend.expenses.routes.route-configs
   "Configuration maps for expenses domain route generation."
   (:require
-    [app.template.backend.routes.admin.utils :as utils]))
+    [app.template.backend.routes.admin.utils :as utils]
+    [app.template.backend.middleware.admin :as admin-mw]))
 
 ;; =============================================================================
 ;; Entity Route Configurations
@@ -36,13 +37,24 @@
    :service 'app.domain.backend.expenses.services.payers
    :default-limit 100
    :default-order-by "label"
-   :required-fields [:type :label]
+   :required-fields [:payer_type_id :label]
    :has-count? true
    :has-search? false
-   :custom-query-params (fn [qp]
-                          {:type (get-param qp :type)})
-   :transform-request (fn [body]
-                        (update body :type #(when % (name %))))})
+   :custom-query-params (fn [_qp] {})})
+
+(def payer-type-config
+  {:entity-key :payer-type
+   :entity-plural :payer-types
+   :route-segment "payer-types"
+   :service 'app.domain.backend.expenses.services.payer-types
+   :default-limit 100
+   :default-order-by "label"
+   :required-fields [:label]
+   :has-count? true
+   :has-search? false
+   ;; Require at least :admin role; owner also passes. Support is blocked.
+   :route-middleware [(fn [handler] (admin-mw/wrap-admin-role handler :admin))]
+   :custom-query-params (fn [_qp] {})})
 
 (def article-config
   {:entity-key :article
@@ -143,7 +155,8 @@
 (def entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers supplier-config
-   :payers payer-config
+  :payers payer-config
+  :payer-types payer-type-config
    :articles article-config
    :expenses expense-config
    :expense-items expense-item-config

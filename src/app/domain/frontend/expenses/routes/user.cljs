@@ -101,6 +101,10 @@
      :view :expense-articles
      :controllers (controllers/make-simple-controller :page/init-expense-articles)}]
 
+   ["/payer-types"
+    {:name :expense-payer-types
+     :view :expense-payer-types}]
+
    ["/article-aliases"
     {:name :expense-article-aliases
      :view :expense-article-aliases

@@ -99,29 +99,45 @@
 
 (def payer-config
   {:table-name "payers"
+   :table-alias :p
    :primary-key :id
-   :required-fields [:type :label]
+   :required-fields [:payer_type_id :label]
+   :allowed-order-by {:label :p/label
+                      :payer-type :pt/label
+                      :created-at :p/created_at
+                      :updated-at :p/updated_at}
+   :default-order-by :p/label
+   :search-fields [:p/label]
+   :joins [[:payer_types :pt] [:= :pt/id :p/payer_type_id]]
+   :select-fields [[:p/*]
+                   [:pt/label :payer_type_label]]
+   :before-insert (fn [data]
+                    (when-not (get data :payer_type_id)
+                      (throw (ex-info "payer_type_id is required" {:data data})))
+                    (-> data
+                      (assoc :id (UUID/randomUUID))
+                      (update :is_default #(boolean %))))
+   :before-update (fn [_id updates]
+                    (-> updates
+                      (assoc :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
+(def payer-type-config
+  {:table-name "payer_types"
+   :primary-key :id
+   :required-fields [:label]
    :allowed-order-by {:label :label
-                      :payer-type :type
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :label
-   :search-fields [:label :type]
+   :search-fields [:label]
    :before-insert (fn [data]
-                    (when-not (get data :type)
-                      (throw (ex-info "type is required" {:data data})))
-                    (when-not (#{"cash" "card" "account" "person"} (:type data))
-                      (throw (ex-info "Invalid payer type"
-                               {:type (:type data)
-                                :valid #{"cash" "card" "account" "person"}})))
                     (-> data
                       (assoc :id (UUID/randomUUID))
-                      (update :type #(vector :cast % :payer_type))
                       (update :is_default #(boolean %))))
    :before-update (fn [_id updates]
-                    (cond-> updates
-                      (:type updates) (update :type #(vector :cast % :payer_type))
-                      true (assoc :updated_at [:now])))
+                    (-> updates (assoc :updated_at [:now])))
    :has-search? true
    :has-count? true})
 
@@ -272,7 +288,8 @@
 (def ^:private entity-configs
   {:article-alias article-alias-config
    :price-observation price-observation-config
-   :supplier supplier-config
+  :supplier supplier-config
+   :payer-type payer-type-config
    :payer payer-config
    :article article-config
    :expense expense-config

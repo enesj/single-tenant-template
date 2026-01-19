@@ -29,6 +29,14 @@
                                   :page-key :page
                                   :per-page-key :per-page}}})
 
+(def payer-types-config
+  {:entity-key :payer-types
+   :base-path [:admin :expenses :payer-types]
+   :api-endpoint "/admin/api/expenses/payer-types"
+   :detail-response-key :payer-type
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
 (def articles-config
   {:entity-key :articles
    :base-path [:admin :expenses :articles]
@@ -89,9 +97,10 @@
    :articles articles-config
    :receipts receipts-config
    :expenses expenses-config
-  :expense-items expense-items-config
+   :expense-items expense-items-config
    :price-observations price-observations-config
-   :article-aliases article-aliases-config})
+   :article-aliases article-aliases-config
+   :payer-types payer-types-config})
 
 ;; =============================================================================
 ;; Registration Helper

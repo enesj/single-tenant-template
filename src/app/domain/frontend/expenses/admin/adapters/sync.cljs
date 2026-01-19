@@ -50,6 +50,12 @@
    :log-prefix "[expenses] Syncing payers to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-payer-types
+   :entity-key :payer-types
+   :normalize-fn normalize/payer-type->template-entity
+   :log-prefix "[expenses] Syncing payer types to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-articles
    :entity-key :articles
    :normalize-fn normalize/article->template-entity
@@ -82,6 +88,8 @@
   {:sync-event-id ::sync-suppliers})
 (entity-sync/register-sync-handler! :payers
   {:sync-event-id ::sync-payers})
+(entity-sync/register-sync-handler! :payer-types
+  {:sync-event-id ::sync-payer-types})
 (entity-sync/register-sync-handler! :articles
   {:sync-event-id ::sync-articles})
 (entity-sync/register-sync-handler! :article-aliases
@@ -99,6 +107,7 @@
 (form-interceptors/register-bridge-entity! :expense-items)
 (form-interceptors/register-bridge-entity! :receipts)
 (form-interceptors/register-bridge-entity! :payers)
+(form-interceptors/register-bridge-entity! :payer-types)
 (form-interceptors/register-bridge-entity! :articles)
 (form-interceptors/register-bridge-entity! :article-aliases)
 (form-interceptors/register-bridge-entity! :price-observations)

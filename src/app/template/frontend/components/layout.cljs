@@ -54,36 +54,36 @@
         active? (fn [names] (contains? names route-name))
 
         expense-items (vec
-                       (concat
-                         [(nav-item {:id "user-sidebar-dashboard"
-                                     :label "Dashboard"
-                                     :href "/dashboard"
-                                     :route :user-dashboard
-                                     :icon ($ dashboard-icon {:class "w-6 h-6"})
-                                     :active? (active? #{:user-dashboard
-                                                         :expenses-dashboard
-                                                         :expenses-dashboard-alias})})
-                          (nav-item {:id "user-sidebar-receipts"
-                                     :label "Receipts"
-                                     :href "/receipts"
-                                     :route :receipts
-                                     :icon ($ receipts-icon {:class "w-6 h-6"})
-                                     :active? (active? #{:receipts :receipt-detail})})
-                          (nav-item {:id "user-sidebar-expenses-list"
-                                     :label "Expenses"
-                                     :href "/expenses/list"
-                                     :route :expenses-list
-                                     :icon ($ expenses-icon {:class "w-6 h-6"})
-                                     :active? (active? #{:expenses-list
-                                                         :expense-detail
-                                                         :expense-new})})]
-                         (when power-user?
-                           [(nav-item {:id "user-sidebar-expense-items"
-                                       :label "Expense Items"
-                                       :href "/expense-items"
-                                       :route :expense-items
-                                       :icon ($ expense-items-icon {:class "w-6 h-6"})
-                                       :active? (active? #{:expense-items})})])))
+                        (concat
+                          [(nav-item {:id "user-sidebar-dashboard"
+                                      :label "Dashboard"
+                                      :href "/dashboard"
+                                      :route :user-dashboard
+                                      :icon ($ dashboard-icon {:class "w-6 h-6"})
+                                      :active? (active? #{:user-dashboard
+                                                          :expenses-dashboard
+                                                          :expenses-dashboard-alias})})
+                           (nav-item {:id "user-sidebar-receipts"
+                                      :label "Receipts"
+                                      :href "/receipts"
+                                      :route :receipts
+                                      :icon ($ receipts-icon {:class "w-6 h-6"})
+                                      :active? (active? #{:receipts :receipt-detail})})
+                           (nav-item {:id "user-sidebar-expenses-list"
+                                      :label "Expenses"
+                                      :href "/expenses/list"
+                                      :route :expenses-list
+                                      :icon ($ expenses-icon {:class "w-6 h-6"})
+                                      :active? (active? #{:expenses-list
+                                                          :expense-detail
+                                                          :expense-new})})]
+                          (when power-user?
+                            [(nav-item {:id "user-sidebar-expense-items"
+                                        :label "Expense Items"
+                                        :href "/expense-items"
+                                        :route :expense-items
+                                        :icon ($ expense-items-icon {:class "w-6 h-6"})
+                                        :active? (active? #{:expense-items})})])))
 
         operations-items (vec
                            (concat
@@ -109,52 +109,58 @@
                                            :active? (active? #{:unmapped-items})})])))
 
         reference-items (vec
-                         (concat
-                           [(nav-item {:id "user-sidebar-suppliers"
-                                       :label "Suppliers"
-                                       :href "/suppliers"
-                                       :route :expense-suppliers
-                                       :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                       :active? (active? #{:expense-suppliers})})
-                            (nav-item {:id "user-sidebar-payers"
-                                       :label "Payers"
-                                       :href "/payers"
-                                       :route :expense-payers
-                                       :icon ($ payers-icon {:class "w-6 h-6"})
-                                       :active? (active? #{:expense-payers})})]
-                           (when power-user?
-                             [(nav-item {:id "user-sidebar-articles"
-                                         :label "Articles"
-                                         :href "/articles"
-                                         :route :expense-articles
-                                         :icon ($ articles-icon {:class "w-6 h-6"})
-                                         :active? (active? #{:expense-articles})})
-                              (nav-item {:id "user-sidebar-article-aliases"
-                                         :label "Aliases"
-                                         :href "/article-aliases"
-                                         :route :expense-article-aliases
-                                         :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                         :active? (active? #{:expense-article-aliases})})
-                              (nav-item {:id "user-sidebar-price-observations"
-                                         :label "Price Observations"
-                                         :href "/price-observations"
-                                         :route :expense-price-observations
-                                         :icon ($ price-observations-icon {:class "w-6 h-6"})
-                                         :active? (active? #{:expense-price-observations})})])))
+                          (concat
+                            [(nav-item {:id "user-sidebar-suppliers"
+                                        :label "Suppliers"
+                                        :href "/suppliers"
+                                        :route :expense-suppliers
+                                        :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                        :active? (active? #{:expense-suppliers})})
+                             (nav-item {:id "user-sidebar-payers"
+                                        :label "Payers"
+                                        :href "/payers"
+                                        :route :expense-payers
+                                        :icon ($ payers-icon {:class "w-6 h-6"})
+                                        :active? (active? #{:expense-payers})})]
+                            (when power-user?
+                              [(nav-item {:id "user-sidebar-payer-types"
+                                          :label "Payer Types"
+                                          :href "/payer-types"
+                                          :route :expense-payer-types
+                                          :icon ($ payers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-payer-types})})
+                               (nav-item {:id "user-sidebar-articles"
+                                          :label "Articles"
+                                          :href "/articles"
+                                          :route :expense-articles
+                                          :icon ($ articles-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-articles})})
+                               (nav-item {:id "user-sidebar-article-aliases"
+                                          :label "Aliases"
+                                          :href "/article-aliases"
+                                          :route :expense-article-aliases
+                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-article-aliases})})
+                               (nav-item {:id "user-sidebar-price-observations"
+                                          :label "Price Observations"
+                                          :href "/price-observations"
+                                          :route :expense-price-observations
+                                          :icon ($ price-observations-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-price-observations})})])))
 
         sections [{:title "Expenses" :items expense-items}
-            {:title "Operations" :items operations-items}
-            {:title "Reference" :items reference-items}]]
+                  {:title "Operations" :items operations-items}
+                  {:title "Reference" :items reference-items}]]
     ($ sidebar
       {:title "Expenses"
        :sections sections
        :footer ($ :ul {:class "ds-menu w-full p-0"}
-                   ($ :li
-                     ($ :a {:id "user-sidebar-logout"
-                            :href "/logout"
-                            :on-click (fn [e] (stop-and-push! e :logout "/logout"))
-                            :class (if (= route-name :logout) "ds-active" "")}
-                       "Log Out")))})))
+                 ($ :li
+                   ($ :a {:id "user-sidebar-logout"
+                          :href "/logout"
+                          :on-click (fn [e] (stop-and-push! e :logout "/logout"))
+                          :class (if (= route-name :logout) "ds-active" "")}
+                     "Log Out")))})))
 
 (defui user-header []
   ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}

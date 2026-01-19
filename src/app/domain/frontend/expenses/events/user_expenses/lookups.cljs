@@ -30,16 +30,16 @@
                               stored-include-archived?)
           request-params (cond-> (dissoc params* :include_archived)
                            include-archived? (assoc :include_archived true))]
-  {:db (-> db
-     (assoc-in [:user-expenses :suppliers :loading?] true)
-     (assoc-in [:user-expenses :suppliers :error] nil))
-   :http-xhrio (x/xhrio db
-         {:method :get
-          :uri endpoints/suppliers-endpoint
-          :admin-uri endpoints/admin-suppliers-endpoint
-          :params (when (seq request-params) request-params)
-          :on-success [:user-expenses/fetch-suppliers-success]
-          :on-failure [:user-expenses/fetch-suppliers-failure]})})))
+      {:db (-> db
+             (assoc-in [:user-expenses :suppliers :loading?] true)
+             (assoc-in [:user-expenses :suppliers :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :get
+                      :uri endpoints/suppliers-endpoint
+                      :admin-uri endpoints/admin-suppliers-endpoint
+                      :params (when (seq request-params) request-params)
+                      :on-success [:user-expenses/fetch-suppliers-success]
+                      :on-failure [:user-expenses/fetch-suppliers-failure]})})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-suppliers-success
@@ -101,6 +101,46 @@
     (-> db
       (assoc-in [:user-expenses :payers :loading?] false)
       (assoc-in [:user-expenses :payers :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Payer Types
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/fetch-payer-types
+  common-interceptors
+  (fn [{:keys [db]} [params]]
+    {:db (-> db
+           (assoc-in [:user-expenses :payer-types :loading?] true)
+           (assoc-in [:user-expenses :payer-types :error] nil))
+     :http-xhrio (x/xhrio db
+                   {:method :get
+                    :uri endpoints/payer-types-endpoint
+                    :admin-uri endpoints/admin-payer-types-endpoint
+                    :params (when (map? params) params)
+                    :on-success [:user-expenses/fetch-payer-types-success]
+                    :on-failure [:user-expenses/fetch-payer-types-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-payer-types-success
+  common-interceptors
+  (fn [{:keys [db]} [response]]
+    (let [payer-types (or (:data response) (:payer-types response) response)]
+      {:db (-> db
+             (assoc-in [:user-expenses :payer-types :data] payer-types)
+             (assoc-in [:user-expenses :payer-types :items] payer-types)
+             (assoc-in [:user-expenses :payer-types :loading?] false)
+             (assoc-in [:user-expenses :payer-types :error] nil))
+       :dispatch [::expenses-sync/sync-payer-types payer-types]})))
+
+(rf/reg-event-db
+  :user-expenses/fetch-payer-types-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch payer types" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :payer-types :loading?] false)
+      (assoc-in [:user-expenses :payer-types :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Upload (image handling)

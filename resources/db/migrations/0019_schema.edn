@@ -1,0 +1,41 @@
+({:action :create-table,
+  :model-name :payer_types,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :label {:null false, :type [:varchar 255]},
+   :is-default {:null false, :default false, :type :boolean},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-payer-types-default,
+  :model-name :payer_types,
+  :options
+  {:fields [:is_default],
+   :unique true,
+   :where [:= :is_default true],
+   :type :btree}}
+ {:action :create-index,
+  :index-name :idx-payers-payer-type,
+  :model-name :payers,
+  :options {:fields [:payer_type_id], :type :btree}}
+ {:action :alter-column,
+  :field-name :user-id,
+  :model-name :user_expense_settings,
+  :options {:primary-key true, :type :uuid},
+  :changes
+  {:on-delete {:from :cascade, :to :EMPTY},
+   :foreign-key {:from :users/id, :to :EMPTY}}}
+ {:action :create-index,
+  :index-name :idx-payer-types-label,
+  :model-name :payer_types,
+  :options {:fields [:label], :unique true, :type :btree}}
+ {:action :drop-column, :field-name :type, :model-name :payers}
+ {:action :drop-index,
+  :index-name :idx-payers-type,
+  :model-name :payers}
+ {:action :drop-type, :type-name :payer-type, :model-name :payers}
+ {:action :add-column,
+  :field-name :payer-type-id,
+  :model-name :payers,
+  :options
+  {:foreign-key :payer_types/id, :on-delete :set-null, :type :uuid}})

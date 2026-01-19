@@ -60,15 +60,20 @@
       response)))
 
 (defn wrap-admin-role
-  "Middleware to check admin role permissions"
+  "Middleware to check admin role permissions.
+
+  Roles are ordered by privilege. Support is lowest; admin and owner are
+  elevated. We keep :super_admin for forward compatibility if present."
   [handler required-role]
   (fn [request]
     (let [admin (:admin request)
           admin-role (keyword (:role admin))
+          ;; Map known roles to privilege levels. Higher = more privileges.
           role-hierarchy {:support 1
                           :admin 2
-                          :super_admin 3}]
+                          :owner 3
+                          :super_admin 4}]
       (if (>= (get role-hierarchy admin-role 0)
-            (get role-hierarchy required-role 0))
+              (get role-hierarchy required-role 0))
         (handler request)
         (utils/error-response "Insufficient permissions" :status 403)))))

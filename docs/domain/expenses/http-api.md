@@ -123,8 +123,8 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /api/v1/expenses/suppliers/:id` – archive supplier (role-gated to `member|admin`).
 
 **Supplier purge (hard delete; admin/owner only)**
-- `GET /api/v1/expenses/suppliers/:id/purge-preview` – preview purge impact.
-- `POST /api/v1/expenses/suppliers/:id/purge` – permanently delete supplier (requires supplier archived and no active expenses).
+- `GET /api/v1/expenses/suppliers/:id/purge-preview` – preview purge impact (**admin/owner only**).
+- `POST /api/v1/expenses/suppliers/:id/purge` – permanently delete supplier (**admin/owner only**; requires supplier archived and no active expenses).
 
 **Supplier detail lists (used by supplier detail UI)**
 - `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier).

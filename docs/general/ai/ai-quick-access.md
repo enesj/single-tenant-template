@@ -11,6 +11,7 @@ Fast pointers for AI agents (and humans) to the current single-tenant docs. Use 
 - Migrations/workflow: `rg -n "migrate|models.edn|mig/" docs/general/migrations`
 - Frontend-config alignment: `bb validate-frontend-config` then `bb sync-frontend-config` (dry-run) / `--apply`
 - Doc-vs-code alignment audits: use **`doc-alignment-audit`** (Morph discovery → `bb audit-bundle` → Lattice evidence extraction)
+- Beginning of session (multi-file): use **`session-context-bundle`** to generate a prompt-scoped bundle first, then query it with Lattice.
 - **AI Skills lookup**: Skills are available in `.claude/skills/`, `.codex/skills/`, and `.github/skills/` for multi-editor support
 
 ## 🚨 Critical Testing Workflow
@@ -67,6 +68,7 @@ All skills are available in `.claude/skills/`, `.codex/skills/`, and `.github/sk
 | **app-db-inspect** | Inspect re-frame app-db state safely | `app-db`, `re-frame state`, `frontend state` |
 | **debugging** | Short, evidence-based debugging playbook | `debug`, `debugging`, `error`, `failure` |
 | **doc-alignment-audit** | Hybrid doc-vs-code alignment audits (Morph → bundle → Lattice) | `alignment audit`, `docs vs code`, `doc mismatch`, `routing docs` |
+| **session-context-bundle** | Session bootstrap bundle (Morph → `bb audit-bundle` → Lattice) | `start session`, `bootstrap context`, `prepare bundle`, `multi-file task` |
 | **reframe-events-analysis** | Analyze re-frame event history and performance | `events`, `event history`, `tracing`, `re-frame` |
 | **system-logs** | Monitor backend + shadow-cljs logs from dev output | `logs`, `build output`, `compilation errors` |
 | **fe-tests** | Automated frontend test failure analysis | `test failure`, `frontend test`, `test error` |

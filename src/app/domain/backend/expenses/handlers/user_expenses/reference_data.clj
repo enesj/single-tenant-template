@@ -2,10 +2,14 @@
   "Reference data (suppliers, payers) handlers for user expenses."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [clojure.string :as str]
+    [honey.sql :as hsql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
 
 (defn- resolve-service-map
-  "Resolve the `service` var in a service namespace and return its value." 
+  "Resolve the `service` var in a service namespace and return its value."
   [service-ns]
   (when-let [service-var (requiring-resolve (symbol (name service-ns) "service"))]
     (let [m (var-get service-var)]
@@ -16,7 +20,7 @@
   "Resolve an operation fn for a service.
 
   Prefers an explicitly named var when provided (so wrappers/overrides still win),
-  otherwise falls back to the `service` map key." 
+  otherwise falls back to the `service` map key."
   ([service-ns service-op]
    (resolve-service-op-fn service-ns service-op nil))
   ([service-ns service-op legacy-var]
@@ -29,6 +33,13 @@
               {:ns service-ns
                :service-op service-op
                :legacy-var legacy-var})))))
+
+(defn- default-payer-type-id
+  "Return the current default payer type id or nil."
+  [db]
+  (some-> ((requiring-resolve 'app.domain.backend.expenses.services.payer-types/get-default-payer-type)
+           db)
+    :id))
 
 (def ^:private supplier-purge-roles
   "User roles allowed to permanently purge suppliers."
@@ -81,9 +92,9 @@
           (if supplier-id
             (try
               (let [get-supplier (resolve-service-op-fn
-                                  'app.domain.backend.expenses.services.suppliers
-                                  :get
-                                  'get-supplier)
+                                   'app.domain.backend.expenses.services.suppliers
+                                   :get
+                                   'get-supplier)
                     supplier (get-supplier db supplier-id)]
                 (if supplier
                   (h/json-response {:data supplier})
@@ -106,15 +117,27 @@
                 limit (or (some-> (:limit params) parse-long) 100)
                 offset (or (some-> (:offset params) parse-long) 0)
                 payers-svc (resolve-service-op-fn
-                            'app.domain.backend.expenses.services.payers
-                            :list
-                            'list-payers)
+                             'app.domain.backend.expenses.services.payers
+                             :list
+                             'list-payers)
                 payers (payers-svc db {:limit limit :offset offset})]
             (h/json-response {:data payers}))
           (catch Exception e
             (log/error e "Error listing payers")
             (h/json-response {:error "Failed to list payers"} 500))))
       (h/unauthorized-response))))
+
+(defn- find-payer-type-id-by-label
+  [db label]
+  (when (some? label)
+    (some-> (jdbc/execute-one!
+              db
+              (hsql/format {:select [:id]
+                            :from [:payer_types]
+                            :where [:= [:lower :label] (some-> label str str/lower-case)]
+                            :limit 1})
+              {:builder-fn rs/as-unqualified-lower-maps})
+      :id)))
 
 (defn create-supplier-handler
   "Handler factory for creating a supplier (shared catalog).
@@ -129,9 +152,9 @@
           (let [body (h/read-json-body request)
                 supplier-data (select-keys body [:display_name :address :tax_id])
                 create-supplier! (resolve-service-op-fn
-                                  'app.domain.backend.expenses.services.suppliers
-                                  :create!
-                                  'create-supplier!)
+                                   'app.domain.backend.expenses.services.suppliers
+                                   :create!
+                                   'create-supplier!)
                 supplier (create-supplier! db supplier-data)]
             (h/json-response {:data supplier} 201))
           (catch clojure.lang.ExceptionInfo e
@@ -158,9 +181,9 @@
               (let [body (h/read-json-body request)
                     updates (select-keys body [:display_name :address :tax_id])
                     update-supplier! (resolve-service-op-fn
-                                      'app.domain.backend.expenses.services.suppliers
-                                      :update!
-                                      'update-supplier!)
+                                       'app.domain.backend.expenses.services.suppliers
+                                       :update!
+                                       'update-supplier!)
                     supplier (update-supplier! db supplier-id updates)]
                 (if supplier
                   (h/json-response {:data supplier})
@@ -276,7 +299,15 @@
         forbidden
         (try
           (let [body (h/read-json-body request)
-                payer-data (-> (select-keys body [:label :type :is_default])
+                ;; Require FK; fall back to default payer type when not provided
+                payer-type-id-raw (or (:payer_type_id body) (default-payer-type-id db))
+                payer-type-id (cond
+                                (instance? java.util.UUID payer-type-id-raw) payer-type-id-raw
+                                :else (h/try-parse-uuid payer-type-id-raw))
+                _ (when (nil? payer-type-id)
+                    (throw (ex-info "payer_type_id is required" {:status 400})))
+                payer-data (-> (select-keys body [:label :is_default])
+                             (assoc :payer_type_id payer-type-id)
                              (cond-> (contains? body :is_default)
                                (update :is_default boolean)))
                 create-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/create-payer!)
@@ -304,7 +335,16 @@
           (if payer-id
             (try
               (let [body (h/read-json-body request)
-                    updates (-> (select-keys body [:label :type :is_default])
+                    payer-type-id-raw (:payer_type_id body)
+                    payer-type-id (when (contains? body :payer_type_id)
+                                    (cond
+                                      (instance? java.util.UUID payer-type-id-raw) payer-type-id-raw
+                                      :else (h/try-parse-uuid payer-type-id-raw)))
+                    _ (when (and (contains? body :payer_type_id) (nil? payer-type-id))
+                        (throw (ex-info "Invalid payer_type_id" {:status 400})))
+                    updates (-> (select-keys body [:label :is_default])
+                              (cond-> (contains? body :payer_type_id)
+                                (assoc :payer_type_id payer-type-id))
                               (cond-> (contains? body :is_default)
                                 (update :is_default boolean)))
                     update-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/update-payer!)
@@ -335,9 +375,9 @@
           (if payer-id
             (try
               (let [delete-payer! (resolve-service-op-fn
-                                   'app.domain.backend.expenses.services.payers
-                                   :delete!
-                                   'delete-payer!)
+                                    'app.domain.backend.expenses.services.payers
+                                    :delete!
+                                    'delete-payer!)
                     deleted? (boolean (delete-payer! db payer-id))]
                 (if deleted?
                   (h/json-response {:success true})
@@ -356,3 +396,122 @@
                 (h/json-response {:error "Failed to delete payer"} 500)))
             (h/json-response {:error "Invalid payer ID"} 400))))
       (h/unauthorized-response))))
+
+(def ^:private payer-type-manage-roles
+  "User roles allowed to manage payer types."
+  #{"admin" "owner"})
+
+(defn list-payer-types-handler
+  "Handler factory for listing payer types.
+
+  Allowed roles: viewer/member/admin/owner."
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request h/reference-data-read-roles "Role assignment required")]
+        forbidden
+        (try
+          (let [params (:query-params request)
+                limit (or (some-> (:limit params) parse-long) 100)
+                offset (or (some-> (:offset params) parse-long) 0)
+                list-payer-types (resolve-service-op-fn
+                                   'app.domain.backend.expenses.services.payer-types
+                                   :list)
+                payer-types (vec (list-payer-types db {:limit limit :offset offset}))]
+            (h/json-response {:data payer-types}))
+          (catch Exception e
+            (log/error e "Error listing payer types")
+            (h/json-response {:error "Failed to list payer types"} 500))))
+      (h/unauthorized-response))))
+
+(defn create-payer-type-handler
+  "Handler factory for creating a payer type.
+
+  Allowed roles: admin/owner."
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request payer-type-manage-roles "Only admins and owners can manage payer types")]
+        forbidden
+        (try
+          (let [body (h/read-json-body request)
+                payer-type-data (-> (select-keys body [:label :is_default])
+                                  (cond-> (contains? body :is_default)
+                                    (update :is_default boolean)))
+                create-payer-type! (requiring-resolve 'app.domain.backend.expenses.services.payer-types/create-payer-type!)
+                payer-type (create-payer-type! db payer-type-data)]
+            (h/json-response {:data payer-type} 201))
+          (catch clojure.lang.ExceptionInfo e
+            (log/warn "Validation error creating payer type" {:error (ex-message e) :data (ex-data e)})
+            (h/json-response {:error (ex-message e)} 400))
+          (catch Exception e
+            (log/error e "Error creating payer type")
+            (h/json-response {:error "Failed to create payer type"} 500))))
+      (h/unauthorized-response))))
+
+(defn update-payer-type-handler
+  "Handler factory for updating a payer type.
+
+  Allowed roles: admin/owner."
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request payer-type-manage-roles "Only admins and owners can manage payer types")]
+        forbidden
+        (let [payer-type-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
+                              (h/try-parse-uuid (get-in request [:parameters :path :id])))]
+          (if payer-type-id
+            (try
+              (let [body (h/read-json-body request)
+                    updates (-> (select-keys body [:label :is_default])
+                              (cond-> (contains? body :is_default)
+                                (update :is_default boolean)))
+                    update-payer-type! (requiring-resolve 'app.domain.backend.expenses.services.payer-types/update-payer-type!)
+                    payer-type (update-payer-type! db payer-type-id updates)]
+                (if payer-type
+                  (h/json-response {:data payer-type})
+                  (h/not-found-response "Payer type not found")))
+              (catch clojure.lang.ExceptionInfo e
+                (log/warn "Validation error updating payer type" {:error (ex-message e) :data (ex-data e)})
+                (h/json-response {:error (ex-message e)} 400))
+              (catch Exception e
+                (log/error e "Error updating payer type" {:payer-type-id payer-type-id})
+                (h/json-response {:error "Failed to update payer type"} 500)))
+            (h/json-response {:error "Invalid payer type ID"} 400))))
+      (h/unauthorized-response))))
+
+(defn delete-payer-type-handler
+  "Handler factory for deleting a payer type.
+
+  Allowed roles: admin/owner."
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request payer-type-manage-roles "Only admins and owners can manage payer types")]
+        forbidden
+        (let [payer-type-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
+                              (h/try-parse-uuid (get-in request [:parameters :path :id])))]
+          (if payer-type-id
+            (try
+              (let [delete-payer-type! (resolve-service-op-fn
+                                         'app.domain.backend.expenses.services.payer-types
+                                         :delete!)
+                    deleted? (boolean (delete-payer-type! db payer-type-id))]
+                (if deleted?
+                  (h/json-response {:success true})
+                  (h/not-found-response "Payer type not found")))
+              (catch org.postgresql.util.PSQLException e
+                (let [sql-state (.getSQLState e)]
+                  (if (= "23503" sql-state) ;; foreign_key_violation
+                    (do
+                      (log/warn "Cannot delete payer type - has related records" {:payer-type-id payer-type-id})
+                      (h/json-response {:error "Cannot delete payer type: it has related payers. Update those payers first."} 409))
+                    (do
+                      (log/error e "Database error deleting payer type" {:payer-type-id payer-type-id :sql-state sql-state})
+                      (h/json-response {:error "Failed to delete payer type"} 500)))))
+              (catch Exception e
+                (log/error e "Error deleting payer type" {:payer-type-id payer-type-id})
+                (h/json-response {:error "Failed to delete payer type"} 500)))
+            (h/json-response {:error "Invalid payer type ID"} 400))))
+      (h/unauthorized-response))))
+

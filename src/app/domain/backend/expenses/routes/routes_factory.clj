@@ -30,7 +30,7 @@
         resolved (requiring-resolve target-sym)]
     (when-not resolved
       (throw (ex-info (str "Could not resolve " target-sym " in namespace " ns-sym)
-               {:ns ns-sym :sym sym :target target-sym})))
+               {:ns ns-sym :sym sym :target-sym target-sym})))
     resolved))
 
 (defn- maybe-resolve-fn
@@ -137,14 +137,12 @@
     (utils/with-error-handling
       (fn [request]
         (let [qp (:query-params request)
-              count-params (merge {}
-                             (when custom-count-params
-                               (custom-count-params qp)))
+              params (if custom-count-params (custom-count-params qp) {})
               count-fn (resolve-service-op-fn service
                          (symbol (str "count-" (name entity-plural)))
                          :count)
-              total (count-fn db count-params)]
-          (utils/success-response {:total total})))
+              {:keys [total]} (count-fn db params)]
+          (utils/success-response {:total (or total 0)})))
       (str "Failed to count " (name entity-plural)))))
 
 (defn build-create-handler
@@ -154,52 +152,41 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [body (-> (read-json-body request)
-                     (cond-> transform-request transform-request))
-              validation-errors (when custom-validation
-                                  (custom-validation body))]
-          (if validation-errors
-            (utils/error-response validation-errors :status 400)
-            (if (some #(empty? (get body %)) required-fields)
-              (do
-                (log/warn "Missing required fields for create"
-                  {:entity entity-key
-                   :required-fields required-fields
-                   :body-keys (when (map? body) (keys body))
-                   :required-values (when (map? body) (select-keys body required-fields))})
-                (utils/error-response (str (str/join ", " required-fields) " are required") :status 400))
-              (let [create-fn (resolve-service-op-fn service
-                                (symbol (str "create-" (name entity-key) "!"))
-                                :create!)
-                    entity (create-fn db body)
-                    response-key (or (:response-key transform-response) entity-key)
-                    response-data (if (:transform transform-response)
-                                    ((:transform transform-response) entity)
-                                    (to-app entity))]
-                (utils/success-response {response-key response-data}))))))
+        (let [body (read-json-body request)
+              data (if transform-request (transform-request body) body)
+              missing (vec (remove #(contains? data %) (or required-fields [])))]
+          (if (seq missing)
+            (utils/error-response (str "Missing required fields: " (str/join ", " (map name missing))) :status 400)
+            (let [create-fn (resolve-service-op-fn service
+                              (symbol (str "create-" (name entity-key) "!"))
+                              :create!)
+                  data* (if custom-validation (custom-validation data) data)
+                  created (create-fn db data*)
+                  response-key (or (:response-key transform-response) entity-key)
+                  response-data (if (:transform transform-response)
+                                  ((:transform transform-response) created)
+                                  (to-app created))]
+              (utils/success-response {response-key response-data} :status 201)))))
       (str "Failed to create " (name entity-key)))))
 
 (defn build-get-handler
-  "Builds a generic get handler for an entity."
+  "Builds a generic get-by-id handler for an entity."
   [{:keys [service entity-key custom-get-fn transform-response]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [get-fn (or custom-get-fn
-                         (resolve-service-op-fn service
-                           (symbol (str "get-" (name entity-key)))
-                           :get))
-                entity (get-fn db id)]
-            (if entity
-              (let [response-key (or (:response-key transform-response) entity-key)
-                    response-data (if (:transform transform-response)
-                                    ((:transform transform-response) entity)
-                                    (to-app entity))]
-                (utils/success-response {response-key response-data}))
-              (utils/error-response (str (clojure.string/capitalize (name entity-key)) " not found") :status 404)))
-          (utils/error-response "Invalid id" :status 400)))
-      (str "Failed to fetch " (name entity-key)))))
+        (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
+              get-fn (or (when custom-get-fn (resolve-fn service custom-get-fn))
+                         (resolve-service-op-fn service (symbol (str "get-" (name entity-key))) :get))
+              result (when id (get-fn db id))]
+          (if result
+            (let [response-key (or (:response-key transform-response) entity-key)
+                  response-data (if (:transform transform-response)
+                                  ((:transform transform-response) result)
+                                  (to-app result))]
+              (utils/success-response {response-key response-data}))
+            (utils/error-response (str (str/capitalize (name entity-key)) " not found") :status 404))))
+      (str "Failed to get " (name entity-key)))))
 
 (defn build-update-handler
   "Builds a generic update handler for an entity."
@@ -207,21 +194,18 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [body (-> (read-json-body request)
-                       (cond-> transform-request transform-request))
-                update-fn (resolve-service-op-fn service
-                            (symbol (str "update-" (name entity-key) "!"))
-                            :update!)
-                updated (update-fn db id body)]
-            (if updated
-              (let [response-key (or (:response-key transform-response) entity-key)
-                    response-data (if (:transform transform-response)
-                                    ((:transform transform-response) updated)
-                                    (to-app updated))]
-                (utils/success-response {response-key response-data}))
-              (utils/error-response (str (clojure.string/capitalize (name entity-key)) " not found") :status 404)))
-          (utils/error-response "Invalid id" :status 400)))
+        (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
+              body (read-json-body request)
+              data (if transform-request (transform-request body) body)
+              update-fn (resolve-service-op-fn service (symbol (str "update-" (name entity-key) "!")) :update!)
+              updated (when id (update-fn db id data))]
+          (if updated
+            (let [response-key (or (:response-key transform-response) entity-key)
+                  response-data (if (:transform transform-response)
+                                  ((:transform transform-response) updated)
+                                  (to-app updated))]
+              (utils/success-response {response-key response-data}))
+            (utils/error-response (str (str/capitalize (name entity-key)) " not found") :status 404))))
       (str "Failed to update " (name entity-key)))))
 
 (defn build-delete-handler
@@ -230,20 +214,16 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [delete-fn (or custom-delete-fn
-                            (resolve-service-op-fn service
-                              (symbol (str "delete-" (name entity-key) "!"))
-                              :delete!))
-                deleted (delete-fn db id)]
-            (if deleted
-              (utils/success-response
-                (case delete-response-type
-                  :entity {(keyword entity-key) (to-app deleted)}
-                  :deleted {:deleted true}
-                  {:deleted true}))
-              (utils/error-response (str (clojure.string/capitalize (name entity-key)) " not found or in use") :status 404)))
-          (utils/error-response "Invalid id" :status 400)))
+        (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
+              delete-fn (or (when custom-delete-fn (resolve-fn service custom-delete-fn))
+                            (resolve-service-op-fn service (symbol (str "delete-" (name entity-key) "!")) :delete!))
+              deleted (when id (delete-fn db id))]
+          (if deleted
+            (case delete-response-type
+              :return-deleted (utils/success-response {(keyword (name entity-key)) (to-app deleted)})
+              :deleted (utils/success-response {:deleted true})
+              (utils/success-response {:deleted true}))
+            (utils/error-response (str (clojure.string/capitalize (name entity-key)) " not found or in use") :status 404))))
       (str "Failed to delete " (name entity-key)))))
 
 (defn build-search-handler
@@ -268,49 +248,43 @@
       (str "Failed to search " (name entity-plural)))))
 
 ;; =============================================================================
-;; Custom Handler Builders
-;; =============================================================================
-
-(defn build-custom-handler
-  "Builds a custom handler with specified logic."
-  [{:keys [handler-fn error-message]}]
-  (fn [_db]
-    (utils/with-error-handling
-      handler-fn
-      (or error-message "Failed to process request"))))
-
-;; =============================================================================
 ;; Route Builder Functions
 ;; =============================================================================
 
 (defn build-standard-routes
-  "Builds standard CRUD routes for an entity."
+  "Builds standard CRUD routes for an entity. Honors optional :route-middleware."
   [db config]
   (let [handlers (:handlers config)
-        route-path (str "/" (:route-segment config))]
-    [route-path
-     ["" {:get ((:list handlers) db)
-          :post ((:create handlers) db)}]
-     ["/:id" {:get ((:get handlers) db)
-              :put ((:update handlers) db)
-              :delete ((:delete handlers) db)}]]))
+        route-path (str "/" (:route-segment config))
+        route-meta (when (seq (:route-middleware config))
+                     {:middleware (:route-middleware config)})
+        base ["" {:get ((:list handlers) db)
+                  :post ((:create handlers) db)}]
+        by-id ["/:id" {:get ((:get handlers) db)
+                       :put ((:update handlers) db)
+                       :delete ((:delete handlers) db)}]
+        header (if route-meta [route-path route-meta] [route-path])]
+    (into header [base by-id])))
 
 (defn build-extended-routes
-  "Builds CRUD routes with additional endpoints like count, search, etc."
+  "Builds CRUD routes with additional endpoints like count, search, etc. Honors optional :route-middleware."
   [db config]
   (let [handlers (:handlers config)
         additional-routes (:additional-routes config)
         route-path (str "/" (:route-segment config))
+        route-meta (when (seq (:route-middleware config))
+                     {:middleware (:route-middleware config)})
         base-routes ["" {:get ((:list handlers) db)
                          :post ((:create handlers) db)}]
         id-routes ["/:id" {:get ((:get handlers) db)
                            :put ((:update handlers) db)
-                           :delete ((:delete handlers) db)}]]
-    (into [route-path]
-      (cond-> [base-routes id-routes]
-        (:count handlers) (conj ["/count" {:get ((:count handlers) db)}])
-        (:search handlers) (conj ["/search" {:get ((:search handlers) db)}])
-        true (into (map #(vector % ((:handler %) db)) additional-routes))))))
+                           :delete ((:delete handlers) db)}]
+        header (if route-meta [route-path route-meta] [route-path])
+        routes (cond-> [base-routes id-routes]
+                 (:count handlers) (conj ["/count" {:get ((:count handlers) db)}])
+                 (:search handlers) (conj ["/search" {:get ((:search handlers) db)}])
+                 true (into (map #(vector % ((:handler %) db)) additional-routes)))]
+    (into header routes)))
 
 ;; =============================================================================
 ;; Main Registration Function
@@ -332,7 +306,8 @@
    - :custom-handlers - map of custom handler functions
    - :additional-routes - vector of additional route definitions
    - :has-count? - whether to include count endpoint (default: false)
-   - :has-search? - whether to include search endpoint (default: false)"
+   - :has-search? - whether to include search endpoint (default: false)
+   - :route-middleware - vector of reitit-compatible middleware fns applied at the route root"
   [config]
   ;; Validate required configuration
   (when-not (:entity-key config)
@@ -342,14 +317,7 @@
   (when-not (:service config)
     (throw (ex-info "service is required" config)))
 
-  ;; NOTE: We do NOT pre-load the service namespace here because it causes issues
-  ;; during hot-reloading when namespaces are in a transitional state.
-  ;; Instead, we rely on requiring-resolve in resolve-fn which is called lazily
-  ;; when requests are actually handled.
-
   ;; Build standard handlers - resolve-fn uses requiring-resolve for lazy loading
-  ;; The :has-count? and :has-search? flags must be explicitly set in config
-  ;; to enable those endpoints - we don't auto-detect anymore to avoid reload issues.
   (let [handlers {:list (build-list-handler config)
                   :count (when (:has-count? config)
                            (build-count-handler config))
@@ -359,8 +327,6 @@
                   :delete (build-delete-handler config)
                   :search (when (:has-search? config)
                             (build-search-handler config))}
-
         ;; Add custom handlers
         handlers* (merge handlers (:custom-handlers config))]
-
     (assoc config :handlers handlers*)))

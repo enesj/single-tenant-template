@@ -18,7 +18,7 @@ Admin SPA (8085) → /admin/api/** (Ring/Reitit)
 ```
 
 ## Core Pieces
-- **Web server**: `app.template.backend.webserver` started by `app.template.backend.core/-main` (config from `config/base.edn`).
+- **Web server**: `app.template.backend.webserver` (http-kit) started by `app.template.backend.core/main` (config from `config/base.edn`).
 - **Routing**:
    - Backend: `app.template.backend.routes.admin-api` composes core admin routes and mounts enabled domain APIs from `app.domain.backend.registry` under `/admin/api/<domain-id>`.
    - Frontend: routes are composed in `app.template.frontend.routes.data` as: template shell routes + domain user routes from `app.domain.frontend.registry/all-user-routes` + admin routes from `app.admin.frontend.routes`.

@@ -1,6 +1,14 @@
 ---
 description: "Hybrid doc-vs-code alignment audits using Morph discovery + audit-bundle + Lattice evidence queries"
 tags: ["docs", "alignment", "audit", "morph", "lattice", "routing", "architecture"]
+allowed-tools:
+  - lattice:lattice_load
+  - lattice:lattice_query
+  - lattice:lattice_expand
+  - lattice:lattice_bindings
+  - lattice:lattice_reset
+  - lattice:lattice_status
+  - morph-mcp:warpgrep_codebase_search
 ---
 
 # doc-alignment-audit
@@ -12,10 +20,44 @@ This skill is deliberately **evidence-first**:
 - Find the code truth.
 - Present the result as **Claim → Evidence (with `path:line`)**.
 
+## Tool availability (important)
+
+- **Do NOT call any `activate_*` tools** (for example `activate_data_inspection_tools`).
+- In this repo environment, the Lattice tools (`mcp_lattice_lattice_load`, `mcp_lattice_lattice_query`, `mcp_lattice_lattice_expand`, etc.) are already available.
+- If you ever feel “a tool isn’t included”, treat that as a prompt/tooling mismatch and continue with the tools that *are* available — do not invent an activation step.
+
 ## Default workflow
 1) Discover the corpus with Morph search.
 2) Generate an evidence bundle file with `bb audit-bundle` (writes to `target/audit-bundles/`).
 3) Load the bundle into Lattice and extract exact `path:line` evidence.
+
+## Output (what this skill must produce)
+
+A single Markdown report containing:
+
+1) **Scope**
+   - Which docs/code areas were audited (e.g. `docs/**`, `src/**`, plus the bundle label/path).
+
+2) **Alignment table (core deliverable)**
+   - A table of **Claim → Evidence (docs) → Evidence (code) → Status**.
+   - Evidence must include **exact `path:line`** references (from the bundle/Lattice output).
+
+3) **Mismatches & recommended edits**
+   - A bullet list of concrete mismatches.
+   - For each mismatch: suggested doc change OR code change, whichever is correct.
+
+4) **Open questions / uncertainties (if any)**
+   - Only include when evidence is ambiguous.
+
+### Suggested report skeleton
+
+- **Scope:** …
+- **Findings:**
+  - | Claim | Docs evidence | Code evidence | Status |
+    |---|---|---|---|
+    | … | `docs/...:123` | `src/...:456` | aligned/mismatch/unknown |
+- **Recommended changes:**
+  - …
 
 ## What “good” looks like
 - Report as: Claim → Evidence (with `path:line`).

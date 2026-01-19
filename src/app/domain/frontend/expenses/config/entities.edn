@@ -2,6 +2,7 @@
  :receipts {:title "Receipts"},
  :suppliers {:title "Suppliers"},
  :payers {:title "Payers"},
+ :payer-types {:title "Payer Types"},
  :expense-items {:title "Expense Items"},
  :articles {:title "Articles"},
  :article-aliases {:title "Article Aliases"},

@@ -23,14 +23,27 @@
  ;; ----------------------------------------------------------------------------
 
  :payers {:fields [[:id :uuid {:primary-key true}]
-                   [:type [:enum :payer-type] {:null false}]
+                   [:payer_type_id :uuid {:foreign-key :payer_types/id :on-delete :set-null}]
                    [:label [:varchar 255] {:null false}]
                    [:last4 [:varchar 4]]  ;; For cards
                    [:is_default :boolean {:default false}]
                    [:created_at :timestamptz {:default "NOW()"}]
                    [:updated_at :timestamptz {:default "NOW()"}]]
-          :types [[:payer-type :enum {:choices ["cash" "card" "account" "person"]}]]
-          :indexes [[:idx_payers_type :btree {:fields [:type]}]]}
+          :indexes [[:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]}
+
+ ;; ----------------------------------------------------------------------------
+ ;; Payer Types (reference table for payer categories)
+ ;; ----------------------------------------------------------------------------
+
+ :payer_types {:fields [[:id :uuid {:primary-key true}]
+                        [:label [:varchar 255] {:null false}]
+                        [:is_default :boolean {:null false :default false}]
+                        [:created_at :timestamptz {:default "NOW()"}]
+                        [:updated_at :timestamptz {:default "NOW()"}]]
+               :indexes [[:idx_payer_types_label :btree {:fields [:label] :unique true}]
+                         [:uniq_payer_types_default :btree {:fields [:is_default]
+                                                           :unique true
+                                                           :where [:= :is_default true]}]]}
 
 ;; ----------------------------------------------------------------------------
  ;; Receipts (uploaded images, ADE processing status)

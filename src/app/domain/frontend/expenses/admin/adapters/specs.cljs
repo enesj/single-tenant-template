@@ -49,7 +49,7 @@
 (def payers-entity-spec
   {:id :payers
    :fields [{:id :label :label "Label" :type :text}
-            {:id :type :label "Type" :type :text}
+            {:id :payer-type-id :label "Payer type" :type :text}
             {:id :is-default :label "Default?" :type :boolean}]})
 
 (def articles-entity-spec
@@ -109,3 +109,6 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :price-observations
    :value-fn (fn [spec _] (or spec price-observations-entity-spec))})
+
+;; Fallback spec for payer-types entity (admin/owner managed)
+

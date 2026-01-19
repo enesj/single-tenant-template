@@ -121,6 +121,20 @@
    [:idx_login_events_principal
     :btree
     {:fields [:principal_type :principal_id]}]]},
+ :payer_types
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:label [:varchar 255] {:null false}]
+   [:is_default :boolean {:null false, :default false}]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_payer_types_label :btree {:fields [:label], :unique true}]
+   [:uniq_payer_types_default
+    :btree
+    {:fields [:is_default],
+     :unique true,
+     :where [:= :is_default true]}]]},
  :admin_sessions
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -140,15 +154,16 @@
  :payers
  {:fields
   [[:id :uuid {:primary-key true}]
-   [:type [:enum :payer-type] {:null false}]
+   [:payer_type_id
+    :uuid
+    {:foreign-key :payer_types/id, :on-delete :set-null}]
    [:label [:varchar 255] {:null false}]
    [:last4 [:varchar 4]]
    [:is_default :boolean {:default false}]
    [:created_at :timestamptz {:default "NOW()"}]
    [:updated_at :timestamptz {:default "NOW()"}]],
-  :types
-  [[:payer-type :enum {:choices ["cash" "card" "account" "person"]}]],
-  :indexes [[:idx_payers_type :btree {:fields [:type]}]]},
+  :indexes
+  [[:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]},
  :price_observations
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -173,9 +188,7 @@
    [:idx_price_obs_observed_at :btree {:fields [:observed_at]}]]},
  :user_expense_settings
  {:fields
-  [[:user_id
-    :uuid
-    {:primary-key true, :foreign-key :users/id, :on-delete :cascade}]
+  [[:user_id :uuid {:primary-key true}]
    [:default_currency [:enum :currency] {:null false, :default "BAM"}]
    [:default_payer_id
     :uuid
