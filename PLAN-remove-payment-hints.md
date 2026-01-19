@@ -101,7 +101,7 @@ The following documentation files reference `payment_hints`. Consider updating t
 1. `app-specs/ade-schema.md` - Lines 25-26, 35, 76, 124
 2. `app-specs/home-expenses-tracker-plan.md` - Lines 180, 338
 3. `app-specs/specs.md` - Line 351
-4. `docs/expenses/index.md` - Line 233
+4. `docs/domain/expenses/index.md` - Line 233
 5. `PLAN-mistral-ocr-pos-receipts.md` - Lines 179, 214, 380
 6. `resources/db/migrations/0010_schema.edn` - Line 26 (migration file - historical)
 

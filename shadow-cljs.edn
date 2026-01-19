@@ -46,11 +46,11 @@
               :auto-refresh true}
    :modules
    {:app
-    {:init-fn app.admin.frontend.core/init
+    {:init-fn app.template.frontend.core/init
      :preloads [app.template.frontend.preload.silence
                 app.template.frontend.dev.tracing]}}}
 
-;; ClojureScript test build (browser)
+  ;; ClojureScript test build (browser)
   :test
   {:target :browser-test
    :test-dir "target/test"

@@ -94,6 +94,10 @@
            (println "Combining files...")
            (apply shell "bb" "scripts/bb/project-management/file_combiner.clj" args))},
 
+  audit-bundle
+  {:doc "Create a provenance-preserving evidence bundle (ripgrep JSON) for Lattice-based audits.\n\nUsage:\n  bb audit-bundle --query <regex> [--query <regex> ...] [--glob <glob> ...] [--context N] [--label <slug>] [--out <path>]",
+   :task (apply shell "bb" "scripts/bb/ai/audit_bundle.clj" *command-line-args*)},
+
   config-audit
   {:doc "Audit frontend config EDN keys for potential unused settings. Usage: bb config-audit [--strict] [--allowlist <path>]",
    :task (apply shell "bb" "scripts/bb/config_audit.clj" *command-line-args*)},

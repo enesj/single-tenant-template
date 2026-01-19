@@ -56,12 +56,31 @@ This project includes specialized AI skills for debugging and development. Use *
 | Skill | Purpose | When to Use |
 |-------|---------|------------|
 | **app-db-inspect** | Inspect re-frame app-db state safely | Frontend state, auth issues, data loading, UI problems |
+| **doc-alignment-audit** | Hybrid doc-vs-code alignment audits (Morph → bundle → Lattice) | Documentation alignment, architecture audits, “docs vs code” tasks |
 | **reframe-events-analysis** | Analyze re-frame event history and performance | Event debugging, performance optimization, subscriptions |
 | **system-logs** | Monitor and analyze server/shadow-cljs logs | Build output, compilation errors, runtime issues |
 
 **Search with Morph MCP (Warp Grep)** by querying for skill names or topics (e.g., “app-db-inspect”, “system-logs”, “re-frame events”).
 
 See `.claude/skills/*/SKILL.md` (repo) or `.codex/skills/*/SKILL.md` (Codex) for detailed documentation, patterns, and implementation guides.
+
+### MCP Servers: Morph vs Lattice (Matryoshka)
+
+This repo commonly uses two MCP servers that are **compatible** and generally **not redundant**:
+
+- **Morph MCP**: best for **codebase discovery and edits** (e.g. WarpGrep search, applying patches/edits).
+- **Lattice MCP (Matryoshka)**: best for **token-efficient, stateful analysis of large files** using Nucleus queries (load once, query many times, expand handles only when needed).
+
+Recommended workflow:
+
+1. Use **Morph** to find the right file(s)/entry points.
+2. Use **Lattice** when a target file is large (or you need multi-step grep/filter/aggregate exploration).
+3. Use **Morph** (and/or structured Clojure edits below) to implement the change.
+
+### Required tool choice for edits (by file type)
+
+- **Clojure / ClojureScript / EDN** (`.clj`, `.cljs`, `.cljc`, `.edn`): use the **clojure-mcp** server’s structured editing tools (e.g. top-level form edits / s-expression replacement / safe file write) and evaluate changes via the Clojure or ClojureScript REPL tools.
+- **Markdown** (`.md`): use **Morph** edit tools for updates (these are fast and minimize context churn).
 
 ## Agent Debugging & Testing Workflow
 
@@ -86,6 +105,7 @@ See `.claude/skills/*/SKILL.md` (repo) or `.codex/skills/*/SKILL.md` (Codex) for
 	- Never run the entire test suite when you're working on a concrete problem. Run only the relevant test(s): a single test file, a focused test suite, or tagged/filtered tests (use your test runner's selector/filter options). This speeds feedback and avoids noise.
 - Use skills when relevant:
 	- Frontend state/auth/UI issues → **app-db-inspect**.
+	- Doc-vs-code alignment work → **doc-alignment-audit**.
 	- Frontend event flow or performance issues → **reframe-events-analysis**.
 	- Backend errors, build failures, or compile problems → **system-logs**.
 - Be documentation-first when stuck:

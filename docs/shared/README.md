@@ -24,3 +24,6 @@ The `app.shared` layer holds cross-platform helpers used by both the backend and
 - [architecture.md](architecture.md) – structure of shared modules
 - [auth-utilities.md](auth-utilities.md) – roles/permissions helpers
 - [http-utilities.md](http-utilities.md) – HTTP helpers
+- [frontend/component-library.md](frontend/component-library.md) – shared UI components
+- [frontend/http-standards.md](frontend/http-standards.md) – shared frontend HTTP patterns
+- [data/snake-case-quick-reference.md](data/snake-case-quick-reference.md) – DB naming quick reference

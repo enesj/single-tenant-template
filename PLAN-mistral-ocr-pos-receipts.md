@@ -160,7 +160,7 @@ curl -X POST "https://api.mistral.ai/v1/ocr" \
 ### Internal Integration Notes (this repo)
 
 - The processor should persist results via `receipts/store-extraction-results!` and status transitions via `receipts/update-status!` / `receipts/mark-failed!`.
-- The admin endpoints needed for debugging/ops already exist (see `docs/backend/http-api.md`):
+- The admin endpoints needed for debugging/ops already exist (see `docs/domain/expenses/http-api.md`):
   - `GET /admin/api/expenses/receipts`, `GET /admin/api/expenses/receipts/pending`
   - `POST /admin/api/expenses/receipts/:id/extraction`, `POST /admin/api/expenses/receipts/:id/retry`, `POST /admin/api/expenses/receipts/:id/approve`
 
@@ -288,7 +288,7 @@ Notes:
 ### Existing integration points
 - Persistence + status machine: `src/app/domain/backend/expenses/services/receipts.clj`
 - Admin API routes: `src/app/domain/backend/expenses/routes/receipts.clj`
-- Public API surface reference: `docs/backend/http-api.md` (Receipts section)
+- Public API surface reference: `docs/domain/expenses/http-api.md` (Receipts section)
 
 ### New backend code (proposed)
 - `src/app/domain/backend/expenses/integrations/mistral_ocr.clj`

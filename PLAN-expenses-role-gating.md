@@ -530,7 +530,7 @@ Tasks:
   - FE: ensure restricted routes render access denied/redirect for non-admin.
   - BE: ensure privileged endpoints return 403 for non-admin.
 - [ ] Update docs (optional but recommended):
-  - Add a short “Expenses roles & capabilities” note under `docs/frontend/` or domain docs.
+  - Add a short “Expenses roles & capabilities” note under `docs/domain/` (for example `docs/domain/expenses/index.md`).
 
 ---
 

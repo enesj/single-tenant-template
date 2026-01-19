@@ -203,11 +203,12 @@ Key configuration files:
 ### Documentation
 
 - `docs/index.md` — Single-tenant template documentation entry point
-- `docs/backend/single-tenant-template.md` — What this template includes and how to extend it
-- `docs/operations/README.md` — Dev/startup/testing commands
-- `docs/migrations/migration-overview.md` — Models/migrations workflow for this template
-- `docs/frontend/app-shell.md` — Frontend/app shell overview (with admin bootstrap notes)
-- `docs/archive` — Hosting/Financial/Integration domain docs kept as reference
+- `docs/general/index.md` — General overview, ops, and architecture
+- `docs/template/backend/single-tenant-template.md` — What this template includes and how to extend it
+- `docs/general/operations/README.md` — Dev/startup/testing commands
+- `docs/general/migrations/migration-overview.md` — Models/migrations workflow for this template
+- `docs/template/frontend/app-shell.md` — Frontend/app shell overview (with admin bootstrap notes)
+- `docs/general/reference/hosting/` — Hosting/Financial/Integration reference docs
 
 ## License
 

@@ -3,16 +3,16 @@
 This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in this codebase. It is intended as a reference list for later audits of duplication or drift.
 
 ## Sources Reviewed
-- `docs/frontend/template-infrastructure.md` (explicit DRY section; list-view + entity-specs)
-- `docs/frontend/component-library.md` (component reuse strategy)
-- `docs/frontend/admin-panel-single-tenant.md`
-- `docs/frontend/admin-settings.md`
-- `docs/frontend/crud-event-flow.md`
-- `docs/frontend/README.md` (Template → Adapter → Admin layering)
-- `docs/frontend/template-component-integration.md` (shared components + adapters)
-- `docs/backend/template-infrastructure.md` (backend reuse and shared utilities)
-- `docs/backend/single-tenant-template.md`
-- `docs/shared/template-domain-integration.md`
+- `docs/template/frontend/template-infrastructure.md` (explicit DRY section; list-view + entity-specs)
+- `docs/shared/frontend/component-library.md` (component reuse strategy)
+- `docs/admin/frontend/admin-panel-single-tenant.md`
+- `docs/admin/frontend/admin-settings.md`
+- `docs/template/frontend/crud-event-flow.md`
+- `docs/admin/frontend/README.md` (Template → Adapter → Admin layering)
+- `docs/template/frontend/template-component-integration.md` (shared components + adapters)
+- `docs/template/backend/template-infrastructure.md` (backend reuse and shared utilities)
+- `docs/template/backend/single-tenant-template.md`
+- `docs/template/architecture/template-domain-integration.md`
 - `docs/shared/README.md`
 - `docs/shared/architecture.md`
 - `docs/shared/auth-utilities.md`
@@ -121,7 +121,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 **Why DRY:** Avoids custom UI per screen; promotes consistent look/behavior.  
 **Where:**
 - `src/app/template/frontend/components/*` (e.g., `table.cljs`, `pagination.cljs`, `modal.cljs`, `filter/*`, `button.cljs`)
-- Documented in `docs/frontend/component-library.md`
+- Documented in `docs/shared/frontend/component-library.md`
 
 ### 13) Shared Utilities Layer (`app.shared/*`)
 **Pattern:** Small, focused, cross-platform utility namespaces for auth, dates, HTTP, pagination, strings, patterns, validation, and type conversion.  
@@ -165,7 +165,7 @@ This is a focused inventory of how DRY (Don't Repeat Yourself) is implemented in
 **Where:**
 - `resources/db/{template,shared,domain}/**` → `resources/db/models.edn`
 - Frontend config validation: `src/app/shared/frontend_config/validation.clj`
-- Docs: `docs/backend/single-tenant-template.md`, `docs/frontend/admin-settings.md`
+- Docs: `docs/template/backend/single-tenant-template.md`, `docs/admin/frontend/admin-settings.md`
 
 **Notes:**
 - `app.shared.frontend-config.schema/models-index` accepts either a consolidated `models.edn` file path (default) **or** a hierarchical schema directory like `resources/db` (template/domain/shared, including `resources/db/domain/*/models.edn`).

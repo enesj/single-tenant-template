@@ -103,7 +103,7 @@ Implementation note: admin adapters no longer hardcode `:per-page` into list UI 
 Some docs were previously stale due to the `table-columns.edn` key shape change.
 
 - `ADMIN-LIST-VIEW-DISPLAY-SETTINGS.md` now reflects the internal (non-inverted) shape.
-- `docs/expenses/index.md` contains example config; verify periodically that examples match the current `entities.edn` / `table-columns.edn` shapes.
+- `docs/domain/expenses/index.md` contains example config; verify periodically that examples match the current `entities.edn` / `table-columns.edn` shapes.
 
 ### 🧾 Report file created/updated
 
@@ -148,7 +148,7 @@ Update: these files have been **restored from HEAD** to keep this branch focused
 
 2) **Update stale docs** (optional but recommended to avoid future confusion)
   - Refresh `ADMIN-LIST-VIEW-DISPLAY-SETTINGS.md` sections that describe inverted table-columns keys/transform.
-  - Update `docs/expenses/index.md` examples to use `:default-visible-columns` (and friends).
+  - Update `docs/domain/expenses/index.md` examples to use `:default-visible-columns` (and friends).
 
 3) **Clarify pagination defaults policy**
   - ✅ Done: `:display-settings :per-page` is now a real config-driven default.

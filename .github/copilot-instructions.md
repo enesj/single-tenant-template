@@ -43,6 +43,23 @@ If you get a `FileNotFoundException` when requiring `.cljs` files, it means the 
 ```
 (Replace `:app` with `:admin` if working on the admin panel).
 
+# Editing Rules (File-Type Specific)
+
+When making changes, use the right tool for the file type:
+
+- **Clojure / ClojureScript / EDN** (`.clj`, `.cljs`, `.cljc`, `.edn`):
+  - Use the **clojure-mcp** server’s *structured editing* tools for modifications (top-level form edits / s-expression replacement / safe file writes).
+  - Then validate behavior by evaluating with the appropriate REPL tool (`mcp__clojure-mcp__clojure_eval` or `mcp__clojure-mcp__clojurescript_eval`).
+- **Markdown** (`.md`):
+  - Use **Morph** edit tools for updates.
+
+# Lattice (Matryoshka) vs Morph MCP
+
+These tools are **compatible** and generally **not redundant**:
+
+- **Morph MCP**: best for codebase discovery (WarpGrep) and applying edits.
+- **Lattice MCP (Matryoshka)**: best for token-efficient, stateful analysis of large files (load once → query many times → expand only what you need).
+
 # Clojure Parenthesis Repair
 
 The command `clj-paren-repair` is installed on your path.
@@ -61,7 +78,7 @@ The tool automatically formats files with cljfmt when it processes them.
 
 ## Migrations Workflow
 
-⚠️ **IMPORTANT: Read the migrations documentation first.** Use Morph MCP (Warp Grep) to search `docs/migrations/**` (and related docs) before making any changes. Key docs: `docs/migrations/complete-guide.md`, `docs/migrations/migration-overview.md`.
+⚠️ **IMPORTANT: Read the migrations documentation first.** Use Morph MCP (Warp Grep) to search `docs/general/migrations/**` (and related docs) before making any changes. Key docs: `docs/general/migrations/complete-guide.md`, `docs/general/migrations/migration-overview.md`.
 
 **Quick workflow**: Edit canonical EDN under `resources/db/{template,shared}` → run REPL helpers via `src/app/migrations/simple_repl.clj` → never hand-edit `resources/db/migrations/*`.
 

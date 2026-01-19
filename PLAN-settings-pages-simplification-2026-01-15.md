@@ -11,8 +11,8 @@ It focuses on simplifying the “hardcoded” list-view settings (i.e., policy d
 
 Related references already in repo:
 
-- `docs/frontend/admin-settings.md` (architecture overview)
-- `docs/frontend/list-view-controls-configuration.md` (intended list-view behavior)
+- `docs/admin/frontend/admin-settings.md` (architecture overview)
+- `docs/admin/frontend/list-view-controls-configuration.md` (intended list-view behavior)
 - `PLAN-settings-ui-parity.md` (prior UI parity work)
 
 ---
@@ -218,7 +218,7 @@ Acceptance:
 - [ ] Choose one:
   - [ ] Option A (recommended): remove `:per-page` from view-options policy (spec + editor UI + backend key routing), keep it as per-user list preference seeded from entity defaults.
   - [ ] Option B: fully support policy defaults/locks for per-page, including enforcement in list-view and settings panel.
-- [ ] Update docs to reflect the chosen model (`docs/frontend/list-view-controls-configuration.md`).
+- [ ] Update docs to reflect the chosen model (`docs/admin/frontend/list-view-controls-configuration.md`).
 
 Acceptance:
 

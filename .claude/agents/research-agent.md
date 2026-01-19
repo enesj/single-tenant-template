@@ -78,8 +78,8 @@ The project includes integrated MCP tools and intelligent Skills that provide co
 4. **Strategic Delegation**: For large research scopes, break down complex topics and delegate specialized sub-tasks
 
 **Available Resources:**
-- Documentation: @docs/architecture/, @docs/authentication/, @docs/backend/, @docs/frontend/, @docs/migrations/, @docs/shared/, @docs/libs/, @docs/validation/, @docs/debugging/
-- Code Structure: src/app/ with admin/, backend/, frontend/, migrations/, shared/, template/
+- Documentation: @docs/general/architecture/, @docs/general/migrations/, @docs/admin/, @docs/template/, @docs/domain/, @docs/shared/, @docs/general/libs/, @docs/general/validation/, @docs/general/operations/
+- Code Structure: src/app/ with admin/, domain/, shared/, template/
 - Configuration: deps.edn, shadow-cljs.edn, resources/db/models.edn
 
 **Recent Project Enhancements (2025-01):**

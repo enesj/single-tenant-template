@@ -3,7 +3,7 @@
 ## Why
 This week included several user-visible feature additions (Expenses workflows, settings persistence, role/capability gating) and a set of internal refactors (shared HTTP/adapters, domain registry cleanup) that change contributor-facing APIs and code pointers.
 
-This plan ensures the `docs/` folder reflects the current codebase state and that “entry point” docs (especially `docs/index.md` and `docs/backend/http-api.md`) are accurate.
+This plan ensures the `docs/` folder reflects the current codebase state and that “entry point” docs (especially `docs/index.md` and `docs/admin/backend/http-api.md`) are accurate.
 
 ## Scope
 - Update markdown docs under `docs/**` to reflect changes made during the last ~7 days.
@@ -46,7 +46,7 @@ Add new “New (YYYY-MM-DD)” entries for the week’s highlights, with pointer
 - User expense settings persistence
 - Role/capability gating
 
-### 2) `docs/expenses/index.md`
+### 2) `docs/domain/expenses/index.md`
 Update the domain guide to include:
 - Receipt review vs approve semantics (what users can edit, what is preserved)
 - POS integration flows:
@@ -57,7 +57,7 @@ Update the domain guide to include:
 - User expense settings persistence (what settings exist, where stored, and how edited)
 - Role/capability gating summary (what’s gated, what roles can do)
 
-### 3) `docs/backend/http-api.md`
+### 3) `docs/admin/backend/http-api.md`
 Audit endpoints and update for this week:
 - Any new user settings endpoints (likely under `/api/v1/expenses/...`)
 - Any new receipt review endpoints (distinct from approve)
@@ -65,25 +65,25 @@ Audit endpoints and update for this week:
 - Any new bulk alias / unmapped items endpoints
 - Note improved deletion failure semantics (FK violation) where relevant
 
-### 4) `docs/frontend/list-view-controls-configuration.md`
+### 4) `docs/admin/frontend/list-view-controls-configuration.md`
 Verify code pointers still match current locations after refactors:
 - Resolver path(s)
 - Entity prefs storage paths (ensure the doc matches current writes)
 
-### 5) Optional: `docs/ai-index.yaml`
+### 5) Optional: `docs/general/ai/ai-index.yaml`
 If key namespaces were renamed/moved this week (or new ones are now primary entry points), add/update pointers.
 
 ## Verification checklist
 - Search docs for stale pointers to moved namespaces/files.
-- Ensure `docs/backend/http-api.md` endpoint lists match actual route files.
+- Ensure `docs/admin/backend/http-api.md` endpoint lists match actual route files (and domain endpoints in `docs/domain/expenses/http-api.md`).
 - Ensure “New (date)” highlights in `docs/index.md` are consistent and link to updated docs.
 
 ## Implementation order (small diffs, easy review)
 1. Update `docs/index.md` highlights.
-2. Update `docs/expenses/index.md` (feature/workflow sections).
-3. Update `docs/backend/http-api.md` (endpoint audit).
-4. Fix any stale pointers in `docs/frontend/list-view-controls-configuration.md`.
-5. Optional: update `docs/ai-index.yaml`.
+2. Update `docs/domain/expenses/index.md` (feature/workflow sections).
+3. Update `docs/admin/backend/http-api.md` (endpoint audit).
+4. Fix any stale pointers in `docs/admin/frontend/list-view-controls-configuration.md`.
+5. Optional: update `docs/general/ai/ai-index.yaml`.
 
 ## Acceptance criteria
 - Docs accurately describe this week’s features and endpoint changes.

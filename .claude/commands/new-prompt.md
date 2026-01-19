@@ -9,13 +9,13 @@ You are creating a reusable research workflow to prep a strong working prompt fo
 - `PROMPT` (required): phrase for the upcoming work (e.g., "admin users pagination", "add domain X backend", "harden login events export").
 
 ## 2) Scope the research (docs first, skills aware)
-- Skim the doc IA: `docs/index.md` and `docs/ai-quick-access.md`.
+- Skim the doc IA: `docs/index.md` and `docs/general/ai/ai-quick-access.md`.
 - List/recall skills from `.claude/skills/*/SKILL.md`; prefer invoking these MCP skills when they fit the task (e.g., state inspection, event tracing, system logs).
 - Targeted reads (pick what fits TOPIC):
-  - Backend: `docs/backend/single-tenant-template.md`, `docs/backend/http-api.md`, `docs/backend/services.md`, `docs/backend/security-middleware.md`.
-  - Frontend: `docs/frontend/app-shell.md`, `docs/frontend/admin-panel-single-tenant.md`, `docs/frontend/feature-guides/admin.md`, `docs/frontend/template-component-integration.md`.
-  - Ops/dev: `docs/operations/dev-environment.md`.
-  - DB/migrations: `docs/migrations/migration-overview.md`, `resources/db/models.edn`.
+  - Backend: `docs/template/backend/single-tenant-template.md`, `docs/template/backend/http-api.md`, `docs/admin/backend/services.md`, `docs/template/backend/security-middleware.md`.
+  - Frontend: `docs/template/frontend/app-shell.md`, `docs/admin/frontend/admin-panel-single-tenant.md`, `docs/admin/frontend/admin.md`, `docs/template/frontend/template-component-integration.md`.
+  - Ops/dev: `docs/general/operations/dev-environment.md`.
+  - DB/migrations: `docs/general/migrations/migration-overview.md`, `resources/db/models.edn`.
 - Use Morph MCP (Warp Grep) to search the repo for TOPIC/namespace references (docs + skills), then open the returned files and read the relevant sections.
 - Use `rg` for code pointers (e.g., `rg -n "<keyword>" src docs resources`).
 

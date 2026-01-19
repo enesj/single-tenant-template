@@ -284,7 +284,7 @@ Acceptance criteria:
 - Added tests + fixtures:
   - `test/app/shared/frontend_config/core_test.clj`
   - `test/fixtures/frontend-config/domains/{alpha,beta}/config/entities.edn`
-- Updated docs: `docs/frontend/admin-settings.md` with schema alignment, normalization, allowlist.
+- Updated docs: `docs/admin/frontend/admin-settings.md` with schema alignment, normalization, allowlist.
 - Cleaned admin UI config by removing UI-only fields and `:tenants` from:
   - `src/app/admin/frontend/config/form-fields.edn`
   - `src/app/admin/frontend/config/table-columns.edn`
