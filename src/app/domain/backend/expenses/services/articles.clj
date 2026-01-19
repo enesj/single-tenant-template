@@ -70,7 +70,7 @@
         query (cond-> base
                 search (assoc :where [:or
                                       [:ilike :canonical_name (str "%" search "%")]
-                  [:ilike :normalized_key (str "%" search "%")]]))]
+                                      [:ilike :normalized_key (str "%" search "%")]]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn update-article!
@@ -342,13 +342,16 @@
     db
     (sql/format
       (cond-> {:select [:ei.*
+           [:rl.raw_label :raw_label]
+                        [:rl.normalized_key :raw_label_normalized]
                         [:e.supplier_id]
                         [:s.display_name :supplier_display_name]
                         [:e.currency]
                         [:e.purchased_at]]
                :from [[:expense_items :ei]]
                :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                      [:suppliers :s] [:= :s.id :e.supplier_id]]
+         [:suppliers :s] [:= :s.id :e.supplier_id]]
+       :left-join [[:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
                :where [:and
                        [:is :ei.article_id nil]
                        [:is :ei.deleted_at nil]
@@ -376,11 +379,14 @@
     (let [item-with-expense (jdbc/execute-one!
                               tx
                               (sql/format {:select [:ei.*
+                    [:rl.raw_label :raw_label]
+                    [:rl.normalized_key :raw_label_normalized]
                                                     [:e.supplier_id]
                                                     [:e.currency]
                                                     [:e.purchased_at]]
                                            :from [[:expense_items :ei]]
                                            :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                 :left-join [[:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
                                            :where [:and
                                                    [:= :ei.id item-id]
                                                    [:is :ei.deleted_at nil]

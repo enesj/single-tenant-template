@@ -3,6 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.price-history :as price-history]
+    [app.domain.backend.expenses.services.raw-labels :as raw-labels]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -124,9 +125,24 @@
   (-> item
     (update-if-present :id #(parse-uuid! :id %))
     (update-if-present :article_id #(parse-uuid! :article_id %))
+    (update-if-present :raw_label_id #(parse-uuid! :raw_label_id %))
+    (update-if-present :raw_label #(some-> % str str/trim))
     (update-if-present :qty #(parse-bigdec! :qty %))
     (update-if-present :unit_price #(parse-bigdec! :unit_price %))
     (update-if-present :line_total #(parse-bigdec! :line_total %))))
+
+(defn- resolve-raw-label-id!
+  "Return a raw_labels.id for a given expense item.
+
+  Accepts either:
+  - :raw_label_id (UUID) (used as-is)
+  - :raw_label (string) (upserted into raw_labels)
+
+  Returns nil only when both are missing." 
+  [tx {:keys [raw_label raw_label_id]}]
+  (or raw_label_id
+    (when (some? raw_label)
+      (:id (raw-labels/find-or-create-raw-label! tx raw_label)))))
 
 (defn- normalize-expense-data
   [expense-data]
@@ -198,6 +214,8 @@
               item)))
         items))))
 
+      (declare get-expense-with-items)
+
 (defn create-expense!
   "Create an expense and its line items. Returns expense with :items.
 
@@ -231,13 +249,18 @@
              expense (jdbc/execute-one! tx expense-sql {:builder-fn rs/as-unqualified-lower-maps})
              item-rows (map (fn [{:keys [raw_label article_id qty unit_price line_total] :as item}]
                               (require-keys! item [:raw_label :line_total])
-                              {:id (UUID/randomUUID)
-                               :expense_id expense-id
-                               :raw_label raw_label
-                               :article_id article_id
-                               :qty qty
-                               :unit_price unit_price
-                               :line_total line_total})
+                              (let [raw-label-id (or (resolve-raw-label-id! tx item)
+                                                   (throw (ex-info "raw_label_id could not be resolved"
+                                                            {:status 400
+                                                             :field :raw_label
+                                                             :data item})))]
+                                {:id (UUID/randomUUID)
+                                 :expense_id expense-id
+                                 :raw_label_id raw-label-id
+                                 :article_id article_id
+                                 :qty qty
+                                 :unit_price unit_price
+                                 :line_total line_total}))
                          items)
              inserted-items (if (seq item-rows)
                               (jdbc/execute! tx
@@ -258,9 +281,7 @@
                    :line_total (:line_total item)
                    :currency (:currency expense)
                    :observed_at (:purchased_at expense)})))
-         (assoc expense :items inserted-items))))))
-
-(declare get-expense-with-items)
+         (get-expense-with-items tx expense-id))))))
 
 (defn update-expense!
   "Update expense fields and optionally line items (when :items is provided). Returns expense with :items."
@@ -322,22 +343,34 @@
                            :where soft-delete-where}))
             (doseq [item update-items]
               (require-keys! item [:raw_label :line_total])
-              (jdbc/execute! tx
-                (sql/format {:update :expense_items
-                             :set (select-keys item [:raw_label :article_id :qty :unit_price :line_total])
-                             :where [:and
-                                     [:= :id (:id item)]
-                                     [:= :expense_id id]
-                                     [:is :deleted_at nil]]})))
+                  (let [raw-label-id (or (resolve-raw-label-id! tx item)
+                     (throw (ex-info "raw_label_id could not be resolved"
+                        {:status 400
+                         :field :raw_label
+                         :data item})))
+                  item* (-> (select-keys item [:article_id :qty :unit_price :line_total])
+                    (assoc :raw_label_id raw-label-id))]
+                (jdbc/execute! tx
+                  (sql/format {:update :expense_items
+                               :set item*
+                               :where [:and
+                                       [:= :id (:id item)]
+                                       [:= :expense_id id]
+                                       [:is :deleted_at nil]]}))))
             (let [item-rows (map (fn [{:keys [raw_label article_id qty unit_price line_total] :as item}]
                                    (require-keys! item [:raw_label :line_total])
-                                   {:id (UUID/randomUUID)
-                                    :expense_id id
-                                    :raw_label raw_label
-                                    :article_id article_id
-                                    :qty qty
-                                    :unit_price unit_price
-                                    :line_total line_total})
+                     (let [raw-label-id (or (resolve-raw-label-id! tx item)
+                        (throw (ex-info "raw_label_id could not be resolved"
+                           {:status 400
+                            :field :raw_label
+                            :data item})))]
+                                     {:id (UUID/randomUUID)
+                                      :expense_id id
+                                      :raw_label_id raw-label-id
+                                      :article_id article_id
+                                      :qty qty
+                                      :unit_price unit_price
+                                      :line_total line_total}))
                               insert-items)
                   inserted-items (if (seq item-rows)
                                    (jdbc/execute!
@@ -439,14 +472,16 @@
                                        [:is :e.deleted_at nil]]})
                   {:builder-fn rs/as-unqualified-lower-maps})
         items (jdbc/execute!
-                db
-                (sql/format {:select [:*]
-                             :from [:expense_items]
-                             :where [:and
-                                     [:= :expense_id id]
-                                     [:is :deleted_at nil]]
-                             :order-by [[:created_at :asc]]})
-                {:builder-fn rs/as-unqualified-lower-maps})]
+          db
+          (sql/format {:select [[:ei.*]
+                    [:rl.raw_label :raw_label]]
+                 :from [[:expense_items :ei]]
+                 :left-join [[:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
+                 :where [:and
+                   [:= :ei.expense_id id]
+                   [:is :ei.deleted_at nil]]
+                 :order-by [[:ei.created_at :asc]]})
+          {:builder-fn rs/as-unqualified-lower-maps})]
     (when expense
       (assoc expense :items items))))
 

@@ -96,7 +96,10 @@
    :service 'app.domain.backend.expenses.services.expense-items
    :default-limit 100
    :default-order-by "created_at"
-   :required-fields [:expense_id :raw_label :line_total]
+  ;; NOTE: raw_label is now stored as expense_items.raw_label_id.
+  ;; We still accept either :raw_label (text) or :raw_label_id (uuid) at the service layer.
+  ;; Keeping :required-fields minimal avoids rejecting requests that send only :raw_label_id.
+  :required-fields [:expense_id :line_total]
    :has-count? true
    :has-search? true
    :custom-query-params (fn [qp]

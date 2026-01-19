@@ -26,6 +26,7 @@
    :expenses/expense.write   2  ; member+
    :expenses/expense.delete  3  ; admin+
    :expenses/expense-items.manage 3 ; admin+ (power-user line items page)
+    :expenses/raw-labels.manage 3 ; admin+ (power-user raw labels page)
    :expenses/reference.write 2  ; member+ (suppliers, payers)
    :expenses/reference.purge 3  ; admin+ (permanent delete)
    :expenses/unmapped.access 3  ; admin+

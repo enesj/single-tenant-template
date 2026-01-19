@@ -41,8 +41,8 @@
                         [:updated_at :timestamptz {:default "NOW()"}]]
                :indexes [[:idx_payer_types_label :btree {:fields [:label] :unique true}]
                          [:uniq_payer_types_default :btree {:fields [:is_default]
-                                                           :unique true
-                                                           :where [:= :is_default true]}]]}
+                                                            :unique true
+                                                            :where [:= :is_default true]}]]}
 
 ;; ----------------------------------------------------------------------------
  ;; Receipts (uploaded images, ADE processing status)
@@ -106,8 +106,8 @@
 ;; ----------------------------------------------------------------------------
 
  :user_expense_settings {:fields [[:user_id :uuid {:primary-key true}
-                                                  :foreign-key :users/id
-                                                  :on-delete :cascade]
+                                   :foreign-key :users/id
+                                   :on-delete :cascade]
                                   [:default_currency [:enum :currency] {:null false :default "BAM"}]
                                   [:default_payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
                                   [:notifications_enabled :boolean {:null false :default true}]
@@ -118,9 +118,21 @@
  ;; Expense Items (line items on receipts)
  ;; ----------------------------------------------------------------------------
 
+ ;; ----------------------------------------------------------------------------
+ ;; Raw Labels (deduplicated receipt line item labels)
+ ;; ----------------------------------------------------------------------------
+
+ :raw_labels {:fields [[:id :uuid {:primary-key true}]
+                       [:raw_label :text {:null false}]
+                       [:normalized_key [:varchar 255] {:null false}]
+                       [:created_at :timestamptz {:default "NOW()"}]
+                       [:updated_at :timestamptz {:default "NOW()"}]]
+              :indexes [[:idx_raw_labels_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
+
  :expense_items {:fields [[:id :uuid {:primary-key true}]
                           [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}]
-                          [:raw_label :text {:null false}]
+                           ;; Canonical raw label reference (deduped). Use joins to render raw_labels.raw_label.
+                           [:raw_label_id :uuid {:foreign-key :raw_labels/id :null false}]
                           [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
                           [:qty [:decimal 10 3]]
                           [:unit_price [:decimal 12 2]]
@@ -128,7 +140,8 @@
                           [:deleted_at :timestamptz]  ;; Soft delete
                           [:created_at :timestamptz {:default "NOW()"}]]
                  :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
-                           [:idx_expense_items_article :btree {:fields [:article_id]}]]}
+                           [:idx_expense_items_article :btree {:fields [:article_id]}]
+                           [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]]}
 
 ;; ----------------------------------------------------------------------------
  ;; Articles (canonical products/items)

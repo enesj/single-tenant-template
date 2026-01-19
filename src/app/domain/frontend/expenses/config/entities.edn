@@ -6,4 +6,5 @@
  :expense-items {:title "Expense Items"},
  :articles {:title "Articles"},
  :article-aliases {:title "Article Aliases"},
+ :raw-labels {:title "Raw Labels"},
  :price-observations {:title "Price Observations"}}

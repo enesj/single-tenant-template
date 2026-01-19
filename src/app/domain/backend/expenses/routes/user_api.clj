@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
+    [app.domain.backend.expenses.handlers.user-raw-labels :as user-raw-labels]
     [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
     [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
@@ -87,6 +88,9 @@
 
    ;; Expense items (power-user only)
    ["/expense-items" {:get {:handler (user-expenses-expense-items/list-expense-items-handler db)}}]
+
+  ;; Raw labels (power-user only; admin/owner)
+  ["/raw-labels" {:get {:handler (user-raw-labels/list-raw-labels-handler db)}}]
 
    ["/expense-items/:id"
     {:put {:handler (user-expenses-expense-items/update-expense-item-handler db)}

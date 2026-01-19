@@ -8,6 +8,7 @@
                                                     dashboard-icon
                                                     expense-items-icon
                                                     expenses-icon
+                                                    raw-labels-icon
                                                     price-observations-icon
                                                     payers-icon
                                                     receipts-icon
@@ -141,6 +142,12 @@
                                           :route :expense-article-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-article-aliases})})
+                               (nav-item {:id "user-sidebar-raw-labels"
+                                          :label "Raw Labels"
+                                          :href "/raw-labels"
+                                          :route :expense-raw-labels
+                                          :icon ($ raw-labels-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-raw-labels})})
                                (nav-item {:id "user-sidebar-price-observations"
                                           :label "Price Observations"
                                           :href "/price-observations"

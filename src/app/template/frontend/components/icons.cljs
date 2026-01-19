@@ -312,6 +312,12 @@
     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
               :d "M10 13l-2 2a3 3 0 104.243 4.243l2-2M14 11l2-2a3 3 0 00-4.243-4.243l-2 2"})))
 
+(defui raw-labels-icon [{:keys [class] :or {class "w-6 h-6"}}]
+  ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+              :d "M3 11V5a2 2 0 012-2h6l10 10a2 2 0 010 2.828l-6 6a2 2 0 01-2.828 0L3 11z"})
+    ($ :circle {:cx "7" :cy "7" :r "1"})))
+
 (defui price-observations-icon [{:keys [class] :or {class "w-6 h-6"}}]
   ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"

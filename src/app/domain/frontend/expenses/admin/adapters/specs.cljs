@@ -20,10 +20,9 @@
 (def expense-items-entity-spec
   {:id :expense-items
    :fields [{:id :expense-purchased-at :label "Expense purchased at" :type :datetime}
-            {:id :supplier-display-name :label "Supplier" :type :text}
-            {:id :payer-label :label "Payer" :type :text}
             {:id :article-canonical-name :label "Article" :type :text}
             {:id :raw-label :label "Raw label" :type :text}
+            {:id :raw-label-id :label "Raw label ID" :type :text}
             {:id :qty :label "Qty" :type :number}
             {:id :unit-price :label "Unit price" :type :number}
             {:id :line-total :label "Line total" :type :number}
@@ -65,6 +64,13 @@
             {:id :confidence :label "Confidence" :type :number}
             {:id :created-at :label "Created at" :type :datetime}]})
 
+(def raw-labels-entity-spec
+  {:id :raw-labels
+   :fields [{:id :raw-label :label "Raw label" :type :text}
+            {:id :normalized-key :label "Normalized key" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
 (def price-observations-entity-spec
   {:id :price-observations
    :fields [{:id :article-canonical-name :label "Article" :type :text}
@@ -103,6 +109,10 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :article-aliases
    :value-fn (fn [spec _] (or spec article-aliases-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :raw-labels
+   :value-fn (fn [spec _] (or spec raw-labels-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :price-observations

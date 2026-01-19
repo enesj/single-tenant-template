@@ -3,6 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.price-history :as price-history]
+    [app.domain.backend.expenses.services.raw-labels :as raw-labels]
     [app.domain.backend.expenses.services.services-factory :as factory]
     [clojure.string :as str])
   (:import
@@ -201,28 +202,52 @@
    ;; Hide soft-deleted line items and items belonging to soft-deleted expenses.
    :base-filters [[:is :ei/deleted_at nil]
                   [:is :e/deleted_at nil]]
-   :required-fields [:expense_id :raw_label :line_total]
+   ;; We accept either :raw_label (string) or :raw_label_id (uuid) as input.
+   ;; The DB stores only :raw_label_id; :raw_label is a joined/computed field.
+   :required-fields [:expense_id :line_total]
    :allowed-order-by {:expense-id :ei/expense_id
-                      :raw-label :ei/raw_label
+                      :raw-label :rl/raw_label
+                      :raw-label-id :ei/raw_label_id
                       :created-at :ei/created_at
                       :qty :ei/qty
                       :unit-price :ei/unit_price
                       :line-total :ei/line_total
                       :expense-purchased-at :e/purchased_at
-                      :supplier-display-name :s/display_name
-                      :payer-label :p/label
                       :article-canonical-name :a/canonical_name}
    :default-order-by :ei/created_at
-   :search-fields [:ei/raw_label :a/canonical_name :s/display_name :p/label]
+   :search-fields [:rl/raw_label :a/canonical_name]
    :joins [[:expenses :e] [:= :e/id :ei/expense_id]
-           [:suppliers :s] [:= :s/id :e/supplier_id]
-           [:payers :p] [:= :p/id :e/payer_id]
-           [:articles :a] [:= :a/id :ei/article_id]]
+           [:articles :a] [:= :a/id :ei/article_id]
+           [:raw_labels :rl] [:= :rl/id :ei/raw_label_id]]
    :select-fields [[:ei.*]
+                   [:rl/raw_label :raw_label]
                    [:e/purchased_at :expense_purchased_at]
-                   [:s/display_name :supplier_display_name]
-                   [:p/label :payer_label]
                    [:a/canonical_name :article_canonical_name]]
+   :before-insert (fn [db data]
+                    (let [raw-label (some-> (:raw_label data) str str/trim)]
+                      (cond
+                        (some? raw-label)
+                        (-> data
+                          (dissoc :raw_label)
+                          (assoc :raw_label_id (:id (raw-labels/find-or-create-raw-label! db raw-label))))
+
+                        (some? (:raw_label_id data))
+                        (dissoc data :raw_label)
+
+                        :else
+                        (throw (ex-info "raw_label or raw_label_id is required"
+                                 {:entity "expense_items"
+                                  :missing-field :raw_label})))))
+   :before-update (fn [db _id updates]
+                    (let [raw-label (some-> (:raw_label updates) str str/trim)]
+                      (cond
+                        (some? raw-label)
+                        (-> updates
+                          (dissoc :raw_label)
+                          (assoc :raw_label_id (:id (raw-labels/find-or-create-raw-label! db raw-label))))
+
+                        :else
+                        (dissoc updates :raw_label))))
    :has-search? true
    :has-count? true})
 
@@ -288,7 +313,7 @@
 (def ^:private entity-configs
   {:article-alias article-alias-config
    :price-observation price-observation-config
-  :supplier supplier-config
+   :supplier supplier-config
    :payer-type payer-type-config
    :payer payer-config
    :article article-config

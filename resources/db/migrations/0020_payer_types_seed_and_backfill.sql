@@ -11,4 +11,3 @@ WHERE NOT EXISTS (
 ) AND NOT EXISTS (
   SELECT 1 FROM payer_types WHERE lower(label) = 'family'
 );
-

@@ -68,6 +68,12 @@
    :log-prefix "[expenses] Syncing article aliases to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-raw-labels
+   :entity-key :raw-labels
+   :normalize-fn normalize/raw-label->template-entity
+   :log-prefix "[expenses] Syncing raw labels to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-price-observations
    :entity-key :price-observations
    :normalize-fn normalize/price-observation->template-entity
@@ -94,6 +100,8 @@
   {:sync-event-id ::sync-articles})
 (entity-sync/register-sync-handler! :article-aliases
   {:sync-event-id ::sync-article-aliases})
+(entity-sync/register-sync-handler! :raw-labels
+  {:sync-event-id ::sync-raw-labels})
 (entity-sync/register-sync-handler! :price-observations
   {:sync-event-id ::sync-price-observations})
 

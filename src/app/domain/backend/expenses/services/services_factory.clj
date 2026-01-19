@@ -8,6 +8,19 @@
   (:import
     [java.util UUID]))
 
+(defn- apply-hook
+  "Call an optional hook with db-aware args when supported.
+
+  Some configs use hook arities without `db` (legacy), others need `db` to
+  perform lookups/side effects. We support both by trying the db-aware arity
+  first and falling back." 
+  [hook primary-args fallback-args]
+  (when hook
+    (try
+      (apply hook primary-args)
+      (catch clojure.lang.ArityException _
+        (apply hook fallback-args)))))
+
 ;; ============================================================================
 ;; Generic Query Builders
 ;; ============================================================================
@@ -145,10 +158,11 @@
           final-data (assoc transformed-data
                        :id (or (:id transformed-data) (UUID/randomUUID)))
 
-          ;; Apply before-insert hook
-          processed-data (if before-insert
-                           (before-insert final-data)
-                           final-data)]
+              ;; Apply before-insert hook (db-aware when supported)
+              processed-data (or (apply-hook before-insert
+                   [db final-data]
+                   [final-data])
+                 final-data)]
 
       (jdbc/execute-one! db
         (sql/format {:insert-into (keyword table-name)
@@ -171,10 +185,11 @@
                                 updates
                                 updates)
 
-          ;; Apply before-update hook
-          processed-updates (if before-update
-                              (before-update id transformed-updates)
-                              transformed-updates)]
+              ;; Apply before-update hook (db-aware when supported)
+              processed-updates (or (apply-hook before-update
+                   [db id transformed-updates]
+                   [id transformed-updates])
+                 transformed-updates)]
 
       (when (seq processed-updates)
         (jdbc/execute-one! db
