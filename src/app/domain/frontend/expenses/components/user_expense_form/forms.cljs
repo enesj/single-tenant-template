@@ -47,6 +47,11 @@
                                   (merge default-values initial-data)))
                               [initial-data])
 
+        clear-errors! (fn [e]
+                        (.preventDefault e)
+                        (set-validation-error! nil)
+                        (rf/dispatch [:user-expenses/clear-form-error]))
+
         handle-submit (fn [{:keys [values]}]
                         (let [validation-result (norm/validate-expense-values values)]
                           (if (:ok? validation-result)
@@ -57,8 +62,13 @@
 
     ($ :div {:class "space-y-4"}
       (when (or validation-error form-error)
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span (or validation-error form-error))))
+        ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between"}
+          ($ :span (or validation-error form-error))
+          ($ :button {:id "btn-clear-expense-form-error"
+                      :type "button"
+                      :class "ds-btn ds-btn-ghost ds-btn-xs"
+                      :on-click clear-errors!}
+            "✕")))
 
       ($ form
         {:entity-name "user-expense"
@@ -94,7 +104,11 @@
                                   (merge default-values initial-data)))
                               [initial-data])
 
-        rid-str (or (some-> receipt-id str) "unknown")]
+        rid-str (or (some-> receipt-id str) "unknown")
+        clear-errors! (fn [e]
+            (.preventDefault e)
+            (set-validation-error! nil)
+            (rf/dispatch [:user-expenses/clear-form-error]))]
 
     (use-effect
       (fn []
@@ -105,8 +119,13 @@
 
     ($ :div {:class "space-y-4"}
       (when (or validation-error form-error)
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span (or validation-error form-error))))
+        ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between"}
+          ($ :span (or validation-error form-error))
+          ($ :button {:id (str "btn-clear-receipt-approve-error-" rid-str)
+                      :type "button"
+                      :class "ds-btn ds-btn-ghost ds-btn-xs"
+                      :on-click clear-errors!}
+            "✕")))
 
       ($ base/initialize-form
         {:entity-name "user-expense"

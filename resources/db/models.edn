@@ -215,7 +215,8 @@
    [:expense_id
     :uuid
     {:foreign-key :expenses/id, :null false, :on-delete :cascade}]
-   [:raw_label_id :uuid {:foreign-key :raw_labels/id, :null false}]
+   [:raw_label_id :uuid {:foreign-key :raw_labels/id}]
+   [:alias_id :uuid {:foreign-key :article_aliases/id}]
    [:article_id
     :uuid
     {:foreign-key :articles/id, :on-delete :set-null}]
@@ -227,13 +228,13 @@
   :indexes
   [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
    [:idx_expense_items_article :btree {:fields [:article_id]}]
-   [:idx_expense_items_raw_label_id
-    :btree
-    {:fields [:raw_label_id]}]]},
+   [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]
+   [:idx_expense_items_alias :btree {:fields [:alias_id]}]]},
  :receipts
  {:fields
   [[:id :uuid {:primary-key true}]
    [:user_id :uuid {:foreign-key :users/id, :on-delete :set-null}]
+   [:payer_id :uuid {:foreign-key :payers/id, :on-delete :set-null}]
    [:storage_key :text {:null false}]
    [:file_hash [:varchar 64] {:null false}]
    [:original_filename [:varchar 255]]
@@ -290,10 +291,9 @@
    [:supplier_id
     :uuid
     {:foreign-key :suppliers/id, :on-delete :cascade}]
+   [:raw_label :text]
    [:raw_label_normalized [:varchar 255] {:null false}]
-   [:article_id
-    :uuid
-    {:foreign-key :articles/id, :null false, :on-delete :cascade}]
+   [:article_id :uuid {:foreign-key :articles/id, :on-delete :cascade}]
    [:confidence :integer {:default 100}]
    [:created_at :timestamptz {:default "NOW()"}]],
   :indexes

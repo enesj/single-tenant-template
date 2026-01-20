@@ -106,8 +106,13 @@
                    :else "BAM")
 
         supplier (or (:supplier-guess-supplier receipt)
-                   (:receipts/supplier-guess-supplier receipt))
+             (:receipts/supplier-guess-supplier receipt))
         supplier-id (when (map? supplier) (:id supplier))
+
+        payer-id (or (:payer-id receipt)
+             (:payer_id receipt)
+             (:receipts/payer-id receipt)
+             (:receipts/payer_id receipt))
 
         normalize-item (fn [item]
                          (let [id (random-uuid)
@@ -128,7 +133,7 @@
                    (:storage-key receipt)
                    "(unknown)")]
     {:supplier_id supplier-id
-     :payer_id nil
+      :payer_id payer-id
      :purchased_at (datetime-local purchased-at true)
      :total_amount (if (number? total-amount) (format-decimal total-amount) "")
      :currency currency

@@ -15,7 +15,6 @@
     [app.domain.frontend.expenses.pages.user.suppliers :refer [suppliers-page]]
     [app.domain.frontend.expenses.pages.user.payers :refer [payers-page]]
     [app.domain.frontend.expenses.pages.user.expense-items :refer [expense-items-page]]
-    [app.domain.frontend.expenses.pages.user.raw-labels :refer [raw-labels-page]]
     [app.domain.frontend.expenses.pages.user.receipts-list :refer [receipts-list-page]]
     [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]
     [app.domain.frontend.expenses.pages.user.articles :refer [articles-page]]
@@ -40,8 +39,7 @@
    :expense-settings expense-settings-page
    :expense-suppliers suppliers-page
    :expense-payers payers-page
-   :expense-items expense-items-page
-  :expense-raw-labels raw-labels-page
+  :expense-items expense-items-page
    :expense-articles articles-page
    :expense-article-aliases article-aliases-page
    :expense-payer-types payer-types-page

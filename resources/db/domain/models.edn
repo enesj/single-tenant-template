@@ -50,6 +50,7 @@
 
  :receipts {:fields [[:id :uuid {:primary-key true}]
                      [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]  ;; User who uploaded this receipt
+                     [:payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]  ;; Optional payer chosen at upload time (used as default during approval)
                      [:storage_key :text {:null false}]  ;; S3/local path
                      [:file_hash [:varchar 64] {:null false}]  ;; SHA-256 for dedupe
                      [:original_filename [:varchar 255]]
@@ -132,7 +133,11 @@
  :expense_items {:fields [[:id :uuid {:primary-key true}]
                           [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}]
                            ;; Canonical raw label reference (deduped). Use joins to render raw_labels.raw_label.
-                           [:raw_label_id :uuid {:foreign-key :raw_labels/id :null false}]
+                           ;; NOTE (Phase 1): this becomes optional once we switch to alias-based labeling.
+                           ;; We keep the column for backward-compat & later cleanup, but allow NULL for new writes.
+                           [:raw_label_id :uuid {:foreign-key :raw_labels/id}]
+                          ;; NEW (Phase 1): canonical alias reference (eventually replaces raw_label_id + article_id)
+                          [:alias_id :uuid {:foreign-key :article_aliases/id}]
                           [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
                           [:qty [:decimal 10 3]]
                           [:unit_price [:decimal 12 2]]
@@ -141,7 +146,8 @@
                           [:created_at :timestamptz {:default "NOW()"}]]
                  :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
                            [:idx_expense_items_article :btree {:fields [:article_id]}]
-                           [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]]}
+                           [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]
+                           [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
 
 ;; ----------------------------------------------------------------------------
  ;; Articles (canonical products/items)
@@ -162,8 +168,11 @@
 
  :article_aliases {:fields [[:id :uuid {:primary-key true}]
                             [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}]
+                            ;; NEW (Phase 1): representative latest-seen raw label text
+                            [:raw_label :text]
                             [:raw_label_normalized [:varchar 255] {:null false}]
-                            [:article_id :uuid {:foreign-key :articles/id :null false :on-delete :cascade}]
+                            ;; CHANGED (Phase 1): allow NULL = unmapped
+                            [:article_id :uuid {:foreign-key :articles/id :on-delete :cascade}]
                             [:confidence :integer {:default 100}]  ;; 0-100, 100 = user confirmed
                             [:created_at :timestamptz {:default "NOW()"}]]
                    :indexes [[:idx_article_aliases_supplier_label :btree

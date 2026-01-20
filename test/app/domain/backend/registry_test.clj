@@ -117,8 +117,7 @@
       (is (contains? routes "/expenses"))
       (is (contains? routes "/expenses/list"))
       (is (contains? routes "/expenses/new"))
-      (is (contains? routes "/expenses/upload"))
-      (is (contains? routes "/raw-labels")))))
+      (is (contains? routes "/expenses/upload")))))
 
 (deftest manifest-routes-are-functions-test
   (testing "admin-api route is a function"

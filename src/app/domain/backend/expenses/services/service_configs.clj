@@ -3,7 +3,6 @@
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.price-history :as price-history]
-    [app.domain.backend.expenses.services.raw-labels :as raw-labels]
     [app.domain.backend.expenses.services.services-factory :as factory]
     [clojure.string :as str])
   (:import
@@ -32,19 +31,19 @@
   {:table-name "article_aliases"
    :table-alias :aa
    :primary-key :aa/id
-   :required-fields [:supplier_id :raw_label]
+   :required-fields [:supplier_id :raw_label :raw_label_normalized]
    :allowed-order-by {:created-at :aa/created_at
-                      :raw-label-normalized :aa/raw_label_normalized
-                      :confidence :aa/confidence
-                      :supplier-display-name :s/display_name
-                      :article-canonical-name :a/canonical_name}
+          :raw-label :aa/raw_label
+          :raw-label-normalized :aa/raw_label_normalized
+          :supplier-display-name :s/display_name
+          :article-canonical-name :a/canonical_name}
    :default-order-by :aa/created_at
-   :search-fields [:aa/raw_label_normalized :s/display_name :a/canonical_name]
+   :search-fields [:aa/raw_label :aa/raw_label_normalized :s/display_name :a/canonical_name]
    :joins [[:suppliers :s] [:= :s/id :aa/supplier_id]
-           [:articles :a] [:= :a/id :aa/article_id]]
+     [:articles :a] [:= :a/id :aa/article_id]]
    :select-fields [[:aa.*]
-                   [:s/display_name :supplier_display_name]
-                   [:a/canonical_name :article_canonical_name]]
+       [:s/display_name :supplier_display_name]
+       [:a/canonical_name :article_canonical_name]]
    :field-transformers {:raw_label_normalized articles/normalize-alias-label}
    :has-search? true
    :has-count? true})
@@ -202,12 +201,11 @@
    ;; Hide soft-deleted line items and items belonging to soft-deleted expenses.
    :base-filters [[:is :ei/deleted_at nil]
                   [:is :e/deleted_at nil]]
-   ;; We accept either :raw_label (string) or :raw_label_id (uuid) as input.
-   ;; The DB stores only :raw_label_id; :raw_label is a joined/computed field.
+   ;; We accept :raw_label (string) or :alias_id (uuid). The DB stores :alias_id.
    :required-fields [:expense_id :line_total]
    :allowed-order-by {:expense-id :ei/expense_id
-                      :raw-label :rl/raw_label
-                      :raw-label-id :ei/raw_label_id
+                      :raw-label :aa/raw_label
+                      :alias-id :ei/alias_id
                       :created-at :ei/created_at
                       :qty :ei/qty
                       :unit-price :ei/unit_price
@@ -215,39 +213,46 @@
                       :expense-purchased-at :e/purchased_at
                       :article-canonical-name :a/canonical_name}
    :default-order-by :ei/created_at
-   :search-fields [:rl/raw_label :a/canonical_name]
+   :search-fields [:aa/raw_label :a/canonical_name]
    :joins [[:expenses :e] [:= :e/id :ei/expense_id]
-           [:articles :a] [:= :a/id :ei/article_id]
-           [:raw_labels :rl] [:= :rl/id :ei/raw_label_id]]
+           [:article_aliases :aa] [:= :aa/id :ei/alias_id]
+           [:articles :a] [:= :a/id :aa/article_id]]
    :select-fields [[:ei.*]
-                   [:rl/raw_label :raw_label]
+                   [:aa/raw_label :raw_label]
+                   [:aa/raw_label_normalized :raw_label_normalized]
                    [:e/purchased_at :expense_purchased_at]
                    [:a/canonical_name :article_canonical_name]]
    :before-insert (fn [db data]
-                    (let [raw-label (some-> (:raw_label data) str str/trim)]
+                    (let [alias-svc (requiring-resolve 'app.domain.backend.expenses.services.article-aliases/find-or-create-alias!)
+                          raw-label (some-> (:raw_label data) str str/trim)
+                          supplier-id (:supplier_id data)]
                       (cond
-                        (some? raw-label)
-                        (-> data
-                          (dissoc :raw_label)
-                          (assoc :raw_label_id (:id (raw-labels/find-or-create-raw-label! db raw-label))))
+                        (some? (:alias_id data))
+                        (dissoc data :raw_label :supplier_id)
 
-                        (some? (:raw_label_id data))
-                        (dissoc data :raw_label)
+                        (some? raw-label)
+                        (let [alias (alias-svc db supplier-id raw-label)]
+                          (-> data
+                            (dissoc :raw_label :supplier_id)
+                            (assoc :alias_id (:id alias))))
 
                         :else
-                        (throw (ex-info "raw_label or raw_label_id is required"
+                        (throw (ex-info "raw_label or alias_id is required"
                                  {:entity "expense_items"
                                   :missing-field :raw_label})))))
    :before-update (fn [db _id updates]
-                    (let [raw-label (some-> (:raw_label updates) str str/trim)]
+                    (let [alias-svc (requiring-resolve 'app.domain.backend.expenses.services.article-aliases/find-or-create-alias!)
+                          raw-label (some-> (:raw_label updates) str str/trim)
+                          supplier-id (:supplier_id updates)]
                       (cond
                         (some? raw-label)
-                        (-> updates
-                          (dissoc :raw_label)
-                          (assoc :raw_label_id (:id (raw-labels/find-or-create-raw-label! db raw-label))))
+                        (let [alias (alias-svc db supplier-id raw-label)]
+                          (-> updates
+                            (dissoc :raw_label :supplier_id)
+                            (assoc :alias_id (:id alias))))
 
                         :else
-                        (dissoc updates :raw_label))))
+                        (dissoc updates :raw_label :supplier_id))))
    :has-search? true
    :has-count? true})
 

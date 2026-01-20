@@ -349,6 +349,7 @@
                 :on-close #(dispatch! close-modal)
                 :draggable? true
                 :width "960px"
+                :z-index 120
                 :class "max-w-[95vw] h-[85vh] flex flex-col"
                 :header header
                 :header-class "p-0 border-0 bg-transparent mb-3"}

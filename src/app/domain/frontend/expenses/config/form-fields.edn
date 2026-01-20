@@ -28,4 +28,4 @@
    :total_amount {:type "number", :step 0.01},
    :notes {:type "textarea"},
    :is_posted {:type "checkbox"}}},
- :article-aliases {:edit-fields ["raw_label_normalized" "confidence"]}}
+ :article-aliases {:edit-fields ["raw_label" "raw_label_normalized" "article_id"]}}

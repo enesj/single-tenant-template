@@ -201,6 +201,11 @@
     (get-in db [:user-expenses :upload :batch])))
 
 (rf/reg-sub
+  :user-expenses/upload-payer-id
+  (fn [db _]
+    (get-in db [:user-expenses :upload :payer-id])))
+
+(rf/reg-sub
   :user-expenses/recent-receipts
   (fn [db _]
     (get-in db [:user-expenses :receipts :items])))

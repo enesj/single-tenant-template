@@ -2,16 +2,38 @@
   "User receipts inbox events (list/detail/approve)."
   (:require
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
+    [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.bridges.crud :as crud-bridges]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
 (def ^:private base-path [:user-expenses :receipts])
+
+(defn- payer-default?
+  [payer]
+  (boolean
+    (or (:is-default payer)
+      (:isDefault payer))))
+
+(defn- default-payer-id
+  [db]
+  (let [settings-id (some-> (get-in db [:user-expenses :settings :data :default-payer-id])
+                      str
+                      str/trim
+                      not-empty)
+        payers (get-in db [:user-expenses :payers :items])]
+    (or settings-id
+      (some->> (or payers [])
+        (some (fn [p]
+                (when (payer-default? p)
+                  (:id p)))))
+      (:id (first payers)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Template CRUD bridge overrides
@@ -161,6 +183,70 @@
 ;; ---------------------------------------------------------------------------
 ;; Approve & post
 ;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/approve-receipt-from-list
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id]]
+    (let [payers (get-in db [:user-expenses :payers :items])
+          settings (get-in db [:user-expenses :settings :data])]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil)
+             (assoc-in (conj base-path :action-loading?) true)
+             (assoc-in (conj base-path :error) nil)
+             (assoc-in (conj base-path :detail-loading?) true))
+       :dispatch-n (cond-> []
+                     (empty? payers) (conj [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+                     (nil? settings) (conj [:user-expenses/fetch-settings]))
+       :http-xhrio (x/xhrio db
+                     {:method :get
+                      :uri (str endpoints/receipts-endpoint "/" receipt-id)
+                      :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id)
+                      :on-success [:user-expenses/approve-receipt-from-list-success receipt-id]
+                      :on-failure [:user-expenses/approve-receipt-from-list-failure receipt-id]})})))
+
+(rf/reg-event-fx
+  :user-expenses/approve-receipt-from-list-success
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id response]]
+    (let [receipt (or (:data response) (:receipt response) response)
+          db* (-> db
+                (assoc-in (conj base-path :detail-loading?) false)
+                (assoc-in (conj base-path :error) nil)
+                (assoc-in (conj base-path :by-id receipt-id) receipt))
+          default-payer (some-> (default-payer-id db*) str str/trim not-empty)
+          normalized (norm/normalize-receipt-data receipt)
+          payer-id (some-> (:payer_id normalized) str str/trim not-empty)
+          values (cond-> normalized
+                   (and (nil? payer-id) default-payer)
+                   (assoc :payer_id default-payer))
+          validation (norm/validate-expense-values values)]
+      (if (:ok? validation)
+        {:db db*
+         :dispatch [:user-expenses/approve-receipt
+                    receipt-id
+                    (norm/prepare-expense-submit-values values)
+                    nil]}
+        (let [message (:error validation)]
+          {:db (-> db*
+                 (assoc-in [:user-expenses :form :loading?] false)
+                 (assoc-in [:user-expenses :form :error] message)
+                 (assoc-in (conj base-path :action-loading?) false)
+                 (assoc-in (conj base-path :error) message))})))))
+
+(rf/reg-event-db
+  :user-expenses/approve-receipt-from-list-failure
+  common-interceptors
+  (fn [db [_receipt-id error]]
+    (log/warn "Failed to load receipt for approval" {:error error})
+    (let [message (http/extract-error-message error)]
+      (-> db
+        (assoc-in [:user-expenses :form :loading?] false)
+        (assoc-in [:user-expenses :form :error] message)
+        (assoc-in (conj base-path :detail-loading?) false)
+        (assoc-in (conj base-path :action-loading?) false)
+        (assoc-in (conj base-path :error) message)))))
 
 (rf/reg-event-fx
   :user-expenses/approve-receipt

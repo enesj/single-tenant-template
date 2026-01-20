@@ -120,6 +120,7 @@
   []
   (let [title "Receipts"
         error (use-subscribe [:user-expenses/receipts-error])
+    form-error (use-subscribe [:user-expenses/form-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
         can-ocr? (boolean (use-subscribe [:expenses/can-write?]))
         processing-count (->> receipts
@@ -148,6 +149,8 @@
     (use-effect
       (fn []
         (refresh!)
+        (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-settings])
         js/undefined)
       [refresh!])
 
@@ -168,6 +171,18 @@
               ($ :div {:class "px-4 pt-4"}
                 ($ :div {:class "ds-alert ds-alert-error"}
                   ($ :span (str error)))))
+
+            (when form-error
+              ($ :div {:class "px-4 pt-4"}
+                ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between"}
+                  ($ :span (str form-error))
+                  ($ :button {:id "btn-clear-receipts-form-error"
+                              :type "button"
+                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+                              :on-click (fn [e]
+                                          (.preventDefault e)
+                                          (rf/dispatch [:user-expenses/clear-form-error]))}
+                    "✕"))))
 
             ;; Top bar: live processing indicator + batch parse button
             ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "

@@ -7,7 +7,7 @@ This document covers the service layer for the **Home Expenses** domain.
 ## Service Map
 - **Suppliers** (`app.domain.backend.expenses.services.suppliers`) — CRUD, normalization/dedupe by `normalized_key`, search/count helpers.
 - **Payers** (`app.domain.backend.expenses.services.payers`) — CRUD, default-per-type management.
-- **Receipts** (`app.domain.backend.expenses.services.receipts`) — upload with file-hash dedupe, status transitions, approve → post expense, extraction storage.
+- **Receipts** (`app.domain.backend.expenses.services.receipts`) — upload with file-hash dedupe, status transitions, approve → post expense, extraction storage. Uploads now capture the selected `payer_id` so approval/edit forms can prefill the payer on a per-receipt basis.
 - **Receipt OCR (Mistral)** (`app.domain.backend.expenses.integrations.mistral-ocr`, `app.domain.backend.expenses.workers.receipt-ocr.core`) — out-of-band worker that processes uploaded receipts and populates markdown + extraction results/guesses.
 - **Expenses** (`app.domain.backend.expenses.services.expenses`) — create/update with line items, soft delete, listing filters; records price observations.
 - **Expense Items** (`app.domain.backend.expenses.services.expense-items`) — standalone CRUD for `expense_items` line items (list/count/search; joins to expense/supplier/payer/article for admin tables).

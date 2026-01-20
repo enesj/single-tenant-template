@@ -235,14 +235,6 @@
       {:db (assoc-in db (paths/current-page) :expense-items)})))
 
 (rf/reg-event-fx
-  :page/init-expense-raw-labels
-  common-interceptors
-  (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-raw-labels)})))
-
-(rf/reg-event-fx
   :page/init-expense-articles
   common-interceptors
   (fn [{:keys [db]} _]

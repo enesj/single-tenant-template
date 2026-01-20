@@ -113,14 +113,15 @@
         status-clause (build-status-clause status helpers)
 
         query (cond-> {:select [:id
-                                :original_filename
-                                [[:raw effective-status-sql] :status]
-                                :supplier_guess
-                                :total_amount_guess
-                                [[:raw lines-total-sql] :lines_total_amount_guess]
-                                :currency_guess
-                                :created_at
-                                :updated_at]
+              :original_filename
+              [[:raw effective-status-sql] :status]
+              :supplier_guess
+              :total_amount_guess
+              [[:raw lines-total-sql] :lines_total_amount_guess]
+              :currency_guess
+              :payer_id
+              :created_at
+              :updated_at]
                        :from [:receipts]
                        :order-by [[:created_at order-dir]]
                        :limit limit
@@ -156,14 +157,15 @@
                        :else visibility-clause)
 
         query {:select [:id
-                        :original_filename
-                        [[:raw effective-status-sql] :status]
-                        :supplier_guess
-                        :total_amount_guess
-                        [[:raw lines-total-sql] :lines_total_amount_guess]
-                        :currency_guess
-                        :created_at
-                        :updated_at]
+            :original_filename
+            [[:raw effective-status-sql] :status]
+            :supplier_guess
+            :total_amount_guess
+            [[:raw lines-total-sql] :lines_total_amount_guess]
+            :currency_guess
+            :payer_id
+            :created_at
+            :updated_at]
                :from [:receipts]
                :where where-clause
                :order-by [[:created_at order-dir]]

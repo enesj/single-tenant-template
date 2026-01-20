@@ -197,14 +197,17 @@
           items (when expense
                   (jdbc/execute!
                     db
-                (sql/format {:select [[:ei.*]
-                    [:rl.raw_label :raw_label]]
-                 :from [[:expense_items :ei]]
-                 :left-join [[:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
-                 :where [:and
-                   [:= :ei.expense_id expense-id]
-                   [:is :ei.deleted_at nil]]
-                 :order-by [[:ei.created_at :asc]]})
+                    (sql/format {:select [[:ei.*]
+                                          [:aa.raw_label :raw_label]
+                                          [:aa.raw_label_normalized :raw_label_normalized]
+                                          [:a.canonical_name :article_canonical_name]]
+                                 :from [[:expense_items :ei]]
+                                 :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                             [:articles :a] [:= :a.id :aa.article_id]]
+                                 :where [:and
+                                         [:= :ei.expense_id expense-id]
+                                         [:is :ei.deleted_at nil]]
+                                 :order-by [[:ei.created_at :asc]]})
                     {:builder-fn rs/as-unqualified-lower-maps}))]
       (when expense
         (assoc expense :items items)))))

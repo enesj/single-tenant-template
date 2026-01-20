@@ -150,9 +150,9 @@
             ($ utils/related-table
               {:title "Article Aliases"
                :rows aliases
-               :columns [{:label "Alias" :value-fn #(:raw-label-normalized %)}
-                         {:label "Supplier" :value-fn #(:supplier-display-name %)}
-                         {:label "Confidence" :value-fn #(:confidence %)}]
+               :columns [{:label "Raw label" :value-fn #(:raw-label %)}
+                         {:label "Alias" :value-fn #(:raw-label-normalized %)}
+                         {:label "Supplier" :value-fn #(:supplier-display-name %)}]
                :empty-label "No aliases mapped to this article."
                :header-actions ($ button
                                 {:id (when article-id (str "btn-add-aliases-article-" article-id))

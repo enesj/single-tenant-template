@@ -36,8 +36,8 @@
         ($ :div {:class "grid gap-3 md:grid-cols-3"}
           (utils/label-value "Supplier" (:supplier-display-name alias))
           (utils/label-value "Article" (:article-canonical-name alias))
-          (utils/label-value "Raw Label" (:raw-label-normalized alias))
-          (utils/label-value "Confidence" (:confidence alias))
+          (utils/label-value "Raw Label" (:raw-label alias))
+          (utils/label-value "Raw Label Normalized" (:raw-label-normalized alias))
           (utils/label-value "Supplier ID" (:supplier-id alias))
           (utils/label-value "Article ID" (:article-id alias))
           (utils/label-value "Created At" (shared/format-date (:created-at alias)))

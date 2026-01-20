@@ -52,8 +52,7 @@
       (is (contains? paths "/expenses"))
       (is (contains? paths "/expenses/list"))
       (is (contains? paths "/expenses/new"))
-      (is (contains? paths "/expenses/upload"))
-      (is (contains? paths "/raw-labels")))))
+      (is (contains? paths "/expenses/upload")))))
 
 (deftest all-admin-entities-test
   (testing "all-admin-entities returns a map (may be empty)"

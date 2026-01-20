@@ -5,9 +5,24 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.auth-guard :refer [auth-guard]]
     [app.template.frontend.components.file-drop-zone :refer [file-drop-zone]]
+    [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]
+    [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
+
+(defn- payer-default?
+  [payer]
+  (boolean (or (:is-default payer)
+             (:isDefault payer))))
+
+(defn- default-payer-id
+  [payers]
+  (let [payers (or payers [])]
+    (or (some (fn [p]
+                (when (payer-default? p)
+                  (:id p)))
+          payers)
+      (:id (first payers)))))
 
 (defui recent-uploads [{:keys [receipts]}]
   (when (seq receipts)
@@ -58,6 +73,9 @@
         auth-loading? (boolean (:loading? auth-status))
         auth-error (:error auth-status)
 
+  payers (or (use-subscribe [:user-expenses/payers]) [])
+  selected-payer-id (use-subscribe [:user-expenses/upload-payer-id])
+
         uploading? (boolean (use-subscribe [:user-expenses/upload-loading?]))
         upload-batch (use-subscribe [:user-expenses/upload-batch])
         upload-error (use-subscribe [:user-expenses/upload-error])
@@ -78,6 +96,23 @@
 
         handle-manual (fn []
                         (rf/dispatch [:navigate-to "/expenses/new"]))]
+
+    (use-effect
+      (fn []
+        ;; Ensure payer options exist for the upload-scoped payer chooser.
+        (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        js/undefined)
+      [])
+
+    (use-effect
+      (fn []
+        ;; If user hasn't chosen an upload payer yet, default to the "default" payer.
+        (when (and (seq payers)
+                (str/blank? (some-> selected-payer-id str)))
+          (when-let [default-id (some-> (default-payer-id payers) str str/trim not-empty)]
+            (rf/dispatch [:user-expenses/set-upload-payer-id default-id])))
+        js/undefined)
+      [payers selected-payer-id])
 
     ($ auth-guard
       {:authenticated? authenticated?
@@ -137,6 +172,25 @@
                   ($ :p {:class "text-base-content/80"}
                     "Upload a photo of your receipt and we'll extract the expense details automatically. "
                     "You can review and edit the extracted information before saving."))
+
+                ;; Payer selection (upload-scoped)
+                ($ :div {:class "mb-6"}
+                  ($ :label {:id "label-payer-expense-upload"
+                             :class "ds-label"}
+                    ($ :span {:class "ds-label-text font-medium"} "Payer"))
+                  ($ :select {:id "select-payer-expense-upload"
+                              :class "ds-select ds-select-bordered w-full max-w-md"
+                              :disabled uploading?
+                              :value (or (some-> selected-payer-id str) "")
+                              :on-change (fn [e]
+                                           (let [v (-> e .-target .-value)]
+                                             (rf/dispatch [:user-expenses/set-upload-payer-id v])))}
+                    ($ :option {:value ""} "Select payer")
+                    (for [{:keys [id label]} payers]
+                      ($ :option {:key (str id) :value (str id)} (or label (str id)))))
+                  ($ :div {:id "help-payer-expense-upload"
+                           :class "text-xs text-base-content/60 mt-2"}
+                    "This applies only to the receipts you're uploading now and does not change your default payer."))
 
                 ;; Upload zone
                 ($ file-drop-zone {:dropzone-id "dropzone-receipt-upload"

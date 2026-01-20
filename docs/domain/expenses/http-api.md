@@ -11,17 +11,6 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 ## Admin API (mounted at `/admin/api/expenses`)
 
-### Raw Labels (admin/owner only)
-
-- `GET /admin/api/expenses/raw-labels` – list deduped raw labels.
-  - Query params:
-    - `limit` (default 200), `offset` (default 0)
-    - `search` (matches `raw_label` or `normalized_key`)
-    - `order_by` one of: `raw_label`, `normalized_key`, `created_at`, `updated_at`
-    - `order_dir` one of: `asc`, `desc`
-  - Response:
-    - `{ "success": true, "raw-labels": [ {"id": ..., "raw-label": ..., "normalized-key": ..., "created-at": ..., "updated-at": ...}, ... ] }`
-
 ### Suppliers
 - `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by). Query: `include_archived=true` to include archived suppliers.
 - `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
@@ -46,7 +35,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ### Receipts
 - `GET /admin/api/expenses/receipts` – list; filters `status`, `limit/offset`, `order-dir`.
 - `GET /admin/api/expenses/receipts/pending` – pending for processing.
-- `POST /admin/api/expenses/upload` – multipart upload (`file`); stores under `upload/stripes/` and creates a receipt (status `uploaded`).
+- `POST /admin/api/expenses/upload` – multipart upload (`file`); stores under `upload/stripes/` and creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
 - `POST /admin/api/expenses/receipts` – upload (programmatic); requires `storage_key` and `file_hash` or `bytes`.
 - `GET /admin/api/expenses/receipts/:id` – fetch one.
 - `GET /admin/api/expenses/receipts/:id/download` – download/inline view the original file (`?download=true` forces attachment).
@@ -69,10 +58,10 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 ### Expense Items (new 2025-12-25)
 - `GET /admin/api/expenses/expense-items` – list expense items with pagination and filters.
-- `POST /admin/api/expenses/expense-items` – create standalone expense item; requires `expense_id`, `line_total` and **either** `raw_label` (text) **or** `raw_label_id` (UUID). (Optional: `qty`, `unit_price`, `article_id`.)
+- `POST /admin/api/expenses/expense-items` – create standalone expense item; requires `expense_id`, `line_total` and **either** `raw_label` (text) **or** `alias_id` (UUID). (Optional: `qty`, `unit_price`.)
 - `GET /admin/api/expenses/expense-items/count` – total count with optional search.
 - `GET /admin/api/expenses/expense-items/:id` – fetch single expense item.
-- `PUT /admin/api/expenses/expense-items/:id` – update expense item (e.g. `raw_label` or `raw_label_id`, `qty`, `unit_price`, `line_total`, `article_id`).
+- `PUT /admin/api/expenses/expense-items/:id` – update expense item (e.g. `raw_label` or `alias_id`, `qty`, `unit_price`, `line_total`).
 - `DELETE /admin/api/expenses/expense-items/:id` – delete expense item.
 
 ### Articles / Price History
@@ -81,8 +70,8 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /admin/api/expenses/articles/:id` – fetch article.
 - `PUT /admin/api/expenses/articles/:id` – update article.
 - `DELETE /admin/api/expenses/articles/:id` – delete article.
-- `GET /admin/api/expenses/articles/unmapped-items` – expense items missing article mapping.
-- `POST /admin/api/expenses/articles/items/:item-id/map` – attach article to item (optional alias create).
+- `GET /admin/api/expenses/articles/unmapped-aliases` – article aliases missing article mapping.
+- `POST /admin/api/expenses/articles/aliases/:alias-id/map` – attach article to alias.
 - `POST /admin/api/expenses/articles/:id/aliases` – add/replace alias for supplier/raw label.
 - `GET /admin/api/expenses/articles/:id/price-history` – price observations (optional `supplier_id`, `limit`).
 - `GET /admin/api/expenses/articles/:id/latest-prices` – latest price per supplier.
@@ -151,18 +140,9 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `PUT /api/v1/expenses/expense-items/:id` – update expense item.
 - `DELETE /api/v1/expenses/expense-items/:id` – delete expense item.
 
-- `GET /api/v1/expenses/raw-labels` – list deduped raw labels.
-  - Query params:
-    - `limit` (default 200), `offset` (default 0)
-    - `search` (matches `raw_label` or `normalized_key`)
-    - `order_by` one of: `raw_label`, `normalized_key`, `created_at`, `updated_at`
-    - `order_dir` one of: `asc`, `desc`
-  - Response:
-    - `{ "success": true, "raw-labels": [ ... ] }`
-
 ### Receipts
-- `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`).
-- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit/offset`, `order_dir`).
+- `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
+- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit/offset`, `order_dir`). Response now includes each receipt’s `payer_id` so caller sees the upload-selected payer without fetching the detail again.
 - `POST /api/v1/expenses/receipts/ocr` – trigger async OCR for a batch of receipt IDs (requires `MISTRAL_API_KEY`).
 - `GET /api/v1/expenses/receipts/:id/download` – download/inline view the original file (`?download=true` forces attachment).
 - `GET /api/v1/expenses/receipts/:id` – fetch receipt.
@@ -174,9 +154,8 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ### Articles + Auto-matching (admin/owner only)
 - `GET /api/v1/expenses/articles` – list/search articles.
 - `POST /api/v1/expenses/articles` – create article.
-- `GET /api/v1/expenses/articles/unmapped-items` – list unmapped expense items.
-  - Includes `raw_label_normalized` (from `raw_labels.normalized_key`) to support the Unmapped Items UI.
-- `POST /api/v1/expenses/articles/items/:item-id/map` – map an expense item to an article (optional alias creation).
+- `GET /api/v1/expenses/articles/unmapped-aliases` – list unmapped article aliases.
+- `POST /api/v1/expenses/articles/aliases/:alias-id/map` – map an alias to an article.
 - `POST /api/v1/expenses/articles/:id/aliases` – batch create aliases (supplier/raw labels) for an article.
 
 ### CRUD Operations

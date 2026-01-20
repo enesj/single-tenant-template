@@ -1,0 +1,5 @@
+({:action :alter-column,
+  :field-name :raw-label-id,
+  :model-name :expense_items,
+  :options {:foreign-key :raw_labels/id, :type :uuid},
+  :changes {:null {:from false, :to :EMPTY}}})

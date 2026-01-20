@@ -2,6 +2,7 @@
   "Integration tests for articles service."
   (:require
     [app.backend.fixtures :as fixtures]
+    [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.payers :as payers]
@@ -57,7 +58,7 @@
       (is (= 1 (count (:reassigned reassigned))))
       (is (empty? (:conflicts reassigned))))))
 
-(deftest articles-map-item-to-article-creates-alias-when-enabled
+(deftest articles-map-alias-to-article-makes-lookup-work
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "MapItem Supplier " (UUID/randomUUID)) {}))
           payer (th/create-payer! db {:type "cash" :label "Cash"})
@@ -70,24 +71,20 @@
                      :total_amount (bigdec "1.00")
                      :currency "BAM"}
                     [{:raw_label "MILK" :line_total (bigdec "1.00")}])
-          item-id (-> expense :items first :id)
-          result (articles/map-item-to-article!
-                   db
-                   item-id
-                   (:id article)
-                   {:create-alias? true
-                    :allow-alias-reassign? false})]
-      (is (= (:id article) (get-in result [:expense-item :article_id])))
-      (is (= 1 (count (get-in result [:alias-result :created]))))
-      (is (= (:id article)
-            (:id (articles/find-article-by-alias db (:id supplier) "MILK")))))))
+          alias-id (-> expense :items first :alias_id)]
+      (is (uuid? alias-id))
 
-(deftest articles-list-unmapped-items-filters-by-supplier
+      (aliases/map-alias-to-article! db alias-id (:id article))
+
+      (is (= (:id article)
+             (:id (articles/find-article-by-alias db (:id supplier) "MILK")))))))
+
+(deftest articles-list-unmapped-aliases-filters-by-supplier
   (when-let [db fixtures/*test-db*]
     (let [supplier-a (:supplier (suppliers/find-or-create-supplier! db (str "Unmapped Supplier A " (UUID/randomUUID)) {}))
           supplier-b (:supplier (suppliers/find-or-create-supplier! db (str "Unmapped Supplier B " (UUID/randomUUID)) {}))
           payer (th/create-payer! db {:type "cash" :label "Cash"})
-          exp-a (expenses/create-expense!
+          _exp-a (expenses/create-expense!
                   db
                   {:supplier_id (:id supplier-a)
                    :payer_id (:id payer)
@@ -103,8 +100,8 @@
                     :total_amount (bigdec "1.00")
                     :currency "BAM"}
                    [{:raw_label "B1" :line_total (bigdec "1.00")}])
-          rows (articles/list-unmapped-items db {:supplier-id (:id supplier-a) :limit 50 :offset 0})]
+          rows (aliases/list-unmapped-aliases db {:supplier-id (:id supplier-a) :limit 50 :offset 0})]
       (is (= 1 (count rows)))
-      (is (= (-> exp-a :items first :id) (:id (first rows))))
       (is (= (:id supplier-a) (:supplier_id (first rows))))
+      (is (= "A1" (:raw_label (first rows))))
       (is (string? (:supplier_display_name (first rows)))))))

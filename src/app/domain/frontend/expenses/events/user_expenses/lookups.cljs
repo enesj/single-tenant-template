@@ -6,6 +6,7 @@
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -147,10 +148,22 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- ^:private form-data-with-file
-  [file]
-  (let [form-data (js/FormData.)]
-    (.append form-data "file" file)
-    form-data))
+  ([file]
+   (form-data-with-file file nil))
+  ([file payer-id]
+   (let [form-data (js/FormData.)
+         payer-id* (some-> payer-id str str/trim not-empty)]
+     (.append form-data "file" file)
+     (when payer-id*
+       (.append form-data "payer_id" payer-id*))
+     form-data)))
+
+(rf/reg-event-db
+  :user-expenses/set-upload-payer-id
+  common-interceptors
+  (fn [db [payer-id]]
+    (let [payer-id* (some-> payer-id str str/trim not-empty)]
+      (assoc-in db [:user-expenses :upload :payer-id] payer-id*))))
 
 (defn- ^:private receipt-from-response
   [response]
@@ -177,7 +190,8 @@
   :user-expenses/upload-receipt
   common-interceptors
   (fn [{:keys [db]} [file]]
-    (let [form-data (form-data-with-file file)]
+    (let [payer-id (get-in db [:user-expenses :upload :payer-id])
+          form-data (form-data-with-file file payer-id)]
       {:db (-> db
              (assoc-in [:user-expenses :upload :batch] nil)
              (assoc-in [:user-expenses :upload :loading?] true)
@@ -250,7 +264,9 @@
   (let [file (first files)
         remaining (vec (rest files))
         filename (or (.-name file) "receipt")
-        form-data (form-data-with-file file)]
+    payer-id (or (get-in db [:user-expenses :upload :batch :payer-id])
+       (get-in db [:user-expenses :upload :payer-id]))
+    form-data (form-data-with-file file payer-id)]
     {:db (-> db
            (assoc-in [:user-expenses :upload :loading?] true)
            (assoc-in [:user-expenses :upload :batch :current] filename))
@@ -268,7 +284,8 @@
   common-interceptors
   (fn [{:keys [db]} [files]]
     (let [files (->> files (remove nil?) vec)
-          total (count files)]
+          total (count files)
+          payer-id (get-in db [:user-expenses :upload :payer-id])]
       (if (pos? total)
         (upload-receipts-next-fx
           (-> db
@@ -279,6 +296,7 @@
                                                        :done 0
                                                        :failed 0
                                                        :current nil
+                                                       :payer-id payer-id
                                                        ;; Track created receipt IDs so we can trigger one batch OCR
                                                        ;; request at the end (uses Mistral Batch API when >1).
                                                        :receipt-ids []}))

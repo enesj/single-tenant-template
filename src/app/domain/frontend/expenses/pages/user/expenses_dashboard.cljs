@@ -252,7 +252,7 @@
                              :on-click #(rf/dispatch [:navigate-to "/expenses/reports"])})
             (when power-user?
               ($ quick-action {:id "btn-quick-unmapped-items"
-                               :title "Unmapped Items"
-                               :description "Bulk-map receipt labels to articles"
+                               :title "Unmapped Aliases"
+                               :description "Bulk-map aliases to articles"
                                :icon "🧩"
                                :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}))))))))

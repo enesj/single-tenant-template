@@ -1,7 +1,6 @@
 (ns app.domain.backend.expenses.services.articles
   "Article management and alias mapping for expense items."
   (:require
-    [app.domain.backend.expenses.services.price-history :as price-history]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -137,7 +136,7 @@
   [db supplier-id raw-label]
   (when (and supplier-id raw-label)
     (let [normalized (normalize-alias-label raw-label)
-          query {:select [[:a.*] [:aa.confidence] [:aa.raw_label_normalized]]
+          query {:select [[:a.*] [:aa.raw_label_normalized]]
                  :from [[:article_aliases :aa]]
                  :join [[:articles :a] [:= :a.id :aa.article_id]]
                  :where [:and
@@ -148,19 +147,20 @@
 
 (defn create-alias!
   "Create or update an article alias for a supplier."
-  [db supplier-id raw-label article-id & [{:keys [confidence]}]]
-  (let [normalized (normalize-alias-label raw-label)
-        row {:id (UUID/randomUUID)
-             :supplier_id supplier-id
-             :raw_label_normalized normalized
-             :article_id article-id
-             :confidence (or confidence 100)}
-        sql-map {:insert-into :article_aliases
-                 :values [row]
-                 :on-conflict [:supplier_id :raw_label_normalized]
-                 :do-update-set {:article_id article-id
-                                 :confidence (or confidence 100)}
-                 :returning [:*]}]
+  [db supplier-id raw-label article-id]
+  (let [raw-label* (some-> raw-label str str/trim)
+     normalized (normalize-alias-label raw-label*)
+     row {:id (UUID/randomUUID)
+       :supplier_id supplier-id
+       :raw_label raw-label*
+       :raw_label_normalized normalized
+       :article_id article-id}
+     sql-map {:insert-into :article_aliases
+        :values [row]
+        :on-conflict [:supplier_id :raw_label_normalized]
+        :do-update-set {:article_id article-id
+               :raw_label :excluded/raw_label}
+        :returning [:*]}]
     (jdbc/execute-one! db (sql/format sql-map) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (def ^:private min-alias-normalized-length
@@ -195,12 +195,12 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- insert-alias!
-  [db {:keys [supplier-id article-id raw-label-normalized confidence]}]
+  [db {:keys [supplier-id article-id raw-label raw-label-normalized]}]
   (let [row {:id (UUID/randomUUID)
              :supplier_id supplier-id
+             :raw_label raw-label
              :raw_label_normalized raw-label-normalized
-             :article_id article-id
-             :confidence (or confidence 100)}]
+             :article_id article-id}]
     (jdbc/execute-one!
       db
       (sql/format {:insert-into :article_aliases
@@ -209,12 +209,12 @@
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- update-alias-article!
-  [db alias-id {:keys [article-id confidence]}]
+  [db alias-id {:keys [article-id raw-label]}]
   (jdbc/execute-one!
     db
     (sql/format {:update :article_aliases
-                 :set {:article_id article-id
-                       :confidence (or confidence 100)}
+                 :set (cond-> {:article_id article-id}
+                        (some? raw-label) (assoc :raw_label raw-label))
                  :where [:= :id alias-id]
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
@@ -242,8 +242,8 @@
   - Dedupes by normalized key.
   - Does NOT silently reassign conflicts unless allow-reassign? is true.
   "
-  [db {:keys [supplier-id article-id raw-labels allow-reassign? confidence]
-       :or {allow-reassign? false confidence 100}}]
+    [db {:keys [supplier-id article-id raw-labels allow-reassign?]
+      :or {allow-reassign? false}}]
   (when-not supplier-id
     (throw (ex-info "supplier-id is required" {:status 400})))
   (when-not article-id
@@ -290,15 +290,21 @@
                                           tx
                                           {:supplier-id supplier-id
                                            :article-id article-id
-                                           :raw-label-normalized raw-label-normalized
-                                           :confidence confidence})]
+                                           :raw-label raw-label
+                                           :raw-label-normalized raw-label-normalized})]
                            (update acc* :created conj inserted))
 
                          (= (:article_id existing) article-id)
-                         (update acc* :skipped conj {:raw-label raw-label
-                                                     :raw-label-normalized raw-label-normalized
-                                                     :reason :already-present
-                                                     :alias-id (:id existing)})
+                         (do
+                           (update-alias-article!
+                             tx
+                             (:id existing)
+                             {:article-id article-id
+                              :raw-label raw-label})
+                           (update acc* :skipped conj {:raw-label raw-label
+                                                       :raw-label-normalized raw-label-normalized
+                                                       :reason :already-present
+                                                       :alias-id (:id existing)}))
 
                          (false? allow-reassign?)
                          (update acc* :conflicts conj {:raw-label raw-label
@@ -312,7 +318,7 @@
                                          tx
                                          (:id existing)
                                          {:article-id article-id
-                                          :confidence confidence})]
+                                          :raw-label raw-label})]
                            (update acc* :reassigned conj {:alias-id (:id updated)
                                                           :raw-label-normalized raw-label-normalized
                                                           :existing-article-id (:article_id existing)
@@ -329,100 +335,3 @@
        :conflicts conflicts
        :reassigned reassigned})))
 
-;; ============================================================================
-;; Unmapped items queue
-;; ============================================================================
-
-(defn list-unmapped-items
-  "Return expense items without an article_id for review.
-
-  Includes supplier display name for admin UX."
-  [db {:keys [supplier-id limit offset] :or {limit 50 offset 0}}]
-  (jdbc/execute!
-    db
-    (sql/format
-      (cond-> {:select [:ei.*
-           [:rl.raw_label :raw_label]
-                        [:rl.normalized_key :raw_label_normalized]
-                        [:e.supplier_id]
-                        [:s.display_name :supplier_display_name]
-                        [:e.currency]
-                        [:e.purchased_at]]
-               :from [[:expense_items :ei]]
-               :join [[:expenses :e] [:= :e.id :ei.expense_id]
-         [:suppliers :s] [:= :s.id :e.supplier_id]]
-       :left-join [[:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
-               :where [:and
-                       [:is :ei.article_id nil]
-                       [:is :ei.deleted_at nil]
-                       [:is :e.deleted_at nil]]
-               :order-by [[:ei.created_at :desc]]
-               :limit limit
-               :offset offset}
-        supplier-id (update :where conj [:= :e.supplier_id supplier-id])))
-    {:builder-fn rs/as-unqualified-lower-maps}))
-
-(defn map-item-to-article!
-  "Attach an article to an expense item and optionally create an alias.
-
-  opts:
-  - :create-alias? (default false)
-  - :allow-alias-reassign? (default false): if true, alias conflicts will be reassigned
-
-  Returns:
-  {:expense-item <updated-row>
-   :alias-result <batch-create-aliases! result, when requested>}"
-  [db item-id article-id {:keys [create-alias? allow-alias-reassign?]
-                          :or {create-alias? false
-                               allow-alias-reassign? false}}]
-  (jdbc/with-transaction [tx db]
-    (let [item-with-expense (jdbc/execute-one!
-                              tx
-                              (sql/format {:select [:ei.*
-                    [:rl.raw_label :raw_label]
-                    [:rl.normalized_key :raw_label_normalized]
-                                                    [:e.supplier_id]
-                                                    [:e.currency]
-                                                    [:e.purchased_at]]
-                                           :from [[:expense_items :ei]]
-                                           :join [[:expenses :e] [:= :e.id :ei.expense_id]]
-                 :left-join [[:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
-                                           :where [:and
-                                                   [:= :ei.id item-id]
-                                                   [:is :ei.deleted_at nil]
-                                                   [:is :e.deleted_at nil]]})
-                              {:builder-fn rs/as-unqualified-lower-maps})]
-      (when-not item-with-expense
-        (throw (ex-info "Expense item not found" {:id item-id :status 404})))
-
-      ;; Update item
-      (let [updated (jdbc/execute-one!
-                      tx
-                      (sql/format {:update :expense_items
-                                   :set {:article_id article-id}
-                                   :where [:and
-                                           [:= :id item-id]
-                                           [:is :deleted_at nil]]
-                                   :returning [:*]})
-                      {:builder-fn rs/as-unqualified-lower-maps})
-            alias-result (when create-alias?
-                           (batch-create-aliases!
-                             tx
-                             {:supplier-id (:supplier_id item-with-expense)
-                              :article-id article-id
-                              :raw-labels [(:raw_label item-with-expense)]
-                              :allow-reassign? (true? allow-alias-reassign?)}))]
-
-        ;; Record price observation for future comparisons
-        (price-history/record-observation!
-          tx {:article_id article-id
-              :supplier_id (:supplier_id item-with-expense)
-              :expense_item_id (:id updated)
-              :qty (:qty updated)
-              :unit_price (:unit_price updated)
-              :line_total (:line_total updated)
-              :currency (:currency item-with-expense)
-              :observed_at (:purchased_at item-with-expense)})
-
-        {:expense-item updated
-         :alias-result alias-result}))))

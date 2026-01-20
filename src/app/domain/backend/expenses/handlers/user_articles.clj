@@ -8,6 +8,7 @@
   - These routes are role-gated to admin/owner.
   - Response shapes intentionally mirror the admin helpers used by the unmapped-items UX."
   (:require
+    [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.shared.adapters.database :as shared-db]
@@ -137,7 +138,7 @@
                                                          :article-id (str article-id)})
                 (h/json-response {:error "Failed to delete article"} 500)))))))))
 
-(defn list-unmapped-items-handler
+(defn list-unmapped-aliases-handler
   [db]
   (fn [request]
     (if-not (h/get-user request)
@@ -149,15 +150,15 @@
                 supplier-id (h/try-parse-uuid (h/get-param qp :supplier_id))
                 limit (or (some-> (h/get-param qp :limit) parse-long) 50)
                 offset (or (some-> (h/get-param qp :offset) parse-long) 0)
-                rows (to-app (articles/list-unmapped-items db (cond-> {:limit limit :offset offset}
+                rows (to-app (aliases/list-unmapped-aliases db (cond-> {:limit limit :offset offset}
                                                                 supplier-id (assoc :supplier-id supplier-id))))]
             (h/json-response {:success true
-                              :unmapped-items rows}))
+                              :unmapped-aliases rows}))
           (catch Exception e
-            (log/error e "Failed to list unmapped items" {:message (.getMessage e)})
-            (h/json-response {:error "Failed to list unmapped items"} 500)))))))
+            (log/error e "Failed to list unmapped aliases" {:message (.getMessage e)})
+            (h/json-response {:error "Failed to list unmapped aliases"} 500)))))))
 
-(defn map-item-to-article-handler
+(defn map-alias-to-article-handler
   [db]
   (fn [request]
     (if-not (h/get-user request)
@@ -165,35 +166,25 @@
       (if-let [forbidden (ensure-admin-or-owner request)]
         forbidden
         (try
-          (let [item-id (h/try-parse-uuid (or (get-in request [:path-params :item-id])
-                                            (get-in request [:parameters :path :item-id])))
+          (let [alias-id (h/try-parse-uuid (or (get-in request [:path-params :alias-id])
+                                             (get-in request [:parameters :path :alias-id])))
                 body (h/read-body-params request)
                 article-id (h/try-parse-uuid (or (:article-id body) (:article_id body)))
-                create-alias? (boolean (or (:create-alias? body) (:create_alias? body)))
-                allow-alias-reassign? (boolean (or (:allow-alias-reassign? body)
-                                                 (:allow_alias_reassign? body)
-                                                 (:allow-reassign? body)
-                                                 (:allow_reassign? body)))]
-            (when-not item-id
-              (throw (ex-info "Invalid item-id" {:status 400})))
+                ]
+            (when-not alias-id
+              (throw (ex-info "Invalid alias-id" {:status 400})))
             (when-not article-id
               (throw (ex-info "Invalid article-id" {:status 400})))
 
-            (let [result (articles/map-item-to-article!
-                           db
-                           item-id
-                           article-id
-                           {:create-alias? create-alias?
-                            :allow-alias-reassign? allow-alias-reassign?})]
+            (let [updated (aliases/map-alias-to-article! db alias-id article-id)]
               (h/json-response {:success true
-                                :expense-item (to-app (:expense-item result))
-                                :alias-result (to-app (:alias-result result))})))
+                                :article-alias (to-app updated)})))
           (catch clojure.lang.ExceptionInfo e
             (let [{:keys [status]} (ex-data e)]
               (h/json-response {:error (ex-message e)} (or status 400))))
           (catch Exception e
-            (log/error e "Failed to map item" {:message (.getMessage e)})
-            (h/json-response {:error "Failed to map item"} 500)))))))
+            (log/error e "Failed to map alias" {:message (.getMessage e)})
+            (h/json-response {:error "Failed to map alias"} 500)))))))
 
 (defn batch-create-aliases-handler
   [db]
@@ -211,8 +202,7 @@
                              (:raw_labels body)
                              (:raw-labels-text body)
                              (:raw_labels_text body))
-                allow-reassign? (boolean (or (:allow-reassign? body) (:allow_reassign? body)))
-                confidence (or (:confidence body) (:confidence_score body) 100)]
+                allow-reassign? (boolean (or (:allow-reassign? body) (:allow_reassign? body)))]
             (when-not article-id
               (throw (ex-info "Invalid article id" {:status 400})))
             (when-not supplier-id
@@ -223,8 +213,7 @@
                            {:supplier-id supplier-id
                             :article-id article-id
                             :raw-labels raw-labels
-                            :allow-reassign? allow-reassign?
-                            :confidence confidence})]
+                            :allow-reassign? allow-reassign?})]
               (h/json-response {:success true
                                 :result (to-app result)})))
           (catch clojure.lang.ExceptionInfo e

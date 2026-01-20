@@ -5,7 +5,7 @@
   It is role-gated to admin/owner and scoped to the current user's expenses."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [app.domain.backend.expenses.services.raw-labels :as raw-labels]
+    [app.domain.backend.expenses.services.article-aliases :as aliases]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -84,26 +84,27 @@
                 search (some-> (h/get-param params :search) str)
                 search* (when (and (string? search) (not (str/blank? search)))
                           (str "%" search "%"))
-                where (cond-> [:and
-                               [:= :e.user_id user-id]
-                               [:is :ei.deleted_at nil]
-                               [:is :e.deleted_at nil]]
-                        search*
-                        (conj [:or
-                       [:ilike :rl.raw_label search*]
+                  where (cond-> [:and
+                       [:= :e.user_id user-id]
+                       [:is :ei.deleted_at nil]
+                       [:is :e.deleted_at nil]]
+                     search*
+                     (conj [:or
+                       [:ilike :aa.raw_label search*]
                        [:ilike :a.canonical_name search*]]))
                   query {:select [[:ei.*]
-                        [:rl.raw_label :raw_label]
+                        [:aa.raw_label :raw_label]
+                        [:aa.raw_label_normalized :raw_label_normalized]
                         [:e.purchased_at :expense_purchased_at]
                         [:a.canonical_name :article_canonical_name]]
-                       :from [[:expense_items :ei]]
+                    :from [[:expense_items :ei]]
                     :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                      [:articles :a] [:= :a.id :ei.article_id]
-                      [:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
-                       :where where
-                       :order-by [[:ei.created_at :desc]]
-                       :limit limit
-                       :offset offset}
+                      [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                      [:articles :a] [:= :a.id :aa.article_id]]
+                    :where where
+                    :order-by [[:ei.created_at :desc]]
+                    :limit limit
+                    :offset offset}
                 items (jdbc/execute! db (sql/format query)
                         {:builder-fn rs/as-unqualified-lower-maps})]
             (h/json-response {:data (vec items)}))
@@ -134,19 +135,20 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- fetch-expense-item
-  "Fetch a single expense item (scoped to user + non-deleted) and include raw label + display joins." 
+  "Fetch a single expense item with alias + article joins." 
   [db user-id item-id]
   (jdbc/execute-one!
     db
     (sql/format
       {:select [[:ei.*]
-                [:rl.raw_label :raw_label]
+                [:aa.raw_label :raw_label]
+                [:aa.raw_label_normalized :raw_label_normalized]
                 [:e.purchased_at :expense_purchased_at]
                 [:a.canonical_name :article_canonical_name]]
        :from [[:expense_items :ei]]
        :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                   [:articles :a] [:= :a.id :ei.article_id]
-                   [:raw_labels :rl] [:= :rl.id :ei.raw_label_id]]
+                   [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                   [:articles :a] [:= :a.id :aa.article_id]]
        :where [:and
                [:= :ei.id item-id]
                [:= :e.user_id user-id]
@@ -170,21 +172,27 @@
         (if-let [item-id (expense-item-id request)]
           (try
             (let [body (h/read-body-params request)
-                  raw-label (some-> (h/get-param body :raw_label) str str/trim)
-                  raw-label* (when-not (str/blank? raw-label) raw-label)
-                  raw-label-id (when raw-label*
-                                 (:id (raw-labels/find-or-create-raw-label! db raw-label*)))
-                  updates {:raw_label_id (or raw-label-id
-                                          (throw (ex-info "raw_label is required"
-                                                   {:status 400
-                                                    :field :raw_label})))
-                           :article_id (parse-uuid! :article_id (h/get-param body :article_id))
-                           :qty (parse-decimal! :qty (h/get-param body :qty))
-                           :unit_price (parse-decimal! :unit_price (h/get-param body :unit_price))
-                           :line_total (or (parse-decimal! :line_total (h/get-param body :line_total))
-                                         (throw (ex-info "line_total is required"
-                                                  {:status 400
-                                                   :field :line_total})))}]
+              raw-label (some-> (h/get-param body :raw_label) str str/trim)
+              raw-label* (when-not (str/blank? raw-label) raw-label)
+              expense-row (jdbc/execute-one! db
+                    (sql/format {:select [:e.supplier_id]
+                         :from [[:expense_items :ei]]
+                         :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                         :where [:= :ei.id item-id]})
+                    {:builder-fn rs/as-unqualified-lower-maps})
+              supplier-id (:supplier_id expense-row)
+              alias-id (when raw-label*
+                     (:id (aliases/find-or-create-alias! db supplier-id raw-label*)))
+              updates {:alias_id (or alias-id
+                      (throw (ex-info "raw_label is required"
+                           {:status 400
+                        :field :raw_label})))
+                   :qty (parse-decimal! :qty (h/get-param body :qty))
+                   :unit_price (parse-decimal! :unit_price (h/get-param body :unit_price))
+                   :line_total (or (parse-decimal! :line_total (h/get-param body :line_total))
+                         (throw (ex-info "line_total is required"
+                          {:status 400
+                           :field :line_total})))}]
               (if-let [updated (update-expense-item! db user-id item-id updates)]
                 (h/json-response {:data (or (fetch-expense-item db user-id item-id) updated)})
                 (h/not-found-response "Expense item not found or access denied")))

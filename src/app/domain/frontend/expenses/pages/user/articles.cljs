@@ -102,7 +102,7 @@
                  ($ button {:id "btn-go-unmapped-items-articles"
                             :btn-type :primary
                             :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}
-                   "Unmapped Items")))))
+                   "Unmapped Aliases")))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view

@@ -79,7 +79,7 @@
                ($ :div
                  ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Article Aliases")
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user alias catalog (mapping is managed via Unmapped Items)"))
+                   "Power-user alias catalog (mapping is managed via Unmapped Aliases)"))
                ($ :div {:class "flex gap-2 flex-wrap"}
                  ($ button {:id "btn-back-expenses-dashboard-article-aliases"
                             :btn-type :ghost
@@ -88,7 +88,7 @@
                  ($ button {:id "btn-go-unmapped-items-article-aliases"
                             :btn-type :primary
                             :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}
-                   "Unmapped Items")))))
+                   "Unmapped Aliases")))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view

@@ -15,31 +15,11 @@
   [a]
   (or (:canonical-name a) (:canonical_name a) (str (:id a))))
 
-(defn- format-date
-  "Small shared date formatting helper (avoid depending on admin-only utils)."
-  [date-str]
-  (when date-str
-    (try
-      (.toLocaleDateString (js/Date. date-str) "en-US")
-      (catch :default _
-        (str date-str)))))
-
-(defn- format-number
-  "Format a number-like value for display; falls back to fallback string."
-  [v fallback]
-  (cond
-    (nil? v) fallback
-    (number? v) (.toLocaleString (js/Number v) "en-US" #js {:maximumFractionDigits 2})
-    :else (try
-            (.toLocaleString (js/Number v) "en-US" #js {:maximumFractionDigits 2})
-            (catch :default _ fallback))))
-
 (defui map-to-article-modal
   []
   (let [open? (use-subscribe [:expenses/unmapped-items-map-modal-open?])
         working? (use-subscribe [:expenses/unmapped-items-map-modal-working?])
         err (use-subscribe [:expenses/unmapped-items-map-modal-error])
-        alias-result (use-subscribe [:expenses/unmapped-items-map-modal-alias-result])
         progress (use-subscribe [:expenses/unmapped-items-map-modal-progress])
         items (use-subscribe [:expenses/unmapped-items])
         selected-ids (use-subscribe [:expenses/unmapped-items-selected-ids])
@@ -77,9 +57,7 @@
         [new-article-name set-new-article-name!] (use-state "")
         ;; Tracks the last auto-prefilled name so we can safely update the suggestion
         ;; when the selected raw label changes (without overwriting user edits).
-        [auto-prefill-name set-auto-prefill-name!] (use-state nil)
-        [create-aliases? set-create-aliases!] (use-state true)
-        [allow-reassign? set-allow-reassign!] (use-state false)]
+        [auto-prefill-name set-auto-prefill-name!] (use-state nil)]
 
     (use-effect
       (fn []
@@ -89,9 +67,7 @@
           (set-mode! :existing)
           (set-existing-article-id! "")
           (set-new-article-name! "")
-          (set-auto-prefill-name! nil)
-          (set-create-aliases! true)
-          (set-allow-reassign! false))
+          (set-auto-prefill-name! nil))
         js/undefined)
       [open?])
 
@@ -115,7 +91,7 @@
 
     ($ modal-wrapper
       {:visible? open?
-       :title "Map unmapped items"
+       :title "Map unmapped aliases"
        :size :large
        :on-close [::unmapped-events/close-map-modal]
        :close-button-id "btn-close-map-unmapped-items"}
@@ -133,7 +109,7 @@
         ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
           ($ :div {:class "ds-card-body space-y-2"}
             ($ :div {:class "text-sm text-base-content/70"}
-              "Selected items: " (count selected-items))
+              "Selected aliases: " (count selected-items))
             (when supplier-id
               ($ :div {:class "text-sm"}
                 ($ :span {:class "font-semibold"} "Supplier: ")
@@ -195,36 +171,6 @@
               ($ :div {:class "text-sm text-base-content/70"}
                 "Loading articles/suppliers…"))
 
-            ($ :div {:class "flex flex-col gap-2"}
-              ($ :label {:class "ds-label cursor-pointer justify-start gap-3"}
-                ($ :input {:id "toggle-create-aliases"
-                           :type "checkbox"
-                           :class "ds-checkbox"
-                           :disabled working?
-                           :checked (boolean create-aliases?)
-                           :on-change (fn [e] (set-create-aliases! (.. e -target -checked)))})
-                ($ :span {:class "label-text"}
-                  "Create aliases for these labels"))
-
-              ($ :label {:class "ds-label cursor-pointer justify-start gap-3"}
-                ($ :input {:id "toggle-reassign-conflicts"
-                           :type "checkbox"
-                           :class "ds-checkbox"
-                           :disabled working?
-                           :checked (boolean allow-reassign?)
-                           :on-change (fn [e] (set-allow-reassign! (.. e -target -checked)))})
-                ($ :span {:class "label-text"}
-                  "Reassign conflicts (use with care)")))
-
-            (when alias-result
-              (let [created (count (get alias-result :created))
-                    skipped (count (get alias-result :skipped))
-                    conflicts (count (get alias-result :conflicts))
-                    reassigned (count (get alias-result :reassigned))]
-                ($ :div {:class "text-sm"}
-                  ($ :div {:class "font-semibold"} "Alias results")
-                  ($ :div (str "Created: " created ", Skipped: " skipped ", Conflicts: " conflicts ", Reassigned: " reassigned)))))
-
             (when progress
               ($ :div {:class "text-sm text-base-content/70"}
                 (str "Mapped " (or (:done progress) 0) " / " (or (:total progress) 0)
@@ -249,19 +195,17 @@
                                        [::unmapped-events/submit-map
                                         {:mode mode
                                          :existing-article-id existing-article-id
-                                         :new-article-name new-article-name
-                                         :create-aliases? create-aliases?
-                                         :allow-reassign? allow-reassign?}])}
+                                         :new-article-name new-article-name}])}
                 (if working? "Working..." "Map")))))))))
 
 (defui unmapped-items-panel
-  "Shared content for both admin and user Unmapped Items pages.
+  "Shared content for both admin and user Unmapped Aliases pages.
 
   Props:
   - :breadcrumbs - vector of breadcrumb items: {:label string, :href string?}
-  - :title - optional title string (default: Unmapped Items)"
+  - :title - optional title string (default: Unmapped Aliases)"
   [{:keys [breadcrumbs title]
-    :or {title "Unmapped Items"}}]
+    :or {title "Unmapped Aliases"}}]
   (let [items (use-subscribe [:expenses/unmapped-items])
         loading? (use-subscribe [:expenses/unmapped-items-loading?])
         err (use-subscribe [:expenses/unmapped-items-error])
@@ -336,7 +280,7 @@
                   ($ :option {:key (str sid) :value (str sid)} label))))
 
             ($ :div {:class "text-sm text-base-content/70"}
-              (str "Showing " (count (or items [])) " unmapped item(s).")))
+              (str "Showing " (count (or items [])) " unmapped alias(es).")))
 
           (cond
             loading?
@@ -345,7 +289,7 @@
 
             (empty? items)
             ($ :div {:class "text-sm text-base-content/70"}
-              "No unmapped items found.")
+              "No unmapped aliases found.")
 
             :else
             ($ :div {:class "overflow-x-auto"}
@@ -355,17 +299,16 @@
                     ($ :th "")
                     ($ :th "Raw Label")
                     ($ :th "Supplier")
-                    ($ :th "Purchased")
-                    ($ :th "Line Total")))
+                    ($ :th "Occurrences")))
                 ($ :tbody
                   (for [it items
                         :let [iid (:id it)
                               iid-str (str iid)
                               checked? (contains? selected-ids iid)]]
-                    ($ :tr {:id (str "row-unmapped-item-" iid-str)
+                    ($ :tr {:id (str "row-unmapped-alias-" iid-str)
                             :key iid-str}
                       ($ :td
-                        ($ :input {:id (str "toggle-unmapped-item-" iid-str)
+                        ($ :input {:id (str "toggle-unmapped-alias-" iid-str)
                                    :type "checkbox"
                                    :class "ds-checkbox"
                                    :checked checked?
@@ -381,8 +324,8 @@
                           (some-> (:supplier-id it) str)
                           "—"))
                       ($ :td
-                        (format-date (:purchased-at it)))
-                      ($ :td
-                        (format-number (:line-total it) "—"))))))))))
+                        (or (:occurrence_count it)
+                          (:occurrence-count it)
+                          0))))))))))
 
       ($ map-to-article-modal))))

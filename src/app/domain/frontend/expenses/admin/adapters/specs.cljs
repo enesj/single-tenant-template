@@ -22,13 +22,13 @@
    :fields [{:id :expense-purchased-at :label "Expense purchased at" :type :datetime}
             {:id :article-canonical-name :label "Article" :type :text}
             {:id :raw-label :label "Raw label" :type :text}
-            {:id :raw-label-id :label "Raw label ID" :type :text}
+            {:id :raw-label-normalized :label "Raw label normalized" :type :text}
+            {:id :alias-id :label "Alias ID" :type :text}
             {:id :qty :label "Qty" :type :number}
             {:id :unit-price :label "Unit price" :type :number}
             {:id :line-total :label "Line total" :type :number}
             {:id :created-at :label "Created at" :type :datetime}
-            {:id :expense-id :label "Expense ID" :type :text}
-            {:id :article-id :label "Article ID" :type :text}]})
+            {:id :expense-id :label "Expense ID" :type :text}]})
 
 (def receipts-entity-spec
   {:id :receipts
@@ -60,16 +60,9 @@
   {:id :article-aliases
    :fields [{:id :supplier-display-name :label "Supplier" :type :text}
             {:id :article-canonical-name :label "Article" :type :text}
+            {:id :raw-label :label "Raw label" :type :text}
             {:id :raw-label-normalized :label "Alias" :type :text}
-            {:id :confidence :label "Confidence" :type :number}
             {:id :created-at :label "Created at" :type :datetime}]})
-
-(def raw-labels-entity-spec
-  {:id :raw-labels
-   :fields [{:id :raw-label :label "Raw label" :type :text}
-            {:id :normalized-key :label "Normalized key" :type :text}
-            {:id :created-at :label "Created at" :type :datetime}
-            {:id :updated-at :label "Updated at" :type :datetime}]})
 
 (def price-observations-entity-spec
   {:id :price-observations
@@ -109,10 +102,6 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :article-aliases
    :value-fn (fn [spec _] (or spec article-aliases-entity-spec))})
-
-(entity-utils/register-entity-spec-sub!
-  {:entity-key :raw-labels
-   :value-fn (fn [spec _] (or spec raw-labels-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :price-observations

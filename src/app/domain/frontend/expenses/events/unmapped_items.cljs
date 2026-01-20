@@ -1,5 +1,5 @@
 (ns app.domain.frontend.expenses.events.unmapped-items
-  "Admin UX for mapping many raw labels to a single article.
+  "Admin UX for mapping many aliases to a single article.
 
   NOTE: This workflow is used in both admin routes (/admin/...) and the
   user-facing power-user page (/unmapped-items). Requests switch between
@@ -34,23 +34,6 @@
   (let [ids (selected-item-ids db)
         items (or (get-in db (conj base-path :items)) [])]
     (filterv (fn [it] (contains? ids (:id it))) items)))
-
-(defn- selected-supplier-id
-  "Return the single supplier-id for selected items, or nil when none/mixed."
-  [db]
-  (let [sids (->> (selected-items db)
-               (map :supplier-id)
-               (remove nil?)
-               set)]
-    (when (= 1 (count sids))
-      (first sids))))
-
-(defn- selected-raw-labels
-  [db]
-  (->> (selected-items db)
-    (map :raw-label)
-    (remove str/blank?)
-    vec))
 
 ;; -----------------------------------------------------------------------------
 ;; Lookups (suppliers + articles) for the map modal
@@ -122,7 +105,7 @@
     (finish-lookups-step db :articles error)))
 
 ;; -----------------------------------------------------------------------------
-;; Unmapped items
+;; Unmapped aliases
 ;; -----------------------------------------------------------------------------
 
 (rf/reg-event-fx
@@ -134,8 +117,8 @@
       {:db (begin-load db)
        :http-xhrio (x/xhrio db
                     {:method :get
-                     :uri endpoints/articles-unmapped-items-endpoint
-                     :admin-uri endpoints/admin-articles-unmapped-items-endpoint
+                     :uri endpoints/articles-unmapped-aliases-endpoint
+                     :admin-uri endpoints/admin-articles-unmapped-aliases-endpoint
                      :params qp
                      :response-format (ajax/json-response-format {:keywords? true})
                      :on-success [::unmapped-items-loaded]
@@ -146,7 +129,7 @@
   (fn [db [_ response]]
     (-> db
       (finish-load nil)
-      (assoc-in (conj base-path :items) (vec (or (:unmapped-items response) [])))
+      (assoc-in (conj base-path :items) (vec (or (:unmapped-aliases response) [])))
       (assoc-in (conj base-path :selection :item-ids) #{}))))
 
 (rf/reg-event-db
@@ -204,17 +187,11 @@
 
 (rf/reg-event-fx
   ::submit-map
-  (fn [{:keys [db]} [_ {:keys [mode existing-article-id new-article-name
-                               create-aliases? allow-reassign?]}]]
-    (let [supplier-id (selected-supplier-id db)
-          item-ids (vec (selected-item-ids db))
-          raw-labels (selected-raw-labels db)]
+  (fn [{:keys [db]} [_ {:keys [mode existing-article-id new-article-name]}]]
+    (let [alias-ids (vec (selected-item-ids db))]
       (cond
-        (empty? item-ids)
-        {:db (set-map-error db "Select at least one unmapped item.")}
-
-        (nil? supplier-id)
-        {:db (set-map-error db "Please select items from a single supplier.")}
+        (empty? alias-ids)
+        {:db (set-map-error db "Select at least one unmapped alias.")}
 
         (and (= mode :existing) (not (seq existing-article-id)))
         {:db (set-map-error db "Select an article (or switch to Create new).")}
@@ -227,7 +204,7 @@
                     (set-map-working true)
                     (assoc-in (conj base-path :map-modal :error) nil)
                     (assoc-in (conj base-path :map-modal :result) nil)
-                    (assoc-in (conj base-path :map-modal :progress) {:total (count item-ids)
+                    (assoc-in (conj base-path :map-modal :progress) {:total (count alias-ids)
                                                                      :done 0
                                                                      :failed 0}))]
           (if (= mode :new)
@@ -238,19 +215,11 @@
                            :admin-uri endpoints/admin-articles-endpoint
                            :params {:canonical_name (str/trim new-article-name)}
                            :response-format (ajax/json-response-format {:keywords? true})
-                           :on-success [::create-article-success {:supplier-id supplier-id
-                                                                  :item-ids item-ids
-                                                                  :raw-labels raw-labels
-                                                                  :create-aliases? create-aliases?
-                                                                  :allow-reassign? allow-reassign?}]
+                           :on-success [::create-article-success {:alias-ids alias-ids}]
                            :on-failure [::create-article-failed]})}
             {:db db*
-             :dispatch [::map-with-article {:supplier-id supplier-id
-                                            :article-id existing-article-id
-                                            :item-ids item-ids
-                                            :raw-labels raw-labels
-                                            :create-aliases? create-aliases?
-                                            :allow-reassign? allow-reassign?}]}))))))
+             :dispatch [::map-with-article {:article-id existing-article-id
+                                            :alias-ids alias-ids}]}))))))
 
 (rf/reg-event-fx
   ::create-article-success
@@ -272,68 +241,34 @@
 
 (rf/reg-event-fx
   ::map-with-article
-  (fn [{:keys [db]} [_ {:keys [supplier-id article-id item-ids raw-labels create-aliases? allow-reassign?]}]]
+  (fn [{:keys [db]} [_ {:keys [article-id alias-ids]}]]
     (let [article-id* article-id]
       (when-not (seq article-id*)
-        (log/error "map-with-article called without article-id" {:supplier-id supplier-id}))
+        (log/error "map-with-article called without article-id"))
 
       (cond
         (not (seq article-id*))
         {:db (-> db (set-map-working false) (set-map-error "Missing article id."))}
-
-        ;; If aliases are requested, do the alias batch request first.
-        (true? create-aliases?)
-        {:db db
-         :http-xhrio (x/xhrio db
-                      {:method :post
-                       :uri (str endpoints/articles-endpoint "/" article-id* "/aliases")
-                       :admin-uri (str endpoints/admin-articles-endpoint "/" article-id* "/aliases")
-                       :params {:supplier_id supplier-id
-                                :raw_labels raw-labels
-                                :allow_reassign? (boolean allow-reassign?)}
-                       :response-format (ajax/json-response-format {:keywords? true})
-                       :on-success [::aliases-batch-success {:article-id article-id*
-                                                             :item-ids item-ids}]
-                       :on-failure [::aliases-batch-failed {:article-id article-id*
-                                                            :item-ids item-ids}]})}
-
         :else
         {:db (assoc-in db (conj base-path :map-modal :alias-result) nil)
-         :dispatch [::map-selected-items {:article-id article-id*
-                                          :item-ids item-ids}]}))))
+         :dispatch [::map-selected-aliases {:article-id article-id*
+                                            :alias-ids alias-ids}]}))))
 
 (rf/reg-event-fx
-  ::aliases-batch-success
-  (fn [{:keys [db]} [_ {:keys [article-id item-ids]} response]]
-    {:db (assoc-in db (conj base-path :map-modal :alias-result) (get-in response [:result]))
-     :dispatch [::map-selected-items {:article-id article-id
-                                      :item-ids item-ids}]}))
-
-(rf/reg-event-fx
-  ::aliases-batch-failed
-  (fn [{:keys [db]} [_ {:keys [article-id item-ids]} error]]
-    {:db (-> db
-           (assoc-in (conj base-path :map-modal :alias-result) nil)
-           (set-map-error (admin-http/extract-error-message error)))
-     :dispatch [::map-selected-items {:article-id article-id
-                                      :item-ids item-ids}]}))
-
-(rf/reg-event-fx
-  ::map-selected-items
-  (fn [{:keys [db]} [_ {:keys [article-id item-ids]}]]
+  ::map-selected-aliases
+  (fn [{:keys [db]} [_ {:keys [article-id alias-ids]}]]
     (let [requests (mapv
-                     (fn [item-id]
+                     (fn [alias-id]
                        [:http-xhrio
                         (x/xhrio db
                           {:method :post
-                           :uri (str endpoints/articles-endpoint "/items/" item-id "/map")
-                           :admin-uri (str endpoints/admin-articles-endpoint "/items/" item-id "/map")
-                           :params {:article_id article-id
-                                    :create_alias? false}
+                           :uri (str endpoints/articles-endpoint "/aliases/" alias-id "/map")
+                           :admin-uri (str endpoints/admin-articles-endpoint "/aliases/" alias-id "/map")
+                           :params {:article_id article-id}
                            :response-format (ajax/json-response-format {:keywords? true})
                            :on-success [::map-item-success]
                            :on-failure [::map-item-failed]})])
-                     item-ids)]
+                     alias-ids)]
       {:db db
        :fx (into [] requests)})))
 

@@ -194,41 +194,6 @@
   (fn [db [error]]
     (finish-entity-load db :expense-items error)))
 
-;; ---------------------------------------------------------------------------
-;; Raw labels (power-user only; admin/owner)
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-fx
-  :user-expenses/fetch-raw-labels
-  common-interceptors
-  (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :raw-labels)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/raw-labels-endpoint
-                      :admin-uri endpoints/admin-raw-labels-endpoint
-                      :params request-params
-                      :on-success [:user-expenses/fetch-raw-labels-success]
-                      :on-failure [:user-expenses/fetch-raw-labels-failure]})})))
-
-(rf/reg-event-fx
-  :user-expenses/fetch-raw-labels-success
-  common-interceptors
-  (fn [{:keys [db]} [response]]
-    (let [items (vec (or (:raw-labels response)
-                       (:raw_labels response)
-                       (:data response)
-                       []))]
-      {:db (finish-entity-load db :raw-labels nil)
-       :dispatch [::expenses-sync/sync-raw-labels items]})))
-
-(rf/reg-event-db
-  :user-expenses/fetch-raw-labels-failure
-  common-interceptors
-  (fn [db [error]]
-    (finish-entity-load db :raw-labels error)))
-
 (rf/reg-event-fx
   :user-expenses/update-expense-item-modal
   common-interceptors
@@ -333,11 +298,11 @@
   common-interceptors
   (fn [{:keys [db]} [article-alias-id form-data on-success]]
     (let [article-alias-id-str (some-> article-alias-id str)
-          {:keys [raw_label_normalized raw-label-normalized confidence]} (or form-data {})
+          raw-label (or (:raw_label form-data) (:raw-label form-data))
+          raw-label-normalized (or (:raw_label_normalized form-data) (:raw-label-normalized form-data))
           payload (cond-> {}
-                    (some? raw_label_normalized) (assoc :raw_label_normalized raw_label_normalized)
-                    (some? raw-label-normalized) (assoc :raw_label_normalized raw-label-normalized)
-                    (some? confidence) (assoc :confidence confidence))
+                    (some? raw-label) (assoc :raw_label raw-label)
+                    (some? raw-label-normalized) (assoc :raw_label_normalized raw-label-normalized))
           payload* (if (seq payload) payload (or form-data {}))]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] true)

@@ -83,11 +83,10 @@
     item
     {:entity-ns :expense-items
      :id-keys [:id]
-     :stringify-keys [:expense_id :article_id :raw_label_id]
+     :stringify-keys [:expense_id :alias_id]
      :alias-keys {:expense_id [:expense-id]
-                  :article_id [:article-id]
+                  :alias_id [:alias-id]
                   :raw_label [:raw-label]
-                  :raw_label_id [:raw-label-id]
                   :raw_label_normalized [:raw-label-normalized]
                   :qty [:qty]
                   :unit_price [:unit-price]
@@ -178,20 +177,9 @@
      :stringify-keys [:supplier_id :article_id]
      :alias-keys {:supplier_display_name [:supplier-display-name]
                   :article_canonical_name [:article-canonical-name]
+                  :raw_label [:raw-label]
                   :raw_label_normalized [:raw-label-normalized]
-                  :confidence [:confidence]
                   :created_at [:created-at]}}))
-
-(defn raw-label->template-entity
-  [raw-label]
-  (entity-utils/normalize-entity
-    raw-label
-    {:entity-ns :raw-labels
-     :id-keys [:id]
-     :alias-keys {:raw_label [:raw-label]
-                  :normalized_key [:normalized-key]
-                  :created_at [:created-at]
-                  :updated_at [:updated-at]}}))
 
 (defn price-observation->template-entity
   [obs]

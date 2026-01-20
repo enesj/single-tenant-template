@@ -7,7 +7,6 @@
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
-    [app.domain.backend.expenses.handlers.user-raw-labels :as user-raw-labels]
     [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
     [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
@@ -89,9 +88,6 @@
    ;; Expense items (power-user only)
    ["/expense-items" {:get {:handler (user-expenses-expense-items/list-expense-items-handler db)}}]
 
-  ;; Raw labels (power-user only; admin/owner)
-  ["/raw-labels" {:get {:handler (user-raw-labels/list-raw-labels-handler db)}}]
-
    ["/expense-items/:id"
     {:put {:handler (user-expenses-expense-items/update-expense-item-handler db)}
      :delete {:handler (user-expenses-expense-items/delete-expense-item-handler db)}}]
@@ -110,15 +106,15 @@
    ["/receipts/:id/review" {:post {:handler (user-receipts/save-receipt-review-handler db)}}]
    ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
 
-   ;; Articles + unmapped items (role-gated to admin/owner)
+  ;; Articles + unmapped aliases (role-gated to admin/owner)
    ;; IMPORTANT: Must come before the "/:id" expense route.
    ["/articles"
     ["" {:get {:handler (user-articles/list-articles-handler db)}
          :post {:handler (user-articles/create-article-handler db)}}]
 
-    ["/unmapped-items" {:get {:handler (user-articles/list-unmapped-items-handler db)}}]
+      ["/unmapped-aliases" {:get {:handler (user-articles/list-unmapped-aliases-handler db)}}]
 
-    ["/items/:item-id/map" {:post {:handler (user-articles/map-item-to-article-handler db)}}]
+      ["/aliases/:alias-id/map" {:post {:handler (user-articles/map-alias-to-article-handler db)}}]
 
     ["/:id/aliases" {:post {:handler (user-articles/batch-create-aliases-handler db)}}]
 

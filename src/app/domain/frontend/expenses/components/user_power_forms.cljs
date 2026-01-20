@@ -74,27 +74,25 @@
          :button-text "Save Article"}))))
 
 (def ^:private article-alias-edit-form-spec
-  [{:id :raw_label_normalized
+  [{:id :raw_label
     :type :text
-    :label "Alias"
+    :label "Raw label"
     :required true
     :placeholder "e.g. COFFEE BEANS 1KG"}
-   {:id :confidence
-    :type :number
-    :label "Confidence"
-    :required false
-    :step 0.01
-    :min 0
-    :max 1}])
+   {:id :raw_label_normalized
+    :type :text
+    :label "Normalized label"
+    :required true
+    :placeholder "e.g. coffee-beans-1kg"}])
 
 (defui user-article-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
         item (normalization/convert-db-keys->app-keys item)
         article-alias-id (id-utils/extract-entity-id item)
-        initial-values {:raw_label_normalized (or (:raw-label-normalized item)
-                                                "")
-                        :confidence (or (:confidence item) "")}]
+        initial-values {:raw_label (or (:raw-label item) "")
+            :raw_label_normalized (or (:raw-label-normalized item)
+                  "")}]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}

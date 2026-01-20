@@ -96,11 +96,6 @@
      :view :expense-items
      :controllers (controllers/make-simple-controller :page/init-expense-items)}]
 
-   ["/raw-labels"
-    {:name :expense-raw-labels
-     :view :expense-raw-labels
-     :controllers (controllers/make-simple-controller :page/init-expense-raw-labels)}]
-
    ["/articles"
     {:name :expense-articles
      :view :expense-articles

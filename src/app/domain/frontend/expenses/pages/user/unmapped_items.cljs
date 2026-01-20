@@ -9,5 +9,5 @@
   ($ page-guard/power-user-guard
     {:children ($ unmapped-items-panel
                  {:breadcrumbs [{:label "Dashboard" :href "/dashboard"}
-                                {:label "Unmapped Items"}]
-                  :title "Unmapped Items"})}))
+                                {:label "Unmapped Aliases"}]
+                  :title "Unmapped Aliases"})}))

@@ -8,11 +8,18 @@
   We reconcile these into the shape expected by the receipts workflow and persist
   results + derived guesses."
   (:require
+    [app.domain.backend.expenses.services.article-aliases :as aliases]
+    [app.domain.backend.expenses.services.articles :as articles]
+    [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
     [clojure.string :as str]
-    [malli.core :as m])
+    [malli.core :as m]
+    [taoensso.timbre :as log])
   (:import
     [java.sql Timestamp]))
 
@@ -89,6 +96,105 @@
         (sort-by :score)
         first
         :cand))))
+
+(defn- valid-alias-label?
+  [raw-label]
+  (let [raw-label* (some-> raw-label str str/trim)
+        normalized (articles/normalize-alias-label raw-label*)]
+    (and (not (str/blank? raw-label*))
+      (not (str/blank? normalized)))))
+
+(defn- resolve-supplier-id
+  [db supplier-guess]
+  (if (str/blank? (some-> supplier-guess str))
+    (aliases/get-unknown-supplier-id db)
+    (let [{:keys [supplier]} (suppliers/find-or-create-supplier! db (str/trim (str supplier-guess)))]
+      (:id supplier))))
+
+(defn- auto-create-aliases!
+  [db supplier-guess extraction]
+  (when (and (map? extraction) (sequential? (:items extraction)))
+    (let [supplier-id (resolve-supplier-id db supplier-guess)]
+      (doseq [{:keys [raw_label] :as _item} (:items extraction)]
+        (when (valid-alias-label? raw_label)
+          (aliases/find-or-create-alias! db supplier-id (str/trim (str raw_label))))))))
+
+(defn- resolve-payer-id
+  [db {:keys [payer_id user_id]}]
+  (or payer_id
+    (when user_id
+      (-> (user-expense-settings/get-user-expense-settings db user_id)
+        user-expense-settings/effective-settings
+        :default-payer-id))))
+
+(defn- resolve-purchased-at
+  [{:keys [purchased_at_guess created_at]}]
+  (or purchased_at_guess created_at))
+
+(defn- build-review-data
+  [supplier-id payer-id receipt extraction {:keys [default-currency]}]
+  (let [purchased-at (resolve-purchased-at receipt)
+        total-amount (:total_amount_guess receipt)
+        currency (or (:currency_guess receipt) default-currency "BAM")
+        items (vec (or (:items extraction) []))
+        notes (str "Extracted from receipt: "
+               (or (:original_filename receipt)
+                 (:storage_key receipt)
+                 "receipt"))]
+    {:supplier_id supplier-id
+     :payer_id payer-id
+     :purchased_at purchased-at
+     :total_amount total-amount
+     :currency currency
+     :notes notes
+     :items items}))
+
+(defn- mark-review-required!
+  [db receipt-id message]
+  (receipt-status/update-status!
+    db
+    receipt-id
+    "review_required"
+    {:error_message message
+     :error_details nil}))
+
+(defn- auto-approve-extracted-receipt!
+  [db receipt-id extraction opts]
+  (when-let [receipt (receipt-queries/get-receipt db receipt-id)]
+    (when (and (= "extracted" (:status receipt))
+            (nil? (:expense_id receipt)))
+      (let [supplier-id (resolve-supplier-id db (:supplier_guess receipt))
+            payer-id (resolve-payer-id db receipt)
+            review-data (build-review-data supplier-id payer-id receipt extraction opts)
+            {:keys [purchased_at total_amount items]} review-data]
+        (cond
+          (nil? payer-id)
+          {:status "review_required"
+           :error (mark-review-required! db receipt-id "Payer is required to auto-post receipt.")}
+
+          (nil? purchased_at)
+          {:status "review_required"
+           :error (mark-review-required! db receipt-id "Purchase date is required to auto-post receipt.")}
+
+          (nil? total_amount)
+          {:status "review_required"
+           :error (mark-review-required! db receipt-id "Total amount is required to auto-post receipt.")}
+
+          (empty? items)
+          {:status "review_required"
+           :error (mark-review-required! db receipt-id "Line items are required to auto-post receipt.")}
+
+          :else
+          (try
+            (if-let [user-id (:user_id receipt)]
+              (receipt-approval/approve-and-post-for-user! db user-id receipt-id review-data)
+              (receipt-approval/approve-and-post! db receipt-id review-data))
+            (log/info "Auto-posted extracted receipt" {:receipt-id receipt-id})
+            {:status "posted"}
+            (catch Exception e
+              (log/warn e "Failed to auto-post extracted receipt" {:receipt-id receipt-id})
+              {:status "review_required"
+               :error (mark-review-required! db receipt-id (or (.getMessage e) "Auto-post failed"))})))))))
 
 (defn reconcile-extraction-with-markdown
   "If provider extraction items don't match the OCR markdown labels, reconcile
@@ -167,9 +273,10 @@
 
                       (and (nil? (:total_amount_guess g)) markdown-total)
                       (assoc :total_amount_guess markdown-total))))
+        supplier-guess (or (:supplier_guess guesses) markdown-supplier)
         status (if (and valid-shape? guesses (not (review-required? guesses)))
-                 "extracted"
-                 "review_required")
+           "extracted"
+           "review_required")
         raw-extract-json (cond-> {:provider "mistral"
                                   :received_at (:received-at extract-result)
                                   :model (:model extract-result)
@@ -189,4 +296,15 @@
                               :currency_guess
                               :purchased_at_guess])))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
-    {:receipt-id receipt-id :stage :extract :result :ok :status status}))
+    (try
+      (auto-create-aliases! db supplier-guess extraction)
+      (catch Exception e
+        (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
+    (let [auto-res (when (= status "extracted")
+                     (try
+                       (auto-approve-extracted-receipt! db receipt-id extraction opts)
+                       (catch Exception e
+                         (log/warn e "Failed during auto-approve flow" {:receipt-id receipt-id})
+                         nil)))
+          final-status (or (:status auto-res) status)]
+      {:receipt-id receipt-id :stage :extract :result :ok :status final-status})))

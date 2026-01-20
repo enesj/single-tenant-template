@@ -94,9 +94,9 @@
             ($ utils/related-table
               {:title "Article Aliases"
                :rows aliases
-               :columns [{:label "Alias" :value-fn #(:raw-label-normalized %)}
+               :columns [{:label "Raw Label" :value-fn #(:raw-label %)}
                          {:label "Article" :value-fn #(:article-canonical-name %)}
-                         {:label "Confidence" :value-fn #(:confidence %)}]
+                         {:label "Normalized" :value-fn #(:raw-label-normalized %)}]
                :empty-label "No article aliases for this supplier."
                :view-all-href (when supplier-id
                                 (str "/admin/article-aliases?supplier_id=" supplier-id))

@@ -130,31 +130,22 @@
       (is (= :get (req-method req)))
       (is (= "/api/v1/expenses/receipts?limit=500&offset=0" (req-uri req))))))
 
-(deftest fetch-raw-labels-uses-expenses-api
-  (testing "user-expenses/fetch-raw-labels uses /api/v1/expenses/raw-labels"
-    (reset-db!)
-
-    (rf/dispatch-sync [:user-expenses/fetch-raw-labels])
-
-    (let [req (last-http-request)]
-      (is (= :get (req-method req)))
-      (is (= "/api/v1/expenses/raw-labels" (req-uri req)))
-      (is (= {:limit 200 :offset 0}
-        (select-keys (req-params req) [:limit :offset]))))))
-
 (deftest upload-receipt-sends-file-in-formdata
   (testing "upload-receipt sends multipart file (guards against trim-v arg loss)"
     (reset-db!)
     (let [file (js/File. #js ["abc"] "r.jpg" #js {:type "image/jpeg"})]
+      (rf/dispatch-sync [:user-expenses/set-upload-payer-id "payer-1"])
       (rf/dispatch-sync [:user-expenses/upload-receipt file])
       (let [req (last-http-request)
             body (req-body req)
-            uploaded (.get body "file")]
+            uploaded (.get body "file")
+            payer-id (.get body "payer_id")]
         (is (= :post (req-method req)))
         (is (string? (req-uri req)))
         (is (instance? js/FormData body))
         (is (instance? js/File uploaded))
         (is (= "r.jpg" (.-name uploaded)))
+        (is (= "payer-1" payer-id))
         (is (not (true? (req-format-content-type req))))))))
 
 (deftest upload-receipt-success-queues-ocr
@@ -183,15 +174,18 @@
     (reset-db!)
     (let [f1 (js/File. #js ["a"] "a.jpg" #js {:type "image/jpeg"})
           f2 (js/File. #js ["b"] "b.jpg" #js {:type "image/jpeg"})]
+  (rf/dispatch-sync [:user-expenses/set-upload-payer-id "payer-xyz"])
       (rf/dispatch-sync [:user-expenses/upload-receipts [f1 f2]])
 
       (is (= 1 (count @captured-http-requests)))
       (let [req1 (last-http-request)
             body1 (req-body req1)
-            uploaded1 (.get body1 "file")]
+            uploaded1 (.get body1 "file")
+            payer1 (.get body1 "payer_id")]
         (is (= :post (req-method req1)))
         (is (instance? js/FormData body1))
         (is (instance? js/File uploaded1))
+        (is (= "payer-xyz" payer1))
         (is (= "a.jpg" (.-name uploaded1))))
 
       ;; simulate success -> triggers next request
@@ -200,9 +194,11 @@
       (is (= 2 (count @captured-http-requests)))
       (let [req2 (last-http-request)
             body2 (req-body req2)
-            uploaded2 (.get body2 "file")]
+            uploaded2 (.get body2 "file")
+            payer2 (.get body2 "payer_id")]
         (is (instance? js/FormData body2))
         (is (instance? js/File uploaded2))
+        (is (= "payer-xyz" payer2))
         (is (= "b.jpg" (.-name uploaded2))))
 
       (rf/dispatch-sync [:user-expenses/upload-receipts-success [] {:data {:id "rec-2"}}])
