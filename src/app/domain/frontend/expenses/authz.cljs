@@ -26,8 +26,7 @@
    :expenses/expense.write   2  ; member+
    :expenses/expense.delete  3  ; admin+
   :expenses/expense-items.manage 3 ; admin+ (power-user line items page)
-   :expenses/reference.write 2  ; member+ (suppliers, payers)
-   :expenses/reference.purge 3  ; admin+ (permanent delete)
+  :expenses/reference.write 2  ; member+ (suppliers, payers)
    :expenses/unmapped.access 3  ; admin+
    :expenses/articles.manage 3  ; admin+
    :expenses/danger.execute  3  ; admin+ (danger zone actions)

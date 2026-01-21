@@ -87,16 +87,7 @@
 (rf/reg-sub
   :user-expenses/suppliers
   (fn [db _]
-    (let [items (or (get-in db [:user-expenses :suppliers :items]) [])]
-      (->> items
-        (remove (fn [s]
-                  (some? (:archived-at s))))
-        vec))))
-
-(rf/reg-sub
-  :user-expenses/suppliers-include-archived?
-  (fn [db _]
-    (true? (get-in db [:user-expenses :suppliers :include-archived?]))))
+    (get-in db [:user-expenses :suppliers :items])))
 
 ;; Supplier detail (used by the user suppliers modal)
 (rf/reg-sub

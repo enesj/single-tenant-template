@@ -1,8 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.entity-actions
   (:require
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
-    [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
-    [app.template.frontend.components.action-components :refer [delete-icon view-details-icon]]
+    [app.template.frontend.components.action-components :refer [view-details-icon]]
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
@@ -36,27 +35,13 @@
 
 (defui admin-suppliers-actions
   [{:keys [suppliers]}]
-  (let [current-admin-role (use-subscribe [:admin/current-user-role])]
-    (when suppliers
-      (let [item-id (id-utils/extract-entity-id suppliers)
-            supplier-id-str (some-> item-id str)
-            archived? (some? (:archived-at suppliers))
-            can-purge? (and archived?
-                           (contains? #{:admin :owner} current-admin-role))
-            actions (cond-> (view-detail-actions "suppliers" suppliers)
-                      can-purge?
-                      (conj {:group-title "Danger"
-                             :items [{:id "purge-permanently"
-                                      :icon ($ delete-icon)
-                                      :label "Purge permanently"
-                                      :variant :error
-                                      :on-click (fn [e]
-                                                  (.stopPropagation e)
-                                                  (rf/dispatch [::suppliers-events/open-purge-confirm supplier-id-str]))}]}))]
-        ($ dropdown/action-dropdown
-          {:entity-id item-id
-           :actions actions
-           :position :portal})))))
+  (when suppliers
+    (let [item-id (id-utils/extract-entity-id suppliers)
+          actions (view-detail-actions "suppliers" suppliers)]
+      ($ dropdown/action-dropdown
+        {:entity-id item-id
+         :actions actions
+         :position :portal}))))
 
 (defui admin-articles-actions
   [{:keys [articles]}]

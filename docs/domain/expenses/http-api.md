@@ -12,15 +12,13 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ## Admin API (mounted at `/admin/api/expenses`)
 
 ### Suppliers
-- `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by). Query: `include_archived=true` to include archived suppliers.
+- `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by).
 - `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
-- `GET /admin/api/expenses/suppliers/count` – total (optional `search`, `include_archived`).
-- `GET /admin/api/expenses/suppliers/search?q=...` – autocomplete (optional `include_archived`).
+- `GET /admin/api/expenses/suppliers/count` – total (optional `search`).
+- `GET /admin/api/expenses/suppliers/search?q=...` – autocomplete.
 - `GET /admin/api/expenses/suppliers/:id` – fetch.
 - `PUT /admin/api/expenses/suppliers/:id` – update.
-- `DELETE /admin/api/expenses/suppliers/:id` – **archive** supplier (idempotent; soft delete via `archived_at`).
-- `GET /admin/api/expenses/suppliers/:id/purge-preview` – preview purge impact (**admin/owner only**).
-- `POST /admin/api/expenses/suppliers/:id/purge` – permanently delete supplier (**admin/owner only**; requires supplier archived and no active expenses).
+- `DELETE /admin/api/expenses/suppliers/:id` – delete supplier (hard delete; returns `409` if referenced by expenses).
 
 ### Payers
 - `GET /admin/api/expenses/payers` – list (optional `type`).
@@ -54,7 +52,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `POST /admin/api/expenses/entries` – create expense with `items`.
 - `GET /admin/api/expenses/entries/:id` – fetch with items.
 - `PUT /admin/api/expenses/entries/:id` – update expense fields.
-- `DELETE /admin/api/expenses/entries/:id` – soft delete.
+- `DELETE /admin/api/expenses/entries/:id` – delete expense (hard delete).
 
 ### Expense Items (new 2025-12-25)
 - `GET /admin/api/expenses/expense-items` – list expense items with pagination and filters.
@@ -62,7 +60,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /admin/api/expenses/expense-items/count` – total count with optional search.
 - `GET /admin/api/expenses/expense-items/:id` – fetch single expense item.
 - `PUT /admin/api/expenses/expense-items/:id` – update expense item (e.g. `raw_label` or `alias_id`, `qty`, `unit_price`, `line_total`).
-- `DELETE /admin/api/expenses/expense-items/:id` – delete expense item.
+- `DELETE /admin/api/expenses/expense-items/:id` – delete expense item (hard delete).
 
 ### Articles / Price History
 - `GET /admin/api/expenses/articles` – list/search.
@@ -113,18 +111,14 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 ### Export & Danger Zone
 - `GET /api/v1/expenses/export` – export user expenses (currently `format=csv` supported).
-- `DELETE /api/v1/expenses/all` – soft-delete all user expenses (**admin/owner only**; requires confirmation token `DELETE_ALL_EXPENSES`).
+- `DELETE /api/v1/expenses/all` – hard-delete all user expenses (**admin/owner only**; requires confirmation token `DELETE_ALL_EXPENSES`).
 
 ### Reference Data (shared catalog)
 - `GET /api/v1/expenses/suppliers` – list suppliers.
 - `POST /api/v1/expenses/suppliers` – create supplier (role-gated to `member|admin`).
 - `GET /api/v1/expenses/suppliers/:id` – fetch supplier.
 - `PUT /api/v1/expenses/suppliers/:id` – update supplier (role-gated to `member|admin`).
-- `DELETE /api/v1/expenses/suppliers/:id` – archive supplier (role-gated to `member|admin`).
-
-**Supplier purge (hard delete; admin/owner only)**
-- `GET /api/v1/expenses/suppliers/:id/purge-preview` – preview purge impact (**admin/owner only**).
-- `POST /api/v1/expenses/suppliers/:id/purge` – permanently delete supplier (**admin/owner only**; requires supplier archived and no active expenses).
+- `DELETE /api/v1/expenses/suppliers/:id` – delete supplier (hard delete; may return `409` when expenses exist).
 
 **Supplier detail lists (used by supplier detail UI)**
 - `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier).

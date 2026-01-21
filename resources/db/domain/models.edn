@@ -85,7 +85,7 @@
  :expenses {:fields [[:id :uuid {:primary-key true}]
                      [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]  ;; User who owns this expense
                      [:receipt_id :uuid {:foreign-key :receipts/id :on-delete :set-null}]
-                     [:supplier_id :uuid {:foreign-key :suppliers/id :null false}]
+                     [:supplier_id :uuid {:foreign-key :suppliers/id :null false :on-delete :restrict}]
                      [:payer_id :uuid {:foreign-key :payers/id :null false}]
                      [:purchased_at :timestamptz {:null false}]
                      [:total_amount [:decimal 12 2] {:null false}]

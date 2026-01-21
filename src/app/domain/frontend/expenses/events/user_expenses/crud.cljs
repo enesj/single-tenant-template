@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.events.user-expenses.crud
   "User expense CRUD events."
   (:require
+    [ajax.core :as ajax]
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
@@ -130,7 +131,41 @@
            {:method :get
             :uri (lookup-uri endpoints/suppliers-endpoint)
             :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
-            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}
+
+    ;; IMPORTANT: User-facing suppliers are served by the expenses user API.
+    ;; The template batch delete action dispatches template CRUD delete events
+    ;; which would otherwise hit /api/v1/entities/suppliers/:id (blocked by
+    ;; deny-by-default entity access).
+    :delete
+    {:request
+     (fn [{:keys [db]} entity-type id default-effect]
+       (let [id* (str id)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio
+           (http/api-request
+             {:method :delete
+              :uri (str endpoints/suppliers-endpoint "/" id*)
+              :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
+              :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
+
+     :on-success
+     (fn [{:keys [db]} entity-type id _default-effect]
+       (let [id* (str id)
+             existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
+             remaining-ids (vec (remove #(= % id*) existing-ids))
+             db* (-> db
+                   (assoc-in (paths/entity-loading? entity-type) false)
+                   (assoc-in (paths/entity-error entity-type) nil)
+                   (update-in (paths/entity-data entity-type) dissoc id*)
+                   (assoc-in (paths/entity-ids entity-type) remaining-ids)
+                   (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
+                   (update-in (paths/list-total-items entity-type) (fn [n]
+                                                                     (if (number? n)
+                                                                       (max 0 (dec n))
+                                                                       n))))]
+         {:db db*}))}}})
 
 (crud-bridges/register-crud-bridge!
   {:entity-key :receipts
@@ -346,6 +381,7 @@
                    {:method :delete
                     :uri (str endpoints/list-endpoint "/" expense-id)
                     :admin-uri (str endpoints/admin-expenses-endpoint "/" expense-id)
+                    :response-format (ajax/text-response-format)
                     :on-success [:user-expenses/delete-expense-success]
                     :on-failure [:user-expenses/delete-expense-failure]})}))
 

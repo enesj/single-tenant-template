@@ -18,13 +18,11 @@
   [{:keys [supplier-id]}]
   (let [supplier (use-subscribe [:expenses/supplier supplier-id])
         loading? (use-subscribe [:expenses/supplier-detail-loading?])
-        error (use-subscribe [:expenses/suppliers-error])
-  archiving? (use-subscribe [:expenses/supplier-archive-loading?])
+          error (use-subscribe [:expenses/suppliers-error])
+        deleting? (use-subscribe [:expenses/supplier-delete-loading?])
         expenses (use-subscribe [:expenses/entries])
         aliases (use-subscribe [:expenses/article-aliases])
     observations (use-subscribe [:expenses/price-observations])
-    archived-at (some-> supplier :archived-at)
-    archived? (some? archived-at)
     supplier-id-str (some-> supplier-id str)]
     (use-effect
       (fn []
@@ -55,28 +53,21 @@
             (utils/label-value "Normalized Key" (:normalized-key supplier))
             (utils/label-value "Address" (:address supplier))
             (utils/label-value "Created At" (shared/format-date (:created-at supplier)))
-            (utils/label-value "Archived At" (when archived-at (shared/format-date archived-at)))
             (utils/label-value "ID" (:id supplier)))
 
           ($ :div {:class "flex flex-wrap items-center gap-2"}
-            (cond
-              archived?
-              ($ :span {:class "text-xs text-base-content/60"}
-                "Archived")
-
-              :else
-              ($ button
-                {:id (str "btn-archive-suppliers-" supplier-id-str)
-                 :btn-type :warning
-                 :loading archiving?
-                 :disabled archiving?
-                 :on-click (fn []
-                             (confirm-dialog/show-confirm
-                               {:title "Archive supplier"
-                                :message "Archive this supplier? You can still purge it later from the suppliers list actions menu (admin-only)."
-                                :danger? true
-                                :on-confirm #(rf/dispatch [::suppliers-events/archive-supplier supplier-id-str])}))}
-                "Archive supplier")))
+            ($ button
+              {:id (str "btn-delete-suppliers-" supplier-id-str)
+               :btn-type :danger
+               :loading deleting?
+               :disabled deleting?
+               :on-click (fn []
+                           (confirm-dialog/show-confirm
+                             {:title "Delete supplier"
+                              :message "Delete this supplier? This cannot be undone."
+                              :danger? true
+                              :on-confirm #(rf/dispatch [::suppliers-events/delete-supplier supplier-id-str])}))}
+              "Delete supplier"))
 
           ($ :div {:class "grid gap-4 lg:grid-cols-3"}
             ($ utils/related-table

@@ -23,12 +23,10 @@
    :required-fields [:display_name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (get-param qp :search)
-                           :include_archived (utils/parse-boolean-param qp :include_archived)})
-   :custom-count-params (fn [qp]
-                         {:search (get-param qp :search)
-                          :include_archived (utils/parse-boolean-param qp :include_archived)})})
+  :custom-query-params (fn [qp]
+                  {:search (get-param qp :search)})
+  :custom-count-params (fn [qp]
+                 {:search (get-param qp :search)})})
 
 (def payer-config
   {:entity-key :payer

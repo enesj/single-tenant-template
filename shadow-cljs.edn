@@ -5,7 +5,7 @@
  :devtools {:http-port 9650
             :http-host "localhost"}
 
- :source-paths ["src" "resources/db"]
+ :source-paths ["src" "test" "resources/db"]
 
  :builds
  {:app

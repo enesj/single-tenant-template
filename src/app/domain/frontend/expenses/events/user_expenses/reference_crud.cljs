@@ -4,16 +4,15 @@
   These events call the user-scoped expenses endpoints (\"/api/v1/expenses/*\")
   and refresh the shared entity store via the existing lookup fetch events."
   (:require
+    [ajax.core :as ajax]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
-    [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.shared.crud.success :as crud-success]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [taoensso.timbre :as log]
-    [uix.core :refer [$]]))
+    [taoensso.timbre :as log]))
 
 (rf/reg-event-db
   :user-expenses/clear-form-error
@@ -118,6 +117,7 @@
                    {:method :delete
                     :uri (str endpoints/suppliers-endpoint "/" supplier-id)
                     :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id)
+                    :response-format (ajax/text-response-format)
                     :on-success [:user-expenses/delete-supplier-success]
                     :on-failure [:user-expenses/delete-supplier-failure]})}))
 
@@ -137,144 +137,6 @@
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
-
-;; ---------------------------------------------------------------------------
-;; Suppliers: purge (hard delete)
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-fx
-  :user-expenses/open-purge-supplier-confirm
-  common-interceptors
-  (fn [{:keys [db]} [supplier-id]]
-    {:db (-> db
-           (assoc-in [:user-expenses :suppliers :purge :loading?] true)
-           (assoc-in [:user-expenses :suppliers :purge :error] nil)
-           (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (x/xhrio db
-                   {:method :get
-                    :uri (str endpoints/suppliers-endpoint "/" supplier-id "/purge-preview")
-                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id "/purge-preview")
-                    :on-success [:user-expenses/open-purge-supplier-confirm-success supplier-id]
-                    :on-failure [:user-expenses/open-purge-supplier-confirm-failure]})}))
-
-(rf/reg-event-fx
-  :user-expenses/open-purge-supplier-confirm-success
-  common-interceptors
-  (fn [{:keys [db]} [_supplier-id response]]
-    (let [preview (:preview response)
-          can-purge? (true? (:can-purge? preview))
-          active-expenses (long (or (:active-expenses preview) 0))
-          soft-expenses-total (long (or (:soft-deleted-expenses-total preview) 0))
-          soft-items-total (long (or (:soft-deleted-expense-items-total preview) 0))
-          soft-expenses (vec (or (:soft-deleted-expenses preview) []))
-          truncated? (true? (:soft-deleted-expenses-truncated? preview))]
-      (cond
-        (not can-purge?)
-        {:db (-> db
-               (assoc-in [:user-expenses :suppliers :purge :loading?] false)
-               (assoc-in [:user-expenses :suppliers :purge :error] nil)
-               (assoc-in [:user-expenses :form :error]
-                 (cond
-                   (pos? active-expenses) (str "Cannot purge supplier: it has " active-expenses " active expense(s).")
-                   :else "Cannot purge supplier. It must be archived and must not have active expenses.")))}
-
-        :else
-        (let [soft-expenses-lines
-              (when (seq soft-expenses)
-                (str/join
-                  "\n"
-                  (for [{:keys [id purchased-at total-amount currency expense-items-count]} soft-expenses]
-                    (str "- "
-                      (or purchased-at "(unknown date)")
-                      " • "
-                      total-amount
-                      " "
-                      currency
-                      " • "
-                      expense-items-count
-                      " item(s)"
-                      " • "
-                      id))))
-              warning
-              (when (pos? soft-expenses-total)
-                ($ :div {:class "ds-alert ds-alert-warning"}
-                  ($ :div {}
-                    ($ :div {:class "font-semibold"}
-                      "Soft-deleted expenses will also be purged")
-                    ($ :div {:class "text-xs opacity-80"}
-                      (str soft-expenses-total " soft-deleted expense(s) and "
-                        soft-items-total " line item(s) will be permanently deleted together with the supplier."))
-                    (when soft-expenses-lines
-                      ($ :pre {:class "mt-2 text-xs max-h-40 overflow-auto whitespace-pre-wrap"}
-                        soft-expenses-lines))
-                    (when truncated?
-                      ($ :div {:class "mt-2 text-xs opacity-70"}
-                        "List truncated. Use Expenses search if you need the full list.")))))
-              message
-              ($ :div {:class "space-y-3 text-sm text-base-content text-left"}
-                ($ :p nil "This will permanently delete the supplier. This cannot be undone.")
-                warning)]
-          {:db (-> db
-                 (assoc-in [:user-expenses :suppliers :purge :loading?] false)
-                 (assoc-in [:user-expenses :suppliers :purge :error] nil))
-           :dispatch
-           [::confirm-dialog/open-confirm-dialog
-            {:title "Purge supplier permanently"
-             :confirm-text "Purge permanently"
-             :cancel-text "Cancel"
-             :message message
-             :on-confirm (fn []
-                           (rf/dispatch [:user-expenses/purge-supplier (:supplier-id preview)]))}]})))))
-
-(rf/reg-event-db
-  :user-expenses/open-purge-supplier-confirm-failure
-  common-interceptors
-  (fn [db [error]]
-    (let [msg (http/extract-error-message error)]
-      (-> db
-        (assoc-in [:user-expenses :suppliers :purge :loading?] false)
-        (assoc-in [:user-expenses :suppliers :purge :error] msg)
-        (assoc-in [:user-expenses :form :error] msg)))))
-
-(rf/reg-event-fx
-  :user-expenses/purge-supplier
-  common-interceptors
-  (fn [{:keys [db]} [supplier-id]]
-    {:db (-> db
-           (assoc-in [:user-expenses :suppliers :purge :loading?] true)
-           (assoc-in [:user-expenses :suppliers :purge :error] nil)
-           (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (x/xhrio db
-                   {:method :post
-                    :uri (str endpoints/suppliers-endpoint "/" supplier-id "/purge")
-                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id "/purge")
-                    :params {}
-                    :on-success [:user-expenses/purge-supplier-success supplier-id]
-                    :on-failure [:user-expenses/purge-supplier-failure]})}))
-
-(rf/reg-event-fx
-  :user-expenses/purge-supplier-success
-  common-interceptors
-  (fn [{:keys [db]} [_supplier-id _response]]
-    {:db (-> db
-           (assoc-in [:user-expenses :suppliers :purge :loading?] false)
-           (assoc-in [:user-expenses :suppliers :purge :error] nil)
-           (assoc-in [:user-expenses :form :loading?] false)
-           (assoc-in [:user-expenses :form :error] nil))
-     :dispatch-n [[:user-expenses/fetch-suppliers]
-                  [:app.template.frontend.events.messages/show-success
-                   "Supplier purged"
-                   "Supplier purged permanently."]]}))
-
-(rf/reg-event-db
-  :user-expenses/purge-supplier-failure
-  common-interceptors
-  (fn [db [error]]
-    (let [msg (http/extract-error-message error)]
-      (-> db
-        (assoc-in [:user-expenses :suppliers :purge :loading?] false)
-        (assoc-in [:user-expenses :suppliers :purge :error] msg)
-        (assoc-in [:user-expenses :form :error] msg)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Payers

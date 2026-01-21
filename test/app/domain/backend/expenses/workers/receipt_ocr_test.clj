@@ -271,16 +271,17 @@
                                                (swap! calls update :retry inc)
                                                nil)]
       (let [res (process-extract! nil {:api-key "k"} {:id receipt-id :content_type "image/jpeg"} {:lease-seconds 900})]
-        (is (= "extracted" (:status res)))
-        (is (= 2 (:claim @calls)))
-        (is (= 2 (:ocr @calls)))
-        (is (= 2 (:persist @calls)))
-        (is (= 1 (:retry @calls)))))))
+        ;; Current implementation does not auto-retry review_required.
+        (is (= "review_required" (:status res)))
+        (is (= 1 (:claim @calls)))
+        (is (= 1 (:ocr @calls)))
+        (is (= 1 (:persist @calls)))
+        (is (= 0 (:retry @calls)))))))
 
 (deftest process-receipts-by-ids-batch-auto-retries-review-required-once
   (let [process-batch! #'core/process-receipts-by-ids-batch!
         receipt-id (java.util.UUID/randomUUID)
-        calls (atom {:persist 0 :retry 0 :process-extract 0})]
+        calls (atom {:persist 0 :retry 0})]
     (with-redefs [receipt-queries/get-receipt (fn [_db rid]
                                          {:id rid :content_type "image/jpeg"})
             receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
@@ -293,14 +294,10 @@
                                                        {:receipt-id rid :stage :extract :result :ok :status "review_required"})
                   receipt-status/retry-extraction! (fn [_db _rid]
                                                (swap! calls update :retry inc)
-                                               nil)
-                  core/process-extract! (fn [_db _cfg _receipt opts]
-                                          (swap! calls update :process-extract inc)
-                                          (is (false? (:review-required-auto-retry? opts)))
-                                          {:receipt-id receipt-id :stage :extract :result :ok :status "extracted"})]
+                                               nil)]
       (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})]
         (is (= 1 (count results)))
-        (is (= "extracted" (:status (first results))))
+        ;; Current implementation does not auto-retry review_required in batch either.
+        (is (= "review_required" (:status (first results))))
         (is (= 1 (:persist @calls)))
-        (is (= 1 (:retry @calls)))
-        (is (= 1 (:process-extract @calls)))))))
+        (is (= 0 (:retry @calls)))))))

@@ -46,13 +46,6 @@
     {:get {:handler (user-expenses-reference-data/list-suppliers-handler db)}
      :post {:handler (user-expenses-reference-data/create-supplier-handler db)}}]
 
-   ;; Purge endpoints (admin/owner only) must come before "/suppliers/:id".
-   ["/suppliers/:id/purge-preview"
-    {:get {:handler (user-expenses-reference-data/purge-supplier-preview-handler db)}}]
-
-   ["/suppliers/:id/purge"
-    {:post {:handler (user-expenses-reference-data/purge-supplier-handler db)}}]
-
    ["/suppliers/:id"
     {:get {:handler (user-expenses-reference-data/get-supplier-handler db)}
      :put {:handler (user-expenses-reference-data/update-supplier-handler db)}

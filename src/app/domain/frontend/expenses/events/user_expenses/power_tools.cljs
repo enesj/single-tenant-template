@@ -4,6 +4,7 @@
   These pages are rendered in the app build (not the admin panel) and are
   role-gated in the UI + backend."
   (:require
+    [ajax.core :as ajax]
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
@@ -243,6 +244,7 @@
                    {:method :delete
                     :uri (str endpoints/expense-items-endpoint "/" expense-item-id)
                     :admin-uri (str endpoints/admin-expense-items-endpoint "/" expense-item-id)
+                    :response-format (ajax/text-response-format)
                     :on-success [:user-expenses/delete-expense-item-success]
                     :on-failure [:user-expenses/delete-expense-item-failure]})}))
 

@@ -8,7 +8,6 @@
 (defn- base-where
   [{:keys [from to]}]
   (cond-> [:and
-           [:is :deleted_at nil]
            [:= :is_posted true]]
     from (conj [:>= :purchased_at from])
     to (conj [:<= :purchased_at to])))

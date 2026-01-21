@@ -65,7 +65,7 @@
       (is (= (:id expense) (:expense_id stored)))
       (is (= 1 (count (:items expense)))))))
 
-(deftest receipts-soft-delete-expense-reverts-receipt
+(deftest receipts-delete-expense-reverts-receipt
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier" {}))
           payer (th/create-payer! db {:type "cash" :label "Cash"})
@@ -84,13 +84,13 @@
       (is (= "posted" (:status posted)))
       (is (= (:id expense) (:expense_id posted)))
 
-      (expenses/soft-delete-expense! db (:id expense))
+      (expenses/delete-expense! db (:id expense))
 
       (let [after (receipt-queries/get-receipt db receipt-id)]
         (is (= "extracted" (:status after)))
         (is (nil? (:expense_id after)))))))
 
-(deftest receipts-soft-delete-expense-clears-link-even-if-receipt-already-reverted
+(deftest receipts-delete-expense-clears-link-even-if-receipt-already-reverted
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier (reverted receipt)" {}))
           payer (th/create-payer! db {:type "cash" :label "Cash"})
@@ -111,7 +111,7 @@
         (is (= "extracted" (:status before)))
         (is (= (:id expense) (:expense_id before))))
 
-      (expenses/soft-delete-expense! db (:id expense))
+      (expenses/delete-expense! db (:id expense))
 
       (let [after (receipt-queries/get-receipt db receipt-id)]
         (is (= "extracted" (:status after)))
@@ -120,35 +120,6 @@
       (is (= receipt-id (:id (receipt-queries/delete-receipt! db receipt-id))))
       (is (nil? (receipt-queries/get-receipt db receipt-id))))))
 
-(deftest receipts-delete-allows-stale-expense-link-when-expense-soft-deleted
-  (when-let [db fixtures/*test-db*]
-    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "DeleteReceipt stale expense link " (UUID/randomUUID)) {}))
-          payer (th/create-payer! db {:type "cash" :label "Cash"})
-          upload (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/r-del-stale-" (UUID/randomUUID) ".jpg")
-                                                      :bytes (.getBytes (str "del-stale-" (UUID/randomUUID)))})
-          receipt-id (:id (:receipt upload))
-          _ (receipt-status/update-status! db receipt-id "extracted")
-          review {:supplier_id (:id supplier)
-                  :payer_id (:id payer)
-                  :purchased_at (now)
-                  :total_amount (bigdec "10.00")
-                  :currency "BAM"
-                  :items [{:raw_label "Item" :line_total (bigdec "10.00")}]}
-          expense (receipt-approval/approve-and-post! db receipt-id review)]
-      (receipt-status/update-status! db receipt-id "extracted")
-
-      (expenses/soft-delete-expense! db (:id expense))
-
-      (jdbc/execute! db
-        (hsql/format {:update :receipts
-                      :set {:expense_id (:id expense)}
-                      :where [:= :id receipt-id]}))
-
-      (let [stale (receipt-queries/get-receipt db receipt-id)]
-        (is (= (:id expense) (:expense_id stale))))
-
-      (is (= receipt-id (:id (receipt-queries/delete-receipt! db receipt-id))))
-      (is (nil? (receipt-queries/get-receipt db receipt-id))))))
 
 (deftest receipts-approve-does-not-move-local-receipt-file
   (when-let [db fixtures/*test-db*]

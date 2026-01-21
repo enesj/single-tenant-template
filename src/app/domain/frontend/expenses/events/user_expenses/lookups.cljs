@@ -14,23 +14,11 @@
 ;; Suppliers
 ;; ---------------------------------------------------------------------------
 
-(rf/reg-event-db
-  :user-expenses/set-suppliers-include-archived
-  common-interceptors
-  (fn [db [include-archived?]]
-    (assoc-in db [:user-expenses :suppliers :include-archived?] (boolean include-archived?))))
-
 (rf/reg-event-fx
   :user-expenses/fetch-suppliers
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [stored-include-archived? (true? (get-in db [:user-expenses :suppliers :include-archived?]))
-          params* (if (map? params) params {})
-          include-archived? (if (contains? params* :include_archived)
-                              (true? (:include_archived params*))
-                              stored-include-archived?)
-          request-params (cond-> (dissoc params* :include_archived)
-                           include-archived? (assoc :include_archived true))]
+    (let [params* (if (map? params) params {})]
       {:db (-> db
              (assoc-in [:user-expenses :suppliers :loading?] true)
              (assoc-in [:user-expenses :suppliers :error] nil))
@@ -38,7 +26,7 @@
                      {:method :get
                       :uri endpoints/suppliers-endpoint
                       :admin-uri endpoints/admin-suppliers-endpoint
-                      :params (when (seq request-params) request-params)
+                      :params (when (seq params*) params*)
                       :on-success [:user-expenses/fetch-suppliers-success]
                       :on-failure [:user-expenses/fetch-suppliers-failure]})})))
 

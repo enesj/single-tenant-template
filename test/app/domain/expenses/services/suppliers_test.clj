@@ -12,10 +12,6 @@
 
 (use-fixtures :each fixtures/with-transaction-rollback)
 
-(defn- unique-supplier-name
-  []
-  (str "Purge Test Supplier " (java.util.UUID/randomUUID)))
-
 (deftest suppliers-normalization-and-dedupe-test
   (testing "normalize-supplier-key trims, lowercases, strips punctuation"
     (is (= "dm-drogerie" (suppliers/normalize-supplier-key "  DM Drogerie!  "))))
@@ -25,84 +21,38 @@
             second (suppliers/find-or-create-supplier! db "  bingo-centar " {})]
         (is (= (:id (:supplier first)) (:id (:supplier second))))))))
 
-(deftest purge-supplier-blocked-when-active-expenses-test
-  (testing "purge is blocked when supplier has active expenses"
+(deftest delete-supplier-blocked-when-expenses-exist
+  (testing "delete is blocked when supplier has expenses (FK RESTRICT)"
     (when-let [db fixtures/*test-db*]
-      (let [supplier-name (unique-supplier-name)
+      (let [supplier-name (str "Delete Supplier Blocked " (java.util.UUID/randomUUID))
             {:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-name {})
             supplier-id (:id supplier)
-        payer (th/create-payer! db {:type "cash" :label "Cash"})
-            _expense (expenses/create-expense!
-                       db
-                       {:supplier_id supplier-id
-                        :payer_id (:id payer)
-                        :purchased_at (java.time.Instant/now)
-                        :total_amount 10M
-                        :currency "BAM"
-                        :items [{:raw_label "Milk" :line_total 10M}]})]
+            payer (th/create-payer! db {:type "cash" :label "Cash"})]
+        (expenses/create-expense!
+          db
+          {:supplier_id supplier-id
+           :payer_id (:id payer)
+           :purchased_at (java.time.Instant/now)
+           :total_amount 10M
+           :currency "BAM"
+           :items [{:raw_label "Milk" :line_total 10M}]})
 
-        (is (true? (suppliers/delete-supplier! db supplier-id)))
+        (try
+          (suppliers/delete-supplier! db supplier-id)
+          (is false "Expected delete to fail due to FK restrict")
+          (catch org.postgresql.util.PSQLException e
+            (is (= "23503" (.getSQLState e)))))))))
 
-        (let [preview (suppliers/purge-supplier-preview db supplier-id)]
-          (is (true? (:archived? preview)))
-          (is (= 1 (:active-expenses preview)))
-          (is (false? (:can-purge? preview))))
-
-        (is (thrown-with-msg?
-              clojure.lang.ExceptionInfo
-              #"active expenses"
-              (suppliers/purge-supplier! db supplier-id)))))))
-
-(deftest purge-supplier-succeeds-after-soft-delete-test
-  (testing "purge succeeds when supplier is archived and only soft-deleted expenses reference it"
+(deftest delete-supplier-succeeds-without-expenses
+  (testing "delete succeeds when supplier has no expenses"
     (when-let [db fixtures/*test-db*]
-      (let [supplier-name (unique-supplier-name)
+      (let [supplier-name (str "Delete Supplier OK " (java.util.UUID/randomUUID))
             {:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-name {})
             supplier-id (:id supplier)
-        payer (th/create-payer! db {:type "cash" :label "Cash"})
-            expense (expenses/create-expense!
-                      db
-                      {:supplier_id supplier-id
-                       :payer_id (:id payer)
-                       :purchased_at (java.time.Instant/now)
-                       :total_amount 10M
-                       :currency "BAM"
-                       :items [{:raw_label "Milk" :line_total 10M}]})
-            expense-id (:id expense)]
-
-        (is (true? (suppliers/delete-supplier! db supplier-id)))
-        (is (some? (expenses/soft-delete-expense! db expense-id)))
-
-        (let [preview (suppliers/purge-supplier-preview db supplier-id)]
-          (is (true? (:archived? preview)))
-          (is (= 0 (:active-expenses preview)))
-          (is (= 1 (:soft-deleted-expenses-total preview)))
-          (is (= 1 (:soft-deleted-expense-items-total preview)))
-          (is (true? (:can-purge? preview))))
-
-        (let [result (suppliers/purge-supplier! db supplier-id)]
-          (is (= true (:purged result)))
-          (is (= supplier-id (:supplier-id result)))
-          (is (= 1 (:deleted-expenses result)))
-          (is (= 1 (:deleted-expense-items result))))
-
-        ;; Verify supplier + expenses are truly gone (hard deleted).
+            deleted (suppliers/delete-supplier! db supplier-id)]
+        (is deleted)
         (is (nil?
               (jdbc/execute-one!
                 db
                 ["select id from suppliers where id = ?" supplier-id]
-                {:builder-fn rs/as-unqualified-lower-maps})))
-
-        (is (= 0
-              (:c
-               (jdbc/execute-one!
-                 db
-                 ["select count(*)::int as c from expenses where supplier_id = ?" supplier-id]
-                 {:builder-fn rs/as-unqualified-lower-maps}))))
-
-        (is (= 0
-              (:c
-               (jdbc/execute-one!
-                 db
-                 ["select count(*)::int as c from expense_items where expense_id = ?" expense-id]
-                 {:builder-fn rs/as-unqualified-lower-maps}))))))))
+                {:builder-fn rs/as-unqualified-lower-maps})))))))

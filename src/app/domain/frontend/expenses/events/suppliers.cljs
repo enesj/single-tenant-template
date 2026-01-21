@@ -7,24 +7,15 @@
     [app.admin.frontend.utils.http :as admin-http]
     [app.domain.frontend.expenses.events.entity-configs :as configs]
     [app.domain.frontend.expenses.events.events-factory :as factory]
-    [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [clojure.string :as str]
-    [re-frame.core :as rf]
-    [uix.core :refer [$]]))
+    [re-frame.core :as rf]))
 
 ;; Register standard CRUD events for suppliers using the factory
 (factory/register-entity-events! configs/suppliers-config)
 
 (def ^:private base-path [:admin :expenses :suppliers])
 (def ^:private inline-create-path (conj base-path :inline-create))
-(def ^:private include-archived-path (conj base-path :include-archived?))
-(def ^:private archive-path (conj base-path :archive))
-(def ^:private purge-path (conj base-path :purge))
-
-(rf/reg-event-db
-  ::set-include-archived
-  (fn [db [_ include-archived?]]
-    (assoc-in db include-archived-path (boolean include-archived?))))
+(def ^:private delete-path (conj base-path :delete))
 
 (defn- supplier-sort-key
   [supplier]
@@ -88,163 +79,36 @@
 ;; ---------------------------------------------------------------------------
 
 (rf/reg-event-fx
-  ::archive-supplier
+  ::delete-supplier
   (fn [{:keys [db]} [_ supplier-id]]
     {:db (-> db
-           (assoc-in (conj archive-path :loading?) true)
-           (assoc-in (conj archive-path :error) nil))
+           (assoc-in (conj delete-path :loading?) true)
+           (assoc-in (conj delete-path :error) nil))
      :http-xhrio (admin-http/admin-delete
                    {:uri (str "/admin/api/expenses/suppliers/" supplier-id)
                     :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::archive-supplier-success supplier-id]
-                    :on-failure [::archive-supplier-failed supplier-id]})}))
+                    :on-success [::delete-supplier-success supplier-id]
+                    :on-failure [::delete-supplier-failed supplier-id]})}))
 
 (rf/reg-event-fx
-  ::archive-supplier-success
-  (fn [{:keys [db]} [_ supplier-id _response]]
-    (let [include-archived? (true? (get-in db include-archived-path))]
-      {:db (-> db
-             (assoc-in (conj archive-path :loading?) false)
-             (assoc-in (conj archive-path :error) nil)
-             (assoc-in (conj base-path :error) nil))
-       :dispatch-n [[:admin/show-success-message "Supplier archived."]
-                    [::load-detail supplier-id]
-                    [::load-list {:include_archived include-archived?}]]})))
-
-(rf/reg-event-fx
-  ::archive-supplier-failed
-  (fn [{:keys [db]} [_ _supplier-id error]]
-    (let [msg (admin-http/extract-error-message error)]
-      {:db (-> db
-             (assoc-in (conj archive-path :loading?) false)
-             (assoc-in (conj archive-path :error) msg)
-             (assoc-in (conj base-path :error) msg))
-       :dispatch [:admin/show-error-message msg]})))
-
-(rf/reg-event-fx
-  ::open-purge-confirm
-  (fn [{:keys [db]} [_ supplier-id]]
-    {:db (-> db
-           (assoc-in (conj purge-path :loading?) true)
-           (assoc-in (conj purge-path :error) nil))
-     :http-xhrio (admin-http/admin-get
-                   {:uri (str "/admin/api/expenses/suppliers/" supplier-id "/purge-preview")
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::open-purge-confirm-success supplier-id]
-                    :on-failure [::open-purge-confirm-failed supplier-id]})}))
-
-(rf/reg-event-fx
-  ::open-purge-confirm-success
-  (fn [{:keys [db]} [_ supplier-id response]]
-    (let [preview (:preview response)
-          can-purge? (true? (:can-purge? preview))
-          active-expenses (long (or (:active-expenses preview) 0))
-          soft-expenses-total (long (or (:soft-deleted-expenses-total preview) 0))
-          soft-items-total (long (or (:soft-deleted-expense-items-total preview) 0))
-          soft-expenses (vec (or (:soft-deleted-expenses preview) []))
-          truncated? (true? (:soft-deleted-expenses-truncated? preview))]
-      (cond
-        (not can-purge?)
-        {:db (-> db
-               (assoc-in (conj purge-path :loading?) false)
-               (assoc-in (conj purge-path :error) nil))
-         :dispatch [:admin/show-error-message
-                    (cond
-                      (pos? active-expenses) (str "Cannot purge supplier: it has " active-expenses " active expense(s).")
-                      :else "Cannot purge supplier. It must be archived and must not have active expenses.")]}
-
-        :else
-        (let [soft-expenses-lines
-              (when (seq soft-expenses)
-                (str/join
-                  "\n"
-                  (for [{:keys [id purchased-at total-amount currency expense-items-count]} soft-expenses]
-                    (str "- "
-                      (or purchased-at "(unknown date)")
-                      " • "
-                      total-amount
-                      " "
-                      currency
-                      " • "
-                      expense-items-count
-                      " item(s)"
-                      " • "
-                      id))))
-              warning
-              (when (pos? soft-expenses-total)
-                ($ :div {:class "ds-alert ds-alert-warning"}
-                  ($ :div {}
-                    ($ :div {:class "font-semibold"}
-                      "Soft-deleted expenses will also be purged")
-                    ($ :div {:class "text-xs opacity-80"}
-                      (str soft-expenses-total " soft-deleted expense(s) and "
-                        soft-items-total " line item(s) will be permanently deleted together with the supplier."))
-                    (when soft-expenses-lines
-                      ($ :pre {:class "mt-2 text-xs max-h-40 overflow-auto whitespace-pre-wrap"}
-                        soft-expenses-lines))
-                    (when truncated?
-                      ($ :div {:class "mt-2 text-xs opacity-70"}
-                        "List truncated. Use Expenses search if you need the full list.")))))
-              message
-              ($ :div {:class "space-y-3 text-sm text-base-content text-left"}
-                ($ :p nil "This will permanently delete the supplier. This cannot be undone.")
-                warning)]
-          {:db (-> db
-                 (assoc-in (conj purge-path :loading?) false)
-                 (assoc-in (conj purge-path :error) nil))
-           :dispatch
-           [::confirm-dialog/open-confirm-dialog
-            {:title "Purge supplier permanently"
-             :confirm-text "Purge permanently"
-             :cancel-text "Cancel"
-             :message message
-             :on-confirm (fn []
-                           (rf/dispatch [::purge-supplier supplier-id]))}]})))))
-
-(rf/reg-event-fx
-  ::open-purge-confirm-failed
-  (fn [{:keys [db]} [_ _supplier-id error]]
-    (let [msg (admin-http/extract-error-message error)]
-      {:db (-> db
-             (assoc-in (conj purge-path :loading?) false)
-             (assoc-in (conj purge-path :error) msg)
-             (assoc-in (conj base-path :error) msg))
-       :dispatch [:admin/show-error-message msg]})))
-
-(rf/reg-event-fx
-  ::purge-supplier
-  (fn [{:keys [db]} [_ supplier-id]]
-    {:db (-> db
-           (assoc-in (conj purge-path :loading?) true)
-           (assoc-in (conj purge-path :error) nil))
-     :http-xhrio (admin-http/admin-post
-                   {:uri (str "/admin/api/expenses/suppliers/" supplier-id "/purge")
-                    :params {}
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::purge-supplier-success supplier-id]
-                    :on-failure [::purge-supplier-failed supplier-id]})}))
-
-(rf/reg-event-fx
-  ::purge-supplier-success
+  ::delete-supplier-success
   (fn [{:keys [db]} [_ _supplier-id _response]]
-    (let [include-archived? (true? (get-in db include-archived-path))]
-      {:db (-> db
-             (assoc-in (conj purge-path :loading?) false)
-             (assoc-in (conj purge-path :error) nil)
-             (assoc-in (conj base-path :error) nil))
-       :dispatch-n [[:admin/show-success-message "Supplier purged permanently."]
-                    ;; Close modal (if open) and navigate back to the list.
-                    [::close-detail-modal]
-                    [:admin/navigate-client "/admin/suppliers"]
-                    [::load-list {:include_archived include-archived?}]]})))
+    {:db (-> db
+           (assoc-in (conj delete-path :loading?) false)
+           (assoc-in (conj delete-path :error) nil)
+           (assoc-in (conj base-path :error) nil))
+     :dispatch-n [[:admin/show-success-message "Supplier deleted."]
+                  [::close-detail-modal]
+                  [:admin/navigate-client "/admin/suppliers"]
+                  [::load-list]]}))
 
 (rf/reg-event-fx
-  ::purge-supplier-failed
+  ::delete-supplier-failed
   (fn [{:keys [db]} [_ _supplier-id error]]
     (let [msg (admin-http/extract-error-message error)]
       {:db (-> db
-             (assoc-in (conj purge-path :loading?) false)
-             (assoc-in (conj purge-path :error) msg)
+             (assoc-in (conj delete-path :loading?) false)
+             (assoc-in (conj delete-path :error) msg)
              (assoc-in (conj base-path :error) msg))
        :dispatch [:admin/show-error-message msg]})))
 

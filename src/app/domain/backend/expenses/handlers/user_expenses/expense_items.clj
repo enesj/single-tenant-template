@@ -84,10 +84,8 @@
                 search (some-> (h/get-param params :search) str)
                 search* (when (and (string? search) (not (str/blank? search)))
                           (str "%" search "%"))
-                  where (cond-> [:and
-                       [:= :e.user_id user-id]
-                       [:is :ei.deleted_at nil]
-                       [:is :e.deleted_at nil]]
+                     where (cond-> [:and
+                       [:= :e.user_id user-id]]
                      search*
                      (conj [:or
                        [:ilike :aa.raw_label search*]
@@ -125,12 +123,10 @@
       {:update [:expense_items :ei]
        :set updates
        :from [[:expenses :e]]
-       :where [:and
+             :where [:and
                [:= :ei.id item-id]
                [:= :e.id :ei.expense_id]
-               [:= :e.user_id user-id]
-               [:is :ei.deleted_at nil]
-               [:is :e.deleted_at nil]]
+               [:= :e.user_id user-id]]
        :returning [:ei.*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
@@ -149,11 +145,9 @@
        :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
                    [:article_aliases :aa] [:= :aa.id :ei.alias_id]
                    [:articles :a] [:= :a.id :aa.article_id]]
-       :where [:and
+             :where [:and
                [:= :ei.id item-id]
-               [:= :e.user_id user-id]
-               [:is :ei.deleted_at nil]
-               [:is :e.deleted_at nil]]
+               [:= :e.user_id user-id]]
        :limit 1})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
@@ -213,22 +207,19 @@
   [db user-id item-id]
   (jdbc/execute-one! db
     (sql/format
-      {:update [:expense_items :ei]
-       :set {:deleted_at [:now]}
-       :from [[:expenses :e]]
+      {:delete-from :expense_items
        :where [:and
-               [:= :ei.id item-id]
-               [:= :e.id :ei.expense_id]
-               [:= :e.user_id user-id]
-               [:is :ei.deleted_at nil]
-               [:is :e.deleted_at nil]]
-       :returning [:ei.*]})
+               [:= :id item-id]
+               [:in :expense_id {:select [:id]
+                                 :from [:expenses]
+                                 :where [:= :user_id user-id]}]]
+       :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn delete-expense-item-handler
   "DELETE /api/v1/expenses/expense-items/:id
 
-  Soft-deletes an expense item scoped to the current user's expenses.
+  Hard-deletes an expense item scoped to the current user's expenses.
 
   Allowed roles: admin/owner."
   [db]
@@ -239,8 +230,12 @@
         forbidden
         (if-let [item-id (expense-item-id request)]
           (try
-            (if-let [deleted (delete-expense-item! db user-id item-id)]
-              (h/json-response {:data deleted :message "Expense item deleted"})
+            (if-let [_deleted (delete-expense-item! db user-id item-id)]
+              (do
+                (log/info "User deleted expense item" {:user-id user-id
+                                                       :expense-item-id item-id
+                                                       :timestamp (java.time.Instant/now)})
+                {:status 204})
               (h/not-found-response "Expense item not found or access denied"))
             (catch Exception e
               (log/error e "Error deleting expense item" {:user-id user-id :item-id item-id})

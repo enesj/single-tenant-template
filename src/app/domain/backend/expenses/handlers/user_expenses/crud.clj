@@ -103,7 +103,7 @@
       (h/unauthorized-response))))
 
 (defn delete-expense-handler
-  "Handler factory for deleting (soft delete) a user expense."
+  "Handler factory for deleting a user expense."
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
@@ -113,8 +113,12 @@
                            (h/try-parse-uuid (get-in request [:parameters :path :id])))]
           (if expense-id
             (try
-              (if-let [expense (user-expenses/soft-delete-user-expense! db user-id expense-id)]
-                (h/json-response {:data expense :message "Expense deleted"})
+              (if-let [_expense (user-expenses/delete-user-expense! db user-id expense-id)]
+                (do
+                  (log/info "User deleted expense" {:user-id user-id
+                                                     :expense-id expense-id
+                                                     :timestamp (java.time.Instant/now)})
+                  {:status 204})
                 (h/not-found-response "Expense not found or access denied"))
               (catch Exception e
                 (log/error e "Error deleting user expense" {:expense-id expense-id})

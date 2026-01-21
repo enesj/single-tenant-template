@@ -166,7 +166,7 @@
                                  FROM expenses e
                                  LEFT JOIN suppliers s ON e.supplier_id = s.id
                                  LEFT JOIN payers p ON e.payer_id = p.id
-                                 WHERE e.user_id = ? AND e.deleted_at IS NULL
+                                 WHERE e.user_id = ?
                                  ORDER BY e.purchased_at DESC
                                  LIMIT 1000"
                                 user-id])
@@ -219,16 +219,22 @@
                              (h/get-param params :token))]
           (if (= confirmation "DELETE_ALL_EXPENSES")
             (try
-              ;; Soft-delete all expenses for user
-              (let [result (jdbc/execute-one! db
-                             ["UPDATE expenses
-                               SET deleted_at = NOW()
-                               WHERE user_id = ? AND deleted_at IS NULL"
-                              user-id])]
-                (log/warn "User deleted all expenses" {:user-id user-id
-                                                       :affected (:next.jdbc/update-count result)})
-                (h/json-response {:success true
-                                  :deleted_count (or (:next.jdbc/update-count result) 0)}))
+              (jdbc/with-transaction [tx db]
+                (jdbc/execute-one!
+                  tx
+                  ["UPDATE receipts
+                    SET expense_id = NULL,
+                        status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END,
+                        updated_at = NOW()
+                    WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
+                   user-id])
+                (let [result (jdbc/execute-one! tx
+                               ["DELETE FROM expenses WHERE user_id = ?"
+                                user-id])]
+                  (log/warn "User deleted all expenses" {:user-id user-id
+                                                         :affected (:next.jdbc/update-count result)})
+                  (h/json-response {:success true
+                                    :deleted_count (or (:next.jdbc/update-count result) 0)})))
               (catch Exception e
                 (log/error e "Failed to delete all expenses")
                 (h/json-response {:error "Delete failed"} 500)))

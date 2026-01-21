@@ -50,9 +50,7 @@
         error (use-subscribe [:user-expenses/supplier-detail-error])
         expenses (use-subscribe [:user-expenses/supplier-detail-expenses])
         aliases (use-subscribe [:user-expenses/supplier-detail-article-aliases])
-        observations (use-subscribe [:user-expenses/supplier-detail-price-observations])
-        archived-at (some-> supplier :archived-at)
-        archived? (some? archived-at)]
+        observations (use-subscribe [:user-expenses/supplier-detail-price-observations])]
     (use-effect
       (fn []
         (when supplier-id
@@ -80,13 +78,7 @@
             (detail-utils/label-value "Normalized Key" (:normalized-key supplier))
             (detail-utils/label-value "Address" (:address supplier))
             (detail-utils/label-value "Created At" (shared/format-date (:created-at supplier)))
-            (detail-utils/label-value "Archived At" (when archived-at (shared/format-date archived-at)))
             (detail-utils/label-value "ID" (or (:id supplier) (some-> supplier-id str))))
-
-          ($ :div {:class "flex flex-wrap items-center gap-2"}
-            (when archived?
-              ($ :span {:class "text-xs text-base-content/60"}
-                "Archived")))
 
           ($ :div {:class "grid gap-4 lg:grid-cols-3"}
             ($ detail-utils/related-table
@@ -125,9 +117,7 @@
 (defui suppliers-page []
   (let [role (use-subscribe [:expenses/user-role])
         can-modify? (authz/can? role :expenses/reference.write)
-        can-purge? (authz/can? role :expenses/reference.purge)
         form-error (use-subscribe [:user-expenses/form-error])
-        include-archived? (true? (use-subscribe [:user-expenses/suppliers-include-archived?]))
         entity-name :suppliers
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         debug? (boolean (.-DEBUG js/goog))
@@ -138,7 +128,7 @@
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:user-expenses/fetch-suppliers]))
-                       [include-archived?])]
+                       [])]
 
     (use-effect
       (fn []
@@ -170,21 +160,11 @@
                   supplier-id-str (some-> supplier-id str)
                   item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)
 
-                  archived? (some? (:archived-at item))
-                  active-expenses (long (or (:active-expenses-count item)
-                                          (:active-expenses item)
-                                          0))
-                  purge-disabled? (pos? active-expenses)
-                  purge-tooltip (when purge-disabled?
-                                  (str "Cannot purge: supplier has " active-expenses " active expense(s)."))
-
                   on-edit-click (:on-edit-click item)
                   edit-disabled? (true? (:edit-disabled? item))
                   delete-disabled? (true? (:delete-disabled? item))
-                  show-edit? (and (not archived?)
-                               (not (false? (:show-edit? item))))
-                  show-archive? (and (not archived?)
-                                  (not (false? (:show-delete? item))))]
+                  show-edit? (not (false? (:show-edit? item)))
+                  show-delete? (not (false? (:show-delete? item)))]
               ($ :div {:class "flex items-center justify-center gap-2"}
                 (when show-edit?
                   ($ button
@@ -198,13 +178,9 @@
                                    (on-edit-click item-data)))}
                     ($ edit-icon)))
 
-                (when archived?
-                  ($ :span {:class "text-xs text-base-content/60"}
-                    "Archived"))
-
-                (when show-archive?
+                (when show-delete?
                   ($ button
-                    {:id (str "btn-archive-suppliers-" supplier-id-str)
+                    {:id (str "btn-delete-suppliers-" supplier-id-str)
                      :btn-type :danger
                      :shape "circle"
                      :disabled delete-disabled?
@@ -212,34 +188,21 @@
                                  (.stopPropagation e)
                                  (when-not delete-disabled?
                                    (confirm-dialog/show-confirm
-                                     {:title "Archive supplier"
-                                      :message "Do you want to archive this supplier?"
+                                     {:title "Delete supplier"
+                                      :message "Do you want to delete this supplier?"
                                       :on-confirm #(rf/dispatch [:user-expenses/delete-supplier supplier-id-str])
                                       :on-cancel nil})))}
                     ($ delete-icon)))
-
-                (when (and can-purge? (seq supplier-id-str))
-                  (let [actions (cond->
-                                  [{:group-title "View"
-                                    :items [{:id "view-details"
-                                             :icon ($ action-components/view-details-icon)
-                                             :label "View Details"
-                                             :on-click (fn [e]
-                                                         (.stopPropagation e)
-                                                         (when debug?
-                                                           (js/console.log "[user-suppliers] view-details click" (str instance-id) supplier-id-str))
-                                                         (set-detail-supplier item-data))}]}]
-                                  archived?
-                                  (conj {:group-title "Danger"
-                                         :items [{:id "purge-permanently"
-                                                  :icon ($ action-components/delete-icon)
-                                                  :label "Purge permanently"
-                                                  :variant :error
-                                                  :disabled? purge-disabled?
-                                                  :tooltip purge-tooltip
-                                                  :on-click (fn [e]
-                                                              (.stopPropagation e)
-                                                              (rf/dispatch [:user-expenses/open-purge-supplier-confirm supplier-id-str]))}]}))]
+                (when (seq supplier-id-str)
+                  (let [actions [{:group-title "View"
+                                  :items [{:id "view-details"
+                                           :icon ($ action-components/view-details-icon)
+                                           :label "View Details"
+                                           :on-click (fn [e]
+                                                       (.stopPropagation e)
+                                                       (when debug?
+                                                         (js/console.log "[user-suppliers] view-details click" (str instance-id) supplier-id-str))
+                                                       (set-detail-supplier item-data))}]}]]
                     ($ dropdown/action-dropdown
                       {:entity-id supplier-id-str
                        :actions actions
@@ -298,17 +261,6 @@
                   ($ user-supplier-detail-body {:supplier-id supplier-id}))))))
 
         ($ :main {:class "w-full px-4 py-6"}
-          ($ :label {:class "mb-4 flex items-center gap-2 cursor-pointer select-none"}
-            ($ :span {:class "text-sm text-base-content/70"} "Show archived")
-            ($ :input {:id "toggle-show-archived-suppliers-user"
-                       :type "checkbox"
-                       :class "ds-toggle ds-toggle-sm"
-                       :checked (true? include-archived?)
-                       :on-change (fn [e]
-                                    (rf/dispatch [:user-expenses/set-suppliers-include-archived (.. e -target -checked)]))})
-            (when include-archived?
-              ($ :span {:class "text-xs text-base-content/50"}
-                "Archived suppliers are read-only")))
           ($ list-view
             {:entity-name entity-name
              :entity-spec entity-spec

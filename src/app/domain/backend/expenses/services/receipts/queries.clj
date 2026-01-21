@@ -192,12 +192,16 @@
 
 (defn list-pending-for-processing
   "Receipts that are ready to process (uploaded or failed-but-retry)."
-  [db]
-  (let [statuses (mapv storage/receipt-status-cast ["uploaded" "parsing" "parsed" "extracting"])]
-    (jdbc/execute!
-      db
-      (sql/format {:select [:*]
-                   :from [:receipts]
-                   :where [:in :status statuses]
-                   :order-by [[:created_at :asc]]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+  ([db]
+   (list-pending-for-processing db nil))
+  ([db {:keys [limit]}]
+   (let [statuses (mapv storage/receipt-status-cast ["uploaded" "parsing" "parsed" "extracting"])
+         query (cond-> {:select [:*]
+                        :from [:receipts]
+                        :where [:in :status statuses]
+                        :order-by [[:created_at :asc]]}
+                 (some? limit) (assoc :limit limit))]
+     (jdbc/execute!
+       db
+       (sql/format query)
+       {:builder-fn rs/as-unqualified-lower-maps}))))

@@ -217,39 +217,29 @@
                    :returning [:*]})
       {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn soft-delete-expense!
-  "Soft delete expense.
+(defn delete-expense!
+  "Hard delete expense.
 
-  In addition to marking the expense as deleted, this also soft-deletes all expense_items
-  that belong to the expense by setting their :deleted_at timestamp.
-
-  NOTE: The DB has a FK from expense_items.expense_id -> expenses.id with ON DELETE
-  CASCADE, but since we implement expense deletion as a *soft delete* (update), the
-  FK cascade does not apply.
+  Expense items are removed via FK ON DELETE CASCADE.
 
   If the expense is linked to a receipt (via :receipt_id and the receipt's :expense_id),
   the receipt is reverted to an approvable status so it can be deleted or processed again."
   [db id]
   (jdbc/with-transaction [tx db]
-    (when-let [deleted (jdbc/execute-one!
+    (when-let [expense (jdbc/execute-one!
                          tx
-                         (sql/format {:update :expenses
-                                      :set {:deleted_at [:now]}
-                                      :where [:and
-                                              [:= :id id]
-                                              [:is :deleted_at nil]]
-                                      :returning [:*]})
+                         (sql/format {:select [:*]
+                                      :from [:expenses]
+                                      :where [:= :id id]
+                                      :limit 1})
                          {:builder-fn rs/as-unqualified-lower-maps})]
-      ;; Soft-delete line items for the deleted expense.
-      (jdbc/execute!
+      (revert-linked-receipt-after-expense-delete! tx expense)
+      (jdbc/execute-one!
         tx
-        (sql/format {:update :expense_items
-                     :set {:deleted_at [:now]}
-                     :where [:and
-                             [:= :expense_id id]
-                             [:is :deleted_at nil]]}))
-      (revert-linked-receipt-after-expense-delete! tx deleted)
-      deleted)))
+        (sql/format {:delete-from :expenses
+                     :where [:= :id id]
+                     :returning [:*]})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn get-expense-with-items
   [db id]
@@ -264,8 +254,7 @@
                                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                                            [:payers :p] [:= :p.id :e.payer_id]
                                            [:payer_types :pt] [:= :pt.id :p.payer_type_id]]
-                               :where [:and [:= :e.id id]
-                                       [:is :e.deleted_at nil]]})
+                                     :where [:= :e.id id]})
                   {:builder-fn rs/as-unqualified-lower-maps})
         items (jdbc/execute!
                 db
@@ -276,9 +265,7 @@
                              :from [[:expense_items :ei]]
                              :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
                        [:articles :a] [:= :a.id :aa.article_id]]
-                             :where [:and
-                                     [:= :ei.expense_id id]
-                                     [:is :ei.deleted_at nil]]
+                                 :where [:= :ei.expense_id id]
                              :order-by [[:ei.created_at :asc]]})
                 {:builder-fn rs/as-unqualified-lower-maps})]
     (when expense
@@ -289,19 +276,12 @@
   [db id]
   (get-expense-with-items db id))
 
-(defn delete-expense!
-  "Delete an expense. Wrapper expected by the generic admin routes factory.
-  Currently implemented as a soft delete."
-  [db id]
-  (soft-delete-expense! db id))
-
 (defn list-expenses
   "List expenses with common filters.
    opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :limit, :offset."
   [db {:keys [from to supplier-id payer-id is-posted? limit offset order-dir]
        :or {limit 50 offset 0 order-dir :desc}}]
-  (let [base-where (cond-> [:and
-                            [:is :e.deleted_at nil]]
+  (let [base-where (cond-> [:and]
                      from (conj [:>= :e.purchased_at from])
                      to (conj [:<= :e.purchased_at to])
                      supplier-id (conj [:= :e.supplier_id supplier-id])
@@ -325,7 +305,7 @@
 (defn count-expenses
   "Count total expenses with optional filters."
   [db {:keys [from to supplier-id payer-id is-posted?]}]
-  (let [base-where (cond-> [:and [:is :deleted_at nil]]
+  (let [base-where (cond-> [:and]
                      from (conj [:>= :purchased_at from])
                      to (conj [:<= :purchased_at to])
                      supplier-id (conj [:= :supplier_id supplier-id])
@@ -423,7 +403,7 @@
 
   If `:items` is present in the update body, the provided set becomes the new
   active set:
-  - missing items are soft-deleted
+  - missing items are deleted
   - items with matching `:id` are updated
   - items without `:id` are inserted
 
@@ -439,13 +419,11 @@
                    (assoc :updated_at [:now]))]
     (jdbc/with-transaction [tx db]
       (when-let [expense (jdbc/execute-one!
-                           tx
-                           (sql/format {:update :expenses
-                                        :set updates*
-                                        :where [:and
-                                                [:= :id id*]
-                                                [:is :deleted_at nil]]
-                                        :returning [:*]})
+                             tx
+                             (sql/format {:update :expenses
+                              :set updates*
+                              :where [:= :id id*]
+                              :returning [:*]})
                            {:builder-fn rs/as-unqualified-lower-maps})]
 
         (when (contains? body :items)
@@ -453,9 +431,7 @@
                                     tx
                                     (sql/format {:select [:id]
                                                  :from [:expense_items]
-                                                 :where [:and
-                                                         [:= :expense_id id*]
-                                                         [:is :deleted_at nil]]})
+                                                 :where [:= :expense_id id*]})
                                     {:builder-fn rs/as-unqualified-lower-maps})
                                (map :id)
                                (into #{}))
@@ -471,21 +447,17 @@
                                         (not (and item-id (contains? existing-ids item-id))))
                                items*)
                 supplier-id (:supplier_id expense)
-                soft-delete-where (if (seq keep-ids)
-                                    [:and
-                                     [:= :expense_id id*]
-                                     [:is :deleted_at nil]
-                                     [:not [:in :id keep-ids]]]
-                                    [:and
-                                     [:= :expense_id id*]
-                                     [:is :deleted_at nil]])]
+                delete-where (if (seq keep-ids)
+                               [:and
+                                [:= :expense_id id*]
+                                [:not [:in :id keep-ids]]]
+                               [:= :expense_id id*])]
 
-            ;; Soft-delete removed items.
+            ;; Delete removed items.
             (jdbc/execute!
               tx
-              (sql/format {:update :expense_items
-                           :set {:deleted_at [:now]}
-                           :where soft-delete-where}))
+              (sql/format {:delete-from :expense_items
+                           :where delete-where}))
 
             ;; Update existing items (no retroactive auto-linking).
             (doseq [item update-items]
@@ -495,12 +467,11 @@
                             alias (assoc :alias_id (:id alias)))]
                 (jdbc/execute!
                   tx
-                  (sql/format {:update :expense_items
-                               :set item*
-                               :where [:and
-                                       [:= :id (:id item)]
-                                       [:= :expense_id id*]
-                                       [:is :deleted_at nil]]}))))
+                    (sql/format {:update :expense_items
+                           :set item*
+                           :where [:and
+                             [:= :id (:id item)]
+                             [:= :expense_id id*]]}))
 
             ;; Insert new items (auto-link from alias when possible).
             (let [resolved-inserts (mapv (fn [item]
@@ -548,4 +519,4 @@
 (defn create-from-receipt!
   "Create an expense tied to a receipt. Delegates to create-expense! then returns expense."
   [db receipt-id expense-data items]
-  (create-expense! db (assoc expense-data :receipt_id receipt-id) items))
+  (create-expense! db (assoc expense-data :receipt_id receipt-id) items))))

@@ -46,14 +46,13 @@
                                   :from [:expenses]
                                   :where [:and
                                           [:= :id expense-id]
-                                          [:= :user_id user-id]
-                                          [:is :deleted_at nil]]})
+                                          [:= :user_id user-id]]})
                      {:builder-fn rs/as-unqualified-lower-maps})]
       (when existing
         (admin-expenses/update-expense! db expense-id updates)))))
 
-(defn soft-delete-user-expense!
-  "Soft delete a user's own expense. Returns deleted expense or nil if not found/unauthorized."
+(defn delete-user-expense!
+  "Hard delete a user's own expense. Returns deleted expense or nil if not found/unauthorized."
   [db user-id expense-id]
   (let [user-id (ensure-uuid user-id)]
     (when-not user-id
@@ -65,19 +64,19 @@
                                   :from [:expenses]
                                   :where [:and
                                           [:= :id expense-id]
-                                          [:= :user_id user-id]
-                                          [:is :deleted_at nil]]})
+                                          [:= :user_id user-id]]})
+
                      {:builder-fn rs/as-unqualified-lower-maps})]
       (when existing
-        (admin-expenses/soft-delete-expense! db expense-id)))))
+        (admin-expenses/delete-expense! db expense-id)))))
 
-(defn soft-delete-user-expenses!
-  "Soft delete multiple expenses owned by a user.
+(defn delete-user-expenses!
+  "Hard delete multiple expenses owned by a user.
 
   Returns a result map:
   - :deleted-count
   - :deleted-ids
-  - :not-found-ids (includes ids not owned by the user, already deleted, or missing)"
+  - :not-found-ids (includes ids not owned by the user or missing)"
   [db user-id expense-ids]
   (let [user-id (ensure-uuid user-id)
         ids (->> (or expense-ids [])
@@ -91,20 +90,19 @@
        :deleted-ids []
        :not-found-ids []}
       (jdbc/with-transaction [tx db]
-        ;; Only delete expenses that are owned by the user and not already soft-deleted.
+        ;; Only delete expenses that are owned by the user.
         (let [owned-rows (jdbc/execute!
                            tx
                            (sql/format {:select [:id]
                                         :from [:expenses]
                                         :where [:and
                                                 [:= :user_id user-id]
-                                                [:in :id ids]
-                                                [:is :deleted_at nil]]})
+                                                [:in :id ids]]})
                            {:builder-fn rs/as-unqualified-lower-maps})
               owned-ids (mapv :id owned-rows)
               deleted-ids (reduce
                             (fn [acc expense-id]
-                              (if-let [deleted (admin-expenses/soft-delete-expense! tx expense-id)]
+                              (if-let [deleted (admin-expenses/delete-expense! tx expense-id)]
                                 (conj acc (:id deleted))
                                 acc))
                             []
@@ -149,8 +147,8 @@
                   (let [expense-id (try-uuid (:id item))
                         updates (-> item
                                   (dissoc :id
-                                    :created_at :updated_at :deleted_at
-                                    :created-at :updated-at :deleted-at)
+                                    :created_at :updated_at
+                                    :created-at :updated-at)
                                   (select-keys allowed-keys))]
                     (cond
                       (nil? expense-id)
@@ -191,8 +189,7 @@
                                              [:payers :p] [:= :p.id :e.payer_id]]
                                  :where [:and
                                          [:= :e.id expense-id]
-                                         [:= :e.user_id user-id]
-                                         [:is :e.deleted_at nil]]})
+                                         [:= :e.user_id user-id]]})
                     {:builder-fn rs/as-unqualified-lower-maps})
           items (when expense
                   (jdbc/execute!
@@ -204,9 +201,7 @@
                                  :from [[:expense_items :ei]]
                                  :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
                                              [:articles :a] [:= :a.id :aa.article_id]]
-                                 :where [:and
-                                         [:= :ei.expense_id expense-id]
-                                         [:is :ei.deleted_at nil]]
+                                 :where [:= :ei.expense_id expense-id]
                                  :order-by [[:ei.created_at :asc]]})
                     {:builder-fn rs/as-unqualified-lower-maps}))]
       (when expense
@@ -221,8 +216,7 @@
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
-                              [:= :e.user_id user-id]
-                              [:is :e.deleted_at nil]]
+                              [:= :e.user_id user-id]]
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to])
                        supplier-id (conj [:= :e.supplier_id supplier-id])
@@ -250,8 +244,7 @@
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
-                              [:= :user_id user-id]
-                              [:is :deleted_at nil]]
+                              [:= :user_id user-id]]
                        from (conj [:>= :purchased_at from])
                        to (conj [:<= :purchased_at to])
                        supplier-id (conj [:= :supplier_id supplier-id])
@@ -285,7 +278,6 @@
                                          :from [:expenses]
                                          :where [:and
                                                  [:= :user_id user-id]
-                                                 [:is :deleted_at nil]
                                                  [:= :is_posted true]]
                                          :group-by [:currency]})
                             {:builder-fn rs/as-unqualified-lower-maps})
@@ -313,15 +305,15 @@
                             :currency
                             [[:sum :total_amount] :total]]
                    :from [:expenses]
-                   :where [:and
-                           [:= :user_id user-id]
-                           [:is :deleted_at nil]
-                           [:= :is_posted true]
-                           [:>= :purchased_at
-                            [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
+                     :where [:and
+                             [:= :user_id user-id]
+                             [:= :is_posted true]
+                             [:>= :purchased_at
+                              [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
                    :group-by [[:to_char :purchased_at [:inline "YYYY-MM"]] :currency]
                    :order-by [[[:to_char :purchased_at [:inline "YYYY-MM"]] :desc]]})
       {:builder-fn rs/as-unqualified-lower-maps})))
+
 
 (defn get-user-spending-by-supplier
   "Get spending by supplier for a user.
@@ -332,7 +324,6 @@
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
                               [:= :e.user_id user-id]
-                              [:is :e.deleted_at nil]
                               [:= :e.is_posted true]]
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to]))]

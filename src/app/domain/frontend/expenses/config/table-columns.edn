@@ -1,6 +1,105 @@
-{:expenses
+{:expense-items
  {:available-columns
-  ["purchased_at" "supplier_id" "payer_id" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "deleted_at" "created_at" "updated_at" "user_id"],
+  ["expense_purchased_at"
+   "article_canonical_name"
+   "raw_label"
+   "raw_label_normalized"
+   "alias_id"
+   "qty"
+   "unit_price"
+   "line_total"
+   "created_at"
+   "expense_id"
+   "id"],
+  :default-visible-columns
+  ["expense_purchased_at"
+   "article_canonical_name"
+   "raw_label"
+   "qty"
+   "unit_price"
+   "line_total"
+   "created_at"],
+  :filterable-columns
+  ["expense_purchased_at"
+   "article_canonical_name"
+   "raw_label"
+   "alias_id"
+   "qty"
+   "unit_price"
+   "line_total"
+   "created_at"
+   "expense_id"],
+  :sortable-columns
+  ["expense_purchased_at"
+   "article_canonical_name"
+   "raw_label"
+   "qty"
+   "unit_price"
+   "line_total"
+   "created_at"],
+  :always-visible ["raw_label"],
+  :computed-fields
+  {:raw_label {},
+   :expense_purchased_at {},
+   :article_canonical_name {}}},
+ :suppliers
+ {:available-columns
+  ["display_name"
+   "normalized_key"
+   "address"
+   "created_at"
+   "id"
+   "updated_at"],
+  :default-visible-columns
+  ["display_name" "normalized_key" "address" "created_at"],
+  :filterable-columns
+  ["display_name" "normalized_key" "address" "created_at"],
+  :sortable-columns
+  ["display_name" "normalized_key" "address" "created_at"],
+  :always-visible ["display_name"]},
+ :articles
+ {:available-columns
+  ["canonical_name"
+   "category"
+   "normalized_key"
+   "created_at"
+   "updated_at"
+   "id"],
+  :default-visible-columns ["canonical_name" "category" "created_at"],
+  :filterable-columns
+  ["canonical_name"
+   "category"
+   "normalized_key"
+   "created_at"
+   "updated_at"],
+  :sortable-columns
+  ["canonical_name"
+   "category"
+   "normalized_key"
+   "created_at"
+   "updated_at"],
+  :always-visible ["canonical_name"]},
+ :payer-types
+ {:available-columns
+  ["label" "is_default" "created_at" "updated_at" "id"],
+  :default-visible-columns ["label" "is_default"],
+  :filterable-columns ["label" "is_default"],
+  :sortable-columns ["label" "is_default"],
+  :always-visible ["label"]},
+ :expenses
+ {:available-columns
+  ["purchased_at"
+   "supplier_id"
+   "payer_id"
+   "currency"
+   "total_amount"
+   "notes"
+   "is_posted"
+   "id"
+   "receipt_id"
+   "created_at"
+   "updated_at"
+   "user_id"],
   :default-visible-columns
   ["purchased_at"
    "supplier_id"
@@ -27,111 +126,20 @@
    "created_at"
    "updated_at"],
   :always-visible []},
- :receipts
- {:available-columns
-  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "storage-key" "file-hash" "content-type" "file-size" "raw-parse-json" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id"],
-  :default-visible-columns
-  ["original-filename"
-   "status"
-   "supplier-guess"
-   "created-at"
-   "updated-at"],
-  :filterable-columns
-  ["original-filename"
-   "status"
-   "supplier-guess"
-   "created-at"
-   "updated-at"],
-  :sortable-columns
-  ["original-filename"
-   "status"
-   "supplier-guess"
-   "created-at"
-   "updated-at"],
-  :always-visible ["original-filename" "status"]},
- :suppliers
- {:available-columns
-  ["display_name" "normalized_key" "address" "created_at" "id" "archived_at" "updated_at"],
-  :default-visible-columns
-  ["display_name" "normalized_key" "address" "created_at"],
-  :filterable-columns
-  ["display_name" "normalized_key" "address" "created_at"],
-  :sortable-columns
-  ["display_name" "normalized_key" "address" "created_at"],
-  :always-visible ["display_name"]},
- :payers
- {:available-columns
-  ["label" "payer_type_id" "is_default" "last4" "created_at" "updated_at" "id"],
-  :default-visible-columns ["label" "is_default"],
-  :filterable-columns ["label" "is_default"],
-  :sortable-columns ["label" "is_default"],
-  :always-visible ["label"]},
- :payer-types
- {:available-columns ["label" "is_default" "created_at" "updated_at" "id"],
-  :default-visible-columns ["label" "is_default"],
-  :filterable-columns ["label" "is_default"],
-  :sortable-columns ["label" "is_default"],
-  :always-visible ["label"]},
- :articles
- {:available-columns
-  ["canonical_name"
-   "category"
-   "normalized_key"
-   "created_at"
-   "updated_at"
-   "id"],
-  :default-visible-columns ["canonical_name" "category" "created_at"],
-  :filterable-columns
-  ["canonical_name" "category" "normalized_key" "created_at" "updated_at"],
-  :sortable-columns
-  ["canonical_name" "category" "normalized_key" "created_at" "updated_at"],
-  :always-visible ["canonical_name"]},
- :expense-items
- {:available-columns
-  ["expense_purchased_at"
-   "article_canonical_name"
-   "raw_label"
-   "raw_label_normalized"
-   "alias_id"
-   "qty"
-   "unit_price"
-   "line_total"
-   "created_at"
-   "deleted_at"
-   "expense_id"
-   "id"],
-  :default-visible-columns
-  ["expense_purchased_at"
-   "article_canonical_name"
-   "raw_label"
-   "qty"
-   "unit_price"
-   "line_total"
-   "created_at"],
-  :filterable-columns
-  ["expense_purchased_at"
-   "article_canonical_name"
-   "raw_label"
-    "alias_id"
-   "qty"
-   "unit_price"
-   "line_total"
-   "created_at"
-    "expense_id"],
-  :sortable-columns
-  ["expense_purchased_at"
-   "article_canonical_name"
-   "raw_label"
-   "qty"
-   "unit_price"
-   "line_total"
-   "created_at"],
-  :always-visible ["raw_label"],
-  :computed-fields
-  {:raw_label {}, :expense_purchased_at {}, :article_canonical_name {}}},
  :price-observations
  {:available-columns
-  ["article_canonical_name" "supplier_display_name" "observed_at" "unit_price" "line_total" "qty" "currency" "expense_item_id" "id" "article_id" "supplier_id" "created_at"],
+  ["article_canonical_name"
+   "supplier_display_name"
+   "observed_at"
+   "unit_price"
+   "line_total"
+   "qty"
+   "currency"
+   "expense_item_id"
+   "id"
+   "article_id"
+   "supplier_id"
+   "created_at"],
   :default-visible-columns
   ["article_canonical_name"
    "supplier_display_name"
@@ -159,24 +167,93 @@
    "currency"
    "expense_item_id"],
   :always-visible
-  ["article_canonical_name" "supplier_display_name" "observed_at" "line_total"],
-  :computed-fields {:article_canonical_name {}, :supplier_display_name {}}},
+  ["article_canonical_name"
+   "supplier_display_name"
+   "observed_at"
+   "line_total"],
+  :computed-fields
+  {:article_canonical_name {}, :supplier_display_name {}}},
+ :payers
+ {:available-columns
+  ["label"
+   "payer_type_id"
+   "is_default"
+   "last4"
+   "created_at"
+   "updated_at"
+   "id"],
+  :default-visible-columns ["label" "is_default"],
+  :filterable-columns ["label" "is_default"],
+  :sortable-columns ["label" "is_default"],
+  :always-visible ["label"]},
+ :receipts
+ {:available-columns
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"
+   "id"
+   "storage-key"
+   "file-hash"
+   "content-type"
+   "file-size"
+   "raw-parse-json"
+   "raw-extract-json"
+   "parsed-markdown"
+   "total-amount-guess"
+   "currency-guess"
+   "purchased-at-guess"
+   "error-message"
+   "error-details"
+   "retry-count"
+   "expense-id"
+   "user-id"
+   "payer-id"],
+  :default-visible-columns
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"],
+  :filterable-columns
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"],
+  :sortable-columns
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"],
+  :always-visible ["original-filename" "status"]},
  :article-aliases
  {:available-columns
-   ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "created_at" "id" "supplier_id" "article_id"],
-    :default-visible-columns ["supplier_display_name" "raw_label" "article_canonical_name"],
+  ["supplier_display_name"
+   "article_canonical_name"
+   "raw_label"
+   "raw_label_normalized"
+   "created_at"
+   "id"
+   "supplier_id"
+   "article_id"],
+  :default-visible-columns
+  ["supplier_display_name" "raw_label" "article_canonical_name"],
   :filterable-columns
   ["supplier_display_name"
    "article_canonical_name"
-     "raw_label"
+   "raw_label"
    "raw_label_normalized"
    "created_at"],
   :sortable-columns
   ["supplier_display_name"
    "article_canonical_name"
-     "raw_label"
+   "raw_label"
    "raw_label_normalized"
    "created_at"],
-    :always-visible ["raw_label"],
-  :computed-fields {:supplier_display_name {}, :article_canonical_name {}},
+  :always-visible ["raw_label"],
+  :computed-fields
+  {:supplier_display_name {}, :article_canonical_name {}},
   :column-config {}}}

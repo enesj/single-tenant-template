@@ -70,34 +70,35 @@
         (is (= "image_url" (get doc :type)))
         (is (str/starts-with? (get doc :image_url) "data:image/jpeg;base64,"))))))
 
-(deftest ocr-extract-sends-json-schema-and-detects-extraction
-  (testing "when provider returns the structured object at top-level"
-    (let [called (atom nil)
-          extraction {:merchant {:name "Store"}
-                      :totals {:total 10.26}
-                      :items [{:raw_label "Coffee" :line_total 6.00}]}
-          resp-json extraction]
-      (with-redefs [mistral-http/http-post!
-                    (fn [url opts]
-                      (reset! called {:url url :opts opts})
-                      {:status 200 :body (json/generate-string resp-json)})]
-        (let [cfg {:api-key "k"
-                   :base-url "https://example"
+(deftest ocr-extract-uses-markdown-only-path
+  (let [called (atom nil)
+        resp-json {:pages [{:index 1 :markdown "A"}
+                           {:index 2 :markdown "B"}]
                    :model "mistral-ocr-2512"
-                   :document-type "receipt"
-                   :conn-timeout-ms 1
-                   :socket-timeout-ms 1
-                   :max-retries 0
-                   :retry-sleep-ms 0}
-              result (mistral-ocr/ocr-extract! cfg {:bytes (byte-array [1 2])})
-              body-map (json/parse-string (get-in @called [:opts :body]) true)
-              schema (get-in body-map [:document_annotation_format :json_schema])]
-          (is (= "https://example/v1/ocr" (:url @called)))
-          (is (= :json (get-in @called [:opts :content-type])))
-          (is (= extraction (:extraction result)))
-          (is (= "json_schema" (get-in body-map [:document_annotation_format :type])))
-          (is (= "receipt_extraction" (:name schema)))
-          (is (map? (:schema schema))))))))
+                   :usage_info {:pages_processed 2}}]
+    (with-redefs [mistral-http/http-post!
+                  (fn [url opts]
+                    (reset! called {:url url :opts opts})
+                    {:status 200 :body (json/generate-string resp-json)})]
+      (let [cfg {:api-key "k"
+                 :base-url "https://example"
+                 :model "mistral-ocr-2512"
+                 :document-type "receipt"
+                 :conn-timeout-ms 1
+                 :socket-timeout-ms 1
+                 :max-retries 0
+                 :retry-sleep-ms 0}
+            result (mistral-ocr/ocr-extract! cfg {:bytes (byte-array [1 2])})
+            body-map (json/parse-string (get-in @called [:opts :body]) true)]
+        (is (= "https://example/v1/ocr" (:url @called)))
+        (is (= :json (get-in @called [:opts :content-type])))
+
+        ;; Current implementation: extraction is disabled; we persist markdown-only parse.
+        (is (nil? (:extraction result)))
+        (is (= "A\n\nB" (:parsed-markdown result)))
+
+        ;; Request should not include structured extraction format.
+        (is (nil? (get body-map :document_annotation_format)))))))
 
 (deftest ocr-extract-batch-parses-results-and-errors
   (let [uploaded-jsonl (atom nil)
@@ -160,8 +161,8 @@
                   [{:custom-id "r1" :bytes (byte-array [1]) :content-type "image/jpeg"}
                    {:custom-id "r2" :bytes (byte-array [2]) :content-type "image/jpeg"}])]
         (is (str/includes? @uploaded-jsonl "\"custom_id\":\"r1\""))
-        (is (str/includes? @uploaded-jsonl "\"document_annotation_format\""))
+          (is (not (str/includes? @uploaded-jsonl "\"document_annotation_format\"")))
         (is (contains? (:results res) "r1"))
         (is (contains? (:errors res) "r2"))
         (is (= "Hello" (get-in res [:results "r1" :parsed-markdown])))
-        (is (= "Store" (get-in res [:results "r1" :extraction :merchant :name])))))))
+          (is (nil? (get-in res [:results "r1" :extraction])))))))

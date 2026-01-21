@@ -54,12 +54,8 @@
         show-edit? (not (false? (:show-edit? item)))
         show-delete? (not (false? (:show-delete? item)))
         item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)
-        deleted? (some? (or (:deleted-at item-data)
-                          (:deleted_at item-data)
-                          (:expenses/deleted-at item-data)
-                          (:expenses/deleted_at item-data)))
-        edit-disabled? (or deleted? (true? (:edit-disabled? item)))
-        delete-disabled? (or deleted? (true? (:delete-disabled? item)))]
+        edit-disabled? (true? (:edit-disabled? item))
+        delete-disabled? (true? (:delete-disabled? item))]
     ($ :div {:class "flex items-center justify-center gap-2"}
       (when show-edit?
         ($ button

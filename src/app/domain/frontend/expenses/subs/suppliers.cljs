@@ -3,23 +3,12 @@
 
 (def ^:private base-path [:admin :expenses :suppliers])
 (def ^:private inline-create-path (conj base-path :inline-create))
-(def ^:private archive-path (conj base-path :archive))
-(def ^:private purge-path (conj base-path :purge))
+(def ^:private delete-path (conj base-path :delete))
 
 (rf/reg-sub
-  :expenses/suppliers-include-archived?
+  :expenses/supplier-delete-loading?
   (fn [db _]
-    (true? (get-in db (conj base-path :include-archived?)))))
-
-(rf/reg-sub
-  :expenses/supplier-archive-loading?
-  (fn [db _]
-    (true? (get-in db (conj archive-path :loading?)))))
-
-(rf/reg-sub
-  :expenses/supplier-purge-loading?
-  (fn [db _]
-    (true? (get-in db (conj purge-path :loading?)))))
+    (true? (get-in db (conj delete-path :loading?)))))
 
 (rf/reg-sub
   :expenses/suppliers

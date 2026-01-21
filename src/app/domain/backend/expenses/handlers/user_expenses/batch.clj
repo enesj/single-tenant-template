@@ -42,7 +42,7 @@
       (h/unauthorized-response))))
 
 (defn batch-delete-expenses-handler
-  "Handler factory for soft-deleting multiple user expenses.
+  "Handler factory for deleting multiple user expenses.
 
   Expects JSON body like:
   {:ids [\"<uuid>\" ...]}
@@ -74,7 +74,7 @@
               (h/json-response {:error "One or more expense ids are invalid"} 400)
 
               :else
-              (let [result (user-expenses/soft-delete-user-expenses! db user-id parsed-ids)]
+              (let [result (user-expenses/delete-user-expenses! db user-id parsed-ids)]
                 (h/json-response {:data result}))))
           (catch Exception e
             (log/error e "Error batch deleting user expenses"
