@@ -3,12 +3,14 @@
   ["expense_purchased_at"
    "article_canonical_name"
    "raw_label"
-   "raw_label_normalized"
+   "raw_label_id"
    "alias_id"
    "qty"
    "unit_price"
    "line_total"
+   "article_id"
    "created_at"
+   "deleted_at"
    "expense_id"
    "id"],
   :default-visible-columns
@@ -47,6 +49,7 @@
   ["display_name"
    "normalized_key"
    "address"
+   "archived_at"
    "created_at"
    "id"
    "updated_at"],
@@ -98,6 +101,7 @@
    "id"
    "receipt_id"
    "created_at"
+   "deleted_at"
    "updated_at"
    "user_id"],
   :default-visible-columns
@@ -235,6 +239,7 @@
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "confidence"
    "created_at"
    "id"
    "supplier_id"
@@ -245,13 +250,15 @@
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
-   "raw_label_normalized"
+    "raw_label_normalized"
+    "confidence"
    "created_at"],
   :sortable-columns
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
-   "raw_label_normalized"
+    "raw_label_normalized"
+    "confidence"
    "created_at"],
   :always-visible ["raw_label"],
   :computed-fields

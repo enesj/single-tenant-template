@@ -8,6 +8,7 @@
   (:require
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
@@ -16,16 +17,56 @@
     [clojure.string :as str]
     [taoensso.timbre :as log]))
 
+(defn- user-allows-receipt-refine?
+  [db receipt]
+  (try
+    (let [user-id (:user_id receipt)]
+      (when user-id
+        (let [persisted (user-expense-settings/get-user-expense-settings db user-id)
+              effective (user-expense-settings/effective-settings persisted)]
+          (true? (:receipt-refine-enabled effective)))))
+    (catch Exception e
+      (log/warn e "Failed to load user expense settings; skipping receipt refine"
+        {:receipt-id (:id receipt)
+         :user-id (:user_id receipt)})
+      false)))
+
 (defn- maybe-refine-with-cerebras
-  [receipt-id extract-result {:keys [cerebras-cfg] :as _opts}]
-  (let [markdown (:parsed-markdown extract-result)]
-    (if-not (and (map? cerebras-cfg)
-              (:enabled? cerebras-cfg)
-              (seq (:api-key cerebras-cfg))
-              (seq (some-> markdown str str/trim)))
-      extract-result
+  [db receipt extract-result {:keys [cerebras-cfg] :as _opts}]
+  (let [receipt-id (:id receipt)
+        markdown (:parsed-markdown extract-result)
+        user-id (:user_id receipt)
+        user-enabled? (user-allows-receipt-refine? db receipt)
+        has-markdown? (boolean (seq (some-> markdown str str/trim)))
+        cerebras-cfg? (map? cerebras-cfg)
+        has-api-key? (boolean (and cerebras-cfg? (seq (:api-key cerebras-cfg))))
+        reasons (cond-> []
+                  (not user-enabled?) (conj :user-disabled)
+                  (not cerebras-cfg?) (conj :missing-cerebras-config)
+                  (and cerebras-cfg? (not (seq (:api-key cerebras-cfg)))) (conj :missing-api-key)
+                  (not has-markdown?) (conj :blank-markdown))]
+    (if (seq reasons)
+      (do
+        ;; Log skip reasons at INFO when user has opted in (otherwise this would be noisy).
+        (when user-enabled?
+          (log/info "Cerebras receipt refine skipped"
+            {:receipt-id receipt-id
+             :user-id user-id
+             :reasons reasons
+             :has-api-key? has-api-key?
+             :has-markdown? has-markdown?}))
+        extract-result)
       (try
-        (let [refine (cerebras/refine-receipt-markdown! cerebras-cfg markdown)]
+        (log/info "Cerebras receipt refine starting" {:receipt-id receipt-id :user-id user-id})
+        (let [started (System/nanoTime)
+              refine (cerebras/refine-receipt-markdown! cerebras-cfg markdown)
+              duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
+          (log/info "Cerebras receipt refine applied"
+            {:receipt-id receipt-id
+             :user-id user-id
+             :duration-ms duration-ms
+             :model (:model refine)
+             :has-extraction? (boolean (:extraction refine))})
           (cond-> extract-result
             (:extraction refine) (assoc :extraction (:extraction refine))
             refine (assoc :llm_refine refine)))
@@ -33,6 +74,7 @@
           (let [details (common/safe-ex-data e)]
             (log/warn e "Cerebras receipt refine failed; continuing without refine"
               (cond-> {:receipt-id receipt-id
+                       :user-id user-id
                        :error_message (or (.getMessage e) (str (class e)))}
                 (seq details) (assoc :error_details details))))
           extract-result)))))
@@ -71,7 +113,7 @@
           (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
                                                                   :content-type (:content_type receipt)})]
-            (extraction/persist-extract-result! db receipt-id (maybe-refine-with-cerebras receipt-id extract-result opts) opts))
+            (extraction/persist-extract-result! db receipt-id (maybe-refine-with-cerebras db receipt extract-result opts) opts))
           (catch Exception e
             (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (common/safe-ex-data e))
             {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
@@ -198,7 +240,10 @@
                   (dissoc m :receipt :request)
 
                   extract-result
-                  (let [extract-result (maybe-refine-with-cerebras receipt-id extract-result opts)]
+                  (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
+                        extract-result (if receipt
+                                       (maybe-refine-with-cerebras db receipt extract-result opts)
+                                       extract-result)]
                     (extraction/persist-extract-result! db receipt-id extract-result opts))
 
                   :else

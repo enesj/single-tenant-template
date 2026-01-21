@@ -44,6 +44,7 @@
         [notifications set-notifications!] (use-state (if (contains? settings :notifications-enabled)
                     (:notifications-enabled settings)
                                                         true))
+        [receipt-refine-enabled set-receipt-refine-enabled!] (use-state (boolean (:receipt-refine-enabled settings)))
         payers (or (use-subscribe [:user-expenses/payers]) [])
 
         ;; Compute "dirty" state to enable Save only when values differ.
@@ -52,14 +53,17 @@
         current-notifications (if (contains? settings :notifications-enabled)
               (boolean (:notifications-enabled settings))
                                 true)
+          current-receipt-refine-enabled (boolean (:receipt-refine-enabled settings))
         dirty? (or (not= default-currency current-currency)
                  (not= (some-> default-payer str) current-payer)
-                 (not= (boolean notifications) current-notifications))
+               (not= (boolean notifications) current-notifications)
+               (not= (boolean receipt-refine-enabled) current-receipt-refine-enabled))
 
         handle-save (fn []
                       (let [settings {:default-currency default-currency
                                       :default-payer-id default-payer
-                                      :notifications-enabled notifications}]
+                                      :notifications-enabled notifications
+                                      :receipt-refine-enabled receipt-refine-enabled}]
                         (rf/dispatch [:user-expenses/save-settings settings])))]
 
     ;; Fetch settings and payers on mount
@@ -80,7 +84,9 @@
           (set-notifications!
             (if (contains? settings :notifications-enabled)
               (boolean (:notifications-enabled settings))
-              true))))
+              true))
+          (set-receipt-refine-enabled!
+            (boolean (:receipt-refine-enabled settings)))))
       [settings])
 
     ($ :div {:class "min-h-screen bg-base-100"}
@@ -150,6 +156,17 @@
                            :class "ds-toggle ds-toggle-primary"
                            :checked notifications
                            :on-change #(set-notifications! (.. % -target -checked))})))
+
+            ;; Receipts
+            ($ setting-section {:title "Receipts"
+                                :description "Control how receipt uploads are processed."}
+              ($ setting-row {:label "AI receipt refinement"
+                              :description "Improve receipt extraction accuracy (may take a bit longer)."}
+                ($ :input {:id "settings-receipt-refine-toggle"
+                           :type "checkbox"
+                           :class "ds-toggle ds-toggle-primary"
+                           :checked receipt-refine-enabled
+                           :on-change #(set-receipt-refine-enabled! (.. % -target -checked))})))
 
             ;; Account Info
             ($ setting-section {:title "Account Information"

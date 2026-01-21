@@ -46,7 +46,7 @@
    url
    request-opts]
   (when-not (seq api-key)
-    (throw (ex-info "Missing Cerebras API key (set env var CEREBRAS_API_KEY; enable with CEREBRAS_RECEIPT_REFINE_ENABLED=true)"
+    (throw (ex-info "Missing Cerebras API key (set env var CEREBRAS_API_KEY)"
              {:type :cerebras/missing-api-key})))
   (let [base-opts {:headers {"Authorization" (str "Bearer " api-key)}
                    :conn-timeout conn-timeout-ms

@@ -30,7 +30,7 @@
 ;; Settings handlers
 ;; ---------------------------------------------------------------------------
 
-(defn- parse-notifications-enabled
+(defn- parse-bool
   [v]
   (cond
     (nil? v) nil
@@ -61,7 +61,7 @@
                {}
                body)
         _ (log/info "After key normalization" {:body body})
-        supported-keys #{:default-currency :default-payer-id :notifications-enabled}
+        supported-keys #{:default-currency :default-payer-id :notifications-enabled :receipt-refine-enabled}
         present-keys (->> supported-keys (filter #(contains? body %)) set)]
     (log/info "Settings validation" {:present-keys present-keys :supported-keys supported-keys})
     (cond
@@ -78,7 +78,9 @@
                          nil
                          (h/try-parse-uuid payer-id-raw)))
             notifications (when (contains? body :notifications-enabled)
-                            (parse-notifications-enabled (:notifications-enabled body)))]
+                            (parse-bool (:notifications-enabled body)))
+            receipt-refine-enabled (when (contains? body :receipt-refine-enabled)
+                                     (parse-bool (:receipt-refine-enabled body)))]
         (cond
           (and (contains? body :default-currency)
             (nil? currency))
@@ -98,12 +100,17 @@
             (nil? notifications))
           {:error (h/json-response {:error "notifications-enabled must be a boolean"} 400)}
 
+          (and (contains? body :receipt-refine-enabled)
+            (nil? receipt-refine-enabled))
+          {:error (h/json-response {:error "receipt-refine-enabled must be a boolean"} 400)}
+
           :else
           {:settings
            (cond-> current
              (contains? body :default-currency) (assoc :default-currency currency)
              (contains? body :default-payer-id) (assoc :default-payer-id payer-id)
-             (contains? body :notifications-enabled) (assoc :notifications-enabled notifications))})))))
+             (contains? body :notifications-enabled) (assoc :notifications-enabled notifications)
+             (contains? body :receipt-refine-enabled) (assoc :receipt-refine-enabled receipt-refine-enabled))})))))
 
 (defn get-settings-handler
   "GET /api/v1/expenses/settings - fetch user settings.

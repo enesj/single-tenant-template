@@ -248,7 +248,8 @@
     (reset-db!)
     (let [settings {:default-currency "EUR"
                     :default-payer-id ""
-                    :notifications-enabled true}]
+                    :notifications-enabled true
+                    :receipt-refine-enabled true}]
       (rf/dispatch-sync [:user-expenses/update-settings settings])
       (let [req (last-http-request)]
         (is (= :put (req-method req)))

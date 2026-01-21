@@ -23,7 +23,6 @@ Visit [Cerebras API Keys](https://inference-docs.cerebras.ai/) and navigate to "
 ### 2. Set Environment Variable
 ```bash
 export CEREBRAS_API_KEY="your-api-key-here"
-export CEREBRAS_RECEIPT_REFINE_ENABLED=true
 ```
 
 ### 3. Clojure (JVM) Setup
@@ -235,7 +234,7 @@ Check the [Pricing page](https://inference-docs.cerebras.ai/pricing) and [Rate L
 Receipt OCR now supports an optional refine step:
 
 1. Mistral OCR produces `parsed_markdown` for the receipt.
-2. If `CEREBRAS_RECEIPT_REFINE_ENABLED=true` and `CEREBRAS_API_KEY` is set, the worker calls Cerebras to extract structured data.
+2. If the user has enabled **AI receipt refinement** in `/expenses/settings` and `CEREBRAS_API_KEY` is set, the worker calls Cerebras to extract structured data.
 3. The worker still runs markdown heuristics + reconciliation to make the final stored extraction more robust.
 
 Refine results are stored under `raw_extract_json.llm_refine` for debugging.

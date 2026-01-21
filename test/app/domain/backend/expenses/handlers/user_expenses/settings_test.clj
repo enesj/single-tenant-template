@@ -55,7 +55,8 @@
       (is (= 200 (:status resp)))
         (is (= "BAM" (:default-currency body)))
         (is (nil? (:default-payer-id body)))
-        (is (= true (:notifications-enabled body))))))
+        (is (= true (:notifications-enabled body)))
+        (is (= false (:receipt-refine-enabled body))))))
 
 (deftest settings-put-persists-and-get-reflects
   (when-let [db fixtures/*test-db*]
@@ -69,7 +70,8 @@
                            :role "member"
                      :body {:default-currency "EUR"
                         :default-payer-id (str payer-id)
-                        :notifications-enabled false}}))
+        :notifications-enabled false
+        :receipt-refine-enabled true}}))
           put-body (parse-body put-resp)
           get-resp (get-handler (req {:user-id user-id :role "member"}))
           get-body (parse-body get-resp)]
@@ -77,11 +79,13 @@
           (is (= "EUR" (:default-currency put-body)))
           (is (= (str payer-id) (:default-payer-id put-body)))
           (is (= false (:notifications-enabled put-body)))
+      (is (= true (:receipt-refine-enabled put-body)))
 
       (is (= 200 (:status get-resp)))
           (is (= "EUR" (:default-currency get-body)))
           (is (= (str payer-id) (:default-payer-id get-body)))
-          (is (= false (:notifications-enabled get-body))))))
+          (is (= false (:notifications-enabled get-body)))
+          (is (= true (:receipt-refine-enabled get-body))))))
 
 (deftest settings-put-blank-payer-clears
   (when-let [db fixtures/*test-db*]

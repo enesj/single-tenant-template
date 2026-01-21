@@ -96,4 +96,10 @@
                     :user #ref [:secrets :gmail :smtp-user]
                     :pass #ref [:secrets :gmail :smtp-pass]
                     :tls  true}
-             :from-email #ref [:secrets :gmail :from-email]}}
+             :from-email #ref [:secrets :gmail :from-email]}
+
+ ;; Cerebras configuration (optional)
+ ;; - Keep secrets (API keys) in env / config/.secrets.edn
+ ;; - Receipt refinement is controlled per-user via the Expenses Settings toggle.
+ ;; - The Cerebras integration is considered available when a Cerebras API key is present.
+ :cerebras  {}}

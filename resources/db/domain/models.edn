@@ -112,6 +112,7 @@
                                   [:default_currency [:enum :currency] {:null false :default "BAM"}]
                                   [:default_payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
                                   [:notifications_enabled :boolean {:null false :default true}]
+                                  [:receipt_refine_enabled :boolean {:null false :default false}]
                                   [:created_at :timestamptz {:default "NOW()"}]
                                   [:updated_at :timestamptz {:default "NOW()"}]]}
 

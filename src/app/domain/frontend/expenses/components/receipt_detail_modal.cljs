@@ -91,13 +91,32 @@
   [status]
   (contains? receipt-processing-statuses status))
 
-(defn- format-time
-  [d]
-  (when d
-    (try
-      (.toLocaleTimeString d "en-US" #js {:hour "2-digit" :minute "2-digit" :second "2-digit"})
-      (catch :default _
-        (str d)))))
+(defn- pad2
+  [n]
+  (let [s (str (or n 0))]
+    (if (= 1 (count s))
+      (str "0" s)
+      s)))
+
+(defn- format-duration-ms
+  "Format a duration in milliseconds as H:MM:SS or M:SS."
+  [ms]
+  (let [ms (max 0 (long (or ms 0)))
+        total-sec (quot ms 1000)
+        sec (mod total-sec 60)
+        total-min (quot total-sec 60)
+        min (mod total-min 60)
+        hrs (quot total-min 60)]
+    (if (pos? hrs)
+      (str hrs ":" (pad2 min) ":" (pad2 sec))
+      (str total-min ":" (pad2 sec)))))
+
+(defn- format-duration
+  [started-at last-checked]
+  (when (and started-at last-checked
+          (instance? js/Date started-at)
+          (instance? js/Date last-checked))
+    (format-duration-ms (- (.getTime last-checked) (.getTime started-at)))))
 
 (defn- format-bytes
   [value]
@@ -166,6 +185,7 @@
         can-approve? (boolean (use-subscribe [:expenses/can? :expenses/receipts.approve]))
         [active-tab set-active-tab!] (use-state (if can-approve? :approve :details))
         [preview-expanded? set-preview-expanded!] (use-state false)
+        [processing-started-at set-processing-started-at!] (use-state nil)
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
                    (fn []
@@ -202,6 +222,22 @@
               (js/clearInterval handle)))))
       [receipt-id processing? refresh! poll-interval-ms])
 
+    ;; Track processing duration for the banner.
+    (use-effect
+      (fn []
+        (cond
+          (and processing? (nil? processing-started-at))
+          (let [now (js/Date.)]
+            (set-processing-started-at! now)
+            (set-last-checked! now))
+
+          (and (not processing?) (or processing-started-at last-checked))
+          (do
+            (set-processing-started-at! nil)
+            (set-last-checked! nil)))
+        js/undefined)
+      [processing? processing-started-at last-checked])
+
     ($ :div {:class "space-y-4"}
       (when processing?
         ($ :div {:id (str "receipt-detail-processing-banner-" rid-str)
@@ -210,9 +246,9 @@
             ($ :div {:class "flex items-center gap-2"}
               ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
               ($ :span {:class "text-sm"} "Processing…")
-              (when last-checked
+              (when-let [duration (format-duration processing-started-at last-checked)]
                 ($ :span {:class "text-xs text-base-content/60"}
-                  (str "Last checked: " (format-time last-checked)))))
+                  (str "Duration: " duration))))
             ($ :button {:id (str "btn-refresh-receipt-detail-" rid-str)
                         :class "ds-btn ds-btn-ghost ds-btn-xs"
                         :type "button"

@@ -243,72 +243,155 @@
     ".edn"))
 
 (defn- print-frontend-config-validation!
-  [results]
-  (println "=== Frontend config validation (dry-run) ===")
-  (doseq [res results]
-    (let [label (frontend-config-label res)
-          path (:path res)]
-      (if (:valid? res)
-        (println "OK" label "valid" (str "(" path ")"))
-        (do
-          (println "ERROR" label "INVALID" (str "(" path ")"))
-          (when (seq (:errors res))
-            (println "  errors:" (pr-str (:errors res))))
-          (when (seq (:warnings res))
-            (println "  warnings:" (pr-str (:warnings res))))))
-      (let [semantic (:semantic res)]
-        (when (seq (:unknown-entities semantic))
-          (println "  unknown entities:" (pr-str (:unknown-entities semantic))))
-        (when (seq (:unknown-fields semantic))
-          (println "  unknown fields:" (pr-str (:unknown-fields semantic))))
-        (when (seq (:missing-fields semantic))
-          (println "  missing DB fields (info):" (pr-str (:missing-fields semantic))))))))
+  ([results] (print-frontend-config-validation! results {:verbose? false}))
+  ([results {:keys [verbose?]
+             :or {verbose? false}}]
+   (println "=== Frontend config validation (dry-run) ===")
+   (let [invalid (filter (comp not :valid?) results)
+         total (count results)
+         invalid-count (count invalid)]
+     (println (format "Checked %d config file(s). %s" total
+                (if (zero? invalid-count)
+                  "All valid ✅"
+                  (format "%d invalid ❌" invalid-count))))
+     (when (or verbose? (pos? invalid-count))
+       (doseq [res (if verbose? results invalid)]
+         (let [label (frontend-config-label res)
+               path (:path res)]
+           (if (:valid? res)
+             (println "OK" label "valid" (str "(" path ")"))
+             (do
+               (println "ERROR" label "INVALID" (str "(" path ")"))
+               (let [print-opts (if verbose?
+                                  {:print-length nil :print-level nil}
+                                  {:print-length 10 :print-level 6})]
+                 (binding [*print-length* (:print-length print-opts)
+                           *print-level* (:print-level print-opts)]
+                   (when (seq (:errors res))
+                     (println "  errors:" (pr-str (:errors res))))
+                   (when (seq (:warnings res))
+                     (println "  warnings:" (pr-str (:warnings res))))))))
+           (let [semantic (:semantic res)
+                 print-opts (if verbose?
+                             {:print-length nil :print-level nil}
+                             {:print-length 10 :print-level 6})]
+             (binding [*print-length* (:print-length print-opts)
+                       *print-level* (:print-level print-opts)]
+               (when (seq (:unknown-entities semantic))
+                 (println "  unknown entities:" (pr-str (:unknown-entities semantic))))
+               (when (seq (:unknown-fields semantic))
+                 (println "  unknown fields:" (pr-str (:unknown-fields semantic))))
+               (when (seq (:missing-fields semantic))
+                 (if verbose?
+                   (println "  missing DB fields (info):" (pr-str (:missing-fields semantic)))
+                   (println "  missing DB fields (info):" (format "%d entity(s)" (count (:missing-fields semantic))))))))))))))
 
 (defn- print-frontend-config-sync!
-  [patches]
-  (println "=== Frontend config sync plan (dry-run) ===")
-  (doseq [patch patches]
-    (let [label (frontend-config-label patch)
-          path (:path patch)]
-      (if (:has-changes? patch)
-        (println "ERROR" label (str "(" path ")"))
-        (println "OK" label "no changes" (str "(" path ")")))
-      (when (seq (:unknown-entities patch))
-        (println "  unknown entities:" (pr-str (:unknown-entities patch))))
-      (doseq [[entity info] (sort-by (comp str key) (:summary patch))]
-        (println "  entity" (pr-str entity))
-        (when (seq (:add-available info))
-          (println "    add to :available-columns:" (pr-str (:add-available info))))
-        (when (seq (:removed info))
-          (println "    quarantine fields:" (pr-str (:removed info))))))))
+  ([patches] (print-frontend-config-sync! patches {:verbose? false}))
+  ([patches {:keys [verbose?]
+             :or {verbose? false}}]
+   (println "=== Frontend config sync plan (dry-run) ===")
+   (let [changed (filter :has-changes? patches)
+         changed-count (count changed)
+         total (count patches)]
+     (println (format "Checked %d config file(s). %s" total
+                (if (zero? changed-count)
+                  "No changes needed ✅"
+                  (format "%d file(s) need updates ❌" changed-count))))
+     (when (or verbose? (pos? changed-count))
+       (doseq [patch (if verbose? patches changed)]
+         (let [label (frontend-config-label patch)
+               path (:path patch)]
+           (if (:has-changes? patch)
+             (println "ERROR" label (str "(" path ")"))
+             (println "OK" label "no changes" (str "(" path ")")))
+           (when (seq (:unknown-entities patch))
+             (println "  unknown entities:" (pr-str (:unknown-entities patch))))
+           (if-not verbose?
+             (when (:has-changes? patch)
+               (println "  changes in" (count (:summary patch)) "entity(s)"))
+             (doseq [[entity info] (sort-by (comp str key) (:summary patch))]
+               (println "  entity" (pr-str entity))
+               (when (seq (:add-available info))
+                 (println "    add to :available-columns:" (pr-str (:add-available info))))
+               (when (seq (:removed info))
+                 (println "    quarantine fields:" (pr-str (:removed info))))))))))))
 
 (defn- run-frontend-config-dry-run!
   "Validate + plan-sync frontend config against the consolidated schema.
 
-  Returns a summary map and prints a human-readable report to the REPL."
-  []
-  (let [bundles (fc-discovery/config-bundles {})]
-    (if (empty? bundles)
-      (do
-        (println "=== Frontend config validation (dry-run) ===")
-        (println "WARNING: No frontend config bundles found. Skipping.")
-        {:status :skipped})
-      (let [schema-index (fc-schema/models-index "resources/db/models.edn")
-            bundles* (fc-discovery/load-bundles bundles)
-            results (fc-validation/validate-bundles bundles* schema-index nil)
-            patches (fc-sync/plan-sync bundles* schema-index nil)
+  Returns a summary map and prints a human-readable report.
+
+  Options:
+  - :verbose? (default false) Print every OK line; otherwise print only invalid/changed files."
+  ([] (run-frontend-config-dry-run! {:verbose? false}))
+  ([{:keys [verbose?]
+     :or {verbose? false}}]
+   (let [bundles (fc-discovery/config-bundles {})]
+     (if (empty? bundles)
+       (do
+         (println "=== Frontend config validation (dry-run) ===")
+         (println "WARNING: No frontend config bundles found. Skipping.")
+         {:status :skipped})
+       (let [schema-index (fc-schema/models-index "resources/db/models.edn")
+             bundles* (fc-discovery/load-bundles bundles)
+             results (fc-validation/validate-bundles bundles* schema-index nil)
+             patches (fc-sync/plan-sync bundles* schema-index nil)
+             invalid (filter (comp not :valid?) results)
+             changes? (some :has-changes? patches)
+             unknown-entities (->> patches (mapcat :unknown-entities) vec)]
+         (print-frontend-config-validation! results {:verbose? verbose?})
+         (print-frontend-config-sync! patches {:verbose? verbose?})
+         {:status :ok
+          :validation {:valid? (empty? invalid)
+                       :invalid-count (count invalid)
+                       :results results}
+          :sync {:has-changes? (boolean changes?)
+                 :unknown-entities unknown-entities
+                 :patches patches}})))))
+
+(defn- frontend-config-dry-run-summary
+  "Convert the (potentially huge) frontend-config dry-run result into a small summary map.
+
+  This is used by `migrate!` so `clojure -e '(mig/migrate!)'` doesn't dump megabytes of data." 
+  [frontend-dry]
+  (let [{:keys [status]} frontend-dry]
+    (if (not= :ok status)
+      {:status status}
+      (let [results (get-in frontend-dry [:validation :results])
+            patches (get-in frontend-dry [:sync :patches])
             invalid (filter (comp not :valid?) results)
-            changes? (some :has-changes? patches)
-            unknown-entities (->> patches (mapcat :unknown-entities) vec)]
-        (print-frontend-config-validation! results)
-        (print-frontend-config-sync! patches)
+            changed (filter :has-changes? patches)]
         {:status :ok
-         :validation {:valid? (empty? invalid)
-                      :invalid-count (count invalid)
-                      :results results}
-         :sync {:has-changes? (boolean changes?)
-                :unknown-entities unknown-entities
-                :patches patches}}))))
+         :validation {:valid? (true? (get-in frontend-dry [:validation :valid?]))
+                      :invalid-count (int (or (get-in frontend-dry [:validation :invalid-count]) 0))
+                          :invalid (mapv (fn [res]
+                               (let [semantic (:semantic res)
+                                 unknown-fields (:unknown-fields semantic)
+                                 missing-fields (:missing-fields semantic)
+                                 warnings (:warnings res)
+                                 errors (:errors res)]
+                                         {:label (frontend-config-label res)
+                                          :path (:path res)
+                                          ;; Keep the summary small: counts + a small sample.
+                                          :errors-count (count errors)
+                                          :errors-sample (vec (take 3 errors))
+                                          :warnings-count (count warnings)
+                                          :warnings-sample (vec (take 1 warnings))
+                                          :unknown-entities-count (count (:unknown-entities semantic))
+                                          :unknown-entities-sample (vec (take 5 (:unknown-entities semantic)))
+                                          :unknown-fields-entities (vec (take 25 (keys unknown-fields)))
+                                          :missing-fields-entities (vec (take 25 (keys missing-fields)))}))
+                                 invalid)}
+         :sync {:has-changes? (boolean (get-in frontend-dry [:sync :has-changes?]))
+                :unknown-entities (vec (or (get-in frontend-dry [:sync :unknown-entities]) []))
+                :changes (mapv (fn [patch]
+                                 {:label (frontend-config-label patch)
+                                  :path (:path patch)
+                                  :unknown-entities (:unknown-entities patch)
+                                  :entities (vec (keys (:summary patch)))
+                                  :entity-count (count (:summary patch))})
+                           changed)}}))))
 
 (defn- run-bb!
   [& args]
@@ -354,6 +437,10 @@
     re-validate using bb tasks.
   - :frontend-config-args (default []) Extra args forwarded to the bb tasks
     (e.g., [--only expenses]).
+  - :frontend-config-verbose? (default false) Print all frontend-config OK lines.
+  - :return (default :summary) One of:
+      - :summary (small map; avoids huge output in `clojure -e`)
+      - :full (includes full alignment + frontend-config structures)
 
   Notes:
   - If verification finds differences, it prints the report and throws.
@@ -366,7 +453,8 @@
              :or {verify? true
                   print-report? false
                   sync-frontend-config? false
-                  frontend-config-args []}}]
+                  frontend-config-args []}
+             :as opts}]
    (let [migration-res (am/migrate {:jdbc-url (get-jdbc-url profile)})
          report (when verify?
                   (alignment-report profile))
@@ -377,7 +465,9 @@
          (alignment/print-report! report))
        (when (and (not diff?) print-report?)
          (alignment/print-report! report)))
-     (let [frontend-dry (run-frontend-config-dry-run!)
+     (let [frontend-config-verbose? (boolean (:frontend-config-verbose? opts))
+           return-mode (or (:return opts) :summary)
+           frontend-dry (run-frontend-config-dry-run! {:verbose? frontend-config-verbose?})
            frontend-base {:dry-run frontend-dry}]
        (when (and verify? diff?)
          (throw (ex-info "DB is not aligned after migrate!" {:profile profile
@@ -387,9 +477,22 @@
                               (run-frontend-config-apply! frontend-config-args))
              frontend-result (cond-> frontend-base
                                frontend-apply (assoc :apply frontend-apply))]
-         {:migration migration-res
-          :alignment report
-          :frontend-config frontend-result})))))
+         (case return-mode
+           :full {:migration migration-res
+                  :alignment report
+                  :frontend-config frontend-result}
+           ;; default: return a small, readable summary (prevents gigantic `clojure -e` output)
+           {:migration migration-res
+            :alignment {:diff? (boolean diff?)}
+            :frontend-config (frontend-config-dry-run-summary frontend-dry)}))))))
+
+(defn migrate-full!
+  "Run migrations and return full (potentially large) result map.
+
+  Prefer `migrate!` for CLI/terminal use; use this when debugging interactively." 
+  ([] (migrate-full! :dev))
+  ([profile] (migrate! profile {:return :full}))
+  ([profile opts] (migrate! profile (assoc opts :return :full))))
 
 (defn status
   "Show migration status for the given profile (default :dev)."

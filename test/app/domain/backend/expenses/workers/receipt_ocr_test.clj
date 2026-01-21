@@ -9,6 +9,34 @@
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
     [clojure.test :refer [deftest is testing]]))
 
+(deftest cerebras-refine-respects-user-setting
+  (let [maybe-refine #'core/maybe-refine-with-cerebras
+        db ::fake-db
+        receipt {:id (java.util.UUID/randomUUID)
+                 :user_id (java.util.UUID/randomUUID)}
+        extract-result {:parsed-markdown "Hello"}]
+    (testing "disabled -> does not call Cerebras"
+      (with-redefs [app.domain.backend.expenses.services.user-expense-settings/get-user-expense-settings
+                    (fn [_db _user-id] {:receipt-refine-enabled false})
+                    app.domain.backend.expenses.services.user-expense-settings/effective-settings
+                    (fn [persisted] persisted)
+                    app.domain.backend.expenses.integrations.cerebras/refine-receipt-markdown!
+                    (fn [& _] (throw (ex-info "Refine should not have been called" {})))]
+        (is (= extract-result
+              (maybe-refine db receipt extract-result {:cerebras-cfg {:enabled? true :api-key "k"}})))))
+
+    (testing "enabled -> calls Cerebras and merges refine result"
+      (with-redefs [app.domain.backend.expenses.services.user-expense-settings/get-user-expense-settings
+                    (fn [_db _user-id] {:receipt-refine-enabled true})
+                    app.domain.backend.expenses.services.user-expense-settings/effective-settings
+                    (fn [persisted] persisted)
+                    app.domain.backend.expenses.integrations.cerebras/refine-receipt-markdown!
+                    (fn [_cfg _markdown]
+                      {:extraction {:supplier "X"}})]
+        (let [res (maybe-refine db receipt extract-result {:cerebras-cfg {:enabled? true :api-key "k"}})]
+          (is (= {:supplier "X"} (:extraction res)))
+          (is (map? (:llm_refine res))))))))
+
 (deftest parse-money-handles-common-formats
   (let [parse-money #'common/parse-money]
     (is (= 10.26M (parse-money "10.26")))
