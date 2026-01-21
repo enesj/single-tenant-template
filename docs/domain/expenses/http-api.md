@@ -107,7 +107,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 **User expense settings (per-user, persisted)**
 - `GET /api/v1/expenses/settings` – fetch effective user settings (defaults + any persisted values).
 - `PUT /api/v1/expenses/settings` – update settings (**partial updates supported**).
-  - Supported keys: `default_currency` (required when present), `default_payer_id` (UUID or blank to clear), `notifications_enabled` (boolean).
+  - Supported keys: `default-currency` (required when present), `default-payer-id` (UUID or blank to clear), `notifications-enabled` (boolean), `receipt-refine-enabled` (boolean).
 
 ### Export & Danger Zone
 - `GET /api/v1/expenses/export` – export user expenses (currently `format=csv` supported).
