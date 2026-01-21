@@ -49,6 +49,7 @@ package-lock.json
 /.idea/
 /src/app/backend/airbnb/
 tmp/
+.tmp/
 -/
 /projectstmp/
 /test-screenshots/

@@ -6,13 +6,36 @@
   This is the concrete implementation namespace (callers should require this
   namespace directly)."
   (:require
+    [app.domain.backend.expenses.integrations.cerebras :as cerebras]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
     [app.shared.type-conversion :as type-conv]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
+
+(defn- maybe-refine-with-cerebras
+  [receipt-id extract-result {:keys [cerebras-cfg] :as _opts}]
+  (let [markdown (:parsed-markdown extract-result)]
+    (if-not (and (map? cerebras-cfg)
+              (:enabled? cerebras-cfg)
+              (seq (:api-key cerebras-cfg))
+              (seq (some-> markdown str str/trim)))
+      extract-result
+      (try
+        (let [refine (cerebras/refine-receipt-markdown! cerebras-cfg markdown)]
+          (cond-> extract-result
+            (:extraction refine) (assoc :extraction (:extraction refine))
+            refine (assoc :llm_refine refine)))
+        (catch Exception e
+          (let [details (common/safe-ex-data e)]
+            (log/warn e "Cerebras receipt refine failed; continuing without refine"
+              (cond-> {:receipt-id receipt-id
+                       :error_message (or (.getMessage e) (str (class e)))}
+                (seq details) (assoc :error_details details))))
+          extract-result)))))
 
 (defn- process-parse!
   [db ocr-cfg receipt opts]
@@ -48,7 +71,7 @@
           (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
                                                                   :content-type (:content_type receipt)})]
-            (extraction/persist-extract-result! db receipt-id extract-result opts))
+            (extraction/persist-extract-result! db receipt-id (maybe-refine-with-cerebras receipt-id extract-result opts) opts))
           (catch Exception e
             (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (common/safe-ex-data e))
             {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
@@ -94,9 +117,11 @@
    (process-pending! db app-config nil))
   ([db app-config {:keys [max-receipts] :as opts}]
    (let [ocr-cfg (mistral-ocr/build-config app-config)
+         cerebras-cfg (cerebras/build-config app-config)
          opts (merge {:max-receipts 25
                       :lease-seconds 900
-                      :default-currency "BAM"}
+                      :default-currency "BAM"
+                      :cerebras-cfg cerebras-cfg}
                 (or opts {}))]
      (if-not (:enabled? ocr-cfg)
        (do
@@ -173,7 +198,8 @@
                   (dissoc m :receipt :request)
 
                   extract-result
-                  (extraction/persist-extract-result! db receipt-id extract-result opts)
+                  (let [extract-result (maybe-refine-with-cerebras receipt-id extract-result opts)]
+                    (extraction/persist-extract-result! db receipt-id extract-result opts))
 
                   :else
                   (do
@@ -199,10 +225,12 @@
    (process-receipts-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
    (let [ocr-cfg (mistral-ocr/build-config app-config)
+         cerebras-cfg (cerebras/build-config app-config)
          use-batch? (and reset? (:batch-enabled? ocr-cfg) (> (count receipt-ids) 1))
          opts (merge {:lease-seconds 900
                       :storage-base-dir "upload/stripes"
-                      :default-currency "BAM"}
+                      :default-currency "BAM"
+                      :cerebras-cfg cerebras-cfg}
                 (dissoc opts :reset?))]
      (if-not (:enabled? ocr-cfg)
        (do
@@ -227,8 +255,8 @@
                      (try
                        (let [;; Optionally reset the receipt first
                              _ (when reset?
-                                   (receipt-status/reset-for-ocr! db rid))
-                               receipt (receipt-queries/get-receipt db rid)]
+                                 (receipt-status/reset-for-ocr! db rid))
+                             receipt (receipt-queries/get-receipt db rid)]
                          (if receipt
                            (process-receipt! db ocr-cfg receipt opts)
                            {:receipt-id rid :result :skipped :reason :not-found}))

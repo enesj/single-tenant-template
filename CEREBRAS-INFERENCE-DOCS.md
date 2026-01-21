@@ -23,40 +23,32 @@ Visit [Cerebras API Keys](https://inference-docs.cerebras.ai/) and navigate to "
 ### 2. Set Environment Variable
 ```bash
 export CEREBRAS_API_KEY="your-api-key-here"
+export CEREBRAS_RECEIPT_REFINE_ENABLED=true
 ```
 
 ### 3. Clojure (JVM) Setup
 
 - This repo already includes suitable HTTP/JSON libs for Clojure (JVM): `clj-http` and `cheshire` in `deps.edn`.
+- Receipt refinement is implemented in app code:
+  - Client: `src/app/domain/backend/expenses/integrations/cerebras.clj`
+  - Prompt + JSON Schema: `src/app/domain/backend/expenses/integrations/cerebras/receipt_refine.clj`
 
 ### 4. Basic Usage
 
-**Clojure (JVM) — clj-http + cheshire:**
+**Clojure (JVM) — in-app integration:**
 ```clj
-(ns cerebras.quickstart
-  (:require [clj-http.client :as http]
-            [cheshire.core :as json]))
+(ns user
+  (:require [app.domain.backend.expenses.integrations.cerebras :as cerebras]
+            [app.domain.backend.expenses.integrations.cerebras.receipt-refine :as receipt-refine]))
 
-(def base-url "https://api.cerebras.ai/v1")
+;; Build config from app-config + env (env wins)
+(def cfg (cerebras/build-config {}))
 
-(defn chat-complete
-  [model messages]
-  (let [api-key (System/getenv "CEREBRAS_API_KEY")
-        req-body {:model model :messages messages}
-        resp (http/post (str base-url "/chat/completions")
-                        {:headers {"Authorization" (str "Bearer " api-key)
-                                   "Content-Type" "application/json"}
-                         :socket-timeout 20000 :conn-timeout 5000
-                         :throw-exceptions false
-                         :body (json/generate-string req-body)})]
-    (cond-> resp
-      true (update :body #(some-> % (json/parse-string true))))))
+;; Build messages (system + user prompt)
+(def messages (receipt-refine/build-chat-messages "<mistral-ocr-markdown>"))
 
-;; Example
-(comment
-  (-> (chat-complete "llama-3.3-70b"
-                     [{:role "user" :content "Why is fast inference important?"}])
-      :body :choices first :message :content))
+;; Call refine (returns app-shaped extraction + raw response)
+(cerebras/refine-receipt-markdown! cfg "<mistral-ocr-markdown>")
 ```
 
 **cURL:**
@@ -108,40 +100,28 @@ curl https://api.cerebras.ai/v1/chat/completions \
 #### Usage Example (Clojure JVM)
 
 ```clj
-(ns cerebras.structured
-  (:require [clj-http.client :as http]
-            [cheshire.core :as json]))
+(ns user
+  (:require [cheshire.core :as json]
+            [clj-http.client :as http]
+            [app.domain.backend.expenses.integrations.cerebras.receipt-refine :as receipt-refine]))
 
 (def base-url "https://api.cerebras.ai/v1")
+(def api-key (System/getenv "CEREBRAS_API_KEY"))
 
-(def receipt-schema
-  {:type "object"
-   :properties {:merchant {:type "string"}
-                :date {:type "string"}
-                :total {:type "number"}
-                :items {:type "array"
-                        :items {:type "object"
-                                :properties {:name {:type "string"}
-                                             :quantity {:type "integer"}
-                                             :price {:type "number"}}
-                                :required ["name" "quantity" "price"]
-                                :additionalProperties false}}}
-   :required ["merchant" "date" "total" "items"]
-   :additionalProperties false})
-
-(defn extract-receipt
-  [raw-ocr-text]
-  (let [api-key (System/getenv "CEREBRAS_API_KEY")
-        body {:model "llama-3.3-70b"
-              :messages [{:role "user"
-                          :content (str "Extract receipt data from: " raw-ocr-text)}]
+(defn refine-with-json-schema
+  [markdown]
+  (let [body {:model "llama-3.3-70b"
+              :messages (receipt-refine/build-chat-messages markdown)
+              :temperature 0
               :response_format {:type "json_schema"
-                                :json_schema {:strict true
-                                              :schema receipt-schema}}}
+                                :json_schema {:json_schema {:name "ReceiptExtractionCentsV1"
+                                                            :strict true
+                                                            :schema receipt-refine/receipt-extraction-json-schema}}}}
         resp (http/post (str base-url "/chat/completions")
                         {:headers {"Authorization" (str "Bearer " api-key)
                                    "Content-Type" "application/json"}
-                         :socket-timeout 20000 :conn-timeout 5000
+                         :socket-timeout 20000
+                         :conn-timeout 5000
                          :throw-exceptions false
                          :body (json/generate-string body)})]
     (-> resp :body (json/parse-string true))))
@@ -252,44 +232,13 @@ Check the [Pricing page](https://inference-docs.cerebras.ai/pricing) and [Rate L
 
 ### In-App Two-Stage Pipeline
 
-```clj
-(ns cerebras.pipeline
-  (:require [clj-http.client :as http]
-            [cheshire.core :as json]))
+Receipt OCR now supports an optional refine step:
 
-(def base-url "https://api.cerebras.ai/v1")
+1. Mistral OCR produces `parsed_markdown` for the receipt.
+2. If `CEREBRAS_RECEIPT_REFINE_ENABLED=true` and `CEREBRAS_API_KEY` is set, the worker calls Cerebras to extract structured data.
+3. The worker still runs markdown heuristics + reconciliation to make the final stored extraction more robust.
 
-(def receipt-schema {;; receipt data schema
-                     :type "object"
-                     :properties {:merchant {:type "string"}
-                                  :date {:type "string"}
-                                  :total {:type "number"}
-                                  :items {:type "array"
-                                          :items {:type "object"
-                                                  :properties {:name {:type "string"}
-                                                               :quantity {:type "integer"}
-                                                               :price {:type "number"}}
-                                                  :required ["name" "quantity" "price"]
-                                                  :additionalProperties false}}}
-                     :required ["merchant" "date" "total" "items"]
-                     :additionalProperties false})
-
-(defn refine-ocr-output
-  [raw-ocr-text]
-  (let [api-key (System/getenv "CEREBRAS_API_KEY")
-        body {:model "llama-3.3-70b"
-              :messages [{:role "user"
-                          :content (str "Extract and clean receipt data:\n" raw-ocr-text)}]
-              :response_format {:type "json_schema"
-                                :json_schema {:strict true
-                                              :schema receipt-schema}}}]
-    (http/post (str base-url "/chat/completions")
-               {:headers {"Authorization" (str "Bearer " api-key)
-                          "Content-Type" "application/json"}
-                :socket-timeout 20000 :conn-timeout 5000
-                :throw-exceptions false
-                :body (json/generate-string body)})))
-```
+Refine results are stored under `raw_extract_json.llm_refine` for debugging.
 
 ---
 

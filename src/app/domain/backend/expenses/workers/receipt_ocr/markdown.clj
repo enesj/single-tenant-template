@@ -21,7 +21,7 @@
     (boolean (and m l (str/includes? m l)))))
 
 (defn- has-letter? [s]
-  (boolean (and (string? s) (re-find #"[A-Za-zÀ-ÿ]" s))))
+  (boolean (and (string? s) (re-find #"\p{L}" s))))
 
 (defn- normalize-item-label [raw-label]
   (let [raw-label (some-> raw-label
@@ -54,19 +54,29 @@
    "fiskalni"
    "racun"
    "račun"
+   "фискални"
+   "рачун"
    "total"
    "ukupno"
+   "ukupna"
+   "укупно"
+   "укупан"
    "pdv"
+   "пдв"
    "vat"
    "osn"
    "ve"
    "upl"
    "gotovina"
    "kartica"
-   "povrat"])
+   "povrat"
+   "промет"
+   "promet"
+   "касир"
+   "kasir"])
 
 (def ^:private header-stop-prefixes
-  ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "fiskalni" "racun" "račun"])
+  ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "fiskalni" "racun" "račun" "фискални" "рачун"])
 
 (def ^:private legal-suffix-re
   #"(?i)\s+(d\.?o\.?o\.?|d\.?d\.?|a\.?d\.?|s\.?p\.?|j\.?p\.?)\.?\s*$")
@@ -102,8 +112,12 @@
 (defn- is-header-stop-line?
   "Check if this line marks end of merchant header (tax IDs, receipt markers)"
   [norm]
-  (or (some #(str/starts-with? norm %) header-stop-prefixes)
-    (re-find #"^\d{1,2}\.\d{1,2}\.\d{2,4}" norm)))
+  (let [norm (or norm "")
+        norm* (-> norm
+                (str/replace #"^[^\p{L}\p{N}]+" "")
+                str/trim)]
+    (or (some #(str/starts-with? norm* %) header-stop-prefixes)
+      (re-find #"^\d{1,2}\.\d{1,2}\.\d{2,4}" norm*))))
 
 (defn- is-store-name-line?
   "Check if line looks like a store/branch name"
@@ -121,7 +135,24 @@
    Returns {:merchant_name .. :store_name .. :address ..} or nil."
   [markdown]
   (when (string? markdown)
-    (let [lines (str/split-lines markdown)
+    (let [strip-leading-junk (fn [s]
+                               (some-> s
+                                 (str/replace #"^[^\p{L}\p{N}]+" "")
+                                 str/trim
+                                 not-empty))
+          numeric-line? (fn [s]
+                          (when (string? s)
+                            (let [s (-> s str/trim (str/replace #"\s+" ""))]
+                              (boolean (re-matches #"\d{6,}" s)))))
+          skip-leading-line? (fn [line0]
+                               (let [line (some-> line0 str str/trim not-empty)
+                                     norm (some-> line normalize-text strip-leading-junk)]
+                                 (or (nil? line)
+                                   (numeric-line? line)
+                                   (and norm (some #(str/starts-with? norm %) supplier-ignore-prefixes)))))
+          lines (->> (str/split-lines markdown)
+                  (drop-while skip-leading-line?)
+                  vec)
           header-lines (take-while
                          (fn [line0]
                            (let [line (some-> line0 str str/trim not-empty)
@@ -169,50 +200,140 @@
   "Take the first plausible merchant-like line from markdown."
   [markdown]
   (when (string? markdown)
-    (->> (str/split-lines markdown)
-      (keep (fn [line0]
-              (let [line (some-> line0 str str/trim not-empty)
-                    norm (normalize-text line)]
-                (when (and norm
-                        (not (some #(str/starts-with? norm %) supplier-ignore-prefixes)))
-                  line))))
-      first)))
+    (let [strip-leading-junk (fn [s]
+                               (some-> s
+                                 (str/replace #"^[^\p{L}\p{N}]+" "")
+                                 str/trim
+                                 not-empty))
+          numeric-line? (fn [s]
+                          (when (string? s)
+                            (let [s (-> s str/trim (str/replace #"\s+" ""))]
+                              (boolean (re-matches #"\d{6,}" s)))))]
+      (->> (str/split-lines markdown)
+        (keep (fn [line0]
+                (let [line (some-> line0 str str/trim not-empty)
+                      norm (some-> line normalize-text strip-leading-junk)]
+                  (when (and norm
+                          (not (numeric-line? line))
+                          (not (some #(str/starts-with? norm %) supplier-ignore-prefixes)))
+                    line))))
+        first))))
 
 (defn markdown->total-amount
-  "Best-effort find the last line that looks like a total and parse money from it."
+  "Best-effort find the last line that looks like a total and parse money from it.
+
+  Handles totals embedded in markdown table rows by stripping pipe characters first.
+  Supports common Latin + Cyrillic variants (ukupno/ukupan iznos/укупно/укупан износ)."
   [markdown]
   (when (string? markdown)
-    (->> (str/split-lines markdown)
-      (keep (fn [line0]
-              (let [line (some-> line0 str str/trim not-empty)
-                    norm (normalize-text line)]
-                (when (and norm
-                        (or (str/starts-with? norm "total")
-                          (str/starts-with? norm "ukupno")))
-                  (common/parse-money line)))))
-      last)))
+    (let [clean-line (fn [s]
+                       (some-> s
+                         str
+                         (str/replace #"[|¦│]" " ")
+                         (str/replace #"\s+" " ")
+                         str/trim
+                         not-empty))
+          total-prefixes ["total" "ukupno" "ukupna" "ukupan iznos" "укупно" "укупан износ"]
+          exclude-substrings ["bez porez" "без порез" "porez" "порез" "pdv" "пдв" "vat"]]
+      (->> (str/split-lines markdown)
+        (keep (fn [line0]
+                (let [line (clean-line line0)
+                      norm (normalize-text line)]
+                  (when (and norm
+                          (some #(str/starts-with? norm %) total-prefixes)
+                          (not (some #(str/includes? norm %) exclude-substrings)))
+                    (common/parse-money line)))))
+        last))))
 
 (defn- markdown->pipe-line-items [markdown]
   (when (string? markdown)
-    (->> (str/split-lines markdown)
-      (map (fn [line]
-             (->> (str/split (or line "") #"\|")
-               (map str/trim)
-               (remove str/blank?)
-               vec)))
-      (filter #(>= (count %) 4))
-      (map (fn [cells]
-             (let [raw-label (normalize-item-label (first cells))
-                   qty (common/parse-money (nth cells 1 nil))
-                   unit-price (common/parse-money (nth cells 2 nil))
-                   line-total (common/parse-money (nth cells 3 nil))]
-               (when (and (has-letter? raw-label) line-total)
-                 {:raw_label raw-label
-                  :qty qty
-                  :unit_price unit-price
-                  :line_total line-total}))))
-      (remove nil?)
-      vec)))
+    (let [pipe-row->cells (fn [line]
+                            (->> (str/split (or line "") #"\|")
+                              (map str/trim)
+                              (remove str/blank?)
+                              vec))
+          separator-row? (fn [cells]
+                           (and (seq cells)
+                             (every? #(re-matches #"(?i)^-+$" %) cells)))
+          header-token? (fn [norm]
+                          (boolean
+                            (and norm
+                              (re-find
+                                #"^(?:naziv|name|opis|description|cijena|price|kol\.?|qty|quantity|ukupno|total|oznaka|poreza|pdv|vat|tax|назив|опис|цијена|кол\.?|укупно|пореза|пдв)$"
+                                norm))))
+          header-row? (fn [cells]
+                        (let [norms (->> cells (map normalize-text) (remove nil?) vec)
+                              hits (count (filter header-token? norms))]
+                          (>= hits 2)))
+          header->table-kind (fn [cells]
+                               (let [norms (->> cells (map normalize-text) (remove nil?) vec)
+                                     joined (str/join " " norms)]
+                                 (cond
+                                   (re-find #"(?:porez|порез|pdv|пдв|vat|tax)" joined) :tax
+                                   (and (re-find #"(?:naziv|name|назив|опис|description|item)" joined)
+                                     (re-find #"(?:ukupno|total|укупно)" joined)) :items
+                                   :else nil)))
+          header->mapping (fn [cells]
+                            (let [norms (map normalize-text cells)
+                                  find-idx (fn [re]
+                                             (some (fn [[i n]] (when (and n (re-find re n)) i))
+                                               (map-indexed vector norms)))
+                                  label-idx (or (find-idx #"^(?:naziv|name|назив|опис|description|item)$") 0)
+                                  qty-idx (find-idx #"^(?:kol\.?|qty|quantity|кол\.?)$")
+                                  unit-idx (find-idx #"^(?:cijena|price|цијена)$")
+                                  total-idx (find-idx #"^(?:ukupno|total|укупно)$")]
+                              {:label-idx label-idx
+                               :qty-idx (or qty-idx 1)
+                               :unit-idx (or unit-idx 2)
+                               :total-idx (or total-idx 3)}))
+          row-looks-like-tax? (fn [cells]
+                                (let [joined (->> cells (map normalize-text) (remove nil?) (str/join " "))]
+                                  (boolean (re-find #"(?:porez|порез|pdv|пдв|vat|tax)" joined))))
+          parse-item (fn [cells {:keys [label-idx qty-idx unit-idx total-idx]}]
+                       (let [raw-label (normalize-item-label (nth cells label-idx nil))
+                             qty (common/parse-money (nth cells qty-idx nil))
+                             unit-price (common/parse-money (nth cells unit-idx nil))
+                             line-total (common/parse-money (nth cells total-idx nil))]
+                         (when (and (has-letter? raw-label) line-total)
+                           {:raw_label raw-label
+                            :qty qty
+                            :unit_price unit-price
+                            :line_total line-total})))
+          default-mapping {:label-idx 0 :qty-idx 1 :unit-idx 2 :total-idx 3}]
+      (loop [remaining (str/split-lines markdown)
+             pending-header nil
+             table-kind nil
+             mapping nil
+             items []]
+        (if-not (seq remaining)
+          (vec items)
+          (let [line (first remaining)
+                cells (pipe-row->cells line)]
+            (cond
+              (empty? cells)
+              (recur (rest remaining) nil nil nil items)
+
+              (separator-row? cells)
+              (let [kind (header->table-kind pending-header)
+                    mapping* (when (= kind :items)
+                               (header->mapping pending-header))
+                    mapping (or mapping* mapping)
+                    table-kind (or kind table-kind)]
+                (recur (rest remaining) nil table-kind mapping items))
+
+              (header-row? cells)
+              (recur (rest remaining) cells table-kind mapping items)
+
+              (and (>= (count cells) 4) (= table-kind :tax))
+              (recur (rest remaining) nil table-kind mapping items)
+
+              (>= (count cells) 4)
+              (let [item (when-not (row-looks-like-tax? cells)
+                           (parse-item cells (or mapping default-mapping)))]
+                (recur (rest remaining) nil table-kind mapping (cond-> items item (conj item))))
+
+              :else
+              (recur (rest remaining) nil nil nil items))))))))
 
 (defn- line->qty-unit-total [line]
   (let [tokens (->> (str/split (str/trim (or line "")) #"\s+")

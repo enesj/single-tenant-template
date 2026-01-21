@@ -246,6 +246,7 @@
         extraction0 (or (:extraction extract-result) {})
         extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
         extraction0 (cond
+                      (seq (:items extraction0)) extraction0
                       (seq markdown-items) (assoc extraction0 :items markdown-items)
                       (sequential? (:items extraction0)) extraction0
                       :else (assoc extraction0 :items []))
@@ -277,12 +278,15 @@
         status (if (and valid-shape? guesses (not (review-required? guesses)))
            "extracted"
            "review_required")
+        llm-refine (:llm_refine extract-result)
         raw-extract-json (cond-> {:provider "mistral"
                                   :received_at (:received-at extract-result)
                                   :model (:model extract-result)
                                   :response (:raw extract-result)
                                   :extraction extraction
                                   :valid_shape? valid-shape?}
+                           (map? llm-refine)
+                           (assoc :llm_refine (dissoc llm-refine :extraction))
                            changed?
                            (assoc :reconciliation {:changes changes
                                                    :source :parsed_markdown}))]
