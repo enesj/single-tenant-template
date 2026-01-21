@@ -8,7 +8,7 @@
   Network calls must be stubbed in tests (see `http-post!`).
 
   Implementation is split into focused submodules:
-  - config: Configuration building and JSON schema
+  - config: Configuration building
   - http: HTTP utilities, retry logic, document helpers
   - batch: Batch API functions"
   (:require
@@ -21,7 +21,6 @@
     [java.time Instant]))
 
 ;; Re-export config
-(def receipt-extraction-json-schema config/receipt-extraction-json-schema)
 (def build-config config/build-config)
 
 ;; Re-export HTTP utilities (for test stubbing)
@@ -59,33 +58,31 @@
      :model (:model resp-json)}))
 
 (defn ocr-extract!
-  "Call Mistral OCR using `response_format` to request structured JSON.
+  "Call Mistral OCR using markdown-only path.
+
+  JSON structured extraction is disabled. We reuse the markdown
+  parsing path and return a map compatible with downstream persistence, with
+  :extraction set to nil.
 
   Args:
   - cfg: from `build-config`
   - {:keys [bytes content-type]}
 
   Returns:
-  {:raw <parsed-json> :extraction <map|nil> :parsed-markdown <string> :received-at <iso-string> :model <string>}"
+  {:raw <parsed-json>
+   :extraction nil
+   :parsed-markdown <string>
+   :received-at <iso-string>
+   :model <string>}"
   [cfg {:keys [bytes content-type]}]
   (let [started (System/nanoTime)
-        body {:model (or (:model cfg) (config/default-model-name))
-              :document (http/build-document-map bytes content-type)
-              :document_annotation_format {:type "json_schema"
-                                           :json_schema {:name "receipt_extraction"
-                                                         :schema config/receipt-extraction-json-schema}}}
-        resp (http/post-with-retries! cfg {:content-type :json
-                                           :body (json/generate-string body)})
-        resp-json (or (http/parse-json-body (:body resp))
-                    (throw (http/response->ex "Mistral OCR returned non-JSON" resp)))
-        duration-ms (/ (- (System/nanoTime) started) 1000000.0)
-        extraction (http/extract-structured resp-json)
-        markdown (http/pages->markdown resp-json)]
-    (log/info "Mistral OCR extract complete" {:duration-ms duration-ms
-                                              :has-extraction? (boolean extraction)
-                                              :model (:model resp-json)})
-    {:raw resp-json
-     :extraction extraction
-     :parsed-markdown markdown
+        parse (ocr-parse! cfg {:bytes bytes :content-type content-type})
+        duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
+    (log/info "Mistral OCR extract disabled; using markdown-only parse"
+      {:duration-ms duration-ms
+       :model (:model parse)})
+    {:raw (:raw parse)
+     :extraction nil
+     :parsed-markdown (:parsed-markdown parse)
      :received-at (str (Instant/now))
-     :model (:model resp-json)}))
+     :model (:model parse)}))

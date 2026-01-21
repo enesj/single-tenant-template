@@ -151,16 +151,15 @@
 
 (defn- resp-json->extract-result
   [cfg resp-json]
-  (let [extraction (http/extract-structured resp-json)
-        markdown (http/pages->markdown resp-json)]
+  (let [markdown (http/pages->markdown resp-json)]
     {:raw resp-json
-     :extraction extraction
+     :extraction nil
      :parsed-markdown markdown
      :received-at (str (Instant/now))
      :model (or (:model resp-json) (:model cfg) (config/default-model-name))}))
 
 (defn ocr-extract-batch!
-  "Run Mistral OCR extraction via Batch API.
+  "Run Mistral OCR extraction via Batch API (markdown-only).
 
   requests: seq of {:custom-id <string> :bytes <byte-array> :content-type <string|nil>}
 
@@ -180,10 +179,7 @@
                       (fn [{:keys [custom-id bytes content-type]}]
                         {:custom_id (str custom-id)
                          :body {:model (or (:model cfg) (config/default-model-name))
-                                :document (http/build-document-map bytes content-type)
-                                :document_annotation_format {:type "json_schema"
-                                                             :json_schema {:name "receipt_extraction"
-                                                                           :schema config/receipt-extraction-json-schema}}}})
+                                :document (http/build-document-map bytes content-type)}})
                       group)
               ^File input-file (write-jsonl-temp-file! lines)
               job (try

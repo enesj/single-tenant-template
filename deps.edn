@@ -53,7 +53,8 @@
   com.pitch/uix.dom {:mvn/version "1.4.8"}
   org.slf4j/slf4j-nop {:mvn/version "2.0.17"}
   net.clojars.abogoyavlensky/automigrate {:mvn/version "0.3.3"}}
- :paths ["src" "config" "resources" "vendor" "cli-tools" "test"],
+
+ :paths ["src" "config" "resources" "vendor" "cli-tools"],
  ;;:resource-paths ["resources"],
  :aliases
  {:dev

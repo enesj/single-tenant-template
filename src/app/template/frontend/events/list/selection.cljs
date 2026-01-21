@@ -40,6 +40,15 @@
         ;; Clear all selections
         (assoc-in db path #{})))))
 
+;; Back-compat: older code dispatches this fully-qualified keyword.
+;; Clear the selection set for the given entity type.
+(rf/reg-event-db
+  :app.template.frontend.events.list/clear-selection
+  common-interceptors
+  (fn [db [entity-type]]
+    (let [path (paths/entity-selected-ids entity-type)]
+      (assoc-in db path #{}))))
+
 (rf/reg-event-fx
   ::delete-selected
   common-interceptors
