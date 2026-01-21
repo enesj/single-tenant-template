@@ -193,19 +193,39 @@
   (let [prepared (mapv
                    (fn [rid]
                      (try
-                       (let [receipt (receipt-queries/get-receipt db rid)
-                             _ (when (and reset? receipt)
+                       (let [receipt0 (receipt-queries/get-receipt db rid)
+                             _ (when (and reset? receipt0)
                                  (receipt-status/reset-for-ocr! db rid))
-                             receipt (or (receipt-queries/get-receipt db rid) receipt)]
-                         (if (and receipt (seq (:api-key ocr-cfg)))
+                             receipt (or (receipt-queries/get-receipt db rid) receipt0)]
+                         (cond
+                           (nil? receipt)
+                           {:receipt-id rid :stage :extract :result :skipped :reason :not-found}
+
+                           (not (seq (:api-key ocr-cfg)))
+                           {:receipt-id rid :stage :extract :result :skipped :reason :missing-api-key}
+
+                           :else
                            (if-let [_claimed (receipt-status/claim-for-extracting! db rid {:lease-seconds (:lease-seconds opts)})]
-                             (let [{:keys [bytes content-type]} (common/read-receipt-bytes! receipt opts)
-                                   request {:custom-id (str rid)
-                                            :bytes bytes
-                                            :content-type content-type}]
-                               {:receipt-id rid :receipt receipt :request request})
-                             {:receipt-id rid :stage :extract :result :skipped :reason :not-claimed})
-                           {:receipt-id rid :stage :extract :result :skipped :reason :not-claimed}))
+                             (try
+                               (let [{:keys [bytes content-type]} (common/read-receipt-bytes! receipt opts)
+                                     request {:custom-id (str rid)
+                                              :bytes bytes
+                                              :content-type content-type}]
+                                 {:receipt-id rid :receipt receipt :request request})
+                               (catch Exception e
+                                 ;; IMPORTANT: we already claimed (status -> extracting). If we fail
+                                 ;; to prepare the request (e.g. missing file), we must fail the
+                                 ;; receipt so it doesn't appear stuck forever.
+                                 (receipt-status/mark-failed!
+                                   db
+                                   rid
+                                   (or (.getMessage e) "Failed to prepare receipt for batch OCR")
+                                   (common/safe-ex-data e))
+                                 {:receipt-id rid
+                                  :stage :extract
+                                  :result :failed
+                                  :error (or (.getMessage e) "Failed to prepare receipt for batch OCR")}))
+                             {:receipt-id rid :stage :extract :result :skipped :reason :not-claimed})))
                        (catch Exception e
                          (log/error e "Failed to prepare receipt for batch OCR" {:receipt-id rid})
                          {:receipt-id rid :stage :extract :result :failed :error (.getMessage e)})))
@@ -240,11 +260,15 @@
                   (dissoc m :receipt :request)
 
                   extract-result
-                  (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
-                        extract-result (if receipt
-                                       (maybe-refine-with-cerebras db receipt extract-result opts)
-                                       extract-result)]
-                    (extraction/persist-extract-result! db receipt-id extract-result opts))
+                  (try
+                    (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
+                          extract-result (if receipt
+                                         (maybe-refine-with-cerebras db receipt extract-result opts)
+                                         extract-result)]
+                      (extraction/persist-extract-result! db receipt-id extract-result opts))
+                    (catch Exception e
+                      (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Persist failed") (common/safe-ex-data e))
+                      {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Persist failed")}))
 
                   :else
                   (do

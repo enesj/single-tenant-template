@@ -372,3 +372,51 @@
         (is (= "review_required" (:status (first results))))
         (is (= 1 (:persist @calls)))
         (is (= 0 (:retry @calls)))))))
+
+(deftest process-receipts-by-ids-batch-marks-failed-when-prep-fails-after-claim
+  (let [process-batch! #'core/process-receipts-by-ids-batch!
+        receipt-id (java.util.UUID/randomUUID)
+        called (atom {:claim 0 :mark-failed 0 :batch 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db rid]
+                                                {:id rid :content_type "image/jpeg" :storage_key "missing.jpg"})
+                  receipt-status/claim-for-extracting! (fn [_db _rid _opts]
+                                                         (swap! called update :claim inc)
+                                                         true)
+                  common/read-receipt-bytes! (fn [_receipt _opts]
+                                               (throw (ex-info "receipt file not found" {:type :receipt/file-not-found})))
+                  receipt-status/mark-failed! (fn [_db _rid _msg _details]
+                                                (swap! called update :mark-failed inc)
+                                                nil)
+                  mistral-ocr/ocr-extract-batch! (fn [& _]
+                                                   (swap! called update :batch inc)
+                                                   (throw (ex-info "Batch should not be called" {})))]
+      (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})
+            r (first results)]
+        (is (= 1 (count results)))
+        (is (= :failed (:result r)))
+        (is (= 1 (:claim @called)))
+        (is (= 1 (:mark-failed @called)))
+        (is (= 0 (:batch @called)))))))
+
+(deftest process-receipts-by-ids-batch-marks-failed-when-persist-throws
+  (let [process-batch! #'core/process-receipts-by-ids-batch!
+        receipt-id (java.util.UUID/randomUUID)
+        called (atom {:mark-failed 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db rid]
+                                                {:id rid :content_type "image/jpeg"})
+                  receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
+                  common/read-receipt-bytes! (fn [_receipt _opts]
+                                               {:bytes (.getBytes "x")
+                                                :content-type "image/jpeg"})
+                  mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
+                                                   {:results {(str receipt-id) {}}})
+                  extraction/persist-extract-result! (fn [_db _rid _extract-result _opts]
+                                                       (throw (ex-info "DB write failed" {:type :db/failure})))
+                  receipt-status/mark-failed! (fn [_db _rid _msg _details]
+                                                (swap! called update :mark-failed inc)
+                                                nil)]
+      (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})
+            r (first results)]
+        (is (= 1 (count results)))
+        (is (= :failed (:result r)))
+        (is (= 1 (:mark-failed @called)))))))

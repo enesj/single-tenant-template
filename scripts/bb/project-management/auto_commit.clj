@@ -6,14 +6,18 @@
   '[clojure.string :as str])
 
 (defn get-openai-api-key
-  "Get OpenAI API key from environment or .api_credentials.sh"
+  "Get OpenAI API key from environment or .env"
   []
   (or (System/getenv "OPENAI_API_KEY")
     (try
-      (let [result (p/shell {:out :string} "bash" "-c" "source .api_credentials.sh && echo $OPENAI_API_KEY")]
-        (str/trim (:out result)))
+      (let [result (p/shell {:out :string}
+                     "bash" "-c" "set -a; [ -f .env ] && source .env; set +a; echo $OPENAI_API_KEY")
+            api-key (str/trim (:out result))]
+        (when-not (seq api-key)
+          (throw (Exception. "OPENAI_API_KEY is missing in environment and .env")))
+        api-key)
       (catch Exception _e
-        (throw (Exception. "Could not load OpenAI API key from .api_credentials.sh"))))))
+        (throw (Exception. "Could not load OpenAI API key from .env"))))))
 
 (defn call-openai-api
   "Use OpenAI API to generate AI-powered commit message"
