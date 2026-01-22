@@ -4,11 +4,11 @@
   This namespace is shared between the different UI wrappers (create, edit,
   receipt approval)."
   (:require
-    [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local
-                                                                 format-decimal
-                                                                 line-items-total
-                                                                 new-line-item
-                                                                 safe-parse-number]]
+    [app.domain.frontend.expenses.components.form-fields.helpers :refer [current-datetime-local
+                                                                         format-decimal
+                                                                         line-items-total
+                                                                         new-line-item
+                                                                         safe-parse-number]]
     [app.shared.adapters.normalization :as normalization]
     [clojure.string :as str]))
 

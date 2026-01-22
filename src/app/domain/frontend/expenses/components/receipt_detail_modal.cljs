@@ -5,17 +5,22 @@
   while allowing different data sources (subs) and behaviors (events/endpoints).
 
   This component is intentionally 'context-driven' via a small config map of
-  subscription keys and event keywords."
+  subscription keys and event keywords.
+
+  Layout:
+  - Row 1: Two columns (resizable, default 1/3 left, 2/3 right)
+    - Left: Tabs for Image, Extracted HTML, Raw Extract JSON
+    - Right: Approval form fields (without line items)
+  - Row 2: Line items (always visible, full width)"
   (:require
     [app.template.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
-    [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview receipt-viewer]]
-    [app.template.frontend.components.json-highlight :refer [json-display-card]]
+    [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview]]
     [app.template.frontend.components.modal :refer [modal]]
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-callback use-effect use-state]]
+    [uix.core :refer [$ defui use-callback use-effect use-ref use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- dispatch!
@@ -76,14 +81,6 @@
             ($ :pre {:class "text-xs opacity-80 whitespace-pre-wrap break-words"}
               (pr-str (or (not-empty details-summary) error-details)))))))))
 
-(defn- label-value
-  [label value]
-  ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-    ($ :div {:class "ds-card-body p-4"}
-      ($ :div {:class "text-xs text-base-content/60"} label)
-      ($ :div {:class "text-sm font-medium break-words"}
-        (shared/format-value value "—" false)))))
-
 (def ^:private receipt-processing-statuses
   #{"uploaded" "parsing" "parsed" "extracting"})
 
@@ -118,34 +115,6 @@
           (instance? js/Date last-checked))
     (format-duration-ms (- (.getTime last-checked) (.getTime started-at)))))
 
-(defn- format-bytes
-  [value]
-  (let [bytes (cond
-                (number? value) value
-                (string? value) (js/parseFloat value)
-                :else nil)
-        kb 1024
-        mb (* 1024 1024)]
-    (cond
-      (nil? bytes) "—"
-      (< bytes kb) (str bytes " B")
-      (< bytes mb) (str (.toFixed (/ bytes kb) 1) " KB")
-      :else (str (.toFixed (/ bytes mb) 1) " MB"))))
-
-(defn- status-class
-  [status]
-  (case status
-    "uploaded" "ds-badge ds-badge-ghost"
-    "parsing" "ds-badge ds-badge-info"
-    "parsed" "ds-badge ds-badge-info"
-    "extracting" "ds-badge ds-badge-warning"
-    "extracted" "ds-badge ds-badge-success"
-    "review_required" "ds-badge ds-badge-warning"
-    "approved" "ds-badge ds-badge-success"
-    "posted" "ds-badge ds-badge-success"
-    "failed" "ds-badge ds-badge-error"
-    "ds-badge"))
-
 (defn- capitalize-words
   [s]
   (when (string? s)
@@ -154,7 +123,13 @@
       (str/join " "))))
 
 (defui receipt-detail-body
-  "Shared receipt detail body with user-style tabs + polling.
+  "Shared receipt detail body with two-row layout + polling.
+
+  Layout:
+  - Row 1: Two columns
+    - Left: Tabs for Image, Extracted HTML, Raw Extract JSON
+    - Right: Approval form fields (without line items)
+  - Row 2: Line items (always visible, full width)
 
   ctx keys:
   - :receipt-sub
@@ -166,7 +141,7 @@
 
   Notes:
   - The approve form component is expected to accept keys:
-    {:receipt-id :receipt :on-success :on-review-saved :on-cancel}
+    {:receipt-id :receipt :on-success :on-review-saved :on-cancel :exclude-line-items?}
     and may ignore any it doesn't use."
   [{:keys [receipt-id ctx]}]
   (let [{:keys [receipt-sub
@@ -183,8 +158,12 @@
         action-loading? (boolean (use-subscribe [receipt-action-loading-sub]))
         error (use-subscribe [receipts-error-sub])
         can-approve? (boolean (use-subscribe [:expenses/can? :expenses/receipts.approve]))
-        [active-tab set-active-tab!] (use-state (if can-approve? :approve :details))
-        [preview-expanded? set-preview-expanded!] (use-state false)
+        ;; Left column tabs: :image, :extracted-html, :raw-json
+        [left-tab set-left-tab!] (use-state :image)
+        ;; Resizable columns: left column width percentage (default 33%)
+        [left-width-pct set-left-width-pct!] (use-state 40)
+        [is-resizing? set-is-resizing!] (use-state false)
+        container-ref (use-ref nil)
         [processing-started-at set-processing-started-at!] (use-state nil)
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
@@ -202,16 +181,51 @@
         rid (or receipt-id
               (when (map? receipt)
                 (id-utils/extract-entity-id receipt)))
-        rid-str (if rid (str rid) "unknown")]
+        rid-str (if rid (str rid) "unknown")
+        approve-allowed? (contains? #{"extracted" "review_required"} status)
+
+        ;; Resize handlers
+        handle-resize-start (use-callback
+                              (fn [e]
+                                (.preventDefault e)
+                                (set-is-resizing! true))
+                              [])
+        handle-resize-move (use-callback
+                             (fn [e]
+                               (when (and is-resizing? @container-ref)
+                                 (let [container-el @container-ref
+                                       rect (.getBoundingClientRect container-el)
+                                       container-width (.-width rect)
+                                       mouse-x (- (.-clientX e) (.-left rect))
+                                       new-pct (-> (/ mouse-x container-width)
+                                                 (* 100)
+                                                 (max 20)  ;; min 20%
+                                                 (min 60))] ;; max 60%
+                                   (set-left-width-pct! new-pct))))
+                             [is-resizing?])
+        handle-resize-end (use-callback
+                            (fn [_e]
+                              (set-is-resizing! false))
+                            [])]
 
     ;; Reset tab + fetch on open/change
     (use-effect
       (fn []
-        (set-active-tab! (if can-approve? :approve :details))
-        (set-preview-expanded! false)
+        (set-left-tab! :image)
         (refresh!)
         js/undefined)
-      [receipt-id refresh! can-approve?])
+      [receipt-id refresh!])
+
+    ;; Attach/detach resize event listeners
+    (use-effect
+      (fn []
+        (when is-resizing?
+          (.addEventListener js/document "mousemove" handle-resize-move)
+          (.addEventListener js/document "mouseup" handle-resize-end))
+        (fn []
+          (.removeEventListener js/document "mousemove" handle-resize-move)
+          (.removeEventListener js/document "mouseup" handle-resize-end)))
+      [is-resizing? handle-resize-move handle-resize-end])
 
     ;; Auto-poll receipt detail while OCR is processing
     (use-effect
@@ -271,88 +285,107 @@
           "Receipt not found.")
 
         :else
-        (let [approve-allowed? (contains? #{"extracted" "review_required"} status)]
-          ($ :div {:class "space-y-4"}
-            ($ receipt-problem-alert {:receipt receipt})
+        ($ :div {:class "space-y-4"}
+          ($ receipt-problem-alert {:receipt receipt})
 
-            ($ :div {:class "ds-tabs ds-tabs-boxed"}
-              (tabs/tab-link {:id (str "tab-receipt-details-" rid-str)
-                              :label "Details"
-                              :active? (= active-tab :details)
-                              :on-select #(set-active-tab! :details)})
-              (tabs/tab-link {:id (str "tab-receipt-viewer-" rid-str)
-                              :label "Receipt"
-                              :active? (= active-tab :receipt)
-                              :on-select #(set-active-tab! :receipt)})
-              (when can-approve?
-                (tabs/tab-link {:id (str "tab-receipt-approve-" rid-str)
-                                :label "Approve & Post"
-                                :active? (= active-tab :approve)
-                                :on-select #(set-active-tab! :approve)})))
+          ;; ROW 1: Two resizable columns (default 1/3 left, 2/3 right)
+          ($ :div {:ref container-ref
+                   :class (str "flex gap-0 " (when is-resizing? "select-none cursor-col-resize"))}
+            ;; LEFT COLUMN: Tabs for Image, Extracted HTML, Raw Extract JSON
+            ($ :div {:class "flex flex-col space-y-3 overflow-hidden"
+                     :style {:width (str left-width-pct "%")
+                             :minWidth "20%"
+                             :maxWidth "60%"}}
+              ($ :div {:class "ds-tabs ds-tabs-boxed ds-tabs-sm"}
+                (tabs/tab-link {:id (str "tab-receipt-image-" rid-str)
+                                :label "Image"
+                                :active? (= left-tab :image)
+                                :on-select #(set-left-tab! :image)})
+                (tabs/tab-link {:id (str "tab-receipt-extracted-html-" rid-str)
+                                :label "Extracted Markdown"
+                                :active? (= left-tab :extracted-html)
+                                :on-select #(set-left-tab! :extracted-html)})
+                (tabs/tab-link {:id (str "tab-receipt-raw-json-" rid-str)
+                                :label "Raw Extract JSON"
+                                :active? (= left-tab :raw-json)
+                                :on-select #(set-left-tab! :raw-json)}))
 
-            (case active-tab
-              :receipt
-              ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-                ($ :div {:class "ds-card-body p-0"}
-                  ($ receipt-viewer {:receipt receipt
-                                     :show-summary? false})))
+              ($ :div {:class "ds-card ds-card-bordered bg-base-100 flex-1 flex flex-col overflow-hidden"}
+                ($ :div {:class "ds-card-body p-2 flex-1 overflow-hidden"}
+                  (case left-tab
+                    :image
+                    ($ receipt-preview {:receipt receipt
+                                        :title "Receipt Image"
+                                        :expanded? true})
 
-              :approve
+                    :extracted-html
+                    (let [parsed-markdown (:parsed-markdown receipt)]
+                      (if (seq parsed-markdown)
+                        ($ :div {:class "space-y-2"}
+                          ($ :h3 {:class "text-sm font-semibold"} "Extracted HTML / Parsed Markdown")
+                          ($ :pre {:class "text-xs whitespace-pre-wrap bg-base-200 p-3 rounded-lg max-h-[400px] overflow-y-auto"}
+                            parsed-markdown))
+                        ($ :div {:class "text-sm text-base-content/60 p-4"}
+                          "No extracted HTML available for this receipt.")))
+
+                    :raw-json
+                    (let [raw-extract (:raw-extract-json receipt)]
+                      (if (seq raw-extract)
+                        ($ :div {:class "flex flex-col h-full -m-2"}
+                          ($ :div {:class "flex items-center justify-between gap-2 px-2 py-1 mb-2"}
+                            ($ :div {:class "flex items-center gap-2"}
+                              ($ :div {:class "w-1 h-4 rounded-full bg-primary"})
+                              ($ :h3 {:class "text-sm font-semibold"} "Raw Extract JSON"))
+                            ($ :button
+                              {:class "ds-btn ds-btn-xs ds-btn-ghost ds-btn-circle"
+                               :title "Copy to clipboard"
+                               :on-click (fn [e]
+                                           (.stopPropagation e)
+                                           (let [json-str (js/JSON.stringify (clj->js raw-extract) nil 2)]
+                                             (.writeText js/navigator.clipboard json-str)))}
+                              ($ :svg {:class "w-3 h-3" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
+                                ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                                          :d "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"}))))
+                          ($ :div {:class "flex-1 bg-base-200/50 rounded-md p-2 overflow-y-auto border border-base-200"}
+                            ($ :pre {:class "text-xs leading-relaxed"}
+                              (js/JSON.stringify (clj->js raw-extract) nil 2))))
+                        ($ :div {:class "text-sm text-base-content/60 p-4"}
+                          "No raw extract JSON available for this receipt.")))))))
+
+            ;; RESIZE HANDLE
+            ($ :div {:class "flex-shrink-0 w-2 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors relative group"
+                     :on-mouse-down handle-resize-start}
+              ($ :div {:class "absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-base-300 group-hover:bg-primary/50 transition-colors"}))
+
+            ;; RIGHT COLUMN: Approve & Post form (with split layout for line items below)
+            ($ :div {:class "flex-1 space-y-2 overflow-hidden pl-3"}
+              ($ :div {:class "flex items-center justify-between"}
+                ($ :h2 {:class "text-base font-semibold"} "Approve & Post")
+                (when action-loading?
+                  ($ :span {:class "text-xs text-base-content/60"} "Working...")))
+
               (if (and can-approve? approve-allowed?)
-                ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-                  ($ :div {:class "ds-card-body"}
-                    ($ :div {:class (str "grid gap-6 " (when preview-expanded? "lg:grid-cols-2"))}
-                      ($ :div {:class "space-y-4"}
-                        ($ receipt-preview {:receipt receipt
-                                            :title "Receipt image"
-                                            :expanded? preview-expanded?
-                                            :on-toggle #(set-preview-expanded! not)}))
-                      ($ :div {:class "space-y-4"}
-                        ($ :div {:class "flex items-center justify-between gap-2"}
-                          ($ :h2 {:class "text-lg font-semibold"} "Approve & Post")
-                          (when action-loading?
-                            ($ :span {:class "text-xs text-base-content/60"} "Working...")))
-                        (when approve-form
-                          ($ approve-form
-                            {:receipt-id rid-str
-                             :receipt receipt
-                             :on-success (fn []
-                                           (close-modal-fn))
-                             :on-review-saved (fn []
-                                                (rf/dispatch [fetch-receipt-event receipt-id]))
-                             :on-cancel #(set-active-tab! :details)}))))))
+                (when approve-form
+                  ($ approve-form
+                    {:receipt-id rid-str
+                     :receipt receipt
+                     :split-layout? true
+                     :on-success (fn []
+                                   (close-modal-fn))
+                     :on-review-saved (fn []
+                                        (rf/dispatch [fetch-receipt-event receipt-id]))
+                     :on-cancel nil}))
 
                 ($ :div {:class "ds-alert ds-alert-info"}
                   ($ :span
-                    (str "Approval is available when status is extracted or review_required. Current status: "
-                      (or status "unknown")
-                      "."))))
+                    (cond
+                      (not can-approve?)
+                      "You don't have permission to approve receipts."
 
-              ;; default: :details
-              ($ :div {:class "space-y-6"}
-                ($ :div {:class "grid gap-3 md:grid-cols-3"}
-                  (label-value "Status" ($ :span {:class (status-class status)}
-                                          (or (capitalize-words status) "—")))
-                  (label-value "Original Filename" (:original-filename receipt))
-                  (label-value "Content Type" (:content-type receipt))
-                  (label-value "File Size" (format-bytes (:file-size receipt)))
-                  (label-value "Created At" (shared/format-date (:created-at receipt)))
-                  (label-value "Supplier Guess" (:supplier-guess receipt))
-                  (label-value "Total Amount Guess" (when (:total-amount-guess receipt)
-                                                      (str (:total-amount-guess receipt) " " (:currency-guess receipt))))
-                  (label-value "Purchased At Guess" (:purchased-at-guess receipt)))
-
-                ($ :div {:class "grid gap-6 lg:grid-cols-2"}
-                  (when (seq (:raw-extract-json receipt))
-                    ($ :div {:id (str "receipt-extract-json-" rid-str)}
-                      ($ json-display-card
-                        {:title "Extracted Data"
-                         :json-value (:raw-extract-json receipt)})))
-                  (when (seq (:raw-parse-json receipt))
-                    ($ :div {:id (str "receipt-parse-json-" rid-str)}
-                      ($ json-display-card
-                        {:title "LlamaParse Results"
-                         :json-value (:raw-parse-json receipt)}))))))))))))
+                      :else
+                      (str "Approval is available when status is extracted or review_required. Current status: "
+                        (or (capitalize-words status) "unknown")
+                        "."))))))))))))
 
 (defui receipt-detail-modal
   "Shared receipt details modal.

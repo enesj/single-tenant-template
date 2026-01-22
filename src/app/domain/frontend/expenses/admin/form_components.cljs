@@ -2,34 +2,34 @@
   "Registers domain-specific admin form field components for expenses entities."
   (:require
     [app.admin.frontend.specs.form-components :as form-components]
-    [app.domain.frontend.expenses.components.form-fields :as form-fields]))
+    [app.domain.frontend.expenses.components.form-fields.selects :as selects]))
 
 (defn- register-expenses-form-components!
   []
   (form-components/register-form-field-component!
     {:entity-key :article-aliases
      :field-key :supplier-id
-     :component form-fields/supplier-select-input})
+     :component selects/supplier-select-input})
   (form-components/register-form-field-component!
     {:entity-key :article-aliases
      :field-key :article-id
-     :component form-fields/article-select-input})
+     :component selects/article-select-input})
   (form-components/register-form-field-component!
     {:entity-key :price-observations
      :field-key :supplier-id
-     :component form-fields/supplier-select-input})
+     :component selects/supplier-select-input})
   (form-components/register-form-field-component!
     {:entity-key :price-observations
      :field-key :article-id
-     :component form-fields/article-select-input})
+     :component selects/article-select-input})
   (form-components/register-form-field-component!
     {:entity-key :expense-items
      :field-key :expense-id
-     :component form-fields/expense-select-input})
+     :component selects/expense-select-input})
   (form-components/register-form-field-component!
     {:entity-key :expense-items
      :field-key :article-id
-     :component form-fields/article-select-input}))
+     :component selects/article-select-input}))
 
 (defonce ^:private _register
   (register-expenses-form-components!))

@@ -3,11 +3,11 @@
 
   Shared between create, edit, and receipt approval UIs."
   (:require
-    [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local
-                                                                 format-decimal
-                                                                 line-items-total
-                                                                 new-line-item
-                                                                 safe-parse-number]]
+    [app.domain.frontend.expenses.components.form-fields.helpers :refer [current-datetime-local
+                                                                         format-decimal
+                                                                         line-items-total
+                                                                         new-line-item
+                                                                         safe-parse-number]]
     [app.shared.adapters.normalization :as normalization]
     [clojure.string :as str]))
 

@@ -28,6 +28,15 @@
      :body-snippet (safe-body-snippet body)
      :response (select-keys resp [:status :headers :reason-phrase])}))
 
+(defn- throwable->log-data [^Throwable t]
+  (let [cause (.getCause t)]
+    (cond-> {:exception-class (some-> t class .getName)
+             :exception-message (.getMessage t)
+             :cause-class (some-> cause class .getName)
+             :cause-message (some-> cause .getMessage)}
+      (instance? clojure.lang.IExceptionInfo t)
+      (assoc :ex-data-keys (some-> t ex-data keys sort vec)))))
+
 (defn- retryable?
   [{:keys [status exception]}]
   (or (some? exception)
@@ -63,12 +72,23 @@
           (some? (:exception resp))
           (if (< attempt max-retries)
             (do
-              (log/warn "Cerebras request exception; retrying" {:attempt (inc attempt) :max-retries max-retries})
+              (let [e (:exception resp)]
+                (log/warn e
+                  "Cerebras request exception; retrying"
+                  (merge
+                    {:attempt (inc attempt)
+                     :max-retries max-retries
+                     :url url}
+                    (throwable->log-data e))))
               (Thread/sleep (* retry-sleep-ms (inc attempt)))
               (recur (inc attempt)))
-            (throw (ex-info "Cerebras request failed" {:type :cerebras/exception
-                                                       :url url}
-                     (:exception resp))))
+            (let [e (:exception resp)]
+              (throw (ex-info "Cerebras request failed"
+                       (merge
+                         {:type :cerebras/exception
+                          :url url}
+                         (throwable->log-data e))
+                       e))))
 
           (and (integer? (:status resp)) (<= 200 (:status resp) 299))
           resp

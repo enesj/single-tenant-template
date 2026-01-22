@@ -4,7 +4,7 @@
     [app.template.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
-    [app.domain.frontend.expenses.components.expense-form :as expense-form]
+    [app.domain.frontend.expenses.components.expense-form.modals :as expense-form-modals]
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview receipt-viewer]]
     [app.domain.frontend.expenses.events.receipts :as receipts-events]
     [app.template.frontend.components.json-highlight :refer [json-display-card]]
@@ -143,7 +143,7 @@
                       ($ :div {:class "space-y-4"}
                         ($ :h2 {:class "text-lg font-semibold"}
                           "Approve & Post")
-                        ($ expense-form/expense-add-form-modal
+                        ($ expense-form-modals/expense-add-form-modal
                           {:receipt-id receipt-id
                            :on-success (fn []
                                          (set-active-tab! :details)

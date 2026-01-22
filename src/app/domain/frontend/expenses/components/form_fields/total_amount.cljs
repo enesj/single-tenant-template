@@ -66,3 +66,64 @@
         ($ :div {:id (str input-id "-error")
                  :class "text-error text-sm mt-1"}
           error)))))
+
+(defui totals-display
+  "Display-only component for receipt approval showing Line items total and editable Total guess.
+   The actual total_amount is auto-set from computed total but is not editable directly."
+  [{:keys [id value on-change values error field-spec inline]}]
+  (let [field-key (cond
+                    (keyword? id) (name id)
+                    (string? id) id
+                    :else "total_amount")
+        input-id (str "expense-" field-key)
+        items (:items values)
+        computed-total (h/line-items-total items)
+        receipt-total-guess (some-> (:receipt-total-guess field-spec) h/safe-parse-number)
+        [local-guess set-local-guess!] (use-state (or receipt-total-guess ""))
+        parsed-guess (h/safe-parse-number local-guess)
+        totals-match? (let [diff (when (and (number? parsed-guess)
+                                         (number? computed-total))
+                                   (js/Math.abs (- parsed-guess computed-total)))]
+                        (and (some? diff) (<= diff amount-tolerance)))]
+    ;; Auto-sync computed total to form value
+    (use-effect
+      (fn []
+        (when (and (pos? computed-total) (not= (h/safe-parse-number value) computed-total))
+          (on-change computed-total))
+        js/undefined)
+      [computed-total value on-change])
+    (let [inline? (not (false? inline))
+          row-class (str "mb-4" (if inline?
+                                  " flex flex-row items-start gap-4"
+                                  " flex flex-col items-start gap-2"))
+          label-class (str "ds-label mb-0" (when inline? " min-w-[150px] text-left"))
+          value-wrap-class (when inline? "flex-1 w-full text-left")
+          label-text-class (str "font-bold" (when totals-match? " text-success"))
+          value-text-class (str "text-lg font-semibold font-mono" (when totals-match? " text-success"))]
+      ($ :div
+        ;; Line items total (read-only, calculated from items)
+        ($ :div {:class row-class}
+          ($ :label {:class label-class}
+            ($ :span {:class label-text-class} "Line items total:"))
+          ($ :div {:class value-wrap-class}
+            ($ :div {:class value-text-class}
+              (or (h/format-decimal computed-total) "0.00"))))
+
+        ;; Total guess (editable)
+        ($ :div {:class row-class}
+          ($ :label {:class label-class}
+            ($ :span {:class label-text-class} "Total guess:"))
+          ($ :div {:class value-wrap-class}
+            ($ :input {:id (str input-id "-guess")
+                       :class (str "ds-input ds-input-bordered ds-input-sm w-32 text-right text-lg font-semibold "
+                                (when totals-match? "text-success"))
+                       :type "number"
+                       :step "0.01"
+                       :value (or local-guess "")
+                       :on-change (fn [e]
+                                    (set-local-guess! (.. e -target -value)))})))
+
+        (when error
+          ($ :div {:id (str input-id "-error")
+                   :class "text-error text-sm mt-1"}
+            error))))))

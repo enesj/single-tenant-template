@@ -1,7 +1,7 @@
 (ns app.domain.frontend.expenses.admin.components.detail-modals
   (:require
     [app.template.frontend.components.shared-utils :as shared]
-    [app.domain.frontend.expenses.components.expense-form :as expense-form]
+    [app.domain.frontend.expenses.components.expense-form.modals :as expense-form-modals]
     [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
     [app.domain.frontend.expenses.admin.components.detail-views.article :as article-view]
     [app.domain.frontend.expenses.admin.components.detail-views.article-alias :as article-alias-view]
@@ -107,7 +107,7 @@
              :modal-id-sub :expenses/receipt-detail-modal-id
              :fetch-receipt-event ::receipts-events/load-detail
              :close-modal [::receipts-events/close-detail-modal]
-             :approve-form expense-form/expense-add-form-modal}]
+             :approve-form expense-form-modals/expense-add-form-modal}]
     ($ receipt-detail-ui/receipt-detail-modal
       {:id "admin-receipt-detail-modal"
        :ctx ctx})))

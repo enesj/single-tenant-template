@@ -58,7 +58,6 @@ slips/
 
 # API Credentials - never commit these
 .env
-.api_credentials.sh
 /test-results/
 
 # Local test output artifacts

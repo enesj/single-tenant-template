@@ -11,13 +11,14 @@
     (dissoc :label :input-type :validate-server? :success :inputType :formId :required :handle-change :on-change :errors :disabled? :inline)))
 
 (defui textarea-input
-  [{:keys [id label placeholder value on-change handle-change errors required disabled? inline formId] :as props}]
+  [{:keys [id label placeholder value on-change handle-change errors required disabled? inline formId class] :as props}]
   (let [;; Generate ID from formId if not explicitly provided
         field-id (or id (when formId (str formId "-textarea")))
         error-id (when field-id (str field-id "-error"))
         handle-change (or handle-change
                         (fn [val] (when on-change (on-change val))))
-        base-class "ds-textarea"
+        base-class "ds-textarea ds-textarea-bordered w-full"
+        textarea-class (str base-class (when (seq class) (str " " class)))
         label-class "ds-label"
         error-class "text-error"]
     ($ :div {:class (str "mb-4" (when inline " flex items-start gap-4"))}
@@ -32,7 +33,7 @@
             {:id field-id
              :value value
              :placeholder placeholder
-             :class base-class
+             :class textarea-class
              :disabled disabled?
              :on-change #(handle-change (.. % -target -value))}))
         (when errors

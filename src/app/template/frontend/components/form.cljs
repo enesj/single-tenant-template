@@ -182,13 +182,17 @@
                                 (when field-id
                                   (-> (name field-id)
                                     (str/replace "_" " ")
-                                    (str/capitalize))))]
+                                    (str/capitalize))))
+                   ;; Respect :layout :stacked from field-spec to override inline behavior
+                   use-inline? (if (= :stacked (:layout field-spec))
+                                 false
+                                 (if editing true true))]
                ($ render-field
                  {:key field-id
                   :label safe-label
                   :field-spec field-spec
                   :editing editing
-                  :inline (if editing true true)
+                  :inline use-inline?
                   :entity-name (:entity-name props)
                   :form-id form-id
                   :handle-change (set-handle-value-change field-spec (assoc props :set-dirty set-dirty) models-data)

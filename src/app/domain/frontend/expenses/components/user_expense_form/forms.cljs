@@ -1,8 +1,8 @@
 (ns app.domain.frontend.expenses.components.user-expense-form.forms
   "UI building blocks for user-scoped expense forms (form body + receipt approval)."
   (:require
-    [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local
-                                                                 new-line-item]]
+    [app.domain.frontend.expenses.components.form-fields.helpers :refer [current-datetime-local
+                                                                         new-line-item]]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
     [app.template.frontend.components.form :refer [form form-fields]]
@@ -82,19 +82,46 @@
          :button-text (if (= mode :edit) "Update Expense" "Save Expense")}))))
 
 (defui receipt-approval-form
-  [{:keys [receipt-id receipt initial-data on-cancel on-expense-saved on-review-saved]}]
+  "Receipt approval form for user-scoped expenses with optional split layout.
+
+  Props:
+  - :receipt-id - The receipt ID
+  - :receipt - The receipt data
+  - :initial-data - Initial form values
+  - :on-cancel - Callback when cancel is clicked
+  - :on-expense-saved - Callback when expense is saved
+  - :on-review-saved - Callback when receipt review is saved
+  - :split-layout? - If true, render fields in right column and line items get separate container"
+  [{:keys [receipt-id receipt initial-data on-cancel on-expense-saved on-review-saved
+           split-layout?]}]
   (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         form-error (use-subscribe [:user-expenses/form-error])
         [validation-error set-validation-error!] (use-state nil)
 
-        entity-spec (use-memo
-                      #(specs/get-expense-form-spec suppliers payers
-                         {:receipt-approval? true
-                          :supplier-guess (some-> receipt :supplier-guess)
-                          :receipt receipt
-                          :receipt-id receipt-id})
-                      [suppliers payers receipt receipt-id])
+        ;; Full spec for the form
+        full-entity-spec (use-memo
+                           #(specs/get-expense-form-spec suppliers payers
+                              {:receipt-approval? true
+                               :supplier-guess (some-> receipt :supplier-guess)
+                               :receipt receipt
+                               :receipt-id receipt-id})
+                           [suppliers payers receipt receipt-id])
+
+        ;; Spec without line items for split layout
+        fields-only-spec (use-memo
+                           #(specs/get-expense-form-spec suppliers payers
+                              {:receipt-approval? true
+                               :supplier-guess (some-> receipt :supplier-guess)
+                               :receipt receipt
+                               :receipt-id receipt-id
+                               :exclude-line-items? true})
+                           [suppliers payers receipt receipt-id])
+
+        ;; Line items spec
+        line-items-spec (use-memo
+                          #(vector specs/line-items-field-spec)
+                          [])
 
         form-initial-values (use-memo
                               (fn []
@@ -129,7 +156,7 @@
 
       ($ base/initialize-form
         {:entity-name "user-expense"
-         :entity-spec entity-spec
+         :entity-spec full-entity-spec
          :editing false
          :initial-values form-initial-values
          :prevent-default? true
@@ -154,23 +181,26 @@
                  can-save-receipt? (and receipt-valid-now? (dirty? dirty))]
              ($ :form {:id form-id
                        :on-submit handle-submit}
+               ;; Fields section (without line items if split layout)
                ($ form-fields
                  (merge form-props
                    {:entity-name "user-expense"
                     :editing false
                     :values values
                     :form-id form-id
-                    :entity-spec entity-spec}))
+                    :entity-spec (if split-layout? fields-only-spec full-entity-spec)}))
 
-               ($ :div {:class "flex justify-end gap-2"}
-                 ($ :button {:id (str "btn-cancel-receipt-approve-" rid-str)
-                             :type "button"
-                             :class "ds-btn"
-                             :disabled submitting?
-                             :on-click (fn [e]
-                                         (.preventDefault e)
-                                         (when (fn? on-cancel) (on-cancel)))}
-                   "Cancel")
+               ;; Buttons
+               ($ :div {:class "flex justify-end gap-2 mt-4"}
+                 (when on-cancel
+                   ($ :button {:id (str "btn-cancel-receipt-approve-" rid-str)
+                               :type "button"
+                               :class "ds-btn"
+                               :disabled submitting?
+                               :on-click (fn [e]
+                                           (.preventDefault e)
+                                           (when (fn? on-cancel) (on-cancel)))}
+                     "Cancel"))
                  ($ :button {:id (str "btn-save-receipt-" rid-str)
                              :type "button"
                              :class "ds-btn ds-btn-outline"
@@ -193,4 +223,15 @@
                              :type "submit"
                              :class "ds-btn ds-btn-primary"
                              :disabled (or submitting? (not expense-valid-now?))}
-                   "Save expense")))))}))))
+                   "Save expense"))
+
+               ;; Line items section for split layout (rendered after buttons, full width)
+               (when split-layout?
+                 ($ :div {:class "mt-6 -mx-4 px-4 pt-4 border-t border-base-300"}
+                   ($ form-fields
+                     (merge form-props
+                       {:entity-name "user-expense"
+                        :editing false
+                        :values values
+                        :form-id form-id
+                        :entity-spec line-items-spec})))))))}))))

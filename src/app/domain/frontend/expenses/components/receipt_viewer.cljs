@@ -77,7 +77,7 @@
   "Preview-only receipt card (image/pdf + Open actions).
 
   Intended for reuse in layouts that already show metadata elsewhere (e.g. Approve tab)."
-  [{:keys [receipt title expanded? on-toggle] :or {title "Preview"}}]
+  [{:keys [receipt title expanded?] :or {title "Preview"}}]
   (let [{:keys [id content-type original-filename download-url storage-key]} receipt
         rid-str (or (some-> id str) "unknown")
         admin-protected? (admin-protected-url? download-url)
@@ -89,9 +89,8 @@
                       (contains? image-exts ext))
         pdfish? (or (= content-type "application/pdf") (= ext "pdf"))
         previewable? (or imageish? pdfish?)
-        ;; Support both controlled and uncontrolled expansion state
-        [local-expanded? set-local-expanded!] (use-state true)
-        current-expanded? (if (some? expanded?) expanded? local-expanded?)
+        ;; Always expanded when expanded? is provided (no toggle)
+        current-expanded? (if (some? expanded?) expanded? true)
         [zoom set-zoom!] (use-state 1.0)
         min-zoom 1.0
         max-zoom 4.0
@@ -160,12 +159,11 @@
               (.abort controller)))
           js/undefined))
       [admin-protected? previewable? current-expanded? download-url preview-url load-error])
-    ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
-      ($ :div {:class "ds-card-body space-y-3"}
-        ($ :div {:class "flex items-center justify-between gap-2"}
-          ($ :h3 {:class "text-sm font-semibold"} title)
-          (when (seq download-url)
-            ($ :div {:class "flex items-center gap-2"}
+    ($ :div {:class "flex flex-col h-full"}
+      ($ :div {:class "flex items-center justify-between gap-2 mb-2 px-2"}
+        ($ :h3 {:class "text-sm font-semibold"} title)
+        (when (seq download-url)
+          ($ :div {:class "flex items-center gap-2"}
               (when (and imageish? current-expanded?)
                 ($ :div {:class "flex items-center gap-1"}
                   ($ :button {:id (str "btn-zoom-out-receipt-preview-" rid-str)
@@ -199,16 +197,6 @@
                                           (set-pan! {:x 0 :y 0})
                                           (set-drag! nil))}
                     "Reset")))
-              ($ :button {:id (str "btn-toggle-receipt-preview-" rid-str)
-                          :type "button"
-                          :class "ds-btn ds-btn-ghost ds-btn-xs"
-                          :on-click (fn [e]
-                                      (.preventDefault e)
-                                      (.stopPropagation e)
-                                      (if on-toggle
-                                        (on-toggle)
-                                        (set-local-expanded! (not local-expanded?))))}
-                (if current-expanded? "Hide" "Show"))
               ($ :a {:id (str "link-open-receipt-" rid-str)
                      :href (or preview-url download-url)
                      :target "_blank"
@@ -255,7 +243,7 @@
                                (not zoomed?) ""
                                dragging? "cursor-grabbing"
                                :else "cursor-grab")
-                container-classes (str "w-full bg-base-200 rounded-lg h-[70vh] overflow-hidden select-none "
+                container-classes (str "w-full bg-base-200 rounded-lg h-[70vh] overflow-hidden select-none flex items-start justify-center "
                                     cursor-class)
                 img-style (when zoomed?
                             #js {:transform (str "translate(" x "px, " y "px) scale(" zoom ")")
@@ -299,7 +287,7 @@
                        :src img-src
                        :alt (or original-filename "Receipt image")
                        :draggable false
-                       :class "w-full h-full object-contain"
+                       :class "w-full h-full object-contain object-top"
                        :style img-style})))
 
           pdfish?
@@ -323,7 +311,7 @@
 
           :else
           ($ :p {:class "text-xs text-base-content/60"}
-            "Preview is not available for this file type."))))))
+            "Preview is not available for this file type.")))))
 
 
 (defui receipt-viewer

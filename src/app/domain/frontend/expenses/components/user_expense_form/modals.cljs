@@ -1,8 +1,8 @@
 (ns app.domain.frontend.expenses.components.user-expense-form.modals
   "Modal wrappers for user-scoped expense forms."
   (:require
-    [app.domain.frontend.expenses.components.form-fields :refer [current-datetime-local
-                                                                 new-line-item]]
+    [app.domain.frontend.expenses.components.form-fields.helpers :refer [current-datetime-local
+                                                                         new-line-item]]
     [app.domain.frontend.expenses.components.user-expense-form.forms :as forms]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
