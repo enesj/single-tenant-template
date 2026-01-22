@@ -20,11 +20,11 @@
 
 (def ^:private settings-read-roles
   "Roles allowed to view per-user settings."
-  h/reference-data-read-roles)
+  #{"admin" "owner"})
 
 (def ^:private settings-write-roles
   "Roles allowed to mutate per-user settings."
-  h/reference-data-write-roles)
+  #{"admin" "owner"})
 
 ;; ---------------------------------------------------------------------------
 ;; Settings handlers
@@ -61,7 +61,7 @@
                {}
                body)
         _ (log/info "After key normalization" {:body body})
-        supported-keys #{:default-currency :default-payer-id :notifications-enabled :receipt-refine-enabled}
+         supported-keys #{:default-currency :default-payer-id :notifications-enabled :auto-post-after-upload-enabled :receipt-refine-enabled}
         present-keys (->> supported-keys (filter #(contains? body %)) set)]
     (log/info "Settings validation" {:present-keys present-keys :supported-keys supported-keys})
     (cond
@@ -77,8 +77,10 @@
                        (if (nil? payer-id-raw)
                          nil
                          (h/try-parse-uuid payer-id-raw)))
-            notifications (when (contains? body :notifications-enabled)
-                            (parse-bool (:notifications-enabled body)))
+             notifications (when (contains? body :notifications-enabled)
+                             (parse-bool (:notifications-enabled body)))
+             auto-post-after-upload-enabled (when (contains? body :auto-post-after-upload-enabled)
+                                              (parse-bool (:auto-post-after-upload-enabled body)))
             receipt-refine-enabled (when (contains? body :receipt-refine-enabled)
                                      (parse-bool (:receipt-refine-enabled body)))]
         (cond
@@ -100,6 +102,10 @@
             (nil? notifications))
           {:error (h/json-response {:error "notifications-enabled must be a boolean"} 400)}
 
+          (and (contains? body :auto-post-after-upload-enabled)
+            (nil? auto-post-after-upload-enabled))
+          {:error (h/json-response {:error "auto-post-after-upload-enabled must be a boolean"} 400)}
+
           (and (contains? body :receipt-refine-enabled)
             (nil? receipt-refine-enabled))
           {:error (h/json-response {:error "receipt-refine-enabled must be a boolean"} 400)}
@@ -107,10 +113,11 @@
           :else
           {:settings
            (cond-> current
-             (contains? body :default-currency) (assoc :default-currency currency)
-             (contains? body :default-payer-id) (assoc :default-payer-id payer-id)
-             (contains? body :notifications-enabled) (assoc :notifications-enabled notifications)
-             (contains? body :receipt-refine-enabled) (assoc :receipt-refine-enabled receipt-refine-enabled))})))))
+              (contains? body :default-currency) (assoc :default-currency currency)
+              (contains? body :default-payer-id) (assoc :default-payer-id payer-id)
+              (contains? body :notifications-enabled) (assoc :notifications-enabled notifications)
+              (contains? body :auto-post-after-upload-enabled) (assoc :auto-post-after-upload-enabled auto-post-after-upload-enabled)
+              (contains? body :receipt-refine-enabled) (assoc :receipt-refine-enabled receipt-refine-enabled))})))))
 
 (defn get-settings-handler
   "GET /api/v1/expenses/settings - fetch user settings.

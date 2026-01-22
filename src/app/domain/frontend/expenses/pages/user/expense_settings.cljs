@@ -44,27 +44,33 @@
         [notifications set-notifications!] (use-state (if (contains? settings :notifications-enabled)
                     (:notifications-enabled settings)
                                                         true))
-        [receipt-refine-enabled set-receipt-refine-enabled!] (use-state (boolean (:receipt-refine-enabled settings)))
+         [auto-post-after-upload-enabled set-auto-post-after-upload-enabled!] (use-state (boolean (:auto-post-after-upload-enabled settings)))
+         [auto-post-after-upload-enabled set-auto-post-after-upload-enabled!] (use-state (boolean (:auto-post-after-upload-enabled settings)))
+         [auto-post-after-upload-enabled set-auto-post-after-upload-enabled!] (use-state (boolean (:auto-post-after-upload-enabled settings)))
+         [receipt-refine-enabled set-receipt-refine-enabled!] (use-state (boolean (:receipt-refine-enabled settings)))
         payers (or (use-subscribe [:user-expenses/payers]) [])
 
         ;; Compute "dirty" state to enable Save only when values differ.
         current-currency (or (:default-currency settings) "BAM")
         current-payer (some-> (:default-payer-id settings) str)
-        current-notifications (if (contains? settings :notifications-enabled)
-              (boolean (:notifications-enabled settings))
-                                true)
-          current-receipt-refine-enabled (boolean (:receipt-refine-enabled settings))
-        dirty? (or (not= default-currency current-currency)
-                 (not= (some-> default-payer str) current-payer)
-               (not= (boolean notifications) current-notifications)
-               (not= (boolean receipt-refine-enabled) current-receipt-refine-enabled))
+           current-notifications (if (contains? settings :notifications-enabled)
+               (boolean (:notifications-enabled settings))
+                                 true)
+           current-auto-post-after-upload-enabled (boolean (:auto-post-after-upload-enabled settings))
+           current-receipt-refine-enabled (boolean (:receipt-refine-enabled settings))
+         dirty? (or (not= default-currency current-currency)
+                  (not= (some-> default-payer str) current-payer)
+                (not= (boolean notifications) current-notifications)
+                (not= (boolean auto-post-after-upload-enabled) current-auto-post-after-upload-enabled)
+                (not= (boolean receipt-refine-enabled) current-receipt-refine-enabled))
 
-        handle-save (fn []
-                      (let [settings {:default-currency default-currency
-                                      :default-payer-id default-payer
-                                      :notifications-enabled notifications
-                                      :receipt-refine-enabled receipt-refine-enabled}]
-                        (rf/dispatch [:user-expenses/save-settings settings])))]
+         handle-save (fn []
+                       (let [settings {:default-currency default-currency
+                                       :default-payer-id default-payer
+                                       :notifications-enabled notifications
+                                       :auto-post-after-upload-enabled auto-post-after-upload-enabled
+                                       :receipt-refine-enabled receipt-refine-enabled}]
+                         (rf/dispatch [:user-expenses/save-settings settings])))]
 
     ;; Fetch settings and payers on mount
     (use-effect
@@ -81,12 +87,13 @@
           ;; Always set from settings (including nil payer-id / false notifications).
           (set-default-currency! (or (:default-currency settings) "BAM"))
           (set-default-payer! (some-> (:default-payer-id settings) str))
-          (set-notifications!
+           (set-notifications!
             (if (contains? settings :notifications-enabled)
               (boolean (:notifications-enabled settings))
               true))
-          (set-receipt-refine-enabled!
-            (boolean (:receipt-refine-enabled settings)))))
+           (set-auto-post-after-upload-enabled! (boolean (:auto-post-after-upload-enabled settings)))
+           (set-receipt-refine-enabled!
+             (boolean (:receipt-refine-enabled settings)))))
       [settings])
 
     ($ :div {:class "min-h-screen bg-base-100"}
@@ -157,9 +164,16 @@
                            :checked notifications
                            :on-change #(set-notifications! (.. % -target -checked))})))
 
-            ;; Receipts
-            ($ setting-section {:title "Receipts"
-                                :description "Control how receipt uploads are processed."}
+             ;; Receipts
+             ($ setting-section {:title "Receipts"
+                                 :description "Control how receipt uploads are processed."}
+              ($ setting-row {:label "Auto-post after upload"
+                              :description "Automatically post receipts after extraction when data is complete."}
+                ($ :input {:id "settings-auto-post-after-upload-toggle"
+                           :type "checkbox"
+                           :class "ds-toggle ds-toggle-primary"
+                           :checked auto-post-after-upload-enabled
+                           :on-change #(set-auto-post-after-upload-enabled! (.. % -target -checked))}))
               ($ setting-row {:label "AI receipt refinement"
                               :description "Improve receipt extraction accuracy (may take a bit longer)."}
                 ($ :input {:id "settings-receipt-refine-toggle"

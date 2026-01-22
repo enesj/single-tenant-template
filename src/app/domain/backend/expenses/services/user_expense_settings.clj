@@ -14,10 +14,12 @@
   "Default values returned when a user has no persisted settings row yet."
   {:default-currency "BAM"
    :default-payer-id nil
-  :notifications-enabled true
-  ;; When true, allow the receipt OCR pipeline to run the optional AI refine step
-  ;; (still subject to global Cerebras config / API key availability).
-  :receipt-refine-enabled false})
+   :notifications-enabled true
+   ;; When true, auto-post extracted receipts after upload (if data is complete).
+   :auto-post-after-upload-enabled false
+   ;; When true, allow the receipt OCR pipeline to run the optional AI refine step
+   ;; (still subject to global Cerebras config / API key availability).
+   :receipt-refine-enabled false})
 
 (def allowed-currencies
   "Keep in sync with the domain :currency enum."
@@ -36,9 +38,9 @@
     (throw (ex-info "user-id must be a UUID" {:user-id user-id})))
   (-> (jdbc/execute-one!
         db
-      (sql/format {:select [:default_currency :default_payer_id :notifications_enabled :receipt_refine_enabled]
-                     :from [:user_expense_settings]
-                     :where [:= :user_id user-id]})
+      (sql/format {:select [:default_currency :default_payer_id :notifications_enabled :auto_post_after_upload_enabled :receipt_refine_enabled]
+                    :from [:user_expense_settings]
+                    :where [:= :user_id user-id]})
         {:builder-fn rs/as-unqualified-lower-maps})
       db-adapter/to-app))
 
@@ -52,7 +54,7 @@
   - :receipt-refine-enabled (boolean)
 
   Returns the stored row (same shape as `get-user-expense-settings`)."
-  [db user-id {:keys [default-currency default-payer-id notifications-enabled receipt-refine-enabled]}]
+  [db user-id {:keys [default-currency default-payer-id notifications-enabled auto-post-after-upload-enabled receipt-refine-enabled]}]
   (when-not (instance? UUID user-id)
     (throw (ex-info "user-id must be a UUID" {:user-id user-id})))
   (when-not (contains? allowed-currencies default-currency)
@@ -60,6 +62,9 @@
                                             :allowed allowed-currencies})))
   (when-not (boolean? notifications-enabled)
     (throw (ex-info "notifications-enabled must be boolean" {:notifications-enabled notifications-enabled})))
+  (when-not (boolean? auto-post-after-upload-enabled)
+    (throw (ex-info "auto-post-after-upload-enabled must be boolean"
+             {:auto-post-after-upload-enabled auto-post-after-upload-enabled})))
   (when-not (boolean? receipt-refine-enabled)
     (throw (ex-info "receipt-refine-enabled must be boolean" {:receipt-refine-enabled receipt-refine-enabled})))
   (when-not (or (nil? default-payer-id) (instance? UUID default-payer-id))
@@ -68,19 +73,21 @@
         db
         [(str
            "INSERT INTO user_expense_settings "
-           "(user_id, default_currency, default_payer_id, notifications_enabled, receipt_refine_enabled, created_at, updated_at) "
-           "VALUES (?, ?::currency, ?, ?, ?, NOW(), NOW()) "
+           "(user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled, created_at, updated_at) "
+           "VALUES (?, ?::currency, ?, ?, ?, ?, NOW(), NOW()) "
            "ON CONFLICT (user_id) DO UPDATE SET "
            "default_currency = EXCLUDED.default_currency, "
            "default_payer_id = EXCLUDED.default_payer_id, "
            "notifications_enabled = EXCLUDED.notifications_enabled, "
+           "auto_post_after_upload_enabled = EXCLUDED.auto_post_after_upload_enabled, "
            "receipt_refine_enabled = EXCLUDED.receipt_refine_enabled, "
            "updated_at = NOW() "
-           "RETURNING default_currency, default_payer_id, notifications_enabled, receipt_refine_enabled")
+           "RETURNING default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled")
          user-id
          default-currency
          default-payer-id
          notifications-enabled
+         auto-post-after-upload-enabled
          receipt-refine-enabled]
         {:builder-fn rs/as-unqualified-lower-maps})
       db-adapter/to-app))

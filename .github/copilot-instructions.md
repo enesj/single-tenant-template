@@ -1,59 +1,39 @@
-## Repo Instructions for Copilot Chat
+# Copilot instructions (single-tenant template)
 
-Read `AGENTS.md` first for workflow, tool/skill selection, testing discipline, and component IDs.
-This file focuses on implementation guidance (coding patterns, migrations, common issues, security checks).
+**Instruction Precedence**: Read `AGENTS.md` first for **policy & workflow** (hard rules like "no Python", testing discipline, security/secrets, component ID patterns). This file covers **implementation patterns** within those constraints. If instructions conflict, follow the more specific one for the code/path you're working on; otherwise prefer `AGENTS.md` for policy and this file for patterns.
 
-### Instruction Precedence
+## Big picture / entrypoints
+- **Backend system entry**: `src/app/template/backend/core.clj` (loads `config/base.edn`, `resources/db/models.edn`, starts webserver + DI container).
+- **DI container**: `src/app/template/di/config.clj` (register/get services like `:crud-service`, `:auth-service`).
+- **Top-level routing composition**: `src/app/template/backend/routes.clj` (mounts `/api/v1`, `/admin/api`, and SPA fallbacks).
+- **HTTP routing boundaries**:
+  - Admin API: `src/app/template/backend/routes/admin_api.clj` mounted at `/admin/api` (template JSON middleware + `wrap-admin-authentication`).
+  - User API: `src/app/template/backend/routes/api.clj` mounted at `/api/v1` (includes `/config`, `/metrics`, auth routes).
+  - Domain route registry: `src/app/domain/backend/registry.clj` defines enabled domains and provides `all-admin-api-routes`, `all-user-api-routes`, and SPA routes.
+  - Example domain: Expenses admin routes are mounted under `/admin/api/expenses` (`src/app/domain/backend/expenses/routes/core.clj`).
 
-- If two instructions conflict, follow the more specific one for the code/path you are working on.
-- If equally specific, prefer `AGENTS.md` for policy/workflow and this file for implementation details.
+## Local dev workflows (use these)
+- Start full stack (hot reload): `bb run-app` (admin UI at `http://localhost:8085/admin`).
+- Backend tests: `bb be-test` (Kaocha, uses `:test` profile).
+- Frontend tests: `bb fe-test-parallel` (fast) or `npm run test:cljs`.
+- **Save test output once** (don’t re-run to grep): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
+- **No Python** in this repo: use Babashka tasks (`bb ...`) or shell scripts under `scripts/sh/**`.
 
-# Coding & Development Instructions
+## Config & ports
+- Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.
+- Domain/user UI config EDNs are edited at runtime via `/admin/user-settings` and loaded dynamically (see `src/app/template/backend/routes/api.clj`).
+- Dev helpers: rate limit/session helpers exist under `/admin/api/*` (see `docs/template/backend/security-middleware.md`).
 
-## Coding Style & Patterns
+## Database & migrations
+- Edit canonical schema inputs under `resources/db/{template,shared,domain}`; **never** hand-edit `resources/db/migrations/*`.
+- Preferred REPL helpers live in `src/app/template/backend/migrations/simple_repl.clj` (see `docs/general/migrations/migration-overview.md`).
 
-- Naming: DB tables/columns use `snake_case`; code uses kebab-case (`:user-settings`). Namespaces dotted (e.g., `app.template.frontend.events`).
-- Architecture: protocols-first services; enforce security middleware; keep concerns isolated.
-- Reuse-first: prefer shared logic/utilities (`src/app/shared/**`, `src/app/template/shared/**`) before adding new code to FE or BE.
-- Frontend composition: for UI, start with template components (`src/app/template/frontend/**`); reuse components from current or parent folders first.
-- UI: use DaisyUI component classes prefixed with `ds-` (e.g., `ds-btn`, `ds-card`) when creating or modifying shared components. Tailwind utilities remain unprefixed.
+## Project-specific conventions (common footguns)
+- Naming boundary: DB is `snake_case`, app/runtime is kebab-case; normalize with `app.shared.model-naming/db-keyword->app` + `ensure-app-keyword`.
+- Generic CRUD: `/api/v1/entities/*` is **deny-by-default allowlisted**; domain entities usually need domain APIs + a CRUD bridge (see `docs/template/backend/generic-entity-crud.md`).
+- Frontend entity specs: `src/app/template/frontend/db/entity_specs.cljs` normalizes entity keys; if list pages show wrong columns, suspect snake↔kebab mismatch.
+- Re-frame interceptors include `re-frame/trim-v` via `app.template.frontend.db.interceptors/common-interceptors`; handlers should destructure like `[params]` (not `[_ params]`).
+- Backend JSON responses: convert PG-specific objects before encoding (see `app.shared.type-conversion` usage in services).
 
-## Migrations Workflow
-
-- Read docs first: `docs/general/migrations/**` (start with `complete-guide.md` and `migration-overview.md`).
-- Edit canonical EDN under `resources/db/{template,shared}`.
-- Run REPL helpers via `src/app/migrations/simple_repl.clj`.
-- Never hand-edit `resources/db/migrations/*`.
-- Databases: dev on `:55432`, test on `:55433`; use `bb backup-db` / `bb restore-db` before migrations.
-
-## Common Issues & Fixes
-
-- PostgreSQL JSON serialization: convert PG-specific objects (PGobject, arrays, timestamps) before returning API responses.
-  - Pattern: apply a DB serialization helper (e.g., `convert-pg-objects`) to query results before `response/ok`.
-- Namespaced keys: JOINs often return `:table/col`; normalize to simple keys where callers expect them (e.g., `:id` via `(or (:id x) (:admins/id x))`).
-- Re-frame orchestration: ensure `app.template.frontend.events.core` is loaded so event namespaces register.
-- Entity store sync: after updates, refresh both the feature store and UI read locations to avoid empty tables until refresh.
-- HoneySQL clause keywords: verify correct keyword shapes (`:id` vs `:users/id`) to prevent silent query issues.
-
-### Recurring frontend issue: list pages show only timestamp columns
-
-- Root cause: entity spec lookup returned `nil` due to entity key mismatch (app/kebab-case vs db/snake_case).
-- Fix: normalize spec map keys to app/kebab-case (use `model-naming/db-keyword->app` in spec generation/lookups).
-
-### Common follow-up: API has data but table rows are empty
-
-- Root cause: re-frame handlers using `common-interceptors` include `trim-v`; handler event vectors are already trimmed.
-- Fix: use handler args like `[params]`, `[response]`, `[error]` (not `[_ params]`, etc.).
-
-## Frontend UI Conventions
-
-- Pass the effective `:entity-spec` to `list-view` when tables use computed/custom fields so column toggles align.
-- Admin pages should pass the spec produced by the admin spec generator.
-
-## Security & Configuration
-
-- Secrets: never commit; keep in `config/.secrets.edn` and environment vars for CI/CD.
-- Security checks (manual):
-  - `curl -I https://localhost:8085/admin` (headers)
-  - `curl -k http://localhost:8085/admin` (HTTPS redirect)
-  - `curl -H "X-Forwarded-For: 192.168.1.100" http://localhost:8085/api/test` (rate limiting)
+## Security middleware toggles
+- HTTPS redirect can be disabled with `DISABLE_HTTPS_REDIRECT=true`; rate limiting with `DISABLE_RATE_LIMITING=true` (see `src/app/template/backend/middleware/security.clj`).

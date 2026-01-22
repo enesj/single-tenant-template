@@ -49,12 +49,11 @@
 (defn build-config
   "Build a provider config from an app config map (Aero) and environment.
 
-  Environment variables override app config when present:
-  - `MISTRAL_API_KEY`
-  - `MISTRAL_OCR_BASE_URL`
-  - `MISTRAL_OCR_MODEL`
-  - `MISTRAL_OCR_ENABLED` (true/false, default true)
-  - `MISTRAL_OCR_AUTO_POST_AFTER_UPLOAD` (true/false, default true)
+   Environment variables override app config when present:
+   - `MISTRAL_API_KEY`
+   - `MISTRAL_OCR_BASE_URL`
+   - `MISTRAL_OCR_MODEL`
+   - `MISTRAL_OCR_ENABLED` (true/false, default true)
 
   Batch API (Mistral Batch jobs) support:
   - `MISTRAL_OCR_BATCH_ENABLED` (true/false, default true)
@@ -100,13 +99,7 @@
                     (if (contains? cfg :ocr-enabled?)
                       (:ocr-enabled? cfg)
                       true))
-         env-auto-post (some-> (getenv* "MISTRAL_OCR_AUTO_POST_AFTER_UPLOAD") parse-bool)
-         auto-post-after-upload? (if (some? env-auto-post)
-                                   env-auto-post
-                                   (if (contains? cfg :ocr-auto-post-after-upload?)
-                                     (:ocr-auto-post-after-upload? cfg)
-                                     true))
-         env-batch-enabled (some-> (getenv* "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
+          env-batch-enabled (some-> (getenv* "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
          batch-enabled? (if (some? env-batch-enabled)
                           env-batch-enabled
                           (if (contains? cfg :ocr-batch-enabled?)
@@ -125,7 +118,9 @@
                               (:ocr-batch-max-requests cfg)
                               50)]
      {:enabled? enabled?
-      :auto-post-after-upload? auto-post-after-upload?
+       :auto-post-after-upload? (if (contains? cfg :ocr-auto-post-after-upload?)
+                                  (:ocr-auto-post-after-upload? cfg)
+                                  true)
       :batch-enabled? batch-enabled?
       :batch-poll-ms batch-poll-ms
       :batch-timeout-ms batch-timeout-ms

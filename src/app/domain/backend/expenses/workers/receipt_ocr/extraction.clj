@@ -323,7 +323,7 @@
       (auto-create-aliases! db supplier-guess extraction)
       (catch Exception e
         (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
-    (let [auto-post? (get opts :auto-post-after-upload? true)
+     (let [auto-post? (get opts :auto-post-after-upload? true)
           auto-res (when (and (= status "extracted") auto-post?)
                      (try
                        (auto-approve-extracted-receipt! db receipt-id extraction opts)

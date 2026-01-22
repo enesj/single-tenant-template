@@ -140,6 +140,20 @@
             {:receipt-id receipt-id :stage :parse :result :failed :error (.getMessage e)}))
         {:receipt-id receipt-id :stage :parse :result :skipped :reason :not-claimed}))))
 
+(defn- user-allows-auto-post?
+  [db receipt]
+  (try
+    (let [user-id (:user_id receipt)]
+      (when user-id
+        (let [persisted (user-expense-settings/get-user-expense-settings db user-id)
+              effective (user-expense-settings/effective-settings persisted)]
+          (true? (:auto-post-after-upload-enabled effective)))))
+    (catch Exception e
+      (log/warn e "Failed to load user expense settings; skipping auto-post"
+        {:receipt-id (:id receipt)
+         :user-id (:user_id receipt)})
+      false)))
+
 (defn- process-extract!
   [db ocr-cfg receipt opts]
   (let [receipt-id (:id receipt)]
@@ -152,8 +166,9 @@
           (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
                                                                   :content-type (:content_type receipt)})
-                opts* (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))
-                persist-result (extraction/persist-extract-result! db receipt-id extract-result opts*)]
+                user-auto-post? (user-allows-auto-post? db receipt)
+                opts* (assoc opts :auto-post-after-upload? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?))
+            persist-result (extraction/persist-extract-result! db receipt-id extract-result opts*)]
             (if (:defer-refine? opts*)
               (assoc persist-result :receipt receipt :extract-result extract-result)
               (maybe-refine-review-required db receipt extract-result persist-result opts*)))
