@@ -38,7 +38,7 @@
     (get-in request [:params "file"])))
 
 (defn- request-param
-  "Read a parameter from either :multipart-params or :params, supporting keyword or string keys." 
+  "Read a parameter from either :multipart-params or :params, supporting keyword or string keys."
   [request k]
   (or (get-in request [:multipart-params k])
     (get-in request [:multipart-params (name k)])
@@ -49,7 +49,7 @@
   "Parse an optional UUID param from the request.
 
   Returns a java.util.UUID or nil.
-  Throws ex-info {:status 400 :field <k>} when invalid." 
+  Throws ex-info {:status 400 :field <k>} when invalid."
   [k v]
   (when-let [s (some-> v str str/trim not-empty)]
     (try
@@ -115,18 +115,18 @@
                                                              :has-multipart-params? (contains? request :multipart-params)
                                                              :multipart-keys (some-> request :multipart-params keys vec)
                                                              :param-keys (some-> request :params keys vec)})))
-    (let [{:keys [storage_key bytes original_filename content-type file_size]} (store-uploaded-file! file)
+    (let [{:keys [storage_key bytes original_filename content_type file_size]} (store-uploaded-file! file)
           user-id (h/get-user-id request)
           payer-id (parse-uuid-param :payer_id
                      (or (request-param request :payer_id)
                        (request-param request :payer-id)
                        (request-param request :payerId)))
           result (receipt-storage/upload-receipt! db {:user_id user-id
-                                                       :payer_id payer-id
+                                                      :payer_id payer-id
                                                       :storage_key storage_key
                                                       :bytes bytes
                                                       :original_filename original_filename
-                                                      :content_type content-type
+                                                      :content_type content_type
                                                       :file_size file_size})]
       ;; If the receipt is a duplicate, delete the just-uploaded file so we don't
       ;; accumulate orphaned files under upload/stripes/.

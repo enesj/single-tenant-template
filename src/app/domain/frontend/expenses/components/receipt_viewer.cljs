@@ -13,12 +13,6 @@
     (or (str/starts-with? url "/admin/api/")
       (str/includes? url "/admin/api/"))))
 
-(defn- with-download-param
-  [url]
-  (when (seq url)
-    (let [separator (if (str/includes? url "?") "&" "?")]
-      (str url separator "download=true"))))
-
 (defn- fetch-receipt-blob
   "Fetch a receipt file as a Blob.
 
@@ -43,18 +37,6 @@
   [url]
   (when (seq url)
     (.open js/window url "_blank" "noopener,noreferrer")))
-
-(defn- download-blob!
-  [blob filename]
-  (let [url (.createObjectURL js/URL blob)
-        link (.createElement js/document "a")]
-    (set! (.-href link) url)
-    (set! (.-download link) filename)
-    (.appendChild (.-body js/document) link)
-    (.click link)
-    (.remove link)
-    ;; Revoke on a short delay so the download can start.
-    (js/setTimeout (fn [] (.revokeObjectURL js/URL url)) 1000)))
 
 (defn- format-bytes
   [value]
@@ -92,19 +74,31 @@
       (shared/format-value value "—" false))))
 
 (defui receipt-preview
-  "Preview-only receipt card (image/pdf + Open/Download actions).
+  "Preview-only receipt card (image/pdf + Open actions).
 
   Intended for reuse in layouts that already show metadata elsewhere (e.g. Approve tab)."
   [{:keys [receipt title expanded? on-toggle] :or {title "Preview"}}]
-  (let [{:keys [id content-type original-filename download-url]} receipt
+  (let [{:keys [id content-type original-filename download-url storage-key]} receipt
         rid-str (or (some-> id str) "unknown")
-        download-href (with-download-param download-url)
         admin-protected? (admin-protected-url? download-url)
-        previewable? (or (str/starts-with? (or content-type "") "image/")
-                       (= content-type "application/pdf"))
+        ;; Robust preview detection: by content-type OR by filename/storage-key extension
+        filename (or original-filename storage-key "")
+        ext (some-> filename (str/split #"\\.") last str/lower-case)
+        image-exts #{"jpg" "jpeg" "png" "gif" "webp" "bmp" "tif" "tiff" "heic" "heif"}
+        imageish? (or (str/starts-with? (or content-type "") "image/")
+                      (contains? image-exts ext))
+        pdfish? (or (= content-type "application/pdf") (= ext "pdf"))
+        previewable? (or imageish? pdfish?)
         ;; Support both controlled and uncontrolled expansion state
         [local-expanded? set-local-expanded!] (use-state true)
         current-expanded? (if (some? expanded?) expanded? local-expanded?)
+        [zoom set-zoom!] (use-state 1.0)
+        min-zoom 1.0
+        max-zoom 4.0
+        zoom-step 0.25
+        [pan set-pan!] (use-state {:x 0 :y 0})
+        [drag set-drag!] (use-state nil)
+        dragging? (some? drag)
         [preview set-preview!] (use-state nil)
         [loading? set-loading!] (use-state false)
         [load-error set-load-error!] (use-state nil)
@@ -125,8 +119,19 @@
         (set-preview! nil)
         (set-loading! false)
         (set-load-error! nil)
+        (set-zoom! 1.0)
+        (set-pan! {:x 0 :y 0})
+        (set-drag! nil)
         js/undefined)
       [download-url])
+
+    (use-effect
+      (fn []
+        (when (= zoom 1.0)
+          (set-pan! {:x 0 :y 0})
+          (set-drag! nil))
+        js/undefined)
+      [zoom])
 
     ;; Lazily fetch blob previews for admin-protected URLs (img/iframe can't send headers).
     (use-effect
@@ -161,6 +166,39 @@
           ($ :h3 {:class "text-sm font-semibold"} title)
           (when (seq download-url)
             ($ :div {:class "flex items-center gap-2"}
+              (when (and imageish? current-expanded?)
+                ($ :div {:class "flex items-center gap-1"}
+                  ($ :button {:id (str "btn-zoom-out-receipt-preview-" rid-str)
+                              :type "button"
+                              :disabled (<= zoom min-zoom)
+                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+                              :on-click (fn [e]
+                                          (.preventDefault e)
+                                          (.stopPropagation e)
+                                          (set-zoom! (max min-zoom (- zoom zoom-step))))}
+                    "−")
+                  ($ :span {:class "text-xs text-base-content/70 w-12 text-center"}
+                    (str (js/Math.round (* 100 zoom)) "%"))
+                  ($ :button {:id (str "btn-zoom-in-receipt-preview-" rid-str)
+                              :type "button"
+                              :disabled (>= zoom max-zoom)
+                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+                              :on-click (fn [e]
+                                          (.preventDefault e)
+                                          (.stopPropagation e)
+                                          (set-zoom! (min max-zoom (+ zoom zoom-step))))}
+                    "+")
+                  ($ :button {:id (str "btn-zoom-reset-receipt-preview-" rid-str)
+                              :type "button"
+                              :disabled (= zoom 1.0)
+                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+                              :on-click (fn [e]
+                                          (.preventDefault e)
+                                          (.stopPropagation e)
+                                          (set-zoom! 1.0)
+                                          (set-pan! {:x 0 :y 0})
+                                          (set-drag! nil))}
+                    "Reset")))
               ($ :button {:id (str "btn-toggle-receipt-preview-" rid-str)
                           :type "button"
                           :class "ds-btn ds-btn-ghost ds-btn-xs"
@@ -192,38 +230,11 @@
                                                 (open-url-in-new-tab! url))))
                                      (.catch (fn [err]
                                                (when-not (= "AbortError" (.-name err))
-                                                 (set-load-error! (or (.-message err) "Failed to open receipt.")))))
+                                               (set-load-error! (or (.-message err) "Failed to open receipt.")))))
                                      (.finally (fn []
                                                  (set-loading! false))))))}
                 "Open")
-              ($ :a {:id (str "btn-download-receipt-" rid-str)
-                     :href download-href
-                     :class "ds-btn ds-btn-primary ds-btn-xs"
-                     :on-click (when admin-protected?
-                                 (fn [e]
-                                   (.preventDefault e)
-                                   (.stopPropagation e)
-                                   (let [filename (or (some-> original-filename str)
-                                                    (str "receipt-" rid-str))]
-                                     (if (seq preview-url)
-                                       (let [link (.createElement js/document "a")]
-                                         (set! (.-href link) preview-url)
-                                         (set! (.-download link) filename)
-                                         (.appendChild (.-body js/document) link)
-                                         (.click link)
-                                         (.remove link))
-                                       (do
-                                         (set-loading! true)
-                                         (set-load-error! nil)
-                                         (-> (fetch-receipt-blob (or download-href download-url) #js {})
-                                           (.then (fn [blob]
-                                                    (download-blob! blob filename)))
-                                           (.catch (fn [err]
-                                                     (when-not (= "AbortError" (.-name err))
-                                                       (set-load-error! (or (.-message err) "Failed to download receipt.")))))
-                                           (.finally (fn []
-                                                       (set-loading! false)))))))))}
-                "Download"))))
+              )))
 
         (cond
           (not (seq download-url))
@@ -235,6 +246,69 @@
                    :class "text-xs text-base-content/60"}
             "Preview hidden")
 
+          ;; Prefer rendering image/pdf directly; blob preview will swap in when ready.
+          imageish?
+          (let [zoomed? (> zoom 1.0)
+                img-src (or preview-url download-url)
+                {:keys [x y]} pan
+                cursor-class (cond
+                               (not zoomed?) ""
+                               dragging? "cursor-grabbing"
+                               :else "cursor-grab")
+                container-classes (str "w-full bg-base-200 rounded-lg h-[70vh] overflow-hidden select-none "
+                                    cursor-class)
+                img-style (when zoomed?
+                            #js {:transform (str "translate(" x "px, " y "px) scale(" zoom ")")
+                                 :transformOrigin "50% 50%"
+                                 :willChange "transform"})]
+            ($ :div {:id (str "receipt-preview-img-container-" rid-str)
+                     :class container-classes
+                     :style #js {:touchAction "none"}
+                     :on-pointer-down (when zoomed?
+                                        (fn [e]
+                                          (.preventDefault e)
+                                          (let [target (.-currentTarget e)
+                                                pid (.-pointerId e)]
+                                            (when target
+                                              (try
+                                                (.setPointerCapture target pid)
+                                                (catch :default _ nil)))
+                                            (set-drag! {:pointer-id pid
+                                                        :start-x (.-clientX e)
+                                                        :start-y (.-clientY e)
+                                                        :pan-x x
+                                                        :pan-y y}))))
+                     :on-pointer-move (when zoomed?
+                                        (fn [e]
+                                          (when (and drag (= (.-pointerId e) (:pointer-id drag)))
+                                            (.preventDefault e)
+                                            (let [dx (- (.-clientX e) (:start-x drag))
+                                                  dy (- (.-clientY e) (:start-y drag))]
+                                              (set-pan! {:x (+ (:pan-x drag) dx)
+                                                         :y (+ (:pan-y drag) dy)})))))
+                     :on-pointer-up (when zoomed?
+                                      (fn [e]
+                                        (when (and drag (= (.-pointerId e) (:pointer-id drag)))
+                                          (.preventDefault e)
+                                          (set-drag! nil))))
+                     :on-pointer-cancel (when zoomed?
+                                          (fn [e]
+                                            (.preventDefault e)
+                                            (set-drag! nil)))}
+              ($ :img {:id (str "receipt-preview-img-" rid-str)
+                       :src img-src
+                       :alt (or original-filename "Receipt image")
+                       :draggable false
+                       :class "w-full h-full object-contain"
+                       :style img-style})))
+
+          pdfish?
+          ($ :iframe {:id (str "receipt-preview-pdf-" rid-str)
+                      :src (or preview-url download-url)
+                      :title (or original-filename "Receipt PDF")
+                      :class "w-full h-[70vh] rounded-lg bg-base-200"})
+
+          ;; Fallback loading/error state for admin-protected previews while blob URL is preparing
           (and admin-protected? previewable? (not (seq preview-url)))
           ($ :div {:class "w-full bg-base-200 rounded-lg p-6 flex items-center justify-center"}
             (cond
@@ -247,22 +321,10 @@
               :else
               ($ :span {:class "text-xs text-base-content/60"} "Loading preview…")))
 
-          (str/starts-with? (or content-type "") "image/")
-          ($ :div {:class "w-full bg-base-200 rounded-lg overflow-hidden"}
-            ($ :img {:id (str "receipt-preview-img-" rid-str)
-                     :src (or preview-url download-url)
-                     :alt (or original-filename "Receipt image")
-                     :class "w-full max-h-[70vh] object-contain"}))
-
-          (= content-type "application/pdf")
-          ($ :iframe {:id (str "receipt-preview-pdf-" rid-str)
-                      :src (or preview-url download-url)
-                      :title (or original-filename "Receipt PDF")
-                      :class "w-full h-[70vh] rounded-lg bg-base-200"})
-
           :else
           ($ :p {:class "text-xs text-base-content/60"}
             "Preview is not available for this file type."))))))
+
 
 (defui receipt-viewer
   [{:keys [receipt show-summary?] :or {show-summary? true}}]

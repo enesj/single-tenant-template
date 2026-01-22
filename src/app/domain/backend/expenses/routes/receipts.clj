@@ -14,7 +14,7 @@
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
-  (def ^:private to-app shared-db/to-app)
+(def ^:private to-app shared-db/to-app)
 
 (defn- parse-status-param [status-param]
   (cond
@@ -131,7 +131,14 @@
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
         (if-let [receipt (receipt-queries/get-receipt db id)]
-          (let [receipt* (->> receipt to-app (enrich-receipt-for-detail db))
+          (let [receipt0 (->> receipt to-app (enrich-receipt-for-detail db))
+                content-type* (some-> (:content-type receipt0) str/trim not-empty)
+                inferred-content-type (or content-type*
+                                        (receipt-storage/infer-content-type (:original-filename receipt0))
+                                        (receipt-storage/infer-content-type (:storage-key receipt0)))
+                receipt* (cond-> receipt0
+                           (and (nil? content-type*) (seq inferred-content-type))
+                           (assoc :content-type inferred-content-type))
                 download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt*))
                                (str "/admin/api/expenses/receipts/" id "/download"))]
             (utils/success-response
@@ -167,7 +174,10 @@
                     download? (truthy-param? (or (:download qp) (get qp "download")))
                     disposition (if download? "attachment" "inline")
                     filename (safe-filename (:original-filename receipt-app) (str "receipt-" id))
-                    content-type (or (:content-type receipt-app) "application/octet-stream")]
+                    content-type (or (some-> (:content-type receipt-app) str/trim not-empty)
+                                   (receipt-storage/infer-content-type (:original-filename receipt-app))
+                                   (receipt-storage/infer-content-type (:storage-key receipt-app))
+                                   "application/octet-stream")]
                 (-> (response/file-response (.getPath file))
                   (response/content-type content-type)
                   (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
@@ -355,6 +365,6 @@
    ["/:id/retry" {:post (retry-receipt-handler db)}]
    ["/:id/fail" {:post (fail-receipt-handler db)}]
    ["/:id/extraction" {:post (save-extraction-handler db)}]
-  ["/:id/review" {:post (save-review-handler db)}]
+   ["/:id/review" {:post (save-review-handler db)}]
    ["/:id/approve" {:post (approve-and-post-handler db)}]
    ["/:id/ocr" {:post (ocr-single-receipt-handler db app-config)}]])

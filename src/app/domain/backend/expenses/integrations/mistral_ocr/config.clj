@@ -54,6 +54,7 @@
   - `MISTRAL_OCR_BASE_URL`
   - `MISTRAL_OCR_MODEL`
   - `MISTRAL_OCR_ENABLED` (true/false, default true)
+  - `MISTRAL_OCR_AUTO_POST_AFTER_UPLOAD` (true/false, default true)
 
   Batch API (Mistral Batch jobs) support:
   - `MISTRAL_OCR_BATCH_ENABLED` (true/false, default true)
@@ -65,6 +66,7 @@
   App config keys (optional):
   {:mistral {:api-key <token> :base-url <url> :ocr-model <model>
              :ocr-enabled? true
+             :ocr-auto-post-after-upload? true
              :ocr-batch-enabled? true
              :ocr-batch-poll-ms 2000
              :ocr-batch-timeout-ms 600000
@@ -82,41 +84,48 @@
    (let [cfg (or (:mistral app-config) {})
          ;; Allow `getenv` injection for tests; normalize blanks to nil.
          getenv* (fn [k] (some-> (getenv k) str/trim (not-empty)))
-        parse-bool (fn [s]
-                     (when s
-                       (let [s (str/lower-case (str/trim s))]
-                         (cond
-                           (contains? #{"1" "true" "yes" "y" "on"} s) true
-                           (contains? #{"0" "false" "no" "n" "off"} s) false
-                           :else nil))))
-        parse-int (fn [s]
-                    (when (and s (re-matches #"\\d+" s))
-                      (Long/parseLong s)))
-        env-enabled (some-> (getenv* "MISTRAL_OCR_ENABLED") parse-bool)
-        enabled? (if (some? env-enabled)
-                   env-enabled
-                   (if (contains? cfg :ocr-enabled?)
-                     (:ocr-enabled? cfg)
-                     true))
-        env-batch-enabled (some-> (getenv* "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
-        batch-enabled? (if (some? env-batch-enabled)
-                         env-batch-enabled
-                         (if (contains? cfg :ocr-batch-enabled?)
-                           (:ocr-batch-enabled? cfg)
-                           true))
-        batch-poll-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_POLL_MS") parse-int)
-                        (:ocr-batch-poll-ms cfg)
-                        2000)
-        batch-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_TIMEOUT_MS") parse-int)
-                           (:ocr-batch-timeout-ms cfg)
-                           600000)
-        batch-min-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MIN_REQUESTS") parse-int)
+         parse-bool (fn [s]
+                      (when s
+                        (let [s (str/lower-case (str/trim s))]
+                          (cond
+                            (contains? #{"1" "true" "yes" "y" "on"} s) true
+                            (contains? #{"0" "false" "no" "n" "off"} s) false
+                            :else nil))))
+         parse-int (fn [s]
+                     (when (and s (re-matches #"\\d+" s))
+                       (Long/parseLong s)))
+         env-enabled (some-> (getenv* "MISTRAL_OCR_ENABLED") parse-bool)
+         enabled? (if (some? env-enabled)
+                    env-enabled
+                    (if (contains? cfg :ocr-enabled?)
+                      (:ocr-enabled? cfg)
+                      true))
+         env-auto-post (some-> (getenv* "MISTRAL_OCR_AUTO_POST_AFTER_UPLOAD") parse-bool)
+         auto-post-after-upload? (if (some? env-auto-post)
+                                   env-auto-post
+                                   (if (contains? cfg :ocr-auto-post-after-upload?)
+                                     (:ocr-auto-post-after-upload? cfg)
+                                     true))
+         env-batch-enabled (some-> (getenv* "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
+         batch-enabled? (if (some? env-batch-enabled)
+                          env-batch-enabled
+                          (if (contains? cfg :ocr-batch-enabled?)
+                            (:ocr-batch-enabled? cfg)
+                            true))
+         batch-poll-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_POLL_MS") parse-int)
+                         (:ocr-batch-poll-ms cfg)
+                         2000)
+         batch-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_TIMEOUT_MS") parse-int)
+                            (:ocr-batch-timeout-ms cfg)
+                            600000)
+         batch-min-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MIN_REQUESTS") parse-int)
                               (:ocr-batch-min-requests cfg)
-                              5)
-        batch-max-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MAX_REQUESTS") parse-int)
-                             (:ocr-batch-max-requests cfg)
-                             50)]
+                              3)
+         batch-max-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MAX_REQUESTS") parse-int)
+                              (:ocr-batch-max-requests cfg)
+                              50)]
      {:enabled? enabled?
+      :auto-post-after-upload? auto-post-after-upload?
       :batch-enabled? batch-enabled?
       :batch-poll-ms batch-poll-ms
       :batch-timeout-ms batch-timeout-ms

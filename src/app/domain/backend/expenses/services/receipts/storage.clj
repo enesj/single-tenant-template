@@ -17,6 +17,33 @@
 (def ^:private local-receipt-storage-base-dir
   (io/file "upload" "stripes"))
 
+(def ^:private ext->content-type
+  {"pdf" "application/pdf"
+   "png" "image/png"
+   "jpg" "image/jpeg"
+   "jpeg" "image/jpeg"
+   "gif" "image/gif"
+   "webp" "image/webp"
+   "bmp" "image/bmp"
+   "tif" "image/tiff"
+   "tiff" "image/tiff"
+   "heic" "image/heic"
+   "heif" "image/heif"})
+
+(defn infer-content-type
+  "Infer a content type from a filename (typically :storage_key or :original_filename).
+
+  Returns nil when the extension is missing or unknown."
+  [filename]
+  (let [ext (some->> filename
+              str
+              str/trim
+              (re-find #"\.([A-Za-z0-9]+)$")
+              second
+              str/lower-case)]
+    (when (seq ext)
+      (get ext->content-type ext))))
+
 (defn compute-file-hash
   "Compute SHA-256 hex digest for uploaded file bytes."
   [bytes]
@@ -105,7 +132,7 @@
       {:duplicate? true :receipt existing}
       (let [row {:id (UUID/randomUUID)
                  :user_id user_id
-            :payer_id payer_id
+                 :payer_id payer_id
                  :storage_key storage_key
                  :file_hash hash
                  :original_filename original_filename

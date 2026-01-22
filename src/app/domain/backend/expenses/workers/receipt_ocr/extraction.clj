@@ -138,9 +138,9 @@
         currency (or (:currency_guess receipt) default-currency "BAM")
         items (vec (or (:items extraction) []))
         notes (str "Extracted from receipt: "
-               (or (:original_filename receipt)
-                 (:storage_key receipt)
-                 "receipt"))]
+                (or (:original_filename receipt)
+                  (:storage_key receipt)
+                  "receipt"))]
     {:supplier_id supplier-id
      :payer_id payer-id
      :purchased_at purchased-at
@@ -235,13 +235,13 @@
 
   Returns {:receipt-id .. :stage :extract :result :ok :status extracted|review_required}."
   [db receipt-id extract-result opts]
-    (let [markdown (:parsed-markdown extract-result)
-      markdown-items (markdown/markdown->line-item-candidates markdown)
-      markdown-merchant-header (markdown/markdown->merchant-header markdown)
-      markdown-merchant-name (some-> (:merchant_name markdown-merchant-header) str/trim not-empty)
-      markdown-supplier (if markdown-merchant-name
-              markdown-merchant-name
-              (markdown/markdown->supplier-guess markdown))
+  (let [markdown (:parsed-markdown extract-result)
+        markdown-items (markdown/markdown->line-item-candidates markdown)
+        markdown-merchant-header (markdown/markdown->merchant-header markdown)
+        markdown-merchant-name (some-> (:merchant_name markdown-merchant-header) str/trim not-empty)
+        markdown-supplier (if markdown-merchant-name
+                            markdown-merchant-name
+                            (markdown/markdown->supplier-guess markdown))
         markdown-total (markdown/markdown->total-amount markdown)
         extraction0 (or (:extraction extract-result) {})
         extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
@@ -276,8 +276,8 @@
                       (assoc :total_amount_guess markdown-total))))
         supplier-guess (or (:supplier_guess guesses) markdown-supplier)
         status (if (and valid-shape? guesses (not (review-required? guesses)))
-           "extracted"
-           "review_required")
+                 "extracted"
+                 "review_required")
         llm-refine (:llm_refine extract-result)
         raw-extract-json (cond-> {:provider "mistral"
                                   :received_at (:received-at extract-result)
@@ -304,11 +304,14 @@
       (auto-create-aliases! db supplier-guess extraction)
       (catch Exception e
         (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
-    (let [auto-res (when (= status "extracted")
+    (let [auto-post? (get opts :auto-post-after-upload? true)
+          auto-res (when (and (= status "extracted") auto-post?)
                      (try
                        (auto-approve-extracted-receipt! db receipt-id extraction opts)
                        (catch Exception e
                          (log/warn e "Failed during auto-approve flow" {:receipt-id receipt-id})
                          nil)))
+          _ (when (and (= status "extracted") (not auto-post?))
+              (log/info "Auto-post after upload disabled; leaving receipt for review" {:receipt-id receipt-id}))
           final-status (or (:status auto-res) status)]
       {:receipt-id receipt-id :stage :extract :result :ok :status final-status})))

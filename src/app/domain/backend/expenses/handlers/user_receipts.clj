@@ -21,7 +21,7 @@
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
-  (def ^:private to-app shared-db/to-app)
+(def ^:private to-app shared-db/to-app)
 
 (def ^:private try-parse-uuid h/try-parse-uuid)
 
@@ -148,7 +148,7 @@
           (let [role (h/get-user-role request)
                 qp (:query-params request)
                 status (parse-status-param (or (:status qp) (get qp "status")))
-                    opts {:status status
+                opts {:status status
                       :limit (parse-long-param qp :limit 50)
                       :offset (parse-long-param qp :offset 0)
                       :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))}
@@ -175,10 +175,17 @@
               (if-let [receipt (if (= "admin" role)
                                  (receipt-queries/get-receipt db id)
                                  (receipt-queries/get-user-receipt db user-id id))]
-                (let [receipt-app (to-app receipt)
-                      download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))
-                         (str "/api/v1/expenses/receipts/" id "/download"))
-                      receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
+                (let [receipt0 (to-app receipt)
+                      content-type* (some-> (:content-type receipt0) str/trim not-empty)
+                      inferred-content-type (or content-type*
+                                              (receipt-storage/infer-content-type (:original-filename receipt0))
+                                              (receipt-storage/infer-content-type (:storage-key receipt0)))
+                      receipt0 (cond-> receipt0
+                                 (and (nil? content-type*) (seq inferred-content-type))
+                                 (assoc :content-type inferred-content-type))
+                      download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt0))
+                                     (str "/api/v1/expenses/receipts/" id "/download"))
+                      receipt-app (cond-> (enrich-receipt-for-detail db receipt0)
                                     download-url (assoc :download-url download-url))]
                   (h/json-response {:data receipt-app} 200))
                 (h/json-response {:error "Receipt not found"} 404))
@@ -220,7 +227,10 @@
                           download? (truthy-param? (or (:download qp) (get qp "download")))
                           disposition (if download? "attachment" "inline")
                           filename (safe-filename (:original-filename receipt-app) (str "receipt-" id))
-                          content-type (or (:content-type receipt-app) "application/octet-stream")]
+                          content-type (or (some-> (:content-type receipt-app) str/trim not-empty)
+                                         (receipt-storage/infer-content-type (:original-filename receipt-app))
+                                         (receipt-storage/infer-content-type (:storage-key receipt-app))
+                                         "application/octet-stream")]
                       (-> (response/file-response (.getPath file))
                         (response/content-type content-type)
                         (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
@@ -317,7 +327,7 @@
                                     (receipt-queries/get-user-receipt db user-id id))
                           receipt-app (to-app receipt)
                           download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))
-                               (str "/api/v1/expenses/receipts/" id "/download"))
+                                         (str "/api/v1/expenses/receipts/" id "/download"))
                           receipt-app (cond-> (enrich-receipt-for-detail db receipt-app)
                                         download-url (assoc :download-url download-url))]
                       (h/json-response {:data {:receipt receipt-app}} 200)))))
@@ -369,11 +379,11 @@
                               (log/error e "OCR failed for receipt" {:receipt-id id}))))
                         ;; Return immediately with 202 Accepted
                         (h/json-response {:data {:queued true
-                                     :receipt_ids [(str id)]}}
+                                                 :receipt_ids [(str id)]}}
                           202))))
-                      (h/json-response {:error "Receipt not found"} 404)))
-                    (h/json-response {:error "Invalid id"} 400))))
-                (h/unauthorized-response)))
+                  (h/json-response {:error "Receipt not found"} 404)))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
     "Failed to trigger OCR"))
 
 (defn- parse-receipt-ids-from-body
@@ -434,7 +444,7 @@
                               (log/error e "Batch OCR failed" {:receipt-ids accessible-ids}))))
                         ;; Return immediately with 202 Accepted
                         (h/json-response {:data {:queued true
-                                     :receipt_ids (mapv str accessible-ids)}}
+                                                 :receipt_ids (mapv str accessible-ids)}}
                           202)))))))))
-                (h/unauthorized-response)))
+        (h/unauthorized-response)))
     "Failed to trigger batch OCR"))

@@ -7,7 +7,7 @@
     [clojure.string :as str]))
 
 (def ^:private default-base-url "https://api.cerebras.ai/v1")
-(def ^:private default-model "qwen-3-32b")
+(def ^:private default-model "zai-glm-4.7")
 (def ^:private default-conn-timeout-ms 5000)
 (def ^:private default-socket-timeout-ms 20000)
 (def ^:private default-max-retries 2)

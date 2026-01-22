@@ -113,7 +113,8 @@
           (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
                                                                   :content-type (:content_type receipt)})]
-            (extraction/persist-extract-result! db receipt-id (maybe-refine-with-cerebras db receipt extract-result opts) opts))
+            (extraction/persist-extract-result! db receipt-id (maybe-refine-with-cerebras db receipt extract-result opts)
+              (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))))
           (catch Exception e
             (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (common/safe-ex-data e))
             {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
@@ -263,9 +264,10 @@
                   (try
                     (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
                           extract-result (if receipt
-                                         (maybe-refine-with-cerebras db receipt extract-result opts)
-                                         extract-result)]
-                      (extraction/persist-extract-result! db receipt-id extract-result opts))
+                                           (maybe-refine-with-cerebras db receipt extract-result opts)
+                                           extract-result)]
+                      (extraction/persist-extract-result! db receipt-id extract-result
+                        (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))))
                     (catch Exception e
                       (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Persist failed") (common/safe-ex-data e))
                       {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Persist failed")}))
