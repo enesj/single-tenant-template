@@ -101,7 +101,7 @@ The optimized configuration provides:
 
 The MCP configuration uses these environment variables:
 
-- `MORPH_API_KEY`: Your MorphLLM API key (recommended: keep it in an ignored local file like `.env` or your shell env; never commit it)
+- `MORPH_API_KEY`: Your MorphLLM API key (recommended: keep it in an ignored local file like `.api_credentials.sh` or your shell env; never commit it)
 - `WARPGREP_EXCLUDES`: Comma-separated list of exclusion patterns
 - `ENABLED_TOOLS`: Must include `warpgrep_codebase_search`
 

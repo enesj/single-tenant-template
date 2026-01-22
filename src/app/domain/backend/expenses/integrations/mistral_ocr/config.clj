@@ -59,6 +59,7 @@
   - `MISTRAL_OCR_BATCH_ENABLED` (true/false, default true)
   - `MISTRAL_OCR_BATCH_POLL_MS` (default 2000)
   - `MISTRAL_OCR_BATCH_TIMEOUT_MS` (default 600000)
+  - `MISTRAL_OCR_BATCH_MIN_REQUESTS` (default 5)
   - `MISTRAL_OCR_BATCH_MAX_REQUESTS` (default 50)
 
   App config keys (optional):
@@ -109,6 +110,9 @@
         batch-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_TIMEOUT_MS") parse-int)
                            (:ocr-batch-timeout-ms cfg)
                            600000)
+        batch-min-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MIN_REQUESTS") parse-int)
+                              (:ocr-batch-min-requests cfg)
+                              5)
         batch-max-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MAX_REQUESTS") parse-int)
                              (:ocr-batch-max-requests cfg)
                              50)]
@@ -116,6 +120,7 @@
       :batch-enabled? batch-enabled?
       :batch-poll-ms batch-poll-ms
       :batch-timeout-ms batch-timeout-ms
+      :batch-min-requests batch-min-requests
       :batch-max-requests batch-max-requests
       :api-key (or (getenv* "MISTRAL_API_KEY") (:api-key cfg))
       :base-url (or (getenv* "MISTRAL_OCR_BASE_URL") (:base-url cfg) default-base-url)

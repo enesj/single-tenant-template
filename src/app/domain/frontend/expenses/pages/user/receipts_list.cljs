@@ -13,25 +13,10 @@
     [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(def ^:private receipt-status-filter-options
-  ;; Keep in sync with DB enum :receipt-status (see resources/db/domain/models.edn).
-  [{:value "uploaded" :label "Uploaded"}
-   {:value "parsing" :label "Parsing"}
-   {:value "parsed" :label "Parsed"}
-   {:value "extracting" :label "Extracting"}
-   {:value "extracted" :label "Extracted"}
-   {:value "review_required" :label "Review Required"}
-   {:value "approved" :label "Approved"}
-   {:value "posted" :label "Posted"}
-   {:value "failed" :label "Failed"}])
-
 (def ^:private receipts-entity-spec
   {:id :receipts
    :fields [{:id :original-filename :label "original filename" :type :text}
-            {:id :status
-             :label "Status"
-             :type "select"
-             :options receipt-status-filter-options}
+            {:id :status :label "status" :type :text}
             {:id :supplier-guess :label "supplier guess" :type :text}
             ;; Single column: show total; include line total only when it differs.
             {:id :total-display :label "total" :type :text}]})

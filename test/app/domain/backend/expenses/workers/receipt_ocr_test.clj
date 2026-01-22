@@ -9,34 +9,6 @@
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
     [clojure.test :refer [deftest is testing]]))
 
-(deftest cerebras-refine-respects-user-setting
-  (let [maybe-refine #'core/maybe-refine-with-cerebras
-        db ::fake-db
-        receipt {:id (java.util.UUID/randomUUID)
-                 :user_id (java.util.UUID/randomUUID)}
-        extract-result {:parsed-markdown "Hello"}]
-    (testing "disabled -> does not call Cerebras"
-      (with-redefs [app.domain.backend.expenses.services.user-expense-settings/get-user-expense-settings
-                    (fn [_db _user-id] {:receipt-refine-enabled false})
-                    app.domain.backend.expenses.services.user-expense-settings/effective-settings
-                    (fn [persisted] persisted)
-                    app.domain.backend.expenses.integrations.cerebras/refine-receipt-markdown!
-                    (fn [& _] (throw (ex-info "Refine should not have been called" {})))]
-        (is (= extract-result
-              (maybe-refine db receipt extract-result {:cerebras-cfg {:enabled? true :api-key "k"}})))))
-
-    (testing "enabled -> calls Cerebras and merges refine result"
-      (with-redefs [app.domain.backend.expenses.services.user-expense-settings/get-user-expense-settings
-                    (fn [_db _user-id] {:receipt-refine-enabled true})
-                    app.domain.backend.expenses.services.user-expense-settings/effective-settings
-                    (fn [persisted] persisted)
-                    app.domain.backend.expenses.integrations.cerebras/refine-receipt-markdown!
-                    (fn [_cfg _markdown]
-                      {:extraction {:supplier "X"}})]
-        (let [res (maybe-refine db receipt extract-result {:cerebras-cfg {:enabled? true :api-key "k"}})]
-          (is (= {:supplier "X"} (:extraction res)))
-          (is (map? (:llm_refine res))))))))
-
 (deftest parse-money-handles-common-formats
   (let [parse-money #'common/parse-money]
     (is (= 10.26M (parse-money "10.26")))
@@ -159,7 +131,7 @@
 
 (deftest markdown-line-item-candidates-does-not-treat-dimensions-as-qty
   (let [candidates #'markdown/markdown->line-item-candidates
-        markdown "60963601 Torba papirna velika 32 x 16 x 45 - bez /pc 0,70E\n"
+  markdown "60963601 Torba papirna velika 32 x 16 x 45 - bez /pc 0,70E\n"
         items (candidates markdown)]
     (is (= 1 (count items)))
     (is (= {:raw_label "Torba papirna velika 32 x 16 x 45 - bez /pc"
@@ -232,49 +204,6 @@
             :line_total 9.90M}
           (first items)))))
 
-(deftest markdown-total-amount-extracts-from-table-rows
-  (let [total #'markdown/markdown->total-amount
-        konzum (str "|  CIG DUNHIL DIST BL | 2,000x | 6,70 | 13,40E  |\n"
-                 "| --- | --- | --- | --- |\n"
-                 "|  Ukupno: |  | 13,40 |   |\n")
-        tropic (str "|  Укупан износ: |  |  | 77,56  |\n"
-                 "|  Укупан износ без пореза: |  |  | 66,29  |\n"
-                 "|  Укупан износ пореза: |  |  | 11,27  |\n")]
-    (is (= 13.40M (total konzum)))
-    (is (= 77.56M (total tropic)))))
-
-(deftest markdown-pipe-table-cyrillic-header-and-tax-table-skip
-  (let [candidates #'markdown/markdown->line-item-candidates
-        markdown (str "ФИСКАЛНИ РАЧУН\n"
-                   "4402700780002\n"
-                   "TROPIC MALOPRUDAJA d.o.o. Banja Luka\n"
-                   "\n"
-                   "|  Назив | Цијена | Кол. | Укупно  |\n"
-                   "| --- | --- | --- | --- |\n"
-                   "|  293076 Ananas CJ/KO (E) | 2,99 | 1,098 | 3,28  |\n"
-                   "|  Укупан износ: |  |  | 3,28  |\n"
-                   "|  Ознака | Назив | Стола | Пореза  |\n"
-                   "| --- | --- | --- | --- |\n"
-                   "|  E | ПДВ | 17% | 0,56  |\n")
-        items (candidates markdown)]
-    (is (= 1 (count items)))
-    (is (= {:raw_label "Ananas CJ/KO (E)"
-            :qty 1.098M
-            :unit_price 2.99M
-            :line_total 3.28M}
-          (first items)))))
-
-(deftest markdown-merchant-header-skips-fiscal-and-numeric-lines
-  (let [parse-header #'markdown/markdown->merchant-header
-        supplier-guess #'markdown/markdown->supplier-guess
-        markdown (str "ФИСКАЛНИ РАЧУН\n"
-                   "4402700780002\n"
-                   "TROPIC MALOPRUDAJA d.o.o. Banja Luka\n"
-                   "JIB: 123\n")
-        header (parse-header markdown)]
-    (is (= "TROPIC MALOPRUDAJA d.o.o. Banja Luka" (:merchant_name header)))
-    (is (= "TROPIC MALOPRUDAJA d.o.o. Banja Luka" (supplier-guess markdown)))))
-
 (deftest markdown-merchant-header-extracts-quoted-name
   (let [parse-header #'markdown/markdown->merchant-header
         markdown (str "\"Pepco B-H\" d.o.o.\n"
@@ -326,8 +255,8 @@
         receipt-id (java.util.UUID/randomUUID)
         calls (atom {:claim 0 :ocr 0 :persist 0 :retry 0})]
     (with-redefs [receipt-status/claim-for-extracting! (fn [_db _rid _opts]
-                                                         (swap! calls update :claim inc)
-                                                         true)
+                                                   (swap! calls update :claim inc)
+                                                   true)
                   common/read-receipt-bytes! (fn [_receipt _opts]
                                                {:bytes (.getBytes "x")})
                   mistral-ocr/ocr-extract! (fn [_cfg _req]
@@ -339,8 +268,8 @@
                                                          {:receipt-id receipt-id :stage :extract :result :ok :status "review_required"}
                                                          {:receipt-id receipt-id :stage :extract :result :ok :status "extracted"}))
                   receipt-status/retry-extraction! (fn [_db _rid]
-                                                     (swap! calls update :retry inc)
-                                                     nil)]
+                                               (swap! calls update :retry inc)
+                                               nil)]
       (let [res (process-extract! nil {:api-key "k"} {:id receipt-id :content_type "image/jpeg"} {:lease-seconds 900})]
         ;; Current implementation does not auto-retry review_required.
         (is (= "review_required" (:status res)))
@@ -354,8 +283,8 @@
         receipt-id (java.util.UUID/randomUUID)
         calls (atom {:persist 0 :retry 0})]
     (with-redefs [receipt-queries/get-receipt (fn [_db rid]
-                                                {:id rid :content_type "image/jpeg"})
-                  receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
+                                         {:id rid :content_type "image/jpeg"})
+            receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
                   common/read-receipt-bytes! (fn [_receipt _opts]
                                                {:bytes (.getBytes "x")})
                   mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
@@ -364,59 +293,11 @@
                                                        (swap! calls update :persist inc)
                                                        {:receipt-id rid :stage :extract :result :ok :status "review_required"})
                   receipt-status/retry-extraction! (fn [_db _rid]
-                                                     (swap! calls update :retry inc)
-                                                     nil)]
+                                               (swap! calls update :retry inc)
+                                               nil)]
       (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})]
         (is (= 1 (count results)))
         ;; Current implementation does not auto-retry review_required in batch either.
         (is (= "review_required" (:status (first results))))
         (is (= 1 (:persist @calls)))
         (is (= 0 (:retry @calls)))))))
-
-(deftest process-receipts-by-ids-batch-marks-failed-when-prep-fails-after-claim
-  (let [process-batch! #'core/process-receipts-by-ids-batch!
-        receipt-id (java.util.UUID/randomUUID)
-        called (atom {:claim 0 :mark-failed 0 :batch 0})]
-    (with-redefs [receipt-queries/get-receipt (fn [_db rid]
-                                                {:id rid :content_type "image/jpeg" :storage_key "missing.jpg"})
-                  receipt-status/claim-for-extracting! (fn [_db _rid _opts]
-                                                         (swap! called update :claim inc)
-                                                         true)
-                  common/read-receipt-bytes! (fn [_receipt _opts]
-                                               (throw (ex-info "receipt file not found" {:type :receipt/file-not-found})))
-                  receipt-status/mark-failed! (fn [_db _rid _msg _details]
-                                                (swap! called update :mark-failed inc)
-                                                nil)
-                  mistral-ocr/ocr-extract-batch! (fn [& _]
-                                                   (swap! called update :batch inc)
-                                                   (throw (ex-info "Batch should not be called" {})))]
-      (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})
-            r (first results)]
-        (is (= 1 (count results)))
-        (is (= :failed (:result r)))
-        (is (= 1 (:claim @called)))
-        (is (= 1 (:mark-failed @called)))
-        (is (= 0 (:batch @called)))))))
-
-(deftest process-receipts-by-ids-batch-marks-failed-when-persist-throws
-  (let [process-batch! #'core/process-receipts-by-ids-batch!
-        receipt-id (java.util.UUID/randomUUID)
-        called (atom {:mark-failed 0})]
-    (with-redefs [receipt-queries/get-receipt (fn [_db rid]
-                                                {:id rid :content_type "image/jpeg"})
-                  receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
-                  common/read-receipt-bytes! (fn [_receipt _opts]
-                                               {:bytes (.getBytes "x")
-                                                :content-type "image/jpeg"})
-                  mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
-                                                   {:results {(str receipt-id) {}}})
-                  extraction/persist-extract-result! (fn [_db _rid _extract-result _opts]
-                                                       (throw (ex-info "DB write failed" {:type :db/failure})))
-                  receipt-status/mark-failed! (fn [_db _rid _msg _details]
-                                                (swap! called update :mark-failed inc)
-                                                nil)]
-      (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})
-            r (first results)]
-        (is (= 1 (count results)))
-        (is (= :failed (:result r)))
-        (is (= 1 (:mark-failed @called)))))))

@@ -2,6 +2,7 @@
 
 # Load local environment variables (optional; never committed).
 # - `.env` supports KEY=VALUE lines (exported via `set -a`)
+# - `.api_credentials.sh` is a regular shell script with exports
 load_local_env() {
     if [ -f ".env" ]; then
         echo "🔐 Loading .env..."
@@ -11,6 +12,14 @@ load_local_env() {
             echo "⚠️  Failed to source .env (check syntax)"
         fi
         set +a
+    fi
+
+    if [ -f ".api_credentials.sh" ]; then
+        echo "🔐 Loading .api_credentials.sh..."
+        # shellcheck disable=SC1091
+        if ! source .api_credentials.sh; then
+            echo "⚠️  Failed to source .api_credentials.sh"
+        fi
     fi
 }
 
