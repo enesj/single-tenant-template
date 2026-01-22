@@ -81,11 +81,19 @@
 
 (defn- maybe-refine-review-required
   [db receipt extract-result persist-result opts]
-  (let [review-required? (true? (:review-required? persist-result))]
+  (let [review-required? (true? (:review-required? persist-result))
+        auto-post-present? (contains? persist-result :auto-post-after-upload?)
+        auto-post-after-upload? (:auto-post-after-upload? persist-result)
+        skip-auto-post? (true? (:skip-auto-post? opts))]
     (if (and receipt review-required?)
       (let [refined (maybe-refine-with-cerebras db receipt extract-result opts)]
         (if (map? (:llm_refine refined))
-          (extraction/persist-extract-result! db (:id receipt) refined opts)
+          (let [persist-opts (if skip-auto-post?
+                               (assoc opts :auto-post-after-upload? false)
+                               opts)
+                updated (extraction/persist-extract-result! db (:id receipt) refined persist-opts)]
+            (cond-> (assoc updated :receipt receipt :extract-result refined)
+              auto-post-present? (assoc :auto-post-after-upload? auto-post-after-upload?)))
           persist-result))
       persist-result)))
 
@@ -100,7 +108,7 @@
 
 (defn- refine-review-required-results!
   [db opts results]
-  (let [refine-opts (dissoc opts :defer-refine?)
+  (let [refine-opts (assoc (dissoc opts :defer-refine? :skip-auto-post?) :skip-auto-post? true)
         refine-map (->> results
                      (keep (fn [result]
                              (let [receipt (:receipt result)
@@ -111,11 +119,40 @@
                                    [receipt-id updated])))))
                      (into {}))]
     (mapv (fn [result]
-            (let [receipt-id (result-receipt-id result)
-                  updated (if receipt-id
-                            (get refine-map receipt-id result)
-                            result)]
-              (strip-refine-metadata updated)))
+            (let [receipt-id (result-receipt-id result)]
+              (if receipt-id
+                (get refine-map receipt-id result)
+                result)))
+      results)))
+
+(defn- auto-post-extracted-results!
+  [db opts results]
+  (let [post-opts (dissoc opts :defer-refine? :skip-auto-post?)
+        post-map (->> results
+                   (keep (fn [result]
+                           (let [receipt-id (result-receipt-id result)
+                                 receipt (:receipt result)
+                                 extract-result (:extract-result result)
+                                 auto-post? (if (contains? result :auto-post-after-upload?)
+                                              (:auto-post-after-upload? result)
+                                              (get opts :auto-post-after-upload? true))]
+                             (when (and receipt-id receipt extract-result
+                                     (= :ok (:result result))
+                                     (= :extract (:stage result))
+                                     (not (:review-required? result))
+                                     (true? auto-post?))
+                               (let [updated (extraction/persist-extract-result!
+                                               db
+                                               receipt-id
+                                               extract-result
+                                               (assoc post-opts :auto-post-after-upload? auto-post?))]
+                                 [receipt-id updated])))))
+                   (into {}))]
+    (mapv (fn [result]
+            (let [receipt-id (result-receipt-id result)]
+              (if (and receipt-id (contains? post-map receipt-id))
+                (get post-map receipt-id)
+                result)))
       results)))
 
 (defn- process-parse!
@@ -167,8 +204,10 @@
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
                                                                   :content-type (:content_type receipt)})
                 user-auto-post? (user-allows-auto-post? db receipt)
-                opts* (assoc opts :auto-post-after-upload? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?))
-            persist-result (extraction/persist-extract-result! db receipt-id extract-result opts*)]
+                auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?)
+                opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
+                persist-result (-> (extraction/persist-extract-result! db receipt-id extract-result opts*)
+                                 (assoc :auto-post-after-upload? auto-post-enabled?))]
             (if (:defer-refine? opts*)
               (assoc persist-result :receipt receipt :extract-result extract-result)
               (maybe-refine-review-required db receipt extract-result persist-result opts*)))
@@ -233,7 +272,9 @@
            (log/warn "Receipt OCR worker skipped: missing API key")
            {:enabled? true :error :missing-api-key :processed 0})
          (let [receipts (receipt-queries/list-pending-for-processing db {:limit (or max-receipts 25)})
-               defer-refine? (> (count receipts) 1)
+               defer-refine? (if (contains? opts :defer-refine?)
+                               (:defer-refine? opts)
+                               true)
                opts* (assoc opts :defer-refine? defer-refine?)
                results0 (mapv (fn [receipt]
                                 (try
@@ -242,15 +283,19 @@
                                     (log/error e "Failed to process receipt" {:receipt-id (:id receipt)})
                                     {:receipt-id (:id receipt) :result :failed :error (.getMessage e)})))
                           receipts)
-               results (if defer-refine?
-                         (refine-review-required-results! db opts* results0)
-                         results0)
-               summary (->> results (map :result) (frequencies))]
+               results1 (if defer-refine?
+                          (refine-review-required-results! db opts* results0)
+                          results0)
+               results2 (if defer-refine?
+                          (auto-post-extracted-results! db opts* results1)
+                          results1)
+               results3 (mapv strip-refine-metadata results2)
+               summary (->> results3 (map :result) (frequencies))]
            (log/info "Receipt OCR worker complete" {:summary summary})
            {:enabled? true
-            :processed (count results)
+            :processed (count results3)
             :summary summary
-            :results results}))))))
+            :results results3}))))))
 
 (defn- process-receipts-by-ids-batch!
   [db ocr-cfg receipt-ids reset? opts]
@@ -327,8 +372,10 @@
                         extract-result
                         (try
                           (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
-                                opts* (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))
-                                persist-result (extraction/persist-extract-result! db receipt-id extract-result opts*)]
+                                auto-post-enabled? (:auto-post-after-upload? ocr-cfg)
+                                opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
+                                persist-result (-> (extraction/persist-extract-result! db receipt-id extract-result opts*)
+                                                 (assoc :auto-post-after-upload? auto-post-enabled?))]
                             (if (:defer-refine? opts*)
                               (assoc persist-result :receipt receipt :extract-result extract-result)
                               (maybe-refine-review-required db receipt extract-result persist-result opts*)))
@@ -365,7 +412,9 @@
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
    (let [ocr-cfg (mistral-ocr/build-config app-config)
          cerebras-cfg (cerebras/build-config app-config)
-         defer-refine? (> (count receipt-ids) 1)
+         defer-refine? (if (contains? opts :defer-refine?)
+                         (:defer-refine? opts)
+                         true)
          use-batch? (and reset? (:batch-enabled? ocr-cfg) (> (count receipt-ids) 1))
          opts (merge {:lease-seconds 900
                       :storage-base-dir "upload/stripes"
@@ -406,17 +455,21 @@
                          (log/error e "Failed to process receipt" {:receipt-id rid})
                          {:receipt-id rid :result :failed :error (.getMessage e)})))
                    receipt-ids))
-               results (if defer-refine?
-                         (refine-review-required-results! db opts results0)
-                         results0)
-               summary (->> results
+               results1 (if defer-refine?
+                          (refine-review-required-results! db opts results0)
+                          results0)
+               results2 (if defer-refine?
+                          (auto-post-extracted-results! db opts results1)
+                          results1)
+               results3 (mapv strip-refine-metadata results2)
+               summary (->> results3
                          (map :result)
                          (frequencies))]
            (log/info "Receipt OCR by-ids complete" {:receipt-ids receipt-ids
                                                     :summary summary
                                                     :batch? use-batch?})
            {:enabled? true
-            :processed (count results)
+            :processed (count results3)
             :summary summary
-            :results results
+            :results results3
             :receipt-ids receipt-ids}))))))

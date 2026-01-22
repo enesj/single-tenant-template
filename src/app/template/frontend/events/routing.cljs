@@ -190,11 +190,20 @@
   :page/init-expense-settings
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-settings)
-       :dispatch-n [[:user-expenses/fetch-settings]
-                    [:user-expenses/fetch-payers {:limit 100}]]})))
+    (let [role (role-str db)
+          power-user? (contains? #{"admin" "owner"} role)]
+      (cond
+        (unassigned? db)
+        (redirect-to-waiting-room db)
+
+        (not power-user?)
+        {:db (assoc-in db (paths/current-page) :expenses-dashboard)
+         :dispatch [:navigate-to "/expenses"]}
+
+        :else
+        {:db (assoc-in db (paths/current-page) :expense-settings)
+         :dispatch-n [[:user-expenses/fetch-settings]
+                      [:user-expenses/fetch-payers {:limit 100}]]}))))
 
 (rf/reg-event-fx
   :page/init-expense-suppliers

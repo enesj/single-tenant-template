@@ -313,7 +313,6 @@
           ($ :p {:class "text-xs text-base-content/60"}
             "Preview is not available for this file type.")))))
 
-
 (defui receipt-viewer
   [{:keys [receipt show-summary?] :or {show-summary? true}}]
   (let [{:keys [status original-filename content-type file-size storage-key

@@ -323,7 +323,8 @@
       (auto-create-aliases! db supplier-guess extraction)
       (catch Exception e
         (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
-     (let [auto-post? (get opts :auto-post-after-upload? true)
+    (let [auto-post? (and (not (:defer-refine? opts))
+                       (get opts :auto-post-after-upload? true))
           auto-res (when (and (= status "extracted") auto-post?)
                      (try
                        (auto-approve-extracted-receipt! db receipt-id extraction opts)
@@ -331,7 +332,9 @@
                          (log/warn e "Failed during auto-approve flow" {:receipt-id receipt-id})
                          nil)))
           _ (when (and (= status "extracted") (not auto-post?))
-              (log/info "Auto-post after upload disabled; leaving receipt for review" {:receipt-id receipt-id}))
+              (log/info "Auto-post after upload skipped"
+                {:receipt-id receipt-id
+                 :reason (if (:defer-refine? opts) :defer-refine :disabled)}))
           final-status (or (:status auto-res) status)
           review-required? (and (not= "posted" final-status)
                              (or (= status "review_required")

@@ -190,13 +190,16 @@
  {:fields
   [[:user_id :uuid {:primary-key true}]
    [:default_currency [:enum :currency] {:null false, :default "BAM"}]
-  [:default_payer_id
-   :uuid
-   {:foreign-key :payers/id, :on-delete :set-null}]
-  [:notifications_enabled :boolean {:null false, :default true}]
-  [:receipt_refine_enabled :boolean {:null false, :default false}]
-  [:created_at :timestamptz {:default "NOW()"}]
-  [:updated_at :timestamptz {:default "NOW()"}]]},
+   [:default_payer_id
+    :uuid
+    {:foreign-key :payers/id, :on-delete :set-null}]
+   [:notifications_enabled :boolean {:null false, :default true}]
+   [:auto_post_after_upload_enabled
+    :boolean
+    {:null false, :default false}]
+   [:receipt_refine_enabled :boolean {:null false, :default false}]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]]},
  :audit_logs
  {:fields
   [[:id :uuid {:primary-key true}]

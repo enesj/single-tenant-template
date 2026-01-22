@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :auto-post-after-upload-enabled,
+  :model-name :user_expense_settings,
+  :options {:null false, :default false, :type :boolean}})
