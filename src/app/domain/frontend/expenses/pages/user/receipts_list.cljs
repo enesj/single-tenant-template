@@ -28,6 +28,15 @@
   [status]
   (contains? receipt-processing-statuses status))
 
+(defn- receipt-refine-pending?
+  [receipt]
+  (let [refine-pending (or (:refine-pending receipt)
+                         (:refine_pending receipt)
+                         (get-in receipt [:raw-extract-json :refine-pending])
+                         (get-in receipt [:raw-extract-json :refine_pending])
+                         (get-in receipt [:raw_extract_json :refine_pending]))]
+    (true? refine-pending)))
+
 (defn- pad2
   [n]
   (let [s (str (or n 0))]
@@ -139,14 +148,19 @@
   []
   (let [title "Receipts"
         error (use-subscribe [:user-expenses/receipts-error])
-    form-error (use-subscribe [:user-expenses/form-error])
+        form-error (use-subscribe [:user-expenses/form-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
         can-ocr? (boolean (use-subscribe [:expenses/can-write?]))
         processing-count (->> receipts
                            (filter (fn [receipt]
                                      (receipt-processing? (:status receipt))))
                            count)
-        processing? (pos? processing-count)
+        refining-count (->> receipts
+                         (filter receipt-refine-pending?)
+                         count)
+        processing? (or (pos? processing-count) (pos? refining-count))
+        processing-label (if (pos? processing-count) "Processing" "Refining")
+        processing-total (if (pos? processing-count) processing-count refining-count)
         [processing-started-at set-processing-started-at!] (use-state nil)
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
@@ -228,7 +242,7 @@
                          :class "flex items-center gap-2"}
                   ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
                   ($ :span {:class "text-sm"}
-                    (str "Processing " processing-count " receipt" (when (not= 1 processing-count) "s") "…"))
+                    (str processing-label " " processing-total " receipt" (when (not= 1 processing-total) "s") "…"))
                   (when-let [duration (format-duration processing-started-at last-checked)]
                     ($ :span {:class "text-xs text-base-content/60"}
                       (str "Duration: " duration)))

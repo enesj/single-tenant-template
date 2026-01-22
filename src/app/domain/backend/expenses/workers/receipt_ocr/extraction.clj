@@ -11,6 +11,7 @@
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.parsing :as receipt-parsing]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
@@ -74,6 +75,22 @@
 (defn- abs-decimal-diff [a b]
   (when (and a b)
     (double (.abs (.subtract (bigdec a) (bigdec b))))))
+
+(defn- normalize-line-item
+  [item]
+  (cond-> item
+    (and (map? item)
+      (contains? item :line_total)
+      (not (contains? item :line-total)))
+    (assoc :line-total (:line_total item))))
+
+(defn- lines-total-mismatch?
+  [items total-amount]
+  (let [items* (mapv normalize-line-item (or items []))
+        lines-total (receipt-parsing/lines-total items*)]
+    (and (some? total-amount)
+      (some? lines-total)
+      (> (abs-decimal-diff lines-total total-amount) 0.01))))
 
 (defn- best-markdown-item-match [markdown-items item]
   (let [item-total (common/parse-money (:line_total item))
@@ -278,6 +295,8 @@
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
+        lines-total-mismatch (and (= status "extracted")
+                               (lines-total-mismatch? (:items extraction) (:total_amount_guess guesses)))
         llm-refine (:llm_refine extract-result)
         raw-extract-json (cond-> {:provider "mistral"
                                   :received_at (:received-at extract-result)
@@ -313,5 +332,22 @@
                          nil)))
           _ (when (and (= status "extracted") (not auto-post?))
               (log/info "Auto-post after upload disabled; leaving receipt for review" {:receipt-id receipt-id}))
-          final-status (or (:status auto-res) status)]
-      {:receipt-id receipt-id :stage :extract :result :ok :status final-status})))
+          final-status (or (:status auto-res) status)
+          review-required? (and (not= "posted" final-status)
+                             (or (= status "review_required")
+                               lines-total-mismatch))
+          effective-status (if (and (= final-status "extracted") lines-total-mismatch)
+                             "review_required"
+                             final-status)
+          refine-pending? (and (:defer-refine? opts) review-required?)
+          _ (when refine-pending?
+              (receipt-status/store-extraction-results!
+                db
+                receipt-id
+                {:raw_extract_json (assoc raw-extract-json :refine_pending true)}))]
+      {:receipt-id receipt-id
+       :stage :extract
+       :result :ok
+       :status final-status
+       :effective-status effective-status
+       :review-required? review-required?})))

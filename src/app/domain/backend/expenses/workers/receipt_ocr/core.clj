@@ -79,6 +79,45 @@
                 (seq details) (assoc :error_details details))))
           extract-result)))))
 
+(defn- maybe-refine-review-required
+  [db receipt extract-result persist-result opts]
+  (let [review-required? (true? (:review-required? persist-result))]
+    (if (and receipt review-required?)
+      (let [refined (maybe-refine-with-cerebras db receipt extract-result opts)]
+        (if (map? (:llm_refine refined))
+          (extraction/persist-extract-result! db (:id receipt) refined opts)
+          persist-result))
+      persist-result)))
+
+(defn- result-receipt-id
+  [result]
+  (or (:receipt-id result)
+    (some-> result :receipt :id)))
+
+(defn- strip-refine-metadata
+  [result]
+  (dissoc result :receipt :extract-result))
+
+(defn- refine-review-required-results!
+  [db opts results]
+  (let [refine-opts (dissoc opts :defer-refine?)
+        refine-map (->> results
+                     (keep (fn [result]
+                             (let [receipt (:receipt result)
+                                   extract-result (:extract-result result)
+                                   receipt-id (result-receipt-id result)]
+                               (when (and receipt-id receipt extract-result (true? (:review-required? result)))
+                                 (let [updated (maybe-refine-review-required db receipt extract-result result refine-opts)]
+                                   [receipt-id updated])))))
+                     (into {}))]
+    (mapv (fn [result]
+            (let [receipt-id (result-receipt-id result)
+                  updated (if receipt-id
+                            (get refine-map receipt-id result)
+                            result)]
+              (strip-refine-metadata updated)))
+      results)))
+
 (defn- process-parse!
   [db ocr-cfg receipt opts]
   (let [receipt-id (:id receipt)]
@@ -112,9 +151,12 @@
         (try
           (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
                 extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
-                                                                  :content-type (:content_type receipt)})]
-            (extraction/persist-extract-result! db receipt-id (maybe-refine-with-cerebras db receipt extract-result opts)
-              (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))))
+                                                                  :content-type (:content_type receipt)})
+                opts* (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))
+                persist-result (extraction/persist-extract-result! db receipt-id extract-result opts*)]
+            (if (:defer-refine? opts*)
+              (assoc persist-result :receipt receipt :extract-result extract-result)
+              (maybe-refine-review-required db receipt extract-result persist-result opts*)))
           (catch Exception e
             (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Extraction failed") (common/safe-ex-data e))
             {:receipt-id receipt-id :stage :extract :result :failed :error (.getMessage e)}))
@@ -164,7 +206,8 @@
          opts (merge {:max-receipts 25
                       :lease-seconds 900
                       :default-currency "BAM"
-                      :cerebras-cfg cerebras-cfg}
+                      :cerebras-cfg cerebras-cfg
+                      :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)}
                 (or opts {}))]
      (if-not (:enabled? ocr-cfg)
        (do
@@ -175,13 +218,18 @@
            (log/warn "Receipt OCR worker skipped: missing API key")
            {:enabled? true :error :missing-api-key :processed 0})
          (let [receipts (receipt-queries/list-pending-for-processing db {:limit (or max-receipts 25)})
-               results (mapv (fn [receipt]
-                               (try
-                                 (process-receipt! db ocr-cfg receipt opts)
-                                 (catch Exception e
-                                   (log/error e "Failed to process receipt" {:receipt-id (:id receipt)})
-                                   {:receipt-id (:id receipt) :result :failed :error (.getMessage e)})))
-                         receipts)
+               defer-refine? (> (count receipts) 1)
+               opts* (assoc opts :defer-refine? defer-refine?)
+               results0 (mapv (fn [receipt]
+                                (try
+                                  (process-receipt! db ocr-cfg receipt opts*)
+                                  (catch Exception e
+                                    (log/error e "Failed to process receipt" {:receipt-id (:id receipt)})
+                                    {:receipt-id (:id receipt) :result :failed :error (.getMessage e)})))
+                          receipts)
+               results (if defer-refine?
+                         (refine-review-required-results! db opts* results0)
+                         results0)
                summary (->> results (map :result) (frequencies))]
            (log/info "Receipt OCR worker complete" {:summary summary})
            {:enabled? true
@@ -251,32 +299,37 @@
                   {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Batch extraction failed")}
                   (dissoc m :receipt :request)))
               prepared))
-          (mapv
-            (fn [{:keys [receipt-id request] :as m}]
-              (let [cid (some-> request :custom-id)
-                    extract-result (when (seq cid) (get-in batch-res [:results cid]))
-                    err (when (seq cid) (get-in batch-res [:errors cid]))]
-                (cond
-                  (nil? cid)
-                  (dissoc m :receipt :request)
+          (let [results0
+                (mapv
+                  (fn [{:keys [receipt-id request] :as m}]
+                    (let [cid (some-> request :custom-id)
+                          extract-result (when (seq cid) (get-in batch-res [:results cid]))
+                          err (when (seq cid) (get-in batch-res [:errors cid]))]
+                      (cond
+                        (nil? cid)
+                        (dissoc m :receipt :request)
 
-                  extract-result
-                  (try
-                    (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
-                          extract-result (if receipt
-                                           (maybe-refine-with-cerebras db receipt extract-result opts)
-                                           extract-result)]
-                      (extraction/persist-extract-result! db receipt-id extract-result
-                        (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))))
-                    (catch Exception e
-                      (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Persist failed") (common/safe-ex-data e))
-                      {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Persist failed")}))
+                        extract-result
+                        (try
+                          (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
+                                opts* (assoc opts :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg))
+                                persist-result (extraction/persist-extract-result! db receipt-id extract-result opts*)]
+                            (if (:defer-refine? opts*)
+                              (assoc persist-result :receipt receipt :extract-result extract-result)
+                              (maybe-refine-review-required db receipt extract-result persist-result opts*)))
+                          (catch Exception e
+                            (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Persist failed") (common/safe-ex-data e))
+                            {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Persist failed")}))
 
-                  :else
-                  (do
-                    (receipt-status/mark-failed! db receipt-id "Batch extraction failed" (or err {:type :mistral/batch-unknown-error}))
-                    {:receipt-id receipt-id :stage :extract :result :failed :error "Batch extraction failed"}))))
-            prepared))))))
+                        :else
+                        (do
+                          (receipt-status/mark-failed! db receipt-id "Batch extraction failed" (or err {:type :mistral/batch-unknown-error}))
+                          {:receipt-id receipt-id :stage :extract :result :failed :error "Batch extraction failed"}))))
+                  prepared)
+                results (if (:defer-refine? opts)
+                          (refine-review-required-results! db opts results0)
+                          results0)]
+            results))))))
 
 (defn process-receipts-by-ids!
   "Process receipts by explicit IDs (for UI-triggered OCR).
@@ -297,11 +350,14 @@
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
    (let [ocr-cfg (mistral-ocr/build-config app-config)
          cerebras-cfg (cerebras/build-config app-config)
+         defer-refine? (> (count receipt-ids) 1)
          use-batch? (and reset? (:batch-enabled? ocr-cfg) (> (count receipt-ids) 1))
          opts (merge {:lease-seconds 900
                       :storage-base-dir "upload/stripes"
                       :default-currency "BAM"
-                      :cerebras-cfg cerebras-cfg}
+                      :cerebras-cfg cerebras-cfg
+                      :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)
+                      :defer-refine? defer-refine?}
                 (dissoc opts :reset?))]
      (if-not (:enabled? ocr-cfg)
        (do
@@ -316,7 +372,7 @@
             :error :missing-api-key
             :processed 0
             :receipt-ids receipt-ids})
-         (let [results
+         (let [results0
                (if use-batch?
                  (do
                    (log/info "Receipt OCR by-ids using Mistral Batch API" {:receipt-ids receipt-ids})
@@ -335,6 +391,9 @@
                          (log/error e "Failed to process receipt" {:receipt-id rid})
                          {:receipt-id rid :result :failed :error (.getMessage e)})))
                    receipt-ids))
+               results (if defer-refine?
+                         (refine-review-required-results! db opts results0)
+                         results0)
                summary (->> results
                          (map :result)
                          (frequencies))]

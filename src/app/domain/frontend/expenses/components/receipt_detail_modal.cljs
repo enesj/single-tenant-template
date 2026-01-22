@@ -88,6 +88,15 @@
   [status]
   (contains? receipt-processing-statuses status))
 
+(defn- receipt-refine-pending?
+  [receipt]
+  (let [refine-pending (or (:refine-pending receipt)
+                         (:refine_pending receipt)
+                         (get-in receipt [:raw-extract-json :refine-pending])
+                         (get-in receipt [:raw-extract-json :refine_pending])
+                         (get-in receipt [:raw_extract_json :refine_pending]))]
+    (true? refine-pending)))
+
 (defn- pad2
   [n]
   (let [s (str (or n 0))]
@@ -177,7 +186,10 @@
                            (dispatch! close-modal))
                          [close-modal])
         status (when (map? receipt) (:status receipt))
-        processing? (and (string? status) (receipt-processing? status))
+        processing-status? (and (string? status) (receipt-processing? status))
+        refining? (receipt-refine-pending? receipt)
+        processing? (or processing-status? refining?)
+        processing-label (if (and (not processing-status?) refining?) "Refining" "Processing")
         rid (or receipt-id
               (when (map? receipt)
                 (id-utils/extract-entity-id receipt)))
@@ -259,7 +271,7 @@
           ($ :div {:class "flex items-center justify-between gap-2 w-full"}
             ($ :div {:class "flex items-center gap-2"}
               ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
-              ($ :span {:class "text-sm"} "Processing…")
+              ($ :span {:class "text-sm"} (str processing-label "…"))
               (when-let [duration (format-duration processing-started-at last-checked)]
                 ($ :span {:class "text-xs text-base-content/60"}
                   (str "Duration: " duration))))
