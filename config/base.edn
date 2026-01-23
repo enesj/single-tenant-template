@@ -121,5 +121,8 @@
              :model "zai-glm-4.7"
              :refine-concurrency 5
              :refine-timeout-ms 60000
+             ;; Prevent structured-output truncation (e.g. finish_reason=length)
+             ;; by explicitly budgeting completion tokens for the refine step.
+             :refine-max-tokens 32000
              :conn-timeout-ms 5000
              :socket-timeout-ms 60000}}

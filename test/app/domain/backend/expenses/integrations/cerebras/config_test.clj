@@ -34,15 +34,23 @@
       (is (= 5 (:refine-concurrency cfg)))
       (is (= 12345 (:refine-timeout-ms cfg)))))
 
+  (testing "defaults refine max tokens"
+    (let [cfg (cerebras-config/build-config {} {:getenv (constantly nil)})]
+      (is (= 32000 (:refine-max-tokens cfg)))))
+
   (testing "env overrides refine settings"
     (let [cfg (cerebras-config/build-config
                 {:cerebras {:refine-concurrency 2
                             :refine-timeout-ms 1111
+                            :refine-max-tokens 123
                             :socket-timeout-ms 2222}}
                 {:getenv (fn [k]
                            (case k
                              "CEREBRAS_REFINE_CONCURRENCY" "7"
                              "CEREBRAS_REFINE_TIMEOUT_MS" "3333"
+                             "CEREBRAS_REFINE_MAX_TOKENS" "9999"
                              nil))})]
       (is (= 7 (:refine-concurrency cfg)))
-      (is (= 3333 (:refine-timeout-ms cfg))))))
+      (is (= 3333 (:refine-timeout-ms cfg)))
+      (is (= 9999 (:refine-max-tokens cfg))))))
+

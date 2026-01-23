@@ -9,11 +9,12 @@
 (def ^:private default-base-url "https://api.cerebras.ai/v1")
 (def ^:private default-model "zai-glm-4.7")
 (def ^:private default-conn-timeout-ms 5000)
-(def ^:private default-socket-timeout-ms 100000)
+(def ^:private default-socket-timeout-ms 60000)
 (def ^:private default-max-retries 2)
 (def ^:private default-retry-sleep-ms 100)
 
-(def ^:private default-refine-concurrency 3)
+(def ^:private default-refine-concurrency 5)
+(def ^:private default-refine-max-tokens 32000)
 
 (defn build-config
   "Build a Cerebras config from an app config map (Aero) and environment.
@@ -30,6 +31,7 @@
   - `CEREBRAS_SOCKET_TIMEOUT_MS` (default 60000)
   - `CEREBRAS_REFINE_CONCURRENCY` (default 5)
   - `CEREBRAS_REFINE_TIMEOUT_MS` (default socket timeout)
+  - `CEREBRAS_REFINE_MAX_TOKENS` (default 32000)
 
   App config keys (optional):
   {:cerebras {:api-key <token>
@@ -39,6 +41,7 @@
               :socket-timeout-ms 20000
               :refine-concurrency 5
               :refine-timeout-ms 60000
+              :refine-max-tokens 32000
               :max-retries 2
               :retry-sleep-ms 500}}"
   ([app-config]
@@ -69,6 +72,9 @@
                            (:refine-timeout-ms cfg)
                            (:socket-timeout-ms cfg)
                            default-socket-timeout-ms)
+      :refine-max-tokens (or (some-> (getenv* "CEREBRAS_REFINE_MAX_TOKENS") parse-int)
+                            (:refine-max-tokens cfg)
+                            default-refine-max-tokens)
       :max-retries (or (some-> (getenv* "CEREBRAS_MAX_RETRIES") parse-int)
                      (:max-retries cfg)
                      default-max-retries)

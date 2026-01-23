@@ -39,6 +39,7 @@
   (let [receipt-id (:id receipt)
         markdown (:parsed-markdown extract-result)
         user-id (:user_id receipt)
+  filename (:original_filename receipt)
         user-enabled? (user-allows-receipt-refine? db receipt)
         has-markdown? (boolean (seq (some-> markdown str str/trim)))
         cerebras-cfg? (map? cerebras-cfg)
@@ -55,18 +56,20 @@
           (log/info "Cerebras receipt refine skipped"
             {:receipt-id receipt-id
              :user-id user-id
+             :filename filename
              :reasons reasons
              :has-api-key? has-api-key?
              :has-markdown? has-markdown?}))
         extract-result)
       (try
-        (log/info "Cerebras receipt refine starting" {:receipt-id receipt-id :user-id user-id})
+        (log/info "Cerebras receipt refine starting" {:receipt-id receipt-id :user-id user-id :filename filename})
         (let [started (System/nanoTime)
               refine (cerebras/refine-receipt-markdown! cerebras-cfg markdown)
               duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
           (log/info "Cerebras receipt refine applied"
             {:receipt-id receipt-id
              :user-id user-id
+             :filename filename
              :duration-ms duration-ms
              :model (:model refine)
              :has-extraction? (boolean (:extraction refine))})
@@ -78,6 +81,7 @@
             (log/warn e "Cerebras receipt refine failed; continuing without refine"
               (cond-> {:receipt-id receipt-id
                        :user-id user-id
+                       :filename filename
                        :error_message (or (.getMessage e) (str (class e)))}
                 (seq details) (assoc :error_details details))))
           extract-result)))))
