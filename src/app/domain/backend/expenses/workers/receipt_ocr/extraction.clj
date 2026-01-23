@@ -121,17 +121,33 @@
     (and (not (str/blank? raw-label*))
       (not (str/blank? normalized)))))
 
+(defn- resolve-user-region
+  [db {:keys [user_id] :as _receipt} {:keys [user-region places-cfg]}]
+  (or user-region
+    (:region-code places-cfg)
+    (when (and user_id (map? (:currency-region-map places-cfg)))
+      (try
+        (let [persisted (user-expense-settings/get-user-expense-settings db user_id)
+              effective (user-expense-settings/effective-settings persisted)
+              currency (:default-currency effective)]
+          (get (:currency-region-map places-cfg) currency))
+        (catch Exception _
+          nil)))))
+
 (defn- resolve-supplier-id
-  [db supplier-guess]
+  [db supplier-guess opts]
   (if (str/blank? (some-> supplier-guess str))
     (aliases/get-unknown-supplier-id db)
-    (let [{:keys [supplier]} (suppliers/find-or-create-supplier! db (str/trim (str supplier-guess)))]
+    (let [{:keys [supplier]} (suppliers/resolve-or-create-supplier-with-places!
+                               db
+                               (str/trim (str supplier-guess))
+                               opts)]
       (:id supplier))))
 
 (defn- auto-create-aliases!
-  [db supplier-guess extraction]
+  [db supplier-guess extraction opts]
   (when (and (map? extraction) (sequential? (:items extraction)))
-    (let [supplier-id (resolve-supplier-id db supplier-guess)]
+    (let [supplier-id (resolve-supplier-id db supplier-guess opts)]
       (doseq [{:keys [raw_label] :as _item} (:items extraction)]
         (when (valid-alias-label? raw_label)
           (aliases/find-or-create-alias! db supplier-id (str/trim (str raw_label))))))))
@@ -180,7 +196,7 @@
   (when-let [receipt (receipt-queries/get-receipt db receipt-id)]
     (when (and (= "extracted" (:status receipt))
             (nil? (:expense_id receipt)))
-      (let [supplier-id (resolve-supplier-id db (:supplier_guess receipt))
+      (let [supplier-id (resolve-supplier-id db (:supplier_guess receipt) opts)
             payer-id (resolve-payer-id db receipt)
             review-data (build-review-data supplier-id payer-id receipt extraction opts)
             {:keys [purchased_at total_amount items]} review-data]
@@ -251,8 +267,12 @@
   "Persist a provider extract result, enriched with markdown-derived guesses.
 
   Returns {:receipt-id .. :stage :extract :result :ok :status extracted|review_required}."
-  [db receipt-id extract-result opts]
-  (let [markdown (:parsed-markdown extract-result)
+    [db receipt-id extract-result opts]
+    (let [receipt (receipt-queries/get-receipt db receipt-id)
+      user-region (resolve-user-region db receipt opts)
+      opts (cond-> opts
+         user-region (assoc :user-region user-region))
+      markdown (:parsed-markdown extract-result)
         markdown-items (markdown/markdown->line-item-candidates markdown)
         markdown-merchant-header (markdown/markdown->merchant-header markdown)
         markdown-merchant-name (some-> (:merchant_name markdown-merchant-header) str/trim not-empty)
@@ -320,7 +340,7 @@
                               :purchased_at_guess])))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
     (try
-      (auto-create-aliases! db supplier-guess extraction)
+      (auto-create-aliases! db supplier-guess extraction opts)
       (catch Exception e
         (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
     (let [auto-post? (and (not (:defer-refine? opts))

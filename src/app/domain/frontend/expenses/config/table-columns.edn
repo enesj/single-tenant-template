@@ -105,10 +105,8 @@
    "updated_at"
    "user_id"],
   :computed-fields
-  {:supplier_display_name {:type :string
-                           :label "Supplier"}
-   :payer_label {:type :string
-                 :label "Payer"}},
+  {:supplier_display_name {:type "string", :label "Supplier"},
+   :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
@@ -203,9 +201,6 @@
    "created-at"
    "updated-at"
    "id"
-   "storage-key"
-   "file-hash"
-   "content-type"
    "file-size"
    "raw-parse-json"
    "raw-extract-json"
@@ -237,7 +232,9 @@
    "supplier-guess"
    "created-at"
    "updated-at"],
-  :always-visible ["original-filename" "status"]},
+  :always-visible ["original-filename" "status" "purchased-at-guess"],
+  :computed-fields {},
+  :column-config {}},
  :article-aliases
  {:available-columns
   ["supplier_display_name"
@@ -255,15 +252,15 @@
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
-    "raw_label_normalized"
-    "confidence"
+   "raw_label_normalized"
+   "confidence"
    "created_at"],
   :sortable-columns
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
-    "raw_label_normalized"
-    "confidence"
+   "raw_label_normalized"
+   "confidence"
    "created_at"],
   :always-visible ["raw_label"],
   :computed-fields

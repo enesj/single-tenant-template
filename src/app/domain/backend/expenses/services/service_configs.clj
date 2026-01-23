@@ -6,22 +6,76 @@
     [app.domain.backend.expenses.services.services-factory :as factory]
     [clojure.string :as str])
   (:import
+    [java.text Normalizer Normalizer$Form]
     [java.util UUID]))
 
 ;; ============================================================================
 ;; Shared Normalization Functions
 ;; ============================================================================
 
+(defn- join-single-letter-tokens
+  [value]
+  (let [tokens (->> (str/split (or value "") #"\s+")
+                 (remove str/blank?))]
+    (if (seq tokens)
+      (let [{:keys [acc run]}
+            (reduce
+              (fn [{:keys [acc run]} token]
+                (if (= 1 (count token))
+                  {:acc acc
+                   :run (conj run token)}
+                  {:acc (cond-> acc
+                          (seq run) (conj (apply str run))
+                          true (conj token))
+                   :run []}))
+              {:acc [] :run []}
+              tokens)
+            acc (cond-> acc (seq run) (conj (apply str run)))]
+        (str/join " " acc))
+      value)))
+
 (defn normalize-supplier-key
   "Normalize supplier name to lowercase, replace spaces with hyphens, remove special chars.
    Used for deduplication and fuzzy matching."
   [name]
   (when name
-    (-> name
-      str/trim
-      str/lower-case
-      (str/replace #"[^a-z0-9\s-]" "")
-      (str/replace #"\s+" "-"))))
+    (let [legal-suffix-tokens
+          ;; Common legal entity suffixes. We intentionally treat these as “end of
+          ;; canonical company name” for dedupe, and drop anything after them
+          ;; (e.g. location like "Sarajevo").
+          ;;
+          ;; NOTE: We include both dotted and undotted forms, but after our
+          ;; punctuation-stripping step most dotted forms collapse ("d.o.o." -> "doo").
+          #{"doo" "dd" "ad" "llc" "ltd" "inc" "gmbh" "ag"}
+          canonicalize-tokens
+          (fn [tokens]
+            (if (seq tokens)
+              (let [idx (->> tokens
+                          (map-indexed vector)
+                          (keep (fn [[i t]] (when (contains? legal-suffix-tokens t) i)))
+                          first)]
+                ;; Only strip when the suffix appears after at least one “real” token.
+                (if (and (some? idx) (pos? (long idx)))
+                  (subvec (vec tokens) 0 (long idx))
+                  (vec tokens)))
+              []))]
+      (-> name
+        str/trim
+        (Normalizer/normalize Normalizer$Form/NFD)
+        (str/replace #"\p{M}+" "")
+        (str/replace #"Đ" "D")
+        (str/replace #"đ" "d")
+        str/lower-case
+        ;; Keep hyphens/spaces for tokenization, remove everything else.
+        (str/replace #"[^a-z0-9\s-]" "")
+        ;; Treat hyphens as whitespace for dedupe.
+        (str/replace #"-" " ")
+        join-single-letter-tokens
+        (str/replace #"\s+" " ")
+        str/trim
+        (str/split #"\s+")
+        (->> (remove str/blank?) vec canonicalize-tokens)
+        (->> (str/join "-"))))))
 
 ;; ============================================================================
 ;; Simple Entity Configs
@@ -33,17 +87,17 @@
    :primary-key :aa/id
    :required-fields [:supplier_id :raw_label :raw_label_normalized]
    :allowed-order-by {:created-at :aa/created_at
-          :raw-label :aa/raw_label
-          :raw-label-normalized :aa/raw_label_normalized
-          :supplier-display-name :s/display_name
-          :article-canonical-name :a/canonical_name}
+                      :raw-label :aa/raw_label
+                      :raw-label-normalized :aa/raw_label_normalized
+                      :supplier-display-name :s/display_name
+                      :article-canonical-name :a/canonical_name}
    :default-order-by :aa/created_at
    :search-fields [:aa/raw_label :aa/raw_label_normalized :s/display_name :a/canonical_name]
    :joins [[:suppliers :s] [:= :s/id :aa/supplier_id]
-     [:articles :a] [:= :a/id :aa/article_id]]
+           [:articles :a] [:= :a/id :aa/article_id]]
    :select-fields [[:aa.*]
-       [:s/display_name :supplier_display_name]
-       [:a/canonical_name :article_canonical_name]]
+                   [:s/display_name :supplier_display_name]
+                   [:a/canonical_name :article_canonical_name]]
    :field-transformers {:raw_label_normalized articles/normalize-alias-label}
    :has-search? true
    :has-count? true})

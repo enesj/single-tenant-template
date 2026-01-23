@@ -98,6 +98,21 @@
                     :tls  true}
              :from-email #ref [:secrets :gmail :from-email]}
 
+ ;; Google Places API configuration (optional)
+ ;; - Keep secrets (API keys) in config/.secrets.edn
+ :places {:api-key #ref [:secrets :places :api-key]
+          :region-code "BA"
+          :language-code "bs"
+          :timeout-ms 3000
+          :max-results 5
+          :currency-region-map {"BAM" "BA"
+                                "EUR" "HR"
+                                "USD" "US"}
+          ;; Optional bias for short/ambiguous queries
+          :location-bias {:circle {:lat 43.8563
+                                   :lng 18.4131
+                                   :radius-m 150000.0}}}
+
  ;; Cerebras configuration (optional)
  ;; - Keep secrets (API keys) in env / config/.secrets.edn
  ;; - Receipt refinement is controlled per-user via the Expenses Settings toggle.

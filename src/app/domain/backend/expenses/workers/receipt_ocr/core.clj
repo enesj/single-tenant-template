@@ -8,6 +8,7 @@
   (:require
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
@@ -255,12 +256,14 @@
   ([db app-config]
    (process-pending! db app-config nil))
   ([db app-config {:keys [max-receipts] :as opts}]
-   (let [ocr-cfg (mistral-ocr/build-config app-config)
-         cerebras-cfg (cerebras/build-config app-config)
+     (let [ocr-cfg (mistral-ocr/build-config app-config)
+       cerebras-cfg (cerebras/build-config app-config)
+       places-cfg (places-api/build-config app-config)
          opts (merge {:max-receipts 25
                       :lease-seconds 900
                       :default-currency "BAM"
                       :cerebras-cfg cerebras-cfg
+            :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)}
                 (or opts {}))]
      (if-not (:enabled? ocr-cfg)
@@ -410,8 +413,9 @@
   ([db app-config receipt-ids]
    (process-receipts-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
-   (let [ocr-cfg (mistral-ocr/build-config app-config)
-         cerebras-cfg (cerebras/build-config app-config)
+     (let [ocr-cfg (mistral-ocr/build-config app-config)
+       cerebras-cfg (cerebras/build-config app-config)
+       places-cfg (places-api/build-config app-config)
          defer-refine? (if (contains? opts :defer-refine?)
                          (:defer-refine? opts)
                          true)
@@ -420,6 +424,7 @@
                       :storage-base-dir "upload/stripes"
                       :default-currency "BAM"
                       :cerebras-cfg cerebras-cfg
+                :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)
                       :defer-refine? defer-refine?}
                 (dissoc opts :reset?))]
