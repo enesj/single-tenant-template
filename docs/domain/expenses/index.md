@@ -167,8 +167,9 @@ See `./http-api.md` for the detailed endpoint map.
 - Reference checking before deletion
 
 Notes:
-- Supplier deletion is **archiving** (soft delete via `archived_at`) rather than hard delete.
-- Permanent deletion is available via a separate **purge** operation (requires supplier archived first and no active expenses).
+- Supplier names are deduped via `suppliers.normalized_key` (derived from `display_name`; diacritics folded, punctuation stripped; legal suffix tokens like `d.o.o.` are treated as “end of canonical name”).
+- Receipt OCR uses Places-assisted resolution (`resolve-or-create-supplier-with-places!`) so OCR variations like `HOŠE-KOMERC d.o.o. Sarajevo` vs `Hoše komerc` don’t create duplicate suppliers.
+- Supplier deletion is a **hard delete**, blocked by FK `RESTRICT` when expenses exist (no archive/purge flow for suppliers at the moment).
 
 **Payers**
 - Type-based categorization

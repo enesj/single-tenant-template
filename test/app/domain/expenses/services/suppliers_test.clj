@@ -41,8 +41,31 @@
             result (with-redefs [places-api/search-text! (fn [& _]
                                                            (reset! called? true)
                                                            {:places [] :error nil})]
-                     (suppliers/resolve-or-create-supplier-with-places! db (str " " supplier-name " ") opts))]
+                     (suppliers/resolve-or-create-supplier-with-places!
+                       db
+                       (str " " supplier-name " ")
+                       opts))]
         (is (= (:id supplier) (get-in result [:supplier :id])))
+        (is (= :db (:source result)))
+        (is (false? @called?))))
+
+    (testing "DB hit via legacy diacritics-stripped key skips Places"
+      (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+            display (str "Hoše komerc " suffix)
+            legacy-id (java.util.UUID/randomUUID)
+            legacy-normalized (str "hoe-komerc-" suffix)
+            _ (jdbc/execute-one!
+                db
+                ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
+                 legacy-id display legacy-normalized]
+                {:builder-fn rs/as-unqualified-lower-maps})
+            called? (atom false)
+            opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+            result (with-redefs [places-api/search-text! (fn [& _]
+                                                           (reset! called? true)
+                                                           {:places [] :error nil})]
+                     (suppliers/resolve-or-create-supplier-with-places! db display opts))]
+        (is (= legacy-id (get-in result [:supplier :id])))
         (is (= :db (:source result)))
         (is (false? @called?))))
 
@@ -69,7 +92,7 @@
     (testing "Unique violation reselects existing supplier"
       (let [supplier-name (str "Places Unique " (java.util.UUID/randomUUID))
             ;; NOTE: Don't insert a real supplier row here. We want to simulate
-            ;; the 23505 path without the new legacy-lookup fallback finding the
+            ;; the 23505 path without the legacy-lookup fallback finding the
             ;; row directly from the DB.
             supplier {:id (java.util.UUID/randomUUID)
                       :display_name supplier-name
@@ -84,10 +107,10 @@
         (with-redefs [suppliers/find-by-normalized-key lookup
                       suppliers/service {:create! create-throws}
                       places-api/search-text! (fn [& _]
-                                                 {:places [] :error {:type :places/unavailable}})]
+                                                {:places [] :error {:type :places/unavailable}})]
           (let [result (suppliers/resolve-or-create-supplier-with-places! db supplier-name opts)]
             (is (= (:id supplier) (get-in result [:supplier :id])))
-            (is (= :ocr-fallback (:source result)))))))))
+            (is (= :ocr-fallback (:source result)))))))
 
     (testing "Places hit resolves to legacy supplier with legal suffix key"
       (let [legacy-id (java.util.UUID/randomUUID)
@@ -108,8 +131,43 @@
                        opts))]
         (is (= legacy-id (get-in result [:supplier :id])))
         (is (= legacy-normalized (get-in result [:supplier :normalized_key])))
-        (is (= :places-api (:source result))))))
+        (is (= :places-api (:source result)))))
 
+    (testing "Places hit resolves to legacy supplier with diacritics-stripped + legal suffix key"
+      (let [legacy-id (java.util.UUID/randomUUID)
+            legacy-display "Šamon d.o.o. Sarajevo"
+        ;; Simulate the pre-diacritic-folding bug:
+        ;; "Š" is dropped by the legacy ASCII whitelist.
+            legacy-normalized "amon-doo-sarajevo"
+            _ (jdbc/execute-one!
+                db
+                ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
+                 legacy-id legacy-display legacy-normalized]
+                {:builder-fn rs/as-unqualified-lower-maps})
+            opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+            result (with-redefs [places-api/search-text! (fn [& _]
+                                                           {:places [{:name legacy-display :raw {}}]
+                                                            :error nil})]
+                     (suppliers/resolve-or-create-supplier-with-places!
+                       db
+                       "SAMON d.o.o. Sarajevo"
+                       opts))]
+        (is (= legacy-id (get-in result [:supplier :id])))
+        (is (= legacy-normalized (get-in result [:supplier :normalized_key])))
+        (is (= :places-api (:source result)))))
+
+    (testing "Places hit resolves to existing supplier when OCR includes legal suffix + location"
+      (let [{:keys [supplier]} (suppliers/find-or-create-supplier! db "Hoše komerc" {})
+            opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+            result (with-redefs [places-api/search-text! (fn [& _]
+                                                           {:places [{:name "Hoše komerc" :raw {}}]
+                                                            :error nil})]
+                     (suppliers/resolve-or-create-supplier-with-places!
+                       db
+                       "HUŠE KEMERC d.o.o. Sarajevo"
+                       opts))]
+        (is (= (:id supplier) (get-in result [:supplier :id])))
+        (is (= :places-api (:source result)))))))
 (deftest delete-supplier-blocked-when-expenses-exist
   (testing "delete is blocked when supplier has expenses (FK RESTRICT)"
     (when-let [db fixtures/*test-db*]
