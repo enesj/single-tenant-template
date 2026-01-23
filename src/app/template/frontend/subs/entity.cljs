@@ -1,5 +1,7 @@
 (ns app.template.frontend.subs.entity
   (:require
+    [app.shared.keywords :as kw]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.subs.list :as list-subs]
@@ -16,6 +18,13 @@
   ::entity-data
   (fn [db [_ entity-type]]
     (get-in db (paths/entity-data entity-type))))
+
+;; Snapshot of all loaded entities in app-db.
+;; Used for sorting/select-label resolution where the current entity's field is a FK.
+(rf/reg-sub
+  ::entities-state
+  (fn [db _]
+    (:entities db)))
 
 (rf/reg-sub
   ::entity-config
@@ -89,42 +98,70 @@
   (fn [[_ entity-type]]
     [(rf/subscribe [::filtered-entities entity-type])
      (rf/subscribe [::list-subs/sort-config entity-type])
-     (rf/subscribe [:entity-specs/by-name (keyword entity-type)])])
-  (fn [[entities sort-config entity-specs] [_ entity-type]]
+     (rf/subscribe [:entity-specs/by-name (keyword entity-type)])
+     (rf/subscribe [::entities-state])])
+  (fn [[entities sort-config entity-specs entities-state] [_ entity-type]]
     (let [{:keys [field direction]} sort-config
+          field (when field (model-naming/ensure-app-keyword field))
           ;; Resolve a field value from an item considering possible namespacing
           resolve-field (fn [item fld]
                           (let [direct (get item fld)]
                             (if (some? direct)
                               direct
-                              (let [ns-key (when (and entity-type fld)
-                                             (keyword (name entity-type) (name fld)))
-                                    by-ns (when ns-key (get item ns-key))]
-                                (if (some? by-ns)
-                                  by-ns
-                                  ;; Fallback: find any key whose local name matches the field
-                                  (some (fn [[k v]]
-                                          (when (and (keyword? k)
-                                                  (= (name k) (name fld)))
-                                            v))
-                                    item))))))
+                              (let [by-db (when (keyword? fld)
+                                            (get item (model-naming/app-keyword->db fld)))]
+                                (if (some? by-db)
+                                  by-db
+                                  (let [ns-key (when (and entity-type fld)
+                                                 (keyword (name entity-type) (name fld)))
+                                        by-ns (when ns-key (get item ns-key))]
+                                    (if (some? by-ns)
+                                      by-ns
+                                      ;; Fallback: find any key whose local name matches the field
+                                      (some (fn [[k v]]
+                                              (when (and (keyword? k)
+                                                      (= (name k) (name fld)))
+                                                v))
+                                        item))))))))
           ;; Get field specification from entity specs
           get-field-spec (fn [field-name]
                            (some (fn [spec]
                                    (when (= (:id spec) (name field-name))
                                      spec))
                              entity-specs))
-          ;; Determine if field should be treated as a date based on its input type
-          date-field? (fn [field-name]
-                        (let [field-spec (get-field-spec field-name)]
-                          (when field-spec
-                            (contains? #{"datetime-local" "date" "time"} (:input-type field-spec)))))
-          ;; Normalize value for consistent comparison across types
-          normalize (fn [v field-name]
+          field-spec (when field (get-field-spec field))
+          date-field? (when field-spec
+                        (contains? #{"datetime-local" "date" "time"} (:input-type field-spec)))
+          select-sort-info (when (and field-spec
+                                   (= "select" (some-> (:type field-spec) kw/ensure-name str/lower-case))
+                                   (vector? (:options field-spec))
+                                   (= 2 (count (:options field-spec))))
+                             (let [[ref-entity label-field] (:options field-spec)
+                                   ref-entity (some-> ref-entity kw/ensure-keyword model-naming/ensure-app-keyword)
+                                   label-field (some-> label-field kw/ensure-keyword model-naming/ensure-app-keyword)]
+                               (when (and ref-entity label-field)
+                                 {:ref-entity ref-entity
+                                  :label-field label-field})))
+          resolve-select-label (fn [raw-id]
+                                 (when (and select-sort-info (some? raw-id))
+                                   (let [{:keys [ref-entity label-field]} select-sort-info
+                                         data (get-in entities-state [ref-entity :data])
+                                         ref-item (or (get data raw-id)
+                                                    (when (and (not (string? raw-id)) (some? raw-id))
+                                                      (get data (str raw-id))))]
+                                     (when (map? ref-item)
+                                       (or (get ref-item label-field)
+                                         (get ref-item (model-naming/app-keyword->db label-field)))))))
+          resolve-sort-value (fn [item]
+                               (let [raw (resolve-field item field)]
+                                 (if select-sort-info
+                                   (or (resolve-select-label raw) raw)
+                                   raw)))
+          normalize (fn [v]
                       (cond
                         (nil? v) nil
                         (string? v)
-                        (if (date-field? field-name)
+                        (if date-field?
                           ;; Only attempt date parsing for fields with date/time input types
                           (let [d (try (js/Date. v) (catch :default _ nil))]
                             (if (and d (not (js/isNaN (.getTime d))))
@@ -137,7 +174,7 @@
                         :else v))]
       (if (and field direction)
         (let [sorted (sort-by (fn [item]
-                                (let [v (normalize (resolve-field item field) field)
+                                (let [v (normalize (resolve-sort-value item))
                                        ;; nil first for ascending; will be reversed for descending
                                       nil-key (if (some? v) 1 0)]
                                   [nil-key v]))

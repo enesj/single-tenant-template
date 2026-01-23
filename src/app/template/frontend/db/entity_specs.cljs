@@ -9,6 +9,15 @@
     [clojure.string :as str]
     [re-frame.core :as rf]))
 
+(defn- app-col->db-col
+  "Best-effort conversion from app/kebab-case keyword to db/snake_case keyword.
+
+  Used for looking up computed field metadata in table-columns config, where
+  keys are often authored in snake_case (e.g. :supplier_display_name)."
+  [col-kw]
+  (when col-kw
+    (-> col-kw name (str/replace "-" "_") keyword)))
+
 (defn- normalize-entity-name
   "Normalize entity identifiers so lookups are consistent.
 
@@ -69,13 +78,25 @@
                                (when-let [k (field-id->kw f)]
                                  [k f])))
                        base-fields)
+          computed-meta-for (fn [col-kw]
+                              (let [db-col (app-col->db-col col-kw)]
+                                (or (get-in table-config [:computed-fields col-kw])
+                                  (get-in table-config [:computed-fields (name col-kw)])
+                                  (when db-col
+                                    (or (get-in table-config [:computed-fields db-col])
+                                      (get-in table-config [:computed-fields (name db-col)]))))))
           computed-field-spec (fn [col-kw]
-                                {:id (name col-kw)
-                                 :label (labels/field-name->label col-kw)
-                                 :type :string
-                                 :admin {:visible-in-table? true
-                                         :filterable? true
-                                         :sortable? true}})
+                                (let [m (computed-meta-for col-kw)
+                                      label (or (:label m)
+                                              (labels/field-name->label col-kw))]
+                                  {:id (name col-kw)
+                                   :label label
+                                   :type (or (:type m) :string)
+                                   :admin (merge
+                                            {:visible-in-table? true
+                                             :filterable? true
+                                             :sortable? true}
+                                            (:admin m))}))
           ;; Computed field specs should be overridden by real field specs when both exist.
           merged-by-id (merge
                          (into {} (map (fn [k] [k (computed-field-spec k)]) computed-cols))

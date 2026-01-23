@@ -92,8 +92,8 @@
  :expenses
  {:available-columns
   ["purchased_at"
-   "supplier_id"
-   "payer_id"
+   "supplier_display_name"
+   "payer_label"
    "currency"
    "total_amount"
    "notes"
@@ -104,17 +104,22 @@
    "deleted_at"
    "updated_at"
    "user_id"],
+  :computed-fields
+  {:supplier_display_name {:type :string
+                           :label "Supplier"}
+   :payer_label {:type :string
+                 :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
-   "supplier_id"
-   "payer_id"
+   "supplier_display_name"
+   "payer_label"
    "currency"
    "total_amount"
    "is_posted"],
   :filterable-columns
   ["purchased_at"
-   "supplier_id"
-   "payer_id"
+   "supplier_display_name"
+   "payer_label"
    "currency"
    "total_amount"
    "is_posted"
@@ -122,8 +127,8 @@
    "updated_at"],
   :sortable-columns
   ["purchased_at"
-   "supplier_id"
-   "payer_id"
+   "supplier_display_name"
+   "payer_label"
    "currency"
    "total_amount"
    "is_posted"
