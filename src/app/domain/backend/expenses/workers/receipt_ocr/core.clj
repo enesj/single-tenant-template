@@ -16,7 +16,9 @@
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import
+    [java.util.concurrent Executors TimeUnit TimeoutException]))
 
 (defn- user-allows-receipt-refine?
   [db receipt]
@@ -95,7 +97,13 @@
                 updated (extraction/persist-extract-result! db (:id receipt) refined persist-opts)]
             (cond-> (assoc updated :receipt receipt :extract-result refined)
               auto-post-present? (assoc :auto-post-after-upload? auto-post-after-upload?)))
-          persist-result))
+          (do
+            (when (and db (true? (:clear-refine-pending? opts)))
+              (try
+                (receipt-status/clear-refine-pending! db (:id receipt))
+                (catch Exception e
+                  (log/warn e "Failed to clear refine_pending" {:receipt-id (:id receipt)}))))
+            persist-result)))
       persist-result)))
 
 (defn- result-receipt-id
@@ -109,22 +117,105 @@
 
 (defn- refine-review-required-results!
   [db opts results]
-  (let [refine-opts (assoc (dissoc opts :defer-refine? :skip-auto-post?) :skip-auto-post? true)
-        refine-map (->> results
+  (let [batch-id (str (java.util.UUID/randomUUID))
+        refine-opts (assoc (dissoc opts :defer-refine? :skip-auto-post?)
+                      :skip-auto-post? true
+                      :clear-refine-pending? true
+                      :refine-batch-id batch-id)
+        cerebras-cfg (:cerebras-cfg opts)
+        max-concurrent (long (max 1 (or (:refine-concurrency cerebras-cfg) 5)))
+        timeout-ms (long (or (:refine-timeout-ms cerebras-cfg)
+                           (:socket-timeout-ms cerebras-cfg)
+                           60000))
+        refineable (->> results
                      (keep (fn [result]
                              (let [receipt (:receipt result)
                                    extract-result (:extract-result result)
                                    receipt-id (result-receipt-id result)]
                                (when (and receipt-id receipt extract-result (true? (:review-required? result)))
-                                 (let [updated (maybe-refine-review-required db receipt extract-result result refine-opts)]
-                                   [receipt-id updated])))))
-                     (into {}))]
-    (mapv (fn [result]
-            (let [receipt-id (result-receipt-id result)]
-              (if receipt-id
-                (get refine-map receipt-id result)
-                result)))
-      results)))
+                                 {:receipt-id receipt-id
+                                  :receipt receipt
+                                  :extract-result extract-result
+                                  :result result})))))
+        total (count refineable)
+        review-required-count (count (filter (fn [result]
+                                               (true? (:review-required? result)))
+                                       results))
+        missing-context (long (max 0 (- review-required-count total)))
+        sample-ids (->> refineable (map :receipt-id) (take 5) vec)]
+    (if (zero? total)
+      (do
+        (when (pos? review-required-count)
+          (log/info "Cerebras parallel refine skipped"
+            {:batch-id batch-id
+             :review-required-count review-required-count
+             :missing-context missing-context
+             :total-results (count results)}))
+        results)
+      (let [started (System/nanoTime)
+            pool (Executors/newFixedThreadPool max-concurrent)]
+        (try
+          (log/info "Cerebras parallel refine starting"
+            {:batch-id batch-id
+             :count total
+             :max-concurrent max-concurrent
+             :timeout-ms timeout-ms
+             :receipt-ids-sample sample-ids
+             :receipt-ids-sample-count (count sample-ids)})
+          (let [futures (mapv
+                          (fn [{:keys [receipt-id receipt extract-result result]}]
+                            {:receipt-id receipt-id
+                             :future (.submit pool
+                                       ^java.util.concurrent.Callable
+                                       (fn []
+                                         [receipt-id (maybe-refine-review-required db receipt extract-result result refine-opts)]))})
+                          refineable)
+                refine-map (->> futures
+                             (map (fn [{:keys [receipt-id future]}]
+                                    (try
+                                      (.get future timeout-ms TimeUnit/MILLISECONDS)
+                                      (catch TimeoutException e
+                                        (try (.cancel future true) (catch Exception _))
+                                        (when db
+                                          (try
+                                            (receipt-status/clear-refine-pending! db receipt-id)
+                                            (catch Exception ce
+                                              (log/warn ce "Failed to clear refine_pending after timeout" {:batch-id batch-id
+                                                                                                           :receipt-id receipt-id}))))
+                                        (log/warn e "Cerebras refine timed out (parallel)"
+                                          {:batch-id batch-id
+                                           :receipt-id receipt-id
+                                           :timeout-ms timeout-ms})
+                                        nil)
+                                      (catch Exception e
+                                        (when db
+                                          (try
+                                            (receipt-status/clear-refine-pending! db receipt-id)
+                                            (catch Exception ce
+                                              (log/warn ce "Failed to clear refine_pending after failure" {:batch-id batch-id
+                                                                                                          :receipt-id receipt-id}))))
+                                        (log/warn e "Cerebras refine failed (parallel)"
+                                          {:batch-id batch-id
+                                           :receipt-id receipt-id})
+                                        nil))))
+                             (keep identity)
+                             (into {}))
+                results* (mapv (fn [result]
+                                 (let [receipt-id (result-receipt-id result)]
+                                   (if receipt-id
+                                     (get refine-map receipt-id result)
+                                     result)))
+                           results)
+                duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
+            (log/info "Cerebras parallel refine complete"
+              {:batch-id batch-id
+               :count (count refine-map)
+               :total-count total
+               :duration-ms duration-ms})
+            results*)
+          (finally
+            (.shutdown pool)
+            (.awaitTermination pool 10 TimeUnit/SECONDS)))))))
 
 (defn- auto-post-extracted-results!
   [db opts results]
@@ -256,14 +347,14 @@
   ([db app-config]
    (process-pending! db app-config nil))
   ([db app-config {:keys [max-receipts] :as opts}]
-     (let [ocr-cfg (mistral-ocr/build-config app-config)
-       cerebras-cfg (cerebras/build-config app-config)
-       places-cfg (places-api/build-config app-config)
+   (let [ocr-cfg (mistral-ocr/build-config app-config)
+         cerebras-cfg (cerebras/build-config app-config)
+         places-cfg (places-api/build-config app-config)
          opts (merge {:max-receipts 25
                       :lease-seconds 900
                       :default-currency "BAM"
                       :cerebras-cfg cerebras-cfg
-            :places-cfg places-cfg
+                      :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)}
                 (or opts {}))]
      (if-not (:enabled? ocr-cfg)
@@ -375,7 +466,8 @@
                         extract-result
                         (try
                           (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
-                                auto-post-enabled? (:auto-post-after-upload? ocr-cfg)
+                                user-auto-post? (user-allows-auto-post? db receipt)
+                                auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?)
                                 opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
                                 persist-result (-> (extraction/persist-extract-result! db receipt-id extract-result opts*)
                                                  (assoc :auto-post-after-upload? auto-post-enabled?))]
@@ -391,9 +483,7 @@
                           (receipt-status/mark-failed! db receipt-id "Batch extraction failed" (or err {:type :mistral/batch-unknown-error}))
                           {:receipt-id receipt-id :stage :extract :result :failed :error "Batch extraction failed"}))))
                   prepared)
-                results (if (:defer-refine? opts)
-                          (refine-review-required-results! db opts results0)
-                          results0)]
+                results results0]
             results))))))
 
 (defn process-receipts-by-ids!
@@ -413,9 +503,9 @@
   ([db app-config receipt-ids]
    (process-receipts-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
-     (let [ocr-cfg (mistral-ocr/build-config app-config)
-       cerebras-cfg (cerebras/build-config app-config)
-       places-cfg (places-api/build-config app-config)
+   (let [ocr-cfg (mistral-ocr/build-config app-config)
+         cerebras-cfg (cerebras/build-config app-config)
+         places-cfg (places-api/build-config app-config)
          defer-refine? (if (contains? opts :defer-refine?)
                          (:defer-refine? opts)
                          true)
@@ -424,7 +514,7 @@
                       :storage-base-dir "upload/stripes"
                       :default-currency "BAM"
                       :cerebras-cfg cerebras-cfg
-                :places-cfg places-cfg
+                      :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)
                       :defer-refine? defer-refine?}
                 (dissoc opts :reset?))]

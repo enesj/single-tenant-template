@@ -9,9 +9,11 @@
 (def ^:private default-base-url "https://api.cerebras.ai/v1")
 (def ^:private default-model "zai-glm-4.7")
 (def ^:private default-conn-timeout-ms 5000)
-(def ^:private default-socket-timeout-ms 60000)
+(def ^:private default-socket-timeout-ms 100000)
 (def ^:private default-max-retries 2)
-(def ^:private default-retry-sleep-ms 500)
+(def ^:private default-retry-sleep-ms 100)
+
+(def ^:private default-refine-concurrency 3)
 
 (defn build-config
   "Build a Cerebras config from an app config map (Aero) and environment.
@@ -23,7 +25,11 @@
 
   - `CEREBRAS_API_KEY`
   - `CEREBRAS_BASE_URL` (default https://api.cerebras.ai/v1)
-  - `CEREBRAS_MODEL` (default qwen-3-32b)
+  - `CEREBRAS_MODEL` (default zai-glm-4.7)
+  - `CEREBRAS_CONN_TIMEOUT_MS` (default 5000)
+  - `CEREBRAS_SOCKET_TIMEOUT_MS` (default 60000)
+  - `CEREBRAS_REFINE_CONCURRENCY` (default 5)
+  - `CEREBRAS_REFINE_TIMEOUT_MS` (default socket timeout)
 
   App config keys (optional):
   {:cerebras {:api-key <token>
@@ -31,6 +37,8 @@
               :model <model>
               :conn-timeout-ms 5000
               :socket-timeout-ms 20000
+              :refine-concurrency 5
+              :refine-timeout-ms 60000
               :max-retries 2
               :retry-sleep-ms 500}}"
   ([app-config]
@@ -40,7 +48,7 @@
    (let [cfg (or (:cerebras app-config) {})
          getenv* (fn [k] (some-> (getenv k) str/trim (not-empty)))
          parse-int (fn [s]
-                     (when (and s (re-matches #"\\d+" s))
+                     (when (and s (re-matches #"\d+" s))
                        (Long/parseLong s)))
          api-key (or (getenv* "CEREBRAS_API_KEY") (:api-key cfg))
          enabled? (boolean (seq api-key))]
@@ -52,6 +60,13 @@
                          (:conn-timeout-ms cfg)
                          default-conn-timeout-ms)
       :socket-timeout-ms (or (some-> (getenv* "CEREBRAS_SOCKET_TIMEOUT_MS") parse-int)
+                           (:socket-timeout-ms cfg)
+                           default-socket-timeout-ms)
+      :refine-concurrency (or (some-> (getenv* "CEREBRAS_REFINE_CONCURRENCY") parse-int)
+                            (:refine-concurrency cfg)
+                            default-refine-concurrency)
+      :refine-timeout-ms (or (some-> (getenv* "CEREBRAS_REFINE_TIMEOUT_MS") parse-int)
+                           (:refine-timeout-ms cfg)
                            (:socket-timeout-ms cfg)
                            default-socket-timeout-ms)
       :max-retries (or (some-> (getenv* "CEREBRAS_MAX_RETRIES") parse-int)

@@ -128,3 +128,23 @@
                    :where [:= :id receipt-id]
                    :returning [:*]})
       {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn clear-refine-pending!
+  "Clear the `raw_extract_json.refine_pending` flag.
+
+  This is primarily used to prevent the UI from staying in a perpetual
+  refining/polling state when the optional LLM refine step is skipped,
+  fails, or times out.
+
+  Note: This does not change the receipt status (e.g. review_required stays
+  review_required)."
+  [db receipt-id]
+  (jdbc/execute-one!
+    db
+    (sql/format
+      {:update :receipts
+       :set {:raw_extract_json [:raw "jsonb_set(coalesce(raw_extract_json, '{}'::jsonb), '{refine_pending}', 'false'::jsonb, true)"]
+             :updated_at [:now]}
+       :where [:= :id receipt-id]
+       :returning [:id]})
+    {:builder-fn rs/as-unqualified-lower-maps}))

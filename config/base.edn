@@ -117,4 +117,9 @@
  ;; - Keep secrets (API keys) in env / config/.secrets.edn
  ;; - Receipt refinement is controlled per-user via the Expenses Settings toggle.
  ;; - The Cerebras integration is considered available when a Cerebras API key is present.
- :cerebras  {}}
+ :cerebras  {:base-url "https://api.cerebras.ai/v1"
+             :model "zai-glm-4.7"
+             :refine-concurrency 5
+             :refine-timeout-ms 60000
+             :conn-timeout-ms 5000
+             :socket-timeout-ms 60000}}
