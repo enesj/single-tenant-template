@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.routes.route-configs
   "Configuration maps for expenses domain route generation."
   (:require
+    [app.domain.backend.expenses.services.service-configs :as svc-configs]
     [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.middleware.admin :as admin-mw]))
 
@@ -23,10 +24,10 @@
    :required-fields [:display_name]
    :has-count? true
    :has-search? true
-  :custom-query-params (fn [qp]
-                  {:search (get-param qp :search)})
-  :custom-count-params (fn [qp]
-                 {:search (get-param qp :search)})})
+   :custom-query-params (fn [qp]
+                          {:search (get-param qp :search)})
+   :custom-count-params (fn [qp]
+                          {:search (get-param qp :search)})})
 
 (def payer-config
   {:entity-key :payer
@@ -106,7 +107,7 @@
   {:entity-key :receipt
    :entity-plural :receipts
    :route-segment "receipts"
-  :service 'app.domain.backend.expenses.services.receipts.queries
+   :service 'app.domain.backend.expenses.services.receipts.queries
    :default-limit 50
    :default-order-by "receipt_date"
    :required-fields [:file_url]
@@ -148,6 +149,33 @@
                            :raw-label (get-param qp :raw-label)
                            :article-id (utils/parse-uuid-custom (get-param qp :article_id))})})
 
+(def supplier-alias-config
+  {:entity-key :supplier-alias
+   :entity-plural :supplier-aliases
+   :route-segment "supplier-aliases"
+   :service 'app.domain.backend.expenses.services.supplier-aliases
+   :default-limit 50
+   :default-order-by "raw_label"
+   :required-fields [:raw_label :raw_label_normalized]
+   :has-count? false
+   :has-search? false
+   :custom-query-params (fn [qp]
+                          {:supplier-id (utils/parse-uuid-custom
+                                          (or (get-param qp :supplier-id)
+                                            (get-param qp :supplier_id)))
+                           :unmapped-only (utils/parse-boolean-param qp :unmapped-only)
+                           :search (get-param qp :search)})
+   ;; Allow clients to omit raw_label_normalized; compute it server-side.
+   :transform-request (fn [body]
+                        (let [raw-label (or (:raw_label body) (:raw-label body))
+                              normalized (or (:raw_label_normalized body)
+                                           (:raw-label-normalized body)
+                                           (when raw-label
+                                             (svc-configs/normalize-supplier-key raw-label)))]
+                          (cond-> body
+                            raw-label (assoc :raw_label raw-label)
+                            normalized (assoc :raw_label_normalized normalized))))})
+
 ;; =============================================================================
 ;; Configuration Map
 ;; =============================================================================
@@ -155,11 +183,12 @@
 (def entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers supplier-config
-  :payers payer-config
-  :payer-types payer-type-config
+   :payers payer-config
+   :payer-types payer-type-config
    :articles article-config
    :expenses expense-config
    :expense-items expense-item-config
    :receipts receipt-config
    :price-observations price-observation-config
-   :article-aliases article-alias-config})
+   :article-aliases article-alias-config
+   :supplier-aliases supplier-alias-config})

@@ -251,6 +251,9 @@
    [:raw_extract_json :jsonb]
    [:parsed_markdown :text]
    [:supplier_guess [:varchar 255]]
+   [:supplier_alias_id
+    :uuid
+    {:foreign-key :supplier_aliases/id, :on-delete :set-null}]
    [:total_amount_guess [:decimal 12 2]]
    [:currency_guess [:enum :currency]]
    [:purchased_at_guess :timestamptz]
@@ -279,7 +282,28 @@
     :btree
     {:fields [:file_hash], :unique true}]
    [:idx_receipts_status :btree {:fields [:status]}]
+   [:idx_receipts_supplier_alias_id
+    :btree
+    {:fields [:supplier_alias_id]}]
    [:idx_receipts_created_at :btree {:fields [:created_at]}]]},
+ :supplier_aliases
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:raw_label :text]
+   [:raw_label_normalized [:varchar 255] {:null false}]
+   [:supplier_id
+    :uuid
+    {:foreign-key :suppliers/id, :on-delete :set-null}]
+   [:confidence :integer {:default 100}]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_supplier_aliases_raw_label_normalized
+    :btree
+    {:fields [:raw_label_normalized], :unique true}]
+   [:idx_supplier_aliases_supplier_id
+    :btree
+    {:fields [:supplier_id]}]]},
  :raw_labels
  {:fields
   [[:id :uuid {:primary-key true}]

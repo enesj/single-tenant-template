@@ -141,6 +141,12 @@
                                           :route :expense-article-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-article-aliases})})
+                               (nav-item {:id "user-sidebar-supplier-aliases"
+                                          :label "Supplier Aliases"
+                                          :href "/supplier-aliases"
+                                          :route :expense-supplier-aliases
+                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-supplier-aliases})})
                                (nav-item {:id "user-sidebar-price-observations"
                                           :label "Price Observations"
                                           :href "/price-observations"

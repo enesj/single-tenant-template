@@ -260,6 +260,14 @@
       {:db (assoc-in db (paths/current-page) :expense-article-aliases)})))
 
 (rf/reg-event-fx
+  :page/init-expense-supplier-aliases
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-supplier-aliases)})))
+
+(rf/reg-event-fx
   :page/init-expense-price-observations
   common-interceptors
   (fn [{:keys [db]} _]
@@ -332,11 +340,8 @@
     (cond
       (map? new-match)
       (let [old-match (:current-route db)
-            controllers (rtfc/apply-controllers (:controllers old-match) new-match)
-            location (.-location js/globalThis)
-             path (str (or (some-> location .-pathname) "")
-               (or (some-> location .-search) ""))]
-         {:dispatch [:navigated new-match controllers]})
+            controllers (rtfc/apply-controllers (:controllers old-match) new-match)]
+        {:dispatch [:navigated new-match controllers]})
 
       ;; Programmatic navigation from UI code (pages, buttons)
       (or (string? new-match) (keyword? new-match) (vector? new-match))

@@ -273,8 +273,8 @@
                      (println "  warnings:" (pr-str (:warnings res))))))))
            (let [semantic (:semantic res)
                  print-opts (if verbose?
-                             {:print-length nil :print-level nil}
-                             {:print-length 10 :print-level 6})]
+                              {:print-length nil :print-level nil}
+                              {:print-length 10 :print-level 6})]
              (binding [*print-length* (:print-length print-opts)
                        *print-level* (:print-level print-opts)]
                (when (seq (:unknown-entities semantic))
@@ -353,7 +353,7 @@
 (defn- frontend-config-dry-run-summary
   "Convert the (potentially huge) frontend-config dry-run result into a small summary map.
 
-  This is used by `migrate!` so `clojure -e '(mig/migrate!)'` doesn't dump megabytes of data." 
+  This is used by `migrate!` so `clojure -e '(mig/migrate!)'` doesn't dump megabytes of data."
   [frontend-dry]
   (let [{:keys [status]} frontend-dry]
     (if (not= :ok status)
@@ -365,12 +365,12 @@
         {:status :ok
          :validation {:valid? (true? (get-in frontend-dry [:validation :valid?]))
                       :invalid-count (int (or (get-in frontend-dry [:validation :invalid-count]) 0))
-                          :invalid (mapv (fn [res]
-                               (let [semantic (:semantic res)
-                                 unknown-fields (:unknown-fields semantic)
-                                 missing-fields (:missing-fields semantic)
-                                 warnings (:warnings res)
-                                 errors (:errors res)]
+                      :invalid (mapv (fn [res]
+                                       (let [semantic (:semantic res)
+                                             unknown-fields (:unknown-fields semantic)
+                                             missing-fields (:missing-fields semantic)
+                                             warnings (:warnings res)
+                                             errors (:errors res)]
                                          {:label (frontend-config-label res)
                                           :path (:path res)
                                           ;; Keep the summary small: counts + a small sample.
@@ -489,7 +489,7 @@
 (defn migrate-full!
   "Run migrations and return full (potentially large) result map.
 
-  Prefer `migrate!` for CLI/terminal use; use this when debugging interactively." 
+  Prefer `migrate!` for CLI/terminal use; use this when debugging interactively."
   ([] (migrate-full! :dev))
   ([profile] (migrate! profile {:return :full}))
   ([profile opts] (migrate! profile (assoc opts :return :full))))

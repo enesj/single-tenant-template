@@ -6,4 +6,5 @@
  :price-observations {:title "Price Observations"},
  :payers {:title "Payers"},
  :receipts {:title "Receipts"},
- :article-aliases {:title "Article Aliases"}}
+ :article-aliases {:title "Article Aliases"},
+ :supplier-aliases {:title "Supplier Aliases"}}

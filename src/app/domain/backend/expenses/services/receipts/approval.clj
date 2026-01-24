@@ -6,6 +6,7 @@
     [app.domain.backend.expenses.services.receipts.queries :as queries]
     [app.domain.backend.expenses.services.receipts.status :as status]
     [app.domain.backend.expenses.services.receipts.storage :as storage]
+    [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -35,6 +36,11 @@
             supplier-guess (or (some-> supplier :display_name str/trim not-empty)
                              (:supplier_guess review-data)
                              (:supplier-guess review-data))
+             supplier-alias-id (try
+                                 (when-not (str/blank? (some-> supplier-guess str))
+                                   (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
+                                 (catch Exception _
+                                   nil))
             purchased-at* (parsing/parse-instant! :purchased_at purchased_at)
             currency* (parsing/normalize-currency! currency)
             total* (parsing/parse-money total_amount)
@@ -67,6 +73,7 @@
                     (storage/jsonb-value items)
                     true]
                    :supplier_guess supplier-guess
+                     :supplier_alias_id supplier-alias-id
                    :currency_guess (when currency* [:cast currency* :currency])
                    :purchased_at_guess purchased-at*
                    :status (storage/receipt-status-cast new-status)

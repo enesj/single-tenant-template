@@ -29,4 +29,6 @@
    :notes {:type "textarea"},
    :is_posted {:type "checkbox"}}},
  :article-aliases
- {:edit-fields ["raw_label" "raw_label_normalized" "article_id"]}}
+   {:edit-fields ["raw_label" "raw_label_normalized" "article_id"]},
+   :supplier-aliases
+   {:edit-fields ["raw_label" "raw_label_normalized"]}}

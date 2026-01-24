@@ -181,6 +181,20 @@
                   :raw_label_normalized [:raw-label-normalized]
                   :created_at [:created-at]}}))
 
+(defn supplier-alias->template-entity
+  [alias]
+  (entity-utils/normalize-entity
+    alias
+    {:entity-ns :supplier-aliases
+     :id-keys [:id]
+     :stringify-keys [:supplier_id]
+     :alias-keys {:supplier_display_name [:supplier-display-name]
+                  :raw_label [:raw-label]
+                  :raw_label_normalized [:raw-label-normalized]
+                  :supplier_id [:supplier-id]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
 (defn price-observation->template-entity
   [obs]
   (entity-utils/normalize-entity

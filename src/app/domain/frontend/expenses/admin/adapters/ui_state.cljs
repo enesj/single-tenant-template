@@ -41,6 +41,7 @@
    :payers {:sort-field :label :sort-direction :asc}
    :articles {:sort-field :created-at :sort-direction :desc}
    :article-aliases {:sort-field :created-at :sort-direction :desc}
+  :supplier-aliases {:sort-field :created-at :sort-direction :desc}
    :price-observations {:sort-field :observed-at :sort-direction :desc}
    :expense-items {:sort-field :created-at :sort-direction :desc}})
 
@@ -81,5 +82,6 @@
 (def init-payers-adapter! (get entity-init-fns :payers))
 (def init-articles-adapter! (get entity-init-fns :articles))
 (def init-article-aliases-adapter! (get entity-init-fns :article-aliases))
+(def init-supplier-aliases-adapter! (get entity-init-fns :supplier-aliases))
 (def init-price-observations-adapter! (get entity-init-fns :price-observations))
 (def init-expense-items-adapter! (get entity-init-fns :expense-items))

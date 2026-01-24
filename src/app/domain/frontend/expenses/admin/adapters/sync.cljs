@@ -68,6 +68,12 @@
    :log-prefix "[expenses] Syncing article aliases to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-supplier-aliases
+   :entity-key :supplier-aliases
+   :normalize-fn normalize/supplier-alias->template-entity
+   :log-prefix "[expenses] Syncing supplier aliases to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-price-observations
    :entity-key :price-observations
    :normalize-fn normalize/price-observation->template-entity
@@ -94,6 +100,8 @@
   {:sync-event-id ::sync-articles})
 (entity-sync/register-sync-handler! :article-aliases
   {:sync-event-id ::sync-article-aliases})
+(entity-sync/register-sync-handler! :supplier-aliases
+  {:sync-event-id ::sync-supplier-aliases})
 (entity-sync/register-sync-handler! :price-observations
   {:sync-event-id ::sync-price-observations})
 
@@ -110,4 +118,5 @@
 (form-interceptors/register-bridge-entity! :payer-types)
 (form-interceptors/register-bridge-entity! :articles)
 (form-interceptors/register-bridge-entity! :article-aliases)
+(form-interceptors/register-bridge-entity! :supplier-aliases)
 (form-interceptors/register-bridge-entity! :price-observations)

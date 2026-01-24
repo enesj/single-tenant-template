@@ -110,6 +110,11 @@
      :view :expense-article-aliases
      :controllers (controllers/make-simple-controller :page/init-expense-article-aliases)}]
 
+   ["/supplier-aliases"
+    {:name :expense-supplier-aliases
+     :view :expense-supplier-aliases
+     :controllers (controllers/make-simple-controller :page/init-expense-supplier-aliases)}]
+
    ["/price-observations"
     {:name :expense-price-observations
      :view :expense-price-observations

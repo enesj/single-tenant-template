@@ -20,11 +20,11 @@
 
 (def ^:private settings-read-roles
   "Roles allowed to view per-user settings."
-  #{"admin" "owner"})
+  h/reference-data-read-roles)
 
 (def ^:private settings-write-roles
   "Roles allowed to mutate per-user settings."
-  #{"admin" "owner"})
+  h/reference-data-write-roles)
 
 ;; ---------------------------------------------------------------------------
 ;; Settings handlers
@@ -60,10 +60,12 @@
                           (assoc m (keyword k) v))
                {}
                body)
-        _ (log/info "After key normalization" {:body body})
-         supported-keys #{:default-currency :default-payer-id :notifications-enabled :auto-post-after-upload-enabled :receipt-refine-enabled}
+        supported-keys #{:default-currency
+                         :default-payer-id
+                         :notifications-enabled
+                         :auto-post-after-upload-enabled
+                         :receipt-refine-enabled}
         present-keys (->> supported-keys (filter #(contains? body %)) set)]
-    (log/info "Settings validation" {:present-keys present-keys :supported-keys supported-keys})
     (cond
       (empty? present-keys)
       {:error (h/json-response {:error "No settings fields provided"} 400)}
@@ -77,10 +79,10 @@
                        (if (nil? payer-id-raw)
                          nil
                          (h/try-parse-uuid payer-id-raw)))
-             notifications (when (contains? body :notifications-enabled)
-                             (parse-bool (:notifications-enabled body)))
-             auto-post-after-upload-enabled (when (contains? body :auto-post-after-upload-enabled)
-                                              (parse-bool (:auto-post-after-upload-enabled body)))
+            notifications (when (contains? body :notifications-enabled)
+                            (parse-bool (:notifications-enabled body)))
+            auto-post-after-upload-enabled (when (contains? body :auto-post-after-upload-enabled)
+                                             (parse-bool (:auto-post-after-upload-enabled body)))
             receipt-refine-enabled (when (contains? body :receipt-refine-enabled)
                                      (parse-bool (:receipt-refine-enabled body)))]
         (cond
@@ -147,7 +149,6 @@
         forbidden
         (try
           (let [body (h/read-body-params request)
-                _ (log/info "Settings update request body" {:body body :body-type (type body)})
                 persisted (user-expense-settings/get-user-expense-settings db user-id)
                 current (user-expense-settings/effective-settings persisted)
                 {:keys [settings error]} (normalize-settings-update current body)]

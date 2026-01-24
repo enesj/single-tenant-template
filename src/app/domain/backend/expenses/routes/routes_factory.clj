@@ -47,7 +47,7 @@
   "Resolve the `service` var in a service namespace and return its value.
 
   Service maps are produced by `services-factory/build-entity-service` and include
-  keys like :list/:get/:create!/:update!/:delete!/:count and sometimes :search." 
+  keys like :list/:get/:create!/:update!/:delete!/:count and sometimes :search."
   [service-ns]
   (when-let [service-var (maybe-resolve-fn service-ns 'service)]
     (let [m (var-get service-var)]
@@ -61,7 +61,7 @@
   1) Prefer an explicitly named var (e.g., wrappers/overrides like delete-expense-item!)
   2) Fallback to the `service` map op (allows removing legacy alias vars)
 
-  Throws if neither exists." 
+  Throws if neither exists."
   [service-ns legacy-sym service-op]
   (or (maybe-resolve-fn service-ns legacy-sym)
     (when-let [service-map (resolve-service-map service-ns)]
@@ -177,7 +177,7 @@
       (fn [request]
         (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
               get-fn (or (when custom-get-fn (resolve-fn service custom-get-fn))
-                         (resolve-service-op-fn service (symbol (str "get-" (name entity-key))) :get))
+                       (resolve-service-op-fn service (symbol (str "get-" (name entity-key))) :get))
               result (when id (get-fn db id))]
           (if result
             (let [response-key (or (:response-key transform-response) entity-key)
@@ -216,7 +216,7 @@
       (fn [request]
         (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
               delete-fn (or (when custom-delete-fn (resolve-fn service custom-delete-fn))
-                            (resolve-service-op-fn service (symbol (str "delete-" (name entity-key) "!")) :delete!))
+                          (resolve-service-op-fn service (symbol (str "delete-" (name entity-key) "!")) :delete!))
               deleted (when id (delete-fn db id))]
           (if deleted
             (case delete-response-type

@@ -14,6 +14,7 @@
     [app.domain.backend.expenses.services.receipts.parsing :as receipt-parsing]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
@@ -312,6 +313,12 @@
                       (and (nil? (:total_amount_guess g)) markdown-total)
                       (assoc :total_amount_guess markdown-total))))
         supplier-guess (or (:supplier_guess guesses) markdown-supplier)
+        supplier-alias-id (try
+                            (when-not (str/blank? (some-> supplier-guess str))
+                              (:id (supplier-aliases/find-or-create-alias! db (str/trim (str supplier-guess)))))
+                            (catch Exception e
+                              (log/warn e "Failed to upsert supplier alias from supplier_guess" {:receipt-id receipt-id})
+                              nil))
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
@@ -334,10 +341,11 @@
       receipt-id
       (merge {:raw_extract_json raw-extract-json
               :parsed_markdown markdown}
-        (select-keys guesses [:supplier_guess
+      (select-keys guesses [:supplier_guess
                               :total_amount_guess
                               :currency_guess
-                              :purchased_at_guess])))
+                :purchased_at_guess])
+      (when supplier-alias-id {:supplier_alias_id supplier-alias-id})))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
     (try
       (auto-create-aliases! db supplier-guess extraction opts)

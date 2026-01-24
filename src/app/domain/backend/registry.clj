@@ -43,6 +43,7 @@
     "/expense-items"
     "/articles"
     "/article-aliases"
+    "/supplier-aliases"
     "/price-observations"]})
 
 (def enabled-domains

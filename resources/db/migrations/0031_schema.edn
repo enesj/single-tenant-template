@@ -1,0 +1,31 @@
+({:action :create-table,
+  :model-name :supplier_aliases,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :raw-label {:type :text},
+   :raw-label-normalized {:null false, :type [:varchar 255]},
+   :supplier-id
+   {:foreign-key :suppliers/id, :on-delete :set-null, :type :uuid},
+   :confidence {:default 100, :type :integer},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :add-column,
+  :field-name :supplier-alias-id,
+  :model-name :receipts,
+  :options
+  {:foreign-key :supplier_aliases/id,
+   :on-delete :set-null,
+   :type :uuid}}
+ {:action :create-index,
+  :index-name :idx-receipts-supplier-alias-id,
+  :model-name :receipts,
+  :options {:fields [:supplier_alias_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-supplier-aliases-raw-label-normalized,
+  :model-name :supplier_aliases,
+  :options
+  {:fields [:raw_label_normalized], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-supplier-aliases-supplier-id,
+  :model-name :supplier_aliases,
+  :options {:fields [:supplier_id], :type :btree}})

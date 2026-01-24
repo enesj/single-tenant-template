@@ -371,6 +371,113 @@
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
+;; Supplier aliases (power-user list + basic edit/delete)
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/fetch-supplier-aliases
+  common-interceptors
+  (fn [{:keys [db]} [params]]
+    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
+      {:db (begin-entity-load db :supplier-aliases)
+       :http-xhrio (x/xhrio db
+                     {:method :get
+                      :uri endpoints/supplier-aliases-endpoint
+                      :admin-uri endpoints/admin-supplier-aliases-endpoint
+                      :params request-params
+                      :on-success [:user-expenses/fetch-supplier-aliases-success]
+                      :on-failure [:user-expenses/fetch-supplier-aliases-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-supplier-aliases-success
+  common-interceptors
+  (fn [{:keys [db]} [response]]
+    (let [aliases (vec (or (:data response) (:supplier-aliases response) []))]
+      {:db (finish-entity-load db :supplier-aliases nil)
+       :dispatch [::expenses-sync/sync-supplier-aliases aliases]})))
+
+(rf/reg-event-db
+  :user-expenses/fetch-supplier-aliases-failure
+  common-interceptors
+  (fn [db [error]]
+    (finish-entity-load db :supplier-aliases error)))
+
+(rf/reg-event-fx
+  :user-expenses/update-supplier-alias-modal
+  common-interceptors
+  (fn [{:keys [db]} [supplier-alias-id form-data on-success]]
+    (let [supplier-alias-id-str (some-> supplier-alias-id str)
+          raw-label (or (:raw_label form-data) (:raw-label form-data))
+          raw-label-normalized (or (:raw_label_normalized form-data) (:raw-label-normalized form-data))
+          payload (cond-> {}
+                    (some? raw-label) (assoc :raw_label raw-label)
+                    (some? raw-label-normalized) (assoc :raw_label_normalized raw-label-normalized))
+          payload* (if (seq payload) payload (or form-data {}))]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :put
+                      :uri (str endpoints/supplier-aliases-endpoint "/" supplier-alias-id-str)
+                      :admin-uri (str endpoints/admin-supplier-aliases-endpoint "/" supplier-alias-id-str)
+                      :params payload*
+                      :on-success [:user-expenses/update-supplier-alias-modal-success supplier-alias-id-str on-success]
+                      :on-failure [:user-expenses/update-supplier-alias-modal-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/update-supplier-alias-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [supplier-alias-id on-success _response]]
+    (let [highlight-id (some-> supplier-alias-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] false)
+             (assoc-in [:user-expenses :form :error] nil)
+             (cond-> highlight-id
+               (crud-success/track-recently-updated :supplier-aliases highlight-id)))
+       :dispatch-n [[:user-expenses/fetch-supplier-aliases]]
+       :fx [(when on-success
+              [:dispatch-later {:ms 100
+                                :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
+
+(rf/reg-event-db
+  :user-expenses/update-supplier-alias-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/delete-supplier-alias
+  common-interceptors
+  (fn [{:keys [db]} [supplier-alias-id]]
+    (let [supplier-alias-id-str (some-> supplier-alias-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :delete
+                      :uri (str endpoints/supplier-aliases-endpoint "/" supplier-alias-id-str)
+                      :admin-uri (str endpoints/admin-supplier-aliases-endpoint "/" supplier-alias-id-str)
+                      :on-success [:user-expenses/delete-supplier-alias-success]
+                      :on-failure [:user-expenses/delete-supplier-alias-failure]})})))
+
+(rf/reg-event-fx
+  :user-expenses/delete-supplier-alias-success
+  common-interceptors
+  (fn [{:keys [db]} [_response]]
+    {:db (assoc-in db [:user-expenses :form :loading?] false)
+     :dispatch [:user-expenses/fetch-supplier-aliases]}))
+
+(rf/reg-event-db
+  :user-expenses/delete-supplier-alias-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
 ;; Price observations (read-only list for now; supplier detail also uses the same endpoint)
 ;; ---------------------------------------------------------------------------
 

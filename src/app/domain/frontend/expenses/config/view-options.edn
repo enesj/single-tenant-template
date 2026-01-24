@@ -37,6 +37,11 @@
   :display-locks {},
   :column-defaults {},
   :column-locks {:id false}},
+ :supplier-aliases
+ {:display-defaults {:show-edit? false},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {:id false}},
  :articles
  {:display-locks {},
   :display-defaults {:show-edit? false, :show-delete? false}},

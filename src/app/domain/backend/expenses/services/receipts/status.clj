@@ -96,6 +96,7 @@
                        :raw_extract_json nil
                        :parsed_markdown nil
                        :supplier_guess nil
+             :supplier_alias_id nil
                        :total_amount_guess nil
                        :currency_guess nil
                        :purchased_at_guess nil
@@ -110,7 +111,7 @@
 
   Updates only fields present in the input map (so callers can PATCH-like update
   without wiping other columns)."
-  [db receipt-id {:keys [raw_parse_json raw_extract_json parsed_markdown supplier_guess
+  [db receipt-id {:keys [raw_parse_json raw_extract_json parsed_markdown supplier_guess supplier_alias_id
                          total_amount_guess currency_guess purchased_at_guess]
                   :as data}]
   (let [set-map (cond-> {:updated_at [:now]}
@@ -118,6 +119,7 @@
                   (contains? data :raw_extract_json) (assoc :raw_extract_json (storage/jsonb-value raw_extract_json))
                   (contains? data :parsed_markdown) (assoc :parsed_markdown parsed_markdown)
                   (contains? data :supplier_guess) (assoc :supplier_guess supplier_guess)
+                  (contains? data :supplier_alias_id) (assoc :supplier_alias_id supplier_alias_id)
                   (contains? data :total_amount_guess) (assoc :total_amount_guess total_amount_guess)
                   (contains? data :currency_guess) (assoc :currency_guess (when currency_guess [:cast currency_guess :currency]))
                   (contains? data :purchased_at_guess) (assoc :purchased_at_guess purchased_at_guess))]

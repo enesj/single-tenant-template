@@ -111,6 +111,43 @@
                                     on-success]))
          :button-text "Save Alias"}))))
 
+(def ^:private supplier-alias-edit-form-spec
+  [{:id :raw_label
+    :type :text
+    :label "Raw label"
+    :required true
+    :placeholder "e.g. MEGA MARKET"}
+   {:id :raw_label_normalized
+    :type :text
+    :label "Normalized label"
+    :required true
+    :placeholder "e.g. mega-market"}])
+
+(defui user-supplier-alias-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        item (normalization/convert-db-keys->app-keys item)
+        supplier-alias-id (id-utils/extract-entity-id item)
+        initial-values {:raw_label (or (:raw-label item) "")
+                        :raw_label_normalized (or (:raw-label-normalized item) "")}]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "user-supplier-alias"
+         :entity-spec supplier-alias-edit-form-spec
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-supplier-alias-modal
+                                    (some-> supplier-alias-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Alias"}))))
+
 (defn- pad-two
   [value]
   (let [s (str value)]

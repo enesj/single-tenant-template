@@ -102,6 +102,26 @@
    :has-search? true
    :has-count? true})
 
+(def supplier-alias-config
+  {:table-name "supplier_aliases"
+   :table-alias :sa
+   :primary-key :sa/id
+   :required-fields [:raw_label :raw_label_normalized]
+   :allowed-order-by {:created-at :sa/created_at
+                      :updated-at :sa/updated_at
+                      :raw-label :sa/raw_label
+                      :raw-label-normalized :sa/raw_label_normalized
+                      :supplier-display-name :s/display_name
+                      :confidence :sa/confidence}
+   :default-order-by :sa/created_at
+   :search-fields [:sa/raw_label :sa/raw_label_normalized :s/display_name]
+   :joins [[:suppliers :s] [:= :s/id :sa/supplier_id]]
+   :select-fields [[:sa.*]
+                   [:s/display_name :supplier_display_name]]
+   :field-transformers {:raw_label_normalized normalize-supplier-key}
+   :has-search? true
+   :has-count? true})
+
 (def price-observation-config
   {:table-name "price_observations"
    :table-alias :po
@@ -368,6 +388,7 @@
 
 (def ^:private entity-configs
   {:article-alias article-alias-config
+   :supplier-alias supplier-alias-config
    :price-observation price-observation-config
    :supplier supplier-config
    :payer-type payer-type-config

@@ -64,6 +64,14 @@
             {:id :raw-label-normalized :label "Alias" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
+(def supplier-aliases-entity-spec
+  {:id :supplier-aliases
+   :fields [{:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :raw-label :label "Raw label" :type :text}
+            {:id :raw-label-normalized :label "Alias" :type :text}
+            {:id :confidence :label "Confidence" :type :number}
+            {:id :created-at :label "Created at" :type :datetime}]})
+
 (def price-observations-entity-spec
   {:id :price-observations
    :fields [{:id :article-canonical-name :label "Article" :type :text}
@@ -102,6 +110,10 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :article-aliases
    :value-fn (fn [spec _] (or spec article-aliases-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :supplier-aliases
+   :value-fn (fn [spec _] (or spec supplier-aliases-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :price-observations

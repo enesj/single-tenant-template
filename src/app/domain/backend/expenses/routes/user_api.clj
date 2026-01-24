@@ -13,6 +13,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.expense-items :as user-expenses-expense-items]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as user-expenses-reference-data]
     [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
+    [app.domain.backend.expenses.handlers.user-expenses.supplier-aliases :as user-expenses-supplier-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
 
@@ -53,6 +54,14 @@
 
    ;; Supplier detail related lists (used by user Suppliers "View Details" modal)
    ["/article-aliases" {:get {:handler (supplier-detail/list-article-aliases-handler db)}}]
+
+   ;; Supplier aliases (admin/owner only)
+   ["/supplier-aliases"
+    {:get {:handler (user-expenses-supplier-aliases/list-supplier-aliases-handler db)}}]
+
+   ["/supplier-aliases/:id"
+    {:put {:handler (user-expenses-supplier-aliases/update-supplier-alias-handler db)}
+     :delete {:handler (user-expenses-supplier-aliases/delete-supplier-alias-handler db)}}]
 
    ["/price-observations"
     ["" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]
