@@ -135,23 +135,42 @@
         (catch Exception _
           nil)))))
 
-(defn- resolve-supplier-id
+;; Returns {:supplier-id uuid :supplier-alias-id uuid|nil :source keyword}
+;;
+;; IMPORTANT: We must consult supplier_aliases first.
+;; If an alias is already mapped, we can skip Places entirely.
+(defn- resolve-supplier-and-alias
   [db supplier-guess opts]
-  (if (str/blank? (some-> supplier-guess str))
-    (aliases/get-unknown-supplier-id db)
-    (let [{:keys [supplier]} (suppliers/resolve-or-create-supplier-with-places!
-                               db
-                               (str/trim (str supplier-guess))
-                               opts)]
-      (:id supplier))))
+  (let [supplier-guess* (some-> supplier-guess str str/trim not-empty)]
+    (if-not supplier-guess*
+      {:supplier-id (aliases/get-unknown-supplier-id db)
+       :supplier-alias-id nil
+       :source :unknown}
+      (let [alias-row (supplier-aliases/find-or-create-alias! db supplier-guess*)
+            alias-id (:id alias-row)
+            mapped-supplier-id (:supplier_id alias-row)]
+        (if mapped-supplier-id
+          {:supplier-id mapped-supplier-id
+           :supplier-alias-id alias-id
+           :source :alias}
+          (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
+                                            db
+                                            supplier-guess*
+                                            opts)
+                supplier-id (:id supplier)]
+            (when (and alias-id supplier-id)
+              ;; Safe during ingestion; won't overwrite manual mappings.
+              (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
+            {:supplier-id supplier-id
+             :supplier-alias-id alias-id
+             :source (or source :resolved)}))))))
 
 (defn- auto-create-aliases!
-  [db supplier-guess extraction opts]
+  [db supplier-id extraction]
   (when (and (map? extraction) (sequential? (:items extraction)))
-    (let [supplier-id (resolve-supplier-id db supplier-guess opts)]
-      (doseq [{:keys [raw_label] :as _item} (:items extraction)]
-        (when (valid-alias-label? raw_label)
-          (aliases/find-or-create-alias! db supplier-id (str/trim (str raw_label))))))))
+    (doseq [{:keys [raw_label] :as _item} (:items extraction)]
+      (when (valid-alias-label? raw_label)
+        (aliases/find-or-create-alias! db supplier-id (str/trim (str raw_label)))))))
 
 (defn- resolve-payer-id
   [db {:keys [payer_id user_id]}]
@@ -193,12 +212,11 @@
      :error_details nil}))
 
 (defn- auto-approve-extracted-receipt!
-  [db receipt-id extraction opts]
+  [db receipt-id extraction supplier-id opts]
   (when-let [receipt (receipt-queries/get-receipt db receipt-id)]
     (when (and (= "extracted" (:status receipt))
             (nil? (:expense_id receipt)))
-      (let [supplier-id (resolve-supplier-id db (:supplier_guess receipt) opts)
-            payer-id (resolve-payer-id db receipt)
+      (let [payer-id (resolve-payer-id db receipt)
             review-data (build-review-data supplier-id payer-id receipt extraction opts)
             {:keys [purchased_at total_amount items]} review-data]
         (cond
@@ -313,12 +331,14 @@
                       (and (nil? (:total_amount_guess g)) markdown-total)
                       (assoc :total_amount_guess markdown-total))))
         supplier-guess (or (:supplier_guess guesses) markdown-supplier)
-        supplier-alias-id (try
-                            (when-not (str/blank? (some-> supplier-guess str))
-                              (:id (supplier-aliases/find-or-create-alias! db (str/trim (str supplier-guess)))))
-                            (catch Exception e
-                              (log/warn e "Failed to upsert supplier alias from supplier_guess" {:receipt-id receipt-id})
-                              nil))
+        {:keys [supplier-id supplier-alias-id]}
+        (try
+          (resolve-supplier-and-alias db supplier-guess opts)
+          (catch Exception e
+            ;; Never fail extraction just because canonicalization failed.
+            (log/warn e "Failed to resolve supplier from supplier_guess" {:receipt-id receipt-id})
+            {:supplier-id (aliases/get-unknown-supplier-id db)
+             :supplier-alias-id nil}))
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
@@ -348,14 +368,14 @@
       (when supplier-alias-id {:supplier_alias_id supplier-alias-id})))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
     (try
-      (auto-create-aliases! db supplier-guess extraction opts)
+      (auto-create-aliases! db supplier-id extraction)
       (catch Exception e
         (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
     (let [auto-post? (and (not (:defer-refine? opts))
                        (get opts :auto-post-after-upload? true))
           auto-res (when (and (= status "extracted") auto-post?)
                      (try
-                       (auto-approve-extracted-receipt! db receipt-id extraction opts)
+                       (auto-approve-extracted-receipt! db receipt-id extraction supplier-id opts)
                        (catch Exception e
                          (log/warn e "Failed during auto-approve flow" {:receipt-id receipt-id})
                          nil)))

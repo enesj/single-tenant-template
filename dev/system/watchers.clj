@@ -105,7 +105,7 @@
 (defn watch-backend
   "Automatically restarts the system if backend related files are changed."
   [callback]
-  (let [paths ["src/app" "dev" "config" "vendor"]
+  (let [paths ["src/app" "dev" "config" "vendor" "test"]
         cwd (System/getProperty "user.dir")
         path-info (mapv (fn [p]
                           (let [f (java.io.File. p)]

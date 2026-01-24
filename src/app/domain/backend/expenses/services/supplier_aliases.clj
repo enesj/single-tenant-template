@@ -146,6 +146,55 @@
                   :returning [:*]})
      {:builder-fn rs/as-unqualified-lower-maps})))
 
+(defn map-alias-to-supplier-if-unmapped!
+  "Map a supplier alias to a canonical supplier only if it is currently unmapped.
+
+  This is safe to run during automated ingestion (OCR) because it will NOT
+  overwrite an existing manual mapping.
+
+  Returns the updated alias row when an update happened, otherwise nil." 
+  ([db alias-id supplier-id]
+   (map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
+  ([db alias-id supplier-id confidence]
+   (jdbc/execute-one!
+     db
+     (sql/format {:update :supplier_aliases
+                  :set {:supplier_id supplier-id
+                        :confidence (or confidence 25)
+                        :updated_at [:now]}
+                  :where [:and
+                          [:= :id alias-id]
+                          [:is :supplier_id nil]]
+                  :returning [:*]})
+     {:builder-fn rs/as-unqualified-lower-maps})))
+
+  (defn backfill-unmapped-alias-links!
+    "Backfill supplier_aliases.supplier_id for aliases that already have a matching
+    supplier row.
+
+    This links by matching:
+    - supplier_aliases.raw_label_normalized == suppliers.normalized_key
+
+    Returns the updated alias rows (may be empty).
+
+    Intended for one-off repair after enabling OCR-created supplier_aliases." 
+    ([db]
+     (backfill-unmapped-alias-links! db {:confidence 25}))
+    ([db {:keys [confidence]
+      :or {confidence 25}}]
+     (jdbc/execute!
+       db
+       (sql/format {:update [[:supplier_aliases :sa]]
+        :set {:supplier_id :s/id
+          :confidence confidence
+          :updated_at [:now]}
+        :from [[:suppliers :s]]
+        :where [:and
+            [:is :sa/supplier_id nil]
+            [:= :sa/raw_label_normalized :s/normalized_key]]
+        :returning [:sa/id :sa/supplier_id :sa/raw_label_normalized]})
+       {:builder-fn rs/as-unqualified-lower-maps})))
+
 (defn unmap-alias!
   "Remove supplier mapping from an alias (set supplier_id to NULL)."
   [db alias-id]

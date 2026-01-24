@@ -1,8 +1,11 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr-test
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.services.article-aliases :as article-aliases]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as core]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
@@ -10,6 +13,55 @@
     [clojure.test :refer [deftest is testing]])
   (:import
     [java.util.concurrent CountDownLatch TimeUnit]))
+
+(deftest persist-extract-result-skips-places-when-supplier-alias-mapped
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        calls (atom {:resolve-supplier 0
+                     :map-alias 0
+                     :article-aliases 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results! (fn [& _] nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias! (fn [_db _raw-label]
+                                                           {:id alias-id
+                                                            :supplier_id mapped-supplier-id})
+                  supplier-aliases/map-alias-to-supplier-if-unmapped!
+                  (fn [& _]
+                    (swap! calls update :map-alias inc)
+                    nil)
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (swap! calls update :resolve-supplier inc)
+                    {:supplier {:id (java.util.UUID/randomUUID)}
+                     :source :places-api})
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    (swap! calls update :article-aliases inc)
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "AMKO KOMERC"}
+                                         :totals {:total 1.00}
+                                         :items [{:raw_label "ITEM" :line_total 1.00}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})]
+        (is (= receipt-id (:receipt-id res)))
+        ;; When the alias is already mapped, we should not call supplier resolution
+        ;; (which can trigger Places API requests).
+        (is (= 0 (:resolve-supplier @calls)))
+        ;; No mapping update should be attempted either.
+        (is (= 0 (:map-alias @calls)))
+        ;; Still creates article aliases for line items.
+        (is (= 1 (:article-aliases @calls)))))))
 
 (deftest parse-money-handles-common-formats
   (let [parse-money #'common/parse-money]

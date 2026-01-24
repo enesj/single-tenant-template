@@ -41,6 +41,15 @@
                                    (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
                                  (catch Exception _
                                    nil))
+             _ (when (and supplier-alias-id supplier-uuid)
+                 ;; User selected a canonical supplier during review: this is a strong
+                 ;; signal that the raw supplier label should map to that supplier.
+                 ;; We intentionally overwrite mappings here (user intent), unlike
+                 ;; automated OCR flows which only map when unmapped.
+                 (try
+                   (supplier-aliases/map-alias-to-supplier! tx supplier-alias-id supplier-uuid 100)
+                   (catch Exception _
+                     nil)))
             purchased-at* (parsing/parse-instant! :purchased_at purchased_at)
             currency* (parsing/normalize-currency! currency)
             total* (parsing/parse-money total_amount)
