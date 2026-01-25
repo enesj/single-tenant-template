@@ -64,6 +64,8 @@
  {:available-columns
   ["canonical_name"
    "category"
+   "manufacturer"
+   "link"
    "normalized_key"
    "created_at"
    "updated_at"
@@ -72,12 +74,16 @@
   :filterable-columns
   ["canonical_name"
    "category"
+   "manufacturer"
+   "link"
    "normalized_key"
    "created_at"
    "updated_at"],
   :sortable-columns
   ["canonical_name"
    "category"
+   "manufacturer"
+   "link"
    "normalized_key"
    "created_at"
    "updated_at"],

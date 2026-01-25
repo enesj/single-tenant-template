@@ -182,6 +182,8 @@
                      [:canonical_name [:varchar 255] {:null false}]
                      [:normalized_key [:varchar 255] {:null false}]
                      [:category [:varchar 100]]
+                     [:link :text]
+                     [:manufacturer [:varchar 255]]
                      [:created_at :timestamptz {:default "NOW()"}]
                      [:updated_at :timestamptz {:default "NOW()"}]]
             :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]

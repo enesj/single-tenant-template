@@ -1,0 +1,8 @@
+({:action :add-column,
+  :field-name :link,
+  :model-name :articles,
+  :options {:type :text}}
+ {:action :add-column,
+  :field-name :manufacturer,
+  :model-name :articles,
+  :options {:type [:varchar 255]}})
