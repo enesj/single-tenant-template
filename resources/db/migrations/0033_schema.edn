@@ -1,0 +1,53 @@
+({:action :create-table,
+  :model-name :manufacturers,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :display-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :archived-at {:type :timestamptz},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :manufacturer_aliases,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :raw-label {:type :text},
+   :raw-label-normalized {:null false, :type [:varchar 255]},
+   :manufacturer-id
+   {:foreign-key :manufacturers/id, :on-delete :set-null, :type :uuid},
+   :confidence {:default 100, :type :integer},
+   :created-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default "NOW()", :type :timestamptz}}}
+ {:action :add-column,
+  :field-name :manufacturer-alias-id,
+  :model-name :articles,
+  :options
+  {:foreign-key :manufacturer_aliases/id,
+   :on-delete :set-null,
+   :type :uuid}}
+ {:action :create-index,
+  :index-name :idx-articles-manufacturer-alias-id,
+  :model-name :articles,
+  :options {:fields [:manufacturer_alias_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-manufacturer-aliases-manufacturer-id,
+  :model-name :manufacturer_aliases,
+  :options {:fields [:manufacturer_id], :type :btree}}
+ {:action :add-column,
+  :field-name :manufacturer-id,
+  :model-name :articles,
+  :options
+  {:foreign-key :manufacturers/id, :on-delete :set-null, :type :uuid}}
+ {:action :create-index,
+  :index-name :idx-articles-manufacturer-id,
+  :model-name :articles,
+  :options {:fields [:manufacturer_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-manufacturer-aliases-raw-label-normalized,
+  :model-name :manufacturer_aliases,
+  :options
+  {:fields [:raw_label_normalized], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-manufacturers-normalized-key,
+  :model-name :manufacturers,
+  :options {:fields [:normalized_key], :unique true, :type :btree}})

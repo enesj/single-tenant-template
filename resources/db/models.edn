@@ -1,4 +1,22 @@
-{:email_verification_tokens
+{:manufacturer_aliases
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:raw_label :text]
+   [:raw_label_normalized [:varchar 255] {:null false}]
+   [:manufacturer_id
+    :uuid
+    {:foreign-key :manufacturers/id, :on-delete :set-null}]
+   [:confidence :integer {:default 100}]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_manufacturer_aliases_raw_label_normalized
+    :btree
+    {:fields [:raw_label_normalized], :unique true}]
+   [:idx_manufacturer_aliases_manufacturer_id
+    :btree
+    {:fields [:manufacturer_id]}]]},
+ :email_verification_tokens
  {:fields
   [[:id :uuid {:primary-key true}]
    [:user_id
@@ -56,13 +74,25 @@
    [:category [:varchar 100]]
    [:link :text]
    [:manufacturer [:varchar 255]]
+   [:manufacturer_alias_id
+    :uuid
+    {:foreign-key :manufacturer_aliases/id, :on-delete :set-null}]
+   [:manufacturer_id
+    :uuid
+    {:foreign-key :manufacturers/id, :on-delete :set-null}]
    [:created_at :timestamptz {:default "NOW()"}]
    [:updated_at :timestamptz {:default "NOW()"}]],
   :indexes
   [[:idx_articles_normalized_key
     :btree
     {:fields [:normalized_key], :unique true}]
-   [:idx_articles_category :btree {:fields [:category]}]]},
+   [:idx_articles_category :btree {:fields [:category]}]
+   [:idx_articles_manufacturer_alias_id
+    :btree
+    {:fields [:manufacturer_alias_id]}]
+   [:idx_articles_manufacturer_id
+    :btree
+    {:fields [:manufacturer_id]}]]},
  :expenses
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -108,6 +138,18 @@
    [:idx_password_reset_tokens_expires
     :btree
     {:fields [:expires_at]}]]},
+ :manufacturers
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:display_name [:varchar 255] {:null false}]
+   [:normalized_key [:varchar 255] {:null false}]
+   [:archived_at :timestamptz]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_manufacturers_normalized_key
+    :btree
+    {:fields [:normalized_key], :unique true}]]},
  :login_events
  {:fields
   [[:id :uuid {:primary-key true}]

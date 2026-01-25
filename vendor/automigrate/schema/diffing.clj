@@ -7,8 +7,23 @@
     [automigrate.util.spec :as spec-util]
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
+    [clojure.string :as str]
     [differ.core :as differ]
     [weavejester.dependency :as dep]))
+
+(defn- normalize-field-key
+  "Normalize field keyword for dependency comparisons.
+
+  Automigrate actions sometimes use kebab-case keys (e.g. :supplier-alias-id)
+  while index definitions commonly use snake_case keys (e.g. :supplier_alias_id).
+  HoneySQL formats both to the same SQL identifier, but our dependency graph is
+  built on raw keywords. Normalizing here makes action ordering deterministic
+  and prevents create-index from being scheduled before add-column."
+  [k]
+  (when k
+    (-> (name k)
+      (str/replace "_" "-")
+      (keyword))))
 
 (def ^:private DROPPED-ENTITY-VALUE 0)
 (def ^:private DEFAULT-ROOT-NODE :root)
@@ -279,7 +294,8 @@
         #{actions/ADD-COLUMN-ACTION
           actions/ALTER-COLUMN-ACTION} (some
                                          #(and (= (:model-name action) (:model-name %))
-                                            (= (:field-name action) (:field-name %)))
+                                            (= (normalize-field-key (:field-name action))
+                                              (normalize-field-key (:field-name %))))
                                          deps)
         #{actions/DROP-COLUMN-ACTION} (let [field-type (get-in old-schema
                                                          [(:model-name action)

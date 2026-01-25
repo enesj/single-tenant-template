@@ -11,6 +11,8 @@
     [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
     [app.domain.backend.expenses.handlers.user-expenses.expense-items :as user-expenses-expense-items]
+    [app.domain.backend.expenses.handlers.user-expenses.manufacturer-aliases :as user-expenses-manufacturer-aliases]
+    [app.domain.backend.expenses.handlers.user-expenses.manufacturers :as user-expenses-manufacturers]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as user-expenses-reference-data]
     [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-aliases :as user-expenses-supplier-aliases]
@@ -62,6 +64,23 @@
    ["/supplier-aliases/:id"
     {:put {:handler (user-expenses-supplier-aliases/update-supplier-alias-handler db)}
      :delete {:handler (user-expenses-supplier-aliases/delete-supplier-alias-handler db)}}]
+
+   ;; Manufacturers (admin/owner only)
+   ["/manufacturers"
+    {:get {:handler (user-expenses-manufacturers/list-manufacturers-handler db)}
+     :post {:handler (user-expenses-manufacturers/create-manufacturer-handler db)}}]
+
+   ["/manufacturers/:id"
+    {:put {:handler (user-expenses-manufacturers/update-manufacturer-handler db)}
+     :delete {:handler (user-expenses-manufacturers/delete-manufacturer-handler db)}}]
+
+   ;; Manufacturer aliases (admin/owner only)
+   ["/manufacturer-aliases"
+    {:get {:handler (user-expenses-manufacturer-aliases/list-manufacturer-aliases-handler db)}}]
+
+   ["/manufacturer-aliases/:id"
+    {:put {:handler (user-expenses-manufacturer-aliases/update-manufacturer-alias-handler db)}
+     :delete {:handler (user-expenses-manufacturer-aliases/delete-manufacturer-alias-handler db)}}]
 
    ["/price-observations"
     ["" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]

@@ -29,6 +29,8 @@
   :expenses/reference.write 2  ; member+ (suppliers, payers)
    :expenses/unmapped.access 3  ; admin+
    :expenses/articles.manage 3  ; admin+
+  :expenses/manufacturers.manage 3 ; admin+
+  :expenses/manufacturer-aliases.manage 3 ; admin+
   :expenses/supplier-aliases.manage 3 ; admin+
    :expenses/danger.execute  3  ; admin+ (danger zone actions)
    :expenses/settings.write  3  ; admin+

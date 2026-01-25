@@ -29,6 +29,21 @@
    :custom-count-params (fn [qp]
                           {:search (get-param qp :search)})})
 
+(def manufacturer-config
+  {:entity-key :manufacturer
+   :entity-plural :manufacturers
+   :route-segment "manufacturers"
+   :service 'app.domain.backend.expenses.services.manufacturers
+   :default-limit 100
+   :default-order-by "display_name"
+   :required-fields [:display_name]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (get-param qp :search)})
+   :custom-count-params (fn [qp]
+                          {:search (get-param qp :search)})})
+
 (def payer-config
   {:entity-key :payer
    :entity-plural :payers
@@ -176,6 +191,33 @@
                             raw-label (assoc :raw_label raw-label)
                             normalized (assoc :raw_label_normalized normalized))))})
 
+(def manufacturer-alias-config
+  {:entity-key :manufacturer-alias
+   :entity-plural :manufacturer-aliases
+   :route-segment "manufacturer-aliases"
+   :service 'app.domain.backend.expenses.services.manufacturer-aliases
+   :default-limit 50
+   :default-order-by "raw_label"
+   :required-fields [:raw_label :raw_label_normalized]
+   :has-count? false
+   :has-search? false
+   :custom-query-params (fn [qp]
+                          {:manufacturer-id (utils/parse-uuid-custom
+                                             (or (get-param qp :manufacturer-id)
+                                               (get-param qp :manufacturer_id)))
+                           :unmapped-only (utils/parse-boolean-param qp :unmapped-only)
+                           :search (get-param qp :search)})
+   ;; Allow clients to omit raw_label_normalized; compute it server-side.
+   :transform-request (fn [body]
+                        (let [raw-label (or (:raw_label body) (:raw-label body))
+                              normalized (or (:raw_label_normalized body)
+                                           (:raw-label-normalized body)
+                                           (when raw-label
+                                             (svc-configs/normalize-manufacturer-key raw-label)))]
+                          (cond-> body
+                            raw-label (assoc :raw_label raw-label)
+                            normalized (assoc :raw_label_normalized normalized))))})
+
 ;; =============================================================================
 ;; Configuration Map
 ;; =============================================================================
@@ -183,6 +225,7 @@
 (def entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers supplier-config
+  :manufacturers manufacturer-config
    :payers payer-config
    :payer-types payer-type-config
    :articles article-config
@@ -191,4 +234,5 @@
    :receipts receipt-config
    :price-observations price-observation-config
    :article-aliases article-alias-config
-   :supplier-aliases supplier-alias-config})
+  :supplier-aliases supplier-alias-config
+  :manufacturer-aliases manufacturer-alias-config})

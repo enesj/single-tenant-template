@@ -1,5 +1,6 @@
 {:expense-items {:title "Expense Items"},
  :suppliers {:title "Suppliers"},
+ :manufacturers {:title "Manufacturers"},
  :articles {:title "Articles"},
  :payer-types {:title "Payer Types"},
  :expenses {:title "My Expenses"},
@@ -7,4 +8,5 @@
  :payers {:title "Payers"},
  :receipts {:title "Receipts"},
  :article-aliases {:title "Article Aliases"},
- :supplier-aliases {:title "Supplier Aliases"}}
+ :supplier-aliases {:title "Supplier Aliases"},
+ :manufacturer-aliases {:title "Manufacturer Aliases"}}

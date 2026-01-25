@@ -101,6 +101,11 @@
      :view :expense-articles
      :controllers (controllers/make-simple-controller :page/init-expense-articles)}]
 
+   ["/manufacturers"
+    {:name :expense-manufacturers
+     :view :expense-manufacturers
+     :controllers (controllers/make-simple-controller :page/init-expense-manufacturers)}]
+
    ["/payer-types"
     {:name :expense-payer-types
      :view :expense-payer-types}]
@@ -109,6 +114,11 @@
     {:name :expense-article-aliases
      :view :expense-article-aliases
      :controllers (controllers/make-simple-controller :page/init-expense-article-aliases)}]
+
+   ["/manufacturer-aliases"
+    {:name :expense-manufacturer-aliases
+     :view :expense-manufacturer-aliases
+     :controllers (controllers/make-simple-controller :page/init-expense-manufacturer-aliases)}]
 
    ["/supplier-aliases"
     {:name :expense-supplier-aliases

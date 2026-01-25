@@ -77,6 +77,13 @@
         (->> (remove str/blank?) vec canonicalize-tokens)
         (->> (str/join "-"))))))
 
+(def normalize-manufacturer-key
+  "Normalize manufacturer display names for deduplication.
+
+  For now we reuse the same normalization as suppliers (diacritics folding,
+  punctuation stripping, legal suffix canonicalization)."
+  normalize-supplier-key)
+
 ;; ============================================================================
 ;; Simple Entity Configs
 ;; ============================================================================
@@ -119,6 +126,26 @@
    :select-fields [[:sa.*]
                    [:s/display_name :supplier_display_name]]
    :field-transformers {:raw_label_normalized normalize-supplier-key}
+   :has-search? true
+   :has-count? true})
+
+(def manufacturer-alias-config
+  {:table-name "manufacturer_aliases"
+   :table-alias :ma
+   :primary-key :ma/id
+   :required-fields [:raw_label :raw_label_normalized]
+   :allowed-order-by {:created-at :ma/created_at
+                      :updated-at :ma/updated_at
+                      :raw-label :ma/raw_label
+                      :raw-label-normalized :ma/raw_label_normalized
+                      :manufacturer-display-name :m/display_name
+                      :confidence :ma/confidence}
+   :default-order-by :ma/created_at
+   :search-fields [:ma/raw_label :ma/raw_label_normalized :m/display_name]
+   :joins [[:manufacturers :m] [:= :m/id :ma/manufacturer_id]]
+   :select-fields [[:ma.*]
+                   [:m/display_name :manufacturer_display_name]]
+   :field-transformers {:raw_label_normalized normalize-manufacturer-key}
    :has-search? true
    :has-count? true})
 
@@ -166,6 +193,31 @@
                     (if (:display_name updates)
                       (assoc updates
                         :normalized_key (normalize-supplier-key (:display_name updates))
+                        :updated_at [:now])
+                      (assoc updates :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
+(def manufacturer-config
+  {:table-name "manufacturers"
+   :primary-key :id
+   :required-fields [:display_name]
+   :allowed-order-by {:display-name :display_name
+                      :normalized-key :normalized_key
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :display_name
+   :search-fields [:display_name :normalized_key]
+   :field-transformers {:normalized_key normalize-manufacturer-key}
+   :before-insert (fn [data]
+                    (let [display-name (:display_name data)]
+                      (assoc data
+                        :normalized_key (normalize-manufacturer-key display-name)
+                        :id (UUID/randomUUID))))
+   :before-update (fn [_id updates]
+                    (if (:display_name updates)
+                      (assoc updates
+                        :normalized_key (normalize-manufacturer-key (:display_name updates))
                         :updated_at [:now])
                       (assoc updates :updated_at [:now])))
    :has-search? true
@@ -389,8 +441,10 @@
 (def ^:private entity-configs
   {:article-alias article-alias-config
    :supplier-alias supplier-alias-config
+  :manufacturer-alias manufacturer-alias-config
    :price-observation price-observation-config
    :supplier supplier-config
+  :manufacturer manufacturer-config
    :payer-type payer-type-config
    :payer payer-config
    :article article-config
