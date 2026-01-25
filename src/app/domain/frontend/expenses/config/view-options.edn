@@ -1,4 +1,15 @@
-{:expenses
+{:suppliers
+ {:display-locks {:show-batch-edit? false, :show-batch-delete? false},
+  :display-defaults {:per-page 100, :show-edit? false}},
+ :articles
+ {:display-locks {},
+  :display-defaults {:show-edit? false, :show-delete? false}},
+ :payer-types
+ {:display-locks {},
+  :display-defaults {:per-page 50, :show-edit? false},
+  :column-defaults {},
+  :column-locks {}},
+ :expenses
  {:display-defaults
   {:show-add-button? false,
    :show-highlights? true,
@@ -9,6 +20,18 @@
   :column-locks
   {:receipt_id false, :id false, :is_posted false, :created_at true},
   :column-defaults {:purchased_at false}},
+ :price-observations
+ {:display-locks {:show-edit? true}, :display-defaults {}},
+ :payers
+ {:display-locks {},
+  :display-defaults {:per-page 50, :show-edit? false},
+  :column-defaults {},
+  :column-locks {}},
+ :supplier-aliases
+ {:display-defaults {:show-edit? false},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {:id false}},
  :receipts
  {:display-defaults
   {:show-select? true,
@@ -19,32 +42,8 @@
    :show-timestamps? true,
    :per-page 50},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
- :suppliers
- {:display-locks {:show-batch-edit? false
-                  :show-batch-delete? false},
-  :display-defaults {:per-page 100, :show-edit? false}},
- :payers
- {:display-locks {},
-  :display-defaults {:per-page 50, :show-edit? false},
-  :column-defaults {},
-  :column-locks {}},
- :payer-types
- {:display-locks {},
-  :display-defaults {:per-page 50, :show-edit? false},
-  :column-defaults {},
-  :column-locks {}},
  :article-aliases
  {:display-defaults {:show-edit? false},
   :display-locks {},
   :column-defaults {},
-  :column-locks {:id false}},
- :supplier-aliases
- {:display-defaults {:show-edit? false},
-  :display-locks {},
-  :column-defaults {},
-  :column-locks {:id false}},
- :articles
- {:display-locks {},
-  :display-defaults {:show-edit? false, :show-delete? false}},
- :price-observations
- {:display-locks {:show-edit? true}, :display-defaults {}}}
+  :column-locks {:id false}}}
