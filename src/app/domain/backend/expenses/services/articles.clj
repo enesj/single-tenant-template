@@ -89,14 +89,22 @@
                      :returning [:*]})
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
+(defn- update-count
+  "Extract next.jdbc update count from a DML result map." 
+  [result]
+  (or (:next.jdbc/update-count result)
+      (:update-count result)
+      0))
+
 (defn delete-article!
   "Delete article by id. Returns true when a row was removed."
   [db id]
   (pos?
-    (jdbc/execute-one!
-      db
-      (sql/format {:delete-from :articles
-                   :where [:= :id id]}))))
+    (update-count
+      (jdbc/execute-one!
+        db
+        (sql/format {:delete-from :articles
+                     :where [:= :id id]})))))
 
 (defn count-articles
   "Count total articles, optionally with search filter."
