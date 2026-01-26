@@ -91,6 +91,57 @@
     (is (= #{} (get-in @rf-db/app-db (paths/entity-selected-ids :expenses))))
     (is (= 1 (get-in @rf-db/app-db (paths/list-total-items :expenses))))))
 
+(deftest template-delete-article-aliases-is-bridged
+  (testing "template delete-entity for :article-aliases uses /api/v1/expenses/article-aliases/:id (not generic /api/v1/entities)"
+    (reset-db!)
+
+    ;; Seed minimal entity + list state so the delete-success bridge can update it.
+    (swap! rf-db/app-db assoc-in (paths/entity-data :article-aliases)
+           {"aa-1" {:id "aa-1"}
+            "aa-2" {:id "aa-2"}})
+    (swap! rf-db/app-db assoc-in (paths/entity-ids :article-aliases) ["aa-1" "aa-2"])
+    (swap! rf-db/app-db assoc-in (paths/entity-selected-ids :article-aliases) #{"aa-1"})
+    (swap! rf-db/app-db assoc-in (paths/list-total-items :article-aliases) 2)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-entity :article-aliases "aa-1"])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/api/v1/expenses/article-aliases/aa-1" (req-uri req))))
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-success :article-aliases "aa-1"])
+
+    (is (nil? (get-in @rf-db/app-db (conj (paths/entity-data :article-aliases) "aa-1"))))
+    (is (= ["aa-2"] (get-in @rf-db/app-db (paths/entity-ids :article-aliases))))
+    (is (= #{} (get-in @rf-db/app-db (paths/entity-selected-ids :article-aliases))))
+    (is (= 1 (get-in @rf-db/app-db (paths/list-total-items :article-aliases))))))
+
+(deftest template-delete-article-aliases-is-bridged-when-entity-type-is-string
+  (testing "template delete-entity for \"article-aliases\" (string) is still bridged to /api/v1/expenses/article-aliases/:id"
+    (reset-db!)
+
+    ;; Seed state under the string entity-type key to simulate callers that
+    ;; use route params/UI widget values before coercion.
+    (swap! rf-db/app-db assoc-in (paths/entity-data "article-aliases")
+           {"aa-1" {:id "aa-1"}
+            "aa-2" {:id "aa-2"}})
+    (swap! rf-db/app-db assoc-in (paths/entity-ids "article-aliases") ["aa-1" "aa-2"])
+    (swap! rf-db/app-db assoc-in (paths/entity-selected-ids "article-aliases") #{"aa-1"})
+    (swap! rf-db/app-db assoc-in (paths/list-total-items "article-aliases") 2)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-entity "article-aliases" "aa-1"])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/api/v1/expenses/article-aliases/aa-1" (req-uri req))))
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-success "article-aliases" "aa-1"])
+
+    (is (nil? (get-in @rf-db/app-db (conj (paths/entity-data "article-aliases") "aa-1"))))
+    (is (= ["aa-2"] (get-in @rf-db/app-db (paths/entity-ids "article-aliases"))))
+    (is (= #{} (get-in @rf-db/app-db (paths/entity-selected-ids "article-aliases"))))
+    (is (= 1 (get-in @rf-db/app-db (paths/list-total-items "article-aliases"))))))
+
 (deftest template-batch-update-expenses-is-bridged
   (testing "template batch update for :expenses uses /api/v1/expenses/batch (not generic /api/v1/entities/expenses/batch)"
     (reset-db!)

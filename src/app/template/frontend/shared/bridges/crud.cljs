@@ -19,6 +19,24 @@
 
 (defonce ^:private bridge-registry (atom {}))
 
+(defn- registry-entity-key
+  "Coerce an entity-type value (keyword/string/{:value ...}) into the keyword key
+  used by the bridge registry.
+
+  IMPORTANT: This is used ONLY for registry lookup. We still pass the original
+  `entity-type` through to default effects and bridge handlers so existing DB
+  keying semantics (keyword vs string) remain unchanged."
+  [entity-type]
+  (cond
+    (keyword? entity-type) entity-type
+    (string? entity-type) (keyword entity-type)
+    (map? entity-type) (let [v (:value entity-type)]
+                         (cond
+                           (keyword? v) v
+                           (string? v) (keyword v)
+                           :else nil))
+    :else nil))
+
 (defn- merge-operation-configs
   "Merge existing and new operation configuration maps without losing nested keys."
   [existing new]
@@ -261,11 +279,16 @@
   nil)
 
 (defn get-bridges-for-entity
-  "Get all registered bridges for an entity type, sorted by priority (highest first)."
-  [entity-key]
-  (some->> (get @bridge-registry entity-key)
-    (sort-by :priority >)
-    (vec)))
+  "Get all registered bridges for an entity type, sorted by priority (highest first).
+
+  Accepts keyword entity types (preferred), but also supports string entity types
+  and select map forms (e.g. {:value \"users\" :label \"Users\"}) by coercing to the
+  registry keyword."
+  [entity-type]
+  (let [entity-key (registry-entity-key entity-type)]
+    (some->> (get @bridge-registry entity-key)
+      (sort-by :priority >)
+      (vec))))
 
 ;; ============================================================================
 ;; Bridge Execution Engine

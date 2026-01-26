@@ -25,13 +25,11 @@
   {:expenses/access          1  ; viewer+
    :expenses/expense.write   2  ; member+
    :expenses/expense.delete  3  ; admin+
-  :expenses/expense-items.manage 3 ; admin+ (power-user line items page)
-  :expenses/reference.write 2  ; member+ (suppliers, payers)
+    :expenses/expense-items.manage 3 ; admin+ (power-user line items page)
+    :expenses/reference.write 2  ; member+ (suppliers, payers)
    :expenses/unmapped.access 3  ; admin+
    :expenses/articles.manage 3  ; admin+
-  :expenses/manufacturers.manage 3 ; admin+
-  :expenses/manufacturer-aliases.manage 3 ; admin+
-  :expenses/supplier-aliases.manage 3 ; admin+
+    :expenses/supplier-aliases.manage 3 ; admin+
    :expenses/danger.execute  3  ; admin+ (danger zone actions)
    :expenses/settings.write  3  ; admin+
    :expenses/upload          2  ; member+

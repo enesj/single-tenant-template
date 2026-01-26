@@ -1,0 +1,10 @@
+;; Seed dataset for canonical manufacturers (brands).
+;;
+;; Fill this file with a vector of maps and re-run the import script.
+;;
+;; Shape:
+;; [{:display-name "Podravka"
+;;   :aliases ["PODRAVKA" "PODRAVKA D.D."]}
+;;  {:display-name "Coca-Cola"}
+;;  ...]
+[]

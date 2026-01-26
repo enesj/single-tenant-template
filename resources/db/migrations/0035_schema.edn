@@ -1,0 +1,2 @@
+({:action :drop-table, :model-name :manufacturer_aliases}
+ {:action :drop-table, :model-name :manufacturers})

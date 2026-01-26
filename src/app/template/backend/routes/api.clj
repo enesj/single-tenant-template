@@ -13,7 +13,6 @@
     [app.shared.http :as http]
     [cheshire.core :as json]
     [java-time.api :as time]
-    [malli.transform :as mt]
     [muuntaja.core :as m]
     [reitit.coercion.malli :as malli-coercion]
     [reitit.ring.coercion :as coercion]
@@ -82,11 +81,12 @@
 
 (def custom-malli-coercion
   (malli-coercion/create
-    {:compile compile-schema
-     :transformers {:body {:default mt/default-value-transformer
-                           :formats {"application/json" mt/default-value-transformer}}
-                    :string {:default mt/default-value-transformer}
-                    :response {:default mt/default-value-transformer}}}))
+    ;; IMPORTANT:
+    ;; We override only schema compilation behavior. Leave :transformers alone so
+    ;; vendored reitit Malli coercion can build transformers via its own
+    ;; TransformationProvider pipeline (avoids :malli.core/invalid-transformer
+    ;; issues during router compilation in dev reloads).
+    {:compile compile-schema}))
 
 (defn wrap-exception-handling
   "Middleware to handle exceptions and return appropriate responses."

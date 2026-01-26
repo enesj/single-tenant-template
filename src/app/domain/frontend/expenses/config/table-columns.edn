@@ -44,33 +44,6 @@
   {:raw_label {},
    :expense_purchased_at {},
    :article_canonical_name {}}},
- :manufacturer-aliases
- {:available-columns
-  ["manufacturer_display_name"
-   "raw_label"
-   "raw_label_normalized"
-   "confidence"
-   "created_at"
-   "updated_at"
-   "manufacturer_id"
-   "id"],
-  :default-visible-columns
-  ["manufacturer_display_name" "raw_label" "raw_label_normalized"],
-  :filterable-columns
-  ["manufacturer_display_name"
-   "raw_label"
-   "raw_label_normalized"
-   "confidence"
-   "created_at"],
-  :sortable-columns
-  ["manufacturer_display_name"
-   "raw_label"
-   "raw_label_normalized"
-   "confidence"
-   "created_at"],
-  :always-visible ["raw_label"],
-  :computed-fields {:manufacturer_display_name {}},
-  :column-config {}},
  :suppliers
  {:available-columns
   ["display_name"
@@ -91,19 +64,16 @@
  {:available-columns
   ["canonical_name"
    "category"
-   "manufacturer_id"
    "link"
    "normalized_key"
    "created_at"
    "updated_at"
    "id"
-   "manufacturer"
-   "manufacturer_alias_id"],
+   "manufacturer"],
   :default-visible-columns ["canonical_name" "category" "created_at"],
   :filterable-columns
   ["canonical_name"
    "category"
-   "manufacturer_id"
    "link"
    "normalized_key"
    "created_at"
@@ -111,7 +81,6 @@
   :sortable-columns
   ["canonical_name"
    "category"
-   "manufacturer_id"
    "link"
    "normalized_key"
    "created_at"
@@ -172,29 +141,6 @@
    "created_at"
    "updated_at"],
   :always-visible []},
- :manufacturers
- {:available-columns
-  ["display_name"
-   "normalized_key"
-   "archived_at"
-   "created_at"
-   "updated_at"
-   "id"],
-  :default-visible-columns
-  ["display_name" "normalized_key" "created_at"],
-  :filterable-columns
-  ["display_name"
-   "normalized_key"
-   "archived_at"
-   "created_at"
-   "updated_at"],
-  :sortable-columns
-  ["display_name"
-   "normalized_key"
-   "archived_at"
-   "created_at"
-   "updated_at"],
-  :always-visible ["display_name"]},
  :price-observations
  {:available-columns
   ["article_canonical_name"

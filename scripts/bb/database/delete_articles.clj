@@ -1,0 +1,181 @@
+#!/usr/bin/env clj
+
+(ns scripts.bb.database.delete-articles
+  "Delete all rows from the articles table while preserving article_aliases.
+
+  Safety:
+  - Default is dry-run (no DB writes)
+  - Requires --apply to perform deletion
+  - Prompts for a confirmation phrase unless --yes is provided
+
+  Usage:
+    bb delete-articles [--dev|--test|dev|test] [--apply] [--yes]
+
+  Notes:
+  - Drops the FK constraint from article_aliases.article_id before deletion
+  - This preserves article_aliases rows (they become orphaned)
+  - Deleting from `articles` will cascade to price_observations
+  - expense_items.article_id will be set to NULL"
+  (:require
+    [aero.core :as aero]
+    [clojure.string :as str]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs])
+  (:import
+    [java.time Instant]))
+
+(defn- usage
+  ([] (usage nil))
+  ([msg]
+   (when msg
+     (binding [*out* *err*]
+       (println msg)
+       (println "")))
+   (println "Usage:")
+   (println "  bb delete-articles [--dev|--test|dev|test] [--apply] [--yes]")
+   (println "")
+   (println "Default is dry-run (no DB writes).")
+   (println "")
+   (println "Examples:")
+   (println "  bb delete-articles --dev")
+   (println "  bb delete-articles --dev --apply")
+   (println "  bb delete-articles test --apply --yes")))
+
+(defn- parse-args
+  [args]
+  (loop [args args
+         parsed {:profile :dev
+                 :apply? false
+                 :yes? false}]
+    (let [[a b & more] args]
+      (cond
+        (nil? a) parsed
+
+        (#{"dev" "test"} a)
+        (recur (cons b more) (assoc parsed :profile (keyword a)))
+
+        (= a "--dev")
+        (recur (cons b more) (assoc parsed :profile :dev))
+
+        (= a "--test")
+        (recur (cons b more) (assoc parsed :profile :test))
+
+        (= a "--apply")
+        (recur (cons b more) (assoc parsed :apply? true))
+
+        (or (= a "--yes") (= a "--force"))
+        (recur (cons b more) (assoc parsed :yes? true))
+
+        (or (= a "--help") (= a "-h"))
+        (do (usage) (System/exit 0))
+
+        :else
+        (do
+          (usage (str "Unknown arg: " a))
+          (System/exit 1))))))
+
+(defn- datasource-from-config
+  [config]
+  (let [{:keys [host port dbname user password]} (:database config)]
+    (jdbc/get-datasource {:dbtype "postgresql"
+                          :host host
+                          :port port
+                          :dbname dbname
+                          :user user
+                          :password password})))
+
+(defn- stats
+  [ds]
+  (jdbc/execute-one!
+    ds
+    [(str
+       "SELECT\n"
+       "  (SELECT count(*) FROM articles) AS articles,\n"
+       "  (SELECT count(*) FROM article_aliases) AS article_aliases,\n"
+       "  (SELECT count(*) FROM price_observations) AS price_observations,\n"
+       "  (SELECT count(*) FROM expense_items WHERE article_id IS NOT NULL) AS expense_items_with_article_id")]
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- get-fk-constraint-name
+  [ds]
+  (jdbc/execute-one!
+    ds
+    ["SELECT constraint_name
+      FROM information_schema.table_constraints
+      WHERE table_schema = 'public'
+        AND table_name = 'article_aliases'
+        AND constraint_type = 'FOREIGN KEY'
+        AND constraint_name LIKE '%article%'"]
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- update-count
+  [result]
+  (or (get result :next.jdbc/update-count)
+      (get result :update-count)
+      0))
+
+(defn- confirm!
+  [{:keys [profile dbname]}]
+  (println (str "⚠️  DANGER: This will DELETE ALL rows from articles in the " (name profile) " database!"))
+  (println (str "🎯 Target DB: " dbname))
+  (println "")
+  (print "Type 'DELETE ARTICLES' to confirm: ")
+  (flush)
+  (= "DELETE ARTICLES" (str/trim (read-line))))
+
+(defn -main
+  [& args]
+  (let [{:keys [profile apply? yes?]} (parse-args args)
+        config (aero/read-config "config/base.edn" {:profile profile})
+        ds (datasource-from-config config)
+        dbname (get-in config [:database :dbname])
+        before (stats ds)
+        fk-info (get-fk-constraint-name ds)
+        fk-name (:constraint_name fk-info)]
+
+    (println (str "[" (Instant/now) "]"))
+    (println "Delete articles (preserve article_aliases)")
+    (println "  profile:" (name profile))
+    (println "  dbname:  " dbname)
+    (println "  dry-run?:" (not apply?))
+    (println "")
+    (println "Before:")
+    (println "  articles:" (:articles before))
+    (println "  article_aliases:" (:article_aliases before))
+    (println "  price_observations:" (:price_observations before))
+    (println "  expense_items (with article_id):" (:expense_items_with_article_id before))
+    (println "")
+    (println "FK constraint found:" (or fk-name "none (already removed?)"))
+    (println "")
+
+    (when-not apply?
+      (println "Dry-run only. Re-run with --apply to delete all articles.")
+      (System/exit 0))
+
+    (when-not (or yes? (confirm! {:profile profile :dbname dbname}))
+      (println "❌ Cancelled.")
+      (System/exit 1))
+
+    (println "Dropping FK constraint from article_aliases.article_id...")
+    (when fk-name
+      (jdbc/execute-one! ds [(str "ALTER TABLE article_aliases DROP CONSTRAINT " fk-name)])
+      (println "✅ Dropped constraint:" fk-name))
+
+    (println "Deleting articles...")
+    (let [result (jdbc/execute-one! ds ["DELETE FROM articles"]) 
+          deleted (update-count result)
+          after (stats ds)]
+      (println "✅ Done")
+      (println "  deleted articles:" deleted)
+      (println "")
+      (println "After:")
+      (println "  articles:" (:articles after))
+      (println "  article_aliases:" (:article_aliases after))
+      (println "  price_observations:" (:price_observations after))
+      (println "  expense_items (with article_id):" (:expense_items_with_article_id after))
+      (println "")
+      (println "💡 Article aliases are now orphaned (article_id points to deleted article)")
+      (println "   You can remap them later or leave them as-is.")
+      (System/exit 0))))
+
+(apply -main *command-line-args*)

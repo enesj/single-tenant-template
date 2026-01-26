@@ -134,18 +134,6 @@
                   :address [:address]
                   :created_at [:created-at]}}))
 
-(defn manufacturer->template-entity
-  [manufacturer]
-  (entity-utils/normalize-entity
-    manufacturer
-    {:entity-ns :manufacturers
-     :id-keys [:id]
-     :alias-keys {:display_name [:display-name]
-                  :normalized_key [:normalized-key]
-                  :archived_at [:archived-at]
-                  :created_at [:created-at]
-                  :updated_at [:updated-at]}}))
-
 (defn payer->template-entity
   [payer]
   (entity-utils/normalize-entity
@@ -204,21 +192,6 @@
                   :raw_label [:raw-label]
                   :raw_label_normalized [:raw-label-normalized]
                   :supplier_id [:supplier-id]
-                  :created_at [:created-at]
-                  :updated_at [:updated-at]}}))
-
-(defn manufacturer-alias->template-entity
-  [alias]
-  (entity-utils/normalize-entity
-    alias
-    {:entity-ns :manufacturer-aliases
-     :id-keys [:id]
-     :stringify-keys [:manufacturer_id]
-     :alias-keys {:manufacturer_display_name [:manufacturer-display-name]
-                  :raw_label [:raw-label]
-                  :raw_label_normalized [:raw-label-normalized]
-                  :manufacturer_id [:manufacturer-id]
-                  :confidence [:confidence]
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 

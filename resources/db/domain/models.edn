@@ -38,39 +38,6 @@
                                :btree
                                {:fields [:supplier_id]}]]}
 
- ;; ----------------------------------------------------------------------------
- ;; Manufacturers (canonical product manufacturers/brands)
- ;; ----------------------------------------------------------------------------
-
- :manufacturers {:fields [[:id :uuid {:primary-key true}]
-                          [:display_name [:varchar 255] {:null false}]
-                          [:normalized_key [:varchar 255] {:null false}]
-                          [:archived_at :timestamptz]
-                          [:created_at :timestamptz {:default "NOW()"}]
-                          [:updated_at :timestamptz {:default "NOW()"}]]
-                 :indexes [[:idx_manufacturers_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
-
- ;; ----------------------------------------------------------------------------
- ;; Manufacturer Aliases (deduplicated raw manufacturer guesses -> canonical manufacturers)
- ;; ----------------------------------------------------------------------------
-
- :manufacturer_aliases {:fields [[:id :uuid {:primary-key true}]
-                                 ;; Representative latest-seen raw label text
-                                 [:raw_label :text]
-                                 ;; Canonical normalized key for dedupe
-                                 [:raw_label_normalized [:varchar 255] {:null false}]
-                                 ;; NULL = unmapped
-                                 [:manufacturer_id :uuid {:foreign-key :manufacturers/id :on-delete :set-null}]
-                                 [:confidence :integer {:default 100}]
-                                 [:created_at :timestamptz {:default "NOW()"}]
-                                 [:updated_at :timestamptz {:default "NOW()"}]]
-                        :indexes [[:idx_manufacturer_aliases_raw_label_normalized
-                                   :btree
-                                   {:fields [:raw_label_normalized] :unique true}]
-                                  [:idx_manufacturer_aliases_manufacturer_id
-                                   :btree
-                                   {:fields [:manufacturer_id]}]]}
-
 ;; ----------------------------------------------------------------------------
  ;; Payers (payment methods: cash, cards, accounts, people)
  ;; ----------------------------------------------------------------------------
@@ -216,18 +183,12 @@
                      [:normalized_key [:varchar 255] {:null false}]
                      [:category [:varchar 100]]
                      [:link :text]
-                     ;; Raw manufacturer string (legacy / display-only). Canonical manufacturer is manufacturer_id.
+                     ;; Raw manufacturer string (display-only).
                      [:manufacturer [:varchar 255]]
-                     ;; Optional link to observed manufacturer label (alias) for unmapped/mapping workflows.
-                     [:manufacturer_alias_id :uuid {:foreign-key :manufacturer_aliases/id :on-delete :set-null}]
-                     ;; Canonical manufacturer link (Option A). Keep nullable until backfill.
-                     [:manufacturer_id :uuid {:foreign-key :manufacturers/id :on-delete :set-null}]
                      [:created_at :timestamptz {:default "NOW()"}]
                      [:updated_at :timestamptz {:default "NOW()"}]]
             :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]
-                      [:idx_articles_category :btree {:fields [:category]}]
-                      [:idx_articles_manufacturer_alias_id :btree {:fields [:manufacturer_alias_id]}]
-                      [:idx_articles_manufacturer_id :btree {:fields [:manufacturer_id]}]]}
+                      [:idx_articles_category :btree {:fields [:category]}]]}
 
 ;; ----------------------------------------------------------------------------
  ;; Article Aliases (mapping raw labels → canonical articles)

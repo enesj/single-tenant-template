@@ -44,12 +44,6 @@
    :log-prefix "[expenses] Syncing suppliers to template:"})
 
 (entity-utils/register-sync-event!
-  {:event-id ::sync-manufacturers
-   :entity-key :manufacturers
-   :normalize-fn normalize/manufacturer->template-entity
-   :log-prefix "[expenses] Syncing manufacturers to template:"})
-
-(entity-utils/register-sync-event!
   {:event-id ::sync-payers
    :entity-key :payers
    :normalize-fn normalize/payer->template-entity
@@ -80,12 +74,6 @@
    :log-prefix "[expenses] Syncing supplier aliases to template:"})
 
 (entity-utils/register-sync-event!
-  {:event-id ::sync-manufacturer-aliases
-   :entity-key :manufacturer-aliases
-   :normalize-fn normalize/manufacturer-alias->template-entity
-   :log-prefix "[expenses] Syncing manufacturer aliases to template:"})
-
-(entity-utils/register-sync-event!
   {:event-id ::sync-price-observations
    :entity-key :price-observations
    :normalize-fn normalize/price-observation->template-entity
@@ -104,8 +92,6 @@
   {:sync-event-id ::sync-receipts})
 (entity-sync/register-sync-handler! :suppliers
   {:sync-event-id ::sync-suppliers})
-(entity-sync/register-sync-handler! :manufacturers
-  {:sync-event-id ::sync-manufacturers})
 (entity-sync/register-sync-handler! :payers
   {:sync-event-id ::sync-payers})
 (entity-sync/register-sync-handler! :payer-types
@@ -116,8 +102,6 @@
   {:sync-event-id ::sync-article-aliases})
 (entity-sync/register-sync-handler! :supplier-aliases
   {:sync-event-id ::sync-supplier-aliases})
-(entity-sync/register-sync-handler! :manufacturer-aliases
-  {:sync-event-id ::sync-manufacturer-aliases})
 (entity-sync/register-sync-handler! :price-observations
   {:sync-event-id ::sync-price-observations})
 
@@ -127,7 +111,6 @@
 ;; This enables admin form submission to work with these entities
 
 (form-interceptors/register-bridge-entity! :suppliers)
-(form-interceptors/register-bridge-entity! :manufacturers)
 (form-interceptors/register-bridge-entity! :expenses)
 (form-interceptors/register-bridge-entity! :expense-items)
 (form-interceptors/register-bridge-entity! :receipts)
@@ -136,5 +119,4 @@
 (form-interceptors/register-bridge-entity! :articles)
 (form-interceptors/register-bridge-entity! :article-aliases)
 (form-interceptors/register-bridge-entity! :supplier-aliases)
-(form-interceptors/register-bridge-entity! :manufacturer-aliases)
 (form-interceptors/register-bridge-entity! :price-observations)

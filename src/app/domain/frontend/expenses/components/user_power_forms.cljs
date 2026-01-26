@@ -73,57 +73,6 @@
                                     on-success]))
          :button-text "Save Article"}))))
 
-(def ^:private manufacturer-form-spec
-  [{:id :display_name
-    :type :text
-    :label "Display name"
-    :required true
-    :placeholder "e.g. Acme"}])
-
-(defui user-manufacturer-add-form-modal
-  [{:keys [on-success on-cancel]}]
-  (let [form-error (use-subscribe [:user-expenses/form-error])]
-    ($ :div {:class "space-y-4"}
-      (when form-error
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span form-error)))
-
-      ($ form
-        {:entity-name "user-manufacturer"
-         :entity-spec manufacturer-form-spec
-         :editing false
-         :initial-values {}
-         :on-cancel on-cancel
-         :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/create-manufacturer-modal values on-success]))
-         :button-text "Save Manufacturer"}))))
-
-(defui user-manufacturer-edit-form-modal
-  [{:keys [item on-success on-cancel]}]
-  (let [form-error (use-subscribe [:user-expenses/form-error])
-        item (normalization/convert-db-keys->app-keys item)
-        manufacturer-id (id-utils/extract-entity-id item)
-        initial-values {:display_name (or (:display-name item)
-                                        (:display_name item)
-                                        "")}]
-    ($ :div {:class "space-y-4"}
-      (when form-error
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span form-error)))
-
-      ($ form
-        {:entity-name "user-manufacturer"
-         :entity-spec manufacturer-form-spec
-         :editing true
-         :initial-values initial-values
-         :on-cancel on-cancel
-         :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/update-manufacturer-modal
-                                    (some-> manufacturer-id str)
-                                    values
-                                    on-success]))
-         :button-text "Save Manufacturer"}))))
-
 (def ^:private article-alias-edit-form-spec
   [{:id :raw_label
     :type :text
@@ -173,44 +122,6 @@
     :label "Normalized label"
     :required true
     :placeholder "e.g. mega-market"}])
-
-(def ^:private manufacturer-alias-edit-form-spec
-  [{:id :raw_label
-    :type :text
-    :label "Raw label"
-    :required true
-    :placeholder "e.g. ACME CORP"}
-   {:id :raw_label_normalized
-    :type :text
-    :label "Normalized label"
-    :required true
-    :placeholder "e.g. acme-corp"}])
-
-(defui user-manufacturer-alias-edit-form-modal
-  [{:keys [item on-success on-cancel]}]
-  (let [form-error (use-subscribe [:user-expenses/form-error])
-        item (normalization/convert-db-keys->app-keys item)
-        alias-id (id-utils/extract-entity-id item)
-        initial-values {:raw_label (or (:raw-label item) "")
-                        :raw_label_normalized (or (:raw-label-normalized item) "")}]
-    ($ :div {:class "space-y-4"}
-      (when form-error
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span form-error)))
-
-      ($ form
-        {:entity-name "user-manufacturer-alias"
-         :entity-spec manufacturer-alias-edit-form-spec
-         :editing true
-         :initial-values initial-values
-         :on-cancel on-cancel
-         :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/update-manufacturer-alias-modal
-                                    (some-> alias-id str)
-                                    values
-                                    on-success]))
-         :button-text "Save Alias"}))))
-
 (defui user-supplier-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])

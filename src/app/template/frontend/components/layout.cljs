@@ -135,24 +135,12 @@
                                           :route :expense-articles
                                           :icon ($ articles-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-articles})})
-                               (nav-item {:id "user-sidebar-manufacturers"
-                                          :label "Manufacturers"
-                                          :href "/manufacturers"
-                                          :route :expense-manufacturers
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-manufacturers})})
                                (nav-item {:id "user-sidebar-article-aliases"
                                           :label "Aliases"
                                           :href "/article-aliases"
                                           :route :expense-article-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-article-aliases})})
-                               (nav-item {:id "user-sidebar-manufacturer-aliases"
-                                          :label "Manufacturer Aliases"
-                                          :href "/manufacturer-aliases"
-                                          :route :expense-manufacturer-aliases
-                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-manufacturer-aliases})})
                                (nav-item {:id "user-sidebar-supplier-aliases"
                                           :label "Supplier Aliases"
                                           :href "/supplier-aliases"

@@ -4,8 +4,6 @@
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.routes.articles :as articles]
     [app.domain.backend.expenses.routes.article-aliases :as article-aliases]
-    [app.domain.backend.expenses.routes.manufacturer-aliases :as manufacturer-aliases]
-    [app.domain.backend.expenses.routes.manufacturers :as manufacturers]
     [app.domain.backend.expenses.routes.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.routes.expense-items :as expense-items]
     [app.domain.backend.expenses.routes.expenses :as expenses]
@@ -24,13 +22,11 @@
   ["/expenses"
    ["/upload" {:post {:handler (receipt-upload/admin-upload-handler db)}}]
    (suppliers/routes db)
-   (manufacturers/routes db)
    (payers/routes db)
    (payer-types/routes db)
    (receipts/routes db app-config)
    (article-aliases/routes db)
    (supplier-aliases/routes db)
-   (manufacturer-aliases/routes db)
    (price-observations/routes db)
    (expenses/routes db)
    (expense-items/routes db)

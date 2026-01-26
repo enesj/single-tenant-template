@@ -414,6 +414,10 @@
                (println "  --dev   Clean development database")
                (println "  --test  Clean test database"))))},
 
+  delete-articles
+  {:doc "Delete ALL articles (and cascades) from the database. Dry-run by default. Usage: bb delete-articles [--dev|--test|dev|test] [--apply] [--yes]",
+    :task (apply shell "clj" "-M" "scripts/bb/database/delete_articles.clj" *command-line-args*)},
+
   check-migrations
   {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
