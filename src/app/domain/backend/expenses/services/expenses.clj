@@ -254,7 +254,7 @@
                                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                                            [:payers :p] [:= :p.id :e.payer_id]
                                            [:payer_types :pt] [:= :pt.id :p.payer_type_id]]
-                                     :where [:= :e.id id]})
+                               :where [:= :e.id id]})
                   {:builder-fn rs/as-unqualified-lower-maps})
         items (jdbc/execute!
                 db
@@ -264,8 +264,8 @@
                                       [:a.canonical_name :article_canonical_name]]
                              :from [[:expense_items :ei]]
                              :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                       [:articles :a] [:= :a.id :aa.article_id]]
-                                 :where [:= :ei.expense_id id]
+                                         [:articles :a] [:= :a.id :aa.article_id]]
+                             :where [:= :ei.expense_id id]
                              :order-by [[:ei.created_at :asc]]})
                 {:builder-fn rs/as-unqualified-lower-maps})]
     (when expense
@@ -390,9 +390,7 @@
                  tx {:article_id article-id
                      :supplier_id (:supplier_id expense)
                      :expense_item_id (:id item)
-                     :qty (:qty item)
                      :unit_price (:unit_price item)
-                     :line_total (:line_total item)
                      :currency (:currency expense)
                      :observed_at (:purchased_at expense)}))))
 
@@ -419,11 +417,11 @@
                    (assoc :updated_at [:now]))]
     (jdbc/with-transaction [tx db]
       (when-let [expense (jdbc/execute-one!
-                             tx
-                             (sql/format {:update :expenses
-                              :set updates*
-                              :where [:= :id id*]
-                              :returning [:*]})
+                           tx
+                           (sql/format {:update :expenses
+                                        :set updates*
+                                        :where [:= :id id*]
+                                        :returning [:*]})
                            {:builder-fn rs/as-unqualified-lower-maps})]
 
         (when (contains? body :items)
@@ -467,56 +465,54 @@
                             alias (assoc :alias_id (:id alias)))]
                 (jdbc/execute!
                   tx
-                    (sql/format {:update :expense_items
-                           :set item*
-                           :where [:and
-                             [:= :id (:id item)]
-                             [:= :expense_id id*]]}))
+                  (sql/format {:update :expense_items
+                               :set item*
+                               :where [:and
+                                       [:= :id (:id item)]
+                                       [:= :expense_id id*]]}))
 
             ;; Insert new items (auto-link from alias when possible).
-            (let [resolved-inserts (mapv (fn [item]
-                                           (require-keys! item [:line_total])
-                                           (let [alias (resolve-alias! tx supplier-id item)
-                                                 resolved-article-id (:article_id alias)]
-                                             (assoc item
-                                               :resolved_alias alias
-                                               :resolved_alias_id (some-> alias :id)
-                                               :resolved_article_id resolved-article-id)))
-                                     insert-items)
-                  item-rows (mapv (fn [{:keys [resolved_alias_id qty unit_price line_total]}]
-                                    {:id (UUID/randomUUID)
-                                     :expense_id id*
-                                     :alias_id resolved_alias_id
-                                     :qty qty
-                                     :unit_price unit_price
-                                     :line_total line_total})
-                              resolved-inserts)
-                  inserted-items (if (seq item-rows)
-                                   (jdbc/execute!
-                                     tx
-                                     (sql/format {:insert-into :expense_items
-                                                  :values item-rows
-                                                  :returning [:*]})
-                                     {:builder-fn rs/as-unqualified-lower-maps})
-                                   [])]
+                (let [resolved-inserts (mapv (fn [item]
+                                               (require-keys! item [:line_total])
+                                               (let [alias (resolve-alias! tx supplier-id item)
+                                                     resolved-article-id (:article_id alias)]
+                                                 (assoc item
+                                                   :resolved_alias alias
+                                                   :resolved_alias_id (some-> alias :id)
+                                                   :resolved_article_id resolved-article-id)))
+                                         insert-items)
+                      item-rows (mapv (fn [{:keys [resolved_alias_id qty unit_price line_total]}]
+                                        {:id (UUID/randomUUID)
+                                         :expense_id id*
+                                         :alias_id resolved_alias_id
+                                         :qty qty
+                                         :unit_price unit_price
+                                         :line_total line_total})
+                                  resolved-inserts)
+                      inserted-items (if (seq item-rows)
+                                       (jdbc/execute!
+                                         tx
+                                         (sql/format {:insert-into :expense_items
+                                                      :values item-rows
+                                                      :returning [:*]})
+                                         {:builder-fn rs/as-unqualified-lower-maps})
+                                       [])]
 
               ;; Record price observations for newly inserted items with an article.
-              (doseq [[item resolved] (map vector inserted-items resolved-inserts)]
-                (let [article-id (:resolved_article_id resolved)]
-                  (when (and (:supplier_id expense) article-id)
-                    (price-history/record-observation!
-                      tx {:article_id article-id
-                          :supplier_id (:supplier_id expense)
-                          :expense_item_id (:id item)
-                          :qty (:qty item)
-                          :unit_price (:unit_price item)
-                          :line_total (:line_total item)
-                          :currency (:currency expense)
-                          :observed_at (:purchased_at expense)})))))))
+                  (doseq [[item resolved] (map vector inserted-items resolved-inserts)]
+                    (let [article-id (:resolved_article_id resolved)]
+                      (when (and (:supplier_id expense) article-id)
+                        (price-history/record-observation!
+                          tx {:article_id article-id
+                              :supplier_id (:supplier_id expense)
+                              :expense_item_id (:id item)
+                              :unit_price (:unit_price item)
+                              :currency (:currency expense)
+                              :observed_at (:purchased_at expense)})))))))
 
-        (get-expense-with-items tx id*)))))
+            (get-expense-with-items tx id*)))))
 
-(defn create-from-receipt!
-  "Create an expense tied to a receipt. Delegates to create-expense! then returns expense."
-  [db receipt-id expense-data items]
-  (create-expense! db (assoc expense-data :receipt_id receipt-id) items))))
+    (defn create-from-receipt!
+      "Create an expense tied to a receipt. Delegates to create-expense! then returns expense."
+      [db receipt-id expense-data items]
+      (create-expense! db (assoc expense-data :receipt_id receipt-id) items))))

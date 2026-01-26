@@ -160,7 +160,7 @@
                            ;; Canonical raw label reference (deduped). Use joins to render raw_labels.raw_label.
                            ;; NOTE (Phase 1): this becomes optional once we switch to alias-based labeling.
                            ;; We keep the column for backward-compat & later cleanup, but allow NULL for new writes.
-                           [:raw_label_id :uuid {:foreign-key :raw_labels/id}]
+                          [:raw_label_id :uuid {:foreign-key :raw_labels/id}]
                           ;; NEW (Phase 1): canonical alias reference (eventually replaces raw_label_id + article_id)
                           [:alias_id :uuid {:foreign-key :article_aliases/id}]
                           [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
@@ -217,8 +217,6 @@
                                [:expense_item_id :uuid {:foreign-key :expense_items/id :on-delete :set-null}]
                                [:observed_at :timestamptz {:null false}]
                                [:unit_price [:decimal 12 2]]
-                               [:line_total [:decimal 12 2] {:null false}]
-                               [:qty [:decimal 10 3]]
                                [:currency [:enum :currency] {:default "BAM"}]
                                [:created_at :timestamptz {:default "NOW()"}]]
                       :indexes [[:idx_price_obs_article :btree {:fields [:article_id]}]

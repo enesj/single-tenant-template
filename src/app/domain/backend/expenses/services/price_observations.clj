@@ -48,11 +48,11 @@
                        to (conj [:<= :po/observed_at to]))
         config* (assoc config :base-filters base-filters)
         base-query (factory/build-query-with-filters
-                    config*
-                    {:limit limit
-                     :offset offset
-                     :order-by order-by
-                     :order-dir order-dir})
+                     config*
+                     {:limit limit
+                      :offset offset
+                      :order-by order-by
+                      :order-dir order-dir})
         final-query (factory/apply-search-filter base-query (:search-fields config*) search)]
     ;; NOTE: When no filters are provided, fall back to the base behavior.
     ;; This preserves compatibility for callers that rely on the generated list.
@@ -66,13 +66,11 @@
 
 (defn create-price-observation!
   "Create a price observation using price-history helper."
-  [db {:keys [article_id supplier_id expense_item_id observed_at qty unit_price line_total currency] :as obs}]
+  [db {:keys [article_id supplier_id expense_item_id observed_at unit_price currency] :as obs}]
   (price-history/record-observation!
-    db (merge obs {:article_id article_id
-                   :supplier_id supplier_id
-                   :expense_item_id expense_item_id
-                   :observed_at observed_at
-                   :qty qty
-                   :unit_price unit_price
-                   :line_total line_total
-                   :currency currency})))
+    db {:article_id article_id
+        :supplier_id supplier_id
+        :expense_item_id expense_item_id
+        :observed_at observed_at
+        :unit_price unit_price
+        :currency currency}))

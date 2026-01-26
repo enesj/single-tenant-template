@@ -147,8 +147,6 @@
    "supplier_display_name"
    "observed_at"
    "unit_price"
-   "line_total"
-   "qty"
    "currency"
    "expense_item_id"
    "id"
@@ -160,16 +158,12 @@
    "supplier_display_name"
    "observed_at"
    "unit_price"
-   "line_total"
-   "qty"
    "currency"],
   :filterable-columns
   ["article_canonical_name"
    "supplier_display_name"
    "observed_at"
    "unit_price"
-   "line_total"
-   "qty"
    "currency"
    "expense_item_id"],
   :sortable-columns
@@ -177,15 +171,13 @@
    "supplier_display_name"
    "observed_at"
    "unit_price"
-   "line_total"
-   "qty"
    "currency"
    "expense_item_id"],
   :always-visible
   ["article_canonical_name"
    "supplier_display_name"
    "observed_at"
-   "line_total"],
+   "unit_price"],
   :computed-fields
   {:article_canonical_name {}, :supplier_display_name {}}},
  :payers

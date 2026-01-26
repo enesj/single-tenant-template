@@ -67,7 +67,7 @@
 
  :price-observations
  {:edit-fields
-  ["observed_at" "article_id" "supplier_id" "qty" "unit_price" "line_total" "currency"],
+  ["observed_at" "article_id" "supplier_id" "unit_price" "currency"],
   :field-config
   {:observed_at {:type "datetime-local"},
    :article_id
@@ -78,8 +78,6 @@
    {:type "select",
     :label "Supplier",
     :options ["suppliers" "display_name"]},
-   :qty {:type "number", :step 0.001},
    :unit_price {:type "number", :step 0.01},
-   :line_total {:type "number", :step 0.01},
    :currency
    {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}}}
