@@ -65,15 +65,20 @@
 (defui user-supplier-edit-form-modal
   [{:keys [supplier-id initial-data on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        initial-values (select-keys (or initial-data {}) [:display_name :address])]
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :suppliers true])
+        ;; Build initial values from data, covering all possible fields
+        initial-values (-> (or initial-data {})
+                         (select-keys [:display_name :address :id :normalized_key :archived_at]))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-supplier"
-         :entity-spec supplier-form-spec
+        {:entity-name "suppliers"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) supplier-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
@@ -114,6 +119,8 @@
 (defui user-payer-edit-form-modal
   [{:keys [payer-id initial-data on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :payers true])
         payer-types (or (use-subscribe [:user-expenses/payer-types]) [])
         payer-type-options (mapv (fn [{:keys [id label]}]
                                    {:label label :value (str id)})
@@ -124,7 +131,8 @@
                                         (:id pt))))
                               str)
                           (get-in payer-type-options [0 :value]))
-        initial-values (-> (select-keys (or initial-data {}) [:label :payer_type_id :is_default])
+        ;; Build initial values from data, covering all possible fields
+        initial-values (-> (select-keys (or initial-data {}) [:label :payer_type_id :is_default :id :last4])
                          (update :payer_type_id #(or (when % (str %)) default-type-id))
                          (update :is_default boolean))]
     ($ :div {:class "space-y-4"}
@@ -133,8 +141,9 @@
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-payer"
-         :entity-spec (payer-form-spec payer-type-options)
+        {:entity-name "payers"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) (payer-form-spec payer-type-options))
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
@@ -163,7 +172,10 @@
 (defui user-payer-type-edit-form-modal
   [{:keys [payer-type-id initial-data on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        initial-values (-> (select-keys (or initial-data {}) [:label :is_default])
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :payer-types true])
+        ;; Build initial values from data, covering all possible fields
+        initial-values (-> (select-keys (or initial-data {}) [:label :is_default :id])
                          (update :is_default #(boolean %)))]
     ($ :div {:class "space-y-4"}
       (when form-error
@@ -171,8 +183,9 @@
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-payer-type"
-         :entity-spec payer-type-form-spec
+        {:entity-name "payer-types"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) payer-type-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel

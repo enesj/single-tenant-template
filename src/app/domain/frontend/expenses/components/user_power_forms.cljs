@@ -49,20 +49,25 @@
 (defui user-article-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :articles true])
         item (normalization/convert-db-keys->app-keys item)
         article-id (id-utils/extract-entity-id item)
-        initial-values {:canonical_name (or (:canonical-name item)
-                                          (:canonicalName item)
-                                          "")
-                        :category (or (:category item) "")}]
+        ;; Build initial values from item, covering all possible fields
+        initial-values (-> {}
+                         (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
+                         (assoc :category (or (:category item) ""))
+                         (assoc :manufacturer (or (:manufacturer item) ""))
+                         (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-article"
-         :entity-spec article-edit-form-spec
+        {:entity-name "articles"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) article-edit-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
@@ -88,19 +93,30 @@
 (defui user-article-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :article-aliases true])
         item (normalization/convert-db-keys->app-keys item)
         article-alias-id (id-utils/extract-entity-id item)
-        initial-values {:raw_label (or (:raw-label item) "")
-            :raw_label_normalized (or (:raw-label-normalized item)
-                  "")}]
+        ;; Build initial values from item, covering all possible fields
+        initial-values (-> {}
+                         (assoc :raw_label (or (:raw-label item) ""))
+                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
+                         (assoc :article_id (or (:article-id item) ""))
+                         (assoc :created_at (or (:created-at item) ""))
+                         (assoc :supplier_display_name (or (:supplier-display-name item) ""))
+                         (assoc :article_canonical_name (or (:article-canonical-name item) ""))
+                         (assoc :confidence (or (:confidence item) ""))
+                         (assoc :id (or (:id item) ""))
+                         (assoc :supplier_id (or (:supplier-id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-article-alias"
-         :entity-spec article-alias-edit-form-spec
+        {:entity-name "article-aliases"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) article-alias-edit-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
@@ -125,18 +141,26 @@
 (defui user-supplier-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :supplier-aliases true])
         item (normalization/convert-db-keys->app-keys item)
         supplier-alias-id (id-utils/extract-entity-id item)
-        initial-values {:raw_label (or (:raw-label item) "")
-                        :raw_label_normalized (or (:raw-label-normalized item) "")}]
+        ;; Build initial values from item, covering all possible fields
+        initial-values (-> {}
+                         (assoc :raw_label (or (:raw-label item) ""))
+                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
+                         (assoc :supplier_id (or (:supplier-id item) ""))
+                         (assoc :confidence (or (:confidence item) ""))
+                         (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-supplier-alias"
-         :entity-spec supplier-alias-edit-form-spec
+        {:entity-name "supplier-aliases"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) supplier-alias-edit-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
@@ -206,24 +230,32 @@
 (defui user-price-observation-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-  item (normalization/convert-db-keys->app-keys item)
-  price-observation-id (id-utils/extract-entity-id item)
-  observed-at (:observed-at item)
-  unit-price (:unit-price item)
-  line-total (:line-total item)
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :price-observations true])
+        item (normalization/convert-db-keys->app-keys item)
+        price-observation-id (id-utils/extract-entity-id item)
+        observed-at (:observed-at item)
+        unit-price (:unit-price item)
+        line-total (:line-total item)
+        ;; Build initial values from item, covering all possible fields
         initial-values {:observed_at (datetime-local observed-at)
                         :qty (or (:qty item) "")
                         :unit_price (or unit-price "")
                         :line_total (or line-total "")
-                        :currency (or (:currency item) "")}]
+                        :currency (or (:currency item) "")
+                        :id (or (:id item) "")
+                        :article_id (or (:article-id item) "")
+                        :supplier_id (or (:supplier-id item) "")
+                        :expense_item_id (or (:expense-item-id item) "")}]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-price-observation"
-         :entity-spec price-observation-edit-form-spec
+        {:entity-name "price-observations"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) price-observation-edit-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel

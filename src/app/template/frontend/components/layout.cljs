@@ -136,7 +136,7 @@
                                           :icon ($ articles-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-articles})})
                                (nav-item {:id "user-sidebar-article-aliases"
-                                          :label "Aliases"
+                                          :label "Article Aliases"
                                           :href "/article-aliases"
                                           :route :expense-article-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})

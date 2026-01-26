@@ -77,10 +77,6 @@ project-templates/
 config/.secrets.edn
 config/secrets.edn
 config/*secrets*
-.codex/config.toml
-.gemini/settings.json
-.copilot/mcp-config.json
-.vscode/mcp.json
 *.key
 *.pem
 api-keys/

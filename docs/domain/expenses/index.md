@@ -341,6 +341,10 @@ When POS receipts produce item labels that don’t match your canonical article 
 2. **Unmapped items**: view the “unmapped items” list and map items to articles.
 3. **Batch alias creation**: create multiple aliases in one action to improve future auto-matching.
 
+#### Optional: spellcheck canonical article names
+
+- Generate spellcheck suggestions for `articles.canonical_name`: `bb spellcheck-article-names dev` (defaults to `--lang bs`; writes `article-canonical-name-spellcheck-suggestions.edn` in the project root)
+
 ### Price Tracking Flow
 
 1. **Expense Creation**: Items linked to articles record prices

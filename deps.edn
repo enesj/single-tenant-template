@@ -103,6 +103,9 @@
                 day8.re-frame/test {:mvn/version "0.1.7"}
                 org.clojure/test.check {:mvn/version "1.1.1"}}}
 
+  :spellcheck
+   {}
+
   ;; Build configuration
   :build
   {:deps {io.github.clojure/tools.build {:mvn/version "0.10.7"}}

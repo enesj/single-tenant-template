@@ -183,7 +183,7 @@
                                           [:s.display_name :supplier_display_name]
                                           [:s.normalized_key :supplier_normalized_key]
                                           [:p.label :payer_label]
-                                          [:p.type :payer_type]]
+                                          [:p.payer_type_id :payer_type_id]]
                                  :from [[:expenses :e]]
                                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                                              [:payers :p] [:= :p.id :e.payer_id]]
@@ -305,15 +305,14 @@
                             :currency
                             [[:sum :total_amount] :total]]
                    :from [:expenses]
-                     :where [:and
-                             [:= :user_id user-id]
-                             [:= :is_posted true]
-                             [:>= :purchased_at
-                              [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
+                   :where [:and
+                           [:= :user_id user-id]
+                           [:= :is_posted true]
+                           [:>= :purchased_at
+                            [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
                    :group-by [[:to_char :purchased_at [:inline "YYYY-MM"]] :currency]
                    :order-by [[[:to_char :purchased_at [:inline "YYYY-MM"]] :desc]]})
       {:builder-fn rs/as-unqualified-lower-maps})))
-
 
 (defn get-user-spending-by-supplier
   "Get spending by supplier for a user.

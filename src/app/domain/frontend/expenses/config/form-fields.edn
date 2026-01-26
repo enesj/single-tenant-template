@@ -29,6 +29,57 @@
    :notes {:type "textarea"},
    :is_posted {:type "checkbox"}}},
  :article-aliases
- {:edit-fields ["raw_label" "raw_label_normalized" "article_id"]},
- :supplier-aliases {:edit-fields ["raw_label" "raw_label_normalized"]},
- :articles {:edit-fields ["manufacturer"]}}
+ {:edit-fields
+  ["raw_label"
+   "raw_label_normalized"
+   "supplier_id"
+   "article_id"],
+  :field-config
+  {:supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]},
+   :article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]}}},
+ :supplier-aliases
+ {:edit-fields
+  ["raw_label" "raw_label_normalized" "supplier_id"],
+  :field-config
+  {:supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]}}},
+ :articles {:edit-fields ["manufacturer"]}
+
+ :expense-items
+ {:edit-fields
+  ["raw_label" "article_id" "qty" "unit_price" "line_total"],
+  :field-config
+  {:article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]},
+   :qty {:type "number", :step 0.001},
+   :unit_price {:type "number", :step 0.01},
+   :line_total {:type "number", :step 0.01}}}
+
+ :price-observations
+ {:edit-fields
+  ["observed_at" "article_id" "supplier_id" "qty" "unit_price" "line_total" "currency"],
+  :field-config
+  {:observed_at {:type "datetime-local"},
+   :article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]},
+   :supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]},
+   :qty {:type "number", :step 0.001},
+   :unit_price {:type "number", :step 0.01},
+   :line_total {:type "number", :step 0.01},
+   :currency
+   {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}}}

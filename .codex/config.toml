@@ -1,0 +1,7 @@
+# Project-local Codex configuration for MCP
+# Multi-tenant property hosting SaaS - Clojure/ClojureScript integration
+
+# Model configuration (project-specific)
+model = "gpt-5"
+model_reasoning_effort = "high"
+

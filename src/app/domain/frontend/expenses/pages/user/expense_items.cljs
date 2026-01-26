@@ -44,16 +44,21 @@
 (defui user-expense-item-edit-form-modal
   [{:keys [expense-item-id initial-data on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        initial-values (select-keys (or initial-data {})
-                         [:raw_label :article_id :qty :unit_price :line_total])]
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :expense-items true])
+        ;; Build initial values from data, covering all possible fields
+        initial-values (-> (or initial-data {})
+                         (select-keys [:raw_label :article_id :qty :unit_price :line_total
+                                       :id :expense_id :raw_label_id :alias_id]))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "user-expense-item"
-         :entity-spec expense-item-form-spec
+        {:entity-name "expense-items"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) expense-item-form-spec)
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel

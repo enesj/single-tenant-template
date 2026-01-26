@@ -40,16 +40,27 @@
       "type": "http",
       "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
       "headers": {
-        "Authorization": "6189b03087e74486bff8234fcab6d678.JOWIHK3u9TANnRhO",
+        "Authorization": "REPLACE_WITH_YOUR_TOKEN",
         "Accept": "application/json, text/event-stream",
         "Content-Type": "application/json"
       }
+    },
+    "RapidAPI Hub - JSpell Checker": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.rapidapi.com",
+        "--header",
+        "x-api-host: jspell-checker.p.rapidapi.com",
+        "--header",
+        "x-api-key: REPLACE_WITH_YOUR_RAPIDAPI_KEY"
+      ]
     },
     "web-reader": {
       "type": "http",
       "url": "https://api.z.ai/api/mcp/web_reader/mcp",
       "headers": {
-        "Authorization": "6189b03087e74486bff8234fcab6d678.JOWIHK3u9TANnRhO",
+        "Authorization": "REPLACE_WITH_YOUR_TOKEN",
         "Accept": "application/json, text/event-stream",
         "Content-Type": "application/json"
       }
