@@ -331,14 +331,15 @@
                       (and (nil? (:total_amount_guess g)) markdown-total)
                       (assoc :total_amount_guess markdown-total))))
         supplier-guess (or (:supplier_guess guesses) markdown-supplier)
-        {:keys [supplier-id supplier-alias-id]}
+        {:keys [supplier-id supplier-alias-id source]}
         (try
           (resolve-supplier-and-alias db supplier-guess opts)
           (catch Exception e
             ;; Never fail extraction just because canonicalization failed.
             (log/warn e "Failed to resolve supplier from supplier_guess" {:receipt-id receipt-id})
             {:supplier-id (aliases/get-unknown-supplier-id db)
-             :supplier-alias-id nil}))
+             :supplier-alias-id nil
+             :source :unknown}))
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
@@ -367,10 +368,11 @@
                 :purchased_at_guess])
       (when supplier-alias-id {:supplier_alias_id supplier-alias-id})))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
-    (try
-      (auto-create-aliases! db supplier-id extraction)
-      (catch Exception e
-        (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})))
+    (when-not (= :unknown source)
+      (try
+        (auto-create-aliases! db supplier-id extraction)
+        (catch Exception e
+          (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id}))))
     (let [auto-post? (and (not (:defer-refine? opts))
                        (get opts :auto-post-after-upload? true))
           auto-res (when (and (= status "extracted") auto-post?)

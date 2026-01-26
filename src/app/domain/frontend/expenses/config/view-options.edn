@@ -1,5 +1,5 @@
 {:suppliers
- {:display-locks {:show-batch-edit? false, :show-batch-delete? false},
+ {:display-locks {:show-batch-edit? false},
   :display-defaults {:per-page 100, :show-edit? false}},
  :articles
  {:display-locks {},

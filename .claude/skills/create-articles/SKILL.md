@@ -4,8 +4,6 @@ tags: ["articles", "article-aliases", "web-search", "database", "products", "rec
 allowed-tools:
   - postgres:execute_sql
   - postgres:list_tables
-  - web-search-prime:webSearchPrime
-  - web-reader:webReader
 ---
 
 # create-articles

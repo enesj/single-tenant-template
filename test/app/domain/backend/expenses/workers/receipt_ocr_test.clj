@@ -63,6 +63,51 @@
         ;; Still creates article aliases for line items.
         (is (= 1 (:article-aliases @calls)))))))
 
+(deftest persist-extract-result-does-not-create-article-aliases-when-supplier-unknown
+  (let [receipt-id (java.util.UUID/randomUUID)
+        unknown-supplier-id (java.util.UUID/randomUUID)
+        calls (atom {:resolve-supplier 0
+                     :supplier-aliases 0
+                     :article-aliases 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results! (fn [& _] nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias!
+                  (fn [& _]
+                    (swap! calls update :supplier-aliases inc)
+                    {:id (java.util.UUID/randomUUID)
+                     :supplier_id nil})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (swap! calls update :resolve-supplier inc)
+                    {:supplier {:id (java.util.UUID/randomUUID)}
+                     :source :places-api})
+                  article-aliases/get-unknown-supplier-id (fn [& _] unknown-supplier-id)
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    (swap! calls update :article-aliases inc)
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            ;; No merchant name -> supplier_guess nil -> :unknown source.
+                            :extraction {:totals {:total 1.00}
+                                         :items [{:raw_label "ITEM" :line_total 1.00}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})]
+        (is (= receipt-id (:receipt-id res)))
+        ;; No supplier guess -> no alias lookup or Places resolution.
+        (is (= 0 (:supplier-aliases @calls)))
+        (is (= 0 (:resolve-supplier @calls)))
+        ;; Critically: don't create article aliases under "Unknown Supplier" during extraction.
+        (is (= 0 (:article-aliases @calls)))))))
+
 (deftest parse-money-handles-common-formats
   (let [parse-money #'common/parse-money]
     (is (= 10.26M (parse-money "10.26")))

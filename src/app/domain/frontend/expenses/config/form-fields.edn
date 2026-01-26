@@ -31,5 +31,4 @@
  :article-aliases
  {:edit-fields ["raw_label" "raw_label_normalized" "article_id"]},
  :supplier-aliases {:edit-fields ["raw_label" "raw_label_normalized"]},
- :articles
- {:edit-fields ["manufacturer"]}}
+ :articles {:edit-fields ["manufacturer"]}}
