@@ -1,7 +1,7 @@
 (ns app.template.frontend.components.confirm-dialog
   (:require
     [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -65,14 +65,16 @@
                         (when on-cancel (on-cancel)))]
 
     (when open?
-      ($ modal
+      ($ modal-wrapper
         {:id "confirm-dialog"
-         :on-close handle-cancel
-         :draggable? false
+         :visible? open?
+         :size :small
          :width "450px"
          :class "shadow-2xl"
-         :header ($ :div {:class "w-full text-lg font-semibold text-center py-2 border-b border-gray-200"}
-                   (or title "Confirm Action"))}
+         :close-button-id "confirm-dialog-close"
+         :header ($ :div {:class "w-full text-lg font-semibold text-center"}
+                   (or title "Confirm Action"))
+         :on-close handle-cancel}
 
         ;; Content
         ($ :div {:class "p-6"}

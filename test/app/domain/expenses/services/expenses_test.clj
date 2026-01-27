@@ -176,6 +176,45 @@
       (is (= 1 (count (:items expense))))
       (is (= "Item" (-> expense :items first :raw_label))))))
 
+(deftest expenses-update-keeps-items-with-valid-not-in-sql
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Update Expense Supplier " (UUID/randomUUID)) {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          created (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "10.00")
+                     :currency "EUR"}
+                    [{:raw_label "A" :line_total (bigdec "6.00") :qty (bigdec "1") :unit_price (bigdec "6.00")}
+                     {:raw_label "B" :line_total (bigdec "4.00") :qty (bigdec "2") :unit_price (bigdec "2.00")}])
+          expense-id (:id created)
+          item-ids (mapv :id (:items created))
+
+          ;; Mimic the user UI update payload shape (JSON numbers, ids as strings, datetime-local string).
+          body {:supplier_id (str (:id supplier))
+                :payer_id (str (:id payer))
+                :purchased_at "2026-01-10T12:01"
+                :currency "EUR"
+                :notes "updated"
+                :total_amount 10.0
+                :items [{:id (str (nth item-ids 0))
+                         :raw_label "A"
+                         :qty 1
+                         :unit_price 6.0
+                         :line_total 6.0}
+                        {:id (str (nth item-ids 1))
+                         :raw_label "B"
+                         :qty 2
+                         :unit_price 2.0
+                         :line_total 4.0}]}
+          updated (expenses/update-expense! db expense-id body)]
+      (is updated)
+      (is (= expense-id (:id updated)))
+      (is (= 2 (count (:items updated))))
+      ;; Ensure existing item ids are preserved and nothing is deleted.
+      (is (= (set item-ids) (set (map :id (:items updated))))))))
+
 (deftest expenses-alias-mapping-affects-existing-and-new-items
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "UpdateAutoLink Supplier " (UUID/randomUUID)) {}))

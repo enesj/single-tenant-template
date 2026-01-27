@@ -4,7 +4,7 @@
     [app.admin.frontend.components.format :as fmt]
     [app.admin.frontend.components.ui :as ui]
     [app.shared.date :as date]
-    [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.cards :refer [quick-actions-card]]
     [re-frame.core :refer [dispatch]]
     [clojure.string :as str]
@@ -152,26 +152,27 @@
                               initials)
                       :icon-bg "bg-primary/10 text-primary"})]
 
-        ($ modal {:id "admin-user-details-modal"
-                  :on-close close!
-                  :draggable? true
-                  :width "700px"
-                  :class "max-w-[90vw] h-[80vh] flex flex-col"
-                  :header header
-                  :header-class "p-0 border-0 bg-transparent mb-4"}
-          ($ :div {:class "flex-1 overflow-y-auto p-4"}
-            (cond
-              loading?
-              ($ :div {:class "flex items-center justify-center py-16"}
-                ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"}))
+        ($ modal-wrapper
+          {:id "admin-user-details-modal"
+           :visible? true
+           :title "User Details"
+           :header header
+           :size :large
+           :on-close close!
+           :close-button-id "btn-close-admin-user-details-modal"
+           :content-class "p-4"}
+          (cond
+            loading?
+            ($ :div {:class "flex items-center justify-center py-16"}
+              ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"}))
 
-              user
-              ($ user-details-body {:user user :error error})
+            user
+            ($ user-details-body {:user user :error error})
 
-              error
-              ($ :div {:class "ds-alert ds-alert-error m-4"}
-                ($ :span error))
+            error
+            ($ :div {:class "ds-alert ds-alert-error m-4"}
+              ($ :span error))
 
-              :else
-              ($ :div {:class "m-8 text-center text-base-content/60"}
-                "No user details available."))))))))
+            :else
+            ($ :div {:class "m-8 text-center text-base-content/60"}
+              "No user details available.")))))))

@@ -17,25 +17,25 @@
     :label "Label"
     :type :text
     :placeholder "e.g. Milk, Bread"
-    :width "min-w-[180px]"}
+    :width "flex-1 min-w-[160px]"}
    {:id :qty
     :label "Qty"
     :type :number
     :step "0.001"
     :min "0"
-    :width "w-16"}
+    :width "w-24 shrink-0"}
    {:id :unit_price
     :label "Price"
     :type :number
     :step "0.01"
     :min "0"
-    :width "w-20"}
+    :width "w-16 shrink-0"}
    {:id :line_total
     :label "Total"
     :type :number
     :step "0.01"
     :min "0"
-    :width "w-20"}])
+    :width "w-16 shrink-0"}])
 
 (def line-items-field-spec
   "Standalone line items field spec for use outside of the main form spec."

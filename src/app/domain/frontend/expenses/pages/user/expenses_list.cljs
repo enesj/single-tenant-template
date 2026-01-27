@@ -10,9 +10,11 @@
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon view-icon]]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.utils.id :as id-utils]
+    [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-callback use-effect]]
+    [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]
     ;; Ensure subs are registered
     app.domain.frontend.expenses.subs.user-expenses))
@@ -46,9 +48,8 @@
 (defn- render-actions
   "Row action dropdown (admin-style) for user expenses.
 
-   Uses list-view's modal edit handler when available, and user-scoped delete.
-   Edit/delete buttons remain visible but disabled when disallowed (edit-disabled?/delete-disabled?)."
-  [item]
+   Supports an optional :on-view callback for opening a custom modal."
+  [item {:keys [on-view]}]
   (let [expense-id (id-utils/extract-entity-id item)
         on-edit-click (:on-edit-click item)
         show-edit? (not (false? (:show-edit? item)))
@@ -97,7 +98,9 @@
                     :icon ($ view-icon {:title "View"})
                     :label "View Details"
                     :on-click (fn [_e]
-                                (rf/dispatch [:navigate-to (str "/expenses/" expense-id)]))}]}]}))))
+                                (if on-view
+                                  (on-view item)
+                                  (rf/dispatch [:navigate-to (str "/expenses/" expense-id)])))}]}]}))))
 
 ;; =============================================================================
 ;; Main Page
@@ -105,11 +108,14 @@
 
 (defui expenses-list-page []
   (let [entity-name :expenses
+        [viewing-id set-viewing-id!] (use-state nil)
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         error (use-subscribe [:user-expenses/recent-error])
         can-write? (use-subscribe [:expenses/can-write?])
+        ;; Subscribe to current expense being viewed in modal
+        current-expense (use-subscribe [:user-expenses/current-expense])
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]))
@@ -163,4 +169,20 @@
            :render-edit-form render-edit-form
            :on-add-success refresh-list
            :on-edit-success refresh-list
-           :render-actions render-actions})))))
+           :render-actions (fn [item]
+                             (render-actions item
+                               {:on-view #(set-viewing-id! (id-utils/extract-entity-id %))}))}))
+
+      (when viewing-id
+        (let [supplier-name (or (:supplier_display_name current-expense) "Expense Details")]
+          ($ modal-wrapper
+            {:id (str "modal-view-" viewing-id)
+             :visible? true
+             :title supplier-name
+             :breadcrumbs [{:label "Expenses" :href "/expenses"}
+                           {:label "All Expenses" :href "/expenses/list"}
+                           {:label supplier-name}]
+             :size :large
+             :on-close #(set-viewing-id! nil)}
+            ($ expense-detail-page {:expense-id viewing-id
+                                    :in-modal? true})))))))

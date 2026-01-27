@@ -4,7 +4,7 @@
     [app.admin.frontend.components.format :as fmt]
     [app.admin.frontend.components.ui :as ui]
     [app.shared.date :as date]
-    [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.copy-button :refer [copy-to-clipboard-button]]
     [app.template.frontend.components.json-viewer :refer [json-viewer json-copy-text]]
@@ -292,21 +292,21 @@
                            (keep identity)
                            (into []))
                 header ($ ui/detail-modal-header
-                     {:title "Audit Log Details"
-                      :subtitle header-subtitle
-                      :icon ($ :span {:class "text-lg font-semibold text-primary"}
-                              icon-letter)
-                      :icon-bg "bg-primary/10 text-primary"
-                      :right header-right
-                      :meta header-meta})]
+                   {:title "Audit Log Details"
+                    :subtitle header-subtitle
+                    :icon ($ :span {:class "text-lg font-semibold text-primary"}
+                      icon-letter)
+                    :icon-bg "bg-primary/10 text-primary"
+                    :right header-right
+                    :meta header-meta})]
 
-        ($ modal {:id "admin-audit-details-modal"
-                  :on-close close!
-                  :draggable? true
-                  :width "800px"
-                  :class "max-w-[90vw] h-[80vh] flex flex-col"
-                  :header header
-                  :header-class "p-0 border-0 bg-transparent mb-4"}
-
-          ($ :div {:class "flex-1 overflow-y-auto p-6"}
-            ($ audit-details-body {:audit-log audit-log})))))))
+            ($ modal-wrapper
+              {:id "admin-audit-details-modal"
+               :visible? true
+               :title "Audit Log Details"
+               :header header
+               :size :large
+               :on-close close!
+               :close-button-id "btn-close-admin-audit-details-modal"
+               :content-class "p-6"}
+              ($ audit-details-body {:audit-log audit-log}))))))

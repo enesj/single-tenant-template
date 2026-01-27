@@ -14,6 +14,9 @@ load_local_env() {
     fi
 }
 
+# PID file for PostCSS watcher
+POSTCSS_PID_FILE="/tmp/postcss_watcher.pid"
+
 # Function to check if app is already running
 check_app_running() {
     echo "Checking if app is already running..."
@@ -52,8 +55,51 @@ cleanup_existing() {
     fi
 }
 
+# Function to start PostCSS watcher
+start_postcss() {
+    echo "🎨 Starting PostCSS watcher..."
+    # Check if already running
+    if [ -f "$POSTCSS_PID_FILE" ]; then
+        local existing_pid=$(cat "$POSTCSS_PID_FILE")
+        if ps -p "$existing_pid" > /dev/null 2>&1; then
+            echo "   ℹ️  PostCSS watcher already running (PID: $existing_pid)"
+            return
+        else
+            rm -f "$POSTCSS_PID_FILE"
+        fi
+    fi
+    
+    # Start in background with nohup to survive terminal
+    nohup npm run develop > /tmp/postcss_watcher.log 2>&1 &
+    local postcss_pid=$!
+    echo $postcss_pid > "$POSTCSS_PID_FILE"
+    echo "   ✅ PostCSS watcher started (PID: $postcss_pid)"
+    echo "   📄 Logs: /tmp/postcss_watcher.log"
+}
+
+# Function to stop PostCSS watcher
+stop_postcss() {
+    if [ -f "$POSTCSS_PID_FILE" ]; then
+        local postcss_pid=$(cat "$POSTCSS_PID_FILE")
+        if ps -p "$postcss_pid" > /dev/null 2>&1; then
+            echo "🛑 Stopping PostCSS watcher (PID: $postcss_pid)..."
+            kill -TERM "$postcss_pid" 2>/dev/null
+            # Wait a bit for graceful shutdown
+            sleep 2
+            # Force kill if still running
+            if ps -p "$postcss_pid" > /dev/null 2>&1; then
+                kill -9 "$postcss_pid" 2>/dev/null
+            fi
+        fi
+        rm -f "$POSTCSS_PID_FILE"
+    fi
+}
+
 # Set terminal title
 printf "\033]0;🚀 Single-Tenant Template Server\007"
+
+# Trap to ensure PostCSS is stopped on exit
+trap stop_postcss EXIT INT TERM
 
 # Check if app is already running before starting
 check_app_running
@@ -80,6 +126,10 @@ if [ $COUNT -eq $MAX_RETRIES ]; then
 else
   echo " ✅ Postgres is ready!"
 fi
+
+# Start PostCSS watcher before the main app
+start_postcss
+echo ""
 
 # Run the app with monitoring
 ./scripts/sh/monitoring/monitor_terminal.sh "clojure -M:dev"

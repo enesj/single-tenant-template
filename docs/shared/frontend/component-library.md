@@ -166,16 +166,16 @@ This keeps row layouts consistent and preserves `actions-btn-<id>` hooks for bro
 
 ## Layout Components
 
-### Modal (`app.template.frontend.components.modal`)
+### Modal Wrapper (`app.template.frontend.components.modal-wrapper`)
 
-Used for the per-user “Activity & Analytics” modal.
+Use `modal-wrapper` for all modal dialogs (it supports consistent styling and optional dragging).
 
 ```clojure
-($ modal {:open? open?
-          :size :xl
-          :title "User Activity & Analytics"
-          :on-close #(rf/dispatch [:users/close-activity])
-          :children ($ user-activity-body {:user user})})
+($ modal-wrapper {:visible? open?
+                 :size :extra-large
+                 :title "User Activity & Analytics"
+                 :on-close [:users/close-activity]
+                 :children ($ user-activity-body {:user user})})
 ```
 
 ### Card (`app.template.frontend.components.cards`)

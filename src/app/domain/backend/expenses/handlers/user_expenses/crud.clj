@@ -91,13 +91,21 @@
                            (h/try-parse-uuid (get-in request [:parameters :path :id])))]
           (if expense-id
             (try
-              (let [body (or (:body-params request) (json/parse-string (slurp (:body request)) true))
+              (let [body (h/read-body-params request)
                     updates (select-keys body [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :items])]
                 (if-let [expense (user-expenses/update-user-expense! db user-id expense-id updates)]
                   (h/json-response {:data expense})
                   (h/not-found-response "Expense not found or access denied")))
+              (catch clojure.lang.ExceptionInfo e
+                (log/warn "Validation error updating expense" {:error (ex-message e) :data (ex-data e)})
+                (h/json-response {:error (ex-message e)} 400))
               (catch Exception e
-                (log/error e "Error updating user expense" {:expense-id expense-id})
+                ;; NOTE: Our dev timbre output fn does not always print throwable stack traces.
+                ;; Include message + class explicitly so 500s are debuggable from logs.
+                (log/error "Error updating user expense"
+                  {:expense-id expense-id
+                   :exception (str (class e))
+                   :message (.getMessage e)})
                 (h/json-response {:error "Failed to update expense"} 500)))
             (h/json-response {:error "Invalid expense ID"} 400))))
       (h/unauthorized-response))))

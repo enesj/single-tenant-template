@@ -16,7 +16,7 @@
     [app.template.frontend.components.shared-utils :as shared]
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview]]
-    [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -425,15 +425,19 @@
         header (detail-header {:title "Receipt Details"
                                :subtitle subtitle
                                :icon "R"})]
-    (when open?
-      ($ modal {:id id
-                :on-close #(dispatch! close-modal)
-                :draggable? true
-                :width "960px"
-                :z-index 120
-                :class "max-w-[95vw] h-[85vh] flex flex-col"
-                :header header
-                :header-class "p-0 border-0 bg-transparent mb-3"}
-        ($ :div {:class "flex-1 overflow-y-auto p-4"}
-          ($ receipt-detail-body {:receipt-id receipt-id
-                                  :ctx ctx}))))))
+    ($ modal-wrapper
+      {:id id
+       :visible? open?
+       :on-close #(dispatch! close-modal)
+       :draggable? true
+       :width "960px"
+       :z-index 120
+       :backdrop-opacity 20
+       :class "max-w-[95vw] h-[85vh] flex flex-col"
+       :header header
+       :header-class "p-0 border-0 bg-transparent mb-3"
+       :content-class "p-0 overflow-hidden"
+       :close-button-id (str "btn-close-" (or id "receipt-detail-modal"))}
+      ($ :div {:class "flex-1 overflow-y-auto p-4"}
+        ($ receipt-detail-body {:receipt-id receipt-id
+                                :ctx ctx})))))

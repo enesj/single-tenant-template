@@ -333,6 +333,7 @@
               {:visible? true
                :title (str "Edit " title)
                :size :large
+               :resizable? true
                :on-close handle-edit-modal-close
                :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
               (render-edit-form edit-modal-item

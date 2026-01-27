@@ -350,6 +350,7 @@
      [:modals {:optional true} [:map-of :keyword :any]]
      [:toasts {:optional true} ui-notifications-schema]]]
      [:forms {:optional true} [:map-of :keyword form-state]]
+    [:user-expenses {:optional true} :any]
      [:entity-fetches {:optional true} [:map-of :keyword [:map-of :string :boolean]]]
      [:csrf-token {:optional true} :any]]))
 

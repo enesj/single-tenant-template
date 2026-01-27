@@ -4,6 +4,7 @@
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.shared.adapters.normalization :as normalization]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [re-frame.core :as rf]
@@ -31,13 +32,14 @@
   :user-expenses/fetch-expense-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense (or (:data response) (:expense response))
+    (let [expense-raw (or (:data response) (:expense response))
+          expense (some-> expense-raw normalization/convert-db-keys->app-keys)
           updated-db (-> db
                        (assoc-in [:user-expenses :current-expense :loading?] false)
                        (assoc-in [:user-expenses :current-expense :error] nil)
                        (assoc-in [:user-expenses :current-expense :data] expense))]
       (cond-> {:db updated-db}
-        expense (assoc :dispatch [::expenses-sync/upsert-expenses [expense]])))))
+        expense-raw (assoc :dispatch [::expenses-sync/upsert-expenses [expense-raw]])))))
 
 (rf/reg-event-db
   :user-expenses/fetch-expense-failure

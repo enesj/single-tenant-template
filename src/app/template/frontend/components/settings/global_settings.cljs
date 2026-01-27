@@ -3,7 +3,7 @@
     [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.icons :refer [settings-icon-large]]
-    [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [uix.core :refer [$ defui use-state]]))
 
 (defn calculate-panel-position []
@@ -64,12 +64,17 @@
       ;; Settings panel when expanded
       (when expanded?
         ($ :div {:class "flex items-center space-x-4"}
-          ($ modal
+          ($ modal-wrapper
             {:id "settings-panel-modal"
+             :visible? true
              :on-close #(set-expanded false)
              :draggable? true
              :initial-position panel-position
              :width "280px"
+             :backdrop-opacity 20
+             :close-button-id "btn-close-settings-panel-modal"
+             :header-class "p-0"
+             :content-class "p-0"
              :class "ds-card ds-shadow bg-base-100 rounded-md border-2 border-blue-500 overflow-hidden"
              :header ($ :div {:class "p-2 text-primary font-medium bg-primary-content rounded-t-md"}
                        "Settings")}

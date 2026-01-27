@@ -3,6 +3,7 @@
   (:require
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.shared.adapters.normalization :as normalization]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [re-frame.core :as rf]
@@ -31,6 +32,10 @@
       (if (seq supplier-id-str)
         {:db (-> db
                (assoc-value :current-id supplier-id-str)
+               (assoc-loading :loading? true)
+               (assoc-loading :expenses-loading? true)
+               (assoc-loading :aliases-loading? true)
+               (assoc-loading :observations-loading? true)
                (assoc-value :error nil)
                (assoc-value :expenses [])
                (assoc-value :expenses-error nil)
@@ -78,7 +83,8 @@
   :user-expenses/fetch-supplier-detail-success
   common-interceptors
   (fn [db [supplier-id response]]
-    (let [supplier (or (:data response) (:supplier response) response)]
+    (let [supplier (normalization/convert-db-keys->app-keys
+                     (or (:data response) (:supplier response) response))]
       (-> db
         (assoc-loading :loading? false)
         (assoc-value :error nil)
@@ -120,10 +126,12 @@
   :user-expenses/fetch-supplier-detail-expenses-success
   common-interceptors
   (fn [db [response]]
-    (let [rows (vec (or (:data response)
+    (let [rows (->> (or (:data response)
                       (:expenses response)
                       response
-                      []))]
+                      [])
+                 (normalization/convert-db-keys->app-keys)
+                 vec)]
       (-> db
         (assoc-loading :expenses-loading? false)
         (assoc-value :expenses-error nil)
@@ -162,10 +170,12 @@
   :user-expenses/fetch-supplier-detail-article-aliases-success
   common-interceptors
   (fn [db [response]]
-    (let [rows (vec (or (:data response)
+    (let [rows (->> (or (:data response)
                       (:article-aliases response)
                       response
-                      []))]
+                      [])
+                 (normalization/convert-db-keys->app-keys)
+                 vec)]
       (-> db
         (assoc-loading :aliases-loading? false)
         (assoc-value :aliases-error nil)
@@ -205,10 +215,12 @@
   :user-expenses/fetch-supplier-detail-price-observations-success
   common-interceptors
   (fn [db [response]]
-    (let [rows (vec (or (:data response)
+    (let [rows (->> (or (:data response)
                       (:price-observations response)
                       response
-                      []))]
+                      [])
+                 (normalization/convert-db-keys->app-keys)
+                 vec)]
       (-> db
         (assoc-loading :observations-loading? false)
         (assoc-value :observations-error nil)

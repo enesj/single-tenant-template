@@ -44,8 +44,8 @@
       (when icon
         ($ :span {:class "text-2xl"} icon))
       ($ :div
-        ($ :span {:class "text-xs uppercase tracking-wide text-base-content/60"} label)
-        ($ :p {:class "font-medium mt-1"} (or value "—"))))))
+        ($ :span {:class "text-sm uppercase tracking-wide text-base-content/60"} label)
+        ($ :p {:class "font-medium mt-1 text-base"} (or value "—"))))))
 
 (defui line-item-table [{:keys [items currency]}]
   (if (seq items)
@@ -58,12 +58,19 @@
             ($ :th {:class "text-right"} "Unit Price")
             ($ :th {:class "text-right"} "Total")))
         ($ :tbody
-          (for [{:keys [id raw_label qty unit_price line_total]} items]
-            ($ :tr {:key (str id)}
-              ($ :td raw_label)
-              ($ :td {:class "text-right font-mono"} (or qty "—"))
-              ($ :td {:class "text-right font-mono"} (when unit_price (format-money unit_price currency)))
-              ($ :td {:class "text-right font-mono font-medium"} (format-money line_total currency)))))))
+          (for [{:keys [id
+                       raw_label raw-label
+                       qty
+                       unit_price unit-price
+                       line_total line-total]} items]
+            (let [raw-label* (or raw-label raw_label)
+                  unit-price* (or unit-price unit_price)
+                  line-total* (or line-total line_total)]
+              ($ :tr {:key (str id)}
+                ($ :td raw-label*)
+                ($ :td {:class "text-right font-mono"} (or qty "—"))
+                ($ :td {:class "text-right font-mono"} (when unit-price* (format-money unit-price* currency)))
+                ($ :td {:class "text-right font-mono font-medium"} (format-money line-total* currency))))))))
     ($ :p {:class "text-base-content/50 text-sm"} "No line items recorded.")))
 
 (defui expense-detail-skeleton []
@@ -77,9 +84,11 @@
 ;; Main Page
 ;; ========================================================================
 
-(defui expense-detail-page []
+(defui expense-detail-page
+  [{:keys [expense-id in-modal?] :as _props}]
   (let [current-route (use-subscribe [:current-route])
-        expense-id (or (get-in current-route [:path-params :expense-id])
+        expense-id (or expense-id
+                     (get-in current-route [:path-params :expense-id])
                      (get-in current-route [:parameters :path :expense-id]))
         expense (use-subscribe [:user-expenses/current-expense])
         loading? (boolean (use-subscribe [:user-expenses/current-expense-loading?]))
@@ -94,34 +103,45 @@
         js/undefined)
       [expense-id])
 
-    (let [{:keys [supplier_display_name payer_label total_amount currency
-                  purchased_at notes is_posted items created_at]} expense]
+    (let [{:keys [supplier_display_name supplier-display-name
+                  payer_label payer-label
+                  total_amount total-amount
+                  currency
+                  purchased_at purchased-at
+                  notes
+                  is_posted is-posted
+                  items
+                  created_at created-at]} expense
+          supplier-name (or supplier-display-name supplier_display_name)
+          payer-name (or payer-label payer_label)
+          total (or total-amount total_amount)
+          purchased (or purchased-at purchased_at)
+          created (or created-at created_at)
+          posted? (true? (or is-posted is_posted))]
       ($ :div {:class "min-h-screen bg-base-100"}
-        ;; Header
-        ($ :header {:class "bg-white border-b border-base-200"}
-          ($ :div {:class "max-w-4xl mx-auto px-4 py-4 sm:py-6"}
-            ($ :div {:class "flex items-center justify-between"}
-              ($ :div
-                ($ :div {:class "text-sm ds-breadcrumbs"}
-                  ($ :ul
-                    ($ :li ($ :a {:href "/expenses"} "Expenses"))
-                    ($ :li ($ :a {:href "/expenses/list"} "All Expenses"))
-                    ($ :li (or supplier_display_name "Detail"))))
-                ($ :h1 {:class "text-xl sm:text-2xl font-bold"}
-                  (or supplier_display_name "Expense Detail")))
-              ($ :div {:class "flex gap-2"}
-                ($ button {:btn-type :ghost
-                           :on-click #(rf/dispatch [:navigate-to "/expenses/list"])}
-                  "Back")
-                (when (and expense (not is_posted) can-write?)
-                  ($ button {:btn-type :outline
-                             :id "btn-edit-expense"
-                             :on-click #(rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")])}
-                    "Edit"))
-                ($ button {:btn-type :ghost
-                           :on-click #(when expense-id
-                                        (rf/dispatch [:user-expenses/fetch-expense expense-id]))}
-                  "⟳")))))
+        ;; Header (hidden when in modal)
+        (when-not in-modal?
+          ($ :header {:class "bg-white border-b border-base-200"}
+            ($ :div {:class "max-w-4xl mx-auto px-4 py-4 sm:py-6"}
+              ($ :div {:class "flex items-center justify-between"}
+                ($ :div
+                  ($ :div {:class "text-sm ds-breadcrumbs"}
+                    ($ :ul
+                      ($ :li ($ :a {:href "/expenses"} "Expenses"))
+                      ($ :li ($ :a {:href "/expenses/list"} "All Expenses"))
+                      ($ :li (or supplier-name "Detail"))))
+                  ($ :h1 {:class "text-xl sm:text-2xl font-bold"}
+                    (or supplier-name "Expense Detail")))
+                ($ :div {:class "flex gap-2"}
+                  (when (and expense (not posted?) can-write?)
+                    ($ button {:btn-type :outline
+                               :id "btn-edit-expense"
+                               :on-click #(rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")])}
+                      "Edit"))
+                  ($ button {:btn-type :ghost
+                             :on-click #(when expense-id
+                                          (rf/dispatch [:user-expenses/fetch-expense expense-id]))}
+                    "⟳"))))))
 
         ;; Error
         (when error
@@ -144,43 +164,43 @@
               ;; Status badge
               ($ :div {:class "flex items-center gap-2"}
                 ($ :span {:class (str "ds-badge "
-                                   (if is_posted "ds-badge-success" "ds-badge-warning"))}
-                  (if is_posted "Posted" "Pending"))
-                (when created_at
+                                   (if posted? "ds-badge-success" "ds-badge-warning"))}
+                  (if posted? "Posted" "Pending"))
+                (when created
                   ($ :span {:class "text-sm text-base-content/60"}
-                    (str "Created " (format-short-date created_at)))))
+                    (str "Created " (format-short-date created)))))
 
               ;; Info cards
               ($ :div {:class "grid grid-cols-2 md:grid-cols-4 gap-4"}
-                ($ info-card {:label "Supplier" :value supplier_display_name :icon "🏪"})
-                ($ info-card {:label "Payer" :value payer_label :icon "👤"})
-                ($ info-card {:label "Total" :value (format-money total_amount currency) :icon "💰"})
-                ($ info-card {:label "Date" :value (format-short-date purchased_at) :icon "📅"}))
+                ($ info-card {:label "Supplier" :value supplier-name :icon "🏪"})
+                ($ info-card {:label "Payer" :value payer-name :icon "👤"})
+                ($ info-card {:label "Total" :value (format-money total currency) :icon "💰"})
+                ($ info-card {:label "Date" :value (format-short-date purchased) :icon "📅"}))
 
               ;; Notes
               (when (and notes (not (str/blank? notes)))
                 ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
-                  ($ :h3 {:class "font-semibold mb-2"} "Notes")
-                  ($ :p {:class "text-base-content/80 whitespace-pre-wrap"} notes)))
+                  ($ :h3 {:class "font-semibold mb-2 text-base"} "Notes")
+                  ($ :p {:class "text-base-content/80 whitespace-pre-wrap text-base"} notes)))
 
               ;; Line items
               ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
                 ($ :div {:class "flex items-center justify-between mb-4"}
-                  ($ :h3 {:class "font-semibold"} "Line Items")
-                  ($ :span {:class "text-sm text-base-content/60"}
+                  ($ :h3 {:class "font-semibold text-base"} "Line Items")
+                  ($ :span {:class "text-base text-base-content/60"}
                     (str (count items) " items")))
                 ($ line-item-table {:items items :currency currency}))
 
               ;; Actions - only show for member+ (can-write?)
               (when can-write?
                 ($ :div {:class "flex gap-2 justify-end pt-4 border-t"}
-                  (when (not is_posted)
+                  (when (not posted?)
                     ($ button {:btn-type :error
                                :size :sm
                                :id "btn-delete-expense"
                                :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
                       "Delete"))
-                  (when (not is_posted)
+                  (when (not posted?)
                     ($ button {:btn-type :primary
                                :size :sm
                                :id "btn-post-expense"

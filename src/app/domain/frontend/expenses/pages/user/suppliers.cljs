@@ -11,7 +11,7 @@
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
-    [app.template.frontend.components.modal :refer [modal]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.messages :refer [error-alert]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
@@ -239,9 +239,6 @@
                 subtitle (or supplier-name
                            (when supplier-id (str "Supplier " supplier-id))
                            "Supplier details")
-                header (detail-header {:title "Supplier Details"
-                                       :subtitle subtitle
-                                       :icon "S"})
                 close! (fn []
                          (rf/dispatch [:user-expenses/clear-supplier-detail])
                          (set-detail-supplier nil))]
@@ -249,15 +246,19 @@
               (when debug?
                 ($ :div {:id "debug-user-supplier-detail-open" :class "hidden"}
                   "open"))
-              ($ modal
-                {:id "user-supplier-detail-modal"
+              ($ modal-wrapper
+                {:visible? true
+                 :title "Supplier Details"
+                 :size :extra-large
                  :on-close close!
-                 :draggable? true
-                 :width "960px"
-                 :class "max-w-[95vw] h-[85vh] flex flex-col"
-                 :header header
-                 :header-class "p-0 border-0 bg-transparent mb-3"}
-                ($ :div {:class "flex-1 overflow-y-auto p-4"}
+                 :close-button-id "btn-close-user-supplier-detail-modal"}
+
+                ;; Keep the rich header style inside the modal body.
+                (detail-header {:title "Supplier Details"
+                               :subtitle subtitle
+                               :icon "S"})
+
+                ($ :div {:class "mt-4"}
                   ($ user-supplier-detail-body {:supplier-id supplier-id}))))))
 
         ($ :main {:class "w-full px-4 py-6"}

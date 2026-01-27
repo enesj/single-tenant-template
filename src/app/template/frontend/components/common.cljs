@@ -68,13 +68,13 @@
 
 (defui input
   {:prop-types input-props}
-  [{:keys [id form-id] :as props}]
+  [{:keys [id form-id class] :as props}]
   (when props
     ($ :div
       ($ :input
         (-> props
-          (dissoc :error :input-type :disabled? :validate-server? :form-id :formId)
-          (assoc :class "ds-input ds-input-bordered")
+          (dissoc :error :input-type :disabled? :validate-server? :form-id :formId :class)
+          (assoc :class (str "ds-input ds-input-bordered" (when class (str " " class))))
           (assoc :id (or id (when form-id (str form-id "-input")))))))))
 
 (def select-props

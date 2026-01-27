@@ -1,6 +1,6 @@
 # Copilot instructions (single-tenant template)
 
-**Instruction Precedence**: Read `AGENTS.md` first for **policy & workflow** (hard rules like "no Python", testing discipline, security/secrets, component ID patterns). This file covers **implementation patterns** within those constraints. If instructions conflict, follow the more specific one for the code/path you're working on; otherwise prefer `AGENTS.md` for policy and this file for patterns.
+**Instruction Precedence**: Read `AGENTS.md` first for **policy & workflow** (hard rules like "no Python", testing discipline, security/secrets, component ID patterns). This file covers **implementation patterns** within those constraints.
 
 ## Big picture / entrypoints
 - **Backend system entry**: `src/app/template/backend/core.clj` (loads `config/base.edn`, `resources/db/models.edn`, starts webserver + DI container).
@@ -13,11 +13,10 @@
   - Example domain: Expenses admin routes are mounted under `/admin/api/expenses` (`src/app/domain/backend/expenses/routes/core.clj`).
 
 ## Local dev workflows (use these)
-- Start full stack (hot reload): `bb run-app` (admin UI at `http://localhost:8085/admin`).
+- User starts the app using `bb run-app`. App is automatically reloaded on file changes so no need to ever start it again.
 - Backend tests: `bb be-test` (Kaocha, uses `:test` profile).
 - Frontend tests: `bb fe-test-parallel` (fast) or `npm run test:cljs`.
 - **Save test output once** (don’t re-run to grep): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
-- **No Python** in this repo: use Babashka tasks (`bb ...`) or shell scripts under `scripts/sh/**`.
 
 ## Config & ports
 - Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.
@@ -34,6 +33,70 @@
 - Frontend entity specs: `src/app/template/frontend/db/entity_specs.cljs` normalizes entity keys; if list pages show wrong columns, suspect snake↔kebab mismatch.
 - Re-frame interceptors include `re-frame/trim-v` via `app.template.frontend.db.interceptors/common-interceptors`; handlers should destructure like `[params]` (not `[_ params]`).
 - Backend JSON responses: convert PG-specific objects before encoding (see `app.shared.type-conversion` usage in services).
+
+## Clojure development patterns
+- REPL-first workflow
+  - Evaluate code in the connected REPL; do not spawn new REPLs.
+  - Only edit files when the REPL is connected; if evaluation errors indicate the REPL is unavailable, pause and reconnect before continuing.
+  - Prefer structural edits (Insert/Replace Top Level Form) over free-typing large diffs.
+  - After edits, reload explicitly: `(require 'my.ns :reload)`.
+  - For CLJS, select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
+  - Prefer returning values over printing.
+- Docstrings and function templates
+  - Put docstrings immediately after the function name and before the arg vector.
+  ```clj
+  (defn my-fn
+    "Does X with Y."
+    [x y]
+    ...)
+  ```
+- Indentation and alignment
+  - Align multi-line elements (vectors/maps/lists) vertically; rely on correct indentation for bracket balancing.
+  ```clj
+  (if (and cond-a
+           cond-b)
+    x
+    y)
+  (when ok?
+    (do-something))
+  ```
+- Inline def for debugging
+  - Inline `def` may be used inside fns to keep intermediate state inspectable during REPL work when helpful. Prefer `tap>` for lighter inspection when a global isn’t needed.
+  ```clj
+  (defn process [xs]
+    (def xs xs)
+    (let [g (group-by :k xs)] g))
+  (tap> {:debug/value xs})
+  ```
+- Rich Comment Forms (RCF)
+  - Use `(comment ...)` blocks to document validated usage and edge cases; keep examples copy‑eval ready.
+  ```clj
+  (comment
+    (process [{:k 1} {:k 2}])
+    :rcf)
+  ```
+- Testing from the REPL
+  - Run tests via REPL for focus and speed.
+  ```clj
+  ;; Clojure — run a whole namespace
+  (require 'app.backend.routes.api-test :reload)
+  (clojure.test/run-tests 'app.backend.routes.api-test)
+
+  ;; Clojure — run a single var
+  (clojure.test/test-vars [#'app.backend.routes.api-test/metrics-endpoint-test])
+
+  ;; ClojureScript — select build, reload ns, run
+  (shadow.cljs.devtools.api/nrepl-select :app)  ;; or :admin
+  (require 'app.domain.frontend.registry-test :reload)
+  (cljs.test/run-tests 'app.domain.frontend.registry-test)
+  ```
+  - Follow repo naming: keep `deftest` names with the `-test` suffix; group related checks with `testing`; add `is` messages when useful.
+  - Optional: Kaocha REPL commands are fine, but default `clojure.test`/`cljs.test` patterns above are preferred.
+- Exploration helpers
+  - Dynamic deps via `clojure.repl.deps/add-libs` are for exploration only; never commit them.
+  - Avoid stdin reads in Babashka/nREPL contexts; pass data as args.
+- Reload safety
+  - Keep top-level code idempotent and side-effect-light so repeated `:reload` remains safe.
 
 ## Security middleware toggles
 - HTTPS redirect can be disabled with `DISABLE_HTTPS_REDIRECT=true`; rate limiting with `DISABLE_RATE_LIMITING=true` (see `src/app/template/backend/middleware/security.clj`).
