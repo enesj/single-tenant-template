@@ -34,20 +34,21 @@
 
 (deftest domain-view-options-policy-locks-test
   (testing "Domain view-options can express policy locks that override user prefs"
-    ;; Use an entity whose domain config actually locks the batch actions off.
-    (let [view-options (expenses-config/view-options :suppliers)]
+    ;; Use an entity whose domain config actually defines explicit batch locks.
+    ;; (This covers both forcing a flag OFF and forcing a flag ON.)
+    (let [view-options (expenses-config/view-options :receipts)]
       (is (contains? view-options :display-locks)
         "Domain config should support explicit :display-locks")
       (let [result (resolver/resolve-display-settings
-                     :suppliers
+                     :receipts
                      {:view-options view-options
-                      :entity-config (or (expenses-config/entity-config :suppliers) {})
+                      :entity-config (or (expenses-config/entity-config :receipts) {})
                       :user-prefs {:show-batch-edit? true
-                                   :show-batch-delete? true}
+                                   :show-batch-delete? false}
                       :legacy-prefs {}})]
         (is (false? (get-in result [:effective :show-batch-edit?]))
           "Locked batch-edit should override user preference")
-        (is (false? (get-in result [:effective :show-batch-delete?]))
+        (is (true? (get-in result [:effective :show-batch-delete?]))
           "Locked batch-delete should override user preference")
         (is (contains? (:locked result) :show-batch-edit?)
           "Batch-edit should be recorded as locked")
