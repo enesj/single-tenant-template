@@ -3,6 +3,8 @@
   (:require
     [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
+    [app.shared.adapters.normalization :as normalization]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.form :refer [form]]
@@ -13,6 +15,29 @@
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
     app.domain.frontend.expenses.subs.user-expenses))
+
+(defn- spec-field-keys
+  "Return the set of field keys (as keywords) described by a form spec.
+
+  Handles either a seq of {:id ...} maps or a map keyed by field id." 
+  [spec]
+  (->> (cond
+         (map? spec) (vals spec)
+         (sequential? spec) spec
+         :else [])
+    (keep :id)
+    (map keyword)
+    set))
+
+(defn- initial-values-for
+  "Build initial-values that work with both:
+
+  - enhanced/dynamic specs (kebab-case keys like :raw-label)
+  - fallback hardcoded specs (snake_case keys like :raw_label)
+
+  by merging app keys plus their db-key equivalents." 
+  [app-values]
+  (merge (model-naming/app-map-keys->db app-values) app-values))
 
 (def ^:private expense-item-form-spec
   [{:id :raw_label
@@ -46,10 +71,12 @@
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :expense-items true])
-        ;; Build initial values from data, covering all possible fields
-        initial-values (-> (or initial-data {})
-                         (select-keys [:raw_label :article_id :qty :unit_price :line_total
-                                       :id :expense_id :raw_label_id :alias_id]))]
+        spec-to-use (if (seq dynamic-spec) dynamic-spec expense-item-form-spec)
+        ;; Build initial values from data.
+        initial-values (initial-values-for
+                         (-> (normalization/convert-db-keys->app-keys (or initial-data {}))
+                           (select-keys [:raw-label :article-id :qty :unit-price :line-total
+                                         :id :expense-id :raw-label-id :alias-id])))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -63,7 +90,11 @@
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/update-expense-item-modal expense-item-id values on-success]))
+                      (let [payload (select-keys values (spec-field-keys spec-to-use))]
+                        (rf/dispatch [:user-expenses/update-expense-item-modal
+                                      expense-item-id
+                                      (model-naming/app-map-keys->db payload)
+                                      on-success])))
          :button-text "Update Expense Item"}))))
 
 (defn- render-edit-form

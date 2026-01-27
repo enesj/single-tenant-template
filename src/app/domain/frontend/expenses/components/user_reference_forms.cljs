@@ -188,9 +188,11 @@
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :payer-types true])
-        ;; Build initial values from data, covering all possible fields
-        initial-values (-> (select-keys (or initial-data {}) [:label :is_default :id])
-                         (update :is_default #(boolean %)))]
+        ;; Build initial values from data.
+        ;; Dynamic form spec uses kebab-case IDs (e.g. :is-default).
+        initial-values (-> (norm/convert-db-keys->app-keys (or initial-data {}))
+                         (select-keys [:label :is-default :id])
+                         (update :is-default boolean))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -204,5 +206,9 @@
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/update-payer-type-modal payer-type-id values on-success]))
+                      ;; Convert kebab-case form keys to snake_case for the API.
+                      (rf/dispatch [:user-expenses/update-payer-type-modal
+                                    payer-type-id
+                                    (model-naming/app-map-keys->db values)
+                                    on-success]))
          :button-text "Update Payer Type"}))))
