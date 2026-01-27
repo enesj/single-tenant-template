@@ -1,9 +1,9 @@
 (ns app.template.backend.routes.admin.auth
   "Admin authentication handlers"
   (:require
-   [app.template.backend.routes.admin.utils :as utils]
-  [app.admin.backend.services.admin.auth :as admin-auth]
-   [app.template.backend.services.monitoring.login-events :as login-monitoring]))
+    [app.template.backend.routes.admin.utils :as utils]
+    [app.admin.backend.services.admin.auth :as admin-auth]
+    [app.template.backend.services.monitoring.login-events :as login-monitoring]))
 
 (defn login-handler
   "Handle admin login"
@@ -11,13 +11,14 @@
   (utils/with-error-handling
     (fn [request]
       (let [{:keys [email password]} (:body request)
-        {:keys [ip-address user-agent]} (utils/extract-request-context request)]
+            {:keys [ip-address user-agent]} (utils/extract-request-context request)
+            existing-session (or (:session request) {})]
         (if-let [admin (admin-auth/authenticate-admin db email password)]
           (let [admin-id (:id admin)
-            admin-email (:email admin)
-            admin-name (:full_name admin)
-            admin-role (:role admin)
-          session (admin-auth/create-admin-session! db admin-id ip-address user-agent)]
+                admin-email (:email admin)
+                admin-name (:full_name admin)
+                admin-role (:role admin)
+                session (admin-auth/create-admin-session! db admin-id ip-address user-agent)]
 
             ;; Record successful admin login in monitoring table
             (login-monitoring/record-login-event! db
@@ -39,7 +40,9 @@
                            :full_name admin-name
                            :role admin-role}
                    :token (:token session)})
-              (assoc-in [:session :admin-token] (:token session))))
+              ;; IMPORTANT: merge with existing session to avoid wiping user auth-session.
+              (assoc :session (assoc existing-session :admin-token (:token session)))))
+
           (do
             ;; Record failed login attempt when we can resolve admin id
             (when-let [admin-row (admin-auth/find-admin-by-email db email)]
@@ -52,7 +55,7 @@
                      :reason "invalid_credentials"
                      :ip ip-address
                      :user-agent user-agent}))))
-                      (utils/error-response "Invalid credentials" :status 401)))))
+            (utils/error-response "Invalid credentials" :status 401)))))
     "Failed to process admin login"))
 
 (defn logout-handler
@@ -62,7 +65,9 @@
     (fn [request]
       (let [token (or (get-in request [:session :admin-token])
                     (get-in request [:headers "x-admin-token"]))
-            admin-id (utils/get-admin-id request)]
+            admin-id (utils/get-admin-id request)
+            existing-session (or (:session request) {})
+            new-session (dissoc existing-session :admin-token)]
         (when token
           (admin-auth/invalidate-session! db token))
 
@@ -70,7 +75,8 @@
           (utils/log-admin-action "logout" admin-id "admin" admin-id {}))
 
         (-> (utils/success-response)
-          (assoc :session nil))))
+          ;; IMPORTANT: keep any existing user session data; only remove admin-token.
+          (assoc :session (when (seq new-session) new-session)))))
     "Failed to process admin logout"))
 
 ;; Route definitions

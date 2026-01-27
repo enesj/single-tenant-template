@@ -19,12 +19,18 @@
 ;; It uses the AuthenticationService to perform the actual logic.
 
 (def logout-handler
-  "Handle logout by clearing the session"
-  (fn [_req]
+  "Handle logout by clearing *user* auth from the session.
+
+  IMPORTANT: We keep other session keys (e.g. :admin-token) intact so that
+  signing out of the user UI does not implicitly sign out of the admin UI."
+  (fn [req]
     (log/info "Processing logout request")
-    (-> (response/response (json/generate-string {:success true}))
-      (response/content-type "application/json")
-      (assoc :session nil))))
+    (let [existing-session (or (:session req) {})
+          new-session (-> existing-session
+                        (dissoc :auth-session :user :tenant :tenant-id :user-id))]
+      (-> (response/response (json/generate-string {:success true}))
+        (response/content-type "application/json")
+        (assoc :session (when (seq new-session) new-session))))))
 
 (defn- sanitize-for-serialization
   "Helper function to sanitize objects for JSON/EDN serialization"
@@ -56,7 +62,8 @@
   [auth-service]
   (fn [req]
     (route-utils/with-error-handling "user-registration"
-      (let [{:keys [email full-name password]} (:body-params req)]
+      (let [{:keys [email full-name password]} (:body-params req)
+            existing-session (or (:session req) {})]
         (log/info "Processing registration request for:" email)
         ;; Note: We log the keys of the request, but be careful not to log the password!
         (log/info "Request keys:" (keys req))
@@ -78,7 +85,8 @@
                         :full-name full-name
                         :password password})
               {:keys [user verification-required]} result
-              sanitized-user (sanitize-for-serialization user)]
+              sanitized-user (sanitize-for-serialization user)
+              new-session (assoc existing-session :auth-session {:user sanitized-user})]
 
           (if verification-required
             ;; User created but needs email verification
@@ -86,14 +94,14 @@
                   {:success true
                    :verification-required true
                    :message "Registration successful. Please check your email for verification."})
-              ;; Store only EDN-serializable data in Ring session cookie
-              (assoc-in [:session :auth-session] {:user sanitized-user}))
+              ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
+              (assoc :session new-session))
 
             ;; User registered successfully without verification requirement
             (-> (json-response {:success true
                                 :verification-required false
                                 :user sanitized-user})
-              (assoc-in [:session :auth-session] {:user sanitized-user}))))))))
+              (assoc :session new-session))))))))
 
 ;; NEW: Email/password login endpoint
 (defn login-handler
@@ -106,7 +114,8 @@
             remote-addr (:remote-addr req)
             headers (:headers req)
             ip (or remote-addr (get headers "x-forwarded-for"))
-            ua (get headers "user-agent")]
+            ua (get headers "user-agent")
+            existing-session (or (:session req) {})]
 
         ;; Validate required fields
         (when (or (empty? email) (empty? password))
@@ -117,7 +126,8 @@
           (let [auth-result (auth-service/login-with-password
                               auth-service {:email email :password password})
                 user-safe (sanitize-for-serialization (:user auth-result))
-                user-id (:id (:user auth-result))]
+                user-id (:id (:user auth-result))
+                new-session (assoc existing-session :auth-session {:user user-safe})]
 
             ;; Record successful login
             (login-monitoring/record-login-event! db
@@ -130,8 +140,8 @@
 
             ;; Return success response with session
             (-> (json-response {:success true :user user-safe})
-              ;; Store only serializable user data in session (Ring cookie store requirement)
-              (assoc-in [:session :auth-session] {:user user-safe})))
+              ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
+              (assoc :session new-session)))
 
           (catch clojure.lang.ExceptionInfo e
             ;; Handle authentication failure
@@ -197,7 +207,10 @@
           (let [test-oauth-data {:email "test@example.com"
                                  :name "Test User"
                                  :hd nil}
-                session (auth-service/process-oauth-callback auth-service test-oauth-data :test)]
+                session (auth-service/process-oauth-callback auth-service test-oauth-data :test)
+                user (sanitize-for-serialization (:user session))
+                existing-session (or (:session req) {})
+                new-session (assoc existing-session :auth-session {:user user})]
 
             (log/info "Test authentication session created for user:" (:email (:user session)))
 
@@ -206,9 +219,9 @@
              :body (json/generate-string
                      {:success true
                       :message "Test authentication session created"
-                      :session {:user (sanitize-for-serialization (:user session))}})
-             ;; Store ONLY serializable user data in session (Ring cookie store requirement)
-             :session {:auth-session {:user (sanitize-for-serialization (:user session))}}}))))))
+                      :session {:user user}})
+             ;; IMPORTANT: merge with existing session (e.g. :admin-token).
+             :session new-session}))))))
 
 (defn create-auth-routes
   "Create authentication routes that use the authentication service"
