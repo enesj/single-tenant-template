@@ -57,7 +57,7 @@
            header-class
            children]
     :or {draggable? false
-         z-index 50}}]
+         z-index 9999}}]
 
   (let [base-id (when (string? id)
                   (if (.endsWith id "-modal")
@@ -80,12 +80,27 @@
         resolved-backdrop-style (when (number? backdrop-opacity)
                                   {:background-color (str "rgba(0,0,0," (/ backdrop-opacity 100) ")")})
 
+        ;; If a modal is resizable we must not constrain it via fixed max-w/max-h
+        ;; size presets; instead clamp it to the viewport.
+        resolved-size-class (if resizable?
+                              "max-w-[95vw] max-h-[95vh]"
+                              (case size
+                                :small "max-w-md max-h-[32rem]"
+                                :medium "max-w-2xl max-h-[40rem]"
+                                :large "max-w-4xl max-h-[48rem]"
+                                :extra-large "max-w-6xl max-h-[64rem]"
+                                "max-w-2xl max-h-[40rem]"))
+
         resolved-box-style (merge
                              (when resizable?
                                {:resize "both"
-                                :overflow "auto"
+                                ;; resize requires overflow != visible; keep this hidden so
+                                ;; we don’t create a second scrollbar outside the content.
+                                :overflow "hidden"
                                 :minWidth "400px"
-                                :minHeight "300px"})
+                                :minHeight "300px"
+                                :maxWidth "95vw"
+                                :maxHeight "95vh"})
                              (when (string? width)
                                {:width width})
                              (when draggable?
@@ -121,12 +136,7 @@
       ($ :div {:id id
                :ref actual-form-ref
                :class (str "ds-modal-box p-0 flex flex-col "
-                        (case size
-                          :small "max-w-md max-h-[32rem]"
-                          :medium "max-w-2xl max-h-[40rem]"
-                          :large "max-w-4xl max-h-[48rem]"
-                          :extra-large "max-w-6xl max-h-[64rem]"
-                          "max-w-2xl max-h-[40rem]")
+                        resolved-size-class
                         (when (seq class) (str " " class)))
                :style resolved-box-style
                :role "dialog"
@@ -137,8 +147,8 @@
         ;; Modal header with title and close button - sticky
         ($ :div (merge
                   {:class (str "flex justify-between items-center px-6 py-4 border-b border-base-200 sticky top-0 bg-base-100 z-10"
-                           (when (seq header-class) (str " " header-class))
-                           (when draggable? " cursor-move select-none"))}
+                            (when (seq header-class) (str " " header-class))
+                            (when draggable? " cursor-move select-none"))}
                   (when draggable?
                     (-> actual-header-props
                       (dissoc :class)

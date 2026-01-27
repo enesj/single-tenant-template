@@ -291,22 +291,24 @@
             header-right (->> [action-badge close-button]
                            (keep identity)
                            (into []))
-                header ($ ui/detail-modal-header
-                   {:title "Audit Log Details"
-                    :subtitle header-subtitle
-                    :icon ($ :span {:class "text-lg font-semibold text-primary"}
-                      icon-letter)
-                    :icon-bg "bg-primary/10 text-primary"
-                    :right header-right
-                    :meta header-meta})]
+            header ($ ui/detail-modal-header
+                     {:title "Audit Log Details"
+                      :subtitle header-subtitle
+                      :icon ($ :span {:class "text-lg font-semibold text-primary"}
+                              icon-letter)
+                      :icon-bg "bg-primary/10 text-primary"
+                      :right header-right
+                      :meta header-meta})]
 
-            ($ modal-wrapper
-              {:id "admin-audit-details-modal"
-               :visible? true
-               :title "Audit Log Details"
-               :header header
-               :size :large
-               :on-close close!
-               :close-button-id "btn-close-admin-audit-details-modal"
-               :content-class "p-6"}
-              ($ audit-details-body {:audit-log audit-log}))))))
+        ($ modal-wrapper
+          {:id "admin-audit-details-modal"
+           :visible? true
+           :title "Audit Log Details"
+           :header header
+           :size :large
+           :draggable? true
+           :resizable? true
+           :on-close close!
+           :close-button-id "btn-close-admin-audit-details-modal"
+           :content-class "p-6"}
+          ($ audit-details-body {:audit-log audit-log}))))))

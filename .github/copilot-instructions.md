@@ -2,6 +2,13 @@
 
 **Instruction Precedence**: Read `AGENTS.md` first for **policy & workflow** (hard rules like "no Python", testing discipline, security/secrets, component ID patterns). This file covers **implementation patterns** within those constraints.
 
+## MCP tools (use these first)
+
+- **Clojure/EDN edits**: For `.clj`/`.cljs`/`.cljc`/`.edn`, use `clojure-mcp` structural editing tools (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit produces reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text diffs.
+- **REPL evaluation is the main debugger/test runner**: Use `mcp__clojure-mcp__clojure_eval` / `mcp__clojure-mcp__clojurescript_eval` for exploration, debugging, and running focused tests (examples below).
+- **Database operations**: Use `postgres-mcp` tools for queries and schema inspection (e.g. `mcp__postgres__execute_sql`, `mcp__postgres__list_tables`).
+- **Browser interactions**: Use `chrome-mcp` tools for interactive UI testing; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
+
 ## Big picture / entrypoints
 - **Backend system entry**: `src/app/template/backend/core.clj` (loads `config/base.edn`, `resources/db/models.edn`, starts webserver + DI container).
 - **DI container**: `src/app/template/di/config.clj` (register/get services like `:crud-service`, `:auth-service`).
@@ -16,7 +23,7 @@
 - User starts the app using `bb run-app`. App is automatically reloaded on file changes so no need to ever start it again.
 - Backend tests: `bb be-test` (Kaocha, uses `:test` profile).
 - Frontend tests: `bb fe-test-parallel` (fast) or `npm run test:cljs`.
-- **Save test output once** (don’t re-run to grep): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
+- **Save test output once** (don’t re-run to grep; see `AGENTS.md` “Testing discipline”): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
 
 ## Config & ports
 - Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.
@@ -38,7 +45,7 @@
 - REPL-first workflow
   - Evaluate code in the connected REPL; do not spawn new REPLs.
   - Only edit files when the REPL is connected; if evaluation errors indicate the REPL is unavailable, pause and reconnect before continuing.
-  - Prefer structural edits (Insert/Replace Top Level Form) over free-typing large diffs.
+  - Use `clojure-mcp` structural edits for Clojure/EDN changes (don’t free-type large diffs). If you hit reader/compilation errors after a plain-text edit, immediately switch/redo using `clojure-mcp` to keep forms balanced.
   - After edits, reload explicitly: `(require 'my.ns :reload)`.
   - For CLJS, select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
   - Prefer returning values over printing.
@@ -90,7 +97,7 @@
   (require 'app.domain.frontend.registry-test :reload)
   (cljs.test/run-tests 'app.domain.frontend.registry-test)
   ```
-  - Follow repo naming: keep `deftest` names with the `-test` suffix; group related checks with `testing`; add `is` messages when useful.
+  - Follow existing file conventions for `deftest` naming (many use `*-test` suffix; some use `test-*` prefix). Keep names descriptive and stay consistent within the namespace; group related checks with `testing`; add `is` messages when useful.
   - Optional: Kaocha REPL commands are fine, but default `clojure.test`/`cljs.test` patterns above are preferred.
 - Exploration helpers
   - Dynamic deps via `clojure.repl.deps/add-libs` are for exploration only; never commit them.

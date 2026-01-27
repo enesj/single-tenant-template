@@ -183,6 +183,9 @@
                            {:label "All Expenses" :href "/expenses/list"}
                            {:label supplier-name}]
              :size :large
+             :draggable? true
+             :resizable? true
+             :close-button-id (str "btn-close-expense-details-" viewing-id)
              :on-close #(set-viewing-id! nil)}
             ($ expense-detail-page {:expense-id viewing-id
                                     :in-modal? true})))))))

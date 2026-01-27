@@ -27,8 +27,8 @@
                              (fn [e]
                                (on-change
                                  (h/update-line-item items item-id key (.. e -target -value)))))]
-    ($ :div {:class "space-y-2"}
-      ($ :div {:class "flex items-center justify-between mb-2"}
+    ($ :div {:class "space-y-4"}
+      ($ :div {:class "flex items-center justify-between"}
         ($ :h2 {:class "text-lg font-semibold"} (:label field-spec))
         ($ :button {:id (str "btn-add-" field-key "-line-item")
                     :class "ds-btn ds-btn-ghost ds-btn-sm"
@@ -40,46 +40,40 @@
             style (merge {:maxHeight "300px"}
                     (:style field-spec)
                     (when stable-gutter? {:scrollbarGutter "stable"}))]
-        ($ :div {:class (str "border border-base-300 rounded-lg bg-base-200/30 "
-                          overflow-y-class " "
-                          (:max-height-class field-spec))
+        ($ :div {:class (str "overflow-x-auto " (:max-height-class field-spec) " " overflow-y-class)
                  :style style}
-          ($ :div {:class "min-w-full"}
-            ($ :div {:class "flex bg-base-200 sticky top-0 z-10 gap-2 px-2 py-2 border-b border-base-300"}
-              (for [col columns
-                    :let [label (:label col)
-                          width (:width col)]]
-                ($ :div {:key (:id col)
-                         :class (str "font-bold text-sm " (or width ""))}
-                  label))
-              ($ :div {:class "w-8"}))
-            ($ :div {:class "divide-y divide-base-200"}
+          ($ :table {:class "ds-table w-full"}
+            ($ :thead
+              ($ :tr
+                (for [col columns
+                      :let [label (:label col)
+                            width (:width col)]]
+                  ($ :th {:key (:id col)
+                          :class (or width "")}
+                    label))
+                ($ :th "")))
+            ($ :tbody
               (for [item items
                     :let [item-id (:id item)]]
-                ($ :div {:key item-id
-                         :class "flex items-center gap-2 px-2 py-1"}
+                ($ :tr {:key item-id}
                   (for [col columns
                         :let [col-id (:id col)
                               val (get item col-id)
                               type (:type col)
                               placeholder (:placeholder col)
                               step (:step col)
-                              min-val (:min col)
-                              width (:width col)
-                              is-number? (= type :number)]]
-                    ($ :div {:key col-id
-                             :class (or width "")}
+                              min-val (:min col)]]
+                    ($ :td {:key col-id}
                       ($ common/input
                         (cond-> {:id (input-id item-id col-id)
-                                 :class (str "ds-input ds-input-bordered ds-input-sm w-full"
-                                          (when is-number? " text-right font-mono"))
+                                 :class "ds-input ds-input-bordered w-full"
                                  :value (or val "")
                                  :type (name (or type :text))
                                  :on-change (handle-line-change item-id col-id)}
                           placeholder (assoc :placeholder placeholder)
                           step (assoc :step step)
                           min-val (assoc :min min-val)))))
-                  ($ :div {:class "w-8 shrink-0 text-center"}
+                  ($ :td {:class "w-8 text-center"}
                     ($ :button {:id (str "btn-remove-" field-key "-line-item-" item-id)
                                 :class "text-error hover:text-error/80 p-1"
                                 :type "button"

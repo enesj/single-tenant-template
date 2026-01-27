@@ -140,12 +140,12 @@
                          (and (string? value) (str/blank? value)) false
                          :else true))
             {:keys [email full-name]} (or user {})
-                initials (fmt/user-initials full-name email)
+            initials (fmt/user-initials full-name email)
             header-subtitle (cond
                               (present? email) email
                               loading? "Loading user information…"
                               :else "User profile overview")
-                header ($ ui/detail-modal-header
+            header ($ ui/detail-modal-header
                      {:title "User Details"
                       :subtitle header-subtitle
                       :icon ($ :span {:class "text-lg font-semibold text-primary"}
@@ -158,6 +158,8 @@
            :title "User Details"
            :header header
            :size :large
+           :draggable? true
+           :resizable? true
            :on-close close!
            :close-button-id "btn-close-admin-user-details-modal"
            :content-class "p-4"}

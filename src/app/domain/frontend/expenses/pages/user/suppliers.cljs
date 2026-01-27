@@ -247,16 +247,19 @@
                 ($ :div {:id "debug-user-supplier-detail-open" :class "hidden"}
                   "open"))
               ($ modal-wrapper
-                {:visible? true
+                {:id "user-supplier-detail-modal"
+                 :visible? true
                  :title "Supplier Details"
                  :size :extra-large
+                 :draggable? true
+                 :resizable? true
                  :on-close close!
                  :close-button-id "btn-close-user-supplier-detail-modal"}
 
                 ;; Keep the rich header style inside the modal body.
                 (detail-header {:title "Supplier Details"
-                               :subtitle subtitle
-                               :icon "S"})
+                                :subtitle subtitle
+                                :icon "S"})
 
                 ($ :div {:class "mt-4"}
                   ($ user-supplier-detail-body {:supplier-id supplier-id}))))))

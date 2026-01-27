@@ -430,6 +430,7 @@
        :visible? open?
        :on-close #(dispatch! close-modal)
        :draggable? true
+       :resizable? true
        :width "960px"
        :z-index 120
        :backdrop-opacity 20

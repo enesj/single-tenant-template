@@ -6,7 +6,7 @@
 - Multi-file work and **2+** of: cross-cutting scope, lots of iterative searching, need `path:line` evidence → run **session-context-bundle** (Morph → `bb audit-bundle` → Lattice).
 - Large file or multi-step analysis → use Lattice (load once, query/expand).
 - Edits by file type:
-  - `.clj`/`.cljs`/`.cljc`/`.edn` → clojure-mcp structured edits, then REPL eval.
+  - `.clj`/`.cljs`/`.cljc`/`.edn` → clojure-mcp structural edits (see “MCP tool discipline” below).
   - `.md` → Morph edits.
   - Other files → standard edits with minimal diffs.
 - Debugging skill map:
@@ -16,6 +16,19 @@
   - Docs vs code alignment → **doc-alignment-audit**
 - Interactive browser testing → **chrome-mcp** (use IDs and verify selectability).
 - Database work (queries, inspection, schema info) → **postgres-mcp** tools.
+
+## MCP tool discipline (mandatory)
+
+These MCP servers are part of the app and should be your primary interface:
+
+- **Clojure/EDN edits**: Always use `clojure-mcp` structural editors for `.clj`/`.cljs`/`.cljc`/`.edn` changes (prefer `mcp__clojure-mcp__clojure_edit` and `mcp__clojure-mcp__clojure_edit_replace_sexp`). If a non-structural edit causes reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop immediately and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text edits.
+- **REPL evaluation is the main feedback loop**: Use `mcp__clojure-mcp__clojure_eval` (backend) and `mcp__clojure-mcp__clojurescript_eval` (frontend) for exploration, debugging, and running focused tests. Always use `:reload` on `require`. If `.cljs` `require` fails, select the build first:
+  ```clojure
+  (shadow.cljs.devtools.api/nrepl-select :app)
+  ```
+  Use `:admin` for the admin panel.
+- **DB access and operations**: Use `postgres-mcp` tools (e.g. `mcp__postgres__execute_sql`, schema inspection, lock inspection) instead of guessing schema or writing pseudo-SQL.
+- **Browser interactions**: Use `chrome-mcp` tools (read/click/fill/screenshot) for interactive UI testing and element verification; rely on stable `:id` attributes (see Component ID requirements below).
 
 ## Instruction Scope & Precedence
 
@@ -65,17 +78,6 @@ Example save-output pattern:
 bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
 bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt
 ```
-
-## Clojure REPL evaluation
-
-- Backend: use `mcp__clojure-mcp__clojure_eval`.
-- Frontend: use `mcp__clojure-mcp__clojurescript_eval`.
-- Always use `:reload` on `require`.
-- If `require` fails for `.cljs`, switch runtime:
-  ```clojure
-  (shadow.cljs.devtools.api/nrepl-select :app)
-  ```
-  Use `:admin` for the admin panel.
 
 ## Component ID requirements (browser testing)
 

@@ -4,34 +4,10 @@
     [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.utils.id :as id-utils]
     [app.shared.adapters.normalization :as normalization]
-    [app.shared.model-naming :as model-naming]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
-
-(defn- spec-field-keys
-  "Return the set of field keys (as keywords) described by a form spec.
-
-  Handles either a seq of {:id ...} maps or a map keyed by field id." 
-  [spec]
-  (->> (cond
-         (map? spec) (vals spec)
-         (sequential? spec) spec
-         :else [])
-    (keep :id)
-    (map keyword)
-    set))
-
-(defn- initial-values-for
-  "Build initial-values that work with both:
-
-  - enhanced/dynamic specs (kebab-case keys like :display-name)
-  - fallback hardcoded specs (snake_case keys like :display_name)
-
-  by merging app keys plus their db-key equivalents." 
-  [app-values]
-  (merge (model-naming/app-map-keys->db app-values) app-values))
 
 (def ^:private article-form-spec
   [{:id :canonical_name
@@ -55,9 +31,7 @@
          :initial-values {}
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/create-article-modal
-                                    (model-naming/app-map-keys->db values)
-                                    on-success]))
+                      (rf/dispatch [:user-expenses/create-article-modal values on-success]))
          :button-text "Save Article"}))))
 
 (def ^:private article-edit-form-spec
@@ -77,17 +51,14 @@
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :articles true])
-        spec-to-use (if (seq dynamic-spec) dynamic-spec article-edit-form-spec)
         item (normalization/convert-db-keys->app-keys item)
         article-id (id-utils/extract-entity-id item)
-        ;; Build initial values from item.
-        ;; NOTE: enhanced specs use kebab-case field ids; fallback specs in this
-        ;; file still use snake_case ids. We merge both key styles.
-        initial-values (initial-values-for
-                         {:canonical-name (or (:canonical-name item) (:canonicalName item) "")
-                          :category (or (:category item) "")
-                          :manufacturer (or (:manufacturer item) "")
-                          :id (or (:id item) "")})]
+        ;; Build initial values from item, covering all possible fields
+        initial-values (-> {}
+                         (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
+                         (assoc :category (or (:category item) ""))
+                         (assoc :manufacturer (or (:manufacturer item) ""))
+                         (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -101,11 +72,10 @@
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (let [payload (select-keys values (spec-field-keys spec-to-use))]
-                        (rf/dispatch [:user-expenses/update-article-modal
-                                      (some-> article-id str)
-                                      (model-naming/app-map-keys->db payload)
-                                      on-success])))
+                      (rf/dispatch [:user-expenses/update-article-modal
+                                    (some-> article-id str)
+                                    values
+                                    on-success]))
          :button-text "Save Article"}))))
 
 (def ^:private article-alias-edit-form-spec
@@ -125,20 +95,19 @@
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :article-aliases true])
-        spec-to-use (if (seq dynamic-spec) dynamic-spec article-alias-edit-form-spec)
         item (normalization/convert-db-keys->app-keys item)
         article-alias-id (id-utils/extract-entity-id item)
-        ;; Build initial values from item.
-        initial-values (initial-values-for
-                         {:raw-label (or (:raw-label item) "")
-                          :raw-label-normalized (or (:raw-label-normalized item) "")
-                          :article-id (or (:article-id item) "")
-                          :created-at (or (:created-at item) "")
-                          :supplier-display-name (or (:supplier-display-name item) "")
-                          :article-canonical-name (or (:article-canonical-name item) "")
-                          :confidence (or (:confidence item) "")
-                          :id (or (:id item) "")
-                          :supplier-id (or (:supplier-id item) "")})]
+        ;; Build initial values from item, covering all possible fields
+        initial-values (-> {}
+                         (assoc :raw_label (or (:raw-label item) ""))
+                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
+                         (assoc :article_id (or (:article-id item) ""))
+                         (assoc :created_at (or (:created-at item) ""))
+                         (assoc :supplier_display_name (or (:supplier-display-name item) ""))
+                         (assoc :article_canonical_name (or (:article-canonical-name item) ""))
+                         (assoc :confidence (or (:confidence item) ""))
+                         (assoc :id (or (:id item) ""))
+                         (assoc :supplier_id (or (:supplier-id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -152,11 +121,10 @@
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (let [payload (select-keys values (spec-field-keys spec-to-use))]
-                        (rf/dispatch [:user-expenses/update-article-alias-modal
-                                      (some-> article-alias-id str)
-                                      (model-naming/app-map-keys->db payload)
-                                      on-success])))
+                      (rf/dispatch [:user-expenses/update-article-alias-modal
+                                    (some-> article-alias-id str)
+                                    values
+                                    on-success]))
          :button-text "Save Alias"}))))
 
 (def ^:private supplier-alias-edit-form-spec
@@ -175,16 +143,15 @@
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :supplier-aliases true])
-        spec-to-use (if (seq dynamic-spec) dynamic-spec supplier-alias-edit-form-spec)
         item (normalization/convert-db-keys->app-keys item)
         supplier-alias-id (id-utils/extract-entity-id item)
-        ;; Build initial values from item.
-        initial-values (initial-values-for
-                         {:raw-label (or (:raw-label item) "")
-                          :raw-label-normalized (or (:raw-label-normalized item) "")
-                          :supplier-id (or (:supplier-id item) "")
-                          :confidence (or (:confidence item) "")
-                          :id (or (:id item) "")})]
+        ;; Build initial values from item, covering all possible fields
+        initial-values (-> {}
+                         (assoc :raw_label (or (:raw-label item) ""))
+                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
+                         (assoc :supplier_id (or (:supplier-id item) ""))
+                         (assoc :confidence (or (:confidence item) ""))
+                         (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -198,11 +165,10 @@
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (let [payload (select-keys values (spec-field-keys spec-to-use))]
-                        (rf/dispatch [:user-expenses/update-supplier-alias-modal
-                                      (some-> supplier-alias-id str)
-                                      (model-naming/app-map-keys->db payload)
-                                      on-success])))
+                      (rf/dispatch [:user-expenses/update-supplier-alias-modal
+                                    (some-> supplier-alias-id str)
+                                    values
+                                    on-success]))
          :button-text "Save Alias"}))))
 
 (defn- pad-two
@@ -266,23 +232,21 @@
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :price-observations true])
-        spec-to-use (if (seq dynamic-spec) dynamic-spec price-observation-edit-form-spec)
         item (normalization/convert-db-keys->app-keys item)
         price-observation-id (id-utils/extract-entity-id item)
         observed-at (:observed-at item)
         unit-price (:unit-price item)
         line-total (:line-total item)
-        ;; Build initial values from item.
-        initial-values (initial-values-for
-                         {:observed-at (datetime-local observed-at)
-                          :qty (or (:qty item) "")
-                          :unit-price (or unit-price "")
-                          :line-total (or line-total "")
-                          :currency (or (:currency item) "")
-                          :id (or (:id item) "")
-                          :article-id (or (:article-id item) "")
-                          :supplier-id (or (:supplier-id item) "")
-                          :expense-item-id (or (:expense-item-id item) "")})]
+        ;; Build initial values from item, covering all possible fields
+        initial-values {:observed_at (datetime-local observed-at)
+                        :qty (or (:qty item) "")
+                        :unit_price (or unit-price "")
+                        :line_total (or line-total "")
+                        :currency (or (:currency item) "")
+                        :id (or (:id item) "")
+                        :article_id (or (:article-id item) "")
+                        :supplier_id (or (:supplier-id item) "")
+                        :expense_item_id (or (:expense-item-id item) "")}]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -296,10 +260,9 @@
          :initial-values initial-values
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      (let [payload (select-keys values (spec-field-keys spec-to-use))]
-                        (rf/dispatch [:user-expenses/update-price-observation-modal
-                                      (some-> price-observation-id str)
-                                      (model-naming/app-map-keys->db payload)
-                                      on-success])))
+                      (rf/dispatch [:user-expenses/update-price-observation-modal
+                                    (some-> price-observation-id str)
+                                    values
+                                    on-success]))
          :button-text "Save Observation"}))))
 

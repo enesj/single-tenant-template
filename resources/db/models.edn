@@ -180,6 +180,8 @@
     {:foreign-key :expense_items/id, :on-delete :set-null}]
    [:observed_at :timestamptz {:null false}]
    [:unit_price [:decimal 12 2]]
+   [:line_total [:decimal 12 2] {:null false}]
+   [:qty [:decimal 10 3]]
    [:currency [:enum :currency] {:default "BAM"}]
    [:created_at :timestamptz {:default "NOW()"}]],
   :indexes
