@@ -8,6 +8,7 @@
                                                     dashboard-icon
                                                     expense-items-icon
                                                     expenses-icon
+                                                    logout-icon
                                                     price-observations-icon
                                                     payers-icon
                                                     receipts-icon
@@ -47,11 +48,14 @@
 
 (defui user-sidebar []
   (let [current-route (use-subscribe [:current-route])
+        current-user (use-subscribe [:current-user])
         role (normalize-role (use-subscribe [:user-role]))
+        is-owner? (= role "owner")
         power-user? (contains? #{"admin" "owner"} role)
         can-upload? (contains? #{"member" "admin" "owner"} role)
         route-name (or (get-in current-route [:data :name]) (:name current-route))
         active? (fn [names] (contains? names route-name))
+        user-display-name (or (:full-name current-user) (:email current-user) "User")
 
         expense-items (vec
                         (concat
@@ -160,13 +164,27 @@
     ($ sidebar
       {:title "Expenses"
        :sections sections
-       :footer ($ :ul {:class "ds-menu w-full p-0"}
-                 ($ :li
-                   ($ :a {:id "user-sidebar-logout"
-                          :href "/logout"
-                          :on-click (fn [e] (stop-and-push! e :logout "/logout"))
-                          :class (if (= route-name :logout) "ds-active" "")}
-                     "Log Out")))})))
+       :footer ($ :div {:class "p-3 border-t border-base-300"}
+                 ;; User info
+                 ($ :div {:class "flex items-center justify-between mb-2"}
+                   ($ :div {:class "flex flex-col min-w-0"}
+                     ($ :span {:class "text-sm font-medium truncate"
+                               :id "sidebar-user-name"}
+                       user-display-name)
+                     (when role
+                       ($ :span {:class (str "ds-badge ds-badge-xs mt-1 "
+                                          (if is-owner? "ds-badge-primary" "ds-badge-secondary"))
+                                 :id "sidebar-user-role"}
+                         role))))
+                 ;; Logout link
+                 ($ :a {:id "user-sidebar-logout"
+                        :href "/logout"
+                        :on-click (fn [e] (stop-and-push! e :logout "/logout"))
+                        :class (str "flex items-center gap-2 text-sm py-2 px-2 rounded-lg "
+                                 "hover:bg-base-200 transition-colors "
+                                 (if (= route-name :logout) "bg-base-200 font-medium" ""))}
+                   ($ logout-icon {:class "w-4 h-4"})
+                   "Log Out"))})))
 
 (defui user-header []
   ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}

@@ -212,7 +212,9 @@
                   (seq recent)
                   (for [expense recent]
                     (let [supplier (or (:supplier-display-name expense)
+                                     (:supplier_display_name expense)
                                      (:supplier-normalized-key expense)
+                                     (:supplier_normalized_key expense)
                                      "Unknown supplier")
                           amount (format-money (:total_amount expense)
                                    (or (:currency expense) primary-currency-str))

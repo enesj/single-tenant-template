@@ -1,15 +1,14 @@
 (ns app.template.frontend.components.auth
   (:require
-    [app.template.frontend.events.auth :as auth-events]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [default-provider-icon
                                                     github-icon google-icon]]
     [clojure.string :as str]
-    [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui auth-component
+  "User info display component (without logout button - logout is in sidebar only)"
   []
   (let [auth-status (use-subscribe [:auth-status])
         current-user (use-subscribe [:current-user])
@@ -17,7 +16,7 @@
         is-owner? (use-subscribe [:is-tenant-owner?])]
 
     (if (and auth-status (:authenticated auth-status))
-      ;; User is authenticated
+      ;; User is authenticated - show info only (no Sign Out button)
       ($ :div {:class "flex justify-between items-center space-x-2"}
         ;; Provider logo + user info container
         ($ :div {:class "flex items-center space-x-2"}
@@ -63,14 +62,7 @@
           (when current-user
             ($ :span {:class (str "ds-badge ds-badge-sm "
                                (if is-owner? "ds-badge-primary" "ds-badge-secondary"))}
-              (str (name (:role current-user))))))          ; ENSURE STRING OUTPUT
-
-        ;; Sign Out Button - FIXED event dispatch
-        ($ button {:btn-type :error
-                   :class "ds-btn-sm"
-                   :id "auth-sign-out-btn"
-                   :on-click #(rf/dispatch [::auth-events/logout])}
-          "Sign Out"))
+              (str (name (:role current-user)))))))
 
       ;; User is not authenticated
       ($ :div {:class "flex items-center space-x-2"}

@@ -55,7 +55,7 @@
     ($ :div {:class "relative"}
       ;; Gear icon button
       ($ button {:btn-type :ghost
-                 :class "ds-btn-circle"
+                 :class "ds-btn-circle border border-base-200 bg-base-100/70 text-base-content/90 shadow-sm hover:bg-base-100"
                  :id "admin-settings-gear"
                  :title "Settings"
                  :on-click #(set-expanded! (not expanded?))}

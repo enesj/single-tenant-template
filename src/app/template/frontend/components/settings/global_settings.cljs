@@ -1,6 +1,5 @@
 (ns app.template.frontend.components.settings.global-settings
   (:require
-    [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.icons :refer [settings-icon-large]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
@@ -85,8 +84,8 @@
               ($ :div {:class "flex flex-col gap-4 mb-3 p-2"}
                 ($ :div {:class "flex items-center justify-between"}
                   ($ :span {:class "font-medium mr-4 font-bold"} "Theme")
-                  ($ change-theme))
-              ;; Settings links (moved from sidebar)
+                  ($ change-theme)))
+              ;; Settings links
               ($ :div {:class "flex flex-col gap-2 mb-3 p-2 border-t border-base-200"}
                 ($ :span {:class "text-xs font-semibold uppercase text-gray-500"}
                   "Settings")
@@ -100,5 +99,4 @@
                     ($ :a {:id "settings-panel-change-password"
                            :href "/change-password"
                            :on-click #(set-expanded false)}
-                      "Change Password"))))
-              ($ auth-component)))))))))
+                      "Change Password")))))))))))
