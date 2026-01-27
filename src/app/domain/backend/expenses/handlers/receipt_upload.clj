@@ -8,10 +8,10 @@
   The stored `storage_key` is the generated filename (relative), so the worker
   can resolve it using `--storage-base-dir upload/stripes`."
   (:require
-    [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [app.template.backend.routes.admin.utils :as admin-utils]
+    [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.shared.adapters.database :as shared-db]
+    [app.template.backend.routes.admin.utils :as admin-utils]
     [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -23,30 +23,70 @@
 
 (def ^:private max-file-size-bytes (* 10 1024 1024))
 
-(defn- file-prop
-  [m k]
-  (or (get m k) (get m (name k))))
+(defn- kebabify
+  "Normalize a param key segment into kebab-case.
 
-(defn- uploaded-file
-  "Extract a parsed multipart file map from a Ring request.
+  Handles:
+  - snake_case -> kebab-case
+  - camelCase  -> kebab-case
 
-  Supports both string and keyword keys (depending on middleware)."
+  Returns nil when input is nil."
+  [s]
+  (some-> s
+    (str/replace #"([a-z0-9])([A-Z])" "$1-$2")
+    (str/replace #"([A-Z]+)([A-Z][a-z])" "$1-$2")
+    (str/lower-case)
+    (str/replace "_" "-")))
+
+(defn- normalize-param-key
+  "Coerce a request param key (string/keyword/etc) into a canonical kebab-case keyword.
+
+  Examples:
+  - \"payer_id\" -> :payer-id
+  - \"payerId\"  -> :payer-id
+  - :payer_id    -> :payer-id"
+  [k]
+  (let [kw* (cond
+              (keyword? k) k
+              (symbol? k) (keyword (name k))
+              (string? k) (some-> k str/trim not-empty keyword)
+              (nil? k) nil
+              :else (keyword (str k)))]
+    (when kw*
+      (let [ns* (some-> kw* namespace kebabify)
+            name* (some-> kw* name kebabify)]
+        (when (seq name*)
+          (if (seq ns*)
+            (keyword ns* name*)
+            (keyword name*)))))))
+
+(defn- normalize-param-map
+  "Normalize a params map to canonical kebab-case keyword keys.
+
+  Recurses into nested maps (notably multipart file maps)."
+  [m]
+  (when m
+    (into (empty m)
+      (map (fn [[k v]]
+             [(normalize-param-key k)
+              (if (map? v)
+                (normalize-param-map v)
+                v)]))
+      m)))
+
+(defn- normalized-request-params
+  "Return a merged+normalized param map for a Ring request.
+
+  - Merges :params with :multipart-params.
+  - Prefers :multipart-params values when keys overlap.
+  - Normalizes keys into kebab-case keywords."
   [request]
-  (or (get-in request [:multipart-params :file])
-    (get-in request [:multipart-params "file"])
-    (get-in request [:params :file])
-    (get-in request [:params "file"])))
-
-(defn- request-param
-  "Read a parameter from either :multipart-params or :params, supporting keyword or string keys."
-  [request k]
-  (or (get-in request [:multipart-params k])
-    (get-in request [:multipart-params (name k)])
-    (get-in request [:params k])
-    (get-in request [:params (name k)])))
+  (or (merge (normalize-param-map (:params request))
+        (normalize-param-map (:multipart-params request)))
+    {}))
 
 (defn- parse-uuid-param
-  "Parse an optional UUID param from the request.
+  "Parse an optional UUID param.
 
   Returns a java.util.UUID or nil.
   Throws ex-info {:status 400 :field <k>} when invalid."
@@ -81,46 +121,45 @@
 
 (defn- store-uploaded-file!
   [{:keys [tempfile filename content-type size] :as file-map}]
-  (let [tempfile (or tempfile (file-prop file-map :tempfile))
-        filename (or filename (file-prop file-map :filename))
-        content-type (or content-type (file-prop file-map :content-type))
-        size (or size (file-prop file-map :size))]
-    (when-not (instance? java.io.File tempfile)
-      (throw (ex-info "Invalid upload payload" {:status 400
-                                                :file-keys (vec (keys file-map))})))
+  (when-not (instance? java.io.File tempfile)
+    (throw (ex-info "Invalid upload payload"
+             {:status 400
+              :file-keys (vec (keys file-map))})))
 
-    (let [bytes (Files/readAllBytes (.toPath ^java.io.File tempfile))
-          size (long (or size (alength bytes)))]
-      (when (and max-file-size-bytes (> size (long max-file-size-bytes)))
-        (throw (ex-info "File too large (max 10MB)" {:status 400
-                                                     :size-bytes size
-                                                     :max-bytes max-file-size-bytes})))
+  (let [bytes (Files/readAllBytes (.toPath ^java.io.File tempfile))
+        size (long (or size (alength bytes)))]
+    (when (and max-file-size-bytes (> size (long max-file-size-bytes)))
+      (throw (ex-info "File too large (max 10MB)"
+               {:status 400
+                :size-bytes size
+                :max-bytes max-file-size-bytes})))
 
-      (let [ext (safe-extension filename content-type)
-            storage-key (str (UUID/randomUUID) ext)
-            out-file (io/file (ensure-upload-dir!) storage-key)]
-        (Files/write (.toPath out-file) bytes (into-array java.nio.file.OpenOption []))
-        {:storage_key storage-key
-         :bytes bytes
-         :file_size size
-         :original_filename filename
-         :content_type content-type}))))
+    (let [ext (safe-extension filename content-type)
+          storage-key (str (UUID/randomUUID) ext)
+          out-file (io/file (ensure-upload-dir!) storage-key)]
+      (Files/write (.toPath out-file) bytes (into-array java.nio.file.OpenOption []))
+      {:storage_key storage-key
+       :bytes bytes
+       :file_size size
+       :original_filename filename
+       :content_type content-type})))
 
 (defn- create-receipt-from-upload!
   [db request]
-  (let [file (uploaded-file request)]
+  (let [params (normalized-request-params request)
+        file (:file params)]
     (when-not (map? file)
-      (throw (ex-info "Missing multipart file param 'file'" {:status 400
-                                                             :content-type (get-in request [:headers "content-type"])
-                                                             :has-multipart-params? (contains? request :multipart-params)
-                                                             :multipart-keys (some-> request :multipart-params keys vec)
-                                                             :param-keys (some-> request :params keys vec)})))
+      (throw (ex-info "Missing multipart file param 'file'"
+               {:status 400
+                :content-type (get-in request [:headers "content-type"])
+                :has-multipart-params? (contains? request :multipart-params)
+                :multipart-keys (some-> request :multipart-params keys vec)
+                :param-keys (some-> request :params keys vec)
+                :normalized-param-keys (some-> params keys vec)})))
+
     (let [{:keys [storage_key bytes original_filename content_type file_size]} (store-uploaded-file! file)
           user-id (h/get-user-id request)
-          payer-id (parse-uuid-param :payer_id
-                     (or (request-param request :payer_id)
-                       (request-param request :payer-id)
-                       (request-param request :payerId)))
+          payer-id (parse-uuid-param :payer-id (:payer-id params))
           result (receipt-storage/upload-receipt! db {:user_id user-id
                                                       :payer_id payer-id
                                                       :storage_key storage_key

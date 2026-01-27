@@ -19,7 +19,7 @@
 
 (defn- supplier-sort-key
   [supplier]
-  (-> (or (:display-name supplier) (:display_name supplier) "")
+  (-> (or (:display-name supplier) "")
     str
     str/trim
     str/lower-case))
@@ -43,8 +43,8 @@
 
 (rf/reg-event-fx
   ::create-inline
-  (fn [{:keys [db]} [_ {:keys [display_name] :as form-data} on-success]]
-    (let [name* (some-> display_name str str/trim)]
+  (fn [{:keys [db]} [_ {:keys [display-name] :as form-data} on-success]]
+    (let [name* (some-> display-name str str/trim)]
       (if (str/blank? name*)
         {:db (-> db
                (assoc-in (conj inline-create-path :loading?) false)
@@ -54,7 +54,7 @@
                (assoc-in (conj inline-create-path :error) nil))
          :http-xhrio (admin-http/admin-post
                        {:uri "/admin/api/expenses/suppliers"
-                        :params (assoc form-data :display_name name*)
+                        :params (assoc form-data :display-name name*)
                         :response-format (ajax/json-response-format {:keywords? true})
                         :on-success [::create-inline-success on-success]
                         :on-failure [::create-inline-failed]})}))))

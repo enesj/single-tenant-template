@@ -9,11 +9,11 @@
 
 (defn- supplier-option-label
   [s]
-  (or (:display-name s) (:display_name s) (str (:id s))))
+  (or (:display-name s) (str (:id s))))
 
 (defn- article-option-label
   [a]
-  (or (:canonical-name a) (:canonical_name a) (str (:id a))))
+  (or (:canonical-name a) (str (:id a))))
 
 (defui map-to-article-modal
   []
@@ -324,8 +324,6 @@
                           (some-> (:supplier-id it) str)
                           "—"))
                       ($ :td
-                        (or (:occurrence_count it)
-                          (:occurrence-count it)
-                          0))))))))))
+                        (or (:occurrence-count it) 0))))))))))
 
       ($ map-to-article-modal))))

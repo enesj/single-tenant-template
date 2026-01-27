@@ -37,27 +37,18 @@
 
 (defui user-price-observation-detail-body
   [{:keys [observation observation-id]}]
-  (let [obs* (or observation {})
-        observed-at (or (:observed-at obs*)
-                      (:observed_at obs*))
-        article-label (or (:article-canonical-name obs*)
-                        (:article_canonical_name obs*)
-                        (:article-label obs*)
-                        (:article_label obs*)
-                        (:article-id obs*)
-                        (:article_id obs*))
-        supplier-label (or (:supplier-display-name obs*)
-                         (:supplier_display_name obs*)
-                         (:supplier-label obs*)
-                         (:supplier_label obs*))
-        unit-price (or (:unit-price obs*)
-                     (:unit_price obs*))
-        quantity (or (:quantity obs*)
-                   (:qty obs*))
-        currency (or (:currency obs*)
-                   (:currency-code obs*)
-                   (:currency_code obs*))
-        id-value (or (:id obs*) observation-id)]
+  (let [obs (or observation {})
+        observed-at (:observed-at obs)
+        article-label (or (:article-canonical-name obs)
+                        (:article-id obs)
+                        "")
+        supplier-label (or (:supplier-display-name obs)
+                         (:supplier-id obs)
+                         "")
+        unit-price (:unit-price obs)
+        qty (:qty obs)
+        currency (:currency obs)
+        id-value (or (:id obs) observation-id)]
     ($ :div {:class "space-y-3"}
       (cond
         (nil? observation)
@@ -70,7 +61,7 @@
           (detail-utils/label-value "Article" article-label)
           (detail-utils/label-value "Supplier" supplier-label)
           (detail-utils/label-value "Unit Price" unit-price)
-          (detail-utils/label-value "Quantity" quantity)
+          (detail-utils/label-value "Quantity" qty)
           (detail-utils/label-value "Currency" currency)
           (detail-utils/label-value "ID" (or id-value (some-> observation-id str))))))))
 
@@ -83,10 +74,9 @@
         entity-name :price-observations
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         [detail-observation set-detail-observation] (use-state nil)
-        detail-observation-id (some-> detail-observation id-utils/extract-entity-id)
+        detail-observation-id (some-> detail-observation id-utils/extract-entity-id str)
         entities-by-id (use-subscribe [::entity-subs/entity-data entity-name])
         detail-observation-record (or (get entities-by-id detail-observation-id)
-                                    (get entities-by-id (some-> detail-observation-id str))
                                     detail-observation)
         refresh-list (use-callback
                        (fn []
@@ -171,11 +161,8 @@
            (when detail-observation
              (let [observation-id detail-observation-id
                    article-label (or (:article-canonical-name detail-observation-record)
-                                   (:article_canonical_name detail-observation-record)
-                                   (:article-label detail-observation-record)
-                                   (:article_label detail-observation-record))
-                   observed-at (or (:observed-at detail-observation-record)
-                                 (:observed_at detail-observation-record))
+                                   (:article-id detail-observation-record))
+                   observed-at (:observed-at detail-observation-record)
                    subtitle (or (when (and article-label observed-at)
                                   (str article-label " · " (shared/format-date observed-at)))
                               (when observation-id (str "Observation " observation-id))

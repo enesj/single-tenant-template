@@ -9,10 +9,10 @@
 ;; Entity Route Configurations
 ;; =============================================================================
 
-(defn- get-param
-  "Get param from map, trying both keyword and string keys."
-  [m k]
-  (or (get m k) (get m (if (keyword? k) (name k) (keyword k)))))
+(comment
+  ;; Query param maps are normalized upstream by the routes factory.
+  ;; Use direct keyword access like (:search qp).
+  :ok)
 
 (def supplier-config
   {:entity-key :supplier
@@ -21,13 +21,13 @@
    :service 'app.domain.backend.expenses.services.suppliers
    :default-limit 100
    :default-order-by "display_name"
-   :required-fields [:display_name]
+   :required-fields [:display-name]
    :has-count? true
    :has-search? true
    :custom-query-params (fn [qp]
-                          {:search (get-param qp :search)})
+                          {:search (:search qp)})
    :custom-count-params (fn [qp]
-                          {:search (get-param qp :search)})})
+                          {:search (:search qp)})})
 
 (def payer-config
   {:entity-key :payer
@@ -36,7 +36,7 @@
    :service 'app.domain.backend.expenses.services.payers
    :default-limit 100
    :default-order-by "label"
-   :required-fields [:payer_type_id :label]
+   :required-fields [:payer-type-id :label]
    :has-count? true
    :has-search? false
    :custom-query-params (fn [_qp] {})})
@@ -62,11 +62,11 @@
    :service 'app.domain.backend.expenses.services.articles
    :default-limit 50
    :default-order-by "canonical_name"
-   :required-fields [:canonical_name]
+   :required-fields [:canonical-name]
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:search (get-param qp :search)})})
+                          {:search (:search qp)})})
 
 (def expense-config
   {:entity-key :expense
@@ -79,14 +79,12 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:from (get-param qp :from)
-                           :to (get-param qp :to)
-                           :supplier-id (or (utils/parse-uuid-custom (get-param qp :supplier_id))
-                                          (utils/parse-uuid-custom (get-param qp :supplier-id)))
-                           :payer-id (or (utils/parse-uuid-custom (get-param qp :payer_id))
-                                       (utils/parse-uuid-custom (get-param qp :payer-id)))
-                           :is-posted? (utils/parse-boolean-param qp :is_posted)
-                           :order-dir (keyword (or (get-param qp :order-dir) "desc"))})})
+                          {:from (:from qp)
+                           :to (:to qp)
+                           :supplier-id (utils/parse-uuid-custom (:supplier-id qp))
+                           :payer-id (utils/parse-uuid-custom (:payer-id qp))
+                           :is-posted? (utils/parse-boolean-param qp :is-posted)
+                           :order-dir (keyword (or (:order-dir qp) "desc"))})})
 
 (def expense-item-config
   {:entity-key :expense-item
@@ -97,11 +95,11 @@
    :default-order-by "created_at"
    ;; NOTE: raw_label is resolved server-side into expense_items.alias_id.
    ;; Keeping :required-fields minimal avoids rejecting requests that only send raw_label.
-   :required-fields [:expense_id :line_total]
+   :required-fields [:expense-id :line-total]
    :has-count? true
    :has-search? true
    :custom-query-params (fn [qp]
-                          {:search (get-param qp :search)})})
+                          {:search (:search qp)})})
 
 (def receipt-config
   {:entity-key :receipt
@@ -110,11 +108,11 @@
    :service 'app.domain.backend.expenses.services.receipts.queries
    :default-limit 50
    :default-order-by "receipt_date"
-   :required-fields [:file_url]
+   :required-fields [:file-url]
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:status (get-param qp :status)})
+                          {:status (:status qp)})
    :transform-request (fn [body]
                         (update body :status #(when % (name %))))})
 
@@ -129,10 +127,10 @@
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:article-id (utils/parse-uuid-custom (get-param qp :article_id))
-                           :supplier-id (utils/parse-uuid-custom (get-param qp :supplier_id))
-                           :from (get-param qp :from)
-                           :to (get-param qp :to)})})
+                          {:article-id (utils/parse-uuid-custom (:article-id qp))
+                           :supplier-id (utils/parse-uuid-custom (:supplier-id qp))
+                           :from (:from qp)
+                           :to (:to qp)})})
 
 (def article-alias-config
   {:entity-key :article-alias
@@ -141,13 +139,13 @@
    :service 'app.domain.backend.expenses.services.article-aliases
    :default-limit 50
    :default-order-by "raw_label"
-   :required-fields [:supplier_id :raw_label :raw_label_normalized]
+   :required-fields [:supplier-id :raw-label :raw-label-normalized]
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:supplier-id (utils/parse-uuid-custom (get-param qp :supplier_id))
-                           :raw-label (get-param qp :raw-label)
-                           :article-id (utils/parse-uuid-custom (get-param qp :article_id))})})
+                          {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
+                           :raw-label (:raw-label qp)
+                           :article-id (utils/parse-uuid-custom (:article-id qp))})})
 
 (def supplier-alias-config
   {:entity-key :supplier-alias
@@ -156,27 +154,21 @@
    :service 'app.domain.backend.expenses.services.supplier-aliases
    :default-limit 50
    :default-order-by "raw_label"
-   :required-fields [:raw_label :raw_label_normalized]
+   :required-fields [:raw-label :raw-label-normalized]
    :has-count? false
    :has-search? false
    :custom-query-params (fn [qp]
-                          {:supplier-id (utils/parse-uuid-custom
-                                          (or (get-param qp :supplier-id)
-                                            (get-param qp :supplier_id)))
+                          {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
                            :unmapped-only (utils/parse-boolean-param qp :unmapped-only)
-                           :search (get-param qp :search)})
-   ;; Allow clients to omit raw_label_normalized; compute it server-side.
+                           :search (:search qp)})
+   ;; Allow clients to omit raw-label-normalized; compute it server-side.
    :transform-request (fn [body]
-                        (let [raw-label (or (:raw_label body) (:raw-label body))
-                              normalized (or (:raw_label_normalized body)
-                                           (:raw-label-normalized body)
+                        (let [raw-label (:raw-label body)
+                              normalized (or (:raw-label-normalized body)
                                            (when raw-label
                                              (svc-configs/normalize-supplier-key raw-label)))]
                           (cond-> body
-                            raw-label (assoc :raw_label raw-label)
-                            normalized (assoc :raw_label_normalized normalized))))})
-
-
+                            normalized (assoc :raw-label-normalized normalized))))})
 
 ;; =============================================================================
 ;; Configuration Map
@@ -193,4 +185,4 @@
    :receipts receipt-config
    :price-observations price-observation-config
    :article-aliases article-alias-config
-  :supplier-aliases supplier-alias-config})
+   :supplier-aliases supplier-alias-config})

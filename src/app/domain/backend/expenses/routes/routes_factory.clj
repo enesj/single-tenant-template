@@ -5,10 +5,12 @@
    across the expenses domain routes while maintaining flexibility for entity-specific
    behavior through configuration."
   (:require
-    [app.template.backend.routes.admin.utils :as utils]
     [app.shared.adapters.database :as shared-db]
+    [app.shared.model-naming :as model-naming]
+    [app.template.backend.routes.admin.utils :as utils]
     [cheshire.core :as json]
     [clojure.string :as str]
+    [clojure.walk :as walk]
     [taoensso.timbre :as log]))
 
 ;; =============================================================================
@@ -105,6 +107,58 @@
   [m k]
   (or (get m k) (get m (if (keyword? k) (name k) (keyword k)))))
 
+(defn- normalize-map-keys->app
+  "Normalize the keys of a request/params map into canonical app keywords.
+
+  This is boundary-only normalization:
+  - Accepts keyword or string keys.
+  - Converts snake_case to kebab-case via `model-naming/ensure-app-keyword`.
+
+  NOTE: If both snake_case and kebab-case versions are provided, the last one
+  in iteration order wins."
+  [m]
+  (when m
+    (into (empty m)
+      (map (fn [[k v]]
+             [(model-naming/ensure-app-keyword k) v]))
+      m)))
+
+(defn- normalize-keys-deep->app
+  "Recursively normalize map keys into canonical app keywords."
+  [data]
+  (walk/postwalk
+    (fn [v]
+      (if (map? v)
+        (into (empty v)
+          (map (fn [[k vv]]
+                 [(model-naming/ensure-app-keyword k) vv]))
+          v)
+        v))
+    (or data {})))
+
+(defn- to-db-deep
+  "Recursively convert app keyword keys to DB (snake_case) keyword keys."
+  [data]
+  (walk/postwalk
+    (fn [v]
+      (if (map? v)
+        (into (empty v)
+          (map (fn [[k vv]]
+                 [(if (keyword? k)
+                    (model-naming/app-keyword->db k)
+                    k)
+                  vv]))
+          v)
+        v))
+    (or data {})))
+
+(defn- order-by->db
+  "Normalize an order-by value (snake/kebab/string/keyword) into a DB keyword."
+  [order-by default-order-by]
+  (let [v (or order-by default-order-by)]
+    (model-naming/app-keyword->db
+      (model-naming/ensure-app-keyword v))))
+
 (defn build-list-handler
   "Builds a generic list handler for an entity."
   [{:keys [service _entity-key entity-plural default-limit default-order-by
@@ -112,11 +166,11 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [qp (:query-params request)
+        (let [qp (or (normalize-map-keys->app (:query-params request)) {})
               custom-params (when custom-query-params (custom-query-params qp))
               query-params (merge {:limit (utils/parse-int-param qp :limit default-limit)
                                    :offset (utils/parse-int-param qp :offset 0)
-                                   :order-by (keyword (or (get-param qp :order-by) default-order-by))
+                                   :order-by (order-by->db (get-param qp :order-by) default-order-by)
                                    :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
                              custom-params)
               list-fn (resolve-service-op-fn service
@@ -136,7 +190,7 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [qp (:query-params request)
+        (let [qp (or (normalize-map-keys->app (:query-params request)) {})
               params (if custom-count-params (custom-count-params qp) {})
               count-fn (resolve-service-op-fn service
                          (symbol (str "count-" (name entity-plural)))
@@ -152,7 +206,7 @@
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [body (read-json-body request)
+        (let [body (normalize-keys-deep->app (read-json-body request))
               data (if transform-request (transform-request body) body)
               missing (vec (remove #(contains? data %) (or required-fields [])))]
           (if (seq missing)
@@ -161,7 +215,7 @@
                               (symbol (str "create-" (name entity-key) "!"))
                               :create!)
                   data* (if custom-validation (custom-validation data) data)
-                  created (create-fn db data*)
+                  created (create-fn db (to-db-deep data*))
                   response-key (or (:response-key transform-response) entity-key)
                   response-data (if (:transform transform-response)
                                   ((:transform transform-response) created)
@@ -195,10 +249,10 @@
     (utils/with-error-handling
       (fn [request]
         (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
-              body (read-json-body request)
+              body (normalize-keys-deep->app (read-json-body request))
               data (if transform-request (transform-request body) body)
               update-fn (resolve-service-op-fn service (symbol (str "update-" (name entity-key) "!")) :update!)
-              updated (when id (update-fn db id data))]
+              updated (when id (update-fn db id (to-db-deep data)))]
           (if updated
             (let [response-key (or (:response-key transform-response) entity-key)
                   response-data (if (:transform transform-response)

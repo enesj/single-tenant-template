@@ -9,6 +9,7 @@
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
   (:import
+    [java.math RoundingMode]
     [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
     [java.util Date UUID]))
 
@@ -120,15 +121,34 @@
     (update m k f)
     m))
 
+(defn- derive-unit-price
+  "Derive a unit price from line total and quantity.
+
+  Receipts often omit an explicit unit price; when qty is missing we treat the
+  line total as the unit price (i.e. assume qty=1)."
+  [qty line-total]
+  (cond
+    (nil? line-total) nil
+    (nil? qty) line-total
+    (pos? qty) (.divide ^java.math.BigDecimal line-total
+                 ^java.math.BigDecimal qty
+                 2
+                 RoundingMode/HALF_UP)
+    :else nil))
+
 (defn- normalize-expense-item
   [item]
-  (-> item
-    (update-if-present :id #(parse-uuid! :id %))
-    (update-if-present :alias_id #(parse-uuid! :alias_id %))
-    (update-if-present :raw_label #(some-> % str str/trim))
-    (update-if-present :qty #(parse-bigdec! :qty %))
-    (update-if-present :unit_price #(parse-bigdec! :unit_price %))
-    (update-if-present :line_total #(parse-bigdec! :line_total %))))
+  (let [item* (-> item
+                (update-if-present :id #(parse-uuid! :id %))
+                (update-if-present :alias_id #(parse-uuid! :alias_id %))
+                (update-if-present :raw_label #(some-> % str str/trim))
+                (update-if-present :qty #(parse-bigdec! :qty %))
+                (update-if-present :unit_price #(parse-bigdec! :unit_price %))
+                (update-if-present :line_total #(parse-bigdec! :line_total %)))
+        derived-unit-price (when (nil? (:unit_price item*))
+                             (derive-unit-price (:qty item*) (:line_total item*)))]
+    (cond-> item*
+      derived-unit-price (assoc :unit_price derived-unit-price))))
 
 (def ^:private min-alias-normalized-length
   "Minimum length of a normalized alias label to be considered valid.

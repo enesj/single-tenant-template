@@ -48,7 +48,7 @@
   :user-expenses/fetch-articles-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [articles (vec (or (:articles response) (:data response) []))]
+    (let [articles (vec (or (:articles response) []))]
       {:db (finish-entity-load db :articles nil)
        :dispatch [::expenses-sync/sync-articles articles]})))
 
@@ -61,8 +61,8 @@
 (rf/reg-event-fx
   :user-expenses/create-article-modal
   common-interceptors
-  (fn [{:keys [db]} [{:keys [canonical_name canonical-name]} on-success]]
-    (let [name* (or canonical_name canonical-name)]
+  (fn [{:keys [db]} [{:keys [canonical-name]} on-success]]
+    (let [name* canonical-name]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] true)
              (assoc-in [:user-expenses :form :error] nil))
@@ -70,7 +70,7 @@
                      {:method :post
                       :uri endpoints/articles-endpoint
                       :admin-uri endpoints/admin-articles-endpoint
-                      :params {:canonical_name name*}
+                      :params {:canonical-name name*}
                       :on-success [:user-expenses/create-article-modal-success on-success]
                       :on-failure [:user-expenses/create-article-modal-failure]})})))
 
@@ -78,7 +78,7 @@
   :user-expenses/create-article-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [article (or (:article response) (:data response) response)]
+    (let [article (:article response)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
@@ -185,7 +185,7 @@
   :user-expenses/fetch-expense-items-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [items (vec (or (:data response) (:expense-items response) []))]
+    (let [items (vec (or (:expense-items response) []))]
       {:db (finish-entity-load db :expense-items nil)
        :dispatch [::expenses-sync/sync-expense-items items]})))
 
@@ -285,7 +285,7 @@
   :user-expenses/fetch-article-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) (:article-aliases response) []))]
+    (let [aliases (vec (or (:article-aliases response) []))]
       {:db (finish-entity-load db :article-aliases nil)
        :dispatch [::expenses-sync/sync-article-aliases aliases]})))
 
@@ -300,12 +300,11 @@
   common-interceptors
   (fn [{:keys [db]} [article-alias-id form-data on-success]]
     (let [article-alias-id-str (some-> article-alias-id str)
-          raw-label (or (:raw_label form-data) (:raw-label form-data))
-          raw-label-normalized (or (:raw_label_normalized form-data) (:raw-label-normalized form-data))
+          {:keys [raw-label raw-label-normalized article-id]} (or form-data {})
           payload (cond-> {}
-                    (some? raw-label) (assoc :raw_label raw-label)
-                    (some? raw-label-normalized) (assoc :raw_label_normalized raw-label-normalized))
-          payload* (if (seq payload) payload (or form-data {}))]
+                    (some? raw-label) (assoc :raw-label raw-label)
+                    (some? raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized)
+                    (some? article-id) (assoc :article-id article-id))]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] true)
              (assoc-in [:user-expenses :form :error] nil))
@@ -313,7 +312,7 @@
                      {:method :put
                       :uri (str endpoints/article-aliases-endpoint "/" article-alias-id-str)
                       :admin-uri (str endpoints/admin-article-aliases-endpoint "/" article-alias-id-str)
-                      :params payload*
+                      :params payload
                       :on-success [:user-expenses/update-article-alias-modal-success article-alias-id-str on-success]
                       :on-failure [:user-expenses/update-article-alias-modal-failure]})})))
 
@@ -392,7 +391,7 @@
   :user-expenses/fetch-supplier-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) (:supplier-aliases response) []))]
+    (let [aliases (vec (or (:supplier-aliases response) []))]
       {:db (finish-entity-load db :supplier-aliases nil)
        :dispatch [::expenses-sync/sync-supplier-aliases aliases]})))
 
@@ -407,12 +406,10 @@
   common-interceptors
   (fn [{:keys [db]} [supplier-alias-id form-data on-success]]
     (let [supplier-alias-id-str (some-> supplier-alias-id str)
-          raw-label (or (:raw_label form-data) (:raw-label form-data))
-          raw-label-normalized (or (:raw_label_normalized form-data) (:raw-label-normalized form-data))
+          {:keys [raw-label raw-label-normalized]} (or form-data {})
           payload (cond-> {}
-                    (some? raw-label) (assoc :raw_label raw-label)
-                    (some? raw-label-normalized) (assoc :raw_label_normalized raw-label-normalized))
-          payload* (if (seq payload) payload (or form-data {}))]
+                    (some? raw-label) (assoc :raw-label raw-label)
+                    (some? raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized))]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] true)
              (assoc-in [:user-expenses :form :error] nil))
@@ -420,7 +417,7 @@
                      {:method :put
                       :uri (str endpoints/supplier-aliases-endpoint "/" supplier-alias-id-str)
                       :admin-uri (str endpoints/admin-supplier-aliases-endpoint "/" supplier-alias-id-str)
-                      :params payload*
+                      :params payload
                       :on-success [:user-expenses/update-supplier-alias-modal-success supplier-alias-id-str on-success]
                       :on-failure [:user-expenses/update-supplier-alias-modal-failure]})})))
 
@@ -498,7 +495,7 @@
   :user-expenses/fetch-price-observations-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [observations (vec (or (:data response) (:price-observations response) []))]
+    (let [observations (vec (or (:price-observations response) []))]
       {:db (finish-entity-load db :price-observations nil)
        :dispatch [::expenses-sync/sync-price-observations observations]})))
 

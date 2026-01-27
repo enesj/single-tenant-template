@@ -143,7 +143,7 @@
          payer-id* (some-> payer-id str str/trim not-empty)]
      (.append form-data "file" file)
      (when payer-id*
-       (.append form-data "payer_id" payer-id*))
+       (.append form-data "payer-id" payer-id*))
      form-data)))
 
 (rf/reg-event-db
@@ -252,9 +252,9 @@
   (let [file (first files)
         remaining (vec (rest files))
         filename (or (.-name file) "receipt")
-    payer-id (or (get-in db [:user-expenses :upload :batch :payer-id])
-       (get-in db [:user-expenses :upload :payer-id]))
-    form-data (form-data-with-file file payer-id)]
+        payer-id (or (get-in db [:user-expenses :upload :batch :payer-id])
+                   (get-in db [:user-expenses :upload :payer-id]))
+        form-data (form-data-with-file file payer-id)]
     {:db (-> db
            (assoc-in [:user-expenses :upload :loading?] true)
            (assoc-in [:user-expenses :upload :batch :current] filename))

@@ -175,7 +175,7 @@
     ($ :fieldset {:class "fieldset border-1 border-base-300 p-4 mb-4 shadow text-left"
                   :id (when form-id (str form-id "-fieldset"))}
       ($ :legend {:class "legend font-bold mb-4 ml-4 text-left"}
-        (str (if editing "Edit " "Add ") (or (str/capitalize (name (:entity-name props))) (:legend props) "")))
+        (str (if editing "Edit " "Add ") (or (when-let [en (:entity-name props)] (str/capitalize (name en))) (:legend props) "")))
       (map (fn [field-spec]
              (let [field-id (:id field-spec)
                    safe-label (or (:label field-spec)

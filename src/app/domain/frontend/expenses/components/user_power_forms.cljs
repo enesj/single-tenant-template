@@ -1,16 +1,16 @@
 (ns app.domain.frontend.expenses.components.user-power-forms
   "User-facing modal forms for power-user reference pages (articles, etc.)."
   (:require
+    [app.shared.adapters.normalization :as normalization]
     [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.utils.id :as id-utils]
-    [app.shared.adapters.normalization :as normalization]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (def ^:private article-form-spec
-  [{:id :canonical_name
+  [{:id :canonical-name
     :type :text
     :label "Canonical name"
     :required true
@@ -35,7 +35,7 @@
          :button-text "Save Article"}))))
 
 (def ^:private article-edit-form-spec
-  [{:id :canonical_name
+  [{:id :canonical-name
     :type :text
     :label "Canonical name"
     :required true
@@ -55,7 +55,7 @@
         article-id (id-utils/extract-entity-id item)
         ;; Build initial values from item, covering all possible fields
         initial-values (-> {}
-                         (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
+                         (assoc :canonical-name (or (:canonical-name item) ""))
                          (assoc :category (or (:category item) ""))
                          (assoc :manufacturer (or (:manufacturer item) ""))
                          (assoc :id (or (:id item) "")))]
@@ -79,12 +79,12 @@
          :button-text "Save Article"}))))
 
 (def ^:private article-alias-edit-form-spec
-  [{:id :raw_label
+  [{:id :raw-label
     :type :text
     :label "Raw label"
     :required true
     :placeholder "e.g. COFFEE BEANS 1KG"}
-   {:id :raw_label_normalized
+   {:id :raw-label-normalized
     :type :text
     :label "Normalized label"
     :required true
@@ -99,15 +99,15 @@
         article-alias-id (id-utils/extract-entity-id item)
         ;; Build initial values from item, covering all possible fields
         initial-values (-> {}
-                         (assoc :raw_label (or (:raw-label item) ""))
-                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
-                         (assoc :article_id (or (:article-id item) ""))
-                         (assoc :created_at (or (:created-at item) ""))
-                         (assoc :supplier_display_name (or (:supplier-display-name item) ""))
-                         (assoc :article_canonical_name (or (:article-canonical-name item) ""))
+                         (assoc :raw-label (or (:raw-label item) ""))
+                         (assoc :raw-label-normalized (or (:raw-label-normalized item) ""))
+                         (assoc :article-id (or (:article-id item) ""))
+                         (assoc :created-at (or (:created-at item) ""))
+                         (assoc :supplier-display-name (or (:supplier-display-name item) ""))
+                         (assoc :article-canonical-name (or (:article-canonical-name item) ""))
                          (assoc :confidence (or (:confidence item) ""))
                          (assoc :id (or (:id item) ""))
-                         (assoc :supplier_id (or (:supplier-id item) "")))]
+                         (assoc :supplier-id (or (:supplier-id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -128,16 +128,17 @@
          :button-text "Save Alias"}))))
 
 (def ^:private supplier-alias-edit-form-spec
-  [{:id :raw_label
+  [{:id :raw-label
     :type :text
     :label "Raw label"
     :required true
     :placeholder "e.g. MEGA MARKET"}
-   {:id :raw_label_normalized
+   {:id :raw-label-normalized
     :type :text
     :label "Normalized label"
     :required true
     :placeholder "e.g. mega-market"}])
+
 (defui user-supplier-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
@@ -147,9 +148,9 @@
         supplier-alias-id (id-utils/extract-entity-id item)
         ;; Build initial values from item, covering all possible fields
         initial-values (-> {}
-                         (assoc :raw_label (or (:raw-label item) ""))
-                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
-                         (assoc :supplier_id (or (:supplier-id item) ""))
+                         (assoc :raw-label (or (:raw-label item) ""))
+                         (assoc :raw-label-normalized (or (:raw-label-normalized item) ""))
+                         (assoc :supplier-id (or (:supplier-id item) ""))
                          (assoc :confidence (or (:confidence item) ""))
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
@@ -198,7 +199,7 @@
           "")))))
 
 (def ^:private price-observation-edit-form-spec
-  [{:id :observed_at
+  [{:id :observed-at
     :type :timestamp
     :input-type "datetime-local"
     :label "Observed at"
@@ -209,13 +210,13 @@
     :required true
     :step 0.01
     :min 0}
-   {:id :unit_price
+   {:id :unit-price
     :type :number
     :label "Unit price"
     :required true
     :step 0.01
     :min 0}
-   {:id :line_total
+   {:id :line-total
     :type :number
     :label "Line total"
     :required false
@@ -238,15 +239,15 @@
         unit-price (:unit-price item)
         line-total (:line-total item)
         ;; Build initial values from item, covering all possible fields
-        initial-values {:observed_at (datetime-local observed-at)
+        initial-values {:observed-at (datetime-local observed-at)
                         :qty (or (:qty item) "")
-                        :unit_price (or unit-price "")
-                        :line_total (or line-total "")
+                        :unit-price (or unit-price "")
+                        :line-total (or line-total "")
                         :currency (or (:currency item) "")
                         :id (or (:id item) "")
-                        :article_id (or (:article-id item) "")
-                        :supplier_id (or (:supplier-id item) "")
-                        :expense_item_id (or (:expense-item-id item) "")}]
+                        :article-id (or (:article-id item) "")
+                        :supplier-id (or (:supplier-id item) "")
+                        :expense-item-id (or (:expense-item-id item) "")}]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -265,4 +266,3 @@
                                     values
                                     on-success]))
          :button-text "Save Observation"}))))
-
