@@ -38,6 +38,137 @@
     (map str/lower-case)
     (set)))
 
+(defn- strip-outer-parens
+  [s]
+  (loop [s (str/trim (or s ""))]
+    (if (and (str/starts-with? s "(")
+          (str/ends-with? s ")"))
+      (recur (subs s 1 (dec (count s))))
+      s)))
+
+(defn- normalize-sql-fragment
+  "Best-effort normalization for SQL fragments returned by Postgres.
+
+  This is intentionally conservative, but it does handle a common source of
+  noise: implicit casts in predicates (e.g. 'password'::text).
+
+  Normalizations:
+  - collapse whitespace
+  - strip outer parentheses
+  - lowercase
+  - strip common casts to text-like types"
+  [s]
+  (let [s (some-> s str str/trim)]
+    (when (seq s)
+      (-> s
+        (str/replace #"\\s+" " ")
+        (strip-outer-parens)
+        (str/lower-case)
+        (str/replace #"::\s*text" "")
+        (str/replace #"::\s*character\s+varying" "")
+        (str/replace #"::\s*varchar" "")
+        (str/trim)))))
+
+(defn- normalize-index-key
+  [s]
+  (-> (or s "")
+    (str/replace "\"" "")
+    (str/trim)
+    (str/lower-case)))
+
+(defn fetch-index-definitions
+  "Fetch index definitions from the DB.
+
+  Returns a map keyed by index name:
+    {index-name {:table .. :method .. :unique? .. :keys [..] :predicate ..}}
+
+  Notes:
+  - Only considers public schema tables.
+  - Excludes internal bookkeeping tables (see utils/internal-tables).
+  - :keys are gathered in index column order using pg_get_indexdef(...)."
+  [db]
+  (let [rows
+        (utils/q db
+          ["SELECT t.relname AS table_name,
+                   i.relname AS index_name,
+                   am.amname AS method,
+                   ix.indisunique AS is_unique,
+                   pg_get_expr(ix.indpred, ix.indrelid) AS predicate,
+                   k.n AS ord,
+                   pg_get_indexdef(i.oid, k.n, true) AS key_def
+            FROM pg_index ix
+            JOIN pg_class i ON i.oid = ix.indexrelid
+            JOIN pg_class t ON t.oid = ix.indrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            JOIN pg_am am ON am.oid = i.relam
+            JOIN generate_series(1, ix.indnatts) AS k(n) ON true
+            WHERE n.nspname = 'public'
+            ORDER BY t.relname, i.relname, k.n"])]
+    (->> rows
+      (remove #(utils/internal-tables (:table_name %)))
+      (reduce
+        (fn [acc {:keys [table_name index_name method is_unique predicate key_def]}]
+          (let [idx (str/lower-case (or index_name ""))]
+            (-> acc
+              (assoc-in [idx :table] (str/lower-case (or table_name "")))
+              (assoc-in [idx :method] (str/lower-case (or method "")))
+              (assoc-in [idx :unique?] (boolean is_unique))
+              (assoc-in [idx :predicate] predicate)
+              (update-in [idx :keys] (fnil conj []) key_def))))
+        {}))))
+
+(defn compare-index-definitions
+  "Compare expected vs actual index definitions.
+
+  Input:
+    expected: {index-name {:table .. :method .. :unique? .. :keys [..] :predicate ..}}
+    actual:   {index-name {:table .. :method .. :unique? .. :keys [..] :predicate ..}}
+
+  Returns:
+    {:missing [index-name ...]
+     :mismatched {table [{:index .. :expected .. :actual ..} ...]}}
+
+  Notes:
+  - We compare :method, :unique?, :keys (in order), and :predicate.
+  - Predicate comparison is normalized best-effort; differences in redundant
+    parentheses/whitespace/casing are ignored.
+  - Expression indexes are supported on the DB side via pg_get_indexdef, but on
+    the expected side we currently only model simple field indexes from
+    models.edn's :indexes/:fields."
+  [{:keys [expected actual]}]
+  (let [expected (or expected {})
+        actual (or actual {})
+        exp-names (set (keys expected))
+        act-names (set (keys actual))
+        missing (sort (set/difference exp-names act-names))
+        common (sort (set/intersection exp-names act-names))
+        mismatched
+        (reduce
+          (fn [acc idx]
+            (let [e (get expected idx)
+                  a (get actual idx)
+                  exp-keys (mapv utils/normalize-ident (or (:keys e) []))
+                  act-keys (mapv normalize-index-key (or (:keys a) []))
+                  exp-pred (normalize-sql-fragment (:predicate e))
+                  act-pred (normalize-sql-fragment (:predicate a))
+                  ok? (and (= (:table e) (:table a))
+                        (= (:method e) (:method a))
+                        (= (:unique? e) (:unique? a))
+                        (= exp-keys act-keys)
+                        (= exp-pred act-pred))]
+              (if ok?
+                acc
+                (update-in acc [(:table e)] (fnil conj [])
+                  {:index idx
+                   :expected (assoc e :keys exp-keys :predicate exp-pred)
+                   :actual (assoc (select-keys a [:table :method :unique? :keys :predicate])
+                             :keys act-keys
+                             :predicate act-pred)}))))
+          {}
+          common)]
+    {:missing (vec missing)
+     :mismatched mismatched}))
+
 (defn fetch-enums
   [db]
   (let [rows (utils/q db ["SELECT t.typname AS type_name, e.enumlabel AS value
@@ -52,6 +183,148 @@
                    (assoc acc (str/lower-case type-name)
                      (mapv :value xs)))
         {}))))
+
+(defn- fk-action-code->kw
+  "Convert Postgres FK action code (confdeltype/confupdtype) into a keyword.
+
+  Postgres codes:
+  - a: NO ACTION
+  - r: RESTRICT
+  - c: CASCADE
+  - n: SET NULL
+  - d: SET DEFAULT"
+  [x]
+  (case (some-> x str)
+    "a" :no-action
+    "r" :restrict
+    "c" :cascade
+    "n" :set-null
+    "d" :set-default
+    nil))
+
+(defn fetch-foreign-keys
+  "Fetch foreign key constraints from the DB.
+
+  Returns a nested map:
+    {table
+      {column {:ref-table ..
+               :ref-column ..
+               :constraint-name ..
+               :validated? ..
+               :on-delete ..
+               :on-update ..}}}
+
+  Notes:
+  - Only considers public schema tables.
+  - Excludes internal bookkeeping tables (see utils/internal-tables).
+  - Produces one entry per constrained column (multi-column FKs produce one
+    row per column, preserving column order via ordinality)."
+  [db]
+  (let [rows
+        (utils/q db
+          ["SELECT c.relname AS table_name,
+                   a.attname AS column_name,
+                   rc.relname AS ref_table_name,
+                   ra.attname AS ref_column_name,
+                   con.conname AS constraint_name,
+                   con.convalidated AS validated,
+                   con.confdeltype AS on_delete,
+                   con.confupdtype AS on_update
+            FROM pg_constraint con
+            JOIN pg_class c ON c.oid = con.conrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_class rc ON rc.oid = con.confrelid
+            JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+            JOIN unnest(con.conkey) WITH ORDINALITY AS ck(attnum, ord) ON true
+            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ck.attnum
+            JOIN unnest(con.confkey) WITH ORDINALITY AS fk(attnum, ord) ON fk.ord = ck.ord
+            JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = fk.attnum
+            WHERE con.contype = 'f'
+              AND n.nspname = 'public'
+              AND rn.nspname = 'public'
+            ORDER BY c.relname, con.conname, ck.ord"])]
+    (->> rows
+      (remove #(utils/internal-tables (:table_name %)))
+      (reduce
+        (fn [acc {:keys [table_name
+                         column_name
+                         ref_table_name
+                         ref_column_name
+                         constraint_name
+                         validated
+                         on_delete
+                         on_update]}]
+          (assoc-in acc [(str/lower-case table_name) (str/lower-case column_name)]
+                    {:ref-table (str/lower-case ref_table_name)
+                     :ref-column (str/lower-case ref_column_name)
+                     :constraint-name (str/lower-case constraint_name)
+                     :validated? (boolean validated)
+                     :on-delete (fk-action-code->kw on_delete)
+                     :on-update (fk-action-code->kw on_update)}))
+        {}))))
+
+(defn compare-foreign-keys
+  "Compare expected vs actual foreign keys.
+
+  Input shape:
+    expected: {table {column {:ref-table .. :ref-column .. :on-delete? .. :on-update? ..}}}
+    actual:   {table {column {:ref-table .. :ref-column .. :validated? .. :on-delete .. :on-update ..}}}
+
+  Returns:
+    {:missing {table [col ...]}
+     :mismatched {table [{:column .. :expected .. :actual ..} ...]}
+     :not-validated {table [col ...]}}
+
+  Notes:
+  - We always compare :ref-table/:ref-column.
+  - We compare :on-delete/:on-update only when the expected FK specifies them
+    (models.edn frequently does; omitting them keeps backwards-compatible
+    behavior for older schemas/alignment assumptions)."
+  [{:keys [expected actual]}]
+  (let [tables (sort (set/union (set (keys expected)) (set (keys actual))))]
+    (reduce
+      (fn [acc t]
+        (let [exp-cols (get expected t {})
+              act-cols (get actual t {})
+              exp-names (set (keys exp-cols))
+              act-names (set (keys act-cols))
+              missing (sort (set/difference exp-names act-names))
+              common (sort (set/intersection exp-names act-names))
+              mismatched
+              (->> common
+                (keep (fn [c]
+                        (let [e (get exp-cols c)
+                              a (get act-cols c)
+                              ref-ok? (and (= (:ref-table e) (:ref-table a))
+                                        (= (:ref-column e) (:ref-column a)))
+                              on-delete-ok? (or (nil? (:on-delete e))
+                                              (= (:on-delete e) (:on-delete a)))
+                              on-update-ok? (or (nil? (:on-update e))
+                                              (= (:on-update e) (:on-update a)))
+                              ok? (and ref-ok? on-delete-ok? on-update-ok?)]
+                          (when-not ok?
+                            {:column c
+                             :expected e
+                             :actual (select-keys a
+                                       [:ref-table
+                                        :ref-column
+                                        :on-delete
+                                        :on-update
+                                        :constraint-name
+                                        :validated?])}))))
+                (vec))
+              not-validated
+              (->> common
+                (filter (fn [c]
+                          (false? (get-in act-cols [c :validated?] true))))
+                (sort)
+                (vec))]
+          (cond-> acc
+            (seq missing) (assoc-in [:missing t] missing)
+            (seq mismatched) (assoc-in [:mismatched t] mismatched)
+            (seq not-validated) (assoc-in [:not-validated t] not-validated))))
+      {:missing {} :mismatched {} :not-validated {}}
+      tables)))
 
 (defn compare-tables
   [{:keys [expected actual]}]

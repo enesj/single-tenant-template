@@ -78,7 +78,8 @@
               ($ arrow-path {:class "w-4 h-4"}))))))))
 
 (defui admin-header []
-  (let [current-user (use-subscribe [:admin/current-user])
+  (let [authenticated? (use-subscribe [:admin/authenticated?])
+        current-user (use-subscribe [:admin/current-user])
         current-role (use-subscribe [:admin/current-user-role])
         admin-name (:full-name current-user)
         admin-email (:email current-user)
@@ -94,8 +95,8 @@
       ($ :div {:class "flex-1 px-4 flex justify-between items-center"}
         ($ :div {:class "flex-1 flex"})
         ($ :div {:class "flex items-center space-x-2"}
-          ;; Admin info (matches user auth-component exactly)
-          (when current-user
+          ;; Admin info - only show when actually authenticated (not just cached from localStorage)
+          (when (and authenticated? current-user)
             ($ :div {:class "flex items-center space-x-2"}
               ;; Person icon
               ($ :svg {:class "w-5 h-5 text-base-content" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
@@ -114,12 +115,13 @@
                                      "ds-badge-secondary"))}
                   role-str))))
 
-          ;; Sign Out button
-          ($ button {:btn-type :error
-                     :class "ds-btn-sm"
-                     :id "admin-sign-out-btn"
-                     :on-click #(rf/dispatch [:admin/logout])}
-            "Sign Out")
+          ;; Sign Out button - only show when authenticated
+          (when authenticated?
+            ($ button {:btn-type :error
+                       :class "ds-btn-sm"
+                       :id "admin-sign-out-btn"
+                       :on-click #(rf/dispatch [:admin/logout])}
+              "Sign Out"))
 
           ;; Settings gear (on the right, opens popover with theme)
           ($ admin-settings-panel))))))

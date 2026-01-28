@@ -166,7 +166,7 @@ bb cljfmt-fix
 ## Development Notes
 - Dev server auto-reloads; no manual restart needed for FE or BE changes.
 - Admin UI dev URL: http://localhost:8085
-- Admin settings pages: /admin/admin-settings, /admin/user-settings (legacy: /admin/settings)
+- Admin settings pages: /admin/admin-settings, /admin/user-settings
 - DEV_SUPPRESS_STDERR=false (or 0/no) keeps stderr visible in dev.
 - Dev watchers ignore runtime-edited config EDNs under:
   - src/app/admin/frontend/config/*.edn

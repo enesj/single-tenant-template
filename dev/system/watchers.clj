@@ -54,8 +54,8 @@
         admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\.edn$" file-path))
         domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\.edn$" file-path))
         excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
-        ;; These EDN files are edited at runtime via /admin/settings; restarting the
-        ;; dev system on each save causes disruptive full page reloads.
+        ;; These EDN files are edited at runtime via /admin/admin-settings and /admin/user-settings;
+        ;; restarting the dev system on each save causes disruptive full page reloads.
         passes? (and matches-extension? (not excluded-edn?))]
        {:file-name file-name
         :file-path file-path
@@ -188,9 +188,6 @@
              :watcher :postcss
              :mode :core-async})
   (go (postcss-watch)))
-
-;;# MODELS.EDN WATCHER
-;;# --------------------------------------------------------------------------
 
 (defn- models-file? [_ {:keys [file]}]
   (= "models.edn" (.getName file)))

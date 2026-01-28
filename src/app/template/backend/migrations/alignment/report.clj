@@ -39,7 +39,9 @@
         actual-tables (fetchers/fetch-tables db)
         actual-columns (fetchers/fetch-columns db)
         actual-indexes (fetchers/fetch-indexes db)
+        actual-index-definitions (fetchers/fetch-index-definitions db)
         actual-enums (fetchers/fetch-enums db)
+        actual-foreign-keys (fetchers/fetch-foreign-keys db)
 
         tables-diff (fetchers/compare-tables {:expected (:tables expected)
                                               :actual actual-tables})
@@ -47,8 +49,13 @@
                                                 :actual actual-columns})
         indexes-diff (fetchers/compare-indexes {:expected (:indexes expected)
                                                 :actual actual-indexes})
+        index-definitions-diff
+        (fetchers/compare-index-definitions {:expected (:index-definitions expected)
+                                             :actual actual-index-definitions})
         enums-diff (fetchers/compare-enums {:expected (:enums expected)
                                             :actual actual-enums})
+        foreign-keys-diff (fetchers/compare-foreign-keys {:expected (:foreign-keys expected)
+                                                          :actual actual-foreign-keys})
 
         functions-edn (utils/read-hierarchical-edn db-root "functions.edn")
         triggers-edn (utils/read-hierarchical-edn db-root "triggers.edn")
@@ -87,7 +94,10 @@
      :schema {:tables tables-diff
               :columns columns-diff
               :indexes indexes-diff
-              :enums enums-diff}
+              :index-definitions index-definitions-diff
+              :index-definition-duplicates (:index-definition-duplicates expected)
+              :enums enums-diff
+              :foreign-keys foreign-keys-diff}
      :extended {:functions {:missing missing-functions
                             :unparseable (:unparseable expected-functions)}
                 :triggers {:missing missing-triggers
@@ -112,8 +122,15 @@
       (seq (get-in r [:schema :columns :extra]))
       (seq (get-in r [:schema :columns :mismatched]))
       (seq (get-in r [:schema :indexes :missing]))
+      (seq (get-in r [:schema :index-definitions :mismatched]))
+      (seq (get-in r [:schema :index-definition-duplicates]))
       (seq (get-in r [:schema :enums :missing-types]))
       (seq (get-in r [:schema :enums :mismatched]))
+
+        ;; Foreign key alignment (models.edn vs DB constraints)
+      (seq (get-in r [:schema :foreign-keys :missing]))
+      (seq (get-in r [:schema :foreign-keys :mismatched]))
+      (seq (get-in r [:schema :foreign-keys :not-validated]))
 
       (seq (get-in r [:extended :functions :missing]))
       (seq (get-in r [:extended :triggers :missing]))
@@ -157,6 +174,17 @@
         (println (str "      expected: " (pr-str expected)))
         (println (str "      actual:   " (pr-str actual)))))))
 
+(defn- print-mismatched-index-definitions
+  [table->mismatches]
+  (when (seq table->mismatches)
+    (println "Mismatched index definitions:")
+    (doseq [[t mismatches] (sort-by key table->mismatches)]
+      (println (str "  " t ":"))
+      (doseq [{:keys [index expected actual]} mismatches]
+        (println (str "    - " index))
+        (println (str "      expected: " (pr-str expected)))
+        (println (str "      actual:   " (pr-str actual)))))))
+
 (defn print-report!
   "Pretty-print a report to stdout."
   [r]
@@ -187,6 +215,15 @@
   (print-mismatched-columns (get-in r [:schema :columns :mismatched]))
   (print-kv-lines "" "Missing indexes" (get-in r [:schema :indexes :missing]))
 
+  (when-let [dups (seq (get-in r [:schema :index-definition-duplicates]))]
+    (println "\n⚠️  Duplicate expected index names detected (normalized):")
+    (doseq [[idx xs] (sort-by key dups)]
+      (println (str "  " idx ":"))
+      (doseq [{:keys [table definition]} xs]
+        (println (str "    - table: " table " expected: " (pr-str definition))))))
+
+  (print-mismatched-index-definitions (get-in r [:schema :index-definitions :mismatched]))
+
   (print-kv-lines "" "Missing enum types" (get-in r [:schema :enums :missing-types]))
   (when-let [mism (seq (get-in r [:schema :enums :mismatched]))]
     (println "Enum value mismatches:")
@@ -194,6 +231,20 @@
       (println (str "  " type ":"))
       (print-kv-lines "    " "missing values" missing-values)
       (print-kv-lines "    " "extra values" extra-values)))
+
+  ;; Foreign keys (constraints) – this is intentionally separate from column shape.
+  ;; Missing FKs are a common source of silent drift (e.g., constraints dropped
+  ;; after restore), and the rest of the schema may still "look" aligned.
+  (print-columns-by-table "Missing foreign keys" (get-in r [:schema :foreign-keys :missing]))
+  (print-columns-by-table "Foreign keys not validated" (get-in r [:schema :foreign-keys :not-validated]))
+  (when-let [table->mism (seq (get-in r [:schema :foreign-keys :mismatched]))]
+    (println "Mismatched foreign key references:")
+    (doseq [[t mismatches] (sort-by key table->mism)]
+      (println (str "  " t ":"))
+      (doseq [{:keys [column expected actual]} mismatches]
+        (println (str "    - " column))
+        (println (str "      expected: " (pr-str expected)))
+        (println (str "      actual:   " (pr-str actual))))))
 
   (println "\n--- Extended objects (EDN vs DB) ---")
   (print-kv-lines "" "Missing functions" (get-in r [:extended :functions :missing]))

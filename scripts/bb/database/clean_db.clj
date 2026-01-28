@@ -6,6 +6,25 @@
     [clojure.java.shell :as shell]
     [clojure.string :as str]))
 
+(defn- psql-superuser
+  "Choose the PostgreSQL role to use for DB-level operations (drop/create).
+
+  Defaults to the DB user from config (works with the official Postgres Docker
+  image where POSTGRES_USER is the superuser). Can be overridden via env var
+  DB_SUPERUSER for local installs." 
+  [db-config]
+  (or (not-empty (System/getenv "DB_SUPERUSER"))
+      (:user db-config)
+      "postgres"))
+
+(defn- sh-psql
+  "Run psql with optional PGPASSWORD injected from db-config." 
+  [db-config & args]
+  (let [pwd (:password db-config)
+        cmd (cond-> (vec args)
+              (not (str/blank? pwd)) (into [:env {"PGPASSWORD" pwd}]))]
+    (apply shell/sh cmd)))
+
 (defn get-db-config [profile]
   (let [config (aero/read-config "config/base.edn" {:profile profile})
         db-config (:database config)]
@@ -30,47 +49,50 @@
 (defn drop-database [env db-config]
   (println (str "🗑️  Dropping " (str/upper-case env) " database: " (:dbname db-config)))
 
-  ;; First terminate all connections to the target database (using superuser)
-  (let [terminate-cmd ["/opt/homebrew/bin/psql"
-                       "-h" (:host db-config)
-                       "-p" (str (:port db-config))
-                       "-U" "enes"  ;; Use superuser for database operations
-                       "-d" "postgres"
-                       "-c" (str "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" (:dbname db-config) "' AND pid <> pg_backend_pid();")]]
+  (let [superuser (psql-superuser db-config)]
 
-    (println "🔌 Terminating existing connections...")
-    (apply shell/sh terminate-cmd))
+    ;; First terminate all connections to the target database (using superuser)
+    (let [terminate-cmd ["/opt/homebrew/bin/psql"
+                         "-h" (:host db-config)
+                         "-p" (str (:port db-config))
+                         "-U" superuser
+                         "-d" "postgres"
+                         "-c" (str "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '" (:dbname db-config) "' AND pid <> pg_backend_pid();")]]
 
-  ;; Drop the database (using superuser)
-  (let [drop-cmd ["/opt/homebrew/bin/psql"
-                  "-h" (:host db-config)
-                  "-p" (str (:port db-config))
-                  "-U" "enes"  ;; Use superuser for database operations
-                  "-d" "postgres"
-                  "-c" (str "DROP DATABASE IF EXISTS \"" (:dbname db-config) "\";")]]
+      (println "🔌 Terminating existing connections...")
+      (apply sh-psql db-config terminate-cmd))
 
-    (println (str "🗑️  Executing: DROP DATABASE " (:dbname db-config)))
-    (let [result (apply shell/sh drop-cmd)]
-      (if (= 0 (:exit result))
-        (println "✅ Database dropped successfully")
-        (do
-          (println "❌ Failed to drop database!")
-          (when-not (str/blank? (:err result))
-            (println "Error:" (:err result)))
-          (throw (Exception. "Database drop failed")))))))
+    ;; Drop the database (using superuser)
+    (let [drop-cmd ["/opt/homebrew/bin/psql"
+                    "-h" (:host db-config)
+                    "-p" (str (:port db-config))
+                    "-U" superuser
+                    "-d" "postgres"
+                    "-c" (str "DROP DATABASE IF EXISTS \"" (:dbname db-config) "\";")]]
+
+      (println (str "🗑️  Executing: DROP DATABASE " (:dbname db-config)))
+      (let [result (apply sh-psql db-config drop-cmd)]
+        (if (= 0 (:exit result))
+          (println "✅ Database dropped successfully")
+          (do
+            (println "❌ Failed to drop database!")
+            (when-not (str/blank? (:err result))
+              (println "Error:" (:err result)))
+            (throw (Exception. "Database drop failed"))))))))
 
 (defn create-database [env db-config]
   (println (str "🏗️  Creating new " (str/upper-case env) " database: " (:dbname db-config)))
 
-  (let [create-cmd ["/opt/homebrew/bin/psql"
+  (let [superuser (psql-superuser db-config)
+        create-cmd ["/opt/homebrew/bin/psql"
                     "-h" (:host db-config)
                     "-p" (str (:port db-config))
-                    "-U" "enes"  ;; Use superuser for database operations
+                    "-U" superuser
                     "-d" "postgres"
                     "-c" (str "CREATE DATABASE \"" (:dbname db-config) "\" OWNER \"" (:user db-config) "\";")]]
 
     (println (str "🏗️  Executing: CREATE DATABASE " (:dbname db-config)))
-    (let [result (apply shell/sh create-cmd)]
+    (let [result (apply sh-psql db-config create-cmd)]
       (if (= 0 (:exit result))
         (println "✅ Database created successfully")
         (do

@@ -143,16 +143,7 @@
   :always-visible []},
  :price-observations
  {:available-columns
-  ["article_canonical_name"
-   "supplier_display_name"
-   "observed_at"
-   "unit_price"
-   "currency"
-   "expense_item_id"
-   "id"
-   "article_id"
-   "supplier_id"
-   "created_at"],
+  ["article_canonical_name" "supplier_display_name" "observed_at" "unit_price" "currency" "expense_item_id" "id" "article_id" "supplier_id" "created_at" "line_total" "qty"],
   :default-visible-columns
   ["article_canonical_name"
    "supplier_display_name"

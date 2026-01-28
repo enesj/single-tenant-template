@@ -3,7 +3,6 @@
 ## Quick decision map (tools & skills)
 
 - Need to locate context/docs or you don’t have an exact file → use Morph WarpGrep first.
-- Multi-file work and **2+** of: cross-cutting scope, lots of iterative searching, need `path:line` evidence → run **session-context-bundle** (Morph → `bb audit-bundle` → Lattice).
 - Large file or multi-step analysis → use Lattice (load once, query/expand).
 - Edits by file type:
   - `.clj`/`.cljs`/`.cljc`/`.edn` → clojure-mcp structural edits (see “MCP tool discipline” below).
@@ -38,6 +37,7 @@ These MCP servers are part of the app and should be your primary interface:
 
 ## 🚨 Hard rules
 
+- Database schema changes must happen ONLY via the migrations process. Never alter the schema directly (manual SQL, psql, ORM/DSL hacks, or ad-hoc edits to `resources/db/models.edn` or the live database). All changes must be captured as forward/backward migrations under `resources/db/migrations/` and applied using the documented tooling (`app.template.backend.migrations.simple-repl` or bb tasks).
 - **No Python scripting** in this repo. Use Babashka (`.bb`) or Bash (`.sh`) when necessary.
 - **Never commit secrets**. Keep them in `config/.secrets.edn` (or `~/.secrets.edn`) and environment variables.
 - Keep changes small and focused; avoid unrelated refactors.
@@ -62,7 +62,6 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 - Admin settings pages:
   - `/admin/admin-settings` (admin UI config)
   - `/admin/user-settings` (domain-owned user UI config)
-  - `/admin/settings` is a legacy redirect.
 - Dev stderr is suppressed by default; set `DEV_SUPPRESS_STDERR=false` (or `0`/`no`) to keep stderr visible.
 - Dev watchers ignore runtime-edited UI config EDNs under `src/app/admin/frontend/config/*.edn` and `src/app/domain/frontend/**/config/*.edn`.
 
@@ -71,6 +70,7 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 - Run only relevant tests; avoid full-suite runs for targeted changes.
 - Always save full output once and analyze it; do not re-run just to grep.
 - See `docs/testing/README.md` for deeper guidance.
+- For REPL-driven workflows and examples (Clojure + ClojureScript), see `.github/copilot-instructions.md#testing-from-the-repl`.
 
 Example save-output pattern:
 

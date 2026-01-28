@@ -18,8 +18,6 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/user-settings` → domain-owned user UI config (user-facing defaults/locks; currently Expenses)
 - **Guard**: `guarded-start` dispatches controller events only after admin auth is confirmed. Unauthed users are redirected to `/admin/login`.
 
-Legacy `/admin/settings` route has been removed; use `/admin/admin-settings`.
-
 ## Data Flow (Users + Activity)
 
 1) Route controller dispatches load events (e.g., `:admin/load-users`).  
@@ -33,7 +31,6 @@ Legacy `/admin/settings` route has been removed; use `/admin/admin-settings`.
 - **Audit Logs**: `/admin/audit` lists all audit events; uses template list components with server pagination and export.  
 - **Login Events**: `/admin/login-events` lists admin/user logins; normalized rows include principal name/email, IP, user-agent, success/failure.  
 - **Per-user modal**: mirrors the same data filtered by user.
-- **Delete/Bulk delete**: both audit logs and login events support per-row delete and bulk delete actions (admin-only).
 
 ## Settings Page
 

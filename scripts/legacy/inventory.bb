@@ -40,7 +40,7 @@
   :api-response-compat     ["compat.*response|dual.*key|legacy.*response"]
   ;; Match concrete legacy route compatibility (admin settings URLs).
   ;; Intentionally does NOT match generic redirects like OAuth.
-  :legacy-route-redirects  ["\"/admin/settings\"" "\"/admin/amin-settings\"" "\"/amin-settings\""]
+  :legacy-route-redirects  ["\"/admin/amin-settings\"" "\"/amin-settings\""]
    :localstorage-migration  ["(?i)(localstorage|local-storage).*(legacy|migrat|compat)"
                              "(?i)(admin-token|admin token).*(localstorage|local-storage)|(localstorage|local-storage).*(admin-token|admin token)"
                              "(?i)(token.*(localstorage|local-storage).*admin|admin.*(localstorage|local-storage).*token)"]

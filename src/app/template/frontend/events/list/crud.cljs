@@ -80,15 +80,18 @@
                 :last-updated (js/Date.now)})
              (assoc-in (paths/list-total-items entity-type) (count items)))})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::fetch-failure
   common-interceptors
-  (fn [db [entity-type response]]
-    (assoc-in db (paths/entity-metadata entity-type)
-              {:loading? false
-               :error (or (get-in response [:response :error])
-                        (str "Failed to fetch " entity-type))
-               :last-updated nil})))
+  (fn [{:keys [db]} [entity-type response]]
+    (let [status (or (:status response) (get-in response [:response :status]))
+          unauthorized? (= 401 status)]
+      (cond-> {:db (assoc-in db (paths/entity-metadata entity-type)
+                     {:loading? false
+                      :error (or (get-in response [:response :error])
+                               (str "Failed to fetch " entity-type))
+                      :last-updated nil})}
+        unauthorized? (assoc :dispatch [:admin/auth-invalid])))))
 
 ;;; -------------------------
 ;;; Entity Deletion

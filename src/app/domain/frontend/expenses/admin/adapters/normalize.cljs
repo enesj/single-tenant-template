@@ -179,7 +179,10 @@
                   :article_canonical_name [:article-canonical-name]
                   :raw_label [:raw-label]
                   :raw_label_normalized [:raw-label-normalized]
-                  :created_at [:created-at]}}))
+                  :created_at [:created-at]
+                  ;; FK id aliases used by list-view generated specs / table-columns.edn
+                  :supplier_id [:supplier-id]
+                  :article_id [:article-id]}}))
 
 (defn supplier-alias->template-entity
   [alias]
