@@ -4,7 +4,7 @@
     [app.domain.backend.expenses.integrations.mistral-ocr.http :as mistral-http]
     [cheshire.core :as json]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is]]))
 
 (deftest build-config-respects-app-config
   (let [cfg (mistral-ocr/build-config
@@ -161,8 +161,8 @@
                   [{:custom-id "r1" :bytes (byte-array [1]) :content-type "image/jpeg"}
                    {:custom-id "r2" :bytes (byte-array [2]) :content-type "image/jpeg"}])]
         (is (str/includes? @uploaded-jsonl "\"custom_id\":\"r1\""))
-          (is (not (str/includes? @uploaded-jsonl "\"document_annotation_format\"")))
+        (is (not (str/includes? @uploaded-jsonl "\"document_annotation_format\"")))
         (is (contains? (:results res) "r1"))
         (is (contains? (:errors res) "r2"))
         (is (= "Hello" (get-in res [:results "r1" :parsed-markdown])))
-          (is (nil? (get-in res [:results "r1" :extraction])))))))
+        (is (nil? (get-in res [:results "r1" :extraction])))))))

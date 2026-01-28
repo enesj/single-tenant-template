@@ -10,7 +10,7 @@
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.shared.crud.success :as crud-success]
-    [clojure.string :as str]
+
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 

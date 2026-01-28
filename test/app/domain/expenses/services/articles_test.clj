@@ -5,7 +5,7 @@
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.expenses :as expenses]
-    [app.domain.backend.expenses.services.payers :as payers]
+
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]])
@@ -77,7 +77,7 @@
       (aliases/map-alias-to-article! db alias-id (:id article))
 
       (is (= (:id article)
-             (:id (articles/find-article-by-alias db (:id supplier) "MILK")))))))
+            (:id (articles/find-article-by-alias db (:id supplier) "MILK")))))))
 
 (deftest articles-list-unmapped-aliases-filters-by-supplier
   (when-let [db fixtures/*test-db*]
@@ -85,13 +85,13 @@
           supplier-b (:supplier (suppliers/find-or-create-supplier! db (str "Unmapped Supplier B " (UUID/randomUUID)) {}))
           payer (th/create-payer! db {:type "cash" :label "Cash"})
           _exp-a (expenses/create-expense!
-                  db
-                  {:supplier_id (:id supplier-a)
-                   :payer_id (:id payer)
-                   :purchased_at (now)
-                   :total_amount (bigdec "1.00")
-                   :currency "BAM"}
-                  [{:raw_label "A1" :line_total (bigdec "1.00")}])
+                   db
+                   {:supplier_id (:id supplier-a)
+                    :payer_id (:id payer)
+                    :purchased_at (now)
+                    :total_amount (bigdec "1.00")
+                    :currency "BAM"}
+                   [{:raw_label "A1" :line_total (bigdec "1.00")}])
           _exp-b (expenses/create-expense!
                    db
                    {:supplier_id (:id supplier-b)

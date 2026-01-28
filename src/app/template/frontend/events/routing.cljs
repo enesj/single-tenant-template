@@ -8,7 +8,7 @@
     [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.routing.router :as router-util]
-    [clojure.string :as str]
+
     [re-frame.core :as rf]
     [reitit.frontend.controllers :as rtfc]
     [reitit.frontend.easy :as rtfe]
@@ -250,6 +250,14 @@
     (if (unassigned? db)
       (redirect-to-waiting-room db)
       {:db (assoc-in db (paths/current-page) :expense-articles)})))
+
+(rf/reg-event-fx
+  :page/init-expense-manufacturers
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-manufacturers)})))
 
 (rf/reg-event-fx
   :page/init-expense-article-aliases

@@ -139,6 +139,12 @@
                                           :route :expense-articles
                                           :icon ($ articles-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-articles})})
+                               (nav-item {:id "user-sidebar-manufacturers"
+                                          :label "Manufacturers"
+                                          :href "/manufacturers"
+                                          :route :expense-manufacturers
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-manufacturers})})
                                (nav-item {:id "user-sidebar-article-aliases"
                                           :label "Article Aliases"
                                           :href "/article-aliases"

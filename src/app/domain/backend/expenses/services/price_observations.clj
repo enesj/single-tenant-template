@@ -66,7 +66,7 @@
 
 (defn create-price-observation!
   "Create a price observation using price-history helper."
-  [db {:keys [article_id supplier_id expense_item_id observed_at unit_price currency] :as obs}]
+  [db {:keys [article_id supplier_id expense_item_id observed_at unit_price currency]}]
   (price-history/record-observation!
     db {:article_id article_id
         :supplier_id supplier_id

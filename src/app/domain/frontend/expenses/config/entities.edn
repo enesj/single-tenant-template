@@ -1,6 +1,7 @@
 {:expense-items {:title "Expense Items"},
  :suppliers {:title "Suppliers"},
  :articles {:title "Articles"},
+ :manufacturers {:title "Manufacturers"},
  :payer-types {:title "Payer Types"},
  :expenses {:title "My Expenses"},
  :price-observations {:title "Price Observations"},

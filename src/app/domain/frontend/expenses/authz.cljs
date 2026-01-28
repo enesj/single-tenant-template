@@ -22,19 +22,20 @@
   "Maps capabilities to minimum required role level or explicit role set.
    - Integer: minimum role level required
    - Set: explicit role membership required"
-  {:expenses/access          1  ; viewer+
-   :expenses/expense.write   2  ; member+
-   :expenses/expense.delete  3  ; admin+
-    :expenses/expense-items.manage 3 ; admin+ (power-user line items page)
-    :expenses/reference.write 2  ; member+ (suppliers, payers)
-   :expenses/unmapped.access 3  ; admin+
-   :expenses/articles.manage 3  ; admin+
-    :expenses/supplier-aliases.manage 3 ; admin+
-   :expenses/danger.execute  3  ; admin+ (danger zone actions)
-   :expenses/settings.write  3  ; admin+
-   :expenses/upload          2  ; member+
-   :expenses/reports.export  1  ; viewer+
-   :expenses/receipts.approve 2}) ; member+
+  {:expenses/access 1
+   :expenses/expense.write 2
+   :expenses/expense.delete 3
+   :expenses/expense-items.manage 3
+   :expenses/reference.write 2
+   :expenses/unmapped.access 3
+   :expenses/articles.manage 3
+   :expenses/manufacturers.manage 3
+   :expenses/supplier-aliases.manage 3
+   :expenses/danger.execute 3
+   :expenses/settings.write 3
+   :expenses/upload 2
+   :expenses/reports.export 1
+   :expenses/receipts.approve 2})
 
 (defn normalize-role
   "Normalize role to a string. Returns nil for invalid input."

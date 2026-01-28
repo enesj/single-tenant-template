@@ -44,6 +44,12 @@
    :log-prefix "[expenses] Syncing suppliers to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-manufacturers
+   :entity-key :manufacturers
+   :normalize-fn normalize/manufacturer->template-entity
+   :log-prefix "[expenses] Syncing manufacturers to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-payers
    :entity-key :payers
    :normalize-fn normalize/payer->template-entity
@@ -92,6 +98,8 @@
   {:sync-event-id ::sync-receipts})
 (entity-sync/register-sync-handler! :suppliers
   {:sync-event-id ::sync-suppliers})
+(entity-sync/register-sync-handler! :manufacturers
+  {:sync-event-id ::sync-manufacturers})
 (entity-sync/register-sync-handler! :payers
   {:sync-event-id ::sync-payers})
 (entity-sync/register-sync-handler! :payer-types
@@ -111,6 +119,7 @@
 ;; This enables admin form submission to work with these entities
 
 (form-interceptors/register-bridge-entity! :suppliers)
+(form-interceptors/register-bridge-entity! :manufacturers)
 (form-interceptors/register-bridge-entity! :expenses)
 (form-interceptors/register-bridge-entity! :expense-items)
 (form-interceptors/register-bridge-entity! :receipts)

@@ -23,4 +23,7 @@
 
 ;; Articles (role-gated in backend)
 (def articles-endpoint (api/versioned-endpoint "/expenses/articles"))
+
+;; Manufacturers (role-gated in backend)
+(def manufacturers-endpoint (api/versioned-endpoint "/expenses/manufacturers"))
 (def articles-unmapped-aliases-endpoint (api/versioned-endpoint "/expenses/articles/unmapped-aliases"))

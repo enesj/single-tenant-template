@@ -2,7 +2,6 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
-    [app.domain.backend.expenses.services.payers :as payers]
     [app.domain.expenses.test-helpers :as th]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is use-fixtures]]
@@ -40,7 +39,7 @@
 (defn- req
   [{:keys [user-id role body]}]
   (cond-> {:session {:auth-session {:user {:id user-id
-                                          :role role}}}}
+                                           :role role}}}}
     (some? body) (assoc :body (json/generate-string body))))
 
 (defn- parse-body [resp]
@@ -51,12 +50,13 @@
     (let [user-id (create-test-user! db "member")
           handler (settings/get-settings-handler db)
           resp (handler (req {:user-id user-id :role "member"}))
-          body (parse-body resp)]
+          parsed (parse-body resp)
+          body (:data parsed)]
       (is (= 200 (:status resp)))
-        (is (= "BAM" (:default-currency body)))
-        (is (nil? (:default-payer-id body)))
-        (is (= true (:notifications-enabled body)))
-        (is (= false (:receipt-refine-enabled body))))))
+      (is (= "BAM" (:default-currency body)))
+      (is (nil? (:default-payer-id body)))
+      (is (= true (:notifications-enabled body)))
+      (is (= false (:receipt-refine-enabled body))))))
 
 (deftest settings-put-persists-and-get-reflects
   (when-let [db fixtures/*test-db*]
@@ -68,24 +68,26 @@
           put-resp (put-handler
                      (req {:user-id user-id
                            :role "member"
-                     :body {:default-currency "EUR"
-                        :default-payer-id (str payer-id)
-        :notifications-enabled false
-        :receipt-refine-enabled true}}))
-          put-body (parse-body put-resp)
+                           :body {:default-currency "EUR"
+                                  :default-payer-id (str payer-id)
+                                  :notifications-enabled false
+                                  :receipt-refine-enabled true}}))
+          put-parsed (parse-body put-resp)
+          put-body (:data put-parsed)
           get-resp (get-handler (req {:user-id user-id :role "member"}))
-          get-body (parse-body get-resp)]
+          get-parsed (parse-body get-resp)
+          get-body (:data get-parsed)]
       (is (= 200 (:status put-resp)))
-          (is (= "EUR" (:default-currency put-body)))
-          (is (= (str payer-id) (:default-payer-id put-body)))
-          (is (= false (:notifications-enabled put-body)))
+      (is (= "EUR" (:default-currency put-body)))
+      (is (= (str payer-id) (:default-payer-id put-body)))
+      (is (= false (:notifications-enabled put-body)))
       (is (= true (:receipt-refine-enabled put-body)))
 
       (is (= 200 (:status get-resp)))
-          (is (= "EUR" (:default-currency get-body)))
-          (is (= (str payer-id) (:default-payer-id get-body)))
-          (is (= false (:notifications-enabled get-body)))
-          (is (= true (:receipt-refine-enabled get-body))))))
+      (is (= "EUR" (:default-currency get-body)))
+      (is (= (str payer-id) (:default-payer-id get-body)))
+      (is (= false (:notifications-enabled get-body)))
+      (is (= true (:receipt-refine-enabled get-body))))))
 
 (deftest settings-put-blank-payer-clears
   (when-let [db fixtures/*test-db*]
@@ -97,18 +99,20 @@
           _ (put-handler
               (req {:user-id user-id
                     :role "member"
-                :body {:default-currency "EUR"
-                     :default-payer-id (str payer-id)
-                     :notifications-enabled true}}))
+                    :body {:default-currency "EUR"
+                           :default-payer-id (str payer-id)
+                           :notifications-enabled true}}))
           clear-resp (put-handler
                        (req {:user-id user-id
                              :role "member"
-                     :body {:default-payer-id ""}}))
-          clear-body (parse-body clear-resp)
-          get-body (parse-body (get-handler (req {:user-id user-id :role "member"})))]
+                             :body {:default-payer-id ""}}))
+          clear-parsed (parse-body clear-resp)
+          clear-body (:data clear-parsed)
+          get-parsed (parse-body (get-handler (req {:user-id user-id :role "member"})))
+          get-body (:data get-parsed)]
       (is (= 200 (:status clear-resp)))
-          (is (nil? (:default-payer-id clear-body)))
-          (is (nil? (:default-payer-id get-body))))))
+      (is (nil? (:default-payer-id clear-body)))
+      (is (nil? (:default-payer-id get-body))))))
 
 (deftest settings-put-forbidden-for-viewer
   (when-let [db fixtures/*test-db*]
@@ -117,7 +121,7 @@
           resp (put-handler
                  (req {:user-id user-id
                        :role "viewer"
-                   :body {:default-currency "EUR"}}))]
+                       :body {:default-currency "EUR"}}))]
       (is (= 403 (:status resp))))))
 
 (deftest settings-requires-authentication
@@ -136,7 +140,7 @@
           resp (put-handler
                  (req {:user-id user-id
                        :role "member"
-                   :body {:default-currency "GBP"}}))
+                       :body {:default-currency "GBP"}}))
           body (parse-body resp)]
       (is (= 400 (:status resp)))
       (is (= "Unsupported currency" (:error body))))))

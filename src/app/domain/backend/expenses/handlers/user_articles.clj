@@ -8,10 +8,11 @@
   - These routes are role-gated to admin/owner.
   - Responses are normalized to {:data ...} to keep frontend handlers consistent."
   (:require
+    [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
-    [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.shared.adapters.database :as shared-db]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 ;; -----------------------------------------------------------------------------
@@ -84,16 +85,45 @@
             (try
               (let [body (h/read-body-params request)
                     canonical-provided? (contains? body :canonical_name)
-                    updates (cond-> {}
-                              canonical-provided?
-                              (assoc :canonical_name (:canonical_name body))
+                    manufacturer-id-provided? (or (contains? body :manufacturer_id)
+                                                (contains? body :manufacturer-id)
+                                                (contains? body :manufacturerId))
+                    manufacturer-id-raw (when manufacturer-id-provided?
+                                          (or (:manufacturer_id body)
+                                            (:manufacturer-id body)
+                                            (:manufacturerId body)))
+                    manufacturer-id (when manufacturer-id-provided?
+                                      (let [v (some-> manufacturer-id-raw str str/trim)]
+                                        (when-not (str/blank? v)
+                                          (h/try-parse-uuid v))))]
 
-                              (contains? body :category)
-                              (assoc :category (:category body)))
-                    updated (articles/update-article! db article-id updates)]
-                (if updated
-                  (h/json-response {:data (to-app updated)})
-                  (h/not-found-response "Article not found")))
+                (when (and manufacturer-id-provided?
+                        (some? manufacturer-id-raw)
+                        (not (str/blank? (some-> manufacturer-id-raw str str/trim)))
+                        (nil? manufacturer-id))
+                  (throw (ex-info "Invalid manufacturer id" {:status 400
+                                                             :manufacturer-id manufacturer-id-raw
+                                                             :article-id article-id})))
+
+                (let [updates (cond-> {}
+                                canonical-provided?
+                                (assoc :canonical_name (:canonical_name body))
+
+                                (contains? body :category)
+                                (assoc :category (:category body))
+
+                                (contains? body :link)
+                                (assoc :link (:link body))
+
+                                manufacturer-id-provided?
+                                (assoc :manufacturer_id manufacturer-id)
+
+                                (contains? body :manufacturer)
+                                (assoc :manufacturer (:manufacturer body)))
+                      updated (articles/update-article! db article-id updates)]
+                  (if updated
+                    (h/json-response {:data (to-app updated)})
+                    (h/not-found-response "Article not found"))))
               (catch clojure.lang.ExceptionInfo e
                 (log/warn "Validation error updating article" {:error (ex-message e)
                                                                :data (ex-data e)

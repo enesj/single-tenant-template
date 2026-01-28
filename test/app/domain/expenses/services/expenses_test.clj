@@ -4,7 +4,7 @@
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.expenses :as expenses]
-    [app.domain.backend.expenses.services.payers :as payers]
+
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]]
@@ -131,9 +131,9 @@
                        :total_amount (bigdec "1.00")
                        :currency "BAM"}
                       [{:raw_label "##" :line_total (bigdec "1.00")}])]
-          (is (nil? (-> exp-blank :items first :alias_id)))
-          (is (nil? (-> exp-short :items first :alias_id)))
-          (is (nil? (-> exp-punct :items first :alias_id))))))
+      (is (nil? (-> exp-blank :items first :alias_id)))
+      (is (nil? (-> exp-short :items first :alias_id)))
+      (is (nil? (-> exp-punct :items first :alias_id))))))
 
 (deftest expenses-create-accepts-body-with-items-two-arity
   (when-let [db fixtures/*test-db*]

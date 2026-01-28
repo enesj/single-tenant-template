@@ -60,20 +60,37 @@
   :sortable-columns
   ["display_name" "normalized_key" "address" "created_at"],
   :always-visible ["display_name"]},
+ :manufacturers
+ {:available-columns
+  ["display_name"
+   "normalized_key"
+   "created_at"
+   "updated_at"
+   "id"],
+  :default-visible-columns
+  ["display_name" "normalized_key" "created_at"],
+  :filterable-columns
+  ["display_name" "normalized_key" "created_at"],
+  :sortable-columns
+  ["display_name" "normalized_key" "created_at"],
+  :always-visible ["display_name"]},
  :articles
  {:available-columns
   ["canonical_name"
    "category"
+   "manufacturer_display_name"
+   "manufacturer_id"
    "link"
    "normalized_key"
    "created_at"
    "updated_at"
-   "id"
-   "manufacturer"],
-  :default-visible-columns ["canonical_name" "category" "created_at"],
+   "id"],
+  :default-visible-columns
+  ["canonical_name" "category" "manufacturer_display_name" "created_at"],
   :filterable-columns
   ["canonical_name"
    "category"
+   "manufacturer_display_name"
    "link"
    "normalized_key"
    "created_at"
@@ -81,12 +98,14 @@
   :sortable-columns
   ["canonical_name"
    "category"
+   "manufacturer_display_name"
    "link"
    "normalized_key"
    "created_at"
    "updated_at"],
   :always-visible ["canonical_name"],
-  :computed-fields {},
+  :computed-fields
+  {:manufacturer_display_name {:type "string", :label "Manufacturer"}},
   :column-config {}},
  :payer-types
  {:available-columns
@@ -143,7 +162,16 @@
   :always-visible []},
  :price-observations
  {:available-columns
-  ["article_canonical_name" "supplier_display_name" "observed_at" "unit_price" "currency" "expense_item_id" "id" "article_id" "supplier_id" "created_at" "line_total" "qty"],
+  ["article_canonical_name"
+   "supplier_display_name"
+   "observed_at"
+   "unit_price"
+   "currency"
+   "expense_item_id"
+   "id"
+   "article_id"
+   "supplier_id"
+   "created_at"],
   :default-visible-columns
   ["article_canonical_name"
    "supplier_display_name"
@@ -265,9 +293,7 @@
    "raw_label_normalized"
    "confidence"
    "created_at"
-   "id"
-   "supplier_id"
-   "article_id"],
+   "id"],
   :default-visible-columns
   ["supplier_display_name" "raw_label" "article_canonical_name"],
   :filterable-columns

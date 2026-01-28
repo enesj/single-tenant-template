@@ -101,6 +101,11 @@
      :view :expense-articles
      :controllers (controllers/make-simple-controller :page/init-expense-articles)}]
 
+   ["/manufacturers"
+    {:name :expense-manufacturers
+     :view :expense-manufacturers
+     :controllers (controllers/make-simple-controller :page/init-expense-manufacturers)}]
+
    ["/payer-types"
     {:name :expense-payer-types
      :view :expense-payer-types}]

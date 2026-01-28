@@ -44,7 +44,12 @@
     :type :text
     :label "Category"
     :required false
-    :placeholder "Optional"}])
+    :placeholder "Optional"}
+   {:id :manufacturer_id
+    :type :select
+    :label "Manufacturer"
+    :required false
+    :options ["manufacturers" "display_name"]}])
 
 (defui user-article-edit-form-modal
   [{:keys [item on-success on-cancel]}]
@@ -53,10 +58,15 @@
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :articles true])
         item (normalization/convert-db-keys->app-keys item)
         article-id (id-utils/extract-entity-id item)
+        manufacturer-id (or (:manufacturer-id item)
+                          (:manufacturer_id item)
+                          (:manufacturerId item))
         ;; Build initial values from item, covering all possible fields
         initial-values (-> {}
                          (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
                          (assoc :category (or (:category item) ""))
+                         (assoc :manufacturer_id (some-> manufacturer-id str))
+                         ;; Legacy fallback (kept for transitional compatibility)
                          (assoc :manufacturer (or (:manufacturer item) ""))
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
@@ -77,6 +87,67 @@
                                     values
                                     on-success]))
          :button-text "Save Article"}))))
+
+(def ^:private manufacturer-form-spec
+  [{:id :display_name
+    :type :text
+    :label "Display name"
+    :required true
+    :placeholder "e.g. Acme Corp"}])
+
+(defui user-manufacturer-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "manufacturers"
+         :entity-spec manufacturer-form-spec
+         :editing false
+         :initial-values {}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-manufacturer-modal values on-success]))
+         :button-text "Save Manufacturer"}))))
+
+(def ^:private manufacturer-edit-form-spec
+  [{:id :display_name
+    :type :text
+    :label "Display name"
+    :required true
+    :placeholder "e.g. Acme Corp"}])
+
+(defui user-manufacturer-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        ;; Get dynamic form spec from user-settings config
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :manufacturers true])
+        item (normalization/convert-db-keys->app-keys item)
+        manufacturer-id (id-utils/extract-entity-id item)
+        initial-values (-> {}
+                         (assoc :display_name (or (:display-name item) (:displayName item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "manufacturers"
+         ;; Only use hardcoded spec as fallback if dynamic config not available
+         :entity-spec (when-not (seq dynamic-spec) manufacturer-edit-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-manufacturer-modal
+                                    (some-> manufacturer-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Manufacturer"}))))
 
 (def ^:private article-alias-edit-form-spec
   [{:id :raw_label

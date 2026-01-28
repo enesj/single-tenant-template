@@ -87,7 +87,7 @@
          (assoc default-effect :dispatch-n dispatches***)))}}})
 
 (defn- user-ui-context?
-  [db]
+  [_db]
   true)
 
 (defn- lookup-uri
@@ -325,7 +325,8 @@
   :user-expenses/create-expense-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense-id (get-in response [:data :id])]
+    (let [expense-id (or (get-in response [:data :id])
+                       (get-in response [:expense :id]))]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
@@ -364,7 +365,8 @@
   :user-expenses/create-expense-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [expense-id (get-in response [:data :id])
+    (let [expense-id (or (get-in response [:data :id])
+                       (get-in response [:expense :id]))
           highlight-id (some-> expense-id str)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)

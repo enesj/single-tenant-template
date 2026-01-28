@@ -49,14 +49,18 @@
     :options ["suppliers" "display_name"]}}},
  :articles
  {:edit-fields
-  ["manufacturer"
-   "canonical_name"
-   "category"
-   "link"
-   "normalized_key"]},
+  ["manufacturer_id" "canonical_name" "category" "link" "normalized_key"],
+  :field-config
+  {:manufacturer_id
+   {:type "select",
+    :label "Manufacturer",
+    :options ["manufacturers" "display_name"]}}},
+ :manufacturers
+ {:create-fields ["display_name"],
+  :edit-fields ["display_name"],
+  :field-config {:display_name {:type "text", :label "Display name"}}},
  :expense-items
- {:edit-fields
-  ["article_id" "qty" "unit_price" "line_total"],
+ {:edit-fields ["article_id" "qty" "unit_price" "line_total"],
   :field-config
   {:article_id
    {:type "select",
@@ -64,7 +68,8 @@
     :options ["articles" "canonical_name"]},
    :qty {:type "number", :step 0.001},
    :unit_price {:type "number", :step 0.01},
-   :line_total {:type "number", :step 0.01}} :removed-fields {:edit-fields ["raw_label"]}},
+   :line_total {:type "number", :step 0.01}},
+  :removed-fields {:edit-fields ["raw_label"]}},
  :price-observations
  {:edit-fields
   ["observed_at" "article_id" "supplier_id" "unit_price" "currency"],

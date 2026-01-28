@@ -175,6 +175,22 @@
                            [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
 
 ;; ----------------------------------------------------------------------------
+ ;; Manufacturers (canonical brands)
+ ;; ----------------------------------------------------------------------------
+
+ :manufacturers {:fields [[:id :uuid {:primary-key true}]
+                          [:display_name [:varchar 255] {:null false}]
+                          [:normalized_key [:varchar 255] {:null false}]
+                          [:created_at :timestamptz {:default "NOW()"}]
+                          [:updated_at :timestamptz {:default "NOW()"}]]
+                 :indexes [[:idx_manufacturers_normalized_key
+                            :btree
+                            {:fields [:normalized_key] :unique true}]
+                           [:idx_manufacturers_display_name
+                            :btree
+                            {:fields [:display_name]}]]}
+
+;; ----------------------------------------------------------------------------
  ;; Articles (canonical products/items)
  ;; ----------------------------------------------------------------------------
 
@@ -183,12 +199,15 @@
                      [:normalized_key [:varchar 255] {:null false}]
                      [:category [:varchar 100]]
                      [:link :text]
-                     ;; Raw manufacturer string (display-only).
+                     ;; Canonical manufacturer reference.
+                     [:manufacturer_id :uuid {:foreign-key :manufacturers/id :on-delete :set-null}]
+                     ;; Legacy/raw manufacturer string (pre-FK). Kept for backfill + display fallback.
                      [:manufacturer [:varchar 255]]
                      [:created_at :timestamptz {:default "NOW()"}]
                      [:updated_at :timestamptz {:default "NOW()"}]]
             :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]
-                      [:idx_articles_category :btree {:fields [:category]}]]}
+                      [:idx_articles_category :btree {:fields [:category]}]
+                      [:idx_articles_manufacturer_id :btree {:fields [:manufacturer_id]}]]}
 
 ;; ----------------------------------------------------------------------------
  ;; Article Aliases (mapping raw labels → canonical articles)

@@ -51,7 +51,7 @@
    - :on-add-success - Called after successful add (closes modal, can trigger refresh)
    - :on-edit-success - Called after successful edit (closes modal, can trigger refresh)"
   [{:keys [entity-name entity-spec title display-settings filterable-columns per-page
-           allow-add? allow-edit? allow-delete? disallowed-action-mode
+           allow-add? disallowed-action-mode
            ;; New props for custom forms and modal support
            render-add-form render-edit-form form-display on-add-success on-edit-success]
     :as props}]

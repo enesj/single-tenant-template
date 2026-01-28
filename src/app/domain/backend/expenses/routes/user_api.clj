@@ -5,17 +5,18 @@
    Path prefix for this router is /expenses."
   (:require
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
-    [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
-    [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
-    [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.article-aliases :as user-expenses-article-aliases]
+    [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
     [app.domain.backend.expenses.handlers.user-expenses.expense-items :as user-expenses-expense-items]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as user-expenses-reference-data]
-    [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
-    [app.domain.backend.expenses.handlers.user-expenses.supplier-aliases :as user-expenses-supplier-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
+    [app.domain.backend.expenses.handlers.user-expenses.supplier-aliases :as user-expenses-supplier-aliases]
+    [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
+    [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
+    [app.domain.backend.expenses.handlers.user-manufacturers :as user-manufacturers]
+    [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
 
 (defn routes
@@ -114,15 +115,23 @@
    ["/receipts/:id/review" {:post {:handler (user-receipts/save-receipt-review-handler db)}}]
    ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
 
-  ;; Articles + unmapped aliases (role-gated to admin/owner)
+   ;; Manufacturers (admin/owner only)
+   ["/manufacturers"
+    ["" {:get {:handler (user-manufacturers/list-manufacturers-handler db)}
+         :post {:handler (user-manufacturers/create-manufacturer-handler db)}}]
+
+    ["/:id" {:put {:handler (user-manufacturers/update-manufacturer-handler db)}
+             :delete {:handler (user-manufacturers/delete-manufacturer-handler db)}}]]
+
+   ;; Articles + unmapped aliases (role-gated to admin/owner)
    ;; IMPORTANT: Must come before the "/:id" expense route.
    ["/articles"
     ["" {:get {:handler (user-articles/list-articles-handler db)}
          :post {:handler (user-articles/create-article-handler db)}}]
 
-      ["/unmapped-aliases" {:get {:handler (user-articles/list-unmapped-aliases-handler db)}}]
+    ["/unmapped-aliases" {:get {:handler (user-articles/list-unmapped-aliases-handler db)}}]
 
-      ["/aliases/:alias-id/map" {:post {:handler (user-articles/map-alias-to-article-handler db)}}]
+    ["/aliases/:alias-id/map" {:post {:handler (user-articles/map-alias-to-article-handler db)}}]
 
     ["/:id/aliases" {:post {:handler (user-articles/batch-create-aliases-handler db)}}]
 

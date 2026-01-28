@@ -3,7 +3,7 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.expenses :as expenses]
-    [app.domain.backend.expenses.services.payers :as payers]
+
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
@@ -120,7 +120,6 @@
       (is (= receipt-id (:id (receipt-queries/delete-receipt! db receipt-id))))
       (is (nil? (receipt-queries/get-receipt db receipt-id))))))
 
-
 (deftest receipts-approve-does-not-move-local-receipt-file
   (when-let [db fixtures/*test-db*]
     (let [base-dir (io/file "upload" "stripes")
@@ -133,18 +132,18 @@
         (Files/write (.toPath src-file) bytes (into-array java.nio.file.OpenOption []))
         (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Konzum" {}))
               payer (th/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
-            upload (receipt-storage/upload-receipt! db {:storage_key storage-key
-                            :bytes bytes})
+              upload (receipt-storage/upload-receipt! db {:storage_key storage-key
+                                                          :bytes bytes})
               receipt-id (:id (:receipt upload))
-            _ (receipt-status/update-status! db receipt-id "extracted")
+              _ (receipt-status/update-status! db receipt-id "extracted")
               review {:supplier_id (:id supplier)
                       :payer_id (:id payer)
                       :purchased_at (now)
                       :total_amount (bigdec "12.34")
                       :currency "BAM"
                       :items [{:raw_label "Milk" :line_total (bigdec "12.34")}]}
-            _expense (receipt-approval/approve-and-post! db receipt-id review)
-            stored (receipt-queries/get-receipt db receipt-id)]
+              _expense (receipt-approval/approve-and-post! db receipt-id review)
+              stored (receipt-queries/get-receipt db receipt-id)]
           (is (= storage-key (:storage_key stored)))
           (is (true? (.exists src-file)))
           (is (false? (.exists dest-file))))
@@ -234,8 +233,8 @@
                   :total_amount (bigdec "3.33")
                   :currency "BAM"
                   :items [{:raw_label "Item" :line_total (bigdec "3.33")}]}
-            expense (receipt-approval/approve-and-post-for-user-any! db admin-user receipt-id review)
-            stored (receipt-queries/get-receipt db receipt-id)]
+          expense (receipt-approval/approve-and-post-for-user-any! db admin-user receipt-id review)
+          stored (receipt-queries/get-receipt db receipt-id)]
       (is (= admin-user (:user_id expense)))
       (is (= "posted" (:status stored)))
       (is (= (:id expense) (:expense_id stored)))

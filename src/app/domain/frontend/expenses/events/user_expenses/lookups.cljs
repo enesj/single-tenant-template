@@ -143,7 +143,7 @@
          payer-id* (some-> payer-id str str/trim not-empty)]
      (.append form-data "file" file)
      (when payer-id*
-       (.append form-data "payer-id" payer-id*))
+       (.append form-data "payer_id" payer-id*))
      form-data)))
 
 (rf/reg-event-db

@@ -24,13 +24,6 @@
 (defn- selected-item-ids [db]
   (or (get-in db (conj base-path :selection :item-ids)) #{}))
 
-(defn- selected-items
-  "Return the full item maps for the currently selected item IDs."
-  [db]
-  (let [ids (selected-item-ids db)
-        items (or (get-in db (conj base-path :items)) [])]
-    (filterv (fn [it] (contains? ids (:id it))) items)))
-
 ;; -----------------------------------------------------------------------------
 ;; Lookups (suppliers + articles) for the map modal
 ;; -----------------------------------------------------------------------------

@@ -38,14 +38,17 @@
 
 (defn create-article!
   "Create a canonical article."
-  [db {:keys [canonical_name category] :as data}]
+  [db {:keys [canonical_name category link manufacturer_id manufacturer] :as data}]
   (when-not canonical_name
     (throw (ex-info "canonical_name is required" {:data data})))
   (let [normalized (normalize-article-key canonical_name)
-        row {:id (UUID/randomUUID)
-             :canonical_name canonical_name
-             :normalized_key normalized
-             :category category}
+        row (cond-> {:id (UUID/randomUUID)
+                     :canonical_name canonical_name
+                     :normalized_key normalized}
+              (contains? data :category) (assoc :category category)
+              (contains? data :link) (assoc :link link)
+              (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id)
+              (contains? data :manufacturer) (assoc :manufacturer manufacturer))
         sql-map {:insert-into :articles
                  :values [row]
                  :returning [:*]}]
@@ -54,31 +57,40 @@
 (defn get-article
   [db id]
   (jdbc/execute-one! db
-    (sql/format {:select [:*] :from [:articles] :where [:= :id id]})
+    (sql/format {:select [[:a.*]
+                          [:m.display_name :manufacturer_display_name]]
+                 :from [[:articles :a]]
+                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                 :where [:= :a.id id]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn list-articles
   "List articles with optional search/pagination."
   [db {:keys [search limit offset order-by order-dir]
        :or {limit 50 offset 0 order-by :canonical_name order-dir :asc}}]
-  (let [base {:select [:*]
-              :from [:articles]
-              :order-by [[order-by order-dir]]
+  (let [base {:select [[:a.*]
+                       [:m.display_name :manufacturer_display_name]]
+              :from [[:articles :a]]
+              :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+              :order-by [[(keyword "a" (name order-by)) order-dir]]
               :limit limit
               :offset offset}
         query (cond-> base
                 search (assoc :where [:or
-                                      [:ilike :canonical_name (str "%" search "%")]
-                                      [:ilike :normalized_key (str "%" search "%")]]))]
+                                      [:ilike :a.canonical_name (str "%" search "%")]
+                                      [:ilike :a.normalized_key (str "%" search "%")]]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn update-article!
   "Update a canonical article. Recomputes normalized_key when canonical_name is provided."
-  [db id {:keys [canonical_name category] :as data}]
+  [db id {:keys [canonical_name category link manufacturer_id manufacturer] :as data}]
   (let [update-map (cond-> {}
                      canonical_name (assoc :canonical_name canonical_name
                                       :normalized_key (normalize-article-key canonical_name))
                      (contains? data :category) (assoc :category category)
+                     (contains? data :link) (assoc :link link)
+                     (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id)
+                     (contains? data :manufacturer) (assoc :manufacturer manufacturer)
                      true (assoc :updated_at [:now]))]
     (when (seq update-map)
       (jdbc/execute-one!
@@ -90,11 +102,11 @@
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn- update-count
-  "Extract next.jdbc update count from a DML result map." 
+  "Extract next.jdbc update count from a DML result map."
   [result]
   (or (:next.jdbc/update-count result)
-      (:update-count result)
-      0))
+    (:update-count result)
+    0))
 
 (defn delete-article!
   "Delete article by id. Returns true when a row was removed."
@@ -157,18 +169,18 @@
   "Create or update an article alias for a supplier."
   [db supplier-id raw-label article-id]
   (let [raw-label* (some-> raw-label str str/trim)
-     normalized (normalize-alias-label raw-label*)
-     row {:id (UUID/randomUUID)
-       :supplier_id supplier-id
-       :raw_label raw-label*
-       :raw_label_normalized normalized
-       :article_id article-id}
-     sql-map {:insert-into :article_aliases
-        :values [row]
-        :on-conflict [:supplier_id :raw_label_normalized]
-        :do-update-set {:article_id article-id
-               :raw_label :excluded/raw_label}
-        :returning [:*]}]
+        normalized (normalize-alias-label raw-label*)
+        row {:id (UUID/randomUUID)
+             :supplier_id supplier-id
+             :raw_label raw-label*
+             :raw_label_normalized normalized
+             :article_id article-id}
+        sql-map {:insert-into :article_aliases
+                 :values [row]
+                 :on-conflict [:supplier_id :raw_label_normalized]
+                 :do-update-set {:article_id article-id
+                                 :raw_label :excluded/raw_label}
+                 :returning [:*]}]
     (jdbc/execute-one! db (sql/format sql-map) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (def ^:private min-alias-normalized-length
@@ -250,8 +262,8 @@
   - Dedupes by normalized key.
   - Does NOT silently reassign conflicts unless allow-reassign? is true.
   "
-    [db {:keys [supplier-id article-id raw-labels allow-reassign?]
-      :or {allow-reassign? false}}]
+  [db {:keys [supplier-id article-id raw-labels allow-reassign?]
+       :or {allow-reassign? false}}]
   (when-not supplier-id
     (throw (ex-info "supplier-id is required" {:status 400})))
   (when-not article-id

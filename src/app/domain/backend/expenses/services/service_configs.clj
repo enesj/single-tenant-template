@@ -77,6 +77,29 @@
         (->> (remove str/blank?) vec canonicalize-tokens)
         (->> (str/join "-"))))))
 
+(defn normalize-manufacturer-key
+  "Normalize manufacturer name to lowercase, replace spaces with hyphens, remove special chars.
+   Used for deduplication and fuzzy matching."
+  [name]
+  (when name
+    (-> name
+      str/trim
+      (Normalizer/normalize Normalizer$Form/NFD)
+      (str/replace #"\p{M}+" "")
+      (str/replace #"Đ" "D")
+      (str/replace #"đ" "d")
+      str/lower-case
+      ;; Keep hyphens/spaces for tokenization, remove everything else.
+      (str/replace #"[^a-z0-9\s-]" "")
+      ;; Treat hyphens as whitespace for dedupe.
+      (str/replace #"-" " ")
+      join-single-letter-tokens
+      (str/replace #"\s+" " ")
+      str/trim
+      (str/split #"\s+")
+      (->> (remove str/blank?)
+        (str/join "-")))))
+
 ;; ============================================================================
 ;; Simple Entity Configs
 ;; ============================================================================
@@ -166,6 +189,31 @@
                     (if (:display_name updates)
                       (assoc updates
                         :normalized_key (normalize-supplier-key (:display_name updates))
+                        :updated_at [:now])
+                      (assoc updates :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
+(def manufacturer-config
+  {:table-name "manufacturers"
+   :primary-key :id
+   :required-fields [:display_name]
+   :allowed-order-by {:display-name :display_name
+                      :normalized-key :normalized_key
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :display_name
+   :search-fields [:display_name :normalized_key]
+   :field-transformers {:normalized_key normalize-manufacturer-key}
+   :before-insert (fn [data]
+                    (let [display-name (:display_name data)]
+                      (-> data
+                        (assoc :id (UUID/randomUUID))
+                        (assoc :normalized_key (normalize-manufacturer-key display-name)))))
+   :before-update (fn [_id updates]
+                    (if (:display_name updates)
+                      (assoc updates
+                        :normalized_key (normalize-manufacturer-key (:display_name updates))
                         :updated_at [:now])
                       (assoc updates :updated_at [:now])))
    :has-search? true
@@ -391,6 +439,7 @@
    :supplier-alias supplier-alias-config
    :price-observation price-observation-config
    :supplier supplier-config
+   :manufacturer manufacturer-config
    :payer-type payer-type-config
    :payer payer-config
    :article article-config
