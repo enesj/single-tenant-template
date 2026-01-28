@@ -66,7 +66,9 @@
                     ($ :td {:key col-id}
                       ($ common/input
                         (cond-> {:id (input-id item-id col-id)
-                                 :class "ds-input ds-input-bordered w-full"
+                                 :class (if (= type :number)
+                                         "ds-input ds-input-bordered w-full [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] appearance-none"
+                                         "ds-input ds-input-bordered w-full")
                                  :value (or val "")
                                  :type (name (or type :text))
                                  :on-change (handle-line-change item-id col-id)}

@@ -24,19 +24,19 @@
     :type :number
     :step "0.001"
     :min "0"
-    :width "w-16"}
+    :width "w-[100px]"}
    {:id :unit_price
     :label "Price"
     :type :number
     :step "0.01"
     :min "0"
-    :width "w-20"}
+    :width "w-[100px]"}
    {:id :line_total
     :label "Total"
     :type :number
     :step "0.01"
     :min "0"
-    :width "w-20"}])
+    :width "w-[100px]"}])
 
 (def line-items-field-spec
   "Standalone line items field spec for use outside of the main form spec."
