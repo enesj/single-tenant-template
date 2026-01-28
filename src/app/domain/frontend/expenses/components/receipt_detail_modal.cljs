@@ -167,6 +167,8 @@
         action-loading? (boolean (use-subscribe [receipt-action-loading-sub]))
         error (use-subscribe [receipts-error-sub])
         can-approve? (boolean (use-subscribe [:expenses/can? :expenses/receipts.approve]))
+        ;; Left column visibility toggle
+        [show-left-column? set-show-left-column!] (use-state true)
         ;; Left column tabs: :image, :extracted-html, :raw-json
         [left-tab set-left-tab!] (use-state :image)
         ;; Resizable columns: left column width percentage (default 33%)
@@ -218,7 +220,14 @@
         handle-resize-end (use-callback
                             (fn [_e]
                               (set-is-resizing! false))
-                            [])]
+                            [])
+
+        ;; Toggle left column visibility
+        toggle-left-column! (use-callback
+                              (fn [e]
+                                (.preventDefault e)
+                                (set-show-left-column! not))
+                              [])]
 
     ;; Reset tab + fetch on open/change
     (use-effect
@@ -303,75 +312,95 @@
           ;; ROW 1: Two resizable columns (default 1/3 left, 2/3 right)
           ($ :div {:ref container-ref
                    :class (str "flex gap-0 " (when is-resizing? "select-none cursor-col-resize"))}
+
             ;; LEFT COLUMN: Tabs for Image, Extracted HTML, Raw Extract JSON
-            ($ :div {:class "flex flex-col space-y-3 overflow-hidden"
-                     :style {:width (str left-width-pct "%")
-                             :minWidth "20%"
-                             :maxWidth "60%"}}
-              ($ :div {:class "ds-tabs ds-tabs-boxed ds-tabs-sm"}
-                (tabs/tab-link {:id (str "tab-receipt-image-" rid-str)
-                                :label "Image"
-                                :active? (= left-tab :image)
-                                :on-select #(set-left-tab! :image)})
-                (tabs/tab-link {:id (str "tab-receipt-extracted-html-" rid-str)
-                                :label "Extracted Markdown"
-                                :active? (= left-tab :extracted-html)
-                                :on-select #(set-left-tab! :extracted-html)})
-                (tabs/tab-link {:id (str "tab-receipt-raw-json-" rid-str)
-                                :label "Raw Extract JSON"
-                                :active? (= left-tab :raw-json)
-                                :on-select #(set-left-tab! :raw-json)}))
+            (when show-left-column?
+              ($ :div {:class "flex flex-col space-y-3 overflow-hidden"
+                       :style {:width (str left-width-pct "%")
+                               :minWidth "20%"
+                               :maxWidth "60%"}}
+                ($ :div {:class "flex items-center justify-between gap-2"}
+                  ($ :div {:class "ds-tabs ds-tabs-boxed ds-tabs-sm flex-1"}
+                    (tabs/tab-link {:id (str "tab-receipt-image-" rid-str)
+                                    :label "Image"
+                                    :active? (= left-tab :image)
+                                    :on-select #(set-left-tab! :image)})
+                    (tabs/tab-link {:id (str "tab-receipt-extracted-html-" rid-str)
+                                    :label "Extracted Markdown"
+                                    :active? (= left-tab :extracted-html)
+                                    :on-select #(set-left-tab! :extracted-html)})
+                    (tabs/tab-link {:id (str "tab-receipt-raw-json-" rid-str)
+                                    :label "Raw Extract JSON"
+                                    :active? (= left-tab :raw-json)
+                                    :on-select #(set-left-tab! :raw-json)}))
+                  ;; Hide button in left column
+                  ($ :button {:id (str "btn-hide-left-column-" rid-str)
+                              :type "button"
+                              :title "Hide preview panel"
+                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+                              :on-click toggle-left-column!}
+                    "✕"))
 
-              ($ :div {:class "ds-card ds-card-bordered bg-base-100 flex-1 flex flex-col overflow-hidden"}
-                ($ :div {:class "ds-card-body p-2 flex-1 overflow-hidden"}
-                  (case left-tab
-                    :image
-                    ($ receipt-preview {:receipt receipt
-                                        :title "Receipt Image"
-                                        :expanded? true})
+                ($ :div {:class "ds-card ds-card-bordered bg-base-100 flex-1 flex flex-col overflow-hidden"}
+                  ($ :div {:class "ds-card-body p-2 flex-1 overflow-hidden"}
+                    (case left-tab
+                      :image
+                      ($ receipt-preview {:receipt receipt
+                                          :title "Receipt Image"
+                                          :expanded? true})
 
-                    :extracted-html
-                    (let [parsed-markdown (:parsed-markdown receipt)]
-                      (if (seq parsed-markdown)
-                        ($ :div {:class "space-y-2"}
-                          ($ :h3 {:class "text-sm font-semibold"} "Extracted HTML / Parsed Markdown")
-                          ($ :pre {:class "text-xs whitespace-pre-wrap bg-base-200 p-3 rounded-lg max-h-[400px] overflow-y-auto"}
-                            parsed-markdown))
-                        ($ :div {:class "text-sm text-base-content/60 p-4"}
-                          "No extracted HTML available for this receipt.")))
+                      :extracted-html
+                      (let [parsed-markdown (:parsed-markdown receipt)]
+                        (if (seq parsed-markdown)
+                          ($ :div {:class "space-y-2"}
+                            ($ :h3 {:class "text-sm font-semibold"} "Extracted HTML / Parsed Markdown")
+                            ($ :pre {:class "text-xs whitespace-pre-wrap bg-base-200 p-3 rounded-lg max-h-[400px] overflow-y-auto"}
+                              parsed-markdown))
+                          ($ :div {:class "text-sm text-base-content/60 p-4"}
+                            "No extracted HTML available for this receipt.")))
 
-                    :raw-json
-                    (let [raw-extract (:raw-extract-json receipt)]
-                      (if (seq raw-extract)
-                        ($ :div {:class "flex flex-col h-full -m-2"}
-                          ($ :div {:class "flex items-center justify-between gap-2 px-2 py-1 mb-2"}
-                            ($ :div {:class "flex items-center gap-2"}
-                              ($ :div {:class "w-1 h-4 rounded-full bg-primary"})
-                              ($ :h3 {:class "text-sm font-semibold"} "Raw Extract JSON"))
-                            ($ :button
-                              {:class "ds-btn ds-btn-xs ds-btn-ghost ds-btn-circle"
-                               :title "Copy to clipboard"
-                               :on-click (fn [e]
-                                           (.stopPropagation e)
-                                           (let [json-str (js/JSON.stringify (clj->js raw-extract) nil 2)]
-                                             (.writeText js/navigator.clipboard json-str)))}
-                              ($ :svg {:class "w-3 h-3" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
-                                ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                                          :d "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"}))))
-                          ($ :div {:class "flex-1 bg-base-200/50 rounded-md p-2 overflow-y-auto border border-base-200"}
-                            ($ :pre {:class "text-xs leading-relaxed"}
-                              (js/JSON.stringify (clj->js raw-extract) nil 2))))
-                        ($ :div {:class "text-sm text-base-content/60 p-4"}
-                          "No raw extract JSON available for this receipt.")))))))
+                      :raw-json
+                      (let [raw-extract (:raw-extract-json receipt)]
+                        (if (seq raw-extract)
+                          ($ :div {:class "flex flex-col h-full -m-2"}
+                            ($ :div {:class "flex items-center justify-between gap-2 px-2 py-1 mb-2"}
+                              ($ :div {:class "flex items-center gap-2"}
+                                ($ :div {:class "w-1 h-4 rounded-full bg-primary"})
+                                ($ :h3 {:class "text-sm font-semibold"} "Raw Extract JSON"))
+                              ($ :button
+                                {:class "ds-btn ds-btn-xs ds-btn-ghost ds-btn-circle"
+                                 :title "Copy to clipboard"
+                                 :on-click (fn [e]
+                                             (.stopPropagation e)
+                                             (let [json-str (js/JSON.stringify (clj->js raw-extract) nil 2)]
+                                               (.writeText js/navigator.clipboard json-str)))}
+                                ($ :svg {:class "w-3 h-3" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
+                                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                                            :d "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"}))))
+                            ($ :div {:class "flex-1 bg-base-200/50 rounded-md p-2 overflow-y-auto border border-base-200"}
+                              ($ :pre {:class "text-xs leading-relaxed"}
+                                (js/JSON.stringify (clj->js raw-extract) nil 2))))
+                          ($ :div {:class "text-sm text-base-content/60 p-4"}
+                            "No raw extract JSON available for this receipt."))))))))
 
-            ;; RESIZE HANDLE
-            ($ :div {:class "flex-shrink-0 w-2 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors relative group"
-                     :on-mouse-down handle-resize-start}
-              ($ :div {:class "absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-base-300 group-hover:bg-primary/50 transition-colors"}))
+            ;; RESIZE HANDLE (only show when left column is visible)
+            (when show-left-column?
+              ($ :div {:class "flex-shrink-0 w-2 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors relative group"
+                       :on-mouse-down handle-resize-start}
+                ($ :div {:class "absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-base-300 group-hover:bg-primary/50 transition-colors"})))
 
             ;; RIGHT COLUMN: Approve & Post form (with split layout for line items below)
             ($ :div {:class "flex-1 space-y-2 overflow-hidden pl-3"}
-              ($ :div {:class "flex items-center justify-between"}
+              ;; Show button banner (only visible when left column is hidden)
+              (when (not show-left-column?)
+                ($ :button {:id (str "btn-show-left-column-" rid-str)
+                            :type "button"
+                            :title "Click to show receipt image and extracted data"
+                            :class "w-full flex items-center justify-between ds-alert bg-primary/5 hover:bg-primary/10 border-primary/20 cursor-pointer transition-all py-2 px-3"
+                            :on-click toggle-left-column!}
+                  ($ :span {:class "text-sm"} "Preview panel is hidden")
+                  ($ :span {:class "text-xs text-primary/70 font-medium"} "Click to show")))
+              ($ :div {:class "flex items-center justify-between gap-2"}
                 ($ :h2 {:class "text-base font-semibold"} "Approve & Post")
                 (when action-loading?
                   ($ :span {:class "text-xs text-base-content/60"} "Working...")))

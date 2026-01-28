@@ -170,7 +170,7 @@ bb cljfmt-fix
 - DEV_SUPPRESS_STDERR=false (or 0/no) keeps stderr visible in dev.
 - Dev watchers ignore runtime-edited config EDNs under:
   - src/app/admin/frontend/config/*.edn
-  - src/app/domain/**/config/*.edn
+  - src/app/domain/frontend/**/config/*.edn
 
 ## Ports and Profiles
 - App port (dev): 8085 (config/base.edn)
