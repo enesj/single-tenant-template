@@ -58,7 +58,6 @@
    [:manufacturer_id
     :uuid
     {:foreign-key :manufacturers/id, :on-delete :set-null}]
-   [:manufacturer [:varchar 255]]
    [:created_at :timestamptz {:default "NOW()"}]
    [:updated_at :timestamptz {:default "NOW()"}]],
   :indexes

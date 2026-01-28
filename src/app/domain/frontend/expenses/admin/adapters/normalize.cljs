@@ -181,8 +181,6 @@
                   ;; manufacturer FK + display
                   :manufacturer_id [:manufacturer-id]
                   :manufacturer_display_name [:manufacturer-display-name]
-                  ;; legacy/free-text fallback
-                  :manufacturer [:manufacturer]
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 

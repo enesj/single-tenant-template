@@ -66,8 +66,6 @@
                          (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
                          (assoc :category (or (:category item) ""))
                          (assoc :manufacturer_id (some-> manufacturer-id str))
-                         ;; Legacy fallback (kept for transitional compatibility)
-                         (assoc :manufacturer (or (:manufacturer item) ""))
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error

@@ -293,6 +293,8 @@
    "raw_label_normalized"
    "confidence"
    "created_at"
+   "supplier_id"
+   "article_id"
    "id"],
   :default-visible-columns
   ["supplier_display_name" "raw_label" "article_canonical_name"],

@@ -201,8 +201,6 @@
                      [:link :text]
                      ;; Canonical manufacturer reference.
                      [:manufacturer_id :uuid {:foreign-key :manufacturers/id :on-delete :set-null}]
-                     ;; Legacy/raw manufacturer string (pre-FK). Kept for backfill + display fallback.
-                     [:manufacturer [:varchar 255]]
                      [:created_at :timestamptz {:default "NOW()"}]
                      [:updated_at :timestamptz {:default "NOW()"}]]
             :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]

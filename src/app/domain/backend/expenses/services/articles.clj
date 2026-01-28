@@ -38,7 +38,7 @@
 
 (defn create-article!
   "Create a canonical article."
-  [db {:keys [canonical_name category link manufacturer_id manufacturer] :as data}]
+  [db {:keys [canonical_name category link manufacturer_id] :as data}]
   (when-not canonical_name
     (throw (ex-info "canonical_name is required" {:data data})))
   (let [normalized (normalize-article-key canonical_name)
@@ -47,8 +47,7 @@
                      :normalized_key normalized}
               (contains? data :category) (assoc :category category)
               (contains? data :link) (assoc :link link)
-              (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id)
-              (contains? data :manufacturer) (assoc :manufacturer manufacturer))
+              (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id))
         sql-map {:insert-into :articles
                  :values [row]
                  :returning [:*]}]
@@ -83,14 +82,14 @@
 
 (defn update-article!
   "Update a canonical article. Recomputes normalized_key when canonical_name is provided."
-  [db id {:keys [canonical_name category link manufacturer_id manufacturer] :as data}]
+  [db id {:keys [canonical_name category link manufacturer_id] :as data}]
   (let [update-map (cond-> {}
                      canonical_name (assoc :canonical_name canonical_name
                                       :normalized_key (normalize-article-key canonical_name))
                      (contains? data :category) (assoc :category category)
                      (contains? data :link) (assoc :link link)
                      (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id)
-                     (contains? data :manufacturer) (assoc :manufacturer manufacturer)
+
                      true (assoc :updated_at [:now]))]
     (when (seq update-map)
       (jdbc/execute-one!

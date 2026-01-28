@@ -116,10 +116,8 @@
                                 (assoc :link (:link body))
 
                                 manufacturer-id-provided?
-                                (assoc :manufacturer_id manufacturer-id)
+                                (assoc :manufacturer_id manufacturer-id))
 
-                                (contains? body :manufacturer)
-                                (assoc :manufacturer (:manufacturer body)))
                       updated (articles/update-article! db article-id updates)]
                   (if updated
                     (h/json-response {:data (to-app updated)})

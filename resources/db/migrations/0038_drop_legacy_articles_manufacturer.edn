@@ -1,0 +1,3 @@
+({:action :drop-column,
+  :field-name :manufacturer,
+  :model-name :articles})
