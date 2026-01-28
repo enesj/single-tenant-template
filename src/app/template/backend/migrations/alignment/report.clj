@@ -62,20 +62,24 @@
         views-edn (utils/read-hierarchical-edn db-root "views.edn")
         policies-edn (utils/read-hierarchical-edn db-root "policies.edn")
 
-        expected-functions (fetchers/expected-extended-object-names :function functions-edn)
-        expected-triggers (fetchers/expected-extended-object-names :trigger triggers-edn)
-        expected-views (fetchers/expected-extended-object-names :view views-edn)
-        expected-policies (fetchers/expected-extended-object-names :policy policies-edn)
+        expected-functions (fetchers/expected-extended-object-definitions :function functions-edn)
+        expected-triggers (fetchers/expected-extended-object-definitions :trigger triggers-edn)
+        expected-views (fetchers/expected-extended-object-definitions :view views-edn)
+        expected-policies (fetchers/expected-extended-object-definitions :policy policies-edn)
 
-        db-functions (fetchers/fetch-functions db)
-        db-triggers (fetchers/fetch-triggers db)
-        db-views (fetchers/fetch-views db)
-        db-policies (fetchers/fetch-policies db)
+        db-functions (fetchers/fetch-function-definitions db)
+        db-triggers (fetchers/fetch-trigger-definitions db)
+        db-views (fetchers/fetch-view-definitions db)
+        db-policies (fetchers/fetch-policy-definitions db)
 
-        missing-functions (sort (set/difference (:expected expected-functions) db-functions))
-        missing-triggers (sort (set/difference (:expected expected-triggers) db-triggers))
-        missing-views (sort (set/difference (:expected expected-views) db-views))
-        missing-policies (sort (set/difference (:expected expected-policies) db-policies))]
+        functions-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-functions)
+                            :actual db-functions})
+        triggers-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-triggers)
+                           :actual db-triggers})
+        views-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-views)
+                        :actual db-views})
+        policies-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-policies)
+                           :actual db-policies})]
 
     {:timestamp (utils/now-iso)
      :config {:jdbc-url jdbc-url
@@ -98,14 +102,10 @@
               :index-definition-duplicates (:index-definition-duplicates expected)
               :enums enums-diff
               :foreign-keys foreign-keys-diff}
-     :extended {:functions {:missing missing-functions
-                            :unparseable (:unparseable expected-functions)}
-                :triggers {:missing missing-triggers
-                           :unparseable (:unparseable expected-triggers)}
-                :views {:missing missing-views
-                        :unparseable (:unparseable expected-views)}
-                :policies {:missing missing-policies
-                           :unparseable (:unparseable expected-policies)}}}))
+         :extended {:functions (assoc functions-diff :unparseable (:unparseable expected-functions))
+        :triggers (assoc triggers-diff :unparseable (:unparseable expected-triggers))
+        :views (assoc views-diff :unparseable (:unparseable expected-views))
+        :policies (assoc policies-diff :unparseable (:unparseable expected-policies))}}))
 
 (defn diff?
   "Return true if a report contains any differences."
@@ -136,6 +136,16 @@
       (seq (get-in r [:extended :triggers :missing]))
       (seq (get-in r [:extended :views :missing]))
       (seq (get-in r [:extended :policies :missing]))
+
+      (seq (get-in r [:extended :functions :extra]))
+      (seq (get-in r [:extended :triggers :extra]))
+      (seq (get-in r [:extended :views :extra]))
+      (seq (get-in r [:extended :policies :extra]))
+
+      (seq (get-in r [:extended :functions :mismatched]))
+      (seq (get-in r [:extended :triggers :mismatched]))
+      (seq (get-in r [:extended :views :mismatched]))
+      (seq (get-in r [:extended :policies :mismatched]))
 
       (seq (get-in r [:extended :functions :unparseable]))
       (seq (get-in r [:extended :triggers :unparseable]))
@@ -184,6 +194,17 @@
         (println (str "    - " index))
         (println (str "      expected: " (pr-str expected)))
         (println (str "      actual:   " (pr-str actual)))))))
+
+(defn- print-mismatched-extended
+  [label mismatches]
+  (when (seq mismatches)
+    (println label ":")
+    (doseq [{:keys [id expected actual expected-source-key]} mismatches]
+      (println (str "  - " id
+                 (when expected-source-key
+                   (str " (edn key: " expected-source-key ")"))))
+      (println (str "    expected: " (pr-str expected)))
+      (println (str "    actual:   " (pr-str actual))))))
 
 (defn print-report!
   "Pretty-print a report to stdout."
@@ -248,9 +269,20 @@
 
   (println "\n--- Extended objects (EDN vs DB) ---")
   (print-kv-lines "" "Missing functions" (get-in r [:extended :functions :missing]))
+  (print-kv-lines "" "Extra functions" (get-in r [:extended :functions :extra]))
+  (print-mismatched-extended "Mismatched functions" (get-in r [:extended :functions :mismatched]))
+
   (print-kv-lines "" "Missing triggers" (get-in r [:extended :triggers :missing]))
+  (print-kv-lines "" "Extra triggers" (get-in r [:extended :triggers :extra]))
+  (print-mismatched-extended "Mismatched triggers" (get-in r [:extended :triggers :mismatched]))
+
   (print-kv-lines "" "Missing views" (get-in r [:extended :views :missing]))
+  (print-kv-lines "" "Extra views" (get-in r [:extended :views :extra]))
+  (print-mismatched-extended "Mismatched views" (get-in r [:extended :views :mismatched]))
+
   (print-kv-lines "" "Missing policies" (get-in r [:extended :policies :missing]))
+  (print-kv-lines "" "Extra policies" (get-in r [:extended :policies :extra]))
+  (print-mismatched-extended "Mismatched policies" (get-in r [:extended :policies :mismatched]))
 
   (doseq [[k {:keys [unparseable]}] (:extended r)]
     (when (seq unparseable)

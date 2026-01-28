@@ -57,6 +57,17 @@
     [x y]
     ...)
   ```
+  - Docstring quoting rules (important)
+    - Use straight double quotes for docstrings and escape any interior double quotes with `\"`.
+    - Do not use smart quotes (“ ”) or unescaped `"` inside docstrings; they will break the reader.
+    - Prefer backticks for code identifiers inside docstrings when helpful (e.g., `identity`), but still escape literal double quotes.
+    - Example (correct):
+    ```clj
+    (defn normalize-arglist
+      "Normalize a Postgres function \"argument\" list (e.g. identity args).\n\nThis is intentionally conservative. It helps match the common case where the EDN function definition lists only argument types."
+      [s]
+      ...)
+    ```
 - Indentation and alignment
   - Align multi-line elements (vectors/maps/lists) vertically; rely on correct indentation for bracket balancing.
   ```clj
