@@ -347,7 +347,8 @@
                       :image
                       ($ receipt-preview {:receipt receipt
                                           :title "Receipt Image"
-                                          :expanded? true})
+                                          :expanded? true
+                                          :preview-height-class "flex-1 min-h-0"})
 
                       :extracted-html
                       (let [parsed-markdown (:parsed-markdown receipt)]
@@ -463,7 +464,7 @@
        :width "960px"
        :z-index 120
        :backdrop-opacity 20
-       :class "max-w-[95vw] h-[85vh] flex flex-col"
+       :class "max-w-[95vw] max-h-[85vh] flex flex-col"
        :header header
        :header-class "p-0 border-0 bg-transparent mb-3"
        :content-class "p-0 overflow-hidden"
