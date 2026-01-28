@@ -9,10 +9,10 @@
   "Handler factory for batch-updating multiple user expenses.
 
   Expects JSON body like:
-  {:items [{:id \" <uuid> \" :supplier_id ... :notes ...} ...]}
+  {:items [{:id <uuid> :supplier_id ... :notes ...} ...]}
 
   Returns:
-  {:updated n :results [...] :errors [...]}"
+  {:data [...] :updated n :errors [...]}"
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
@@ -32,7 +32,10 @@
                                items)]
             (if (empty? items)
               (h/json-response {:error "No items provided"} 400)
-              (h/json-response (user-expenses/batch-update-user-expenses! db user-id parsed-items))))
+              (let [{:keys [updated results errors]} (user-expenses/batch-update-user-expenses! db user-id parsed-items)]
+                (h/json-response {:data (vec (or results []))
+                                  :updated updated
+                                  :errors (vec (or errors []))}))))
           (catch Exception e
             (log/error e "Error batch updating user expenses"
               {:user-id user-id

@@ -25,7 +25,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/suppliers-endpoint
-                      :admin-uri endpoints/admin-suppliers-endpoint
+
                       :params (when (seq params*) params*)
                       :on-success [:user-expenses/fetch-suppliers-success]
                       :on-failure [:user-expenses/fetch-suppliers-failure]})})))
@@ -34,7 +34,7 @@
   :user-expenses/fetch-suppliers-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [suppliers (or (:data response) (:suppliers response) response)]
+    (let [suppliers (:data response)]
       {:db (-> db
              (assoc-in [:user-expenses :suppliers :data] suppliers)
              (assoc-in [:user-expenses :suppliers :items] suppliers)
@@ -65,7 +65,7 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/payers-endpoint
-                    :admin-uri endpoints/admin-payers-endpoint
+
                     :params (when (map? params) params)
                     :on-success [:user-expenses/fetch-payers-success]
                     :on-failure [:user-expenses/fetch-payers-failure]})}))
@@ -74,7 +74,7 @@
   :user-expenses/fetch-payers-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [payers (or (:data response) (:payers response) response)]
+    (let [payers (:data response)]
       {:db (-> db
              (assoc-in [:user-expenses :payers :data] payers)
              (assoc-in [:user-expenses :payers :items] payers)
@@ -105,7 +105,7 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/payer-types-endpoint
-                    :admin-uri endpoints/admin-payer-types-endpoint
+
                     :params (when (map? params) params)
                     :on-success [:user-expenses/fetch-payer-types-success]
                     :on-failure [:user-expenses/fetch-payer-types-failure]})}))
@@ -114,7 +114,7 @@
   :user-expenses/fetch-payer-types-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [payer-types (or (:data response) (:payer-types response) response)]
+    (let [payer-types (:data response)]
       {:db (-> db
              (assoc-in [:user-expenses :payer-types :data] payer-types)
              (assoc-in [:user-expenses :payer-types :items] payer-types)
@@ -155,9 +155,7 @@
 
 (defn- ^:private receipt-from-response
   [response]
-  (or (:data response)
-    (:receipt response)
-    (get-in response [:data :receipt])))
+  (:data response))
 
 (defn- ^:private ocr-receipts-xhrio
   "Build an OCR batch request (POST /expenses/receipts/ocr).
@@ -168,7 +166,7 @@
   (x/xhrio db
     {:method :post
      :uri (str endpoints/receipts-endpoint "/ocr")
-     :admin-uri (str endpoints/admin-receipts-endpoint "/ocr")
+
      :params {:receipt_ids (vec receipt-ids)}
      ;; Reuse the existing OCR success/failure handlers so the receipts list refreshes.
      :on-success [:user-expenses/ocr-selected-success receipt-ids]
@@ -188,7 +186,7 @@
        :http-xhrio (x/xhrio db
                      {:method :post
                       :uri endpoints/upload-endpoint
-                      :admin-uri endpoints/admin-upload-endpoint
+
                       :body form-data
                       :format {:write identity :content-type false}
                       :on-success [:user-expenses/upload-receipt-success]
@@ -206,11 +204,10 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [receipt (receipt-from-response response)
-          duplicate? (true? (or (:duplicate? response) (:duplicate response)))
+          duplicate? (true? (:duplicate? response))
           receipt-id (:id receipt)
           receipt-id-str (some-> receipt-id str)
           filename (or (:original-filename receipt)
-                     (:original_filename receipt)
                      "receipt")
           notice (when duplicate?
                    [(str "Already uploaded: " filename ". Using the existing receipt.")])
@@ -261,7 +258,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/upload-endpoint
-                    :admin-uri endpoints/admin-upload-endpoint
+
                     :body form-data
                     :format {:write identity :content-type false}
                     :on-success [:user-expenses/upload-receipts-success remaining]
@@ -296,12 +293,11 @@
   common-interceptors
   (fn [{:keys [db]} [remaining response]]
     (let [receipt (receipt-from-response response)
-          duplicate? (true? (or (:duplicate? response) (:duplicate response)))
+          duplicate? (true? (:duplicate? response))
           receipt-id (:id receipt)
           receipt-id-str (some-> receipt-id str)
           filename (or (get-in db [:user-expenses :upload :batch :current])
                      (:original-filename receipt)
-                     (:original_filename receipt)
                      "receipt")
           notice-msg (when duplicate?
                        (str "Already uploaded: " filename ". Using the existing receipt."))

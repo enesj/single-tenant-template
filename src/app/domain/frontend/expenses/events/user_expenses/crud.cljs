@@ -37,7 +37,7 @@
          (x/xhrio db
            {:method :delete
             :uri (str endpoints/list-endpoint "/" id)
-            :admin-uri (str endpoints/admin-expenses-endpoint "/" id)
+
             :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
             :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})))
 
@@ -66,7 +66,7 @@
          (x/xhrio db
            {:method :put
             :uri (str endpoints/list-endpoint "/batch")
-            :admin-uri (str endpoints/list-endpoint "/batch")
+
             :params request-params
             :timeout 8000
             :on-success [:app.template.frontend.events.list.batch/batch-update-success entity-type]
@@ -74,10 +74,7 @@
 
      :on-success
      (fn [_cofx _entity-type response default-effect]
-       (let [updated-records (or (:results response)
-                               (get-in response [:data :results])
-                               (get-in response [:data])
-                               response)
+       (let [updated-records (:data response)
              updated-records (vec (or updated-records []))
              dispatches (or (:dispatch-n default-effect) [])
              dispatches* (->> dispatches
@@ -91,7 +88,7 @@
 
 (defn- user-ui-context?
   [db]
-  (not (x/admin-context? db)))
+  true)
 
 (defn- lookup-uri
   [base-uri]
@@ -167,125 +164,125 @@
                                                                        n))))]
          {:db db*}))}}})
 
-  (crud-bridges/register-crud-bridge!
-    {:entity-key :article-aliases
-     :bridge-id :expenses-user-power-tools
-     :priority 90
-     :context-pred user-ui-context?
-     :operations
-     {;; IMPORTANT: User-facing article aliases are served by the expenses user API.
+(crud-bridges/register-crud-bridge!
+  {:entity-key :article-aliases
+   :bridge-id :expenses-user-power-tools
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {;; IMPORTANT: User-facing article aliases are served by the expenses user API.
       ;; The template batch delete action dispatches template CRUD delete events
       ;; which would otherwise hit /api/v1/entities/article-aliases/:id (blocked by
       ;; deny-by-default entity access).
-      :delete
-      {:request
-       (fn [{:keys [db]} entity-type id default-effect]
-         (let [id* (str id)]
-           (assoc default-effect
-             :db (assoc-in db (paths/entity-loading? entity-type) true)
-             :http-xhrio
-             (http/api-request
-               {:method :delete
-                :uri (str endpoints/article-aliases-endpoint "/" id*)
-                :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
-                :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
+    :delete
+    {:request
+     (fn [{:keys [db]} entity-type id default-effect]
+       (let [id* (str id)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio
+           (http/api-request
+             {:method :delete
+              :uri (str endpoints/article-aliases-endpoint "/" id*)
+              :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
+              :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
 
-       :on-success
-       (fn [{:keys [db]} entity-type id _default-effect]
-         (let [id* (str id)
-               existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
-               remaining-ids (vec (remove #(= % id*) existing-ids))
-               db* (-> db
-                     (assoc-in (paths/entity-loading? entity-type) false)
-                     (assoc-in (paths/entity-error entity-type) nil)
-                     (update-in (paths/entity-data entity-type) dissoc id*)
-                     (assoc-in (paths/entity-ids entity-type) remaining-ids)
-                     (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
-                     (update-in (paths/list-total-items entity-type) (fn [n]
-                                                                       (if (number? n)
-                                                                         (max 0 (dec n))
-                                                                         n))))]
-           {:db db*}))}}})
+     :on-success
+     (fn [{:keys [db]} entity-type id _default-effect]
+       (let [id* (str id)
+             existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
+             remaining-ids (vec (remove #(= % id*) existing-ids))
+             db* (-> db
+                   (assoc-in (paths/entity-loading? entity-type) false)
+                   (assoc-in (paths/entity-error entity-type) nil)
+                   (update-in (paths/entity-data entity-type) dissoc id*)
+                   (assoc-in (paths/entity-ids entity-type) remaining-ids)
+                   (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
+                   (update-in (paths/list-total-items entity-type) (fn [n]
+                                                                     (if (number? n)
+                                                                       (max 0 (dec n))
+                                                                       n))))]
+         {:db db*}))}}})
 
-  (crud-bridges/register-crud-bridge!
-    {:entity-key :articles
-     :bridge-id :expenses-user-power-tools
-     :priority 90
-     :context-pred user-ui-context?
-     :operations
-     {;; IMPORTANT: User-facing articles are served by the expenses user API.
+(crud-bridges/register-crud-bridge!
+  {:entity-key :articles
+   :bridge-id :expenses-user-power-tools
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {;; IMPORTANT: User-facing articles are served by the expenses user API.
       ;; The template batch delete action dispatches template CRUD delete events
       ;; which would otherwise hit /api/v1/entities/articles/:id (blocked by
       ;; deny-by-default entity access).
-      :delete
-      {:request
-       (fn [{:keys [db]} entity-type id default-effect]
-         (let [id* (str id)]
-           (assoc default-effect
-             :db (assoc-in db (paths/entity-loading? entity-type) true)
-             :http-xhrio
-             (http/api-request
-               {:method :delete
-                :uri (str endpoints/articles-endpoint "/" id*)
-                :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
-                :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
+    :delete
+    {:request
+     (fn [{:keys [db]} entity-type id default-effect]
+       (let [id* (str id)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio
+           (http/api-request
+             {:method :delete
+              :uri (str endpoints/articles-endpoint "/" id*)
+              :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
+              :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
 
-       :on-success
-       (fn [{:keys [db]} entity-type id _default-effect]
-         (let [id* (str id)
-               existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
-               remaining-ids (vec (remove #(= % id*) existing-ids))
-               db* (-> db
-                     (assoc-in (paths/entity-loading? entity-type) false)
-                     (assoc-in (paths/entity-error entity-type) nil)
-                     (update-in (paths/entity-data entity-type) dissoc id*)
-                     (assoc-in (paths/entity-ids entity-type) remaining-ids)
-                     (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
-                     (update-in (paths/list-total-items entity-type) (fn [n]
-                                                                       (if (number? n)
-                                                                         (max 0 (dec n))
-                                                                         n))))]
-           {:db db*}))}}})
+     :on-success
+     (fn [{:keys [db]} entity-type id _default-effect]
+       (let [id* (str id)
+             existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
+             remaining-ids (vec (remove #(= % id*) existing-ids))
+             db* (-> db
+                   (assoc-in (paths/entity-loading? entity-type) false)
+                   (assoc-in (paths/entity-error entity-type) nil)
+                   (update-in (paths/entity-data entity-type) dissoc id*)
+                   (assoc-in (paths/entity-ids entity-type) remaining-ids)
+                   (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
+                   (update-in (paths/list-total-items entity-type) (fn [n]
+                                                                     (if (number? n)
+                                                                       (max 0 (dec n))
+                                                                       n))))]
+         {:db db*}))}}})
 
-  (crud-bridges/register-crud-bridge!
-    {:entity-key :supplier-aliases
-     :bridge-id :expenses-user-power-tools
-     :priority 90
-     :context-pred user-ui-context?
-     :operations
-     {;; IMPORTANT: User-facing supplier aliases are served by the expenses user API.
+(crud-bridges/register-crud-bridge!
+  {:entity-key :supplier-aliases
+   :bridge-id :expenses-user-power-tools
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {;; IMPORTANT: User-facing supplier aliases are served by the expenses user API.
       ;; The template batch delete action dispatches template CRUD delete events
       ;; which would otherwise hit /api/v1/entities/supplier-aliases/:id (blocked by
       ;; deny-by-default entity access).
-      :delete
-      {:request
-       (fn [{:keys [db]} entity-type id default-effect]
-         (let [id* (str id)]
-           (assoc default-effect
-             :db (assoc-in db (paths/entity-loading? entity-type) true)
-             :http-xhrio
-             (http/api-request
-               {:method :delete
-                :uri (str endpoints/supplier-aliases-endpoint "/" id*)
-                :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
-                :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
+    :delete
+    {:request
+     (fn [{:keys [db]} entity-type id default-effect]
+       (let [id* (str id)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio
+           (http/api-request
+             {:method :delete
+              :uri (str endpoints/supplier-aliases-endpoint "/" id*)
+              :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id*]
+              :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))))
 
-       :on-success
-       (fn [{:keys [db]} entity-type id _default-effect]
-         (let [id* (str id)
-               existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
-               remaining-ids (vec (remove #(= % id*) existing-ids))
-               db* (-> db
-                     (assoc-in (paths/entity-loading? entity-type) false)
-                     (assoc-in (paths/entity-error entity-type) nil)
-                     (update-in (paths/entity-data entity-type) dissoc id*)
-                     (assoc-in (paths/entity-ids entity-type) remaining-ids)
-                     (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
-                     (update-in (paths/list-total-items entity-type) (fn [n]
-                                                                       (if (number? n)
-                                                                         (max 0 (dec n))
-                                                                         n))))]
-           {:db db*}))}}})
+     :on-success
+     (fn [{:keys [db]} entity-type id _default-effect]
+       (let [id* (str id)
+             existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
+             remaining-ids (vec (remove #(= % id*) existing-ids))
+             db* (-> db
+                   (assoc-in (paths/entity-loading? entity-type) false)
+                   (assoc-in (paths/entity-error entity-type) nil)
+                   (update-in (paths/entity-data entity-type) dissoc id*)
+                   (assoc-in (paths/entity-ids entity-type) remaining-ids)
+                   (update-in (paths/entity-selected-ids entity-type) (fn [s] (disj (or s #{}) id*)))
+                   (update-in (paths/list-total-items entity-type) (fn [n]
+                                                                     (if (number? n)
+                                                                       (max 0 (dec n))
+                                                                       n))))]
+         {:db db*}))}}})
 
 (crud-bridges/register-crud-bridge!
   {:entity-key :receipts
@@ -319,7 +316,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/list-endpoint
-                    :admin-uri endpoints/admin-expenses-endpoint
+
                     :params expense-data
                     :on-success [:user-expenses/create-expense-success]
                     :on-failure [:user-expenses/create-expense-failure]})}))
@@ -328,8 +325,7 @@
   :user-expenses/create-expense-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense-id (or (get-in response [:data :id])
-                       (get-in response [:expense :id]))]
+    (let [expense-id (get-in response [:data :id])]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
@@ -359,7 +355,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/list-endpoint
-                    :admin-uri endpoints/admin-expenses-endpoint
+
                     :params expense-data
                     :on-success [:user-expenses/create-expense-modal-success on-success]
                     :on-failure [:user-expenses/create-expense-modal-failure]})}))
@@ -368,8 +364,7 @@
   :user-expenses/create-expense-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [expense-id (or (get-in response [:data :id])
-                       (get-in response [:expense :id]))
+    (let [expense-id (get-in response [:data :id])
           highlight-id (some-> expense-id str)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
@@ -404,7 +399,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/list-endpoint "/" expense-id)
-                    :admin-uri (str endpoints/admin-expenses-endpoint "/" expense-id)
+
                     :params expense-data
                     :on-success [:user-expenses/update-expense-success expense-id]
                     :on-failure [:user-expenses/update-expense-failure]})}))
@@ -413,7 +408,7 @@
   :user-expenses/update-expense-success
   common-interceptors
   (fn [{:keys [db]} [expense-id response]]
-    (let [expense (or (:data response) (:expense response))]
+    (let [expense (:data response)]
       (cond-> {:db (-> db
                      (assoc-in [:user-expenses :form :loading?] false)
                      (assoc-in [:user-expenses :form :error] nil))
@@ -444,7 +439,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/list-endpoint "/" expense-id)
-                    :admin-uri (str endpoints/admin-expenses-endpoint "/" expense-id)
+
                     :params expense-data
                     :on-success [:user-expenses/update-expense-modal-success expense-id on-success]
                     :on-failure [:user-expenses/update-expense-modal-failure]})}))
@@ -453,7 +448,7 @@
   :user-expenses/update-expense-modal-success
   common-interceptors
   (fn [{:keys [db]} [expense-id on-success response]]
-    (let [expense (or (:data response) (:expense response))
+    (let [expense (:data response)
           highlight-id (some-> expense-id str)]
       (cond-> {:db (-> db
                      (assoc-in [:user-expenses :form :loading?] false)
@@ -500,7 +495,7 @@
      :http-xhrio (x/xhrio db
                    {:method :delete
                     :uri (str endpoints/list-endpoint "/" expense-id)
-                    :admin-uri (str endpoints/admin-expenses-endpoint "/" expense-id)
+
                     :response-format (ajax/text-response-format)
                     :on-success [:user-expenses/delete-expense-success]
                     :on-failure [:user-expenses/delete-expense-failure]})}))
@@ -534,7 +529,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/list-endpoint "/" expense-id)
-                    :admin-uri (str endpoints/admin-expenses-endpoint "/" expense-id)
+
                     :params {:is_posted true}
                     :on-success [:user-expenses/post-expense-success expense-id]
                     :on-failure [:user-expenses/post-expense-failure]})}))

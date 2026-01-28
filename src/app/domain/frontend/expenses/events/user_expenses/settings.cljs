@@ -22,7 +22,7 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/settings-endpoint
-                    :admin-uri endpoints/admin-settings-endpoint
+
                     :on-success [:user-expenses/fetch-settings-success]
                     :on-failure [:user-expenses/fetch-settings-failure]})}))
 
@@ -30,7 +30,7 @@
   :user-expenses/fetch-settings-success
   common-interceptors
   (fn [db [response]]
-    (let [settings (or (:data response) (:settings response) response)]
+    (let [settings (:data response)]
       (-> db
         (assoc-in [:user-expenses :settings :data] settings)
         (assoc-in [:user-expenses :settings :loading?] false)
@@ -59,10 +59,10 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri endpoints/settings-endpoint
-                    :admin-uri endpoints/admin-settings-endpoint
+
                      ;; NOTE: day8.re-frame.http-fx + cljs-ajax expects JSON payloads in :params.
                      ;; :body is reserved for raw bodies like FormData or pre-serialized JSON strings.
-                     :params settings-data
+                    :params settings-data
                     :on-success [:user-expenses/update-settings-success]
                     :on-failure [:user-expenses/update-settings-failure]})}))
 
@@ -70,7 +70,7 @@
   :user-expenses/update-settings-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [settings (or (:data response) (:settings response) response)]
+    (let [settings (:data response)]
       {:db (-> db
              (assoc-in [:user-expenses :settings :data] settings)
              (assoc-in [:user-expenses :settings :loading?] false)
@@ -123,7 +123,7 @@
   :user-expenses/update-settings-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [settings (or (:data response) (:settings response) response)]
+    (let [settings (:data response)]
       {:db (-> db
              (assoc-in [:user-expenses :settings :data] settings)
              (assoc-in [:user-expenses :settings :loading?] false)

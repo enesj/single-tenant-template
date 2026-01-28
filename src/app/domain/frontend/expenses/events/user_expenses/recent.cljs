@@ -27,7 +27,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/list-endpoint
-                      :admin-uri endpoints/admin-expenses-endpoint
+
                       :params {:limit limit* :offset offset*}
                       :on-success [:user-expenses/fetch-recent-success]
                       :on-failure [:user-expenses/fetch-recent-failure]})})))
@@ -36,7 +36,7 @@
   :user-expenses/fetch-recent-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [data (or (:data response) (:expenses response) [])
+    (let [data (or (:data response) [])
           total (or (:total response) (count data))
           limit (or (:limit response) (get-in db [:user-expenses :recent :limit]))
           offset (or (:offset response) (get-in db [:user-expenses :recent :offset]))]

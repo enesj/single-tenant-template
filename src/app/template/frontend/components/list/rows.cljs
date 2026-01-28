@@ -238,7 +238,19 @@
 
     (if is-editing
       ;; If the item is being edited, render the edit form
-      ($ form (assoc row-props :editing editing))
+      (if-let [custom-render-edit (:render-edit-form props)]
+        ;; Use custom edit form renderer if provided (inline mode with custom form)
+        ;; Return as a single cell that spans all columns
+        [(custom-render-edit item-clj
+           {:entity-name entity-name
+            :entity-spec entity-spec
+            :on-success (fn []
+                          (set-editing! nil)
+                          (when-let [on-success (:on-edit-success props)]
+                            (on-success)))
+            :on-cancel #(set-editing! nil)})]
+        ;; Otherwise use the default form
+        ($ form (assoc row-props :editing editing)))
       ;; Otherwise, render the table row with action buttons and select checkbox
       {:cells (row-content {:entity-spec effective-entity-spec
                             :item item                      ; Keep using original item for display

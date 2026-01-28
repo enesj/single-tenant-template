@@ -39,7 +39,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/articles-endpoint
-                      :admin-uri endpoints/admin-articles-endpoint
+
                       :params request-params
                       :on-success [:user-expenses/fetch-articles-success]
                       :on-failure [:user-expenses/fetch-articles-failure]})})))
@@ -48,7 +48,7 @@
   :user-expenses/fetch-articles-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [articles (vec (or (:articles response) []))]
+    (let [articles (vec (or (:data response) []))]
       {:db (finish-entity-load db :articles nil)
        :dispatch [::expenses-sync/sync-articles articles]})))
 
@@ -61,24 +61,22 @@
 (rf/reg-event-fx
   :user-expenses/create-article-modal
   common-interceptors
-  (fn [{:keys [db]} [{:keys [canonical-name]} on-success]]
-    (let [name* canonical-name]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] true)
-             (assoc-in [:user-expenses :form :error] nil))
-       :http-xhrio (x/xhrio db
-                     {:method :post
-                      :uri endpoints/articles-endpoint
-                      :admin-uri endpoints/admin-articles-endpoint
-                      :params {:canonical-name name*}
-                      :on-success [:user-expenses/create-article-modal-success on-success]
-                      :on-failure [:user-expenses/create-article-modal-failure]})})))
+  (fn [{:keys [db]} [form-data on-success]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri endpoints/articles-endpoint
+                    :params (or form-data {})
+                    :on-success [:user-expenses/create-article-modal-success on-success]
+                    :on-failure [:user-expenses/create-article-modal-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/create-article-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [article (:article response)]
+    (let [article (:data response)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
@@ -106,7 +104,7 @@
        :http-xhrio (x/xhrio db
                      {:method :put
                       :uri (str endpoints/articles-endpoint "/" article-id-str)
-                      :admin-uri (str endpoints/admin-articles-endpoint "/" article-id-str)
+
                       :params (or form-data {})
                       :on-success [:user-expenses/update-article-modal-success article-id-str on-success]
                       :on-failure [:user-expenses/update-article-modal-failure]})})))
@@ -144,7 +142,7 @@
        :http-xhrio (x/xhrio db
                      {:method :delete
                       :uri (str endpoints/articles-endpoint "/" article-id-str)
-                      :admin-uri (str endpoints/admin-articles-endpoint "/" article-id-str)
+
                       :on-success [:user-expenses/delete-article-success]
                       :on-failure [:user-expenses/delete-article-failure]})})))
 
@@ -176,7 +174,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/expense-items-endpoint
-                      :admin-uri endpoints/admin-expense-items-endpoint
+
                       :params request-params
                       :on-success [:user-expenses/fetch-expense-items-success]
                       :on-failure [:user-expenses/fetch-expense-items-failure]})})))
@@ -185,7 +183,7 @@
   :user-expenses/fetch-expense-items-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [items (vec (or (:expense-items response) []))]
+    (let [items (vec (or (:data response) []))]
       {:db (finish-entity-load db :expense-items nil)
        :dispatch [::expenses-sync/sync-expense-items items]})))
 
@@ -205,7 +203,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/expense-items-endpoint "/" expense-item-id)
-                    :admin-uri (str endpoints/admin-expense-items-endpoint "/" expense-item-id)
+
                     :params expense-item-data
                     :on-success [:user-expenses/update-expense-item-modal-success expense-item-id on-success]
                     :on-failure [:user-expenses/update-expense-item-modal-failure]})}))
@@ -243,7 +241,7 @@
      :http-xhrio (x/xhrio db
                    {:method :delete
                     :uri (str endpoints/expense-items-endpoint "/" expense-item-id)
-                    :admin-uri (str endpoints/admin-expense-items-endpoint "/" expense-item-id)
+
                     :response-format (ajax/text-response-format)
                     :on-success [:user-expenses/delete-expense-item-success]
                     :on-failure [:user-expenses/delete-expense-item-failure]})}))
@@ -276,7 +274,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/article-aliases-endpoint
-                      :admin-uri endpoints/admin-article-aliases-endpoint
+
                       :params request-params
                       :on-success [:user-expenses/fetch-article-aliases-success]
                       :on-failure [:user-expenses/fetch-article-aliases-failure]})})))
@@ -285,7 +283,7 @@
   :user-expenses/fetch-article-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:article-aliases response) []))]
+    (let [aliases (vec (or (:data response) []))]
       {:db (finish-entity-load db :article-aliases nil)
        :dispatch [::expenses-sync/sync-article-aliases aliases]})))
 
@@ -311,7 +309,7 @@
        :http-xhrio (x/xhrio db
                      {:method :put
                       :uri (str endpoints/article-aliases-endpoint "/" article-alias-id-str)
-                      :admin-uri (str endpoints/admin-article-aliases-endpoint "/" article-alias-id-str)
+
                       :params payload
                       :on-success [:user-expenses/update-article-alias-modal-success article-alias-id-str on-success]
                       :on-failure [:user-expenses/update-article-alias-modal-failure]})})))
@@ -350,7 +348,7 @@
        :http-xhrio (x/xhrio db
                      {:method :delete
                       :uri (str endpoints/article-aliases-endpoint "/" article-alias-id-str)
-                      :admin-uri (str endpoints/admin-article-aliases-endpoint "/" article-alias-id-str)
+
                       :on-success [:user-expenses/delete-article-alias-success]
                       :on-failure [:user-expenses/delete-article-alias-failure]})})))
 
@@ -382,7 +380,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/supplier-aliases-endpoint
-                      :admin-uri endpoints/admin-supplier-aliases-endpoint
+
                       :params request-params
                       :on-success [:user-expenses/fetch-supplier-aliases-success]
                       :on-failure [:user-expenses/fetch-supplier-aliases-failure]})})))
@@ -391,7 +389,7 @@
   :user-expenses/fetch-supplier-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:supplier-aliases response) []))]
+    (let [aliases (vec (or (:data response) []))]
       {:db (finish-entity-load db :supplier-aliases nil)
        :dispatch [::expenses-sync/sync-supplier-aliases aliases]})))
 
@@ -416,7 +414,7 @@
        :http-xhrio (x/xhrio db
                      {:method :put
                       :uri (str endpoints/supplier-aliases-endpoint "/" supplier-alias-id-str)
-                      :admin-uri (str endpoints/admin-supplier-aliases-endpoint "/" supplier-alias-id-str)
+
                       :params payload
                       :on-success [:user-expenses/update-supplier-alias-modal-success supplier-alias-id-str on-success]
                       :on-failure [:user-expenses/update-supplier-alias-modal-failure]})})))
@@ -455,7 +453,7 @@
        :http-xhrio (x/xhrio db
                      {:method :delete
                       :uri (str endpoints/supplier-aliases-endpoint "/" supplier-alias-id-str)
-                      :admin-uri (str endpoints/admin-supplier-aliases-endpoint "/" supplier-alias-id-str)
+
                       :on-success [:user-expenses/delete-supplier-alias-success]
                       :on-failure [:user-expenses/delete-supplier-alias-failure]})})))
 
@@ -486,7 +484,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/price-observations-endpoint
-                      :admin-uri endpoints/admin-price-observations-endpoint
+
                       :params request-params
                       :on-success [:user-expenses/fetch-price-observations-success]
                       :on-failure [:user-expenses/fetch-price-observations-failure]})})))
@@ -495,7 +493,7 @@
   :user-expenses/fetch-price-observations-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [observations (vec (or (:price-observations response) []))]
+    (let [observations (vec (or (:data response) []))]
       {:db (finish-entity-load db :price-observations nil)
        :dispatch [::expenses-sync/sync-price-observations observations]})))
 
@@ -516,7 +514,7 @@
        :http-xhrio (x/xhrio db
                      {:method :put
                       :uri (str endpoints/price-observations-endpoint "/" price-observation-id-str)
-                      :admin-uri (str endpoints/admin-price-observations-endpoint "/" price-observation-id-str)
+
                       :params (or form-data {})
                       :on-success [:user-expenses/update-price-observation-modal-success price-observation-id-str on-success]
                       :on-failure [:user-expenses/update-price-observation-modal-failure]})})))
@@ -554,7 +552,7 @@
        :http-xhrio (x/xhrio db
                      {:method :delete
                       :uri (str endpoints/price-observations-endpoint "/" price-observation-id-str)
-                      :admin-uri (str endpoints/admin-price-observations-endpoint "/" price-observation-id-str)
+
                       :on-success [:user-expenses/delete-price-observation-success]
                       :on-failure [:user-expenses/delete-price-observation-failure]})})))
 

@@ -24,7 +24,7 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri (str endpoints/expense-detail-endpoint "/" expense-id)
-                    :admin-uri (str endpoints/admin-expenses-endpoint "/" expense-id)
+
                     :on-success [:user-expenses/fetch-expense-success]
                     :on-failure [:user-expenses/fetch-expense-failure]})}))
 
@@ -32,7 +32,7 @@
   :user-expenses/fetch-expense-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense-raw (or (:data response) (:expense response))
+    (let [expense-raw (:data response)
           expense (some-> expense-raw normalization/convert-db-keys->app-keys)
           updated-db (-> db
                        (assoc-in [:user-expenses :current-expense :loading?] false)

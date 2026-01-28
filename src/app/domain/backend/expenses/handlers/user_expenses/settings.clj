@@ -115,11 +115,11 @@
           :else
           {:settings
            (cond-> current
-              (contains? body :default-currency) (assoc :default-currency currency)
-              (contains? body :default-payer-id) (assoc :default-payer-id payer-id)
-              (contains? body :notifications-enabled) (assoc :notifications-enabled notifications)
-              (contains? body :auto-post-after-upload-enabled) (assoc :auto-post-after-upload-enabled auto-post-after-upload-enabled)
-              (contains? body :receipt-refine-enabled) (assoc :receipt-refine-enabled receipt-refine-enabled))})))))
+             (contains? body :default-currency) (assoc :default-currency currency)
+             (contains? body :default-payer-id) (assoc :default-payer-id payer-id)
+             (contains? body :notifications-enabled) (assoc :notifications-enabled notifications)
+             (contains? body :auto-post-after-upload-enabled) (assoc :auto-post-after-upload-enabled auto-post-after-upload-enabled)
+             (contains? body :receipt-refine-enabled) (assoc :receipt-refine-enabled receipt-refine-enabled))})))))
 
 (defn get-settings-handler
   "GET /api/v1/expenses/settings - fetch user settings.
@@ -132,7 +132,7 @@
         (try
           (let [persisted (user-expense-settings/get-user-expense-settings db user-id)
                 effective (user-expense-settings/effective-settings persisted)]
-            (h/json-response effective))
+            (h/json-response {:data effective}))
           (catch Exception e
             (log/error e "Failed to load user expense settings" {:user-id user-id})
             (h/json-response {:error "Failed to load settings"} 500))))
@@ -157,7 +157,7 @@
               (let [stored (user-expense-settings/upsert-user-expense-settings! db user-id settings)]
                 (log/info "Updated user expense settings" {:user-id user-id
                                                            :keys (keys body)})
-                (h/json-response stored))))
+                (h/json-response {:data stored}))))
           (catch Exception e
             (log/error e "Failed to update user expense settings" {:user-id user-id})
             (h/json-response {:error "Failed to update settings"} 500))))
@@ -177,15 +177,15 @@
             format (or (h/get-param params :format) "csv")]
         (try
           (let [expenses (->> (jdbc/execute! db
-                               ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+                                ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
                                  FROM expenses e
                                  LEFT JOIN suppliers s ON e.supplier_id = s.id
                                  LEFT JOIN payers p ON e.payer_id = p.id
                                  WHERE e.user_id = ?
                                  ORDER BY e.purchased_at DESC
                                  LIMIT 1000"
-                                user-id])
-                             (map db-adapter/to-app))]
+                                 user-id])
+                           (map db-adapter/to-app))]
             (if (= format "csv")
               ;; Return CSV data directly
               (let [header "id,purchased_at,supplier,payer,total_amount,currency,notes\n"
@@ -248,8 +248,7 @@
                                 user-id])]
                   (log/warn "User deleted all expenses" {:user-id user-id
                                                          :affected (:next.jdbc/update-count result)})
-                  (h/json-response {:success true
-                                    :deleted_count (or (:next.jdbc/update-count result) 0)})))
+                  (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))
               (catch Exception e
                 (log/error e "Failed to delete all expenses")
                 (h/json-response {:error "Delete failed"} 500)))

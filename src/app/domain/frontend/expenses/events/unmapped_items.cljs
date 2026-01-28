@@ -1,14 +1,10 @@
 (ns app.domain.frontend.expenses.events.unmapped-items
-  "Admin UX for mapping many aliases to a single article.
-
-  NOTE: This workflow is used in both admin routes (/admin/...) and the
-  user-facing power-user page (/unmapped-items). Requests switch between
-  admin and user endpoints based on runtime context."
+  "Power-user UX for mapping many aliases to a single article."
   (:require
     [ajax.core :as ajax]
-    [app.admin.frontend.utils.http :as admin-http]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.template.frontend.api.http :as http]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -23,7 +19,7 @@
 (defn- finish-load [db error]
   (-> db
     (assoc-in (conj base-path :loading?) false)
-    (assoc-in (conj base-path :error) (when error (admin-http/extract-error-message error)))))
+    (assoc-in (conj base-path :error) (when error (http/extract-error-message error)))))
 
 (defn- selected-item-ids [db]
   (or (get-in db (conj base-path :selection :item-ids)) #{}))
@@ -50,7 +46,7 @@
   [db k error]
   (let [pending-path (conj base-path :lookups :pending)
         pending (disj (or (get-in db pending-path) #{}) k)
-        err-msg (when error (admin-http/extract-error-message error))]
+        err-msg (when error (http/extract-error-message error))]
     (cond-> (assoc-in db pending-path pending)
       err-msg (assoc-in (conj base-path :lookups :error) err-msg)
       (empty? pending) (assoc-in (conj base-path :lookups :loading?) false))))
@@ -63,7 +59,7 @@
            (x/xhrio db
              {:method :get
               :uri endpoints/suppliers-endpoint
-              :admin-uri endpoints/admin-suppliers-endpoint
+
               :params {:limit 200 :offset 0}
               :response-format (ajax/json-response-format {:keywords? true})
               :on-success [::lookups-suppliers-loaded]
@@ -72,7 +68,7 @@
            (x/xhrio db
              {:method :get
               :uri endpoints/articles-endpoint
-              :admin-uri endpoints/admin-articles-endpoint
+
               :params {:limit 200 :offset 0}
               :response-format (ajax/json-response-format {:keywords? true})
               :on-success [::lookups-articles-loaded]
@@ -81,7 +77,7 @@
 (rf/reg-event-db
   ::lookups-suppliers-loaded
   (fn [db [_ response]]
-    (let [items (vec (or (:suppliers response) (:data response) []))]
+    (let [items (vec (or (:data response) []))]
       (-> db
         (assoc-in (conj base-path :lookups :suppliers) items)
         (finish-lookups-step :suppliers nil)))))
@@ -94,7 +90,7 @@
 (rf/reg-event-db
   ::lookups-articles-loaded
   (fn [db [_ response]]
-    (let [items (vec (or (:articles response) (:data response) []))]
+    (let [items (vec (or (:data response) []))]
       (-> db
         (assoc-in (conj base-path :lookups :articles) items)
         (finish-lookups-step :articles nil)))))
@@ -116,20 +112,20 @@
                supplier-id (assoc :supplier_id supplier-id))]
       {:db (begin-load db)
        :http-xhrio (x/xhrio db
-                    {:method :get
-                     :uri endpoints/articles-unmapped-aliases-endpoint
-                     :admin-uri endpoints/admin-articles-unmapped-aliases-endpoint
-                     :params qp
-                     :response-format (ajax/json-response-format {:keywords? true})
-                     :on-success [::unmapped-items-loaded]
-                     :on-failure [::unmapped-items-load-failed]})})))
+                     {:method :get
+                      :uri endpoints/articles-unmapped-aliases-endpoint
+
+                      :params qp
+                      :response-format (ajax/json-response-format {:keywords? true})
+                      :on-success [::unmapped-items-loaded]
+                      :on-failure [::unmapped-items-load-failed]})})))
 
 (rf/reg-event-db
   ::unmapped-items-loaded
   (fn [db [_ response]]
     (-> db
       (finish-load nil)
-      (assoc-in (conj base-path :items) (vec (or (:unmapped-aliases response) [])))
+      (assoc-in (conj base-path :items) (vec (or (:data response) [])))
       (assoc-in (conj base-path :selection :item-ids) #{}))))
 
 (rf/reg-event-db
@@ -210,13 +206,13 @@
           (if (= mode :new)
             {:db db*
              :http-xhrio (x/xhrio db*
-                          {:method :post
-                           :uri endpoints/articles-endpoint
-                           :admin-uri endpoints/admin-articles-endpoint
-                           :params {:canonical_name (str/trim new-article-name)}
-                           :response-format (ajax/json-response-format {:keywords? true})
-                           :on-success [::create-article-success {:alias-ids alias-ids}]
-                           :on-failure [::create-article-failed]})}
+                           {:method :post
+                            :uri endpoints/articles-endpoint
+
+                            :params {:canonical_name (str/trim new-article-name)}
+                            :response-format (ajax/json-response-format {:keywords? true})
+                            :on-success [::create-article-success {:alias-ids alias-ids}]
+                            :on-failure [::create-article-failed]})}
             {:db db*
              :dispatch [::map-with-article {:article-id existing-article-id
                                             :alias-ids alias-ids}]}))))))
@@ -224,7 +220,7 @@
 (rf/reg-event-fx
   ::create-article-success
   (fn [{:keys [db]} [_ ctx response]]
-    (let [article-id (get-in response [:article :id])]
+    (let [article-id (get-in response [:data :id])]
       (if (seq article-id)
         {:db db
          :dispatch [::map-with-article (assoc ctx :article-id article-id)]}
@@ -237,7 +233,7 @@
   (fn [db [_ error]]
     (-> db
       (set-map-working false)
-      (set-map-error (admin-http/extract-error-message error)))))
+      (set-map-error (http/extract-error-message error)))))
 
 (rf/reg-event-fx
   ::map-with-article
@@ -263,7 +259,7 @@
                         (x/xhrio db
                           {:method :post
                            :uri (str endpoints/articles-endpoint "/aliases/" alias-id "/map")
-                           :admin-uri (str endpoints/admin-articles-endpoint "/aliases/" alias-id "/map")
+
                            :params {:article_id article-id}
                            :response-format (ajax/json-response-format {:keywords? true})
                            :on-success [::map-item-success]
@@ -302,11 +298,11 @@
 (rf/reg-event-fx
   ::map-item-failed
   (fn [{:keys [db]} [_ error]]
-    (log/warn "Failed to map item" {:error (admin-http/extract-error-message error)})
+    (log/warn "Failed to map item" {:error (http/extract-error-message error)})
     (let [db* (-> db
                 (bump-progress :done)
                 (bump-progress :failed)
-                (set-map-error (admin-http/extract-error-message error)))
+                (set-map-error (http/extract-error-message error)))
           db** (maybe-finish db*)
           reload? (false? (get-in db** (conj base-path :map-modal :working?)))]
       (cond-> {:db db**}

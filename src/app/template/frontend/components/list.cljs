@@ -278,9 +278,12 @@
                               ;; When provided, rows will render only this component for actions,
                               ;; and will not show the template's default action-buttons.
                               :actions-override (:render-actions props)
-                              ;; Pass modal edit handler for action buttons to use
-                              :on-edit-click (when (and use-modal-forms? has-custom-edit-form?)
-                                               handle-edit-click))
+                              ;; Always pass edit handler for action buttons to trigger inline editing
+                              :on-edit-click handle-edit-click
+                              ;; Pass custom edit form renderer for inline mode
+                              :render-edit-form (when (and has-custom-edit-form? (not use-modal-forms?))
+                                                  render-edit-form)
+                              :on-edit-success on-edit-success)
                        merged-display-settings)
 
           ;; Debug removed
@@ -333,7 +336,7 @@
               {:visible? true
                :title (str "Edit " title)
                :size :large
-               :resizable? true
+               :draggable? true
                :on-close handle-edit-modal-close
                :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
               (render-edit-form edit-modal-item

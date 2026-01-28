@@ -49,12 +49,12 @@
       (if-let [forbidden (h/ensure-role request h/reference-data-read-roles "Role assignment required")]
         forbidden
         (try
-              (let [params (:query-params request)
+          (let [params (:query-params request)
                 limit (or (some-> (:limit params) parse-long) 100)
                 offset (or (some-> (:offset params) parse-long) 0)
                 suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
                 suppliers (vec (suppliers-svc db {:limit limit
-                          :offset offset}))]
+                                                  :offset offset}))]
             (h/json-response {:data suppliers}))
           (catch Exception e
             (log/error e "Error listing suppliers")
@@ -133,7 +133,7 @@
         forbidden
         (try
           (let [body (h/read-json-body request)
-                 supplier-data (select-keys body [:display_name :address])
+                supplier-data (select-keys body [:display_name :address])
                 create-supplier! (resolve-service-op-fn
                                    'app.domain.backend.expenses.services.suppliers
                                    :create!
@@ -162,7 +162,7 @@
           (if supplier-id
             (try
               (let [body (h/read-json-body request)
-                   updates (select-keys body [:display_name :address])
+                    updates (select-keys body [:display_name :address])
                     update-supplier! (resolve-service-op-fn
                                        'app.domain.backend.expenses.services.suppliers
                                        :update!
@@ -198,8 +198,8 @@
                 (if deleted?
                   (do
                     (log/info "User deleted supplier" {:user-id (h/get-user-id request)
-                                                        :supplier-id supplier-id
-                                                        :timestamp (java.time.Instant/now)})
+                                                       :supplier-id supplier-id
+                                                       :timestamp (java.time.Instant/now)})
                     {:status 204})
                   (h/not-found-response "Supplier not found")))
               (catch org.postgresql.util.PSQLException e
@@ -216,7 +216,6 @@
                 (h/json-response {:error "Failed to delete supplier"} 500)))
             (h/json-response {:error "Invalid supplier ID"} 400))))
       (h/unauthorized-response))))
-
 
 (defn create-payer-handler
   "Handler factory for creating a payer (shared catalog).
@@ -310,7 +309,7 @@
                                     'delete-payer!)
                     deleted? (boolean (delete-payer! db payer-id))]
                 (if deleted?
-                  (h/json-response {:success true})
+                  (h/json-response {:data {:deleted true}})
                   (h/not-found-response "Payer not found")))
               (catch org.postgresql.util.PSQLException e
                 (let [sql-state (.getSQLState e)]
@@ -428,7 +427,7 @@
                                          :delete!)
                     deleted? (boolean (delete-payer-type! db payer-type-id))]
                 (if deleted?
-                  (h/json-response {:success true})
+                  (h/json-response {:data {:deleted true}})
                   (h/not-found-response "Payer type not found")))
               (catch org.postgresql.util.PSQLException e
                 (let [sql-state (.getSQLState e)]

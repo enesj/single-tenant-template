@@ -75,7 +75,7 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri (str endpoints/suppliers-endpoint "/" supplier-id)
-                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id)
+
                     :on-success [:user-expenses/fetch-supplier-detail-success supplier-id]
                     :on-failure [:user-expenses/fetch-supplier-detail-failure]})}))
 
@@ -84,7 +84,7 @@
   common-interceptors
   (fn [db [supplier-id response]]
     (let [supplier (normalization/convert-db-keys->app-keys
-                     (or (:data response) (:supplier response) response))]
+                     (:data response))]
       (-> db
         (assoc-loading :loading? false)
         (assoc-value :error nil)
@@ -114,11 +114,11 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/list-endpoint
-                    :admin-uri endpoints/admin-expenses-endpoint
+
                     :params {:supplier_id (str supplier-id)
-                            :limit 10
-                            :offset 0
-                            :order_dir "desc"}
+                             :limit 10
+                             :offset 0
+                             :order_dir "desc"}
                     :on-success [:user-expenses/fetch-supplier-detail-expenses-success]
                     :on-failure [:user-expenses/fetch-supplier-detail-expenses-failure]})}))
 
@@ -126,10 +126,7 @@
   :user-expenses/fetch-supplier-detail-expenses-success
   common-interceptors
   (fn [db [response]]
-    (let [rows (->> (or (:data response)
-                      (:expenses response)
-                      response
-                      [])
+    (let [rows (->> (or (:data response) [])
                  (normalization/convert-db-keys->app-keys)
                  vec)]
       (-> db
@@ -159,10 +156,10 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/article-aliases-endpoint
-                    :admin-uri endpoints/admin-article-aliases-endpoint
+
                     :params {:supplier_id (str supplier-id)
-                            :limit 10
-                            :offset 0}
+                             :limit 10
+                             :offset 0}
                     :on-success [:user-expenses/fetch-supplier-detail-article-aliases-success]
                     :on-failure [:user-expenses/fetch-supplier-detail-article-aliases-failure]})}))
 
@@ -170,10 +167,7 @@
   :user-expenses/fetch-supplier-detail-article-aliases-success
   common-interceptors
   (fn [db [response]]
-    (let [rows (->> (or (:data response)
-                      (:article-aliases response)
-                      response
-                      [])
+    (let [rows (->> (or (:data response) [])
                  (normalization/convert-db-keys->app-keys)
                  vec)]
       (-> db
@@ -203,11 +197,11 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/price-observations-endpoint
-                    :admin-uri endpoints/admin-price-observations-endpoint
+
                     :params {:supplier_id (str supplier-id)
-                            :limit 10
-                            :offset 0
-                            :order_dir "desc"}
+                             :limit 10
+                             :offset 0
+                             :order_dir "desc"}
                     :on-success [:user-expenses/fetch-supplier-detail-price-observations-success]
                     :on-failure [:user-expenses/fetch-supplier-detail-price-observations-failure]})}))
 
@@ -215,10 +209,7 @@
   :user-expenses/fetch-supplier-detail-price-observations-success
   common-interceptors
   (fn [db [response]]
-    (let [rows (->> (or (:data response)
-                      (:price-observations response)
-                      response
-                      [])
+    (let [rows (->> (or (:data response) [])
                  (normalization/convert-db-keys->app-keys)
                  vec)]
       (-> db

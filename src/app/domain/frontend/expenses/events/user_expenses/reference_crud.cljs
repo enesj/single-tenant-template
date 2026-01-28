@@ -34,7 +34,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/suppliers-endpoint
-                    :admin-uri endpoints/admin-suppliers-endpoint
+
                     :params supplier-data
                     :on-success [:user-expenses/create-supplier-modal-success on-success]
                     :on-failure [:user-expenses/create-supplier-modal-failure]})}))
@@ -43,10 +43,8 @@
   :user-expenses/create-supplier-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [supplier (or (:data response) (:supplier response) response)
-          supplier-id (or (:id supplier)
-                        (get-in response [:data :id])
-                        (get-in response [:supplier :id]))
+    (let [supplier (:data response)
+          supplier-id (:id supplier)
           highlight-id (some-> supplier-id str)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
@@ -77,7 +75,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/suppliers-endpoint "/" supplier-id)
-                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id)
+
                     :params supplier-data
                     :on-success [:user-expenses/update-supplier-modal-success supplier-id on-success]
                     :on-failure [:user-expenses/update-supplier-modal-failure]})}))
@@ -116,7 +114,7 @@
      :http-xhrio (x/xhrio db
                    {:method :delete
                     :uri (str endpoints/suppliers-endpoint "/" supplier-id)
-                    :admin-uri (str endpoints/admin-suppliers-endpoint "/" supplier-id)
+
                     :response-format (ajax/text-response-format)
                     :on-success [:user-expenses/delete-supplier-success]
                     :on-failure [:user-expenses/delete-supplier-failure]})}))
@@ -152,7 +150,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/payers-endpoint
-                    :admin-uri endpoints/admin-payers-endpoint
+
                     :params payer-data
                     :on-success [:user-expenses/create-payer-modal-success on-success]
                     :on-failure [:user-expenses/create-payer-modal-failure]})}))
@@ -161,8 +159,7 @@
   :user-expenses/create-payer-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [payer-id (or (get-in response [:data :id])
-                     (get-in response [:payer :id]))
+    (let [payer-id (get-in response [:data :id])
           highlight-id (some-> payer-id str)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
@@ -193,7 +190,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/payers-endpoint "/" payer-id)
-                    :admin-uri (str endpoints/admin-payers-endpoint "/" payer-id)
+
                     :params payer-data
                     :on-success [:user-expenses/update-payer-modal-success payer-id on-success]
                     :on-failure [:user-expenses/update-payer-modal-failure]})}))
@@ -232,7 +229,7 @@
      :http-xhrio (x/xhrio db
                    {:method :delete
                     :uri (str endpoints/payers-endpoint "/" payer-id)
-                    :admin-uri (str endpoints/admin-payers-endpoint "/" payer-id)
+
                     :on-success [:user-expenses/delete-payer-success]
                     :on-failure [:user-expenses/delete-payer-failure]})}))
 
@@ -266,7 +263,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/payer-types-endpoint
-                    :admin-uri endpoints/admin-payer-types-endpoint
+
                     :params payer-type-data
                     :on-success [:user-expenses/create-payer-type-modal-success on-success]
                     :on-failure [:user-expenses/create-payer-type-modal-failure]})}))
@@ -275,8 +272,7 @@
   :user-expenses/create-payer-type-modal-success
   common-interceptors
   (fn [{:keys [db]} [on-success response]]
-    (let [payer-type-id (or (get-in response [:data :id])
-                          (get-in response [:payer-type :id]))
+    (let [payer-type-id (get-in response [:data :id])
           highlight-id (some-> payer-type-id str)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
@@ -307,7 +303,7 @@
      :http-xhrio (x/xhrio db
                    {:method :put
                     :uri (str endpoints/payer-types-endpoint "/" payer-type-id)
-                    :admin-uri (str endpoints/admin-payer-types-endpoint "/" payer-type-id)
+
                     :params payer-type-data
                     :on-success [:user-expenses/update-payer-type-modal-success payer-type-id on-success]
                     :on-failure [:user-expenses/update-payer-type-modal-failure]})}))
@@ -346,7 +342,7 @@
      :http-xhrio (x/xhrio db
                    {:method :delete
                     :uri (str endpoints/payer-types-endpoint "/" payer-type-id)
-                    :admin-uri (str endpoints/admin-payer-types-endpoint "/" payer-type-id)
+
                     :on-success [:user-expenses/delete-payer-type-success]
                     :on-failure [:user-expenses/delete-payer-type-failure]})}))
 

@@ -59,8 +59,7 @@
                   :else
                   (let [updated (update! db obs-id updates)]
                     (if updated
-                      (h/json-response {:success true
-                                        :data updated})
+                      (h/json-response {:data updated})
                       (h/not-found-response "Price observation not found")))))
               (catch clojure.lang.ExceptionInfo e
                 (log/warn "Validation error updating price observation" {:error (ex-message e)
@@ -93,7 +92,7 @@
                     (h/json-response {:error "Delete not available"} 500))
 
                   deleted?
-                  (h/json-response {:success true})
+                  (h/json-response {:data {:deleted true}})
 
                   :else
                   (h/not-found-response "Price observation not found")))

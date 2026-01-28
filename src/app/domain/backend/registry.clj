@@ -1,17 +1,12 @@
 (ns app.domain.backend.registry
   "Domain backend registry; register domain services/routes."
   (:require
-    [app.domain.backend.expenses.routes.core :as expenses-admin-routes]
     [app.domain.backend.expenses.routes.user-api :as expenses-user-routes]))
 
 (def ^:private expenses-manifest
   {:id :expenses
    :routes
-   {:admin-api (fn [db service-container]
-                 ;; Extract app-config from service-container for OCR routes
-                 (let [app-config (:config service-container)]
-                   (expenses-admin-routes/routes db app-config)))
-    :user-api (fn [db wrap-user-auth app-config]
+   {:user-api (fn [db wrap-user-auth app-config]
                 (expenses-user-routes/routes db wrap-user-auth app-config))}
 
    :ui-config

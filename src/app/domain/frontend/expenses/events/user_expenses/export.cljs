@@ -56,7 +56,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri (str endpoints/list-endpoint "/export")
-                      :admin-uri (str endpoints/admin-expenses-endpoint "/export")
+
                       :params request-params
                       :response-format response-format
                       :on-success [:user-expenses/export-success export-format]
@@ -101,7 +101,7 @@
        :http-xhrio (x/xhrio db
                      {:method :delete
                       :uri (str endpoints/list-endpoint "/all")
-                      :admin-uri (str endpoints/admin-expenses-endpoint "/all")
+
                       :params {:confirmation confirmation-token}
                       :on-success [:user-expenses/delete-all-success]
                       :on-failure [:user-expenses/delete-all-failure]})}

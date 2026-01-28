@@ -1,12 +1,12 @@
 (ns app.domain.backend.expenses.handlers.user-articles
-  "User-facing (non-admin) articles endpoints.
+  "User-facing articles endpoints.
 
   These endpoints are mounted under /api/v1/expenses/articles and are intended
   for power users inside the main app.
 
   IMPORTANT:
   - These routes are role-gated to admin/owner.
-  - Response shapes intentionally mirror the admin helpers used by the unmapped-items UX."
+  - Responses are normalized to {:data ...} to keep frontend handlers consistent."
   (:require
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
@@ -46,8 +46,7 @@
                 rows (to-app (articles/list-articles db {:limit limit
                                                          :offset offset
                                                          :search search}))]
-            (h/json-response {:success true
-                              :articles rows}))
+            (h/json-response {:data rows :limit limit :offset offset}))
           (catch Exception e
             (log/error e "Failed to list articles" {:message (.getMessage e)})
             (h/json-response {:error "Failed to list articles"} 500)))))))
@@ -60,11 +59,10 @@
       (if-let [forbidden (ensure-admin-or-owner request)]
         forbidden
         (try
-              (let [body (h/read-body-params request)
+          (let [body (h/read-body-params request)
                 canonical-name (:canonical_name body)
                 article (to-app (articles/create-article! db {:canonical_name canonical-name}))]
-            (h/json-response {:success true
-                              :article article} 201))
+            (h/json-response {:data article} 201))
           (catch clojure.lang.ExceptionInfo e
             (log/warn "Validation error creating article" {:error (ex-message e) :data (ex-data e)})
             (h/json-response {:error (ex-message e)} 400))
@@ -84,18 +82,17 @@
           (if-not article-id
             (h/json-response {:error "Invalid article id"} 400)
             (try
-                (let [body (h/read-body-params request)
-                  canonical-provided? (contains? body :canonical_name)
+              (let [body (h/read-body-params request)
+                    canonical-provided? (contains? body :canonical_name)
                     updates (cond-> {}
                               canonical-provided?
-                    (assoc :canonical_name (:canonical_name body))
+                              (assoc :canonical_name (:canonical_name body))
 
                               (contains? body :category)
                               (assoc :category (:category body)))
                     updated (articles/update-article! db article-id updates)]
                 (if updated
-                  (h/json-response {:success true
-                                    :article (to-app updated)})
+                  (h/json-response {:data (to-app updated)})
                   (h/not-found-response "Article not found")))
               (catch clojure.lang.ExceptionInfo e
                 (log/warn "Validation error updating article" {:error (ex-message e)
@@ -121,7 +118,7 @@
             (try
               (let [deleted? (boolean (articles/delete-article! db article-id))]
                 (if deleted?
-                  (h/json-response {:success true})
+                  (h/json-response {:data {:deleted true}})
                   (h/not-found-response "Article not found")))
               (catch org.postgresql.util.PSQLException e
                 (let [sql-state (.getSQLState e)]
@@ -151,9 +148,8 @@
                 limit (or (some-> (h/get-param qp :limit) parse-long) 50)
                 offset (or (some-> (h/get-param qp :offset) parse-long) 0)
                 rows (to-app (aliases/list-unmapped-aliases db (cond-> {:limit limit :offset offset}
-                                                                supplier-id (assoc :supplier-id supplier-id))))]
-            (h/json-response {:success true
-                              :unmapped-aliases rows}))
+                                                                 supplier-id (assoc :supplier-id supplier-id))))]
+            (h/json-response {:data rows :limit limit :offset offset}))
           (catch Exception e
             (log/error e "Failed to list unmapped aliases" {:message (.getMessage e)})
             (h/json-response {:error "Failed to list unmapped aliases"} 500)))))))
@@ -169,16 +165,14 @@
           (let [alias-id (h/try-parse-uuid (or (get-in request [:path-params :alias-id])
                                              (get-in request [:parameters :path :alias-id])))
                 body (h/read-body-params request)
-                article-id (h/try-parse-uuid (or (:article-id body) (:article_id body)))
-                ]
+                article-id (h/try-parse-uuid (or (:article-id body) (:article_id body)))]
             (when-not alias-id
               (throw (ex-info "Invalid alias-id" {:status 400})))
             (when-not article-id
               (throw (ex-info "Invalid article-id" {:status 400})))
 
             (let [updated (aliases/map-alias-to-article! db alias-id article-id)]
-              (h/json-response {:success true
-                                :article-alias (to-app updated)})))
+              (h/json-response {:data (to-app updated)})))
           (catch clojure.lang.ExceptionInfo e
             (let [{:keys [status]} (ex-data e)]
               (h/json-response {:error (ex-message e)} (or status 400))))
@@ -214,8 +208,7 @@
                             :article-id article-id
                             :raw-labels raw-labels
                             :allow-reassign? allow-reassign?})]
-              (h/json-response {:success true
-                                :result (to-app result)})))
+              (h/json-response {:data (to-app result)})))
           (catch clojure.lang.ExceptionInfo e
             (let [{:keys [status]} (ex-data e)]
               (h/json-response {:error (ex-message e)} (or status 400))))

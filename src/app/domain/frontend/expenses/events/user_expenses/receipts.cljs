@@ -48,7 +48,7 @@
   {:entity-key :receipts
    :bridge-id :expenses-user-receipts
    :priority 90
-   :context-pred (fn [db] (not (x/admin-context? db)))
+   :context-pred (constantly true)
    :operations
    {:delete
     {:request (fn [{:keys [db]} entity-type id default-effect]
@@ -58,7 +58,7 @@
                   (x/xhrio db
                     {:method :delete
                      :uri (str endpoints/receipts-endpoint "/" id)
-                     :admin-uri (str endpoints/admin-receipts-endpoint "/" id)
+
                      :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
                      :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})))
      :on-success (fn [{:keys [db]} entity-type _id default-effect]
@@ -89,7 +89,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/receipts-endpoint
-                      :admin-uri endpoints/admin-receipts-endpoint
+
                       :params (cond-> {:limit limit* :offset offset*}
                                 (some? status) (assoc :status status))
                       :on-success [:user-expenses/fetch-receipts-success]
@@ -99,7 +99,7 @@
   :user-expenses/fetch-receipts-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [rows (or (:data response) (:receipts response) [])
+    (let [rows (or (:data response) [])
           limit (or (:limit response) (get-in db (conj base-path :limit)))
           offset (or (:offset response) (get-in db (conj base-path :offset)))]
       {:db (-> db
@@ -157,7 +157,7 @@
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri (str endpoints/receipts-endpoint "/" receipt-id)
-                    :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id)
+
                     :on-success [:user-expenses/fetch-receipt-success receipt-id]
                     :on-failure [:user-expenses/fetch-receipt-failure]})}))
 
@@ -165,7 +165,7 @@
   :user-expenses/fetch-receipt-success
   common-interceptors
   (fn [db [receipt-id response]]
-    (let [receipt (or (:data response) (:receipt response) response)]
+    (let [receipt (:data response)]
       (-> db
         (assoc-in (conj base-path :detail-loading?) false)
         (assoc-in (conj base-path :error) nil)
@@ -202,7 +202,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri (str endpoints/receipts-endpoint "/" receipt-id)
-                      :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id)
+
                       :on-success [:user-expenses/approve-receipt-from-list-success receipt-id]
                       :on-failure [:user-expenses/approve-receipt-from-list-failure receipt-id]})})))
 
@@ -210,7 +210,7 @@
   :user-expenses/approve-receipt-from-list-success
   common-interceptors
   (fn [{:keys [db]} [receipt-id response]]
-    (let [receipt (or (:data response) (:receipt response) response)
+    (let [receipt (:data response)
           db* (-> db
                 (assoc-in (conj base-path :detail-loading?) false)
                 (assoc-in (conj base-path :error) nil)
@@ -260,7 +260,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/" receipt-id "/approve")
-                    :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id "/approve")
+
                     :params form-data
                     :on-success [:user-expenses/approve-receipt-success receipt-id on-success]
                     :on-failure [:user-expenses/approve-receipt-failure]})}))
@@ -269,10 +269,8 @@
   :user-expenses/approve-receipt-success
   common-interceptors
   (fn [{:keys [db]} [receipt-id on-success response]]
-    (let [expense (or (get-in response [:data :expense])
-                    (:expense response))
-          receipt (or (get-in response [:data :receipt])
-                    (:receipt response))
+    (let [expense (get-in response [:data :expense])
+          receipt (get-in response [:data :receipt])
           fx (cond-> []
                on-success (conj [:dispatch-later {:ms 100}
                                  :dispatch [:user-expenses/call-modal-callback on-success]]))]
@@ -318,7 +316,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/" receipt-id "/review")
-                    :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id "/review")
+
                     :params form-data
                     :on-success [:user-expenses/save-receipt-review-success receipt-id on-success]
                     :on-failure [:user-expenses/save-receipt-review-failure]})}))
@@ -327,9 +325,7 @@
   :user-expenses/save-receipt-review-success
   common-interceptors
   (fn [{:keys [db]} [receipt-id on-success response]]
-    (let [receipt (or (get-in response [:data :receipt])
-                    (:receipt response)
-                    (:data response))
+    (let [receipt (get-in response [:data :receipt])
           fx (cond-> []
                on-success (conj [:dispatch-later {:ms 100}
                                  :dispatch [:user-expenses/call-modal-callback on-success]]))]
@@ -369,7 +365,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/" receipt-id "/ocr")
-                    :admin-uri (str endpoints/admin-receipts-endpoint "/" receipt-id "/ocr")
+
                     :on-success [:user-expenses/ocr-receipt-success receipt-id]
                     :on-failure [:user-expenses/ocr-receipt-failure receipt-id]})}))
 
@@ -402,7 +398,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/ocr")
-                    :admin-uri (str endpoints/admin-receipts-endpoint "/ocr")
+
                     :params {:receipt_ids (vec receipt-ids)}
                     :on-success [:user-expenses/ocr-selected-success receipt-ids]
                     :on-failure [:user-expenses/ocr-selected-failure]})}))
