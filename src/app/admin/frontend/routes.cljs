@@ -2,15 +2,21 @@
   "Admin routes; update when adding admin pages."
   (:require
     [app.admin.frontend.pages.admins :as admins]
+    [app.admin.frontend.pages.article-aliases :as article-aliases]
+    [app.admin.frontend.pages.audit :as audit]
+    [app.admin.frontend.pages.articles :as articles]
     [app.admin.frontend.pages.dashboard :as dashboard]
     [app.admin.frontend.pages.forgot-password :as forgot-password]
     [app.admin.frontend.pages.login :as login]
     [app.admin.frontend.pages.login-events :as login-events]
+    [app.admin.frontend.pages.manufacturers :as manufacturers]
+    [app.admin.frontend.pages.price-observations :as price-observations]
     [app.admin.frontend.pages.reset-password :as reset-password]
+    [app.admin.frontend.pages.supplier-aliases :as supplier-aliases]
+    [app.admin.frontend.pages.suppliers :as suppliers]
     [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
+    [app.admin.frontend.pages.unmapped-aliases :as unmapped-aliases]
     [app.admin.frontend.pages.users :as users]
-    [app.admin.frontend.pages.audit :as audit]
-    [app.admin.frontend.pages.articles :as articles]
     [re-frame.core :as rf]))
 
 (defn guarded-start
@@ -73,6 +79,36 @@
          ["/articles"
           {:name :admin-articles
            :view articles/admin-articles-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/article-aliases"
+          {:name :admin-article-aliases
+           :view article-aliases/admin-article-aliases-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/suppliers"
+          {:name :admin-suppliers
+           :view suppliers/admin-suppliers-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/supplier-aliases"
+          {:name :admin-supplier-aliases
+           :view supplier-aliases/admin-supplier-aliases-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/manufacturers"
+          {:name :admin-manufacturers
+           :view manufacturers/admin-manufacturers-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/price-observations"
+          {:name :admin-price-observations
+           :view price-observations/admin-price-observations-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/unmapped-aliases"
+          {:name :admin-unmapped-aliases
+           :view unmapped-aliases/admin-unmapped-aliases-page
            :controllers [(guarded-start nil)]}]
 
          ;; Audit Logs

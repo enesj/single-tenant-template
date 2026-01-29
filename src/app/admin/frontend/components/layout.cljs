@@ -4,7 +4,19 @@
     [app.admin.frontend.subs.dashboard]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
-    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon settings-icon articles-icon]]
+    [app.template.frontend.components.icons :refer [admins-icon
+                                                    article-aliases-icon
+                                                    articles-icon
+                                                    arrow-path
+                                                    audit-icon
+                                                    dashboard-icon
+                                                    login-events-icon
+                                                    price-observations-icon
+                                                    settings-icon
+                                                    suppliers-icon
+                                                    unmapped-items-icon
+                                                    user-settings-icon
+                                                    users-icon]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -23,17 +35,64 @@
                                     {:label "Users"
                                      :href "/admin/users"
                                      :icon ($ users-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-users)}
-                                    {:id "admin-sidebar-articles"
-                                     :label "Articles"
-                                     :href "/admin/articles"
-                                     :icon ($ articles-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-articles)}]
-                             is-owner? (conj {:label "Admins" :href "/admin/admins" :icon ($ admins-icon {:class "w-6 h-6"}) :active? (= route-name :admin-admins)})
-                             true (into [{:label "Audit Logs" :href "/admin/audit" :icon ($ audit-icon {:class "w-6 h-6"}) :active? (= route-name :admin-audit)}
-                                         {:label "Login Events" :href "/admin/login-events" :icon ($ login-events-icon {:class "w-6 h-6"}) :active? (= route-name :admin-login-events)}]))
+                                     :active? (= route-name :admin-users)}]
+                             is-owner?
+                             (conj {:label "Admins"
+                                    :href "/admin/admins"
+                                    :icon ($ admins-icon {:class "w-6 h-6"})
+                                    :active? (= route-name :admin-admins)})
 
-        sections [{:title "System Administration" :items system-admin-items}]]
+                             true
+                             (into [{:label "Audit Logs"
+                                     :href "/admin/audit"
+                                     :icon ($ audit-icon {:class "w-6 h-6"})
+                                     :active? (= route-name :admin-audit)}
+                                    {:label "Login Events"
+                                     :href "/admin/login-events"
+                                     :icon ($ login-events-icon {:class "w-6 h-6"})
+                                     :active? (= route-name :admin-login-events)}]))
+
+        expenses-items [{:id "admin-sidebar-expenses-articles"
+                         :label "Articles"
+                         :href "/admin/articles"
+                         :icon ($ articles-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-articles)}
+                        {:id "admin-sidebar-expenses-article-aliases"
+                         :label "Article Aliases"
+                         :href "/admin/article-aliases"
+                         :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-article-aliases)}
+                        {:id "admin-sidebar-expenses-suppliers"
+                         :label "Suppliers"
+                         :href "/admin/suppliers"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-suppliers)}
+                        {:id "admin-sidebar-expenses-supplier-aliases"
+                         :label "Supplier Aliases"
+                         :href "/admin/supplier-aliases"
+                         :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-supplier-aliases)}
+                        {:id "admin-sidebar-expenses-manufacturers"
+                         :label "Manufacturers"
+                         :href "/admin/manufacturers"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-manufacturers)}
+                        {:id "admin-sidebar-expenses-price-observations"
+                         :label "Price observations"
+                         :href "/admin/price-observations"
+                         :icon ($ price-observations-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-price-observations)}
+                        {:id "admin-sidebar-expenses-unmapped-aliases"
+                         :label "Unmapped Aliases"
+                         :href "/admin/unmapped-aliases"
+                         :icon ($ unmapped-items-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-unmapped-aliases)}]
+
+        sections [{:title "System Administration" :items system-admin-items}
+                  {:title "Domain"
+                   :subsections [{:id "admin-sidebar-domain-expenses"
+                                  :title "Expenses"
+                                  :items expenses-items}]}]]
     ($ sidebar {:title "Admin Panel"
                 :sections sections
                 :footer ($ :ul {:class "ds-menu w-full p-0"}

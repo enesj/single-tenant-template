@@ -10,6 +10,7 @@
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.bridges.crud :as crud-bridges]
     [app.template.frontend.shared.crud.success :as crud-success]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -87,8 +88,18 @@
          (assoc default-effect :dispatch-n dispatches***)))}}})
 
 (defn- user-ui-context?
-  [_db]
-  true)
+  "True only for the user-facing (non-admin) UI.
+
+  This prevents user-scoped expenses endpoints (e.g. /api/v1/expenses/*) from
+  being used while browsing the admin UI (which relies on /admin/api/* and an
+  admin token)."
+  [db]
+  (let [route-name (get-in db (paths/current-route-name))
+        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        pathname (when (exists? js/window)
+                   (some-> js/window .-location .-pathname))
+        in-admin-path? (and pathname (str/includes? pathname "/admin"))]
+    (not (or admin-route? in-admin-path?))))
 
 (defn- lookup-uri
   [base-uri]

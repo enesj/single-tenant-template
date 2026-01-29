@@ -17,6 +17,14 @@
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
+(def manufacturers-config
+  {:entity-key :manufacturers
+   :base-path [:admin :expenses :manufacturers]
+   :api-endpoint "/admin/api/expenses/manufacturers"
+   :detail-response-key :manufacturer
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
 (def payers-config
   {:entity-key :payers
    :base-path [:admin :expenses :payers]
@@ -86,6 +94,14 @@
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
+(def supplier-aliases-config
+  {:entity-key :supplier-aliases
+   :base-path [:admin :expenses :supplier-aliases]
+   :api-endpoint "/admin/api/expenses/supplier-aliases"
+   :detail-response-key :supplier-alias
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
 ;; =============================================================================
 ;; Configuration Registry
 ;; =============================================================================
@@ -93,6 +109,7 @@
 (def all-entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers suppliers-config
+   :manufacturers manufacturers-config
    :payers payers-config
    :articles articles-config
    :receipts receipts-config
@@ -100,6 +117,7 @@
    :expense-items expense-items-config
    :price-observations price-observations-config
    :article-aliases article-aliases-config
+   :supplier-aliases supplier-aliases-config
    :payer-types payer-types-config})
 
 ;; =============================================================================

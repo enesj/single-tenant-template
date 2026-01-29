@@ -85,6 +85,12 @@
    :normalize-fn normalize/price-observation->template-entity
    :log-prefix "[expenses] Syncing price observations to template:"})
 
+(entity-utils/register-sync-event!
+  {:event-id ::sync-unmapped-aliases
+   :entity-key :unmapped-aliases
+   :normalize-fn normalize/unmapped-alias->template-entity
+   :log-prefix "[expenses] Syncing unmapped aliases to template:"})
+
 ;; =============================================================================
 ;; Register with generic entity-sync dispatcher
 ;; =============================================================================
@@ -112,6 +118,8 @@
   {:sync-event-id ::sync-supplier-aliases})
 (entity-sync/register-sync-handler! :price-observations
   {:sync-event-id ::sync-price-observations})
+(entity-sync/register-sync-handler! :unmapped-aliases
+  {:sync-event-id ::sync-unmapped-aliases})
 
 ;; =============================================================================
 ;; Register with form interceptors bridge

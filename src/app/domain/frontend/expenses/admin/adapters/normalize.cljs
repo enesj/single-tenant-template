@@ -229,3 +229,17 @@
                   :qty [:qty]
                   :currency [:currency]
                   :created_at [:created-at]}}))
+
+(defn unmapped-alias->template-entity
+  [alias]
+  (entity-utils/normalize-entity
+    alias
+    {:entity-ns :unmapped-aliases
+     :id-keys [:id]
+     :stringify-keys [:supplier_id :supplier-id]
+     :alias-keys {:supplier_display_name [:supplier-display-name]
+                  :raw_label [:raw-label]
+                  :raw_label_normalized [:raw-label-normalized]
+                  :occurrence_count [:occurrence-count]
+                  ;; FK id aliases
+                  :supplier_id [:supplier-id]}}))

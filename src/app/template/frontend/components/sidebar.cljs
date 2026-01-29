@@ -12,13 +12,27 @@
         icon)
       label)))
 
-(defui sidebar-section [{:keys [title items]}]
+(defui sidebar-section [{:keys [title items subsections]}]
   ($ :<>
     (when title
       ($ :li {:class "ds-menu-title mt-4 mb-2"}
         ($ :span title)))
-    (for [{:keys [label] :as item} items]
-      ($ sidebar-item (assoc item :key label)))))
+
+    (when (seq items)
+      (for [{:keys [id label href] :as item} items]
+        ($ sidebar-item (assoc item :key (or id href label)))))
+
+    (when (seq subsections)
+      (for [{sub-title :title sub-items :items sub-id :id} subsections]
+        ($ :<> {:key (or sub-id sub-title)}
+          (when sub-title
+            ($ :li {:class "ds-menu-title mt-2 mb-1 pl-2"}
+              ($ :span {:class "text-xs"} sub-title)))
+          (for [{:keys [id label href className] :as item} sub-items]
+            ($ sidebar-item
+              (assoc item
+                :key (or id href label)
+                :className (str "pl-4" (when className (str " " className)))))))))))
 
 (defui sidebar [{:keys [title sections footer className]}]
   ($ :div {:class (str "hidden md:flex md:flex-shrink-0 text-base-content " className)}

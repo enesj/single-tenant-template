@@ -1,8 +1,7 @@
-(ns app.admin.frontend.pages.articles
-  "Admin Articles page.
+(ns app.admin.frontend.pages.suppliers
+  "Admin Suppliers page.
 
-   Renders an admin-native list backed by the expenses admin API (no iframe), so
-   the admin shell stays visible and we don't depend on a user session/capability."
+  Renders an admin-native list backed by the expenses admin API."
   (:require
     [app.admin.frontend.components.layout :as layout]
     [app.template.frontend.components.list :refer [list-view]]
@@ -15,18 +14,16 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.articles))
+    app.domain.frontend.expenses.events.suppliers))
 
-(defui admin-articles-page
-  "Admin route: /admin/articles"
+(defui admin-suppliers-page
+  "Admin route: /admin/suppliers"
   []
-  (let [entity-name :articles
+  (let [entity-name :suppliers
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         ;; Template list-view pagination is client-side; fetch a reasonably large
-                         ;; set so the list can paginate without additional backend wiring.
-                         (rf/dispatch [:app.domain.frontend.expenses.events.articles/load-list
+                         (rf/dispatch [:app.domain.frontend.expenses.events.suppliers/load-list
                                        {:limit 1000
                                         :offset 0}]))
                        [])]
@@ -40,14 +37,14 @@
       ($ :div {:class "p-6 min-h-screen"}
         ($ :div {:class "mb-6"}
           ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Articles")
+            "Suppliers")
           ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Articles from the Expenses domain (admin API)."))
+            "Suppliers from the Expenses domain (admin API)."))
 
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Articles"
+           :title "Suppliers"
            :form-display :modal
            :allow-add? false
            :allow-edit? true

@@ -1,25 +1,38 @@
 (ns app.template.frontend.components.form.validation
   "Form validation utilities"
   (:require
-   [app.shared.validation.builder :as validation-builder]
-   [app.shared.validation.core :as validation-core]
-   [app.shared.validation.fork :as validation-fork]
-   [app.template.frontend.events.form :as form-events]
-   [clojure.edn :as edn]
-   [clojure.string :as str]
-   [re-frame.core :as rf]))
+    [app.shared.validation.builder :as validation-builder]
+    [app.shared.validation.core :as validation-core]
+    [app.shared.validation.fork :as validation-fork]
+    [app.template.frontend.events.form :as form-events]
+    [clojure.edn :as edn]
+    [clojure.string :as str]
+    [re-frame.core :as rf]))
 
 (defn- parse-field-value
   "Parses field value based on input type"
   [input-type raw-value]
-  (case input-type
-    "number" (when-not (str/blank? raw-value)
-               (js/parseFloat raw-value))
-    "object" (try
-               (edn/read-string raw-value)
-               (catch :default _
-                 raw-value))
-    raw-value))
+  (let [t (some-> (cond
+                    (keyword? input-type) (name input-type)
+                    (string? input-type) input-type
+                    :else nil)
+            str/lower-case)]
+    (case t
+      ("number" "decimal")
+      (when-not (str/blank? raw-value)
+        (js/parseFloat raw-value))
+
+      "integer"
+      (when-not (str/blank? raw-value)
+        (js/parseInt raw-value 10))
+
+      "object"
+      (try
+        (edn/read-string raw-value)
+        (catch :default _
+          raw-value))
+
+      raw-value)))
 
 (defn- validate-on-server
   "Sends a field value to the server for validation"

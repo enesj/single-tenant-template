@@ -44,6 +44,13 @@
             {:id :address :label "Address" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
+(def manufacturers-entity-spec
+  {:id :manufacturers
+   :fields [{:id :display-name :label "Name" :type :text}
+            {:id :normalized-key :label "Normalized key" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
 (def payers-entity-spec
   {:id :payers
    :fields [{:id :label :label "Label" :type :text}
@@ -71,6 +78,13 @@
             {:id :raw-label-normalized :label "Alias" :type :text}
             {:id :confidence :label "Confidence" :type :number}
             {:id :created-at :label "Created at" :type :datetime}]})
+
+(def unmapped-aliases-entity-spec
+  {:id :unmapped-aliases
+   :fields [{:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :raw-label :label "Raw label" :type :text}
+            {:id :raw-label-normalized :label "Alias" :type :text}
+            {:id :occurrence-count :label "Occurrences" :type :number}]})
 
 (def price-observations-entity-spec
   {:id :price-observations
@@ -100,6 +114,10 @@
    :value-fn (fn [spec _] (or spec suppliers-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
+  {:entity-key :manufacturers
+   :value-fn (fn [spec _] (or spec manufacturers-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
   {:entity-key :payers
    :value-fn (fn [spec _] (or spec payers-entity-spec))})
 
@@ -114,6 +132,10 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :supplier-aliases
    :value-fn (fn [spec _] (or spec supplier-aliases-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :unmapped-aliases
+   :value-fn (fn [spec _] (or spec unmapped-aliases-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :price-observations

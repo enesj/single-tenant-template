@@ -12,7 +12,8 @@
     [app.domain.backend.expenses.routes.price-observations :as price-observations]
     [app.domain.backend.expenses.routes.receipts :as receipts]
     [app.domain.backend.expenses.routes.reports :as reports]
-    [app.domain.backend.expenses.routes.suppliers :as suppliers]))
+    [app.domain.backend.expenses.routes.suppliers :as suppliers]
+    [app.domain.backend.expenses.routes.manufacturers :as manufacturers]))
 
 (defn routes
   "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses.
@@ -22,6 +23,7 @@
   ["/expenses"
    ["/upload" {:post {:handler (receipt-upload/admin-upload-handler db)}}]
    (suppliers/routes db)
+   (manufacturers/routes db)
    (payers/routes db)
    (payer-types/routes db)
    (receipts/routes db app-config)

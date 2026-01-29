@@ -65,6 +65,15 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 - Dev stderr is suppressed by default; set `DEV_SUPPRESS_STDERR=false` (or `0`/`no`) to keep stderr visible.
 - Dev watchers ignore runtime-edited UI config EDNs under `src/app/admin/frontend/config/*.edn` and `src/app/domain/frontend/**/config/*.edn`.
 
+## Logs
+
+Use these to tail combined backend and frontend dev output:
+
+```bash
+./scripts/sh/monitoring/read_output.sh -f
+./sc
+```
+
 ## Testing discipline
 
 - Run only relevant tests; avoid full-suite runs for targeted changes.

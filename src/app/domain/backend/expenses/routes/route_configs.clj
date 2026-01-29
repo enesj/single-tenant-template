@@ -29,6 +29,21 @@
    :custom-count-params (fn [qp]
                           {:search (:search qp)})})
 
+(def manufacturer-config
+  {:entity-key :manufacturer
+   :entity-plural :manufacturers
+   :route-segment "manufacturers"
+   :service 'app.domain.backend.expenses.services.manufacturers
+   :default-limit 100
+   :default-order-by "display_name"
+   :required-fields [:display-name]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
+                          {:search (:search qp)})})
+
 (def payer-config
   {:entity-key :payer
    :entity-plural :payers
@@ -145,7 +160,15 @@
    :custom-query-params (fn [qp]
                           {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
                            :raw-label (:raw-label qp)
-                           :article-id (utils/parse-uuid-custom (:article-id qp))})})
+                           :article-id (utils/parse-uuid-custom (:article-id qp))})
+
+   ;; Admin edit forms can send numeric fields as strings (HTML inputs always
+   ;; emit strings). Coerce them at the boundary so Postgres doesn't reject the
+   ;; update with a type error.
+   :transform-request (fn [body]
+                        (cond-> body
+                          (contains? body :confidence)
+                          (assoc :confidence (utils/parse-int-param body :confidence nil))))})
 
 (def supplier-alias-config
   {:entity-key :supplier-alias
@@ -161,14 +184,19 @@
                           {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
                            :unmapped-only (utils/parse-boolean-param qp :unmapped-only)
                            :search (:search qp)})
+
    ;; Allow clients to omit raw-label-normalized; compute it server-side.
+   ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.
    :transform-request (fn [body]
                         (let [raw-label (:raw-label body)
                               normalized (or (:raw-label-normalized body)
                                            (when raw-label
-                                             (svc-configs/normalize-supplier-key raw-label)))]
+                                             (svc-configs/normalize-supplier-key raw-label)))
+                              confidence (when (contains? body :confidence)
+                                           (utils/parse-int-param body :confidence nil))]
                           (cond-> body
-                            normalized (assoc :raw-label-normalized normalized))))})
+                            normalized (assoc :raw-label-normalized normalized)
+                            (contains? body :confidence) (assoc :confidence confidence))))})
 
 ;; =============================================================================
 ;; Configuration Map
@@ -177,6 +205,7 @@
 (def entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers supplier-config
+   :manufacturers manufacturer-config
    :payers payer-config
    :payer-types payer-type-config
    :articles article-config

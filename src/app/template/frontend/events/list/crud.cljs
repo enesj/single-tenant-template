@@ -65,10 +65,34 @@
   (fn [{:keys [db]} [entity-type response]]
     ;; Support both:
     ;; - a raw vector response: [{...} {...}]
-    ;; - a wrapped response: {:data [{...} {...}] ...}
-    (let [items (cond
-                  (map? response) (or (:data response) (:results response) [])
+    ;; - wrapped responses:
+    ;;   - {:data [{...} {...}] ...}
+    ;;   - {:results [{...} {...}] ...}
+    ;;   - {:articles [{...} ...]} (common in domain admin routes)
+    (let [entity-kw (cond
+                      (keyword? entity-type) entity-type
+                      (string? entity-type) (keyword entity-type)
+                      (map? entity-type) (let [v (:value entity-type)]
+                                           (cond
+                                             (keyword? v) v
+                                             (string? v) (keyword v)
+                                             :else nil))
+                      :else nil)
+          items (cond
+                  (map? response)
+                  (or (:data response)
+                    (:results response)
+                    (when entity-kw
+                      (or (get response entity-kw)
+                        (get response (name entity-kw))
+                        (get response (keyword (name entity-kw)))))
+                    (when (= 1 (count response))
+                      (let [[_k v] (first response)]
+                        (when (coll? v) v)))
+                    [])
+
                   (coll? response) response
+
                   :else [])
           normalized (normalize/normalize-entities items)]
       {:db (-> db

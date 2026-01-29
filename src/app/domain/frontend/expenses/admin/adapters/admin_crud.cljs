@@ -3,11 +3,17 @@
 
    These bridges customize how template CRUD operations work for
    expenses-related entities (suppliers, expenses, receipts, payers,
-   articles, article-aliases, price-observations)."
+   articles, article-aliases, supplier-aliases, manufacturers,
+   price-observations)."
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
     [app.admin.frontend.utils.http :as admin-http]
     [taoensso.timbre :as log]))
+
+(def ^:private lookup-params
+  "Default query params used for FK lookup dropdowns in admin forms."
+  {:limit 500
+   :offset 0})
 
 (defn- suppliers-request
   "Create HTTP request config for suppliers admin API."
@@ -25,7 +31,17 @@
   {:entity-key :suppliers
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (suppliers-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (suppliers-request
@@ -80,7 +96,17 @@
   {:entity-key :expenses
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (expenses-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (expenses-request
@@ -134,7 +160,17 @@
   {:entity-key :expense-items
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (expense-items-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (expense-items-request
@@ -188,7 +224,17 @@
   {:entity-key :receipts
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (receipts-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (receipts-request
@@ -242,7 +288,17 @@
   {:entity-key :payers
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (payers-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (payers-request
@@ -296,7 +352,17 @@
   {:entity-key :articles
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (articles-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (articles-request
@@ -350,7 +416,17 @@
   {:entity-key :article-aliases
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (article-aliases-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (article-aliases-request
@@ -404,7 +480,17 @@
   {:entity-key :price-observations
 
    :operations
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (price-observations-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
                             :http-xhrio (price-observations-request
@@ -441,3 +527,131 @@
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
                              :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}}})
+
+(defn- supplier-aliases-request
+  "Create HTTP request config for supplier aliases admin API."
+  [{:keys [method id params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/supplier-aliases"
+        uri (if id (str base-uri "/" id) base-uri)]
+    (log/info "🔁 supplier-aliases-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :supplier-aliases
+
+   :operations
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (supplier-aliases-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (supplier-aliases-request
+                                          {:method :delete
+                                           :id id
+                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (supplier-aliases-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (supplier-aliases-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]))}}})
+
+(defn- manufacturers-request
+  "Create HTTP request config for manufacturers admin API."
+  [{:keys [method id params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/manufacturers"
+        uri (if id (str base-uri "/" id) base-uri)]
+    (log/info "🏭 manufacturers-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :manufacturers
+
+   :operations
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (manufacturers-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (manufacturers-request
+                                          {:method :delete
+                                           :id id
+                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (manufacturers-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (manufacturers-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}}})
