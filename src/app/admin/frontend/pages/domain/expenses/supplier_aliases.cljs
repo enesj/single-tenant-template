@@ -1,5 +1,5 @@
-(ns app.admin.frontend.pages.unmapped-aliases
-  "Admin Unmapped Aliases page.
+(ns app.admin.frontend.pages.domain.expenses.supplier-aliases
+  "Admin Supplier Aliases page.
 
   Renders an admin-native list backed by the expenses admin API."
   (:require
@@ -10,18 +10,19 @@
     [uix.re-frame :refer [use-subscribe]]
 
     ;; Side-effect requires
+    app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.unmapped-aliases))
+    app.domain.frontend.expenses.events.supplier-aliases))
 
-(defui admin-unmapped-aliases-page
-  "Admin route: /admin/unmapped-aliases"
+(defui admin-supplier-aliases-page
+  "Admin route: /admin/supplier-aliases"
   []
-  (let [entity-name :unmapped-aliases
+  (let [entity-name :supplier-aliases
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.unmapped-aliases/load-list
+                         (rf/dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list
                                        {:limit 1000
                                         :offset 0}]))
                        [])]
@@ -35,16 +36,16 @@
       ($ :div {:class "p-6 min-h-screen"}
         ($ :div {:class "mb-6"}
           ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Unmapped Aliases")
+            "Supplier Aliases")
           ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Unmapped article aliases (admin API helper endpoint)."))
+            "Supplier aliases from the Expenses domain (admin API)."))
 
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Unmapped Aliases"
+           :title "Supplier Aliases"
            :form-display :modal
            :allow-add? false
-           :allow-edit? false
-           :allow-delete? false
+           :allow-edit? true
+           :allow-delete? true
            :disallowed-action-mode :hide})))))

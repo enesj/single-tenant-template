@@ -2,20 +2,20 @@
   "Admin routes; update when adding admin pages."
   (:require
     [app.admin.frontend.pages.admins :as admins]
-    [app.admin.frontend.pages.article-aliases :as article-aliases]
+    [app.admin.frontend.pages.domain.expenses.article-aliases :as article-aliases]
     [app.admin.frontend.pages.audit :as audit]
-    [app.admin.frontend.pages.articles :as articles]
+    [app.admin.frontend.pages.domain.expenses.articles :as articles]
     [app.admin.frontend.pages.dashboard :as dashboard]
     [app.admin.frontend.pages.forgot-password :as forgot-password]
     [app.admin.frontend.pages.login :as login]
     [app.admin.frontend.pages.login-events :as login-events]
-    [app.admin.frontend.pages.manufacturers :as manufacturers]
-    [app.admin.frontend.pages.price-observations :as price-observations]
+    [app.admin.frontend.pages.domain.expenses.manufacturers :as manufacturers]
+    [app.admin.frontend.pages.domain.expenses.price-observations :as price-observations]
     [app.admin.frontend.pages.reset-password :as reset-password]
-    [app.admin.frontend.pages.supplier-aliases :as supplier-aliases]
-    [app.admin.frontend.pages.suppliers :as suppliers]
+    [app.admin.frontend.pages.domain.expenses.supplier-aliases :as supplier-aliases]
+    [app.admin.frontend.pages.domain.expenses.suppliers :as suppliers]
     [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
-    [app.admin.frontend.pages.unmapped-aliases :as unmapped-aliases]
+    [app.admin.frontend.pages.domain.expenses.unmapped-aliases :as unmapped-aliases]
     [app.admin.frontend.pages.users :as users]
     [re-frame.core :as rf]))
 

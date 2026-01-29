@@ -1,5 +1,5 @@
-(ns app.admin.frontend.pages.supplier-aliases
-  "Admin Supplier Aliases page.
+(ns app.admin.frontend.pages.domain.expenses.price-observations
+  "Admin Price Observations page.
 
   Renders an admin-native list backed by the expenses admin API."
   (:require
@@ -13,16 +13,16 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.supplier-aliases))
+    app.domain.frontend.expenses.events.price-observations))
 
-(defui admin-supplier-aliases-page
-  "Admin route: /admin/supplier-aliases"
+(defui admin-price-observations-page
+  "Admin route: /admin/price-observations"
   []
-  (let [entity-name :supplier-aliases
+  (let [entity-name :price-observations
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list
+                         (rf/dispatch [:app.domain.frontend.expenses.events.price-observations/load-list
                                        {:limit 1000
                                         :offset 0}]))
                        [])]
@@ -36,14 +36,14 @@
       ($ :div {:class "p-6 min-h-screen"}
         ($ :div {:class "mb-6"}
           ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Supplier Aliases")
+            "Price observations")
           ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Supplier aliases from the Expenses domain (admin API)."))
+            "Price observations from the Expenses domain (admin API)."))
 
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Supplier Aliases"
+           :title "Price observations"
            :form-display :modal
            :allow-add? false
            :allow-edit? true
