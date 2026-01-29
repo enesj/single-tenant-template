@@ -10,6 +10,7 @@
     [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
     [app.admin.frontend.pages.users :as users]
     [app.admin.frontend.pages.audit :as audit]
+    [app.admin.frontend.pages.articles :as articles]
     [re-frame.core :as rf]))
 
 (defn guarded-start
@@ -67,6 +68,12 @@
            :view users/admin-users-page
            :controllers [{:start (fn [params]
                                    ((:start (guarded-start [[:admin/load-users]])) params))}]}]
+
+         ;; Articles (embedded user route; keeps admin shell visible)
+         ["/articles"
+          {:name :admin-articles
+           :view articles/admin-articles-page
+           :controllers [(guarded-start nil)]}]
 
          ;; Audit Logs
          ["/audit"

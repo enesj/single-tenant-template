@@ -4,7 +4,7 @@
     [app.admin.frontend.subs.dashboard]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
-    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon settings-icon]]
+    [app.template.frontend.components.icons :refer [arrow-path dashboard-icon users-icon admins-icon user-settings-icon audit-icon login-events-icon settings-icon articles-icon]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -23,7 +23,12 @@
                                     {:label "Users"
                                      :href "/admin/users"
                                      :icon ($ users-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-users)}]
+                                     :active? (= route-name :admin-users)}
+                                    {:id "admin-sidebar-articles"
+                                     :label "Articles"
+                                     :href "/admin/articles"
+                                     :icon ($ articles-icon {:class "w-6 h-6"})
+                                     :active? (= route-name :admin-articles)}]
                              is-owner? (conj {:label "Admins" :href "/admin/admins" :icon ($ admins-icon {:class "w-6 h-6"}) :active? (= route-name :admin-admins)})
                              true (into [{:label "Audit Logs" :href "/admin/audit" :icon ($ audit-icon {:class "w-6 h-6"}) :active? (= route-name :admin-audit)}
                                          {:label "Login Events" :href "/admin/login-events" :icon ($ login-events-icon {:class "w-6 h-6"}) :active? (= route-name :admin-login-events)}]))

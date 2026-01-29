@@ -71,6 +71,10 @@
           is-admin-route (str/starts-with? uri "/admin")
 
           ;; Base security headers for all routes
+          ;;
+          ;; NOTE: Keep X-Frame-Options at DENY to prevent clickjacking. If you need
+          ;; same-origin embedding, introduce a narrowly-scoped exception instead of
+          ;; loosening the default for all routes.
           base-headers {"X-Frame-Options" "DENY"
                         "X-Content-Type-Options" "nosniff"
                         "X-XSS-Protection" "1; mode=block"
