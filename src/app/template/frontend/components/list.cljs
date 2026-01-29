@@ -9,6 +9,7 @@
     [app.template.frontend.components.list.table :refer [make-table-headers]]
     [app.template.frontend.components.list.ui :refer [add-item-section
                                                       header-section]]
+    [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.components.messages :refer [error-alert]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.pagination :refer [pagination]]
@@ -23,6 +24,7 @@
     [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.subs.entity :as entity-subs]
     [app.template.frontend.subs.list :as list-subs]
+    [app.template.frontend.subs.form :as form-subs]
     [app.template.frontend.subs.ui :as ui-subs]
     [app.template.frontend.utils.column-config :as column-config]
     [re-frame.core :as rf]
@@ -55,7 +57,8 @@
            ;; New props for custom forms and modal support
            render-add-form render-edit-form form-display on-add-success on-edit-success]
     :as props}]
-  (let [items (use-subscribe [::entity-subs/paginated-entities entity-name])
+  (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+        items (use-subscribe [::entity-subs/paginated-entities entity-name])
         loading? (use-subscribe [::entity-subs/loading? entity-name])
         error (use-subscribe [::entity-subs/error entity-name])
         total-pages (use-subscribe [::list-subs/total-pages entity-name])
@@ -63,6 +66,8 @@
         selected-ids (use-subscribe [::list-subs/selected-ids entity-name])
         editing (use-subscribe [::ui-subs/editing])
         show-add-form? (use-subscribe [::ui-subs/show-add-form])
+        form-success? (use-subscribe [::form-subs/form-success entity-kw])
+        form-submitted? (use-subscribe [::form-subs/submitted? entity-kw])
         recently-updated-ids (use-subscribe [::ui-subs/recently-updated-entities entity-name])
         recently-created-ids (use-subscribe [::ui-subs/recently-created-entities entity-name])
         ;; Subscribe to hardcoded view-options for hiding settings panel controls
@@ -76,7 +81,6 @@
         filterable-fields-subscription (use-subscribe [::ui-subs/filterable-fields entity-name])
         user-filterable-settings (use-subscribe [::settings-events/filterable-fields entity-name])
         filterable-fields (or filterable-columns filterable-fields-subscription)
-        entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
         ;; Vector-config is only enabled once admin config is loaded.
         ;; We still use the unified visible-columns subscription underneath so policy defaults/locks apply.
         admin-config-loaded? (use-subscribe [:admin/config-loaded?])
@@ -179,6 +183,27 @@
               (set-inline-filter-value desired)))))
       [active-filters active-inline-filter inline-filter-value])
 
+    ;; Auto-close default modal edit form after success.
+    ;; (Custom modal edit forms are expected to call the provided :on-success callback.)
+    (use-effect
+      (fn []
+        (when (and use-modal-forms?
+                edit-modal-open?
+                (not has-custom-edit-form?)
+                form-success?
+                form-submitted?)
+          ;; Give the success alert a brief moment to show, then close.
+          (js/setTimeout
+            (fn []
+              (rf/dispatch [::form-events/cancel-form entity-kw])
+              (set-edit-modal-open! false)
+              (set-edit-modal-item! nil)
+              (when on-edit-success
+                (on-edit-success)))
+            500))
+        js/undefined)
+      [on-edit-success use-modal-forms? edit-modal-open? has-custom-edit-form? form-success? form-submitted? entity-kw])
+
     ;; Handle single item selection toggle
     (let [handle-select-change (fn [item-id selected?]
                                  (rf/dispatch [::selection-events/select-item entity-name item-id selected?]))
@@ -240,19 +265,23 @@
           handle-edit-click (fn [item]
                               (rf/dispatch [::crud-events/clear-error entity-kw])
                               (rf/dispatch [::form-events/clear-form-errors entity-kw])
-                              (if (and use-modal-forms? has-custom-edit-form?)
-                                ;; Open edit modal with item
+                              (if use-modal-forms?
+                                ;; Modal behavior (default or custom): keep table visible.
                                 (do
+                                  ;; Ensure the modal form starts from item values (not stale form state).
+                                  (rf/dispatch [::form-events/cancel-form entity-kw])
                                   (set-edit-modal-item! item)
                                   (set-edit-modal-open! true))
-                                ;; Fall back to inline behavior
+                                ;; Inline behavior
                                 (rf/dispatch [::config-events/set-editing (id-utils/extract-entity-id item)])))
 
           handle-edit-modal-close (fn []
+                                    (rf/dispatch [::form-events/cancel-form entity-kw])
                                     (set-edit-modal-open! false)
                                     (set-edit-modal-item! nil))
 
           handle-edit-modal-success (fn []
+                                      (rf/dispatch [::form-events/cancel-form entity-kw])
                                       (set-edit-modal-open! false)
                                       (set-edit-modal-item! nil)
                                       (when on-edit-success
@@ -330,20 +359,53 @@
                                 :on-success handle-add-modal-success
                                 :on-cancel handle-add-modal-close})))
 
-          ;; Modal for custom edit form
-          (when (and edit-modal-open? has-custom-edit-form? edit-modal-item)
-            ($ modal-wrapper
-              {:visible? true
-               :title (str "Edit " title)
-               :size :large
-               :draggable? true
-               :on-close handle-edit-modal-close
-               :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
-              (render-edit-form edit-modal-item
-                {:entity-name entity-name
-                 :entity-spec entity-spec
-                 :on-success handle-edit-modal-success
-                 :on-cancel handle-edit-modal-close})))
+          ;; Modal for edit form (custom or default)
+          (when (and edit-modal-open? edit-modal-item)
+            (let [item-clj (if (map? edit-modal-item)
+                             edit-modal-item
+                             (js->clj edit-modal-item :keywordize-keys true))
+                  item-id (id-utils/extract-entity-id item-clj)
+                  initial-values (into {}
+                                   (map (fn [[k v]]
+                                          ;; Convert namespaced keys to simple keys for form fields
+                                          (let [simple-key (if (and (keyword? k) (namespace k))
+                                                             (keyword (name k))
+                                                             k)]
+                                            [simple-key v]))
+                                     item-clj))
+                  effective-form-spec (or form-entity-spec-edit
+                                        form-entity-spec
+                                        entity-spec)
+                  handle-default-submit (fn [{:keys [dirty values] :as payload}]
+                                          (let [changed-values (-> values
+                                                                 (select-keys (cons :id (keys dirty))))]
+                                            (rf/dispatch [::form-events/submit-form
+                                                          (assoc payload
+                                                            :values changed-values
+                                                            :entity-name entity-kw
+                                                            :editing true)])
+                                            (rf/dispatch [::form-events/set-submitted entity-kw true])))]
+              ($ modal-wrapper
+                {:visible? true
+                 :title (str "Edit " title)
+                 :size :large
+                 :draggable? true
+                 :on-close handle-edit-modal-close
+                 :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
+                (if has-custom-edit-form?
+                  (render-edit-form item-clj
+                    {:entity-name entity-name
+                     :entity-spec entity-spec
+                     :on-success handle-edit-modal-success
+                     :on-cancel handle-edit-modal-close})
+                  ($ form
+                    {:key (str "modal-edit-" (kw/ensure-name entity-name) "-" (or item-id "unknown"))
+                     :entity-name entity-kw
+                     :entity-spec effective-form-spec
+                     :editing true
+                     :initial-values initial-values
+                     :on-cancel handle-edit-modal-close
+                     :on-submit handle-default-submit})))))
 
           ;; Remove the old modal filter form rendering
           nil

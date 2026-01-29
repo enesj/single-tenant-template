@@ -49,7 +49,11 @@
     :options ["suppliers" "display_name"]}}},
  :articles
  {:edit-fields
-  ["manufacturer_id" "canonical_name" "category" "link" "normalized_key"],
+  ["manufacturer_id"
+   "canonical_name"
+   "category"
+   "link"
+   "normalized_key"],
   :field-config
   {:manufacturer_id
    {:type "select",
