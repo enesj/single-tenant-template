@@ -45,17 +45,6 @@
         "Content-Type": "application/json"
       }
     },
-    "RapidAPI Hub - JSpell Checker": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.rapidapi.com",
-        "--header",
-        "x-api-host: jspell-checker.p.rapidapi.com",
-        "--header",
-        "x-api-key: REPLACE_WITH_YOUR_RAPIDAPI_KEY"
-      ]
-    },
     "web-reader": {
       "type": "http",
       "url": "https://api.z.ai/api/mcp/web_reader/mcp",

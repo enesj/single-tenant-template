@@ -22,8 +22,7 @@ This document explains what the **single-tenant template** includes, how it diff
 
 ## What’s NOT Included (Hosting Reference Only)
 
-- Hosting/Financial/Integration domain code (`src/app/domain/*`), RLS-heavy tenant context middleware, multi-tenant role matrix.
-- Domain-specific migrations under `resources/db/domain/*` (removed).
+- Hosting/Financial/Integration domains from the multi-tenant app, RLS-heavy tenant context middleware, multi-tenant role matrix.
 - These topics remain documented for reference in Hosting docs and are tagged `:hosting`/`:reference-only`.
 
 ## Running the Template
@@ -32,7 +31,7 @@ This document explains what the **single-tenant template** includes, how it diff
 bb run-app          # start backend + shadow-cljs watch + nREPL
 open http://localhost:8085/admin/users
 bb be-test          # backend tests
-bb fe-test          # frontend tests
+bb fe-test-node     # frontend tests
 ```
 
 Ports and DB names come from `config/base.edn` (dev defaults to port 8085 unless changed).

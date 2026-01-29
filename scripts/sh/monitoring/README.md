@@ -17,7 +17,6 @@ Advanced process monitoring script that runs commands with output capture and cl
 - Process ID tracking for cleanup
 - Handles Ctrl+C interruption gracefully
 - Automatic cleanup of processes and temporary files
-- Java process detection and termination for port 8080
 - Used by `run-app.sh` for application monitoring
 
 ### `read_output.sh`
@@ -53,7 +52,7 @@ Reads browser console logs from the running development application with various
 - `--help, -h` : Show help message
 
 **Features:**
-- Connects to development server at localhost:8080
+- Connects to development server at localhost:8085
 - Filters console output by type (errors, debug, etc.)
 - Continuous monitoring support
 - Integration with fe-tools console reader

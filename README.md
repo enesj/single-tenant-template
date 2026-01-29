@@ -6,37 +6,29 @@ This repository is the **single-tenant template** derived from the Hosting multi
 
 ### Prerequisites
 
-Before running the application, ensure you have all required software installed. See the [**Complete Software Requirements**](#complete-software-requirements) section below.
+Before running the application, ensure you have all required software installed. See the [**Complete Software Requirements**](#complete-software-requirements) section below (and the canonical runbook at `docs/general/operations/README.md`). The default dev DB setup uses Docker Compose (`docker-compose.yml`).
 
-### 1. Database Setup
+### 1. Secrets & Database Setup
 
-```bash
-# Start PostgreSQL service
-brew services start postgresql@14
+This template expects a secrets file for DB credentials:
 
-# Create development database
-psql -U postgres -c "CREATE DATABASE bookkeeping;"
-psql -U postgres -c "CREATE USER user WITH PASSWORD 'password';"
-psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE bookkeeping TO user;"
+- Create `config/.secrets.edn` (or `~/.secrets.edn`) with at least:
+  - `:db {:dev-password "...", :test-password "..."}`
 
-# Create test database
-psql -U postgres -c "CREATE DATABASE bookkeeping_test;"
-psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE bookkeeping_test TO user;"
-```
+By default, `bb run-app` uses `docker compose` to start two Postgres containers:
+- Dev DB: `single_tenant_pos` on `localhost:55432`
+- Test DB: `single_tenant_pos_test` on `localhost:55433`
 
 ### 2. Project Setup
 
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd hosting
+cd <repo-dir>
 
 # Install Node.js dependencies
 npm install
 
-# Run database migrations via REPL
-# (require '[app.template.backend.migrations.simple-repl :as mig])
-# (mig/migrate!)
 ```
 
 ### 3. Start Your Application Stack
@@ -46,9 +38,14 @@ npm install
 bb run-app
 ```
 
+First-time DB setup (new database): in another terminal, run:
+```bash
+bb migrate-and-sync-frontend-config
+```
+
 The application will be available at:
-- **Main App**: http://localhost:8080
-- **Admin Panel**: http://localhost:8080/admin/users (admin auth is simplified for this template)
+- **Main App**: http://localhost:8085
+- **Admin Panel**: http://localhost:8085/admin/users (admin auth is simplified for this template)
 
 ## Complete Software Requirements
 
@@ -64,19 +61,19 @@ The application will be available at:
 
 | Software | Version | Purpose | Installation |
 |----------|---------|---------|--------------|
-| **PostgreSQL** | 14+ | Primary database with RLS | `brew install postgresql@14` |
+| **PostgreSQL** | 13+ | Primary database | Via `docker compose` (recommended) or `brew install postgresql@14` |
 | **psql** | Latest | Database administration | Comes with PostgreSQL |
 
 > **Note**: Two database instances are required:
-> - Development: `localhost:5432`
-> - Test: `localhost:5433`
+> - Development: `localhost:55432`
+> - Test: `localhost:55433`
 
 ### Frontend & Build Tools
 
 | Software | Version | Purpose | Installation |
 |----------|---------|---------|--------------|
 | **Node.js** | 22.0.0+ | Frontend build tooling | `brew install node@22` |
-| **Shadow-CLJS** | 2.28.18+ | ClojureScript compiler | `npm install -g shadow-cljs` |
+| **Shadow-CLJS** | 2.28.18+ | ClojureScript compiler | Via npm (`npx shadow-cljs ...`) |
 | **PostCSS** | 8.5.6+ | CSS processing | Via npm (auto-installed) |
 | **Tailwind CSS** | 4.0.0+ | CSS framework | Via npm (auto-installed) |
 
@@ -96,8 +93,6 @@ The application will be available at:
 | **Kaocha** | 1.91.1392+ | Backend test runner | Included as dependency |
 | **Karma** | 6.4.3+ | Frontend test runner | Via npm (auto-installed) |
 | **Chrome/Chromium** | Latest | Browser testing | Install Chrome browser |
-| **Playwright** | 1.52.0+ | E2E testing | Via npm (auto-installed) |
-| **Etaoin** | 1.1.43+ | Browser automation | Included as dependency |
 
 ### Optional Tools
 
@@ -111,19 +106,13 @@ The application will be available at:
 
 ```bash
 # Core requirements
-brew install openjdk@17 clojure/tools/clojure babashka postgresql@14 node@22
+brew install openjdk@17 clojure/tools/clojure babashka node@22
 
 # Development tools
 brew install clojure-lsp/brew/clojure-lsp borkdave/brew/clj-kondo borkdave/brew/neil
 
-# Global tools
-npm install -g shadow-cljs
-
 # Optional tools
 brew install git pandoc
-
-# Start PostgreSQL
-brew services start postgresql@14
 ```
 
 ## Development Workflow
@@ -139,7 +128,6 @@ bb run-app              # Start the application
 # Testing
 bb be-test              # Run backend tests
 bb fe-test-node         # Run frontend tests
-bb commit --test        # Run tests then commit changes
 
 # 🚨 IMPORTANT: Always save test output before analysis:
 bb be-test 2>&1 | tee /tmp/be-test.txt && grep "FAIL" /tmp/be-test.txt
@@ -177,7 +165,7 @@ bb upgrade-deps         # Upgrade all dependencies
 #### Common Issues
 
 1. **Cache issues**: `bb clean-cache` to clear compilation caches
-2. **Database connection**: Ensure PostgreSQL is running on ports 5432 and 5433
+2. **Database connection**: Ensure PostgreSQL is running on ports 55432 and 55433
 3. **Missing dependencies**: Run `npm install` and check Java/Clojure installation
 
 #### Database Reset

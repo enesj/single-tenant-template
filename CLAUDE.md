@@ -1,32 +1,51 @@
 # Repository Guidelines
 
-## Overview & Architecture
-- Single-tenant SaaS template built with Clojure/ClojureScript and PostgreSQL.
-- Core structure: Admin (admin panel), Backend (core services), Frontend (UI utilities), Template (shared SaaS infrastructure), Shared (cross-platform utilities).
+## Quick decision map (tools & skills)
 
-## 🚨 SCRIPTING POLICY: NO PYTHON - Babashka/Bash Only
+- Need to locate context/docs or you don’t have an exact file → use Morph WarpGrep first.
+- Large file or multi-step analysis → use Lattice (load once, query/expand).
+- Edits by file type:
+  - `.clj`/`.cljs`/`.cljc`/`.edn` → clojure-mcp structural edits (see “MCP tool discipline” below).
+  - `.md` → Morph edits.
+  - Other files → standard edits with minimal diffs.
+- Debugging skill map:
+  - Frontend state/auth/data loading → **app-db-inspect**
+  - Re-frame event flow/perf → **reframe-events-analysis**
+  - Build/compile/runtime logs → **system-logs**
+  - Docs vs code alignment → **doc-alignment-audit**
+- Interactive browser testing → **chrome-mcp** (use IDs and verify selectability).
+- Database work (queries, inspection, schema info) → **postgres-mcp** tools.
 
-**NEVER create or run Python scripts in this repository.** This is a Clojure-focused codebase.
+## MCP tool discipline (mandatory)
 
-**Use Babashka (.bb files) as the preferred scripting language** - it provides:
-- Native Clojure syntax and ecosystem access
-- Fast startup times with GraalVM
-- Seamless integration with existing Clojure code and tools
-- Rich library support for common tasks
+These MCP servers are part of the app and should be your primary interface:
 
-**Use Bash scripts (.sh) only when**:
-- Babashka cannot handle the specific requirement
-- Interacting with system-level tools that require shell commands
-- Simple wrapper scripts for existing tools
+- **Clojure/EDN edits**: Always use `clojure-mcp` structural editors for `.clj`/`.cljs`/`.cljc`/`.edn` changes (prefer `mcp__clojure-mcp__clojure_edit` and `mcp__clojure-mcp__clojure_edit_replace_sexp`). If a non-structural edit causes reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop immediately and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text edits.
+- **REPL evaluation is the main feedback loop**: Use `mcp__clojure-mcp__clojure_eval` (backend) and `mcp__clojure-mcp__clojurescript_eval` (frontend) for exploration, debugging, and running focused tests. Always use `:reload` on `require`. If `.cljs` `require` fails, select the build first:
+  ```clojure
+  (shadow.cljs.devtools.api/nrepl-select :app)
+  ```
+  Use `:admin` for the admin panel.
+- **DB access and operations**: Use `postgres-mcp` tools (e.g. `mcp__postgres__execute_sql`, schema inspection, lock inspection) instead of guessing schema or writing pseudo-SQL.
+- **Browser interactions**: Use `chrome-mcp` tools (read/click/fill/screenshot) for interactive UI testing and element verification; rely on stable `:id` attributes (see Component ID requirements below).
 
-**Why not Python?**
-- This repository uses Clojure/ClojureScript exclusively
-- Python introduces unnecessary dependencies and complexity
-- Babashka provides better integration with the existing Clojure ecosystem
+## Instruction Scope & Precedence
+
+- `AGENTS.md` is canonical for repo-wide policy and workflow (scripting, dev commands, testing discipline, tool/skill usage).
+- `.github/copilot-instructions.md` is canonical for implementation guidance (coding patterns, migrations, common issues, security checks).
+- If instructions conflict, follow the more specific one; otherwise prefer `AGENTS.md` for policy/workflow.
+
+## 🚨 Hard rules
+
+- Database schema changes must happen ONLY via the migrations process. Never alter the schema directly (manual SQL, psql, ORM/DSL hacks, or ad-hoc edits to `resources/db/models.edn` or the live database). All changes must be captured as forward/backward migrations under `resources/db/migrations/` and applied using the documented tooling (`app.template.backend.migrations.simple-repl` or bb tasks).
+- **No Python scripting** in this repo. Use Babashka (`.bb`) or Bash (`.sh`) when necessary.
+- **Never commit secrets**. Keep them in `config/.secrets.edn` (or `~/.secrets.edn`) and environment variables.
+- Keep changes small and focused; avoid unrelated refactors.
 
 ## Project Structure (Quick Map)
+
 ```
-src/app/        # admin, backend, frontend, migrations, shared, template
+src/app/        # admin, template, domain, shared (plus a small frontend/ folder for global assets)
 test/           # *_test.clj / *_test.cljs mirroring src
 resources/      # public assets, db models/migrations
 config/         # base + secrets (local only)
@@ -36,95 +55,67 @@ vendor/         # vendored libs (automigrate, ring, etc.)
 Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 ```
 
+## Development quick facts
 
-## Development & Commands
-- App start: App is ALWAYS RUNNING during development; no need to restart manually because the system automatically restarts after FE/BE changes.
-- Admin UI is served by default at `http://localhost:8085` (not 3000); use that port in local testing and curl checks.
+- App is always running during development; it auto-restarts after FE/BE changes.
+- Admin UI runs at `http://localhost:8085` (not 3000).
+- Admin settings pages:
+  - `/admin/admin-settings` (admin UI config)
+  - `/admin/user-settings` (domain-owned user UI config)
+- Admin domain pages (Expenses) are available under: `/admin/articles`, `/admin/article-aliases`, `/admin/suppliers`, `/admin/supplier-aliases`, `/admin/manufacturers`, `/admin/price-observations`, `/admin/unmapped-aliases`.
+- Sessions are isolated: user logout preserves `:admin-token`; admin logout preserves user `:auth-session`.
+- Dev stderr is suppressed by default; set `DEV_SUPPRESS_STDERR=false` (or `0`/`no`) to keep stderr visible.
+- Dev watchers ignore runtime-edited UI config EDNs under `src/app/admin/frontend/config/*.edn` and `src/app/domain/frontend/**/config/*.edn`.
 
-## Debugging & Development Tools
+## System logs
 
-- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
-
-This project includes specialized AI skills that activate automatically:
-
-- **app-db-inspect** - Inspect re-frame app-db state safely (mention: app-db, re-frame state, frontend state)
-- **reframe-events-analysis** - Analyze re-frame event history and performance (mention: events, event history, tracing)
-- **system-logs** - Monitor and analyze server/shadow-cljs logs (mention: logs, build output, compilation errors)
-
-Use these skills when debugging by describing your issue naturally in Chat.
-
-## 🚨 Critical Testing Workflow
-
-**ALWAYS save test output FIRST - never run tests multiple times:**
+Use these to tail combined backend and frontend dev output:
 
 ```bash
-# ✅ GOOD - run once, analyze many times
-bb be-test 2>&1 | tee /tmp/be-test.txt
-npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
-# Then grep the saved files repeatedly
-
-# ❌ BAD - wasteful re-runs
-bb be-test | grep FAIL
-bb be-test | grep ERROR
+./scripts/sh/monitoring/read_output.sh -f
+./sc
 ```
 
-## Component ID Requirements (Browser Testing)
+## Testing discipline
 
-🚨 **CRITICAL**: All interactive UI components MUST have unique `:id` attributes for browser testing via **chrome-mcp**.
+- Run only relevant tests; avoid full-suite runs for targeted changes.
+- Always save full output once and analyze it; do not re-run just to grep.
+- See `docs/testing/README.md` for deeper guidance.
+- For REPL-driven workflows and examples (Clojure + ClojureScript), see `.github/copilot-instructions.md#testing-from-the-repl`.
 
-### When Creating New Components
+Example save-output pattern:
 
-1. **Always accept an `:id` prop** and generate fallback IDs:
-   ```clojure
-   (let [field-id (or id (when formId (str formId "-input")))]
-     ($ :input {:id field-id ...}))
-   ```
-2. **Error elements** need IDs too: `(str field-id "-error")`
-3. See `INTERACTIVE-COMPONENTS-ID-AUDIT.md` for patterns and examples
-
-### Standard ID Patterns
-
-- Form fields: `(str formId "-" field-type)` → `"login-form-input"`
-- Buttons: `(str "btn-" action "-" context)` → `"btn-delete-users-123"`
-- Toggles: `(str "toggle-" label "-" entity)` → `"toggle-edit-users"`
-- Dropdowns: `(str "actions-btn-" entity-id)` → `"actions-btn-123"`
-
----
-
-## Documentation & AI Search
-
-Use **Morph MCP (Warp Grep)** as the standard way to search project documentation (`docs/**`) and skill docs (`.claude/skills/**`).
-
-**Entry points**: `docs/index.md` (overview), `docs/ai-quick-access.md` (AI pointers)
-
-# Clojure REPL Evaluation
-
-Use the **clojure-mcp** MCP server tools for evaluating code:
-
-- **Backend (Clojure `.clj`)**: Use `mcp__clojure-mcp__clojure_eval` to run code and verify behavior.
-- **Frontend (ClojureScript `.cljs`)**: Use `mcp__clojure-mcp__clojurescript_eval` for frontend evaluation.
-
-The MCP tools provide persistent REPL sessions - namespaces and state are maintained between evaluations.
-Always use `:reload` when requiring namespaces to pick up changes.
-
-**Troubleshooting ClojureScript REPL**:
-If you get a `FileNotFoundException` when requiring `.cljs` files, it means the REPL is in Clojure (JVM) mode. Switch to the ClojureScript runtime by evaluating:
-```clojure
-(shadow.cljs.devtools.api/nrepl-select :app)
 ```
-(Replace `:app` with `:admin` if working on the admin panel).
+bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
+bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt
+```
 
-# Clojure Parenthesis Repair
+## Component ID requirements (browser testing)
 
-The command `clj-paren-repair` is installed on your path.
+All interactive UI components must have unique `:id` attributes for chrome-mcp.
+See `INTERACTIVE-COMPONENTS-ID-AUDIT.md` for the canonical patterns.
 
-Examples:
-`clj-paren-repair <files>`
-`clj-paren-repair path/to/file1.clj path/to/file2.clj path/to/file3.clj`
+Use chrome-mcp for interactive browser testing and element verification (IDs are mandatory).
 
-**IMPORTANT:** Do NOT try to manually repair parenthesis errors.
-If you encounter unbalanced delimiters, run `clj-paren-repair` on the file
-instead of attempting to fix them yourself. If the tool doesn't work,
-report to the user that they need to fix the delimiter error manually.
+ID patterns (examples):
 
-The tool automatically formats files with cljfmt when it processes them.
+| Component Type | Pattern | Example |
+|---------------|---------|---------|
+| Form fields | `(str formId "-" field-type)` | `"login-form-input"` |
+| Buttons | `(str "btn-" action "-" context)` | `"btn-submit-login"` |
+| Settings toggles | `(str "toggle-" label "-" entity)` | `"toggle-timestamps-users"` |
+| Column toggles | `(str "col-toggle-" entity "-" field)` | `"col-toggle-users-email"` |
+| Action dropdowns | `(str "actions-btn-" entity-id)` | `"actions-btn-123"` |
+| Filter controls | `(str "filter-" type "-" field)` | `"filter-toggle-users-name"` |
+
+When creating new components:
+1. Always accept an `:id` prop.
+2. Generate fallback IDs when not provided.
+3. Error elements should have IDs too (`(str field-id "-error")`).
+4. Verify selectability via chrome-mcp.
+
+## Documentation pointers
+
+- `docs/index.md` (overview)
+- `docs/ai-quick-access.md` (AI pointers)
+- Skill docs: `.claude/skills/*/SKILL.md` or `.codex/skills/*/SKILL.md`

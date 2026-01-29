@@ -54,8 +54,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Check if development server is running
-if ! curl -s http://localhost:8080 > /dev/null 2>&1; then
-    echo "❌ Development server is not running on http://localhost:8080"
+if ! curl -s http://localhost:8085 > /dev/null 2>&1; then
+    echo "❌ Development server is not running on http://localhost:8085"
     echo "💡 Start the dev server with: ./scripts/sh/development/run-app.sh"
     exit 1
 fi
@@ -75,7 +75,7 @@ if [ "$FOLLOW" = true ]; then
 fi
 
 echo "🔍 Reading browser console logs..."
-echo "📱 Connecting to http://localhost:8080"
+echo "📱 Connecting to http://localhost:8085"
 echo ""
 
 # Run the console reader with Babashka

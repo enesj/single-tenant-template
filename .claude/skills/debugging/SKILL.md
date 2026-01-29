@@ -31,7 +31,7 @@ Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool to evaluate ClojureScrip
 
 ## Logs
 ```bash
-./scripts/sh/monitoring/read_output.sh -f
+./scripts/sh/monitoring/read_output.sh
 ./scripts/sh/monitoring/read_output.sh | rg -i "error|exception"
 ```
 

@@ -202,8 +202,12 @@
            (flush)
            (shell "clj -X:test"))},
 
+  fe-test
+  {:doc "Alias for frontend tests (same as fe-test-node). Usage: bb fe-test [start] [lines]",
+   :task (apply shell "bb" "fe-test-node" *command-line-args*)},
+
   fe-test-node
-  {:doc "Run frontend tests once using Shadow CLJS. Usage: bb fe-test [start] [lines]
+  {:doc "Run frontend tests once using Shadow CLJS (Node). Usage: bb fe-test-node [start] [lines] (or bb fe-test)
         If start is provided, skips that many lines before showing output. Defaults to 0.
         If lines is provided, shows that many lines of output. Defaults to 50.",
    :task (let [args *command-line-args*

@@ -73,7 +73,7 @@
             ($ :li "Live-reload dev environment (bb run-app)")
             ($ :li "Template/shared libraries kept intact for reuse"))
           ($ :div {:class "mt-4 text-xs text-slate-500"}
-            "Tip: start dev with `bb run-app` then open http://localhost:8080"))))
+            "Tip: start dev with `bb run-app` then open http://localhost:8085"))))
 
     ;; Features
     ($ :div {:class "max-w-6xl mx-auto px-4 pb-12"}
@@ -87,7 +87,7 @@
         ($ :div {:class "flex items-center justify-between mb-4"}
           ($ :h2 {:class "text-xl font-semibold text-slate-900"} "Jump in")
           ($ :span {:class "text-xs text-slate-500"}
-            "Everything runs at http://localhost:8080 by default"))
+            "Everything runs at http://localhost:8085 by default"))
         ($ :div {:class "grid md:grid-cols-3 gap-4"}
           (for [{:keys [title] :as link} quick-links]
             ($ quick-link (assoc link :key title))))))))

@@ -9,14 +9,16 @@ Primary script for starting the development environment. Handles cleanup of exis
 
 **Usage:**
 ```bash
-./run-app.sh
+bb run-app
+# or: ./scripts/sh/development/run-app.sh
 ```
 
 **Features:**
-- Automatically kills existing processes on port 8080
-- Starts the application with database migrations
-- Uses monitoring for process management
-- Primary development command
+- Checks whether the app is already running on port 8085
+- Starts Docker services (`docker compose up -d`) for Postgres (dev + test)
+- Waits for Postgres on `localhost:55432` before booting the app
+- Starts the PostCSS watcher (`npm run develop`) and tails logs in `/tmp/postcss_watcher.log`
+- Runs `clojure -M:dev` under `scripts/sh/monitoring/monitor_terminal.sh` for readable output
 
 ### `kill-java.sh`
 Terminates all Java processes except clojure-mcp to clean up development environment.

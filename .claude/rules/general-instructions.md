@@ -1,91 +1,120 @@
-## Repo Instructions for Copilot Chat
+# Copilot instructions (single-tenant template)
 
-- Treat this file and `AGENTS.md` as your primary instructions for this repo.
-- Don't try to revert the changes made by other agents or user during your session unless they are making the problem to you working on your task. If so ask user what to do.
+**Instruction Precedence**: Read `AGENTS.md` first for **policy & workflow** (hard rules like "no Python", testing discipline, security/secrets, component ID patterns). This file covers **implementation patterns** within those constraints.
 
-### Documentation-First Approach
+## MCP tools (use these first)
 
-- **At the beginning of any new task**, use Morph MCP (Warp Grep) to find and read relevant documentation before writing code.
-- Search for concepts, patterns, or domain terms related to the task (e.g., "authentication", "migrations", "validation", "entity store").
-- This ensures you follow established patterns and avoid reinventing solutions that already exist in the codebase.
+- **Clojure/EDN edits**: For `.clj`/`.cljs`/`.cljc`/`.edn`, use `clojure-mcp` structural editing tools (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit produces reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text diffs.
+- **REPL evaluation is the main debugger/test runner**: Use `mcp__clojure-mcp__clojure_eval` / `mcp__clojure-mcp__clojurescript_eval` for exploration, debugging, and running focused tests (examples below).
+- **Database operations**: Use `postgres-mcp` tools for queries and schema inspection (e.g. `mcp__postgres__execute_sql`, `mcp__postgres__list_tables`).
+- **Browser interactions**: Use `chrome-mcp` tools for interactive UI testing; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
 
-### Coding & Migrations
+## Big picture / entrypoints
+- **Backend system entry**: `src/app/template/backend/core.clj` (loads `config/base.edn`, `resources/db/models.edn`, starts webserver + DI container).
+- **DI container**: `src/app/template/di/config.clj` (register/get services like `:crud-service`, `:auth-service`).
+- **Top-level routing composition**: `src/app/template/backend/routes.clj` (mounts `/api/v1`, `/admin/api`, and SPA fallbacks).
+- **HTTP routing boundaries**:
+  - Admin API: `src/app/template/backend/routes/admin_api.clj` mounted at `/admin/api` (template JSON middleware + `wrap-admin-authentication`).
+  - User API: `src/app/template/backend/routes/api.clj` mounted at `/api/v1` (includes `/config`, `/metrics`, auth routes).
+  - Domain route registry: `src/app/domain/backend/registry.clj` defines enabled domains and provides `all-admin-api-routes`, `all-user-api-routes`, and SPA routes.
+  - Example domain: Expenses admin routes are mounted under `/admin/api/expenses` (`src/app/domain/backend/expenses/routes/core.clj`).
 
-- Follow the conventions in `.claude/coding.instructions.md` for:
-  - Naming, architecture, and reuse patterns.
-  - Migrations workflow (edit canonical EDN, use REPL helpers, never touch generated migrations).
-  - Common backend/frontend issues and security guidelines.
+## Local dev workflows (use these)
+- User starts the app using `bb run-app`. App is automatically reloaded on file changes so no need to ever start it again.
+- Backend tests: `bb be-test` (Kaocha, uses `:test` profile).
+- Frontend tests: `bb fe-test-parallel` (fast) or `npm run test:cljs`.
+- **Save test output once** (don’t re-run to grep; see `AGENTS.md` “Testing discipline”): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
 
-### Debugging & Testing
+## Config & ports
+- Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.
+- Domain/user UI config EDNs are edited at runtime via `/admin/user-settings` and loaded dynamically (see `src/app/template/backend/routes/api.clj`).
+- Dev helpers: rate limit/session helpers exist under `/admin/api/*` (see `docs/template/backend/security-middleware.md`).
 
-- Prefer evaluation tools over speculation:
-  - **Clojure (backend `.clj`)**: Use the `mcp__clojure-mcp__clojure_eval` MCP tool to run code and verify behavior.
-  - **ClojureScript (frontend `.cljs`)**: Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool.
-- Use the project’s debugging skills when relevant:
-  - Frontend state/auth/UI issues → **app-db-inspect**.
-  - Frontend event flow or performance issues → **reframe-events-analysis**.
-  - Backend errors, build failures, or compile problems → **system-logs**.
-- Be documentation-first when stuck:
-  - Use Morph MCP (Warp Grep) to consult project docs before inventing new patterns.
-- Add or improve logging when debugging:
-  - Prefer small, targeted logs around the failing path over large refactors; keep high-value logs.
-- After backend changes:
-  - Use the `system-logs` skill to restart the system and re-attach to logs; ensure there are no startup/runtime errors.
-- After frontend or shared FE/BE build changes:
-  - Run shadow-cljs compile for the relevant builds (e.g. `app`, `admin`) and fix any breaking errors/warnings.
-- Always confirm fixes
+## Database & migrations
+- Edit canonical schema inputs under `resources/db/{template,shared,domain}`; **never** hand-edit `resources/db/migrations/*`.
+- Preferred REPL helpers live in `src/app/template/backend/migrations/simple_repl.clj` (see `docs/general/migrations/migration-overview.md`).
 
-### Planning & Phased Execution
+## Project-specific conventions (common footguns)
+- Naming boundary: DB is `snake_case`, app/runtime is kebab-case; normalize with `app.shared.model-naming/db-keyword->app` + `ensure-app-keyword`.
+- Generic CRUD: `/api/v1/entities/*` is **deny-by-default allowlisted**; domain entities usually need domain APIs + a CRUD bridge (see `docs/template/backend/generic-entity-crud.md`).
+- Frontend entity specs: `src/app/template/frontend/db/entity_specs.cljs` normalizes entity keys; if list pages show wrong columns, suspect snake↔kebab mismatch.
+- Re-frame interceptors include `re-frame/trim-v` via `app.template.frontend.db.interceptors/common-interceptors`; handlers should destructure like `[params]` (not `[_ params]`).
+- Backend JSON responses: convert PG-specific objects before encoding (see `app.shared.type-conversion` usage in services).
 
-- For any bigger task, start with a concrete multi-phase plan before coding.
-- Implement strictly phase-by-phase and test each phase before moving on:
-  - **Backend**: Use `mcp__clojure-mcp__clojure_eval` for Clojure.
-  - **Frontend**: Use `mcp__clojure-mcp__clojurescript_eval` for ClojureScript.
-- If a phase cannot be fully fixed after testing, record the problem in the Clojure MCP scratch pad (phase, what was attempted, what failed, current hypothesis) and then continue with the next phase.
-- For really big tasks, create a markdown plan file in the repo root (e.g. `PLAN-<short-name>.md`) and use it to track phases and progress; otherwise, use the Clojure MCP scratch pad to store the plan, progress, and open issues.
-
-# Coding & Development Instructions
-
-## Coding Style & Patterns
-- Naming: DB tables/columns use `snake_case`; code uses kebab-case (`:user-settings`). Namespaces dotted (e.g., `app.template.frontend.events`).
-
-- Architecture: protocols-first services; enforce security middleware; keep concerns isolated.
-- Reuse-first: for functionality, use shared logic/utilities (`src/app/shared/**`, `src/app/template/shared/**`) before adding new code to FE or BE.
-- Frontend composition: for UI, start with template components (`src/app/template/frontend/**`); reuse other components defined in current of folders containing current folder; and create new components only if nothing existing fits.
-- UI: use DaisyUI component classes prefixed with `ds-` (e.g., `ds-btn`, `ds-card`) when creating new components or modifying shared components. Tailwind utilities remain unprefixed (`flex`, `text-sm`).
-
-## Migrations Workflow
-
-⚠️ **IMPORTANT: Read the migrations documentation first.** Use Morph MCP (Warp Grep) to search `docs/general/migrations/**` (and related docs) before making any changes. Key docs: `docs/general/migrations/complete-guide.md`, `docs/general/migrations/migration-overview.md`.
-
-**Quick workflow**: Edit canonical EDN under `resources/db/{template,shared}` → run REPL helpers via `src/app/migrations/simple_repl.clj` → never hand-edit `resources/db/migrations/*`.
-
-**Databases**: Dev on `:55432`, test on `:55433`. Use `bb backup-db` / `bb restore-db` before migrations for safety.
-
-## Common Issues & Fixes
-- PostgreSQL JSON serialization: convert PG-specific objects (PGobject, arrays, timestamps) before returning API responses.
-  - Pattern: apply a DB serialization helper (e.g., `convert-pg-objects`) to query results before `response/ok`.
-- Namespaced keys: JOINs often return `:table/col`; normalize to simple keys where callers expect them (e.g., `:id` via `(or (:id x) (:admins/id x))`).
-- Re-frame orchestration: ensure `app.template.frontend.events.core` is loaded so event namespaces register.
-- Entity store sync: after updates, refresh both the feature store and UI read locations to avoid empty tables until refresh.
-- HoneySQL clause keywords: verify correct keyword shapes (`:id` vs `:users/id`) to prevent silent query issues.
-
-## Frontend UI Conventions
-- Effective `:entity-spec`: When a page's table uses customized or computed fields, pass the effective spec to `list-view` via `:entity-spec`. The table forwards it to the column settings so toggles operate on the exact rendered fields.
-- Fallback behavior: If `:entity-spec` is omitted, settings fall back to the template spec; computed/admin-only fields might be missing from toggles.
-- Example:
-  ```clojure
-  ($ list-view
-     {:entity-name :users
-      :entity-spec users-entity-spec
-      :title "Users"})
+## Clojure development patterns
+- REPL-first workflow
+  - Evaluate code in the connected REPL; do not spawn new REPLs.
+  - Only edit files when the REPL is connected; if evaluation errors indicate the REPL is unavailable, pause and reconnect before continuing.
+  - Use `clojure-mcp` structural edits for Clojure/EDN changes (don’t free-type large diffs). If you hit reader/compilation errors after a plain-text edit, immediately switch/redo using `clojure-mcp` to keep forms balanced.
+  - After edits, reload explicitly: `(require 'my.ns :reload)`.
+  - For CLJS, select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
+  - Prefer returning values over printing.
+- Docstrings and function templates
+  - Put docstrings immediately after the function name and before the arg vector.
+  ```clj
+  (defn my-fn
+    "Does X with Y."
+    [x y]
+    ...)
   ```
-- Recommendation: Admin pages should pass the spec produced by the admin spec generator to ensure toggles match admin-visible columns.
+  - Docstring quoting rules (important)
+    - Use straight double quotes for docstrings and escape any interior double quotes with `\"`.
+    - Do not use smart quotes (“ ”) or unescaped `"` inside docstrings; they will break the reader.
+    - Prefer backticks for code identifiers inside docstrings when helpful (e.g., `identity`), but still escape literal double quotes.
+    - Example (correct):
+    ```clj
+    (defn normalize-arglist
+      "Normalize a Postgres function \"argument\" list (e.g. identity args).\n\nThis is intentionally conservative. It helps match the common case where the EDN function definition lists only argument types."
+      [s]
+      ...)
+    ```
+- Indentation and alignment
+  - Align multi-line elements (vectors/maps/lists) vertically; rely on correct indentation for bracket balancing.
+  ```clj
+  (if (and cond-a
+           cond-b)
+    x
+    y)
+  (when ok?
+    (do-something))
+  ```
+- Inline def for debugging
+  - Inline `def` may be used inside fns to keep intermediate state inspectable during REPL work when helpful. Prefer `tap>` for lighter inspection when a global isn’t needed.
+  ```clj
+  (defn process [xs]
+    (def xs xs)
+    (let [g (group-by :k xs)] g))
+  (tap> {:debug/value xs})
+  ```
+- Rich Comment Forms (RCF)
+  - Use `(comment ...)` blocks to document validated usage and edge cases; keep examples copy‑eval ready.
+  ```clj
+  (comment
+    (process [{:k 1} {:k 2}])
+    :rcf)
+  ```
+- Testing from the REPL
+  - Run tests via REPL for focus and speed.
+  ```clj
+  ;; Clojure — run a whole namespace
+  (require 'app.backend.routes.api-test :reload)
+  (clojure.test/run-tests 'app.backend.routes.api-test)
 
-## Security & Configuration
-- Secrets: never commit; keep in `config/.secrets.edn` and environment vars for CI/CD.
-- Security checks (manual):
-  - `curl -I https://localhost:8085/admin` (headers)
-  - `curl -k http://localhost:8085/admin` (HTTPS redirect)
-  - `curl -H "X-Forwarded-For: 192.168.1.100" http://localhost:8085/api/test` (rate limiting)
-- Optional services: see `docker-compose.yml`; document port/env changes.
+  ;; Clojure — run a single var
+  (clojure.test/test-vars [#'app.backend.routes.api-test/metrics-endpoint-test])
+
+  ;; ClojureScript — select build, reload ns, run
+  (shadow.cljs.devtools.api/nrepl-select :app)  ;; or :admin
+  (require 'app.domain.frontend.registry-test :reload)
+  (cljs.test/run-tests 'app.domain.frontend.registry-test)
+  ```
+  - Follow existing file conventions for `deftest` naming (many use `*-test` suffix; some use `test-*` prefix). Keep names descriptive and stay consistent within the namespace; group related checks with `testing`; add `is` messages when useful.
+  - Optional: Kaocha REPL commands are fine, but default `clojure.test`/`cljs.test` patterns above are preferred.
+- Exploration helpers
+  - Dynamic deps via `clojure.repl.deps/add-libs` are for exploration only; never commit them.
+  - Avoid stdin reads in Babashka/nREPL contexts; pass data as args.
+- Reload safety
+  - Keep top-level code idempotent and side-effect-light so repeated `:reload` remains safe.
+
+## Security middleware toggles
+- HTTPS redirect can be disabled with `DISABLE_HTTPS_REDIRECT=true`; rate limiting with `DISABLE_RATE_LIMITING=true` (see `src/app/template/backend/middleware/security.clj`).
