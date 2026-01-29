@@ -4,19 +4,20 @@
 
 ## Overview
 
-The admin panel in this single-tenant app covers user administration, audit logging, login event monitoring, and system health. There is no tenant switching or billing.
+The admin panel in this single-tenant app covers user administration, audit logging, login event monitoring, system health, and domain CRUD pages (e.g., Expenses). There is no tenant switching or billing.
 
 ## Architecture Map (Frontend)
 
 ```
 app.admin.frontend.*
 ├── core.cljs           ; bootstraps admin UI, loads configs
-├── routes.cljs         ; admin routing (dashboard, users, audit, login-events)
+├── routes.cljs         ; admin routing (dashboard, users, audit, login-events, domain pages)
 ├── pages/
 │   ├── dashboard.cljs  ; overview
 │   ├── users.cljs      ; user management + per-user activity modal
 │   ├── audit.cljs      ; audit log table
-│   └── login_events.cljs ; global login events table
+│   ├── login_events.cljs ; global login events table
+│   └── domain/expenses/* ; domain pages (articles, manufacturers, etc.)
 ├── components/         ; layout, tables, stats, monitoring widgets
 │   └── sidebar.cljs    ; main navigation with DaisyUI menu
 └── adapters/
@@ -35,6 +36,7 @@ app.admin.frontend.*
 | System Monitoring | Basic health/status | Admin | `/admin/dashboard` |
 | Admin Settings | Configure admin UI + entity settings | Admin | `/admin/admin-settings` |
 | User UI Config | Configure user-facing defaults/locks | Admin | `/admin/user-settings` |
+| Expenses Domain | Admin CRUD pages for expenses entities | Admin | `/admin/articles`, `/admin/article-aliases`, `/admin/suppliers`, `/admin/supplier-aliases`, `/admin/manufacturers`, `/admin/price-observations`, `/admin/unmapped-aliases` |
 
 ## Activity & Login Monitoring
 
@@ -42,6 +44,12 @@ app.admin.frontend.*
 - **Login Events** (`/admin/login-events`): Global feed of admin and user logins (success/failure, reason, IP, user agent, principal name/email). Filter by principal type and success.
 - **Per-user Activity Modal** (Users → “View Activity”): Combines that user’s audit actions and login history.
 - **Data sources**: `audit_logs` for admin actions; `login_events` for both admin and user logins. IDs/emails/names are normalized for consistent display/export.
+
+## List + Modal Editing (Domain Pages)
+
+Domain pages use `list-view` with optional modal editing:
+- Set `:form-display :modal` to show edit forms in a modal without leaving the table.
+- Default modal edit auto-closes on success; custom forms can still call the provided `:on-success` callback.
 
 ## Security Context
 
@@ -54,7 +62,7 @@ Admin operations require the admin role:
       (if (= "admin" (:role current-user))
         {:dispatch [event]}
         {:dispatch [:auth/require-login
-                    {:message "Administrator access required"}]})))))
+                    {:message "Administrator access required"}]}))))
 ```
 
 ## Dashboard Overview

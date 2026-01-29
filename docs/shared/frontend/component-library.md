@@ -4,7 +4,7 @@
 
 ## Overview
 
-Single-tenant admin UI built with UIx, Tailwind, and DaisyUI (`ds-` prefixed classes). **These components implement the DRY principle** by providing reusable, configuration-driven UI for users, audit logs, and login events.
+Single-tenant admin UI built with UIx, Tailwind, and DaisyUI (`ds-` prefixed classes). **These components implement the DRY principle** by providing reusable, configuration-driven UI for users, audit logs, login events, and domain pages (e.g., Expenses).
 
 > [!NOTE]
 > **Code Reuse Strategy**: Before creating a new component, check if existing components can be configured to meet your needs. The `list-view`, `dynamic-form`, and modal components are designed to handle most admin use cases through props and entity specs.
@@ -13,6 +13,7 @@ The same `list-view` component powers:
 - User management (`/admin/users`)
 - Audit logs (`/admin/audit`)  
 - Login events (`/admin/login-events`)
+- Expenses domain pages (e.g., `/admin/articles`, `/admin/manufacturers`)
 
 Each page provides different `:entity-spec` and `:render-actions` configurations—no duplicate list code.
 
@@ -74,7 +75,7 @@ Dynamic forms for creating/editing users.
    {:id :email :type :email :label "Email" :required true}
    {:id :role  :type :select :label "Role"
     :options [{:value "owner" :label "Owner"}
-              {:value "admin" :label "Admin"}]}])
+              {:value "admin" :label "Admin"}]})]
 
 ($ dynamic-form {:form-spec user-form-spec
                  :values form-values
@@ -102,7 +103,7 @@ Guide: `./master-detail-form.md`
 
 ### List (`app.template.frontend.components.list`)
 
-Backed by template list adapters; used for audit logs and login events.
+Backed by template list adapters; used for audit logs, login events, and domain pages.
 
 ```clojure
 ($ list-view {:entity-name :audit
@@ -113,6 +114,14 @@ Backed by template list adapters; used for audit logs and login events.
 ```
 
 Features: dynamic columns, filtering, pagination, sorting, selection, batch actions. Use `:entity-spec` that matches rendered fields (e.g., `:principal_email`, `:action`).
+
+#### Modal Editing (new defaults)
+
+`list-view` supports modal-based forms so the table remains visible while editing:
+
+- Set `:form-display :modal` to enable modal forms.
+- Provide `:render-add-form` / `:render-edit-form` for custom forms, or rely on defaults.
+- Default modal edit auto-closes on success; provide `:on-edit-success` if you need to refresh additional state.
 
 ### Row Actions (Admin Lists)
 

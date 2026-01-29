@@ -39,7 +39,10 @@ bb run-app
 - Manual restart: `(system.core/restart-system)` from the REPL.
 
 ## Optional Workers
-- Receipt OCR (process receipts uploaded via `/expenses/upload`): `MISTRAL_API_KEY=... bb receipt-ocr-worker dev --loop`
+- Receipt OCR processing no longer ships with a dedicated shell worker script in this template. Use the admin or user OCR endpoints instead:
+  - Admin: `POST /admin/api/expenses/receipts/ocr` (batch) or `POST /admin/api/expenses/receipts/:id/ocr` (single)
+  - User:  `POST /api/v1/expenses/receipts/ocr` (batch) or `POST /api/v1/expenses/receipts/:id/ocr` (single)
+  - Set `MISTRAL_API_KEY` to enable OCR processing.
 
 ## Troubleshooting
 - **FileNotFoundException in REPL**: If you get this when requiring `.cljs` files, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:

@@ -26,7 +26,15 @@
                      :admin-login-events
                      :admin-admins
                      :admin-admin-settings
-                     :admin-user-settings}]
+                     :admin-user-settings
+                     ;; Domain pages (Expenses)
+                     :admin-articles
+                     :admin-article-aliases
+                     :admin-suppliers
+                     :admin-supplier-aliases
+                     :admin-manufacturers
+                     :admin-price-observations
+                     :admin-unmapped-aliases}]
       (is (set/subset? expected names)))))
 
 (deftest guarded-start-wraps-dispatch

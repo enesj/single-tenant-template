@@ -20,6 +20,14 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `PUT /admin/api/expenses/suppliers/:id` – update.
 - `DELETE /admin/api/expenses/suppliers/:id` – delete supplier (hard delete; returns `409` if referenced by expenses).
 
+### Manufacturers (new 2026-01-28)
+- `GET /admin/api/expenses/manufacturers` – list (search, pagination, order-by).
+- `POST /admin/api/expenses/manufacturers` – create; requires `display_name`.
+- `GET /admin/api/expenses/manufacturers/count` – total (optional `search`).
+- `GET /admin/api/expenses/manufacturers/:id` – fetch.
+- `PUT /admin/api/expenses/manufacturers/:id` – update.
+- `DELETE /admin/api/expenses/manufacturers/:id` – delete manufacturer (hard delete).
+
 ### Payers
 - `GET /admin/api/expenses/payers` – list (optional `type`).
 - `POST /admin/api/expenses/payers` – create; requires `type`, `label`.
@@ -75,6 +83,8 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /admin/api/expenses/articles/:id/latest-prices` – latest price per supplier.
 - `GET /admin/api/expenses/articles/:id/compare` – price observations for comparisons (optional `from`, `limit`).
 
+> Note (2026-01-28): Article records no longer contain a legacy `manufacturer` field. Manufacturers are managed as a dedicated entity (see “Manufacturers”).
+
 ### Article Aliases
 - `GET /admin/api/expenses/article-aliases` – list aliases with optional filters.
 - `POST /admin/api/expenses/article-aliases` – create new alias.
@@ -119,6 +129,12 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /api/v1/expenses/suppliers/:id` – fetch supplier.
 - `PUT /api/v1/expenses/suppliers/:id` – update supplier (role-gated to `member|admin`).
 - `DELETE /api/v1/expenses/suppliers/:id` – delete supplier (hard delete; may return `409` when expenses exist).
+
+**Manufacturers (admin/owner only; new 2026-01-28)**
+- `GET /api/v1/expenses/manufacturers` – list manufacturers (optional `search`, pagination).
+- `POST /api/v1/expenses/manufacturers` – create manufacturer (`display_name`).
+- `PUT /api/v1/expenses/manufacturers/:id` – update manufacturer.
+- `DELETE /api/v1/expenses/manufacturers/:id` – delete manufacturer.
 
 **Supplier detail lists (used by supplier detail UI)**
 - `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier).

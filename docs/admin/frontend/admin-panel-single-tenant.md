@@ -16,6 +16,14 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/login-events` → global login events (guarded)
   - `/admin/admin-settings` → admin UI configuration (view options, form fields, table columns)
   - `/admin/user-settings` → domain-owned user UI config (user-facing defaults/locks; currently Expenses)
+  - Domain pages (Expenses):
+    - `/admin/articles`
+    - `/admin/article-aliases`
+    - `/admin/suppliers`
+    - `/admin/supplier-aliases`
+    - `/admin/manufacturers` (new 2026-01-29)
+    - `/admin/price-observations`
+    - `/admin/unmapped-aliases`
 - **Guard**: `guarded-start` dispatches controller events only after admin auth is confirmed. Unauthed users are redirected to `/admin/login`.
 
 ## Data Flow (Users + Activity)
@@ -25,6 +33,13 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 3) `generic-admin-entity-page` renders list/form using the synced entity-spec.  
 4) Per-user activity modal triggers audit + login history fetch for that user; results populate modal tables and stats.  
 5) Saves/updates dispatch refresh events to keep the list and activity modal in sync.
+
+## Domain Pages (Expenses)
+
+All Expenses domain admin pages use the shared `list-view` component, entity specs, and the admin API under `/admin/api/expenses/*`. Typical features include dynamic columns, filters, pagination, selection, and inline/export actions.
+
+- Articles, Article Aliases, Suppliers, Supplier Aliases, Manufacturers (new 2026-01-29), Price Observations, Unmapped Aliases.
+- Default edit flows may use modal forms; see Component Library for `:form-display :modal` and auto-close on success.
 
 ## Monitoring Pages
 
@@ -40,9 +55,16 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 - Data sources:
   - Admin scope:
     - system config: `src/app/admin/frontend/config/{view-options,form-fields,table-columns,entities}.edn`
-    - optional domain-admin overlay: `src/app/domain/**/admin/config/*.edn` (none currently; Expenses admin pages removed)
-  - User UI config: `src/app/domain/**/config/*.edn` (currently `src/app/domain/frontend/expenses/config/*`)
+    - optional domain-admin overlay: `src/app/domain/**/admin/config/*.edn`
+  - User UI config: `src/app/domain/**/config/*.edn` (e.g., `src/app/domain/frontend/expenses/config/*`)
 - Use it to set defaults/locks per-entity; locked display toggles are hidden in list-view controls while remaining effective.
+
+## Session Isolation
+
+Admin and user sessions are isolated:
+- User logout only clears the user `:auth-session` and leaves any `:admin-token` intact (so admin work continues).
+- Admin logout removes only `:admin-token` and preserves any user `:auth-session`.
+- Impersonation creates a user `:auth-session` while retaining the admin token.
 
 ## Extension Points
 
