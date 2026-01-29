@@ -2,7 +2,7 @@
   "Bulk user ops; keep batch validation and side effects centralized."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
-    [app.admin.backend.services.admin.auth :as auth]
+    [app.shared.data :as shared-data]
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
     [app.template.backend.utils.adapters.persistence :as persist]
@@ -11,9 +11,7 @@
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
-    [taoensso.timbre :as log])
-  (:import
-    [java.util UUID]))
+    [taoensso.timbre :as log]))
 
 ;; ============================================================================
 ;; Bulk User Operations
@@ -158,6 +156,25 @@
 ;; User Impersonation
 ;; ============================================================================
 
+(defn- user-row->safe-session-user
+  "Convert a DB user row into the shape we store in `:session/:auth-session`.
+
+  Notes:
+  - We *must* use unqualified keys (e.g. :id, :email) because downstream
+    middleware/access helpers look up `[:session :auth-session :user :id]`.
+  - Never include secrets/sensitive values (e.g. password hashes) in the
+    session cookie.
+  - Session data is cookie-backed in this template, so keep it small."
+  [user-row]
+  (let [m (shared-db/convert-pg-objects user-row)
+        ;; Drop any table namespaces (e.g. :users/id -> :id)
+        plain (into {} (map (fn [[k v]] [(keyword (name k)) v])) m)]
+    (-> plain
+      ;; Strip sensitive fields (support a few naming variants defensively)
+      (dissoc :password_hash :password-hash)
+      ;; Ensure cookie-safe serialization
+      shared-data/sanitize-for-serialization)))
+
 (defn create-user-impersonation-session!
   "Create an impersonation session for admin to access user account"
   [db user-id admin-id ip-address user-agent]
@@ -173,58 +190,38 @@
                     (hsql/format {:select [:*]
                                   :from [:admins]
                                   :where [:= :id admin-id]}))
-            normalized-user (when user
-                              (-> user
-                                shared-db/convert-pg-objects
-                                (norm/normalize-admin-result
-                                  {:prefixes ["users-" "user-"]
-                                   :namespaces #{"users"}
-                                   :id-fields #{}})))
-            tenant-id (or (:tenant-id normalized-user)
-                          ;; Fallbacks for unexpected shapes (pre-normalization)
-                        (:tenant_id user)
-                        (:tenant-id user)
-                        (:users/tenant_id user)
-                        (:users/tenant-id user))]
+            now (time/instant)]
 
-        (if (and user admin tenant-id)
-          (let [;; Create impersonation session
-                session-token (auth/generate-session-token)
-                session-id (UUID/randomUUID)
-                now (time/instant)
-                expires-at (time/plus now (time/hours 2)) ;; Shorter session for impersonation
-
-                ;; Store impersonation session
-                _ (jdbc/execute-one! tx
-                    (hsql/format {:insert-into :user_sessions
-                                  :values [{:id session-id
-                                            :tenant_id tenant-id
-                                            :user_id user-id
-                                            :token session-token
-                                            :ip_address (when ip-address [:cast ip-address :inet])
-                                            :user_agent user-agent
-                                            :impersonated_by admin-id
-                                            :expires_at expires-at
-                                            :created_at now}]}))]
+        (if (and user admin)
+          (let [session-user (user-row->safe-session-user user)
+                auth-session {:user session-user
+                              :provider "impersonation"
+                              ;; Useful for debugging and auditing UI behavior.
+                              :impersonated-by (str admin-id)
+                              :impersonated-at (str now)}]
 
             ;; Log the impersonation
             (audit/log-audit! tx {:admin_id admin-id
                                   :action "user.impersonated"
                                   :entity-type "user"
                                   :entity-id user-id
-                                  :changes {:impersonation_session session-id}
+                                  :changes {:impersonation true}
                                   :ip-address ip-address
                                   :user-agent user-agent})
 
             {:success true
-             :session_token session-token
-             :user user
-             :redirect_url "/app/dashboard"})
+             ;; Returned so the route handler can set the Ring session.
+             :auth-session auth-session
+             :redirect-url "/dashboard"})
+
           (do
-            (when (and user (nil? tenant-id))
-              (log/error "Impersonation failed: resolved tenant_id is nil for user"
-                {:user-id user-id :admin-id admin-id :user user}))
-            {:error "User or admin not found, user not active, or missing tenant context"}))))
+            (when (nil? user)
+              (log/warn "Impersonation failed: user not found or not active"
+                {:user-id user-id :admin-id admin-id}))
+            (when (nil? admin)
+              (log/warn "Impersonation failed: admin not found"
+                {:user-id user-id :admin-id admin-id}))
+            {:error "User or admin not found, or user not active"}))))
     (catch Exception e
       (log/error e "Failed to create impersonation session" {:user_id user-id :admin_id admin-id})
       {:error (.getMessage e)})))

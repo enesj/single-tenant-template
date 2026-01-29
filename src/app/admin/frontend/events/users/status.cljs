@@ -46,7 +46,7 @@
     (let [role-value (if (keyword? new-role) (name new-role) (str new-role))]
       {:db (utils/create-loading-db-state db :admin/updating-user)
        :http-xhrio (utils/create-user-http-request
-                     :put (str "/admin/api/user-management/role/" user-id)
+                     :put (str "/admin/api/users/role/" user-id)
                      :params {:role role-value}
                      :on-success [:admin/update-user-role-success user-id role-value]
                      :on-failure [:admin/update-user-role-failure])})))

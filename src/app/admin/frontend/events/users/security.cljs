@@ -14,7 +14,7 @@
     (utils/log-user-operation "Impersonating user" user-id)
     {:db (utils/create-loading-db-state db :admin/impersonating-user)
      :http-xhrio (utils/create-user-http-request
-                   :post (str "/admin/api/user-management/impersonate/" user-id)
+                   :post (str "/admin/api/users/impersonate/" user-id)
                    :on-success [:admin/impersonate-user-success]
                    :on-failure [:admin/impersonate-user-failure])}))
 
@@ -22,7 +22,7 @@
   :admin/impersonate-user-success
   (fn [{:keys [db]} [_ response]]
     (utils/log-user-operation "User impersonation successful, redirecting...")
-    (set! (.-location js/window) (:redirect-url response "/app/dashboard"))
+    (set! (.-location js/window) (or (:redirect-url response) "/dashboard"))
     {:db (utils/clear-loading-db-state db :admin/impersonating-user)}))
 
 (rf/reg-event-db
@@ -40,7 +40,7 @@
     (utils/log-user-operation "Resetting password for user" user-id)
     {:db (utils/create-loading-db-state db :admin/updating-user)
      :http-xhrio (utils/create-user-http-request
-                   :post (str "/admin/api/user-management/reset-password/" user-id)
+                   :post (str "/admin/api/users/reset-password/" user-id)
                    :on-success [:admin/reset-user-password-success user-id]
                    :on-failure [:admin/reset-user-password-failure])}))
 
@@ -67,7 +67,7 @@
     (utils/log-user-operation "Force verifying email for user" user-id)
     {:db (utils/create-loading-db-state db :admin/updating-user)
      :http-xhrio (utils/create-user-http-request
-                   :post (str "/admin/api/user-management/verify-email/" user-id)
+                   :post (str "/admin/api/users/verify-email/" user-id)
                    :on-success [:admin/force-verify-email-success user-id]
                    :on-failure [:admin/force-verify-email-failure])}))
 

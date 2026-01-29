@@ -105,7 +105,11 @@
               "user" user-id {})
 
             (if (:success result)
-              (utils/json-response result)
+              (let [existing-session (or (:session request) {})
+                    ;; IMPORTANT: merge with existing session to avoid wiping :admin-token.
+                    new-session (assoc existing-session :auth-session (:auth-session result))]
+                (-> (utils/json-response (dissoc result :auth-session))
+                  (assoc :session new-session)))
               (utils/json-response result :status 400)))
           (utils/error-response "Invalid user ID" :status 400))))
     "Failed to impersonate user"))
