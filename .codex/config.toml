@@ -2,6 +2,6 @@
 # Multi-tenant property hosting SaaS - Clojure/ClojureScript integration
 
 # Model configuration (project-specific)
-model = "gpt-5"
+model = "gpt-5.2"
 model_reasoning_effort = "high"
 

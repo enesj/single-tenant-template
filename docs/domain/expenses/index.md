@@ -4,7 +4,7 @@
 
 ## Overview
 
-The expenses domain provides comprehensive financial management functionality for tracking expenses, receipts, suppliers, manufacturers, and price monitoring. It includes user-facing pages plus admin API endpoints for operational tooling and reporting.
+The expenses domain provides comprehensive financial management functionality for tracking expenses, receipts, suppliers, and price monitoring. It includes user-facing pages plus admin API endpoints for operational tooling and reporting.
 
 ## Domain Architecture
 
@@ -21,17 +21,19 @@ The expenses domain consists of several interconnected entities:
 6. **Articles** (`articles`) - Product/item catalog with pricing
 7. **Article Aliases** (`article_aliases`) - Alternative names for articles
 8. **Price Observations** (`price_observations`) - Historical price tracking
-9. **Manufacturers** (`manufacturers`) – Product brand/manufacturer catalog (new 2026-01-28)
 
 ### Entity Relationships
 
 ```
-Manufacturers ──┐              
-               ├──► Articles ───► Price Observations
-Suppliers ────┐ │               │
-             ├─┴──► Expenses ──► Receipts
-Payers ───────┘                  │
-                                 └──► Expense Items (expense_items)
+Suppliers ────┐
+             ├──► Expenses ──► Receipts
+Payers ───────┘                │
+                               │
+Articles ───► Article Aliases   │
+    │                         │
+    └──► Price Observations ──┘
+    │
+    └──► Expense Items (expense_items)
 ```
 
 ## Frontend Implementation
@@ -57,7 +59,6 @@ The expenses domain contributes the following user-facing routes under `/` (see 
 - `/expense-items` - Expense items (admin/owner only)
 - `/articles` - Articles (admin/owner only)
 - `/article-aliases` - Article aliases (admin/owner only)
-- `/manufacturers` - Manufacturers (admin/owner only; new 2026-01-28)
 - `/price-observations` - Price observations (admin/owner only)
 - `/expenses/:expense-id` - Expense detail
 
@@ -79,7 +80,7 @@ Each entity supports configurable list view controls:
 
 #### Form Configuration
 
-Domain-owned UI config for user pages lives in `src/app/domain/frontend/expenses/config/` (editable via `/admin/user-settings`). Admin pages for the expenses domain are now part of the admin panel (see below) and use the same `list-view` foundation with entity specs.
+The Expenses domain is not currently exposed in the admin panel UI. User-facing forms (the `/expenses/...` pages) use the domain-owned UI config under `src/app/domain/frontend/expenses/config/` (editable via `/admin/user-settings`).
 
 The form fields configuration lives in `form-fields.edn` and defines:
 - Create field lists
@@ -122,7 +123,6 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 - `/receipts/:receipt-id` - Receipt detail / approve flow
 - `/suppliers` - Suppliers reference data
 - `/payers` - Payers reference data
-- `/manufacturers` - Manufacturers (admin/owner only)
 - `/expenses/:expense-id` - Expense detail
 - `/expenses/reports` - Personal spending reports
 - `/expenses/settings` - User expense settings (defaults such as currency/payer, notifications)
@@ -134,7 +134,7 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 3. **Quick Entry**: Simplified form for rapid expense recording (`expense_new.cljs`)
 4. **Receipt Upload**: Multipart upload that creates a receipt for OCR processing (`expense_upload.cljs`)
 5. **Receipts Inbox**: Review receipts and approve into expenses (`receipts_list.cljs`, `receipt_detail.cljs`)
-6. **Reference Data**: Browse/manage suppliers, manufacturers and payers (`suppliers.cljs`, `manufacturers.cljs`, `payers.cljs`)
+6. **Reference Data**: Browse/manage suppliers and payers (`suppliers.cljs`, `payers.cljs`)
 7. **Reports**: Visual breakdown of expenses by category and supplier (`expense_reports.cljs`)
 8. **User Settings**: Persisted per-user settings (`expense_settings.cljs`) backed by `/api/v1/expenses/settings`
 
@@ -155,7 +155,7 @@ User-facing expenses endpoints and pages are role-gated:
 ### API Endpoints
 
 Admin expense domain APIs are mounted under `/admin/api/expenses`.
-User-facing APIs are mounted under `/api/v1/expenses` (upload, receipts inbox, suppliers/manufacturers/payers reference data, expenses CRUD).
+User-facing APIs are mounted under `/api/v1/expenses` (upload, receipts inbox, suppliers/payers reference data, expenses CRUD).
 
 See `./http-api.md` for the detailed endpoint map.
 
@@ -170,11 +170,6 @@ Notes:
 - Supplier names are deduped via `suppliers.normalized_key` (derived from `display_name`; diacritics folded, punctuation stripped; legal suffix tokens like `d.o.o.` are treated as “end of canonical name”).
 - Receipt OCR uses Places-assisted resolution (`resolve-or-create-supplier-with-places!`) so OCR variations like `HOŠE-KOMERC d.o.o. Sarajevo` vs `Hoše komerc` don’t create duplicate suppliers.
 - Supplier deletion is a **hard delete**, blocked by FK `RESTRICT` when expenses exist (no archive/purge flow for suppliers at the moment).
-
-**Manufacturers (new 2026-01-28)**
-- Dedicated catalog for product brands/manufacturers
-- Admin and user APIs provide CRUD
-- Articles reference manufacturers via API workflows (article schema no longer includes a legacy manufacturer column)
 
 **Payers**
 - Type-based categorization

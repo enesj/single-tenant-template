@@ -32,7 +32,7 @@
    :expenses/manufacturers.manage 3
    :expenses/supplier-aliases.manage 3
    :expenses/danger.execute 3
-   :expenses/settings.write 3
+   :expenses/settings.write 2
    :expenses/upload 2
    :expenses/reports.export 1
    :expenses/receipts.approve 2})

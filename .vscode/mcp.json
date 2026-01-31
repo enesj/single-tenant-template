@@ -39,14 +39,6 @@
         "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
       }
     },
-    "RapidAPI Hub - JSpell Checker": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; cd \"$repo_root\" || exit 1; set -a; [ -f \"$repo_root/.env\" ] && . \"$repo_root/.env\"; set +a; key=\"$JSPELL_RAPIDAPI_KEY\"; if [ -z \"$key\" ]; then key=\"$RAPIDAPI_KEY\"; fi; if [ -z \"$key\" ]; then echo \"RapidAPI Hub - JSpell Checker: missing JSPELL_RAPIDAPI_KEY (preferred) or RAPIDAPI_KEY. Add it to $repo_root/.env or export it in your environment.\" 1>&2; exit 1; fi; exec npx mcp-remote https://mcp.rapidapi.com --header \"x-api-host: jspell-checker.p.rapidapi.com\" --header \"x-api-key: $key\""
-      ]
-    },
     "lattice": {
       "type": "stdio",
       "command": "/bin/sh",

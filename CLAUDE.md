@@ -72,7 +72,7 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 Use these to tail combined backend and frontend dev output:
 
 ```bash
-./scripts/sh/monitoring/read_output.sh -f
+./scripts/sh/monitoring/read_output.sh
 ./sc
 ```
 
