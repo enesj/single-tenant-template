@@ -41,3 +41,23 @@
         "Required fields should remain required after normalization")
       (is (true? (:required (get by-id :label)))
         "Required fields should remain required after normalization"))))
+
+(deftest form-entity-specs-normalize-snake-case-field-ids
+  (testing "Snake_case field ids in form-fields config are normalized to kebab-case app keywords"
+    (reset-db!
+      {:admin {:config {:form-fields
+                        {:articles {:edit-fields ["manufacturer_id" "canonical_name" "normalized_key"]
+                                    :field-config {"manufacturer_id" {"type" "select"
+                                                                      "options" ["manufacturers" "display_name"]}
+                                                   "canonical_name" {"type" "text"}
+                                                   "normalized_key" {"type" "text"}}}}}}})
+
+    (let [spec @(rf/subscribe [:form-entity-specs/by-name :articles true])
+          ids (set (map :id spec))
+          by-id (into {} (map (juxt :id identity)) spec)]
+      (is (contains? ids :manufacturer-id))
+      (is (contains? ids :canonical-name))
+      (is (contains? ids :normalized-key))
+      (is (= [:manufacturers :display-name]
+            (:options (get by-id :manufacturer-id)))
+        "Foreign-key options should be normalized to kebab-case keywords"))))

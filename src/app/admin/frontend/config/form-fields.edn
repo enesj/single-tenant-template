@@ -1,21 +1,14 @@
-{;; =============================================================================
- ;; Admin/Template Core Form Field Configurations
- ;; =============================================================================
- ;; Runtime-editable form field settings for template/admin entities.
- ;; Domain-specific form fields are in their respective domain config files.
-
- :users
- {:create-fields
-  ["email" "status" "full-name"],
-  :edit-fields ["email" "full-name" "role" "status"],
-  :required-fields ["email"],
+{:expense-items
+ {:edit-fields ["article_id" "qty" "unit_price" "line_total"],
   :field-config
-  {:email {:type "email", :validation "email"},
-   :full-name {:type "text", :max-length 255, :placeholder "Full Name"},
-   :role {:type "select", :options ["admin" "member" "viewer" "unassigned"]},
-   :status
-   {:type "select", :options ["active" "inactive" "suspended"]}}}
-
+  {:article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]},
+   :qty {:type "number", :step 0.001},
+   :unit_price {:type "number", :step 0.01},
+   :line_total {:type "number", :step 0.01}},
+  :removed-fields {:edit-fields ["raw_label"]}},
  :admins
  {:create-fields [:email :full-name :role :status],
   :edit-fields [:email :full-name :role :status],
@@ -29,4 +22,102 @@
    :role
    {:type :select, :options [:admin :support :owner], :default :admin},
    :status
-   {:type :select, :options [:active :suspended], :default :active}}}}
+   {:type :select, :options [:active :suspended], :default :active}}},
+ :articles
+ {:edit-fields
+  ["manufacturer_id"
+   "canonical_name"
+   "category"
+   "link"
+   "normalized_key"
+   "manufacturer_display_name"],
+  :field-config
+  {:manufacturer_id
+   {:type "select",
+    :label "Manufacturer",
+    :options ["manufacturers" "display_name"]}}},
+ :expenses
+ {:create-fields
+  ["purchased_at"
+   "supplier_id"
+   "payer_id"
+   "currency"
+   "total_amount"
+   "notes"
+   "is_posted"],
+  :edit-fields
+  ["purchased_at"
+   "supplier_id"
+   "payer_id"
+   "currency"
+   "total_amount"
+   "notes"
+   "is_posted"],
+  :field-config
+  {:purchased_at {:type "datetime-local"},
+   :supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]},
+   :payer_id
+   {:type "select", :label "Payer", :options ["payers" "label"]},
+   :currency
+   {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]},
+   :total_amount {:type "number", :step 0.01},
+   :notes {:type "textarea"},
+   :is_posted {:type "checkbox"}}},
+ :manufacturers
+ {:create-fields ["display_name"],
+  :edit-fields ["display_name"],
+  :field-config {:display_name {:type "text", :label "Display name"}}},
+ :price-observations
+ {:edit-fields
+  ["observed_at" "article_id" "supplier_id" "unit_price" "currency"],
+  :field-config
+  {:observed_at {:type "datetime-local"},
+   :article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]},
+   :supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]},
+   :unit_price {:type "number", :step 0.01},
+   :currency
+   {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}},
+ :supplier-aliases
+ {:edit-fields ["raw_label" "raw_label_normalized" "supplier_id"],
+  :field-config
+  {:supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]}}},
+ :article-aliases
+ {:edit-fields
+  ["raw_label"
+   "raw_label_normalized"
+   "supplier_id"
+   "article_id"
+   "confidence"],
+  :field-config
+  {:supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]},
+   :article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]}}},
+ :users
+ {:create-fields ["email" "status" "full-name"],
+  :edit-fields ["email" "full-name" "role" "status"],
+  :required-fields ["email"],
+  :field-config
+  {:email {:type "email", :validation "email"},
+   :full-name
+   {:type "text", :max-length 255, :placeholder "Full Name"},
+   :role
+   {:type "select", :options ["admin" "member" "viewer" "unassigned"]},
+   :status
+   {:type "select", :options ["active" "inactive" "suspended"]}}}}

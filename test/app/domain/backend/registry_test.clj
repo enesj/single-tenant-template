@@ -93,12 +93,22 @@
         (is (nil? (domain-registry/primary-user-ui-config-paths)))))))
 
 (deftest get-admin-ui-config-paths-test
-  (testing "get-admin-ui-config-paths returns a vector (may be empty)"
+  (testing "returns vector of path maps for enabled domains"
     (let [paths (domain-registry/get-admin-ui-config-paths)]
-      (is (vector? paths))))
+      (is (vector? paths))
+      (is (seq paths))
+      (is (every? map? paths))))
 
-  (testing "expenses domain currently does not provide admin UI config paths"
-    (is (empty? (domain-registry/get-admin-ui-config-paths)))))
+  (testing "falls back to user UI config paths when admin paths are absent"
+    (let [expenses-paths (first (domain-registry/get-admin-ui-config-paths))]
+      (is (contains? expenses-paths :view-options))
+      (is (contains? expenses-paths :form-fields))
+      (is (contains? expenses-paths :table-columns))))
+
+  (testing "returns empty vector when no domains are enabled"
+    (clojure.core/with-redefs-fn {#'domain-registry/enabled-domains []}
+      (fn []
+        (is (= [] (domain-registry/get-admin-ui-config-paths)))))))
 
 (deftest get-post-login-path-test
   (testing "get-post-login-path returns valid path"

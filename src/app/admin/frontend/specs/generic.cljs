@@ -253,16 +253,16 @@
       options)))
 
 (defn- ->kw
-  "Coerce a field identifier into a keyword.
+  "Coerce an identifier into the canonical app keyword.
 
   Admin UI config is transported over JSON, so collections like
-  :create-fields / :edit-fields often arrive as strings."
+  :create-fields / :edit-fields often arrive as strings.
+
+  This function also normalizes snake_case identifiers into kebab-case
+  (e.g. \"manufacturer_id\" -> :manufacturer-id) so form specs match
+  the normalized entity keys used across the app."
   [x]
-  (cond
-    (keyword? x) x
-    (string? x) (keyword x)
-    (symbol? x) (keyword (name x))
-    :else x))
+  (model-naming/ensure-app-keyword x))
 
 (defn- normalize-field-type
   "Normalize a form-fields.edn :type value that may arrive as a string from JSON."
@@ -378,15 +378,18 @@
           ;; JSON arrays preserve values as strings, so we normalize identifiers here.
           fields-to-show (mapv ->kw (if editing? edit-fields create-fields))
           required-set (set (map ->kw required-fields))
-          field-config (or field-config {})]
+          ;; Normalize field-config keys to canonical app keywords so lookups are stable
+          ;; across EDN (keyword keys) and JSON (string keys).
+          field-config (let [fc (or field-config {})]
+                         (if (map? fc)
+                           (into {}
+                             (map (fn [[k v]] [(->kw k) v]))
+                             fc)
+                           {}))]
       (when (seq fields-to-show)
         (mapv (fn [field-key]
                 (let [field-key (->kw field-key)
-                      ;; field-config keys may be keywords (EDN) or strings (JSON).
-                      config (or (get field-config field-key)
-                               (get field-config (name field-key))
-                               (get field-config (str/replace (name field-key) "-" "_"))
-                               {})
+                      config (or (get field-config field-key) {})
                       spec (build-field-spec-from-config entity-keyword field-key config editing?)]
                   (if (contains? required-set field-key)
                     (assoc spec :required true)

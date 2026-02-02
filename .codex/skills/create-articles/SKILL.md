@@ -10,9 +10,6 @@ tags:
   - receipts
   - ocr
   - mapping
-allowed-tools:
-  - "postgres:execute_sql"
-  - "postgres:list_tables"
 ---
 
 # create-articles

@@ -1,9 +1,6 @@
 ---
 description: "Map article aliases from receipt OCR to canonical products via web search and database entry"
 tags: ["articles", "article-aliases", "web-search", "database", "products", "receipts", "ocr", "mapping"]
-allowed-tools:
-  - postgres:execute_sql
-  - postgres:list_tables
 ---
 
 # create-articles

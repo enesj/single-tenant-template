@@ -8,7 +8,7 @@
  {:column-locks {},
   :display-locks
   {:show-select? true, :show-pagination? true, :show-filtering? true},
-  :column-defaults {:id true},
+  :column-defaults {:id false},
   :display-defaults {:show-edit? false}},
  :articles
  {:display-defaults
@@ -16,6 +16,22 @@
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
+ :payer-types
+ {:display-locks {},
+  :display-defaults {:per-page 50, :show-edit? false},
+  :column-defaults {},
+  :column-locks {}},
+ :expenses
+ {:display-defaults
+  {:show-add-button? false,
+   :show-highlights? true,
+   :show-timestamps? true,
+   :show-pagination? true,
+   :per-page 25},
+  :display-locks {:show-batch-delete? true, :show-batch-edit? true},
+  :column-locks
+  {:receipt_id false, :is_posted false, :created_at true},
+  :column-defaults {:purchased_at false}},
  :manufacturers
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 25},
@@ -33,6 +49,11 @@
   :display-locks {:show-add-button? false},
   :column-defaults {},
   :column-locks {}},
+ :payers
+ {:display-locks {},
+  :display-defaults {:per-page 50, :show-edit? false},
+  :column-defaults {},
+  :column-locks {}},
  :supplier-aliases
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 25},
@@ -46,6 +67,16 @@
    :show-add-button? false,
    :show-batch-edit? false},
   :display-defaults {:show-batch-delete? true, :per-page 50}},
+ :receipts
+ {:display-defaults
+  {:show-select? true,
+   :show-pagination? true,
+   :show-add-button? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-timestamps? true,
+   :per-page 50},
+  :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
  :login-events
  {:display-locks
   {:show-add-button? false,

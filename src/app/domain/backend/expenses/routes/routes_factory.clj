@@ -11,7 +11,9 @@
     [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.walk :as walk]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import
+    [java.util UUID]))
 
 ;; =============================================================================
 ;; Data Transformation Utilities
@@ -137,17 +139,44 @@
     (or data {})))
 
 (defn- to-db-deep
-  "Recursively convert app keyword keys to DB (snake_case) keyword keys."
+  "Recursively convert app keyword keys to DB (snake_case) keyword keys.
+
+  Also performs lightweight boundary coercions so DB writes use correct types.
+  In particular, UUID foreign keys often arrive from the frontend as strings
+  (e.g. select inputs). When the DB column is UUID, passing a string causes a
+  PostgreSQL type error.
+
+  Coercion rules:
+  - For keys named \"id\" or ending with \"_id\", if the value is a string:
+    - blank string => nil
+    - UUID string => java.util.UUID
+    - otherwise => leave as-is
+
+  This is best-effort and intentionally conservative: it only changes values
+  when it can confidently coerce them."
   [data]
   (walk/postwalk
     (fn [v]
       (if (map? v)
         (into (empty v)
           (map (fn [[k vv]]
-                 [(if (keyword? k)
-                    (model-naming/app-keyword->db k)
-                    k)
-                  vv]))
+                 (let [k* (if (keyword? k)
+                            (model-naming/app-keyword->db k)
+                            k)
+                       k-name (when (keyword? k*) (name k*))
+                       vv* (if (and k-name
+                                 (or (= k-name "id")
+                                   (str/ends-with? k-name "_id"))
+                                 (string? vv))
+                             (let [s (str/trim vv)]
+                               (cond
+                                 (str/blank? s) nil
+                                 :else (try
+                                         (UUID/fromString s)
+                                         (catch Exception _
+                                           vv))))
+                             vv)]
+                   [k* vv*])))
           v)
         v))
     (or data {})))
