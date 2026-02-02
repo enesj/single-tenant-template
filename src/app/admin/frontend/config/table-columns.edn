@@ -1,12 +1,14 @@
-{;; =============================================================================
- ;; Admin/Template Core Table Column Configurations
- ;; =============================================================================
- ;; Runtime-editable table column settings for template/admin entities.
- ;; Domain-specific table columns are in their respective domain config files.
-
- :admins
+{:admins
  {:available-columns
-  ["id" "email" "full-name" "role" "status" "last-login-at" "created-at" "updated-at" "password-hash"],
+  ["id"
+   "email"
+   "full-name"
+   "role"
+   "status"
+   "last-login-at"
+   "created-at"
+   "updated-at"
+   "password-hash"],
   :default-visible-columns
   ["id"
    "email"
@@ -28,11 +30,22 @@
    :last-login-at {:width "160px", :formatter "date"},
    :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
-   :created-at {:width "140px", :formatter "date"}}}
-
+   :created-at {:width "140px", :formatter "date"}}},
  :audit-logs
  {:available-columns
-  ["action" "entity-name" "admin-email" "admin-name" "user-agent" "id" "actor-type" "actor-id" "target-type" "target-id" "metadata" "ip" "created-at"],
+  ["action"
+   "entity-name"
+   "admin-email"
+   "admin-name"
+   "user-agent"
+   "id"
+   "actor-type"
+   "actor-id"
+   "target-type"
+   "target-id"
+   "metadata"
+   "ip"
+   "created-at"],
   :default-visible-columns
   ["action" "entity-name" "admin-email" "admin-name"],
   :filterable-columns
@@ -58,11 +71,17 @@
    :admin-email {:width "180px"},
    :entity-name {:width "200px", :computed-field true},
    :action {:width "120px", :formatter "audit-action-badge"},
-   :admin-name {:width "140px"}}}
-
+   :admin-name {:width "140px"}}},
  :login-events
  {:available-columns
-  ["created-at" "principal-type" "success" "reason" "user-agent" "id" "principal-id" "ip"],
+  ["created-at"
+   "principal-type"
+   "success"
+   "reason"
+   "user-agent"
+   "id"
+   "principal-id"
+   "ip"],
   :default-visible-columns
   ["created-at" "principal-type" "success" "reason"],
   :filterable-columns
@@ -76,13 +95,23 @@
    :principal-type {:width "110px"},
    :success {:width "100px"},
    :reason {:width "200px"},
-   :user-agent {:width "260px"}}}
-
+   :user-agent {:width "260px"}}},
  :users
  {:available-columns
-  ["id" "email" "full-name" "status" "role" "last-login-at" "created-at" "updated-at" "password-hash" "email-verified" "avatar-url" "auth-provider" "provider-user-id"],
-  :default-visible-columns
-  ["id" "status" "role" "created-at"],
+  ["id"
+   "email"
+   "full-name"
+   "status"
+   "role"
+   "last-login-at"
+   "created-at"
+   "updated-at"
+   "password-hash"
+   "email-verified"
+   "avatar-url"
+   "auth-provider"
+   "provider-user-id"],
+  :default-visible-columns ["id" "status" "role" "created-at"],
   :filterable-columns
   ["status" "role" "last-login-at" "created-at" "updated-at"],
   :sortable-columns ["status" "created-at"],
@@ -95,4 +124,20 @@
    :last-login-at {:width "160px", :formatter "date"},
    :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
-   :created-at {:width "140px", :formatter "date"}} :removed-fields {:available-columns ["preferred-name"]}}}
+   :created-at {:width "140px", :formatter "date"}},
+  :removed-fields {:available-columns ["preferred-name"]}},
+ :article-aliases
+ {:available-columns
+  ["id"
+   "supplier_id"
+   "raw_label"
+   "raw_label_normalized"
+   "article_id"
+   "confidence"
+   "created_at"],
+  :always-visible [],
+  :default-visible-columns [],
+  :filterable-columns [],
+  :sortable-columns [],
+  :computed-fields {},
+  :column-config {}}}

@@ -4,4 +4,3 @@
 # Model configuration (project-specific)
 model = "gpt-5.2"
 model_reasoning_effort = "high"
-

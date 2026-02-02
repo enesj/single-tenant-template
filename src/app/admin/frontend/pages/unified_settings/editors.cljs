@@ -101,10 +101,10 @@
         all-specs (or (use-subscribe [:entity-specs]) {})
         spec-fields (get all-specs entity-kw)
         spec-ids (->> (or spec-fields [])
-                  (keep (fn [f]
-                          (when (map? f)
-                            (:id f))))
-                  vec)
+                   (keep (fn [f]
+                           (when (map? f)
+                             (:id f))))
+                   vec)
 
         config-refs (->> (concat
                            (or (:available-columns entity-config) [])
@@ -378,13 +378,18 @@
 (defui admin-entity-editor
   "Editor for a single admin entity's settings."
   [{:keys [entity-kw settings on-change on-display-settings-bulk]}]
-  ($ cards/admin-entity-settings-card
-    {:entity-name entity-kw
-     :settings settings
-     :editing? true
-     :on-change on-change
-     :on-display-settings-bulk on-display-settings-bulk
-     :setting-keys defs/all-setting-keys}))
+  (let [local-display-prefs (use-subscribe [::ui-subs/entity-display-prefs entity-kw])
+        clear-local-display-prefs! (fn [entity-kw]
+                                     (rf/dispatch [::list-ui-events/clear-display-prefs entity-kw]))]
+    ($ cards/admin-entity-settings-card
+      {:entity-name entity-kw
+       :settings settings
+       :local-display-prefs local-display-prefs
+       :on-clear-local-display-prefs clear-local-display-prefs!
+       :editing? true
+       :on-change on-change
+       :on-display-settings-bulk on-display-settings-bulk
+       :setting-keys defs/all-setting-keys})))
 
 (defui user-entity-editor
   "Editor for a single user entity's settings."

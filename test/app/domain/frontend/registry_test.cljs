@@ -63,12 +63,18 @@
     (is (empty? (domain-registry/all-admin-entities)))))
 
 (deftest all-admin-domain-groups-test
-  (testing "all-admin-domain-groups returns a map (may be empty)"
+  (testing "all-admin-domain-groups returns a map"
     (let [groups (domain-registry/all-admin-domain-groups)]
       (is (map? groups))))
 
-  (testing "expenses domain currently does not register admin domain groups"
-    (is (empty? (domain-registry/all-admin-domain-groups)))))
+  (testing "expenses admin domain group is registered"
+    (let [groups (domain-registry/all-admin-domain-groups)
+          expenses (:expenses groups)]
+      (is (some? expenses))
+      (is (= "Expenses Management" (:title expenses)))
+      (is (= :admin (:scope expenses)))
+      (is (set? (:entities expenses)))
+      (is (contains? (:entities expenses) :article-aliases)))))
 
 (deftest all-user-domain-groups-test
   (testing "all-user-domain-groups returns map of domain groups"

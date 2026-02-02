@@ -10,7 +10,20 @@
    :routes {:user expenses-user-routes/routes}
    :init! (fn [] nil)
    :admin-entities {}
-   :admin-domain-groups {}
+   :admin-domain-groups
+   {:expenses
+    {:title "Expenses Management"
+     :description "Manage articles, suppliers, manufacturers, and price observations"
+     :icon "💰"
+     :entities #{:articles
+                 :article-aliases
+                 :suppliers
+                 :supplier-aliases
+                 :manufacturers
+                 :price-observations
+                 :unmapped-aliases}
+     :color "accent"
+     :scope :admin}}
    :user-domain-groups
    {:expenses-user
     {:title "User Expenses"

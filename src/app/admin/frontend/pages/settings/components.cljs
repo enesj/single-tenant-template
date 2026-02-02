@@ -29,11 +29,11 @@
       (cond
         is-true?
         ($ :span {:class "ds-badge ds-badge-success ds-badge-sm"}
-          "Enabled")
+          "Locked On")
 
         is-false?
         ($ :span {:class "ds-badge ds-badge-error ds-badge-sm"}
-          "Disabled")
+          "Locked Off")
 
         :else
         ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"}
@@ -42,9 +42,9 @@
       (when editing?
         ($ :span {:class "text-xs text-base-content/50 ml-auto"}
           (cond
-            is-true? "→ Disabled"
+            is-true? "→ Locked Off"
             is-false? "→ Remove"
-            :else "→ Enabled"))))))
+            :else "→ Locked On"))))))
 
 (defui entity-settings-card
   "Card displaying all hardcoded settings for a single entity"

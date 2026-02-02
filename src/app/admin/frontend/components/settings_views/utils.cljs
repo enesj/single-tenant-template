@@ -47,19 +47,19 @@
       (true? effective-lock)
       {:class "ds-badge ds-badge-success ds-badge-sm"
        :text (case lock-style
-               :admin "Enabled"
+               :admin "Locked On"
                "Locked On")}
 
       (false? effective-lock)
       {:class "ds-badge ds-badge-error ds-badge-sm"
        :text (case lock-style
-               :admin "Disabled"
+               :admin "Locked Off"
                "Locked Off")}
 
       :else
       {:class "ds-badge ds-badge-ghost ds-badge-sm"
        :text (case lock-style
-               :admin "Not set"
+               :admin "Inherit"
                "Inherit")})))
 
 (defn tristate-hint
@@ -76,9 +76,9 @@
 
       :lock
       (str "→ " (cond
-                  (true? next-val) (case lock-style :admin "Enabled" "Locked On")
-                  (false? next-val) (case lock-style :admin "Disabled" "Locked Off")
-                  :else (case lock-style :admin "Not set" "Inherit")))
+                  (true? next-val) (case lock-style :admin "Locked On" "Locked On")
+                  (false? next-val) (case lock-style :admin "Locked Off" "Locked Off")
+                  :else (case lock-style :admin "Inherit" "Inherit")))
       nil)))
 
 (defn uniform-or-mixed
@@ -91,4 +91,3 @@
       (empty? vals) nil
       (apply = vals) (first vals)
       :else :mixed)))
-

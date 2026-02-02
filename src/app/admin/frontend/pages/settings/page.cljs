@@ -156,7 +156,7 @@
               ($ :h4 {:class "font-bold"} "Edit Mode Active")
               ($ :p {:class "text-sm"}
                 (case config-tab
-                  "view-options" "Click on any setting to cycle through: Enabled → Disabled → Remove. Click 'Save settings' to persist."
+                  "view-options" "Click on any setting to cycle through: Locked On → Locked Off → Remove. Click 'Save settings' to persist."
                   "form-fields" "Click fields to toggle them in each list. Click 'Save Changes' to persist."
                   "table-columns" "Click columns to toggle them in each list. Click 'Save Changes' to persist."
                   "Changes are saved immediately.")))))

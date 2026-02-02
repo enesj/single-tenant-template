@@ -1,8 +1,44 @@
-{:admins
+{:suppliers
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
+ :admins
  {:column-locks {},
   :display-locks
   {:show-select? true, :show-pagination? true, :show-filtering? true},
-  :column-defaults {:id true}},
+  :column-defaults {:id true},
+  :display-defaults {:show-edit? false}},
+ :articles
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
+ :manufacturers
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
+ :unmapped-aliases
+ {:display-defaults {:show-filtering? true, :per-page 25},
+  :display-locks {:show-add-button? false, :show-edit? false},
+  :column-defaults {},
+  :column-locks {}},
+ :price-observations
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 50},
+  :display-locks {:show-add-button? false},
+  :column-defaults {},
+  :column-locks {}},
+ :supplier-aliases
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
  :audit-logs
  {:display-locks
   {:show-edit? false,
@@ -16,6 +52,12 @@
    :show-edit? false,
    :show-batch-edit? false},
   :display-defaults {:show-batch-delete? false}},
+ :article-aliases
+ {:display-defaults
+  {:show-filtering? true, :per-page 25, :show-edit? false},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
  :users
  {:display-defaults
   {:show-add-button? true, :show-edit? true, :per-page 25},

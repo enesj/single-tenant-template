@@ -207,6 +207,10 @@
         ;; Subscribe to entity-specific display settings - SINGLE subscription
         entity-settings (use-subscribe [::ui-subs/entity-display-settings entity-kw])
 
+        ;; Current browser overrides that can mask policy defaults.
+        local-display-prefs (or (use-subscribe [::ui-subs/entity-display-prefs entity-kw]) {})
+        local-overrides-count (count local-display-prefs)
+
         ;; Always call hooks unconditionally
         entity-type-sub (use-subscribe [::core-subs/entity-type])
         ;; Then use their results conditionally
@@ -242,6 +246,21 @@
                                 label)))))]
     ($ :div {:id "panel"
              :class "flex flex-col gap-4"}
+
+      (when (seq local-display-prefs)
+        ($ :div {:id (str "local-overrides-" (name entity-kw))
+                 :class "flex items-center justify-between gap-2 p-2 rounded-lg bg-base-200"}
+          ($ :span {:class "text-xs text-base-content/70"}
+            "Local overrides are active in this browser; they can override Defaults until cleared.")
+          ($ :button {:type "button"
+                      :id (str "btn-clear-local-display-prefs-" (name entity-kw))
+                      :class "btn btn-xs btn-ghost"
+                      :on-click (fn [e]
+                                  (.preventDefault e)
+                                  (rf/dispatch [::ui-events/clear-display-prefs entity-kw]))}
+            (str "Clear local overrides"
+              (when (pos? local-overrides-count)
+                (str " (" local-overrides-count ")"))))))
 
       ;; Entity header for global settings
       (when (not compact?)

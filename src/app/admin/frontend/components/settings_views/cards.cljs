@@ -154,14 +154,20 @@
    Props:
    - :entity-name - entity keyword
    - :settings - map with :display-locks etc.
+   - :local-display-prefs - current browser's local overrides ([:ui :entity-prefs <entity> :display])
+   - :on-clear-local-display-prefs - fn [entity-kw]
    - :editing? - whether in edit mode
    - :on-change - fn [entity-name setting-key new-value]
    - :setting-keys - which setting keys to show (default: display-setting-keys)"
-  [{:keys [entity-name settings editing? on-change on-display-settings-bulk
+  [{:keys [entity-name settings
+           local-display-prefs on-clear-local-display-prefs
+           editing? on-change on-display-settings-bulk
            setting-keys]}]
   (let [setting-keys (or setting-keys defs/display-setting-keys)
         defaults (or (:display-defaults settings) {})
         locks (or (:display-locks settings) {})
+        local-display-prefs (or local-display-prefs {})
+        local-overrides-count (count local-display-prefs)
         has-any-defaults? (seq (select-keys defaults setting-keys))
         has-any-locks? (seq (select-keys locks setting-keys))]
     ($ :div {:class "ds-card bg-base-100 shadow-md hover:shadow-lg transition-shadow"}
@@ -170,7 +176,17 @@
         ($ :div {:class "flex items-center justify-between mb-4"}
           ($ :h3 {:class "ds-card-title text-lg"}
             (defs/entity-title entity-name))
-          ($ :div {:class "flex items-center gap-2"}
+          ($ :div {:class "flex items-center gap-2 flex-wrap justify-end"}
+            (when (and (seq local-display-prefs) (fn? on-clear-local-display-prefs))
+              ($ :button {:type "button"
+                          :id (str "btn-clear-local-display-prefs-" (name entity-name))
+                          :class "ds-btn ds-btn-xs ds-btn-ghost"
+                          :on-click (fn [e]
+                                      (.preventDefault e)
+                                      (on-clear-local-display-prefs entity-name))}
+                (str "Clear local overrides"
+                  (when (pos? local-overrides-count)
+                    (str " (" local-overrides-count ")")))))
             (if has-any-defaults?
               ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
                 (str (count (select-keys defaults setting-keys)) " defaults"))
@@ -179,6 +195,10 @@
               ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
                 (str (count (select-keys locks setting-keys)) " locks"))
               ($ :span {:class "ds-badge ds-badge-ghost ds-badge-sm"} "No locks"))))
+
+        (when (seq local-display-prefs)
+          ($ :div {:class "text-xs text-base-content/60 mb-2"}
+            "This browser has local list display overrides for this entity; they can override Defaults until cleared."))
 
         ;; Settings grid
         ($ :div {:class "grid grid-cols-1 gap-2"}
@@ -199,7 +219,7 @@
                  :lock-style :admin
                  :help-text "Apply Default/Lock to all display toggles for this entity."
                  :on-default-click (fn []
-                                    ;; cycle the current aggregate state
+                                     ;; cycle the current aggregate state
                                      (let [current (if (= bulk-default :mixed) nil bulk-default)
                                            next-val (utils/next-tristate current)
                                            next-state (if (nil? next-val)
@@ -207,7 +227,7 @@
                                                         {:kind :default :value next-val})]
                                        (on-display-settings-bulk entity-name setting-keys next-state)))
                  :on-lock-click (fn []
-                                 ;; cycle the current aggregate lock state
+                                  ;; cycle the current aggregate lock state
                                   (let [current (if (= bulk-lock :mixed) nil bulk-lock)
                                         next-val (utils/next-tristate current)
                                         next-state (if (nil? next-val)
