@@ -173,7 +173,7 @@
                           :show-delete? false
                           :show-filtering? true
                           :show-pagination? true
-                          :show-timestamps? true
+
                           :show-highlights? true
                           :show-add-button? can-ocr?
                           :show-batch-edit? false

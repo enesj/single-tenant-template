@@ -11,8 +11,7 @@
    :show-select?
    :show-filtering?
    :show-pagination?
-   :show-highlights?
-   :show-timestamps?])
+   :show-highlights?])
 
 (def action-setting-keys
   [:show-add-button?

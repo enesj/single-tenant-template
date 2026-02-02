@@ -136,14 +136,6 @@
       (update-in db [:ui :show-select?] not))))
 
 (rf/reg-event-db
-  ::toggle-timestamps
-  [common-interceptors persistence/persist-entity-prefs]
-  (fn [db [entity-type]]
-    (if-let [entity-key (->entity-key entity-type)]
-      (toggle-entity-flag db entity-key [:show-timestamps?] false)
-      (update-in db [:ui :show-timestamps?] not))))
-
-(rf/reg-event-db
   ::toggle-edit
   [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]

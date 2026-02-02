@@ -325,7 +325,7 @@
                                               :all-items items
                                               :on-select-all handle-select-all
                                               :active-filters active-filters
-                                              :show-timestamps? (:show-timestamps? merged-display-settings)
+
                                               :show-filtering? (:show-filtering? merged-display-settings)
                                               :show-batch-edit? (:show-batch-edit? merged-display-settings)
                                               :show-batch-delete? (:show-batch-delete? merged-display-settings)

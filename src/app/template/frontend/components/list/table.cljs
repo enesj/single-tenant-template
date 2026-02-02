@@ -87,12 +87,12 @@
                                   (when has-multiple-selection?
                                     (.stopPropagation e)
             ;; Dispatch entity-specific batch actions based on entity type
-            (case entity-name
-              :users (rf/dispatch [:admin/show-batch-user-actions selected-ids])
-              :tenants (rf/dispatch [:admin/show-batch-tenant-actions selected-ids])
-              :audit-logs (rf/dispatch [:admin/show-batch-audit-actions selected-ids])
+                                    (case entity-name
+                                      :users (rf/dispatch [:admin/show-batch-user-actions selected-ids])
+                                      :tenants (rf/dispatch [:admin/show-batch-tenant-actions selected-ids])
+                                      :audit-logs (rf/dispatch [:admin/show-batch-audit-actions selected-ids])
               ;; Default fallback - could be extended for other entities
-              (log/warn "No batch actions defined for entity:" entity-name))))]
+                                      (log/warn "No batch actions defined for entity:" entity-name))))]
     ($ :div {:class "flex items-center gap-2 overflow-visible flex-shrink-0"}
       ;; Edit button - now enabled only when multiple items are selected AND batch edit is allowed
       (when show-batch-edit?
@@ -149,32 +149,47 @@
 ;; Re-export reactive-select-all-header from cells module for backward compatibility
 (def reactive-select-all-header cells/reactive-select-all-header)
 
-(defn- make-table-headers- [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete?
-                                   sort-field sort-direction all-items selected-ids on-select-all active-filters
-                                   filterable-fields user-filterable-settings visible-columns column-order
-                                   active-inline-filter on-inline-filter-click]}]
+(defn- make-table-headers-
+  [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete?
+           sort-field sort-direction all-items selected-ids on-select-all active-filters
+           filterable-fields user-filterable-settings visible-columns column-order
+           active-inline-filter on-inline-filter-click]}]
   (let [;; Start with base headers from entity spec fields
         entity-fields (cond
                         (and (map? entity-spec) (contains? entity-spec :fields))
                         (:fields entity-spec)
-                        (map? entity-spec) (->> entity-spec
-                                             ;; Sort the map entries by display-order first, then extract values
-                                             ;; This ensures we preserve the order we want
-                                             (sort-by (fn [[_ field-spec]]
-                                                        (or (get-in field-spec [:admin :display-order]) 999)))
-                                             (map second)   ; Get the values in sorted order
-                                             (filter map?)  ; Only keep maps
-                                             (filter #(contains? % :id))) ; Only keep field definitions with :id
+
+                        (map? entity-spec)
+                        (->> entity-spec
+                          ;; Sort the map entries by display-order first, then extract values
+                          ;; This ensures we preserve the order we want
+                          (sort-by (fn [[_ field-spec]]
+                                     (or (get-in field-spec [:admin :display-order]) 999)))
+                          (map second)
+                          (filter map?)
+                          (filter #(contains? % :id)))
+
                         (sequential? entity-spec) entity-spec
                         :else [])
 
-                    ordered-entity-fields (column-config/order-fields entity-fields column-order)
+        ordered-entity-fields (column-config/order-fields entity-fields column-order)
 
-;; Filter out the raw timestamp fields to avoid duplication
+        normalize-col (fn [col]
+                        ;; Canonicalize to a simple app keyword (no namespace).
+                        ;; Example: :admins/email -> :email, :created_at -> :created-at
+                        (model-naming/ensure-app-keyword (kw/ensure-name col)))
+
+        timestamp-field-ids (into #{}
+                              (keep (comp normalize-col :id))
+                              (filter map? ordered-entity-fields))
+
+        ;; Filter out the raw timestamp fields to avoid duplication.
+        ;; Timestamp columns are rendered via the timestamp header/cell helpers below,
+        ;; and are controlled solely by Column Visibility.
         filtered-entity-fields (remove (fn [field]
-                                         (let [field-id (keyword (:id field))]
-                                           (#{:created-at :updated-at} field-id)))
-                           ordered-entity-fields)
+                                         (contains? #{:created-at :updated-at}
+                                           (normalize-col (:id field))))
+                                 ordered-entity-fields)
 
         ;; Selection header using reactive component that subscribes to show-select?
         ;; This ensures the header updates immediately when the user toggles the Selection setting
@@ -190,11 +205,6 @@
         ;; IMPORTANT: if admin config returns an empty collection for an entity with no
         ;; vector-config, treat it as "no restriction" (default sortable). Only restrict
         ;; when the config provides a non-empty set of sortable columns.
-        normalize-col (fn [col]
-                        ;; Canonicalize to a simple app keyword (no namespace).
-                        ;; Example: :admins/email -> :email, :created_at -> :created-at
-                        (model-naming/ensure-app-keyword (kw/ensure-name col)))
-
         sortable-set (let [sc (use-subscribe [:admin/sortable-columns entity-name])]
                        ;; Normalize string/keyword column keys and only restrict sorting
                        ;; when a non-empty set is provided.
@@ -218,17 +228,17 @@
 
                          :else nil)
 
-          base-headers (mapv (fn [field]
-                   (let [field-id (normalize-col (:id field))
+        base-headers (mapv (fn [field]
+                             (let [field-id (normalize-col (:id field))
                                    ;; Use vector-config driven visibility map directly
                                    is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
                                                         (if (not= user-setting ::not-found) user-setting true))
                                    ;; Filterable if user has enabled it in settings panel AND field is in filterable-set
                                    is-field-filterable? (let [user-setting (get user-filterable-settings field-id ::not-found)]
                                                           (if (not= user-setting ::not-found)
-                                                          ;; User has explicitly set filterable setting - use it
+                                                            ;; User has explicitly set filterable setting - use it
                                                             user-setting
-                                                          ;; No user setting, check vector config for filterable columns
+                                                            ;; No user setting, check vector config for filterable columns
                                                             (cond
                                                               (map? filterable-set) (boolean (get filterable-set field-id true))
                                                               (set? filterable-set) (contains? filterable-set field-id)
@@ -269,86 +279,85 @@
         ;; Filter out nil values (from columns that should be hidden)
         filtered-base-headers (filterv some? base-headers)
 
-        ;; Timestamp headers for created_at and updated_at - using namespaced field names
-        timestamp-headers (when show-timestamps?
-                            (let [created-key :created-at
-                                  created-legacy-key :created-at
-                                  updated-key :updated-at
-                                  updated-legacy-key :updated-at
-                                  legacy-map {created-key created-legacy-key
-                                              updated-key updated-legacy-key}
-                                  sentinel ::not-found
-                                  resolve-setting (fn [settings key]
-                                                    (let [legacy (get legacy-map key)
-                                                          current (get settings key sentinel)
-                                                          legacy-val (if legacy (get settings legacy sentinel) sentinel)]
-                                                      (cond
-                                                        (not= current sentinel) current
-                                                        (not= legacy-val sentinel) legacy-val
-                                                        :else sentinel)))
-                                  column-visible? (fn [key]
-                                                    (let [value (resolve-setting visible-columns key)]
-                                                      (if (= value sentinel) true value)))
-                                  field-filterable? (fn [key]
-                                                      (let [user-setting (resolve-setting (or user-filterable-settings {}) key)]
-                                                        (if (not= user-setting sentinel)
-                                                          ;; User has explicitly set filterable setting - use it
-                                                          user-setting
-                                                          ;; No user setting, check vector config for filterable columns
-                                                          ;; Use the already-computed filterable-set (from line ~185)
-                                                          ;; instead of calling use-subscribe inside a function
-                                                          (cond
-                                                            (map? filterable-set) (boolean (get filterable-set key true))
-                                                            (set? filterable-set) (contains? filterable-set key)
-                                                            :else true))))
-                                  filter-active? (fn [key]
-                                                   (let [legacy (get legacy-map key)]
-                                                     (or (contains? active-filters key)
-                                                       (and legacy (contains? active-filters legacy)))))
-                                  inline-active? (fn [key]
-                                                   (let [legacy (get legacy-map key)]
-                                                     (boolean
-                                                       (some #(= active-inline-filter %)
-                                                         (remove nil? [key legacy])))))
-                                  namespaced (fn [key]
-                                               (keyword (kw/ensure-name entity-name)
-                                                 (kw/ensure-name key)))]
-                              [(fn []
-                                 (when (column-visible? created-key)
-                                   ($ table-header
-                                     {:key "header-created-at"
-                                      :header-id "header-created-at"
-                                      :label "Created"
-                                      :sortable? true
-                                      :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced created-key)])
-                                      :sort-direction (when (= sort-field (namespaced created-key)) sort-direction)
-                                      :filter-on-click #(do
-                                                          (.stopPropagation %)
-                                                          (when on-inline-filter-click
-                                                            (on-inline-filter-click created-key {:id "created-at" :label "Created At" :input-type "datetime"})))
-                                      :filter-active? (filter-active? created-key)
-                                      :active-inline-filter? (inline-active? created-key)
-                                      :show-filtering? show-filtering?
-                                      :is-field-filterable? (field-filterable? created-key)
-                                      :field-id created-key})))
-                               (fn []
-                                 (when (column-visible? updated-key)
-                                   ($ table-header
-                                     {:key "header-updated-at"
-                                      :header-id "header-updated-at"
-                                      :label "Updated"
-                                      :sortable? true
-                                      :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced updated-key)])
-                                      :sort-direction (when (= sort-field (namespaced updated-key)) sort-direction)
-                                      :filter-on-click #(do
-                                                          (.stopPropagation %)
-                                                          (when on-inline-filter-click
-                                                            (on-inline-filter-click updated-key {:id "updated-at" :label "Updated At" :input-type "datetime"})))
-                                      :filter-active? (filter-active? updated-key)
-                                      :active-inline-filter? (inline-active? updated-key)
-                                      :show-filtering? show-filtering?
-                                      :is-field-filterable? (field-filterable? updated-key)
-                                      :field-id updated-key})))]))
+        ;; Timestamp headers for created_at and updated_at - controlled solely by Column Visibility
+        timestamp-headers (let [created-key :created-at
+                                created-legacy-key :created-at
+                                updated-key :updated-at
+                                updated-legacy-key :updated-at
+                                legacy-map {created-key created-legacy-key
+                                            updated-key updated-legacy-key}
+                                sentinel ::not-found
+                                resolve-setting (fn [settings key]
+                                                  (let [legacy (get legacy-map key)
+                                                        current (get settings key sentinel)
+                                                        legacy-val (if legacy (get settings legacy sentinel) sentinel)]
+                                                    (cond
+                                                      (not= current sentinel) current
+                                                      (not= legacy-val sentinel) legacy-val
+                                                      :else sentinel)))
+                                column-visible? (fn [key]
+                                                  (let [value (resolve-setting visible-columns key)]
+                                                    (if (= value sentinel) true value)))
+                                field-filterable? (fn [key]
+                                                    (let [user-setting (resolve-setting (or user-filterable-settings {}) key)]
+                                                      (if (not= user-setting sentinel)
+                                                        ;; User has explicitly set filterable setting - use it
+                                                        user-setting
+                                                        ;; No user setting, check vector config for filterable columns
+                                                        (cond
+                                                          (map? filterable-set) (boolean (get filterable-set key true))
+                                                          (set? filterable-set) (contains? filterable-set key)
+                                                          :else true))))
+                                filter-active? (fn [key]
+                                                 (let [legacy (get legacy-map key)]
+                                                   (or (contains? active-filters key)
+                                                     (and legacy (contains? active-filters legacy)))))
+                                inline-active? (fn [key]
+                                                 (let [legacy (get legacy-map key)]
+                                                   (boolean
+                                                     (some #(= active-inline-filter %)
+                                                       (remove nil? [key legacy])))))
+                                namespaced (fn [key]
+                                             (keyword (kw/ensure-name entity-name)
+                                               (kw/ensure-name key)))
+                                has-created? (contains? timestamp-field-ids created-key)
+                                has-updated? (contains? timestamp-field-ids updated-key)]
+                            [(fn []
+                               (when (and has-created? (column-visible? created-key))
+                                 ($ table-header
+                                   {:key "header-created-at"
+                                    :header-id "header-created-at"
+                                    :label "Created"
+                                    :sortable? true
+                                    :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced created-key)])
+                                    :sort-direction (when (= sort-field (namespaced created-key)) sort-direction)
+                                    :filter-on-click #(do
+                                                        (.stopPropagation %)
+                                                        (when on-inline-filter-click
+                                                          (on-inline-filter-click created-key {:id "created-at" :label "Created At" :input-type "datetime"})))
+                                    :filter-active? (filter-active? created-key)
+                                    :active-inline-filter? (inline-active? created-key)
+                                    :show-filtering? show-filtering?
+                                    :is-field-filterable? (field-filterable? created-key)
+                                    :field-id created-key})))
+                             (fn []
+                               (when (and has-updated? (column-visible? updated-key))
+                                 ($ table-header
+                                   {:key "header-updated-at"
+                                    :header-id "header-updated-at"
+                                    :label "Updated"
+                                    :sortable? true
+                                    :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced updated-key)])
+                                    :sort-direction (when (= sort-field (namespaced updated-key)) sort-direction)
+                                    :filter-on-click #(do
+                                                        (.stopPropagation %)
+                                                        (when on-inline-filter-click
+                                                          (on-inline-filter-click updated-key {:id "updated-at" :label "Updated At" :input-type "datetime"})))
+                                    :filter-active? (filter-active? updated-key)
+                                    :active-inline-filter? (inline-active? updated-key)
+                                    :show-filtering? show-filtering?
+                                    :is-field-filterable? (field-filterable? updated-key)
+                                    :field-id updated-key})))])
 
         ;; Filter out nil values from timestamp headers (from columns that should be hidden)
         filtered-timestamp-headers (filterv (fn [header-fn]
@@ -376,13 +385,13 @@
            filtered-timestamp-headers
            action-header))))
 
-(defn make-table-headers [{:keys [entity-spec entity-name show-timestamps? show-filtering? show-batch-edit? show-batch-delete?
-                                 sort-field sort-direction all-items selected-ids on-select-all active-filters
-                                 filterable-fields user-filterable-settings visible-columns column-order
-                                 active-inline-filter on-inline-filter-click]}]
+(defn make-table-headers
+  [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete?
+           sort-field sort-direction all-items selected-ids on-select-all active-filters
+           filterable-fields user-filterable-settings visible-columns column-order
+           active-inline-filter on-inline-filter-click]}]
   (make-table-headers- {:entity-spec entity-spec
                         :entity-name entity-name
-                        :show-timestamps? show-timestamps?
                         :show-filtering? show-filtering?
                         :show-batch-edit? show-batch-edit?
                         :show-batch-delete? show-batch-delete?

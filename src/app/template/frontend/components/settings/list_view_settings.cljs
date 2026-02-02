@@ -222,7 +222,7 @@
         curr-show-highlights? (:show-highlights? entity-settings)
         curr-show-select? (:show-select? entity-settings)
         curr-show-pagination? (:show-pagination? entity-settings)
-        curr-show-timestamps? (:show-timestamps? entity-settings)
+
         curr-show-filtering? (:show-filtering? entity-settings)
         curr-show-add-button? (:show-add-button? entity-settings)
         curr-show-batch-edit? (:show-batch-edit? entity-settings)
@@ -270,7 +270,7 @@
             (str "Controls for " (str/capitalize (name curr-entity-name))))
           ($ :div {:class "border-t border-gray-200 my-2"})))
 
-      ;; FIRST ROW: Main controls (Edit, Delete, Highlights, Selection, Timestamps, Table Width, Rows Per Page)
+      ;; FIRST ROW: Main controls (Edit, Delete, Highlights, Selection, Table Width, Rows Per Page)
       ($ :div {:id "main-controls-row"
                :class "flex flex-row flex-wrap gap-4 items-center p-3 bg-base-100 rounded-lg shadow-sm"}
 
@@ -303,12 +303,6 @@
                         :is-active? curr-show-pagination?
                         :event-key ::ui-events/toggle-pagination
                         :hardcoded-key :show-pagination?})
-
-        ;; Timestamps control
-        (toggle-button {:label "Timestamps"
-                        :is-active? curr-show-timestamps?
-                        :event-key ::ui-events/toggle-timestamps
-                        :hardcoded-key :show-timestamps?})
 
         ;; Filtering control (global master switch)
         (toggle-button {:label "Filtering"

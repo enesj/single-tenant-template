@@ -13,7 +13,6 @@
  {:display-defaults
   {:show-add-button? false,
    :show-highlights? true,
-   :show-timestamps? true,
    :show-pagination? true,
    :per-page 25},
   :display-locks {:show-batch-delete? true, :show-batch-edit? true},
@@ -39,7 +38,6 @@
    :show-add-button? true,
    :show-filtering? true,
    :show-highlights? true,
-   :show-timestamps? true,
    :per-page 50},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
  :article-aliases

@@ -23,8 +23,7 @@
    :show-select?
    :show-filtering?
    :show-pagination?
-   :show-highlights?
-   :show-timestamps?])
+   :show-highlights?])
 
 (def action-setting-keys
   "Action settings that can be configured in view-options.
@@ -75,10 +74,7 @@
                        :help "When enabled, rows can be visually highlighted based on certain conditions (e.g., new records, important items). Adds color coding to the table."
                        :default true
                        :type :toggle}
-   :show-timestamps?  {:label "Timestamps"
-                       :help "When enabled, shows 'Created At' and 'Updated At' timestamp columns in the table. Useful for auditing when records were modified."
-                       :default true
-                       :type :toggle}
+
    :show-add-button?  {:label "Add Button"
                        :help "When enabled, shows an 'Add' or 'New' button in the table header allowing users to create new records. When disabled, new records cannot be created from this view."
                        :default true

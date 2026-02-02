@@ -22,7 +22,6 @@
    - :show-select?      - Show row selection checkboxes
    - :show-edit?        - Show edit buttons on rows
    - :show-delete?      - Show delete buttons on rows
-   - :show-timestamps?  - Show created_at/updated_at columns
    - :show-highlights?  - Show row highlighting for recent changes
    - :show-filtering?   - Show filter controls
    - :show-pagination?  - Show pagination controls
@@ -57,12 +56,6 @@
    Convenience hook for components that only need delete button visibility."
   [entity-name]
   (:show-delete? (use-display-settings entity-name)))
-
-(defn use-show-timestamps?
-  "Returns just the show-timestamps? setting for an entity.
-   Convenience hook for components that only need timestamp column visibility."
-  [entity-name]
-  (:show-timestamps? (use-display-settings entity-name)))
 
 (defn use-show-highlights?
   "Returns just the show-highlights? setting for an entity.

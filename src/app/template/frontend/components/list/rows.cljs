@@ -22,7 +22,7 @@
 
 (defn- row-content
   "Generates the content for a table row."
-  [{:keys [entity-spec item show-timestamps? actions visible-columns entity-name selected-ids on-select-change column-order]}]
+  [{:keys [entity-spec item actions visible-columns entity-name selected-ids on-select-change column-order]}]
 
   (let [;; Safely get field values from entity-spec - FIXED: Check :fields key first
         entity-fields (cond
@@ -32,97 +32,111 @@
                             fields
                             []))
 
-                        (map? entity-spec) (->> (vals entity-spec)
-                                             (filter map?)  ; Only keep maps
-                                             (filter #(contains? % :id)) ; Only keep field definitions with :id
-                                             ;; CRITICAL FIX: Sort by display-order to match header ordering
-                                             (sort-by #(or (get-in % [:admin :display-order]) 999)))
+                        (map? entity-spec)
+                        (->> (vals entity-spec)
+                          (filter map?)
+                          (filter #(contains? % :id))
+                          ;; CRITICAL FIX: Sort by display-order to match header ordering
+                          (sort-by #(or (get-in % [:admin :display-order]) 999)))
+
                         (sequential? entity-spec) entity-spec
                         :else [])
 
         ordered-entity-fields (column-config/order-fields entity-fields column-order)
 
-        ;; Filter out the raw timestamp fields to avoid duplication
+        normalize-col (fn [col]
+                        ;; Canonicalize to a simple app keyword (no namespace).
+                        ;; Example: :admins/email -> :email, :created_at -> :created-at
+                        (model-naming/ensure-app-keyword (kw/ensure-name col)))
+
+        timestamp-field-ids (into #{}
+                              (keep (comp normalize-col :id))
+                              (filter map? ordered-entity-fields))
+
+        ;; Filter out the raw timestamp fields to avoid duplication.
+        ;; Timestamp columns are rendered via the timestamp cell helpers below,
+        ;; and are controlled solely by Column Visibility.
         filtered-entity-fields (remove (fn [field]
-                                         (let [field-id (keyword (:id field))]
-                                           (#{:created-at :updated-at} field-id)))
+                                         (contains? #{:created-at :updated-at}
+                                           (normalize-col (:id field))))
                                  ordered-entity-fields)
 
         ;; Process field values, but only for visible columns
-          field-values (mapv (fn [field]
-                   (let [raw-id (:id field)
-                     ;; Canonical (non-namespaced) column key used by config/prefs.
-                     ;; Example: :admins/email -> :email
-                     field-id (model-naming/ensure-app-keyword (kw/ensure-name raw-id))
-                     ;; Use vector-config driven visibility map directly.
-                     is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
-                          (if (not= user-setting ::not-found) user-setting true))]
-                 ;; Only include this field if the column is visible
-                 (when is-column-visible?
-                   (let [entity-ns (kw/ensure-name entity-name)
-                     raw-name (kw/ensure-name raw-id)
-                     raw-kw (kw/ensure-keyword raw-id)
-                     namespaced-raw (when (and entity-ns raw-name)
-                         (keyword entity-ns raw-name))
-                     namespaced-canonical (when (and entity-ns (kw/ensure-name field-id))
-                           (keyword entity-ns (kw/ensure-name field-id)))
-                     ;; Try canonical + raw (namespaced) keys for resilience.
-                     value (or (get item field-id)
-                         (when raw-kw (get item raw-kw))
-                         (when namespaced-raw (get item namespaced-raw))
-                         (when namespaced-canonical (get item namespaced-canonical)))]
-                     (get-field-display-value field value)))))
+        field-values (mapv (fn [field]
+                             (let [raw-id (:id field)
+                                   ;; Canonical (non-namespaced) column key used by config/prefs.
+                                   ;; Example: :admins/email -> :email
+                                   field-id (normalize-col raw-id)
+                                   ;; Use vector-config driven visibility map directly.
+                                   is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
+                                                        (if (not= user-setting ::not-found) user-setting true))]
+                               ;; Only include this field if the column is visible
+                               (when is-column-visible?
+                                 (let [entity-ns (kw/ensure-name entity-name)
+                                       raw-name (kw/ensure-name raw-id)
+                                       raw-kw (kw/ensure-keyword raw-id)
+                                       namespaced-raw (when (and entity-ns raw-name)
+                                                        (keyword entity-ns raw-name))
+                                       namespaced-canonical (when (and entity-ns (kw/ensure-name field-id))
+                                                              (keyword entity-ns (kw/ensure-name field-id)))
+                                       ;; Try canonical + raw (namespaced) keys for resilience.
+                                       value (or (get item field-id)
+                                               (when raw-kw (get item raw-kw))
+                                               (when namespaced-raw (get item namespaced-raw))
+                                               (when namespaced-canonical (get item namespaced-canonical)))]
+                                   (get-field-display-value field value)))))
                        filtered-entity-fields)
 
         ;; Filter out nil values (from columns that should be hidden)
         filtered-field-values (filterv some? field-values)
 
-        ;; Add timestamp values if requested, but only if they're visible
-        timestamps (when show-timestamps?
-                     (let [created-key :created-at
-                           updated-key :updated-at
-                           legacy-map {created-key :created-at
-                                       updated-key :updated-at}
-                           sentinel ::not-found
-                           resolve-setting (fn [settings key]
-                                             (let [legacy (get legacy-map key)
-                                                   current (get settings key sentinel)
-                                                   legacy-val (if legacy (get settings legacy sentinel) sentinel)]
-                                               (cond
-                                                 (not= current sentinel) current
-                                                 (not= legacy-val sentinel) legacy-val
-                                                 :else nil)))
-                           column-visible? (fn [key]
-                                             (let [value (resolve-setting visible-columns key)]
-                                               (if (nil? value) true value)))
-                           fetch-value (fn [entity key]
-                                         (let [legacy (get legacy-map key)
-                                               direct (or (get entity key)
-                                                        (get entity (keyword (str (kw/ensure-name entity-name)
-                                                                               "/"
-                                                                               (kw/ensure-name key)))))
-                                               legacy-val (when legacy
-                                                            (or (get entity legacy)
-                                                              (get entity (keyword (str (kw/ensure-name entity-name)
-                                                                                     "/"
-                                                                                     (kw/ensure-name legacy))))))]
-                                           (or direct legacy-val)))
-                           render-timestamp (fn [value]
-                                              ($ :span {:class "whitespace-nowrap"}
-                                                (when value
-                                                  (let [date (js/Date. value)
-                                                        month (.toLocaleString date "en-US" #js {:month "short"})
-                                                        day (.getDate date)
-                                                        hours (.getHours date)
-                                                        minutes (.getMinutes date)
-                                                        formatted-time (str (when (< hours 10) "0") hours ":" (when (< minutes 10) "0") minutes)]
-                                                    ($ :div
-                                                      ($ :span {:class "text-primary"} (str month " " day))
-                                                      ($ :span {:class "ml-1"} formatted-time))))))]
-                       [(when (column-visible? created-key)
-                          (render-timestamp (fetch-value item created-key)))
-                        (when (column-visible? updated-key)
-                          (render-timestamp (fetch-value item updated-key)))]))
+        ;; Timestamp values for created_at and updated_at - controlled solely by Column Visibility
+        timestamps (let [created-key :created-at
+                         updated-key :updated-at
+                         legacy-map {created-key :created-at
+                                     updated-key :updated-at}
+                         sentinel ::not-found
+                         resolve-setting (fn [settings key]
+                                           (let [legacy (get legacy-map key)
+                                                 current (get settings key sentinel)
+                                                 legacy-val (if legacy (get settings legacy sentinel) sentinel)]
+                                             (cond
+                                               (not= current sentinel) current
+                                               (not= legacy-val sentinel) legacy-val
+                                               :else nil)))
+                         column-visible? (fn [key]
+                                           (let [value (resolve-setting visible-columns key)]
+                                             (if (nil? value) true value)))
+                         fetch-value (fn [entity key]
+                                       (let [legacy (get legacy-map key)
+                                             direct (or (get entity key)
+                                                      (get entity (keyword (str (kw/ensure-name entity-name)
+                                                                             "/"
+                                                                             (kw/ensure-name key)))))
+                                             legacy-val (when legacy
+                                                          (or (get entity legacy)
+                                                            (get entity (keyword (str (kw/ensure-name entity-name)
+                                                                                   "/"
+                                                                                   (kw/ensure-name legacy))))))]
+                                         (or direct legacy-val)))
+                         render-timestamp (fn [value]
+                                            ($ :span {:class "whitespace-nowrap"}
+                                              (when value
+                                                (let [date (js/Date. value)
+                                                      month (.toLocaleString date "en-US" #js {:month "short"})
+                                                      day (.getDate date)
+                                                      hours (.getHours date)
+                                                      minutes (.getMinutes date)
+                                                      formatted-time (str (when (< hours 10) "0") hours ":" (when (< minutes 10) "0") minutes)]
+                                                  ($ :div
+                                                    ($ :span {:class "text-primary"} (str month " " day))
+                                                    ($ :span {:class "ml-1"} formatted-time))))))
+                         has-created? (contains? timestamp-field-ids created-key)
+                         has-updated? (contains? timestamp-field-ids updated-key)]
+                     [(when (and has-created? (column-visible? created-key))
+                        (render-timestamp (fetch-value item created-key)))
+                      (when (and has-updated? (column-visible? updated-key))
+                        (render-timestamp (fetch-value item updated-key)))])
 
         ;; Filter out nil values from timestamps (from timestamps that should be hidden)
         filtered-timestamps (filterv some? timestamps)]
@@ -275,7 +289,7 @@
                                           :delete-disabled? delete-disabled?
                                           :custom-actions (:custom-actions props)
                                           :on-edit-click (:on-edit-click props)}))
-                            :show-timestamps? (:show-timestamps? props)
+
                             :visible-columns visible-columns
                             :column-order column-order
                             :entity-name entity-name
