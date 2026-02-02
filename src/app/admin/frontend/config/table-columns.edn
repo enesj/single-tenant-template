@@ -382,19 +382,45 @@
    :user-agent {:width "260px"}}},
  :article-aliases
  {:available-columns
-  ["id"
-   "supplier_id"
+  ["supplier_display_name"
+   "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "confidence"
+   "created_at"
+   "supplier_id"
    "article_id"
+   "id"],
+  :default-visible-columns
+  ["supplier_display_name"
+   "article_canonical_name"
+   "raw_label"
+   "raw_label_normalized"
    "confidence"
    "created_at"],
-  :always-visible [],
-  :default-visible-columns [],
-  :filterable-columns [],
-  :sortable-columns [],
-  :computed-fields {},
-  :column-config {}},
+  :filterable-columns
+  ["supplier_display_name"
+   "article_canonical_name"
+   "raw_label"
+   "raw_label_normalized"
+   "confidence"
+   "created_at"],
+  :sortable-columns
+  ["supplier_display_name"
+   "article_canonical_name"
+   "raw_label"
+   "raw_label_normalized"
+   "confidence"
+   "created_at"],
+  :always-visible ["raw_label"],
+  :computed-fields {:supplier_display_name {}, :article_canonical_name {}},
+  :column-config
+  {:supplier_display_name {:width "220px"},
+   :article_canonical_name {:width "260px"},
+   :raw_label {:width "260px"},
+   :raw_label_normalized {:width "220px"},
+   :confidence {:width "110px"},
+   :created_at {:width "160px", :formatter "date"}}},
  :users
  {:available-columns
   ["id"

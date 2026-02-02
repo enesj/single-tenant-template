@@ -85,7 +85,7 @@
   :display-defaults {:show-batch-delete? false}},
  :article-aliases
  {:display-defaults
-  {:show-filtering? true, :per-page 25, :show-edit? false},
+  {:show-filtering? true, :per-page 25, :show-edit? true},
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
