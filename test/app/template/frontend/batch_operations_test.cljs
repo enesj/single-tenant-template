@@ -3,6 +3,7 @@
   (:require
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.list.batch :as batch-events]
+    [app.template.frontend.events.list.crud :as list-crud-events]
     [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.helpers-test :as helpers]
     [app.template.frontend.state.normalize :as normalize]

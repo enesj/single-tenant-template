@@ -217,6 +217,64 @@
             (h/json-response {:error "Invalid supplier ID"} 400))))
       (h/unauthorized-response))))
 
+(defn batch-delete-suppliers-handler
+  "Handler factory for deleting multiple suppliers (shared catalog).
+
+  Allowed roles: member/admin.
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify suppliers")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:supplier_ids body)
+                          (:supplier-ids body)
+                          (:supplierIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No supplier ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more supplier ids are invalid"} 400)
+
+              :else
+              (let [delete-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/delete-supplier!)
+                    deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [supplier-id ids]
+                  (try
+                    (if (boolean (delete-supplier! db supplier-id))
+                      (swap! deleted-ids conj (str supplier-id))
+                      (swap! errors conj {:id (str supplier-id)
+                                          :error "not found"}))
+                    (catch org.postgresql.util.PSQLException e
+                      (let [sql-state (.getSQLState e)]
+                        (swap! errors conj {:id (str supplier-id)
+                                            :error (if (= "23503" sql-state)
+                                                     "foreign key constraint"
+                                                     "database error")
+                                            :sql-state sql-state})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str supplier-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Error batch deleting suppliers")
+            (h/json-response {:error "Failed to delete suppliers"} 500))))
+      (h/unauthorized-response))))
+
 (defn create-payer-handler
   "Handler factory for creating a payer (shared catalog).
 
@@ -324,6 +382,67 @@
                 (log/error e "Error deleting payer" {:payer-id payer-id})
                 (h/json-response {:error "Failed to delete payer"} 500)))
             (h/json-response {:error "Invalid payer ID"} 400))))
+      (h/unauthorized-response))))
+
+(defn batch-delete-payers-handler
+  "Handler factory for deleting multiple payers (shared catalog).
+
+  Allowed roles: member/admin.
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify payers")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:payer_ids body)
+                          (:payer-ids body)
+                          (:payerIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No payer ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more payer ids are invalid"} 400)
+
+              :else
+              (let [delete-payer! (resolve-service-op-fn
+                                    'app.domain.backend.expenses.services.payers
+                                    :delete!
+                                    'delete-payer!)
+                    deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [payer-id ids]
+                  (try
+                    (if (boolean (delete-payer! db payer-id))
+                      (swap! deleted-ids conj (str payer-id))
+                      (swap! errors conj {:id (str payer-id)
+                                          :error "not found"}))
+                    (catch org.postgresql.util.PSQLException e
+                      (let [sql-state (.getSQLState e)]
+                        (swap! errors conj {:id (str payer-id)
+                                            :error (if (= "23503" sql-state)
+                                                     "foreign key constraint"
+                                                     "database error")
+                                            :sql-state sql-state})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str payer-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Error batch deleting payers")
+            (h/json-response {:error "Failed to delete payers"} 500))))
       (h/unauthorized-response))))
 
 (def ^:private payer-type-manage-roles
@@ -442,5 +561,65 @@
                 (log/error e "Error deleting payer type" {:payer-type-id payer-type-id})
                 (h/json-response {:error "Failed to delete payer type"} 500)))
             (h/json-response {:error "Invalid payer type ID"} 400))))
+      (h/unauthorized-response))))
+
+(defn batch-delete-payer-types-handler
+  "Handler factory for deleting multiple payer types.
+
+  Allowed roles: admin/owner.
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request payer-type-manage-roles "Only admins and owners can manage payer types")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:payer_type_ids body)
+                          (:payer-type-ids body)
+                          (:payerTypeIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No payer type ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more payer type ids are invalid"} 400)
+
+              :else
+              (let [delete-payer-type! (resolve-service-op-fn
+                                         'app.domain.backend.expenses.services.payer-types
+                                         :delete!)
+                    deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [payer-type-id ids]
+                  (try
+                    (if (boolean (delete-payer-type! db payer-type-id))
+                      (swap! deleted-ids conj (str payer-type-id))
+                      (swap! errors conj {:id (str payer-type-id)
+                                          :error "not found"}))
+                    (catch org.postgresql.util.PSQLException e
+                      (let [sql-state (.getSQLState e)]
+                        (swap! errors conj {:id (str payer-type-id)
+                                            :error (if (= "23503" sql-state)
+                                                     "foreign key constraint"
+                                                     "database error")
+                                            :sql-state sql-state})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str payer-type-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Error batch deleting payer types")
+            (h/json-response {:error "Failed to delete payer types"} 500))))
       (h/unauthorized-response))))
 

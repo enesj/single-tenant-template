@@ -162,9 +162,10 @@
         "Should toggle entity-specific setting back to true"))
 
     ;; Test toggle for different entity
-    (rf/dispatch-sync [::ui-state-events/toggle-timestamps :expenses])
+
+    (rf/dispatch-sync [::ui-state-events/toggle-delete :expenses])
     (let [db @rf-db/app-db]
-      (is (true? (get-in db [:ui :entity-prefs :expenses :display :show-timestamps?]))
+      (is (false? (get-in db [:ui :entity-prefs :expenses :display :show-delete?]))
         "Should create entity-specific override for expenses"))
 
     ;; Test toggle highlights

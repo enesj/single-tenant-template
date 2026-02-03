@@ -91,3 +91,53 @@
             (log/error e "Failed to delete supplier alias" {:alias-id (get-in request [:path-params :id])})
             (h/json-response {:error "Failed to delete supplier alias"} 500))))
       (h/unauthorized-response))))
+
+(defn batch-delete-supplier-aliases-handler
+  "Batch delete supplier aliases (admin/owner only).
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request power-user-roles
+                           "Only admins and owners can delete supplier aliases")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:supplier_alias_ids body)
+                          (:supplier-alias-ids body)
+                          (:supplierAliasIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No supplier alias ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more supplier alias ids are invalid"} 400)
+
+              :else
+              (let [delete! (:delete! supplier-aliases/service)
+                    deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [alias-id ids]
+                  (try
+                    (if (boolean (delete! db alias-id))
+                      (swap! deleted-ids conj (str alias-id))
+                      (swap! errors conj {:id (str alias-id)
+                                          :error "not found"}))
+                    (catch Exception e
+                      (swap! errors conj {:id (str alias-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Failed to batch delete supplier aliases")
+            (h/json-response {:error "Failed to delete supplier aliases"} 500))))
+      (h/unauthorized-response))))

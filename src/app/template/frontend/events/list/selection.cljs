@@ -53,10 +53,14 @@
   ::delete-selected
   common-interceptors
   (fn [{:keys [db]} [entity-type selected-ids]]
-    {:db (assoc-in db (paths/entity-loading? entity-type) true)
-     :fx (vec
-           (for [id selected-ids]
-             [:dispatch [:app.template.frontend.events.list.crud/delete-entity entity-type id]]))}))
+    (let [ids (->> (or selected-ids [])
+                (remove nil?)
+                distinct
+                vec)]
+      (if (and entity-type (seq ids))
+        {:db (assoc-in db (paths/entity-loading? entity-type) true)
+         :dispatch [:app.template.frontend.events.list.crud/batch-delete entity-type ids]}
+        {:db db}))))
 
 ;;; -------------------------
 ;;; Item Fetching

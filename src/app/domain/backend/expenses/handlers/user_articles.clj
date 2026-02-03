@@ -163,6 +163,61 @@
                                                          :article-id (str article-id)})
                 (h/json-response {:error "Failed to delete article"} 500)))))))))
 
+(defn batch-delete-articles-handler
+  "Batch delete articles (admin/owner only).
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-not (h/get-user request)
+      (h/unauthorized-response)
+      (if-let [forbidden (ensure-admin-or-owner request)]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:article_ids body)
+                          (:article-ids body)
+                          (:articleIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No article ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more article ids are invalid"} 400)
+
+              :else
+              (let [deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [article-id ids]
+                  (try
+                    (if (boolean (articles/delete-article! db article-id))
+                      (swap! deleted-ids conj (str article-id))
+                      (swap! errors conj {:id (str article-id)
+                                          :error "not found"}))
+                    (catch org.postgresql.util.PSQLException e
+                      (let [sql-state (.getSQLState e)]
+                        (swap! errors conj {:id (str article-id)
+                                            :error (if (= "23503" sql-state)
+                                                     "foreign key constraint"
+                                                     "database error")
+                                            :sql-state sql-state})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str article-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Failed to batch delete articles" {:message (.getMessage e)})
+            (h/json-response {:error "Failed to delete articles"} 500)))))))
+
 (defn list-unmapped-aliases-handler
   [db]
   (fn [request]

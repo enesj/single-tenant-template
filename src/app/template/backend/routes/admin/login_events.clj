@@ -84,5 +84,4 @@
   [db]
   [""
    ["" {:get (get-login-events-handler db)}]
-   ["/bulk" {:delete (bulk-delete-login-events-handler db)}]
-   ["/:id" {:delete (delete-login-event-handler db)}]])
+   ["/batch" {:delete (bulk-delete-login-events-handler db)}]])

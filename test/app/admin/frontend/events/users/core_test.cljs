@@ -79,7 +79,8 @@
 
       (let [req (setup/last-http-request)]
         (is (= :delete (:method req)))
-        (is (= (str "/admin/api/users/" user-id) (:uri req)))
+        (is (= "/admin/api/users/batch" (:uri req)))
+        (is (= {:ids [user-id]} (:params req)))
         (is (= [:admin/delete-user-success user-id] (:on-success req)))
         (is (= [:admin/delete-user-failure user-id] (:on-failure req))))
 

@@ -50,23 +50,27 @@
    :priority 90
    :context-pred (constantly true)
    :operations
-   {:delete
-    {:request (fn [{:keys [db]} entity-type id default-effect]
-                (assoc default-effect
-                  :db (assoc-in db (paths/entity-loading? entity-type) true)
-                  :http-xhrio
-                  (x/xhrio db
-                    {:method :delete
-                     :uri (str endpoints/receipts-endpoint "/" id)
+   {:batch-delete
+    {:request
+     (fn [{:keys [db]} entity-type ids default-effect]
+       (let [ids* (->> (or ids []) (remove nil?) (map str) distinct vec)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio
+           (x/xhrio db
+             {:method :delete
+              :uri (str endpoints/receipts-endpoint "/batch")
+              :params {:ids ids*}
+              :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+              :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]}))))
 
-                     :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                     :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})))
-     :on-success (fn [{:keys [db]} entity-type _id default-effect]
-                   (assoc default-effect
-                     :db (-> db
-                           (assoc-in (paths/entity-loading? entity-type) false)
-                           (assoc-in (paths/entity-error entity-type) nil))
-                     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}}})
+     :on-success
+     (fn [{:keys [db]} entity-type _ids _response default-effect]
+       (assoc default-effect
+         :db (-> db
+               (assoc-in (paths/entity-loading? entity-type) false)
+               (assoc-in (paths/entity-error entity-type) nil))
+         :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}}})
 
 ;; ---------------------------------------------------------------------------
 ;; List receipts

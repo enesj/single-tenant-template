@@ -66,23 +66,23 @@
     (fn [request]
       (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
             admin-data (:body request)]
-        
+
         (log/info "Admin create request:" {:email (:email admin-data) :role (:role admin-data)})
-        
+
         ;; Basic validation
         (when-not (:email admin-data)
           (throw (ex-info "Email is required" {:status 400 :field :email})))
         (when-not (:password admin-data)
           (throw (ex-info "Password is required" {:status 400 :field :password})))
-        
+
         (let [created-admin (admin-admins/create-admin! db admin-data
                               (:id admin)
                               ip-address
                               user-agent)]
-          
+
           (utils/log-admin-action "create_admin" (:id admin) "admin"
             (:id created-admin) (dissoc admin-data :password))
-          
+
           (let [converted-admin (shared-db/to-app created-admin)]
             (utils/json-response {:admin converted-admin} :status 201)))))
     "Failed to create admin"))
@@ -102,10 +102,10 @@
                                 (-> context :admin :id)
                                 (:ip-address context)
                                 (:user-agent context))]
-            
+
             (utils/log-admin-action "update_admin" (-> context :admin :id)
               "admin" admin-id updates)
-            
+
             (let [converted-admin (shared-db/to-app updated-admin)]
               (utils/json-response {:admin converted-admin}))))))
     "Failed to update admin"))
@@ -126,14 +126,54 @@
                          (:id admin)
                          ip-address
                          user-agent)]
-            
+
             (utils/log-admin-action "delete_admin" (:id admin)
               "admin" admin-id nil)
-            
+
             (if (:success result)
               (utils/success-response {:message (:message result)})
               (utils/error-response (:message result) :status 400))))))
     "Failed to delete admin"))
+
+(defn batch-delete-admins-handler
+  "Delete multiple admins.
+
+  Expects JSON body like:
+  {:ids [<uuid-str> ...]}"
+  [db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
+            body (:body request)
+            ids (or (:ids body) [])
+            admin-ids (->> ids (map utils/parse-uuid-custom) (filter some?) vec)]
+        (if (empty? admin-ids)
+          (utils/error-response "No valid IDs provided" :status 400)
+          (let [deleted-ids (atom [])
+                errors (atom [])]
+            (doseq [admin-id admin-ids]
+              (try
+                (let [result (admin-admins/delete-admin! db admin-id
+                               (:id admin)
+                               ip-address
+                               user-agent)]
+                  (if (:success result)
+                    (swap! deleted-ids conj (str admin-id))
+                    (swap! errors conj {:id (str admin-id)
+                                        :error (:message result)})))
+                (catch Exception e
+                  (swap! errors conj {:id (str admin-id)
+                                      :error (.getMessage e)}))))
+
+            (utils/log-admin-action "batch_delete_admins" (:id admin)
+              "admins" nil {:count (count @deleted-ids)
+                            :ids (vec @deleted-ids)})
+
+            (utils/success-response
+              {:data {:deleted-count (count @deleted-ids)
+                      :deleted-ids (vec @deleted-ids)
+                      :errors (vec @errors)}})))))
+    "Failed to batch delete admins"))
 
 ;; ============================================================================
 ;; Update Admin Role
@@ -149,20 +189,20 @@
           (let [new-role (:role body)]
             (when-not new-role
               (throw (ex-info "Role is required" {:status 400 :field :role})))
-            
+
             (when-not (#{"admin" "support" "owner"} new-role)
-              (throw (ex-info "Invalid role. Must be one of: admin, support, owner" 
+              (throw (ex-info "Invalid role. Must be one of: admin, support, owner"
                        {:status 400 :field :role :allowed ["admin" "support" "owner"]})))
-            
+
             (let [updated-admin (admin-admins/update-admin-role! db admin-id new-role
                                   (-> context :admin :id)
                                   (:ip-address context)
                                   (:user-agent context))]
-              
+
               (utils/log-admin-action "update_admin_role" (-> context :admin :id)
                 "admin" admin-id {:new-role new-role})
-              
-                (let [converted-admin (shared-db/to-app updated-admin)]
+
+              (let [converted-admin (shared-db/to-app updated-admin)]
                 (utils/json-response {:admin converted-admin})))))))
     "Failed to update admin role"))
 
@@ -180,20 +220,20 @@
           (let [new-status (:status body)]
             (when-not new-status
               (throw (ex-info "Status is required" {:status 400 :field :status})))
-            
+
             (when-not (#{"active" "suspended"} new-status)
-              (throw (ex-info "Invalid status. Must be one of: active, suspended" 
+              (throw (ex-info "Invalid status. Must be one of: active, suspended"
                        {:status 400 :field :status :allowed ["active" "suspended"]})))
-            
+
             (let [updated-admin (admin-admins/update-admin-status! db admin-id new-status
                                   (-> context :admin :id)
                                   (:ip-address context)
                                   (:user-agent context))]
-              
+
               (utils/log-admin-action "update_admin_status" (-> context :admin :id)
                 "admin" admin-id {:new-status new-status})
-              
-                (let [converted-admin (shared-db/to-app updated-admin)]
+
+              (let [converted-admin (shared-db/to-app updated-admin)]
                 (utils/json-response {:admin converted-admin})))))))
     "Failed to update admin status"))
 
@@ -207,10 +247,10 @@
   ["/admins"
    ["" {:get (list-admins-handler db)
         :post (create-admin-handler db)}]
+   ["/batch" {:delete (batch-delete-admins-handler db)}]
    ["/:id"
     {:get (get-admin-details-handler db)
-     :put (update-admin-handler db)
-     :delete (delete-admin-handler db)}]
+     :put (update-admin-handler db)}]
    ["/:id/role"
     {:put (update-admin-role-handler db)}]
    ["/:id/status"

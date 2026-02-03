@@ -123,14 +123,15 @@
 
       (if token
         {:db (assoc-in db [:admin :login-events :deleting?] true)
-         :http-xhrio {:method          :delete
-                      :uri             (str "/admin/api/login-events/" event-id)
-                      :headers         (when token {"x-admin-token" token})
-                      :format          (ajax/json-request-format)
+         :http-xhrio {:method :delete
+                      :uri "/admin/api/login-events/batch"
+                      :body (js/JSON.stringify (clj->js {:ids [(str event-id)]}))
+                      :headers (cond-> {"Content-Type" "application/json"}
+                                 token (assoc "x-admin-token" token))
                       :response-format (ajax/json-response-format {:keywords? true})
-                      :timeout         10000
-                      :on-success      [:admin/login-event-deleted event-id]
-                      :on-failure      [:admin/login-event-delete-failed]}}
+                      :timeout 10000
+                      :on-success [:admin/login-event-deleted event-id]
+                      :on-failure [:admin/login-event-delete-failed]}}
         {:db (assoc-in db [:admin :login-events :error] "Authentication required")}))))
 
 (rf/reg-event-fx
@@ -166,7 +167,7 @@
       (if token
         {:db (assoc-in db [:admin :login-events :bulk-deleting?] true)
          :http-xhrio {:method          :delete
-                      :uri             "/admin/api/login-events/bulk"
+                      :uri             "/admin/api/login-events/batch"
                       :body            (js/JSON.stringify (clj->js {:ids ids-as-strings}))
                       :headers         (cond-> {"Content-Type" "application/json"}
                                          token (assoc "x-admin-token" token))

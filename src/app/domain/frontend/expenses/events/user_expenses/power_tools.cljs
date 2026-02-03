@@ -141,8 +141,8 @@
              (assoc-in [:user-expenses :form :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :delete
-                      :uri (str endpoints/articles-endpoint "/" article-id-str)
-
+                      :uri (str endpoints/articles-endpoint "/batch")
+                      :params {:ids [article-id-str]}
                       :on-success [:user-expenses/delete-article-success]
                       :on-failure [:user-expenses/delete-article-failure]})})))
 
@@ -240,9 +240,8 @@
            (assoc-in [:user-expenses :form :error] nil))
      :http-xhrio (x/xhrio db
                    {:method :delete
-                    :uri (str endpoints/expense-items-endpoint "/" expense-item-id)
-
-                    :response-format (ajax/text-response-format)
+                    :uri (str endpoints/expense-items-endpoint "/batch")
+                    :params {:ids [(some-> expense-item-id str)]}
                     :on-success [:user-expenses/delete-expense-item-success]
                     :on-failure [:user-expenses/delete-expense-item-failure]})}))
 
@@ -347,8 +346,8 @@
              (assoc-in [:user-expenses :form :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :delete
-                      :uri (str endpoints/article-aliases-endpoint "/" article-alias-id-str)
-
+                      :uri (str endpoints/article-aliases-endpoint "/batch")
+                      :params {:ids [article-alias-id-str]}
                       :on-success [:user-expenses/delete-article-alias-success]
                       :on-failure [:user-expenses/delete-article-alias-failure]})})))
 
@@ -452,8 +451,8 @@
              (assoc-in [:user-expenses :form :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :delete
-                      :uri (str endpoints/supplier-aliases-endpoint "/" supplier-alias-id-str)
-
+                      :uri (str endpoints/supplier-aliases-endpoint "/batch")
+                      :params {:ids [supplier-alias-id-str]}
                       :on-success [:user-expenses/delete-supplier-alias-success]
                       :on-failure [:user-expenses/delete-supplier-alias-failure]})})))
 
@@ -551,8 +550,8 @@
              (assoc-in [:user-expenses :form :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :delete
-                      :uri (str endpoints/price-observations-endpoint "/" price-observation-id-str)
-
+                      :uri (str endpoints/price-observations-endpoint "/batch")
+                      :params {:ids [price-observation-id-str]}
                       :on-success [:user-expenses/delete-price-observation-success]
                       :on-failure [:user-expenses/delete-price-observation-failure]})})))
 
@@ -570,3 +569,4 @@
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+

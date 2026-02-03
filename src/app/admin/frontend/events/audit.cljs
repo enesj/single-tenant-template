@@ -184,9 +184,10 @@
       (if token
         {:db (assoc-in db [:admin :audit :deleting?] true)
          :http-xhrio {:method          :delete
-                      :uri             (str "/admin/api/audit/" audit-id)
-                      :headers         (when token {"x-admin-token" token})
-                      :format          (ajax/json-request-format)
+                      :uri             "/admin/api/audit/batch"
+                      :body            (js/JSON.stringify (clj->js {:ids [(str audit-id)]}))
+                      :headers         (cond-> {"Content-Type" "application/json"}
+                                         token (assoc "x-admin-token" token))
                       :response-format (ajax/json-response-format {:keywords? true})
                       :timeout         10000 ; 10 second timeout
                       :on-success      [:admin/audit-log-deleted audit-id]
@@ -242,7 +243,7 @@
       (if token
         {:db (assoc-in db [:admin :audit :bulk-deleting?] true)
          :http-xhrio {:method          :delete
-                      :uri             "/admin/api/audit/bulk"
+                      :uri             "/admin/api/audit/batch"
                       :body            (js/JSON.stringify (clj->js {:ids ids-as-strings}))
                       :headers         (cond-> {"Content-Type" "application/json"}
                                          token (assoc "x-admin-token" token))

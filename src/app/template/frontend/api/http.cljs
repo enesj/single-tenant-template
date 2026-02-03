@@ -207,6 +207,20 @@
        :on-success on-success
        :on-failure on-failure})))
 
+(defn batch-delete-entities
+  "Batch delete multiple entities.
+
+  Sends a single request to the template batch endpoint for the entity.
+  NOTE: This uses DELETE with a JSON body {:ids [...]}."
+  [{:keys [entity-name ids on-success on-failure timeout]
+    :or {timeout 8000}}]
+  (delete-request
+    {:uri (api/batch-endpoint entity-name "delete")
+     :params {:ids (vec (or ids []))}
+     :timeout timeout
+     :on-success on-success
+     :on-failure on-failure}))
+
 ;;; -------------------------
 ;;; Error Handling
 ;;; -------------------------

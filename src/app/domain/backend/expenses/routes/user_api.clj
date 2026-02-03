@@ -49,57 +49,70 @@
     {:get {:handler (user-expenses-reference-data/list-suppliers-handler db)}
      :post {:handler (user-expenses-reference-data/create-supplier-handler db)}}]
 
+   ["/suppliers/batch"
+    {:delete {:handler (user-expenses-reference-data/batch-delete-suppliers-handler db)}}]
+
    ["/suppliers/:id"
     {:get {:handler (user-expenses-reference-data/get-supplier-handler db)}
-     :put {:handler (user-expenses-reference-data/update-supplier-handler db)}
-     :delete {:handler (user-expenses-reference-data/delete-supplier-handler db)}}]
+     :put {:handler (user-expenses-reference-data/update-supplier-handler db)}}]
 
    ;; Supplier detail related lists (used by user Suppliers "View Details" modal)
    ["/article-aliases" {:get {:handler (supplier-detail/list-article-aliases-handler db)}}]
 
    ;; Article aliases (power-user only)
+   ["/article-aliases/batch"
+    {:delete {:handler (user-expenses-article-aliases/batch-delete-article-aliases-handler db)}}]
+
    ["/article-aliases/:id"
-    {:put {:handler (user-expenses-article-aliases/update-article-alias-handler db)}
-     :delete {:handler (user-expenses-article-aliases/delete-article-alias-handler db)}}]
+    {:put {:handler (user-expenses-article-aliases/update-article-alias-handler db)}}]
 
    ;; Supplier aliases (admin/owner only)
    ["/supplier-aliases"
     {:get {:handler (user-expenses-supplier-aliases/list-supplier-aliases-handler db)}}]
 
+   ["/supplier-aliases/batch"
+    {:delete {:handler (user-expenses-supplier-aliases/batch-delete-supplier-aliases-handler db)}}]
+
    ["/supplier-aliases/:id"
-    {:put {:handler (user-expenses-supplier-aliases/update-supplier-alias-handler db)}
-     :delete {:handler (user-expenses-supplier-aliases/delete-supplier-alias-handler db)}}]
+    {:put {:handler (user-expenses-supplier-aliases/update-supplier-alias-handler db)}}]
 
    ["/price-observations"
     ["" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]
 
+    ["/batch" {:delete {:handler (user-price-observations/batch-delete-price-observations-handler db)}}]
+
     ["/:id"
-     {:put {:handler (user-price-observations/update-price-observation-handler db)}
-      :delete {:handler (user-price-observations/delete-price-observation-handler db)}}]]
+     {:put {:handler (user-price-observations/update-price-observation-handler db)}}]]
 
    ["/payers"
     {:get {:handler (user-expenses-reference-data/list-payers-handler db)}
      :post {:handler (user-expenses-reference-data/create-payer-handler db)}}]
 
+   ["/payers/batch"
+    {:delete {:handler (user-expenses-reference-data/batch-delete-payers-handler db)}}]
+
    ["/payers/:id"
-    {:put {:handler (user-expenses-reference-data/update-payer-handler db)}
-     :delete {:handler (user-expenses-reference-data/delete-payer-handler db)}}]
+    {:put {:handler (user-expenses-reference-data/update-payer-handler db)}}]
 
    ;; Payer Types (admin/owner only)
    ["/payer-types"
     {:get {:handler (user-expenses-reference-data/list-payer-types-handler db)}
      :post {:handler (user-expenses-reference-data/create-payer-type-handler db)}}]
 
+   ["/payer-types/batch"
+    {:delete {:handler (user-expenses-reference-data/batch-delete-payer-types-handler db)}}]
+
    ["/payer-types/:id"
-    {:put {:handler (user-expenses-reference-data/update-payer-type-handler db)}
-     :delete {:handler (user-expenses-reference-data/delete-payer-type-handler db)}}]
+    {:put {:handler (user-expenses-reference-data/update-payer-type-handler db)}}]
 
    ;; Expense items (power-user only)
    ["/expense-items" {:get {:handler (user-expenses-expense-items/list-expense-items-handler db)}}]
 
+   ["/expense-items/batch"
+    {:delete {:handler (user-expenses-expense-items/batch-delete-expense-items-handler db)}}]
+
    ["/expense-items/:id"
-    {:put {:handler (user-expenses-expense-items/update-expense-item-handler db)}
-     :delete {:handler (user-expenses-expense-items/delete-expense-item-handler db)}}]
+    {:put {:handler (user-expenses-expense-items/update-expense-item-handler db)}}]
 
    ;; Receipt upload (creates a receipts row)
    ["/upload" {:post {:handler (receipt-upload/user-upload-handler db)}}]
@@ -108,9 +121,10 @@
    ["/receipts" {:get {:handler (user-receipts/list-receipts-handler db)}}]
    ["/receipts/ocr" {:post {:handler (user-receipts/ocr-batch-receipts-handler db app-config)}}]
    ["/receipts/:id/download" {:get {:handler (user-receipts/download-receipt-handler db)}}]
+   ["/receipts/batch" {:delete {:handler (user-receipts/batch-delete-receipts-handler db)}}]
+
    ["/receipts/:id"
-    {:get {:handler (user-receipts/get-receipt-handler db)}
-     :delete {:handler (user-receipts/delete-receipt-handler db)}}]
+    {:get {:handler (user-receipts/get-receipt-handler db)}}]
    ["/receipts/:id/approve" {:post {:handler (user-receipts/approve-receipt-handler db)}}]
    ["/receipts/:id/review" {:post {:handler (user-receipts/save-receipt-review-handler db)}}]
    ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
@@ -120,8 +134,9 @@
     ["" {:get {:handler (user-manufacturers/list-manufacturers-handler db)}
          :post {:handler (user-manufacturers/create-manufacturer-handler db)}}]
 
-    ["/:id" {:put {:handler (user-manufacturers/update-manufacturer-handler db)}
-             :delete {:handler (user-manufacturers/delete-manufacturer-handler db)}}]]
+    ["/batch" {:delete {:handler (user-manufacturers/batch-delete-manufacturers-handler db)}}]
+
+    ["/:id" {:put {:handler (user-manufacturers/update-manufacturer-handler db)}}]]
 
    ;; Articles + unmapped aliases (role-gated to admin/owner)
    ;; IMPORTANT: Must come before the "/:id" expense route.
@@ -135,18 +150,19 @@
 
     ["/:id/aliases" {:post {:handler (user-articles/batch-create-aliases-handler db)}}]
 
-    ["/:id" {:put {:handler (user-articles/update-article-handler db)}
-             :delete {:handler (user-articles/delete-article-handler db)}}]]
+    ["/batch" {:delete {:handler (user-articles/batch-delete-articles-handler db)}}]
+
+    ["/:id" {:put {:handler (user-articles/update-article-handler db)}}]]
 
    ;; Expenses CRUD
    ["" {:get {:handler (user-expenses-crud/list-expenses-handler db)}
         :post {:handler (user-expenses-crud/create-expense-handler db)}}]
 
    ;; Batch operations
-   ["/batch" {:put {:handler (user-expenses-batch/batch-update-expenses-handler db)}}]
+   ["/batch" {:put {:handler (user-expenses-batch/batch-update-expenses-handler db)}
+              :delete {:handler (user-expenses-batch/batch-delete-expenses-handler db)}}]
 
    ["/batch-delete" {:post {:handler (user-expenses-batch/batch-delete-expenses-handler db)}}]
 
    ["/:id" {:get {:handler (user-expenses-crud/get-expense-handler db)}
-            :put {:handler (user-expenses-crud/update-expense-handler db)}
-            :delete {:handler (user-expenses-crud/delete-expense-handler db)}}]])
+            :put {:handler (user-expenses-crud/update-expense-handler db)}}]])

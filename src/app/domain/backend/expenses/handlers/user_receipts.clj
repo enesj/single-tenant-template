@@ -270,6 +270,71 @@
         (h/unauthorized-response)))
     "Failed to delete receipt"))
 
+(defn batch-delete-receipts-handler
+  "DELETE /api/v1/expenses/receipts/batch
+
+  Batch delete receipts visible to the current user.
+
+  Allowed roles: member/admin/owner.
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (with-error-handling
+    (fn [request]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles
+                             "Only members, admins, and owners can delete receipts")]
+          forbidden
+          (let [role (h/get-user-role request)
+                body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:receipt_ids body)
+                          (:receipt-ids body)
+                          (:receiptIds body)
+                          [])
+                ids (->> raw-ids (map try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No receipt ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more receipt ids are invalid"} 400)
+
+              :else
+              (let [deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [id ids]
+                  (try
+                    (cond
+                      (= "admin" role)
+                      (if-let [_deleted (receipt-queries/delete-receipt! db id)]
+                        (swap! deleted-ids conj (str id))
+                        (swap! errors conj {:id (str id)
+                                            :error "not found"}))
+
+                      (not (receipt-queries/get-user-receipt db user-id id))
+                      (swap! errors conj {:id (str id)
+                                          :error "not found"})
+
+                      :else
+                      (if-let [_deleted (receipt-queries/delete-receipt! db id)]
+                        (swap! deleted-ids conj (str id))
+                        (swap! errors conj {:id (str id)
+                                            :error "not found"})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str id)
+                                          :error (.getMessage e)}))))
+
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}})))))
+        (h/unauthorized-response)))
+    "Failed to batch delete receipts"))
+
 (defn approve-receipt-handler
   "POST /api/v1/expenses/receipts/:id/approve
 

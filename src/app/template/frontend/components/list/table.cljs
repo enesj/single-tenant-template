@@ -54,7 +54,7 @@
 
 (defui action-header-buttons
   "Action buttons for the table header"
-  [{:keys [entity-name selected-ids show-batch-edit? show-batch-delete?]}]
+  [{:keys [entity-name selected-ids show-batch-edit? show-batch-delete? on-batch-delete]}]
   (let [has-selection? (seq selected-ids)
         selection-count (count selected-ids)
         has-multiple-selection? (and has-selection? (>= selection-count 2))
@@ -64,12 +64,18 @@
 
         ;; Define a separate function to handle batch delete confirmation
         ;; Route entity-specific batch deletes through their admin endpoints
+        ;; Allow callers to override batch delete for domain/user-specific endpoints.
         handle-batch-delete-confirm (fn []
-                                      (case entity-name
-                                        :audit-logs (rf/dispatch [:admin/bulk-delete-audit-logs (vec selected-ids)])
-                                        :login-events (rf/dispatch [:admin/bulk-delete-login-events (vec selected-ids)])
-                                        ;; Default to generic template batch delete
-                                        (rf/dispatch [::selection-events/delete-selected entity-name selected-ids])))
+                                      (cond
+                                        on-batch-delete
+                                        (on-batch-delete (vec selected-ids))
+
+                                        :else
+                                        (case entity-name
+                                          :audit-logs (rf/dispatch [:admin/bulk-delete-audit-logs (vec selected-ids)])
+                                          :login-events (rf/dispatch [:admin/bulk-delete-login-events (vec selected-ids)])
+                                          ;; Default to generic template batch delete
+                                          (rf/dispatch [::selection-events/delete-selected entity-name selected-ids]))))
 
         ;; Create a function that will only show the dialog when clicked
         handle-batch-delete-click (fn [e]
@@ -150,7 +156,7 @@
 (def reactive-select-all-header cells/reactive-select-all-header)
 
 (defn- make-table-headers-
-  [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete?
+  [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete? on-batch-delete
            sort-field sort-direction all-items selected-ids on-select-all active-filters
            filterable-fields user-filterable-settings visible-columns column-order
            active-inline-filter on-inline-filter-click]}]
@@ -374,7 +380,8 @@
                              {:entity-name entity-name
                               :selected-ids selected-ids
                               :show-batch-edit? show-batch-edit?
-                              :show-batch-delete? show-batch-delete?})))]]
+                              :show-batch-delete? show-batch-delete?
+                              :on-batch-delete on-batch-delete})))]]
 
     ;; Combine all headers in the correct order: select, base fields, timestamps, actions
     ;; Always include the select header - the reactive-select-all-header component
@@ -386,7 +393,7 @@
            action-header))))
 
 (defn make-table-headers
-  [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete?
+  [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete? on-batch-delete
            sort-field sort-direction all-items selected-ids on-select-all active-filters
            filterable-fields user-filterable-settings visible-columns column-order
            active-inline-filter on-inline-filter-click]}]
@@ -395,6 +402,7 @@
                         :show-filtering? show-filtering?
                         :show-batch-edit? show-batch-edit?
                         :show-batch-delete? show-batch-delete?
+                        :on-batch-delete on-batch-delete
                         :sort-field sort-field
                         :sort-direction sort-direction
                         :all-items all-items

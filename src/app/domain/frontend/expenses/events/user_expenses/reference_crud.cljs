@@ -113,9 +113,8 @@
            (assoc-in [:user-expenses :form :error] nil))
      :http-xhrio (x/xhrio db
                    {:method :delete
-                    :uri (str endpoints/suppliers-endpoint "/" supplier-id)
-
-                    :response-format (ajax/text-response-format)
+                    :uri (str endpoints/suppliers-endpoint "/batch")
+                    :params {:ids [(some-> supplier-id str)]}
                     :on-success [:user-expenses/delete-supplier-success]
                     :on-failure [:user-expenses/delete-supplier-failure]})}))
 
@@ -228,8 +227,8 @@
            (assoc-in [:user-expenses :form :error] nil))
      :http-xhrio (x/xhrio db
                    {:method :delete
-                    :uri (str endpoints/payers-endpoint "/" payer-id)
-
+                    :uri (str endpoints/payers-endpoint "/batch")
+                    :params {:ids [(some-> payer-id str)]}
                     :on-success [:user-expenses/delete-payer-success]
                     :on-failure [:user-expenses/delete-payer-failure]})}))
 
@@ -341,8 +340,8 @@
            (assoc-in [:user-expenses :form :error] nil))
      :http-xhrio (x/xhrio db
                    {:method :delete
-                    :uri (str endpoints/payer-types-endpoint "/" payer-type-id)
-
+                    :uri (str endpoints/payer-types-endpoint "/batch")
+                    :params {:ids [(some-> payer-type-id str)]}
                     :on-success [:user-expenses/delete-payer-type-success]
                     :on-failure [:user-expenses/delete-payer-type-failure]})}))
 

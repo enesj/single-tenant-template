@@ -129,3 +129,59 @@
                 (log/error e "Failed to delete manufacturer" {:message (.getMessage e)
                                                               :manufacturer-id (str manufacturer-id)})
                 (h/json-response {:error "Failed to delete manufacturer"} 500)))))))))
+
+(defn batch-delete-manufacturers-handler
+  "Batch delete manufacturers (admin/owner only).
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-not (h/get-user request)
+      (h/unauthorized-response)
+      (if-let [forbidden (ensure-admin-or-owner request)]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:manufacturer_ids body)
+                          (:manufacturer-ids body)
+                          (:manufacturerIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No manufacturer ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more manufacturer ids are invalid"} 400)
+
+              :else
+              (let [delete! (:delete! manufacturers/service)
+                    deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [manufacturer-id ids]
+                  (try
+                    (if (boolean (delete! db manufacturer-id))
+                      (swap! deleted-ids conj (str manufacturer-id))
+                      (swap! errors conj {:id (str manufacturer-id)
+                                          :error "not found"}))
+                    (catch org.postgresql.util.PSQLException e
+                      (let [sql-state (.getSQLState e)]
+                        (swap! errors conj {:id (str manufacturer-id)
+                                            :error (if (= "23503" sql-state)
+                                                     "foreign key constraint"
+                                                     "database error")
+                                            :sql-state sql-state})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str manufacturer-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Failed to batch delete manufacturers" {:message (.getMessage e)})
+            (h/json-response {:error "Failed to delete manufacturers"} 500)))))))

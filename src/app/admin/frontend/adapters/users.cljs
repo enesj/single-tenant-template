@@ -30,7 +30,10 @@
    Users have dedicated routes at /admin/api/users, not /admin/api/entities/users."
   [{:keys [method id params on-success on-failure]}]
   (let [base-uri "/admin/api/users"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (and (= :delete method) (nil? id) (seq (:ids params))) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)]
     (admin-http/admin-request {:method method
                                :uri uri
                                :params params
@@ -45,17 +48,18 @@
    ;; - delete: (fn [cofx entity-type id default-effect]) - 4 args
    ;; - create: (fn [cofx entity-type response default-effect]) - 4 args
    ;; - update: (fn [cofx entity-type id response default-effect]) - 5 args
-   {:delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (users-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_cofx _entity-type _id default-effect]
-                           (assoc default-effect :dispatch [:admin/load-users]))}
+   {:batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (->> (or ids []) (remove nil?) (map str) distinct vec)]
+                                  (assoc default-effect
+                                    :http-xhrio (users-request
+                                                  {:method :delete
+                                                   :params {:ids ids*}
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_cofx _entity-type _ids _response default-effect]
+                                 (assoc default-effect :dispatch [:admin/load-users]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect

@@ -13,8 +13,8 @@
 
 (defn- protected-admin? [entity-name role status]
   (and (= entity-name :users)
-       (= "admin" (str role))
-       (= "active" (str status))))
+    (= "admin" (str role))
+    (= "active" (str status))))
 
 (defui enhanced-action-buttons
   "Action buttons with only local protections (no remote deletion constraints)."
@@ -31,13 +31,13 @@
         delete-disabled? local-admin-protection?
         delete-tooltip (or (when local-admin-protection?
                              "Cannot delete active admin user")
-                           "Delete this record")
+                         "Delete this record")
         ;; Route deletions through the appropriate admin endpoint to ensure
         ;; admin authentication and audit logging are applied correctly.
         ;; - :users -> :admin/delete-user
         ;; - :admins -> :admin/delete-admin
-        ;; - :audit-logs -> :admin/delete-audit-log (uses /admin/api/audit/:id)
-        ;; - :login-events -> :admin/delete-login-event (uses /admin/api/login-events/:id)
+        ;; - :audit-logs -> :admin/delete-audit-log (uses /admin/api/audit/batch)
+        ;; - :login-events -> :admin/delete-login-event (uses /admin/api/login-events/batch)
         ;; - others -> generic template delete
         handle-delete-confirm #(case entity-name-kw
                                  :users (rf/dispatch [:admin/delete-user item-id])
@@ -75,8 +75,8 @@
        :delete (when show-delete?
                  {:id (str "btn-delete-" entity-name-lower "-" item-id)
                   :class (str "ds-btn-circle "
-                              (when delete-disabled?
-                                "opacity-50 cursor-not-allowed pointer-events-none"))
+                           (when delete-disabled?
+                             "opacity-50 cursor-not-allowed pointer-events-none"))
                   :disabled? delete-disabled?
                   :aria-disabled? delete-disabled?
                   :tooltip delete-tooltip

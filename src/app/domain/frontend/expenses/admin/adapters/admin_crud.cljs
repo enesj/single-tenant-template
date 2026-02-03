@@ -17,9 +17,13 @@
 
 (defn- suppliers-request
   "Create HTTP request config for suppliers admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/suppliers"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🔧 suppliers-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -41,19 +45,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (suppliers-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_cofx _entity-type _id default-effect]
-                           ;; Reuse default DB updates but refresh via expenses domain loader
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (suppliers-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_cofx _entity-type _ids default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -82,9 +86,13 @@
 
 (defn- expenses-request
   "Create HTTP request config for expenses admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/entries"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "💸 expenses-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -106,18 +114,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (expenses-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_cofx _entity-type _id default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.expenses/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (expenses-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_cofx _entity-type _ids default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.expenses/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -146,9 +155,13 @@
 
 (defn- expense-items-request
   "Create HTTP request config for expense items admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/expense-items"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🧾 expense-items-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -170,18 +183,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (expense-items-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_cofx _entity-type _id default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.expense-items/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (expense-items-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_cofx _entity-type _ids default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.expense-items/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -210,9 +224,13 @@
 
 (defn- receipts-request
   "Create HTTP request config for receipts admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/receipts"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🧾 receipts-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -234,18 +252,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (receipts-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_cofx _entity-type _id default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.receipts/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (receipts-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_cofx _entity-type _ids default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.receipts/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -274,9 +293,13 @@
 
 (defn- payers-request
   "Create HTTP request config for payers admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/payers"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🔧 payers-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -298,18 +321,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (payers-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_cofx _entity-type _id default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.payers/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (payers-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_cofx _entity-type _ids default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.payers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -338,9 +362,13 @@
 
 (defn- articles-request
   "Create HTTP request config for articles admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/articles"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "📦 articles-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -362,18 +390,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (articles-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (articles-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -402,9 +431,13 @@
 
 (defn- article-aliases-request
   "Create HTTP request config for article aliases admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/article-aliases"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🔗 article-aliases-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -426,18 +459,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (article-aliases-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.article-aliases/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (article-aliases-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.article-aliases/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -466,9 +500,13 @@
 
 (defn- price-observations-request
   "Create HTTP request config for price observations admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/price-observations"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "📈 price-observations-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -490,18 +528,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (price-observations-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (price-observations-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -530,9 +569,13 @@
 
 (defn- supplier-aliases-request
   "Create HTTP request config for supplier aliases admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/supplier-aliases"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🔁 supplier-aliases-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -554,18 +597,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (supplier-aliases-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (supplier-aliases-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -594,9 +638,13 @@
 
 (defn- manufacturers-request
   "Create HTTP request config for manufacturers admin API."
-  [{:keys [method id params on-success on-failure]}]
+  [{:keys [method id ids params on-success on-failure]}]
   (let [base-uri "/admin/api/expenses/manufacturers"
-        uri (if id (str base-uri "/" id) base-uri)]
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
     (log/info "🏭 manufacturers-request:" {:method method :uri uri :params params})
     (admin-http/admin-request {:method method
                                :uri uri
@@ -618,18 +666,19 @@
                                           :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
                          {:dispatch [:admin/redirect-to-login]}))}
 
-    :delete {:request (fn [{:keys [db]} entity-type id default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (manufacturers-request
-                                          {:method :delete
-                                           :id id
-                                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (manufacturers-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect

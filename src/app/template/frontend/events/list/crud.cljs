@@ -111,10 +111,10 @@
     (let [status (or (:status response) (get-in response [:response :status]))
           unauthorized? (= 401 status)]
       (cond-> {:db (assoc-in db (paths/entity-metadata entity-type)
-                     {:loading? false
-                      :error (or (get-in response [:response :error])
-                               (str "Failed to fetch " entity-type))
-                      :last-updated nil})}
+                             {:loading? false
+                              :error (or (get-in response [:response :error])
+                                       (str "Failed to fetch " entity-type))
+                              :last-updated nil})}
         unauthorized? (assoc :dispatch [:admin/auth-invalid])))))
 
 ;;; -------------------------
@@ -125,13 +125,10 @@
   ::delete-entity
   common-interceptors
   (fn [cofx [entity-type id]]
-    ;; Guard against malformed dispatches like
-    ;; [:app.template.frontend.events.list.crud/delete-entity nil nil]
-    ;; which would otherwise throw when calling `name` on nil.
-    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    ;; Legacy single-delete event; implemented via batch delete.
     (if (and entity-type id)
       (crud-bridges/run-bridge-operation
-        :delete :request crud-bridges/default-delete-request cofx entity-type [id])
+        :batch-delete :request crud-bridges/default-batch-delete-request cofx entity-type [[id]])
       (do
         (when js/console
           (js/console.warn
@@ -143,17 +140,44 @@
   ::delete-success
   common-interceptors
   (fn [cofx [entity-type id]]
-    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    ;; Legacy single-delete success; implemented via batch delete.
     (crud-bridges/run-bridge-operation
-      :delete :on-success crud-bridges/default-crud-success cofx entity-type [id])))
+      :batch-delete :on-success crud-bridges/default-batch-delete-success cofx entity-type [[id] nil])))
 
 (rf/reg-event-fx
   ::delete-failure
   common-interceptors
   (fn [cofx [entity-type error]]
-    ;; NOTE: trim-v interceptor already removes event name, so destructure directly
+    ;; Legacy single-delete failure; implemented via batch delete.
     (crud-bridges/run-bridge-operation
-      :delete :on-failure crud-bridges/default-delete-failure cofx entity-type [error])))
+      :batch-delete :on-failure crud-bridges/default-batch-delete-failure cofx entity-type [[] error])))
+
+;;; -------------------------
+;;; Batch Deletion
+;;; -------------------------
+
+(rf/reg-event-fx
+  ::batch-delete
+  common-interceptors
+  (fn [cofx [entity-type ids]]
+    (if (and entity-type (seq ids))
+      (crud-bridges/run-bridge-operation
+        :batch-delete :request crud-bridges/default-batch-delete-request cofx entity-type [ids])
+      {:db (:db cofx)})))
+
+(rf/reg-event-fx
+  ::batch-delete-success
+  common-interceptors
+  (fn [cofx [entity-type ids response]]
+    (crud-bridges/run-bridge-operation
+      :batch-delete :on-success crud-bridges/default-batch-delete-success cofx entity-type [ids response])))
+
+(rf/reg-event-fx
+  ::batch-delete-failure
+  common-interceptors
+  (fn [cofx [entity-type ids error]]
+    (crud-bridges/run-bridge-operation
+      :batch-delete :on-failure crud-bridges/default-batch-delete-failure cofx entity-type [ids error])))
 
 ;;; -------------------------
 ;;; Entity Update

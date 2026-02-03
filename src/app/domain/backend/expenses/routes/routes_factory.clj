@@ -309,6 +309,45 @@
             (utils/error-response (str (clojure.string/capitalize (name entity-key)) " not found or in use") :status 404))))
       (str "Failed to delete " (name entity-key)))))
 
+(defn build-batch-delete-handler
+  "Builds a generic batch delete handler for an entity.
+
+  Expects JSON body like:
+  {:ids [<uuid-str> ...]}"
+  [{:keys [service entity-key custom-delete-fn]}]
+  (fn [db]
+    (utils/with-error-handling
+      (fn [request]
+        (let [body (normalize-keys-deep->app (read-json-body request))
+              raw-ids (or (:ids body) [])
+              ids (->> raw-ids (map utils/parse-uuid-custom) (filter some?) vec)
+              delete-fn (or (when custom-delete-fn (resolve-fn service custom-delete-fn))
+                          (resolve-service-op-fn service (symbol (str "delete-" (name entity-key) "!")) :delete!))]
+          (cond
+            (empty? raw-ids)
+            (utils/error-response "No ids provided" :status 400)
+
+            (empty? ids)
+            (utils/error-response "One or more ids are invalid" :status 400)
+
+            :else
+            (let [deleted-ids (atom [])
+                  errors (atom [])]
+              (doseq [id ids]
+                (try
+                  (if (delete-fn db id)
+                    (swap! deleted-ids conj (str id))
+                    (swap! errors conj {:id (str id)
+                                        :error "not found or in use"}))
+                  (catch Exception e
+                    (swap! errors conj {:id (str id)
+                                        :error (.getMessage e)}))))
+              (utils/success-response
+                {:data {:deleted-count (count @deleted-ids)
+                        :deleted-ids (vec @deleted-ids)
+                        :errors (vec @errors)}})))))
+      (str "Failed to batch delete " (name entity-key)))))
+
 (defn build-search-handler
   "Builds a generic search handler for an entity."
   [{:keys [service entity-plural query-param-name search-fn-name transform-response]}]
@@ -343,11 +382,12 @@
                      {:middleware (:route-middleware config)})
         base ["" {:get ((:list handlers) db)
                   :post ((:create handlers) db)}]
+        batch ["/batch" {:conflicting true
+                         :delete ((:batch-delete handlers) db)}]
         by-id ["/:id" {:get ((:get handlers) db)
-                       :put ((:update handlers) db)
-                       :delete ((:delete handlers) db)}]
+                       :put ((:update handlers) db)}]
         header (if route-meta [route-path route-meta] [route-path])]
-    (into header [base by-id])))
+    (into header [base batch by-id])))
 
 (defn build-extended-routes
   "Builds CRUD routes with additional endpoints like count, search, etc. Honors optional :route-middleware."
@@ -359,11 +399,12 @@
                      {:middleware (:route-middleware config)})
         base-routes ["" {:get ((:list handlers) db)
                          :post ((:create handlers) db)}]
+        batch-routes ["/batch" {:conflicting true
+                                :delete ((:batch-delete handlers) db)}]
         id-routes ["/:id" {:get ((:get handlers) db)
-                           :put ((:update handlers) db)
-                           :delete ((:delete handlers) db)}]
+                           :put ((:update handlers) db)}]
         header (if route-meta [route-path route-meta] [route-path])
-        routes (cond-> [base-routes id-routes]
+        routes (cond-> [base-routes batch-routes id-routes]
                  (:count handlers) (conj ["/count" {:get ((:count handlers) db)}])
                  (:search handlers) (conj ["/search" {:get ((:search handlers) db)}])
                  true (into (map #(vector % ((:handler %) db)) additional-routes)))]
@@ -408,6 +449,7 @@
                   :get (build-get-handler config)
                   :update (build-update-handler config)
                   :delete (build-delete-handler config)
+                  :batch-delete (build-batch-delete-handler config)
                   :search (when (:has-search? config)
                             (build-search-handler config))}
         ;; Add custom handlers

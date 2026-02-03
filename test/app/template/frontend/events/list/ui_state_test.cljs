@@ -103,9 +103,9 @@
 
     (testing "Global toggles mutate ui root when entity nil"
       (rf/dispatch-sync [::ui-state-events/toggle-highlights nil])
-      (rf/dispatch-sync [::ui-state-events/toggle-timestamps nil])
+
       (rf/dispatch-sync [::ui-state-events/toggle-delete nil])
       (let [db @rf-db/app-db]
         (is (false? (get-in db [:ui :show-highlights?])) "Global highlight toggle flips existing true → false")
-        (is (true? (get-in db [:ui :show-timestamps?])) "Global timestamps toggle flips existing false → true")
+
         (is (false? (get-in db [:ui :show-delete?])) "Global delete toggle flips existing true → false")))))

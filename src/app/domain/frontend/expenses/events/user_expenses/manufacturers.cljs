@@ -147,8 +147,8 @@
              (assoc-in [:user-expenses :form :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :delete
-                      :uri (str endpoints/manufacturers-endpoint "/" manufacturer-id-str)
-                      :response-format (ajax/text-response-format)
+                      :uri (str endpoints/manufacturers-endpoint "/batch")
+                      :params {:ids [manufacturer-id-str]}
                       :on-success [:user-expenses/delete-manufacturer-success]
                       :on-failure [:user-expenses/delete-manufacturer-failure]})})))
 

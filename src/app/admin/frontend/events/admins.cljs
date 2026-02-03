@@ -172,7 +172,8 @@
            (dissoc :admin/admin-update-error))
      :http-xhrio (admin-http/admin-request
                    {:method :delete
-                    :uri (str "/admin/api/admins/" admin-id)
+                    :uri "/admin/api/admins/batch"
+                    :params {:ids [(str admin-id)]}
                     :on-success [:admin/delete-admin-success admin-id]
                     :on-failure [:admin/delete-admin-failure admin-id]})}))
 

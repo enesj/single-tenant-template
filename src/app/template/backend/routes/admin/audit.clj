@@ -23,7 +23,7 @@
                      :action (:action params)}
             logs (audit-service/get-audit-logs db (merge filters pagination))]
         ;; Convert any remaining PostgreSQL objects for JSON serialization
-          (utils/json-response {:logs (shared-db/convert-pg-objects logs)})))
+        (utils/json-response {:logs (shared-db/convert-pg-objects logs)})))
     "Failed to retrieve audit logs"))
 
 (defn delete-audit-log-handler
@@ -87,5 +87,4 @@
   [db]
   [""
    ["" {:get (get-audit-logs-handler db)}]
-   ["/bulk" {:delete (bulk-delete-audit-logs-handler db)}]
-   ["/:id" {:delete (delete-audit-log-handler db)}]])
+   ["/batch" {:delete (bulk-delete-audit-logs-handler db)}]])

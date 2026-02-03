@@ -111,3 +111,65 @@
                                                                    :price-observation-id (str obs-id)})
                 (h/json-response {:error "Failed to delete price observation"} 500))))))
       (h/unauthorized-response))))
+
+(defn batch-delete-price-observations-handler
+  "Batch delete price observations (admin/owner only).
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (ensure-admin-or-owner request)]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:price_observation_ids body)
+                          (:price-observation-ids body)
+                          (:priceObservationIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No price observation ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more price observation ids are invalid"} 400)
+
+              :else
+              (let [delete! (resolve-service-op :delete!)
+                    deleted-ids (atom [])
+                    errors (atom [])]
+                (when (nil? delete!)
+                  (log/error "Price observation service missing :delete! op")
+                  (throw (ex-info "Delete not available" {:status 500})))
+                (doseq [obs-id ids]
+                  (try
+                    (if (boolean (delete! db obs-id))
+                      (swap! deleted-ids conj (str obs-id))
+                      (swap! errors conj {:id (str obs-id)
+                                          :error "not found"}))
+                    (catch org.postgresql.util.PSQLException e
+                      (let [sql-state (.getSQLState e)]
+                        (swap! errors conj {:id (str obs-id)
+                                            :error (if (= "23503" sql-state)
+                                                     "foreign key constraint"
+                                                     "database error")
+                                            :sql-state sql-state})))
+                    (catch Exception e
+                      (swap! errors conj {:id (str obs-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch clojure.lang.ExceptionInfo e
+            (let [{:keys [status]} (ex-data e)]
+              (h/json-response {:error (ex-message e)} (or status 500))))
+          (catch Exception e
+            (log/error e "Failed to batch delete price observations" {:message (.getMessage e)})
+            (h/json-response {:error "Failed to delete price observations"} 500))))
+      (h/unauthorized-response))))

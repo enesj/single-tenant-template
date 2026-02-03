@@ -68,9 +68,9 @@
         (log/info "Admin create user request:" user-data)
 
         (let [created-user (admin-users/create-user! db user-data
-                 (:id admin)
-                 ip-address
-                 user-agent)]
+                             (:id admin)
+                             ip-address
+                             user-agent)]
 
           (utils/log-admin-action "create_user" (:id admin) "user"
             (:id created-user) user-data)
@@ -104,6 +104,83 @@
               (utils/error-response (:message result) :status 400))))))
     "Failed to delete user"))
 
+(defn batch-delete-users-handler
+  "Batch delete users.
+
+  Expects JSON body like:
+  {:ids [<uuid-str> ...] :force-delete <boolean?>}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
+            body (:body request)
+            raw-ids (or (:ids body) (:user_ids body) (:user-ids body) (:userIds body) [])
+            user-ids (->> raw-ids (map utils/parse-uuid-custom) (filter some?) vec)
+            force-delete (boolean (:force-delete body))
+            dry-run (boolean (:dry-run body))]
+        (cond
+          (empty? raw-ids)
+          (utils/error-response "No user ids provided" :status 400)
+
+          (empty? user-ids)
+          (utils/error-response "One or more user ids are invalid" :status 400)
+
+          :else
+          (let [deleted-ids (atom [])
+                errors (atom [])]
+            (doseq [user-id user-ids]
+              (try
+                (let [result (user-deletion/delete-user!
+                               db
+                               user-id
+                               (:id admin)
+                               ip-address
+                               user-agent
+                               :force-delete force-delete
+                               :dry-run dry-run)]
+                  (cond
+                    (:error result)
+                    (swap! errors conj {:id (str user-id)
+                                        :error (:message result)
+                                        :details (dissoc result :error :message :status)})
+
+                    (:dry-run result)
+                    (swap! errors conj {:id (str user-id)
+                                        :error "dry-run"
+                                        :details (select-keys result [:message :impact-summary])})
+
+                    (:success result)
+                    (swap! deleted-ids conj (str user-id))
+
+                    :else
+                    (swap! errors conj {:id (str user-id)
+                                        :error "Unexpected deletion result"})))
+                (catch clojure.lang.ExceptionInfo e
+                  (let [data (ex-data e)
+                        status (:status data 400)]
+                    (swap! errors conj {:id (str user-id)
+                                        :error (ex-message e)
+                                        :status status
+                                        :details data})))
+                (catch Exception e
+                  (swap! errors conj {:id (str user-id)
+                                      :error (.getMessage e)}))))
+
+            (utils/log-admin-action "batch_delete_users" (:id admin)
+              "users" nil {:count (count @deleted-ids)
+                           :force-delete force-delete
+                           :dry-run dry-run
+                           :ids (vec @deleted-ids)})
+
+            (utils/success-response
+              {:data {:deleted-count (count @deleted-ids)
+                      :deleted-ids (vec @deleted-ids)
+                      :errors (vec @errors)}})))))
+    "Failed to batch delete users"))
+
 ;; Route definitions
 (defn routes
   "Basic user management route definitions"
@@ -111,7 +188,7 @@
   [""
    ["" {:get (list-users-handler db)
         :post (create-user-handler db)}]
+   ["/batch" {:delete (batch-delete-users-handler db)}]
    ["/:id"
     {:get (get-user-details-handler db)
-     :put (update-user-handler db)
-     :delete (delete-user-handler db)}]])
+     :put (update-user-handler db)}]])

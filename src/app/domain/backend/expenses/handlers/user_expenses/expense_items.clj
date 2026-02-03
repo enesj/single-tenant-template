@@ -229,3 +229,54 @@
               (h/json-response {:error "Failed to delete expense item"} 500)))
           (h/json-response {:error "Invalid expense item ID"} 400)))
       (h/unauthorized-response))))
+
+(defn batch-delete-expense-items-handler
+  "Batch delete expense items scoped to the current user's expenses.
+
+  Allowed roles: admin/owner.
+
+  Expects JSON body like:
+  {:ids [<uuid> ...]}
+
+  Returns:
+  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  [db]
+  (fn [request]
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request power-user-roles
+                           "Only admins and owners can modify expense items")]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                raw-ids (or (:ids body)
+                          (:expense_item_ids body)
+                          (:expense-item-ids body)
+                          (:expenseItemIds body)
+                          [])
+                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No expense item ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more expense item ids are invalid"} 400)
+
+              :else
+              (let [deleted-ids (atom [])
+                    errors (atom [])]
+                (doseq [item-id ids]
+                  (try
+                    (if (some? (delete-expense-item! db user-id item-id))
+                      (swap! deleted-ids conj (str item-id))
+                      (swap! errors conj {:id (str item-id)
+                                          :error "not found"}))
+                    (catch Exception e
+                      (swap! errors conj {:id (str item-id)
+                                          :error (.getMessage e)}))))
+                (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                         :deleted-ids (vec @deleted-ids)
+                                         :errors (vec @errors)}}))))
+          (catch Exception e
+            (log/error e "Error batch deleting expense items" {:user-id user-id})
+            (h/json-response {:error "Failed to delete expense items"} 500))))
+      (h/unauthorized-response))))

@@ -89,6 +89,35 @@
        :dispatch [:app.template.frontend.events.list.crud/fetch-entities entity-type]}
       {:db db*})))
 
+(defn default-batch-delete-success
+  "Default success handler for batch delete operations.
+
+  Updates list state optimistically by removing the deleted IDs, clearing selection,
+  and decrementing total item count.
+
+  NOTE: This does not refetch automatically; callers can still trigger a fetch if needed."
+  [{:keys [db]} entity-type ids _response]
+  (let [ids (vec (or ids []))
+        ids-set (set ids)
+        existing-ids (vec (or (get-in db (paths/entity-ids entity-type)) []))
+        remaining-ids (vec (remove ids-set existing-ids))
+        total-dec (count ids)
+        db* (-> db
+              (clear-loading entity-type)
+              (assoc-in (paths/entity-error entity-type) nil)
+              (update-in (paths/entity-data entity-type)
+                (fn [m]
+                  (let [m (or m {})]
+                    (apply dissoc m ids))))
+              (assoc-in (paths/entity-ids entity-type) remaining-ids)
+              (assoc-in (paths/entity-selected-ids entity-type) #{})
+              (update-in (paths/list-total-items entity-type)
+                (fn [n]
+                  (if (number? n)
+                    (max 0 (- n total-dec))
+                    n))))]
+    {:db db*}))
+
 (defn- failure-message
   "Extract error message (and optional suggestion) from response or use default."
   [default-msg error]
@@ -125,6 +154,7 @@
   ; Default failure handler with operation-specific error messages.
   (let [base (case operation
                :delete "Failed to delete item"
+               :batch-delete "Failed to delete items"
                :create (str "Failed to create " (entity-name entity-type))
                :update (str "Failed to update " (entity-name entity-type))
                (str "Failed to complete operation on " (entity-name entity-type)))
@@ -152,6 +182,9 @@
 ;; use these wrappers.
 (defn default-delete-failure [cofx entity-type error]
   (default-crud-failure cofx entity-type :delete error))
+
+(defn default-batch-delete-failure [cofx entity-type _ids error]
+  (default-crud-failure cofx entity-type :batch-delete error))
 
 (defn default-create-failure [cofx entity-type error]
   (default-crud-failure cofx entity-type :create error))
@@ -188,9 +221,18 @@
                            :id id
                            :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
                            :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}]
-                (if (in-admin-context? db)
-                  (template-http/delete-entity-admin opts)
-                  (template-http/delete-entity-public opts)))})
+                 (if (in-admin-context? db)
+                   (template-http/delete-entity-admin opts)
+                   (template-http/delete-entity-public opts)))})
+
+(defn default-batch-delete-request
+  [{:keys [db]} entity-type ids]
+  {:db (assoc-in db (paths/entity-loading? entity-type) true)
+   :http-xhrio (template-http/batch-delete-entities
+                 {:entity-name (entity-name entity-type)
+                  :ids ids
+                  :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids]
+                  :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids]})})
 
 (defn default-create-request [{:keys [db]} entity-type form-data]
   ; Default create request handler using template HTTP.
@@ -199,9 +241,9 @@
                            :data form-data
                            :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
                            :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}]
-                (if (in-admin-context? db)
-                  (template-http/create-entity-admin opts)
-                  (template-http/create-entity-public opts)))})
+                 (if (in-admin-context? db)
+                   (template-http/create-entity-admin opts)
+                   (template-http/create-entity-public opts)))})
 
 (defn default-update-request [{:keys [db]} entity-type id form-data]
   ; Default update request handler using template HTTP.
@@ -211,9 +253,9 @@
                            :data form-data
                            :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
                            :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}]
-                (if (in-admin-context? db)
-                  (template-http/update-entity-admin opts)
-                  (template-http/update-entity-public opts)))})
+                 (if (in-admin-context? db)
+                   (template-http/update-entity-admin opts)
+                   (template-http/update-entity-public opts)))})
 
 ;; ============================================================================
 ;; Bridge Registration and Management
@@ -245,7 +287,7 @@
   (swap! bridge-registry
     (fn [registry]
       (let [existing-bridges (get registry entity-key [])
-            existing-bridge (some (fn [bridge] (= bridge-id (:bridge-id bridge))) existing-bridges)
+            existing-bridge (some (fn [bridge] (when (= bridge-id (:bridge-id bridge)) bridge)) existing-bridges)
             merged-ops (if existing-bridge
                          (merge-operation-configs (:operations existing-bridge) operations)
                          operations)
@@ -374,7 +416,7 @@
       (rf/reg-event-fx
         :app.template.frontend.events.list.crud/delete-entity
         (fn [cofx [_ entity-type id]]
-          (run-bridge-operation :delete :request default-delete-request cofx entity-type [id])))
+          (run-bridge-operation :batch-delete :request default-batch-delete-request cofx entity-type [[id]])))
 
       (rf/reg-event-fx
         :app.template.frontend.events.list.crud/create-entity
@@ -389,7 +431,7 @@
       (rf/reg-event-fx
         :app.template.frontend.events.list.crud/delete-success
         (fn [cofx [_ entity-type id]]
-          (run-bridge-operation :delete :on-success default-crud-success cofx entity-type [id])))
+          (run-bridge-operation :batch-delete :on-success default-batch-delete-success cofx entity-type [[id] nil])))
 
       (rf/reg-event-fx
         :app.template.frontend.events.list.crud/create-success
@@ -403,8 +445,12 @@
 
       (rf/reg-event-fx
         :app.template.frontend.events.list.crud/delete-failure
-        (fn [cofx [_ entity-type error]]
-          (run-bridge-operation :delete :on-failure default-delete-failure cofx entity-type [error])))
+        (fn [cofx event]
+          (let [[_ entity-type & rest] event
+                [ids error] (if (= 2 (count rest))
+                              rest
+                              [[] (first rest)])]
+            (run-bridge-operation :batch-delete :on-failure default-batch-delete-failure cofx entity-type [ids error]))))
 
       (rf/reg-event-fx
         :app.template.frontend.events.list.crud/create-failure
