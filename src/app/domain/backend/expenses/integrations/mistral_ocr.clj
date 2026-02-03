@@ -9,14 +9,12 @@
 
   Implementation is split into focused submodules:
   - config: Configuration building
-  - http: HTTP utilities, retry logic, document helpers
-  - batch: Batch API functions"
+  - http: HTTP utilities, retry logic, document helpers"
   (:require
     [cheshire.core :as json]
     [taoensso.timbre :as log]
     [app.domain.backend.expenses.integrations.mistral-ocr.config :as config]
-    [app.domain.backend.expenses.integrations.mistral-ocr.http :as http]
-    [app.domain.backend.expenses.integrations.mistral-ocr.batch :as batch])
+    [app.domain.backend.expenses.integrations.mistral-ocr.http :as http])
   (:import
     [java.time Instant]))
 
@@ -26,9 +24,6 @@
 ;; Re-export HTTP utilities (for test stubbing)
 (def http-post! http/http-post!)
 (def http-get! http/http-get!)
-
-;; Re-export batch
-(def ocr-extract-batch! batch/ocr-extract-batch!)
 
 (defn ocr-parse!
   "Call Mistral OCR to get markdown per page.

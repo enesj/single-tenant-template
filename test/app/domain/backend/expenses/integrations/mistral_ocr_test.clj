@@ -12,10 +12,6 @@
                          :base-url "https://example"
                          :ocr-model "m"
                          :ocr-enabled? false
-                         :ocr-batch-enabled? false
-                         :ocr-batch-poll-ms 11
-                         :ocr-batch-timeout-ms 22
-                         :ocr-batch-max-requests 33
                          :conn-timeout-ms 1
                          :socket-timeout-ms 2
                          :max-retries 3
@@ -24,10 +20,6 @@
               ;; into test expectations.
               {:getenv (constantly nil)})]
     (is (= false (:enabled? cfg)))
-    (is (= false (:batch-enabled? cfg)))
-    (is (= 11 (:batch-poll-ms cfg)))
-    (is (= 22 (:batch-timeout-ms cfg)))
-    (is (= 33 (:batch-max-requests cfg)))
     (is (= "k" (:api-key cfg)))
     (is (= "https://example" (:base-url cfg)))
     (is (= "m" (:model cfg)))
@@ -99,70 +91,3 @@
 
         ;; Request should not include structured extraction format.
         (is (nil? (get body-map :document_annotation_format)))))))
-
-(deftest ocr-extract-batch-parses-results-and-errors
-  (let [uploaded-jsonl (atom nil)
-        job-polls (atom 0)
-        extraction {:merchant {:name "Store"}
-                    :totals {:total 10.26}
-                    :items [{:raw_label "Coffee" :line_total 10.26}]}
-        ok-body {:pages [{:index 1 :markdown "Hello"}]
-                 :document_annotation (json/generate-string extraction)}
-        out-jsonl (str
-                    (json/generate-string {:custom_id "r1"
-                                           :response {:status_code 200
-                                                      :body ok-body}})
-                    "\n"
-                    (json/generate-string {:custom_id "r2"
-                                           :response {:status_code 400
-                                                      :body (json/generate-string {:object "error" :message "bad"})}})
-                    "\n")]
-    (with-redefs [mistral-http/http-post!
-                  (fn [url opts]
-                    (cond
-                      (str/ends-with? url "/v1/files")
-                      (let [file-part (some #(when (= "file" (:name %)) %) (:multipart opts))
-                            f (:content file-part)]
-                        (reset! uploaded-jsonl (slurp f))
-                        {:status 200 :body (json/generate-string {:id "file-1"})})
-
-                      (str/ends-with? url "/v1/batch/jobs")
-                      {:status 200 :body (json/generate-string {:id "job-1"})}
-
-                      :else
-                      {:status 404 :body (json/generate-string {:error "unexpected url" :url url})}))
-                  mistral-http/http-get!
-                  (fn [url _opts]
-                    (cond
-                      (str/ends-with? url "/v1/batch/jobs/job-1")
-                      (let [n (swap! job-polls inc)]
-                        (if (= 1 n)
-                          {:status 200 :body (json/generate-string {:id "job-1" :status "RUNNING"})}
-                          {:status 200 :body (json/generate-string {:id "job-1" :status "SUCCESS" :output_file "out-1"})}))
-
-                      (str/ends-with? url "/v1/files/out-1/content")
-                      {:status 200 :body out-jsonl}
-
-                      :else
-                      {:status 404 :body (json/generate-string {:error "unexpected url" :url url})}))]
-      (let [cfg {:api-key "k"
-                 :base-url "https://example"
-                 :model "mistral-ocr-2512"
-                 :batch-enabled? true
-                 :batch-poll-ms 1
-                 :batch-timeout-ms 5000
-                 :batch-max-requests 50
-                 :conn-timeout-ms 1
-                 :socket-timeout-ms 1
-                 :max-retries 0
-                 :retry-sleep-ms 0}
-            res (mistral-ocr/ocr-extract-batch!
-                  cfg
-                  [{:custom-id "r1" :bytes (byte-array [1]) :content-type "image/jpeg"}
-                   {:custom-id "r2" :bytes (byte-array [2]) :content-type "image/jpeg"}])]
-        (is (str/includes? @uploaded-jsonl "\"custom_id\":\"r1\""))
-        (is (not (str/includes? @uploaded-jsonl "\"document_annotation_format\"")))
-        (is (contains? (:results res) "r1"))
-        (is (contains? (:errors res) "r2"))
-        (is (= "Hello" (get-in res [:results "r1" :parsed-markdown])))
-        (is (nil? (get-in res [:results "r1" :extraction])))))))

@@ -109,12 +109,6 @@
 (defn file-content-url [{:keys [base-url]} file-id]
   (str (or base-url (config/default-base-url-value)) "/v1/files/" file-id "/content"))
 
-(defn batch-jobs-url [{:keys [base-url]}]
-  (str (or base-url (config/default-base-url-value)) "/v1/batch/jobs"))
-
-(defn batch-job-url [{:keys [base-url]} job-id]
-  (str (or base-url (config/default-base-url-value)) "/v1/batch/jobs/" job-id))
-
 (defn post-with-retries!
   [cfg request-opts]
   (request-with-retries! cfg :post (ocr-url cfg) request-opts))

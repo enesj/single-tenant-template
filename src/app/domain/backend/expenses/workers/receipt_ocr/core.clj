@@ -14,11 +14,26 @@
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
-    [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [taoensso.timbre :as log])
   (:import
     [java.util.concurrent Executors TimeUnit TimeoutException]))
+
+(defn- env->pos-int
+  [k default-val]
+  (try
+    (let [v (System/getenv k)]
+      (if (seq v)
+        (max 1 (Long/parseLong v))
+        default-val))
+    (catch Exception _
+      default-val)))
+
+(defonce ^:private ui-ocr-max-concurrent
+  (env->pos-int "RECEIPT_OCR_UI_MAX_CONCURRENT" 3))
+
+(defonce ^:private ui-ocr-executor
+  (Executors/newFixedThreadPool ui-ocr-max-concurrent))
 
 (defn- user-allows-receipt-refine?
   [db receipt]
@@ -39,7 +54,7 @@
   (let [receipt-id (:id receipt)
         markdown (:parsed-markdown extract-result)
         user-id (:user_id receipt)
-  filename (:original_filename receipt)
+        filename (:original_filename receipt)
         user-enabled? (user-allows-receipt-refine? db receipt)
         has-markdown? (boolean (seq (some-> markdown str str/trim)))
         cerebras-cfg? (map? cerebras-cfg)
@@ -197,7 +212,7 @@
                                             (receipt-status/clear-refine-pending! db receipt-id)
                                             (catch Exception ce
                                               (log/warn ce "Failed to clear refine_pending after failure" {:batch-id batch-id
-                                                                                                          :receipt-id receipt-id}))))
+                                                                                                           :receipt-id receipt-id}))))
                                         (log/warn e "Cerebras refine failed (parallel)"
                                           {:batch-id batch-id
                                            :receipt-id receipt-id})
@@ -395,101 +410,6 @@
             :summary summary
             :results results3}))))))
 
-(defn- process-receipts-by-ids-batch!
-  [db ocr-cfg receipt-ids reset? opts]
-  (let [prepared (mapv
-                   (fn [rid]
-                     (try
-                       (let [receipt0 (receipt-queries/get-receipt db rid)
-                             _ (when (and reset? receipt0)
-                                 (receipt-status/reset-for-ocr! db rid))
-                             receipt (or (receipt-queries/get-receipt db rid) receipt0)]
-                         (cond
-                           (nil? receipt)
-                           {:receipt-id rid :stage :extract :result :skipped :reason :not-found}
-
-                           (not (seq (:api-key ocr-cfg)))
-                           {:receipt-id rid :stage :extract :result :skipped :reason :missing-api-key}
-
-                           :else
-                           (if-let [_claimed (receipt-status/claim-for-extracting! db rid {:lease-seconds (:lease-seconds opts)})]
-                             (try
-                               (let [{:keys [bytes content-type]} (common/read-receipt-bytes! receipt opts)
-                                     request {:custom-id (str rid)
-                                              :bytes bytes
-                                              :content-type content-type}]
-                                 {:receipt-id rid :receipt receipt :request request})
-                               (catch Exception e
-                                 ;; IMPORTANT: we already claimed (status -> extracting). If we fail
-                                 ;; to prepare the request (e.g. missing file), we must fail the
-                                 ;; receipt so it doesn't appear stuck forever.
-                                 (receipt-status/mark-failed!
-                                   db
-                                   rid
-                                   (or (.getMessage e) "Failed to prepare receipt for batch OCR")
-                                   (common/safe-ex-data e))
-                                 {:receipt-id rid
-                                  :stage :extract
-                                  :result :failed
-                                  :error (or (.getMessage e) "Failed to prepare receipt for batch OCR")}))
-                             {:receipt-id rid :stage :extract :result :skipped :reason :not-claimed})))
-                       (catch Exception e
-                         (log/error e "Failed to prepare receipt for batch OCR" {:receipt-id rid})
-                         {:receipt-id rid :stage :extract :result :failed :error (.getMessage e)})))
-                   receipt-ids)
-        batch-reqs (->> prepared (keep :request) vec)
-        batch-ids (set (map :custom-id batch-reqs))]
-    (if (empty? batch-reqs)
-      (mapv (fn [m] (dissoc m :receipt :request)) prepared)
-      (let [batch-res (try
-                        (mistral-ocr/ocr-extract-batch! ocr-cfg batch-reqs)
-                        (catch Exception e
-                          {:exception e}))]
-        (if-let [e (:exception batch-res)]
-          (do
-            (doseq [cid batch-ids]
-              (let [rid (type-conv/try-parse-uuid cid)]
-                (when rid
-                  (receipt-status/mark-failed! db rid (or (.getMessage e) "Batch extraction failed") (common/safe-ex-data e)))))
-            (mapv
-              (fn [{:keys [receipt-id request] :as m}]
-                (if (seq (some-> request :custom-id))
-                  {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Batch extraction failed")}
-                  (dissoc m :receipt :request)))
-              prepared))
-          (let [results0
-                (mapv
-                  (fn [{:keys [receipt-id request] :as m}]
-                    (let [cid (some-> request :custom-id)
-                          extract-result (when (seq cid) (get-in batch-res [:results cid]))
-                          err (when (seq cid) (get-in batch-res [:errors cid]))]
-                      (cond
-                        (nil? cid)
-                        (dissoc m :receipt :request)
-
-                        extract-result
-                        (try
-                          (let [receipt (or (:receipt m) (receipt-queries/get-receipt db receipt-id))
-                                user-auto-post? (user-allows-auto-post? db receipt)
-                                auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?)
-                                opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
-                                persist-result (-> (extraction/persist-extract-result! db receipt-id extract-result opts*)
-                                                 (assoc :auto-post-after-upload? auto-post-enabled?))]
-                            (if (:defer-refine? opts*)
-                              (assoc persist-result :receipt receipt :extract-result extract-result)
-                              (maybe-refine-review-required db receipt extract-result persist-result opts*)))
-                          (catch Exception e
-                            (receipt-status/mark-failed! db receipt-id (or (.getMessage e) "Persist failed") (common/safe-ex-data e))
-                            {:receipt-id receipt-id :stage :extract :result :failed :error (or (.getMessage e) "Persist failed")}))
-
-                        :else
-                        (do
-                          (receipt-status/mark-failed! db receipt-id "Batch extraction failed" (or err {:type :mistral/batch-unknown-error}))
-                          {:receipt-id receipt-id :stage :extract :result :failed :error "Batch extraction failed"}))))
-                  prepared)
-                results results0]
-            results))))))
-
 (defn process-receipts-by-ids!
   "Process receipts by explicit IDs (for UI-triggered OCR).
 
@@ -513,7 +433,6 @@
          defer-refine? (if (contains? opts :defer-refine?)
                          (:defer-refine? opts)
                          true)
-         use-batch? (and reset? (:batch-enabled? ocr-cfg) (> (count receipt-ids) 1))
          opts (merge {:lease-seconds 900
                       :storage-base-dir "upload/stripes"
                       :default-currency "BAM"
@@ -535,25 +454,20 @@
             :error :missing-api-key
             :processed 0
             :receipt-ids receipt-ids})
-         (let [results0
-               (if use-batch?
-                 (do
-                   (log/info "Receipt OCR by-ids using Mistral Batch API" {:receipt-ids receipt-ids})
-                   (process-receipts-by-ids-batch! db ocr-cfg receipt-ids reset? opts))
-                 (mapv
-                   (fn [rid]
-                     (try
-                       (let [;; Optionally reset the receipt first
-                             _ (when reset?
-                                 (receipt-status/reset-for-ocr! db rid))
-                             receipt (receipt-queries/get-receipt db rid)]
-                         (if receipt
-                           (process-receipt! db ocr-cfg receipt opts)
-                           {:receipt-id rid :result :skipped :reason :not-found}))
-                       (catch Exception e
-                         (log/error e "Failed to process receipt" {:receipt-id rid})
-                         {:receipt-id rid :result :failed :error (.getMessage e)})))
-                   receipt-ids))
+         (let [results0 (mapv
+                          (fn [rid]
+                            (try
+                              (let [;; Optionally reset the receipt first
+                                    _ (when reset?
+                                        (receipt-status/reset-for-ocr! db rid))
+                                    receipt (receipt-queries/get-receipt db rid)]
+                                (if receipt
+                                  (process-receipt! db ocr-cfg receipt opts)
+                                  {:receipt-id rid :result :skipped :reason :not-found}))
+                              (catch Exception e
+                                (log/error e "Failed to process receipt" {:receipt-id rid})
+                                {:receipt-id rid :result :failed :error (.getMessage e)})))
+                          receipt-ids)
                results1 (if defer-refine?
                           (refine-review-required-results! db opts results0)
                           results0)
@@ -565,10 +479,36 @@
                          (map :result)
                          (frequencies))]
            (log/info "Receipt OCR by-ids complete" {:receipt-ids receipt-ids
-                                                    :summary summary
-                                                    :batch? use-batch?})
+                                                    :summary summary})
            {:enabled? true
             :processed (count results3)
             :summary summary
             :results results3
             :receipt-ids receipt-ids}))))))
+
+(defn queue-ui-ocr!
+  "Queue receipt OCR work from UI endpoints.
+
+  We serialize UI-triggered OCR to reduce provider rate limiting when users
+  trigger multiple OCR requests quickly.
+
+  Returns immediately; the background job logs progress."
+  ([db app-config receipt-ids]
+   (queue-ui-ocr! db app-config receipt-ids nil))
+  ([db app-config receipt-ids opts]
+   (let [receipt-ids (vec receipt-ids)]
+     (.submit ui-ocr-executor
+       ^java.util.concurrent.Callable
+       (fn []
+         (try
+           (log/info "UI OCR job starting" {:receipt-ids receipt-ids})
+           (let [result (process-receipts-by-ids! db app-config receipt-ids opts)]
+             (log/info "UI OCR job complete" {:receipt-ids receipt-ids
+                                              :summary (:summary result)})
+             result)
+           (catch Exception e
+             (log/error e "UI OCR job failed" {:receipt-ids receipt-ids})
+             {:error (.getMessage e)}))))
+     {:queued true
+      :receipt-ids receipt-ids})))
+

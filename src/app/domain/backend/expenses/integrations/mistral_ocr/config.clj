@@ -55,27 +55,14 @@
    - `MISTRAL_OCR_MODEL`
    - `MISTRAL_OCR_ENABLED` (true/false, default true)
 
-  Batch API (Mistral Batch jobs) support:
-  - `MISTRAL_OCR_BATCH_ENABLED` (true/false, default true)
-  - `MISTRAL_OCR_BATCH_POLL_MS` (default 2000)
-  - `MISTRAL_OCR_BATCH_TIMEOUT_MS` (default 600000)
-  - `MISTRAL_OCR_BATCH_MIN_REQUESTS` (default 5)
-  - `MISTRAL_OCR_BATCH_MAX_REQUESTS` (default 50)
-
   App config keys (optional):
   {:mistral {:api-key <token> :base-url <url> :ocr-model <model>
              :ocr-enabled? true
              :ocr-auto-post-after-upload? true
-             :ocr-batch-enabled? true
-             :ocr-batch-poll-ms 2000
-             :ocr-batch-timeout-ms 600000
-             :ocr-batch-max-requests 50
              :conn-timeout-ms 5000 :socket-timeout-ms 30000
              :max-retries 2 :retry-sleep-ms 500}}
 
-  The returned map is suitable for `ocr-parse!` / `ocr-extract!` and the Batch API helpers.
-
-  NOTE: Batch support is currently used only in the receipt worker's batch-by-ids flow."
+  The returned map is suitable for `ocr-parse!` / `ocr-extract!`."
   ([app-config]
    (build-config app-config nil))
   ([app-config {:keys [getenv]
@@ -98,34 +85,11 @@
                     env-enabled
                     (if (contains? cfg :ocr-enabled?)
                       (:ocr-enabled? cfg)
-                      true))
-          env-batch-enabled (some-> (getenv* "MISTRAL_OCR_BATCH_ENABLED") parse-bool)
-         batch-enabled? (if (some? env-batch-enabled)
-                          env-batch-enabled
-                          (if (contains? cfg :ocr-batch-enabled?)
-                            (:ocr-batch-enabled? cfg)
-                            true))
-         batch-poll-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_POLL_MS") parse-int)
-                         (:ocr-batch-poll-ms cfg)
-                         2000)
-         batch-timeout-ms (or (some-> (getenv* "MISTRAL_OCR_BATCH_TIMEOUT_MS") parse-int)
-                            (:ocr-batch-timeout-ms cfg)
-                            600000)
-         batch-min-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MIN_REQUESTS") parse-int)
-                              (:ocr-batch-min-requests cfg)
-                              3)
-         batch-max-requests (or (some-> (getenv* "MISTRAL_OCR_BATCH_MAX_REQUESTS") parse-int)
-                              (:ocr-batch-max-requests cfg)
-                              50)]
+                      true))]
      {:enabled? enabled?
        :auto-post-after-upload? (if (contains? cfg :ocr-auto-post-after-upload?)
                                   (:ocr-auto-post-after-upload? cfg)
                                   true)
-      :batch-enabled? batch-enabled?
-      :batch-poll-ms batch-poll-ms
-      :batch-timeout-ms batch-timeout-ms
-      :batch-min-requests batch-min-requests
-      :batch-max-requests batch-max-requests
       :api-key (or (getenv* "MISTRAL_API_KEY") (:api-key cfg))
       :base-url (or (getenv* "MISTRAL_OCR_BASE_URL") (:base-url cfg) default-base-url)
       :model (or (getenv* "MISTRAL_OCR_MODEL") (:ocr-model cfg) default-model)

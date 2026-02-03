@@ -157,20 +157,18 @@
   [response]
   (:data response))
 
-(defn- ^:private ocr-receipts-xhrio
-  "Build an OCR batch request (POST /expenses/receipts/ocr).
+(defn- ^:private ocr-receipt-xhrio
+  "Build a request to queue OCR for a single receipt (POST /expenses/receipts/:id/ocr).
 
   We trigger this automatically after upload completes.
   The backend processes OCR asynchronously and responds 202."
-  [db receipt-ids]
+  [db receipt-id]
   (x/xhrio db
     {:method :post
-     :uri (str endpoints/receipts-endpoint "/ocr")
-
-     :params {:receipt_ids (vec receipt-ids)}
+     :uri (str endpoints/receipts-endpoint "/" receipt-id "/ocr")
      ;; Reuse the existing OCR success/failure handlers so the receipts list refreshes.
-     :on-success [:user-expenses/ocr-selected-success receipt-ids]
-     :on-failure [:user-expenses/ocr-selected-failure]}))
+     :on-success [:user-expenses/ocr-receipt-success receipt-id]
+     :on-failure [:user-expenses/ocr-receipt-failure receipt-id]}))
 
 (rf/reg-event-fx
   :user-expenses/upload-receipt
@@ -229,7 +227,7 @@
         ;; Automatically queue OCR for this receipt.
         ;; Do this via :http-xhrio directly (instead of :dispatch) so tests that use
         ;; dispatch-sync remain deterministic.
-        (assoc :http-xhrio (ocr-receipts-xhrio db' [(str receipt-id)]))))))
+        (assoc :http-xhrio (ocr-receipt-xhrio db' (str receipt-id)))))))
 
 (rf/reg-event-db
   :user-expenses/upload-receipt-failure
@@ -282,8 +280,7 @@
                                                        :failed 0
                                                        :current nil
                                                        :payer-id payer-id
-                                                       ;; Track created receipt IDs so we can trigger one batch OCR
-                                                       ;; request at the end (uses Mistral Batch API when >1).
+                                                       ;; Track created receipt IDs so we can queue OCR after the last upload.
                                                        :receipt-ids []}))
           files)
         {}))))
@@ -323,10 +320,8 @@
                        (assoc-in [:user-expenses :upload :loading?] false)
                        (assoc-in [:user-expenses :upload :batch :current] nil))}
           (seq all-ids)
-          ;; Trigger a single batch OCR request after the last upload completes.
-          ;; This ensures we use the worker's Batch API path when multiple receipts
-          ;; are uploaded at once.
-          (assoc :http-xhrio (ocr-receipts-xhrio db' all-ids)))))))
+          ;; Queue OCR for each uploaded receipt.
+          (assoc :fx (mapv (fn [rid] [:http-xhrio (ocr-receipt-xhrio db' rid)]) all-ids)))))))
 
 (rf/reg-event-fx
   :user-expenses/upload-receipts-failure
@@ -347,7 +342,7 @@
                          (assoc-in [:user-expenses :upload :batch :current] nil))}
             ;; Even if some uploads failed, still OCR the receipts that *did* upload.
             (seq all-ids)
-            (assoc :http-xhrio (ocr-receipts-xhrio db' all-ids))))))))
+            (assoc :fx (mapv (fn [rid] [:http-xhrio (ocr-receipt-xhrio db' rid)]) all-ids))))))))
 
 (rf/reg-event-db
   :user-expenses/clear-upload

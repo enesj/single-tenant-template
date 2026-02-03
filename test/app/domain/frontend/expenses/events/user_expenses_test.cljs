@@ -298,8 +298,8 @@
     (is (= 1 (count @captured-http-requests)))
     (let [req (last-http-request)]
       (is (= :post (req-method req)))
-      (is (= "/api/v1/expenses/receipts/ocr" (req-uri req)))
-      (is (= ["rec-1"] (get-in req [:params :receipt_ids]))))))
+      (is (= "/api/v1/expenses/receipts/rec-1/ocr" (req-uri req)))
+      (is (nil? (req-params req))))))
 
 (deftest upload-receipt-duplicate-shows-notice-and-skips-ocr
   (testing "duplicate uploads show a notice and do not queue OCR"
@@ -345,12 +345,15 @@
         (is (= "b.jpg" (.-name uploaded2))))
 
       (rf/dispatch-sync [:user-expenses/upload-receipts-success [] {:data {:id "rec-2"}}])
-      ;; Final success should also queue one OCR batch request for the receipts.
-      (is (= 3 (count @captured-http-requests)))
-      (let [req3 (last-http-request)]
+      ;; Final success should queue OCR for each uploaded receipt.
+      (is (= 4 (count @captured-http-requests)))
+      (let [req3 (nth @captured-http-requests 2)
+            req4 (nth @captured-http-requests 3)]
         (is (= :post (req-method req3)))
-        (is (= "/api/v1/expenses/receipts/ocr" (req-uri req3)))
-        (is (= ["rec-1" "rec-2"] (get-in req3 [:params :receipt_ids]))))
+        (is (= "/api/v1/expenses/receipts/rec-1/ocr" (req-uri req3)))
+
+        (is (= :post (req-method req4)))
+        (is (= "/api/v1/expenses/receipts/rec-2/ocr" (req-uri req4))))
       (is (false? (get-in @rf-db/app-db [:user-expenses :upload :loading?]))))))
 
 (deftest upload-receipts-batch-continues-after-failure
@@ -383,8 +386,8 @@
       (is (= 3 (count @captured-http-requests)))
       (let [req3 (last-http-request)]
         (is (= :post (req-method req3)))
-        (is (= "/api/v1/expenses/receipts/ocr" (req-uri req3)))
-        (is (= ["rec-2"] (get-in req3 [:params :receipt_ids])))))))
+        (is (= "/api/v1/expenses/receipts/rec-2/ocr" (req-uri req3)))
+        (is (nil? (req-params req3)))))))
 
 (deftest update-settings-sends-json-params
   (testing "update-settings sends JSON payload in :params (not :body)"

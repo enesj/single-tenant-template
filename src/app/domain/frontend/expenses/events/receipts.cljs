@@ -156,32 +156,3 @@
     (-> db
       (assoc-in (conj base-path :action-loading?) false)
       (assoc-in (conj base-path :error) (admin-http/extract-error-message error)))))
-
-(rf/reg-event-fx
-  ::ocr-selected
-  (fn [{:keys [db]} [_ receipt-ids]]
-    {:db (-> db
-           (assoc-in (conj base-path :action-loading?) true)
-           (assoc-in (conj base-path :error) nil))
-     :http-xhrio (admin-http/admin-post
-                   {:uri "/admin/api/expenses/receipts/ocr"
-                    :params {:receipt_ids (vec receipt-ids)}
-                    :on-success [::ocr-selected-success receipt-ids]
-                    :on-failure [::ocr-selected-failure]})}))
-
-(rf/reg-event-fx
-  ::ocr-selected-success
-  (fn [{:keys [db]} [_ _receipt-ids _response]]
-    {:db (-> db
-           (assoc-in (conj base-path :action-loading?) false)
-           (assoc-in (conj base-path :error) nil))
-     ;; Refresh the receipts list and clear selection
-     :dispatch-n [[::load-list]
-                  [:app.template.frontend.events.list/clear-selection :receipts]]}))
-
-(rf/reg-event-db
-  ::ocr-selected-failure
-  (fn [db [_ error]]
-    (-> db
-      (assoc-in (conj base-path :action-loading?) false)
-      (assoc-in (conj base-path :error) (admin-http/extract-error-message error)))))

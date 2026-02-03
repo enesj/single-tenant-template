@@ -37,11 +37,6 @@
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
- :unmapped-aliases
- {:display-defaults {:show-filtering? true, :per-page 25},
-  :display-locks {:show-add-button? false, :show-edit? false},
-  :column-defaults {},
-  :column-locks {}},
  :price-observations
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 50},

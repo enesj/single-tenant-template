@@ -4,10 +4,8 @@
     [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
     [app.template.frontend.components.action-components :refer [view-details-icon]]
-    [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
-    [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
@@ -121,29 +119,6 @@
        :actions action-groups
        :position :portal})))
 
-(defui batch-parse-button
-  "Batch parse button shown when receipts are selected."
-  []
-  (let [can-ocr? (boolean (use-subscribe [:expenses/can-write?]))
-        selected-ids (use-subscribe [::list-subs/selected-ids :receipts])
-        action-loading? (boolean (use-subscribe [:user-expenses/receipt-action-loading?]))
-        has-selection? (and (seq selected-ids) (pos? (count selected-ids)))]
-    (when (and can-ocr? has-selection?)
-      ($ button
-        {:id "btn-batch-parse-user-receipts"
-         :btn-type :primary
-         :class "ds-btn-sm"
-         :disabled action-loading?
-         :on-click (fn [e]
-                     (.stopPropagation e)
-                     (rf/dispatch [:user-expenses/ocr-selected selected-ids]))}
-        (if action-loading?
-          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
-          "🔍 Batch Parse (OCR)")
-        (when-not action-loading?
-          ($ :span {:class "ds-badge ds-badge-sm ml-1"}
-            (count selected-ids)))))))
-
 (defui receipts-list-page
   []
   (let [title "Receipts"
@@ -168,7 +143,7 @@
                      (rf/dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}])
                      (set-last-checked! (js/Date.)))
                    [])
-        display-settings {:show-select? can-ocr?
+        display-settings {:show-select? false
                           :show-edit? false
                           :show-delete? false
                           :show-filtering? true
@@ -234,7 +209,7 @@
                                           (rf/dispatch [:user-expenses/clear-form-error]))}
                     "✕"))))
 
-            ;; Top bar: live processing indicator + batch parse button
+            ;; Top bar: live processing indicator
             ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "
                               (if processing? "justify-between" "justify-end"))}
               (when processing?
@@ -252,8 +227,7 @@
                               :on-click (fn [e]
                                           (.preventDefault e)
                                           (refresh!))}
-                    "Refresh")))
-              ($ batch-parse-button))
+                    "Refresh"))))
 
             ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
               ($ list-view

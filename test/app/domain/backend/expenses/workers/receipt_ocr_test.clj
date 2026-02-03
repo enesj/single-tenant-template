@@ -377,51 +377,6 @@
         (is (= 1 (:persist @calls)))
         (is (= 0 (:retry @calls)))))))
 
-(deftest process-receipts-by-ids-batch-auto-retries-review-required-once
-  (let [process-batch! #'core/process-receipts-by-ids-batch!
-        receipt-id (java.util.UUID/randomUUID)
-        calls (atom {:persist 0 :retry 0})]
-    (with-redefs [receipt-queries/get-receipt (fn [_db rid]
-                                                {:id rid :content_type "image/jpeg"})
-                  receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
-                  common/read-receipt-bytes! (fn [_receipt _opts]
-                                               {:bytes (.getBytes "x")})
-                  mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
-                                                   {:results {(str receipt-id) {}}})
-                  extraction/persist-extract-result! (fn [_db rid _extract-result _opts]
-                                                       (swap! calls update :persist inc)
-                                                       {:receipt-id rid :stage :extract :result :ok :status "review_required"})
-                  receipt-status/retry-extraction! (fn [_db _rid]
-                                                     (swap! calls update :retry inc)
-                                                     nil)]
-      (let [results (process-batch! nil {:api-key "k"} [receipt-id] false {:lease-seconds 900})]
-        (is (= 1 (count results)))
-        ;; Current implementation does not auto-retry review_required in batch either.
-        (is (= "review_required" (:status (first results))))
-        (is (= 1 (:persist @calls)))
-        (is (= 0 (:retry @calls)))))))
-
-(deftest process-receipts-by-ids-batch-respects-auto-post-setting
-  (let [process-batch! #'core/process-receipts-by-ids-batch!
-        receipt-id (java.util.UUID/randomUUID)
-        captured-opts (atom nil)
-        results (clojure.core/with-redefs-fn
-                  {#'receipt-queries/get-receipt (fn [_db rid]
-                                                   {:id rid :content_type "image/jpeg" :user_id (java.util.UUID/randomUUID)})
-                   #'receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
-                   #'common/read-receipt-bytes! (fn [_receipt _opts]
-                                                  {:bytes (.getBytes "x")})
-                   #'mistral-ocr/ocr-extract-batch! (fn [_cfg _reqs]
-                                                      {:results {(str receipt-id) {}}})
-                   #'core/user-allows-auto-post? (fn [_db _receipt] false)
-                   #'extraction/persist-extract-result! (fn [_db rid _extract-result opts]
-                                                          (reset! captured-opts opts)
-                                                          {:receipt-id rid :stage :extract :result :ok :status "extracted"})}
-                  (fn []
-                    (process-batch! nil {:api-key "k" :auto-post-after-upload? true} [receipt-id] false {:lease-seconds 900 :defer-refine? true})))]
-    (is (= false (:auto-post-after-upload? @captured-opts)))
-    (is (= false (:auto-post-after-upload? (first results))))))
-
 (deftest refine-review-required-results-respects-concurrency-limit
   (let [limit 2
         opts {:cerebras-cfg {:refine-concurrency limit :refine-timeout-ms 5000}}

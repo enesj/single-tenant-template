@@ -52,7 +52,6 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `POST /admin/api/expenses/receipts/:id/extraction` – store extraction payloads/guesses.
 - `POST /admin/api/expenses/receipts/:id/review` – save user-reviewed fields/items without approving (does not create an expense).
 - `POST /admin/api/expenses/receipts/:id/approve` – approve + create expense + mark posted.
-- `POST /admin/api/expenses/receipts/ocr` – trigger async OCR for a batch of receipt IDs (returns `202` when queued; requires `MISTRAL_API_KEY`).
 - `POST /admin/api/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires `MISTRAL_API_KEY`).
 
 ### Expenses
@@ -153,7 +152,6 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ### Receipts
 - `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
 - `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit/offset`, `order_dir`). Response now includes each receipt’s `payer_id` so caller sees the upload-selected payer without fetching the detail again.
-- `POST /api/v1/expenses/receipts/ocr` – trigger async OCR for a batch of receipt IDs (requires `MISTRAL_API_KEY`).
 - `GET /api/v1/expenses/receipts/:id/download` – download/inline view the original file (`?download=true` forces attachment).
 - `GET /api/v1/expenses/receipts/:id` – fetch receipt.
 - `DELETE /api/v1/expenses/receipts/:id` – delete receipt.

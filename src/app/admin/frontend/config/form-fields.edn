@@ -29,8 +29,7 @@
    "canonical_name"
    "category"
    "link"
-   "normalized_key"
-   "manufacturer_display_name"],
+   "normalized_key"],
   :field-config
   {:manufacturer_id
    {:type "select",

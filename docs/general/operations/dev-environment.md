@@ -40,8 +40,8 @@ bb run-app
 
 ## Optional Workers
 - Receipt OCR processing no longer ships with a dedicated shell worker script in this template. Use the admin or user OCR endpoints instead:
-  - Admin: `POST /admin/api/expenses/receipts/ocr` (batch) or `POST /admin/api/expenses/receipts/:id/ocr` (single)
-  - User:  `POST /api/v1/expenses/receipts/ocr` (batch) or `POST /api/v1/expenses/receipts/:id/ocr` (single)
+  - Admin: `POST /admin/api/expenses/receipts/:id/ocr`
+  - User:  `POST /api/v1/expenses/receipts/:id/ocr`
   - Set `MISTRAL_API_KEY` to enable OCR processing.
 
 ## Troubleshooting

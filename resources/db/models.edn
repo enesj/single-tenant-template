@@ -217,6 +217,7 @@
     :boolean
     {:null false, :default false}]
    [:receipt_refine_enabled :boolean {:null false, :default false}]
+   [:receipt_ocr_provider :text {:null false, :default "mistral"}]
    [:created_at :timestamptz {:default "NOW()"}]
    [:updated_at :timestamptz {:default "NOW()"}]]},
  :audit_logs

@@ -15,7 +15,6 @@ The Expenses domain is no longer exposed in the admin panel. `/admin/receipts` a
 Expose “run receipt OCR (parse/extract)” from the UI:
 
 - **Single receipt**: an action in the per-row **dropdown actions** menu.
-- **Batch**: a **Batch parse** button that runs OCR for **all selected receipts**.
 
 This should reuse the existing worker logic used by `scripts/bb/expenses/receipt_ocr_worker.clj`, but **must not** shell out to `bb` from the web app.
 
@@ -47,22 +46,6 @@ IDs (required for browser testing):
 
 - Per-row dropdown trigger already follows `actions-btn-<receipt-id>` via `dropdown/action-dropdown`.
 - Add menu item id: `parse-ocr` so it becomes `parse-ocr-<receipt-id>`.
-
-## 2) Batch parse button
-
-Add a button visible when selection is non-empty:
-
-- Label: `Batch parse (OCR)`
-- Disabled when `selected-ids` empty.
-- On click:
-  - confirm dialog (optional but recommended if many receipts)
-  - call API to trigger OCR for those ids
-  - refresh the receipts list and keep selection (or clear selection on success; pick one and be consistent across admin/user)
-
-IDs:
-
-- Admin: `btn-batch-parse-admin-receipts`
-- User: `btn-batch-parse-user-receipts`
 
 # Backend Plan
 
@@ -96,17 +79,15 @@ Add a dedicated service function (e.g. `receipts/reset-for-ocr!`) that:
 
 ## C) HTTP endpoints
 
-Expose two endpoints for **admin** and two for **user**:
+Expose one endpoint for **admin** and one for **user**:
 
 Admin (auth: admin):
 
 - `POST /admin/api/expenses/receipts/:id/ocr`
-- `POST /admin/api/expenses/receipts/ocr` with body `{:receipt_ids [...]}` (or `:receipt-ids`)
 
 User (auth: user; must enforce visibility/ownership):
 
 - `POST /api/v1/expenses/receipts/:id/ocr`
-- `POST /api/v1/expenses/receipts/ocr` with body `{:receipt_ids [...]}` (only receipts visible to the user)
 
 Response shape:
 
@@ -130,20 +111,11 @@ Change `src/app/domain/frontend/expenses/pages/admin/receipts.cljs` to pass page
   - group: “OCR”
   - item: “Parse (OCR)” dispatching a new event `::receipts-events/ocr-receipt` (name TBD)
 
-### 2) Add Batch parse button
-
-Add `:components {:custom-header ...}` in the page override:
-
-- Subscribe to `selected-ids` via `app.template.frontend.subs.list/selected-ids` for `:receipts`
-- Show button when `selected-ids` present
-- Dispatch new event `::receipts-events/ocr-selected` with `selected-ids`
-
 ### 3) Add re-frame events
 
 Extend `src/app/domain/frontend/expenses/events/receipts.cljs`:
 
 - `::ocr-receipt` → `POST /admin/api/expenses/receipts/:id/ocr`
-- `::ocr-selected` → `POST /admin/api/expenses/receipts/ocr` with ids
 - Maintain `:action-loading?` state (reuse existing `:action-loading?` key)
 - On success: refresh list (dispatch `::load-list` with current params or `:admin/refresh-entity` if appropriate)
 
@@ -156,20 +128,11 @@ Update `receipt-actions` in `src/app/domain/frontend/expenses/pages/user/receipt
 - Add a second group `OCR` with `Parse (OCR)` item.
 - Dispatch `:user-expenses/ocr-receipt` with `receipt-id`.
 
-### 2) Add Batch parse button
-
-In `receipts-list-page`:
-
-- Subscribe to selected ids: `[::list-subs/selected-ids :receipts]`
-- Render a button above the list-view (or in a small toolbar) when selection is non-empty.
-- Dispatch `:user-expenses/ocr-selected` with selected ids.
-
 ### 3) Add re-frame events
 
 Add events to `src/app/domain/frontend/expenses/events/user_expenses/receipts.cljs`:
 
 - `:user-expenses/ocr-receipt` → `POST /api/v1/expenses/receipts/:id/ocr` (with fallback to admin endpoint if user has admin role, matching existing endpoint patterns)
-- `:user-expenses/ocr-selected` → `POST /api/v1/expenses/receipts/ocr`
 - On success: refresh list + refresh any open receipt detail modal
 
 # Validation / Testing Plan
@@ -183,7 +146,6 @@ Add events to `src/app/domain/frontend/expenses/events/user_expenses/receipts.cl
 - Frontend (CLJS): add a focused test for:
   - admin receipts row actions include parse item
   - user receipts row actions include parse item
-  - batch parse button appears only when selection non-empty
   - all new buttons/items have stable `:id`s
 
 # Rollout Notes
