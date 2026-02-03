@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :receipt-ocr-provider,
+  :model-name :user_expense_settings,
+  :options {:null false, :default "mistral", :type :text}})
