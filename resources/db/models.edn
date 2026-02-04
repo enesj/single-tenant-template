@@ -75,6 +75,7 @@
    [:receipt_id
     :uuid
     {:foreign-key :receipts/id, :on-delete :set-null}]
+   [:store_id :uuid {:foreign-key :stores/id, :on-delete :set-null}]
    [:supplier_id
     :uuid
     {:foreign-key :suppliers/id, :null false, :on-delete :restrict}]
@@ -90,6 +91,7 @@
   :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]],
   :indexes
   [[:idx_expenses_user :btree {:fields [:user_id]}]
+   [:idx_expenses_store :btree {:fields [:store_id]}]
    [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
    [:idx_expenses_payer :btree {:fields [:payer_id]}]
    [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]
@@ -113,6 +115,20 @@
    [:idx_password_reset_tokens_expires
     :btree
     {:fields [:expires_at]}]]},
+ :store_aliases
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:raw_label :text]
+   [:raw_label_normalized [:varchar 255] {:null false}]
+   [:store_id :uuid {:foreign-key :stores/id, :on-delete :set-null}]
+   [:confidence :integer {:default 100}]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_store_aliases_raw_label_normalized
+    :btree
+    {:fields [:raw_label_normalized], :unique true}]
+   [:idx_store_aliases_store_id :btree {:fields [:store_id]}]]},
  :manufacturers
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -274,6 +290,10 @@
    [:supplier_alias_id
     :uuid
     {:foreign-key :supplier_aliases/id, :on-delete :set-null}]
+   [:store_guess [:varchar 255]]
+   [:store_alias_id
+    :uuid
+    {:foreign-key :store_aliases/id, :on-delete :set-null}]
    [:total_amount_guess [:decimal 12 2]]
    [:currency_guess [:enum :currency]]
    [:purchased_at_guess :timestamptz]
@@ -305,7 +325,27 @@
    [:idx_receipts_supplier_alias_id
     :btree
     {:fields [:supplier_alias_id]}]
+   [:idx_receipts_store_alias_id :btree {:fields [:store_alias_id]}]
    [:idx_receipts_created_at :btree {:fields [:created_at]}]]},
+ :stores
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:supplier_id
+    :uuid
+    {:foreign-key :suppliers/id, :null false, :on-delete :cascade}]
+   [:display_name [:varchar 255] {:null false}]
+   [:normalized_key [:varchar 255] {:null false}]
+   [:address :text]
+   [:place_id :text]
+   [:archived_at :timestamptz]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_stores_supplier :btree {:fields [:supplier_id]}]
+   [:idx_stores_supplier_normalized_key
+    :btree
+    {:fields [:supplier_id :normalized_key], :unique true}]
+   [:idx_stores_place_id :btree {:fields [:place_id]}]]},
  :supplier_aliases
  {:fields
   [[:id :uuid {:primary-key true}]

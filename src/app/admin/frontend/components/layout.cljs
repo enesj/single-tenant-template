@@ -67,11 +67,21 @@
                          :href "/admin/suppliers"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-suppliers)}
+                        {:id "admin-sidebar-expenses-stores"
+                         :label "Stores"
+                         :href "/admin/stores"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-stores)}
                         {:id "admin-sidebar-expenses-supplier-aliases"
                          :label "Supplier Aliases"
                          :href "/admin/supplier-aliases"
                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-supplier-aliases)}
+                        {:id "admin-sidebar-expenses-store-aliases"
+                         :label "Store Aliases"
+                         :href "/admin/store-aliases"
+                         :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-store-aliases)}
                         {:id "admin-sidebar-expenses-manufacturers"
                          :label "Manufacturers"
                          :href "/admin/manufacturers"

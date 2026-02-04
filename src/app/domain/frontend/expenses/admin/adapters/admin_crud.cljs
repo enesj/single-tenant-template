@@ -636,6 +636,144 @@
                            (assoc default-effect
                              :dispatch [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]))}}})
 
+(defn- stores-request
+  "Create HTTP request config for stores admin API."
+  [{:keys [method id ids params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/stores"
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
+    (log/info "🏬 stores-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :stores
+
+   :operations
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (stores-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (stores-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (stores-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (stores-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))}}})
+
+(defn- store-aliases-request
+  "Create HTTP request config for store aliases admin API."
+  [{:keys [method id ids params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/store-aliases"
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
+    (log/info "🏷️ store-aliases-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :store-aliases
+
+   :operations
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (store-aliases-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (store-aliases-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (store-aliases-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (store-aliases-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]))}}})
+
 (defn- manufacturers-request
   "Create HTTP request config for manufacturers admin API."
   [{:keys [method id ids params on-success on-failure]}]

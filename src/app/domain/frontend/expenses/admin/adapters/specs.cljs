@@ -79,6 +79,26 @@
             {:id :confidence :label "Confidence" :type :number}
             {:id :created-at :label "Created at" :type :datetime}]})
 
+(def stores-entity-spec
+  {:id :stores
+   :fields [{:id :supplier-id :label "Supplier ID" :type :text}
+            {:id :display-name :label "Name" :type :text}
+            {:id :normalized-key :label "Normalized key" :type :text}
+            {:id :address :label "Address" :type :text}
+            {:id :place-id :label "Place ID" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
+(def store-aliases-entity-spec
+  {:id :store-aliases
+   :fields [{:id :supplier-display-name :label "Supplier" :type :text}
+            {:id :store-display-name :label "Store" :type :text}
+            {:id :store-address :label "Store address" :type :text}
+            {:id :raw-label :label "Raw label" :type :text}
+            {:id :raw-label-normalized :label "Alias" :type :text}
+            {:id :confidence :label "Confidence" :type :number}
+            {:id :created-at :label "Created at" :type :datetime}]})
+
 (def unmapped-aliases-entity-spec
   {:id :unmapped-aliases
    :fields [{:id :supplier-display-name :label "Supplier" :type :text}
@@ -132,6 +152,14 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :supplier-aliases
    :value-fn (fn [spec _] (or spec supplier-aliases-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :stores
+   :value-fn (fn [spec _] (or spec stores-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :store-aliases
+   :value-fn (fn [spec _] (or spec store-aliases-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :unmapped-aliases

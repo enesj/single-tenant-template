@@ -102,6 +102,22 @@
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
+(def stores-config
+  {:entity-key :stores
+   :base-path [:admin :expenses :stores]
+   :api-endpoint "/admin/api/expenses/stores"
+   :detail-response-key :store
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
+(def store-aliases-config
+  {:entity-key :store-aliases
+   :base-path [:admin :expenses :store-aliases]
+   :api-endpoint "/admin/api/expenses/store-aliases"
+   :detail-response-key :store-alias
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
 ;; =============================================================================
 ;; Configuration Registry
 ;; =============================================================================
@@ -109,6 +125,7 @@
 (def all-entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers suppliers-config
+   :stores stores-config
    :manufacturers manufacturers-config
    :payers payers-config
    :articles articles-config
@@ -118,6 +135,7 @@
    :price-observations price-observations-config
    :article-aliases article-aliases-config
    :supplier-aliases supplier-aliases-config
+   :store-aliases store-aliases-config
    :payer-types payer-types-config})
 
 ;; =============================================================================

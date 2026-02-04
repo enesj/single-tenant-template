@@ -14,6 +14,8 @@
     [app.domain.backend.expenses.services.receipts.parsing :as receipt-parsing]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.store-aliases :as store-aliases]
+    [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
@@ -165,6 +167,43 @@
              :supplier-alias-id alias-id
              :source (or source :resolved)}))))))
 
+(defn- resolve-store-and-alias
+  "Resolve a store (branch/location) for an already-resolved supplier.
+
+  Store aliases are keyed by the OCR-extracted merchant address (preferred) or
+  store_name (fallback).
+
+  When Places is configured, store resolution will attempt to canonicalize by
+  store.place_id (without changing alias keying).
+
+  Returns {:store-id uuid|nil :store-alias-id uuid|nil :store-guess string|nil :source keyword}."
+  [db supplier-id extraction opts]
+  (let [merchant (:merchant extraction)
+        address (some-> merchant :address str str/trim not-empty)
+        store-name (some-> merchant :store_name str str/trim not-empty)
+        store-guess (or address store-name)]
+    (if (or (nil? supplier-id) (not (seq store-guess)))
+      {:store-id nil
+       :store-alias-id nil
+       :store-guess store-guess
+       :source :unknown}
+      (let [alias-row (store-aliases/find-or-create-alias! db store-guess)
+            alias-id (:id alias-row)
+            mapped-store-id (:store_id alias-row)]
+        (if mapped-store-id
+          {:store-id mapped-store-id
+           :store-alias-id alias-id
+           :store-guess store-guess
+           :source :alias}
+          (let [{:keys [store-id store-alias-label]}
+                (stores/resolve-store-from-merchant db supplier-id merchant opts)]
+            (when (and alias-id store-id)
+              (store-aliases/map-alias-to-store-if-unmapped! db alias-id store-id 25))
+            {:store-id store-id
+             :store-alias-id alias-id
+             :store-guess (or store-alias-label store-guess)
+             :source :resolved}))))))
+
 (defn- auto-create-aliases!
   [db supplier-id extraction]
   (when (and (map? extraction) (sequential? (:items extraction)))
@@ -185,7 +224,7 @@
   (or purchased_at_guess created_at))
 
 (defn- build-review-data
-  [supplier-id payer-id receipt extraction {:keys [default-currency]}]
+  [supplier-id store-id payer-id receipt extraction {:keys [default-currency]}]
   (let [purchased-at (resolve-purchased-at receipt)
         total-amount (:total_amount_guess receipt)
         currency (or (:currency_guess receipt) default-currency "BAM")
@@ -194,13 +233,14 @@
                 (or (:original_filename receipt)
                   (:storage_key receipt)
                   "receipt"))]
-    {:supplier_id supplier-id
-     :payer_id payer-id
-     :purchased_at purchased-at
-     :total_amount total-amount
-     :currency currency
-     :notes notes
-     :items items}))
+    (cond-> {:supplier_id supplier-id
+             :payer_id payer-id
+             :purchased_at purchased-at
+             :total_amount total-amount
+             :currency currency
+             :notes notes
+             :items items}
+      store-id (assoc :store_id store-id))))
 
 (defn- mark-review-required!
   [db receipt-id message]
@@ -212,12 +252,12 @@
      :error_details nil}))
 
 (defn- auto-approve-extracted-receipt!
-  [db receipt-id extraction supplier-id opts]
+  [db receipt-id extraction supplier-id store-id opts]
   (when-let [receipt (receipt-queries/get-receipt db receipt-id)]
     (when (and (= "extracted" (:status receipt))
             (nil? (:expense_id receipt)))
       (let [payer-id (resolve-payer-id db receipt)
-            review-data (build-review-data supplier-id payer-id receipt extraction opts)
+            review-data (build-review-data supplier-id store-id payer-id receipt extraction opts)
             {:keys [purchased_at total_amount items]} review-data]
         (cond
           (nil? payer-id)
@@ -286,12 +326,12 @@
   "Persist a provider extract result, enriched with markdown-derived guesses.
 
   Returns {:receipt-id .. :stage :extract :result :ok :status extracted|review_required}."
-    [db receipt-id extract-result opts]
-    (let [receipt (receipt-queries/get-receipt db receipt-id)
-      user-region (resolve-user-region db receipt opts)
-      opts (cond-> opts
-         user-region (assoc :user-region user-region))
-      markdown (:parsed-markdown extract-result)
+  [db receipt-id extract-result opts]
+  (let [receipt (receipt-queries/get-receipt db receipt-id)
+        user-region (resolve-user-region db receipt opts)
+        opts (cond-> opts
+               user-region (assoc :user-region user-region))
+        markdown (:parsed-markdown extract-result)
         markdown-items (markdown/markdown->line-item-candidates markdown)
         markdown-merchant-header (markdown/markdown->merchant-header markdown)
         markdown-merchant-name (some-> (:merchant_name markdown-merchant-header) str/trim not-empty)
@@ -340,6 +380,21 @@
             {:supplier-id (aliases/get-unknown-supplier-id db)
              :supplier-alias-id nil
              :source :unknown}))
+        {:keys [store-id store-alias-id store-guess]}
+        (if (= :unknown source)
+          {:store-id nil
+           :store-alias-id nil
+           :store-guess nil
+           :source :unknown}
+          (try
+            (resolve-store-and-alias db supplier-id extraction opts)
+            (catch Exception e
+              ;; Never fail extraction just because store resolution failed.
+              (log/warn e "Failed to resolve store from merchant" {:receipt-id receipt-id})
+              {:store-id nil
+               :store-alias-id nil
+               :store-guess nil
+               :source :unknown})))
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
@@ -362,11 +417,13 @@
       receipt-id
       (merge {:raw_extract_json raw-extract-json
               :parsed_markdown markdown}
-      (select-keys guesses [:supplier_guess
+        (select-keys guesses [:supplier_guess
                               :total_amount_guess
                               :currency_guess
-                :purchased_at_guess])
-      (when supplier-alias-id {:supplier_alias_id supplier-alias-id})))
+                              :purchased_at_guess])
+        (when supplier-alias-id {:supplier_alias_id supplier-alias-id})
+        (when store-guess {:store_guess store-guess})
+        (when store-alias-id {:store_alias_id store-alias-id})))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
     (when-not (= :unknown source)
       (try
@@ -377,7 +434,7 @@
                        (get opts :auto-post-after-upload? true))
           auto-res (when (and (= status "extracted") auto-post?)
                      (try
-                       (auto-approve-extracted-receipt! db receipt-id extraction supplier-id opts)
+                       (auto-approve-extracted-receipt! db receipt-id extraction supplier-id store-id opts)
                        (catch Exception e
                          (log/warn e "Failed during auto-approve flow" {:receipt-id receipt-id})
                          nil)))

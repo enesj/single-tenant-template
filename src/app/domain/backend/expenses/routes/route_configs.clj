@@ -29,6 +29,21 @@
    :custom-count-params (fn [qp]
                           {:search (:search qp)})})
 
+(def store-config
+  {:entity-key :store
+   :entity-plural :stores
+   :route-segment "stores"
+   :service 'app.domain.backend.expenses.services.stores
+   :default-limit 100
+   :default-order-by "display_name"
+   :required-fields [:supplier-id :display-name]
+   :has-count? true
+   :has-search? false
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
+                          {:search (:search qp)})})
+
 (def manufacturer-config
   {:entity-key :manufacturer
    :entity-plural :manufacturers
@@ -198,6 +213,32 @@
                             normalized (assoc :raw-label-normalized normalized)
                             (contains? body :confidence) (assoc :confidence confidence))))})
 
+(def store-alias-config
+  {:entity-key :store-alias
+   :entity-plural :store-aliases
+   :route-segment "store-aliases"
+   :service 'app.domain.backend.expenses.services.store-aliases
+   :default-limit 50
+   :default-order-by "raw_label"
+   :required-fields [:raw-label :raw-label-normalized]
+   :has-count? false
+   :has-search? false
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+
+   ;; Allow clients to omit raw-label-normalized; compute it server-side.
+   ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.
+   :transform-request (fn [body]
+                        (let [raw-label (:raw-label body)
+                              normalized (or (:raw-label-normalized body)
+                                           (when raw-label
+                                             (svc-configs/normalize-store-key raw-label)))
+                              confidence (when (contains? body :confidence)
+                                           (utils/parse-int-param body :confidence nil))]
+                          (cond-> body
+                            normalized (assoc :raw-label-normalized normalized)
+                            (contains? body :confidence) (assoc :confidence confidence))))})
+
 ;; =============================================================================
 ;; Configuration Map
 ;; =============================================================================
@@ -205,6 +246,7 @@
 (def entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers supplier-config
+   :stores store-config
    :manufacturers manufacturer-config
    :payers payer-config
    :payer-types payer-type-config
@@ -214,4 +256,5 @@
    :receipts receipt-config
    :price-observations price-observation-config
    :article-aliases article-alias-config
-   :supplier-aliases supplier-alias-config})
+   :supplier-aliases supplier-alias-config
+   :store-aliases store-alias-config})

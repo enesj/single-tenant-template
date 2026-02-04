@@ -45,9 +45,7 @@
   (http/post url opts))
 
 (defn http-get!
-  "Wrapper around clj-http `get`.
-
-  Kept as a var so tests can stub network calls."
+  "Low-level HTTP GET. Separated for stubbing in tests."
   [url opts]
   (http/get url opts))
 

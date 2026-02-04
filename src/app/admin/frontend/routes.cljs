@@ -12,6 +12,8 @@
     [app.admin.frontend.pages.domain.expenses.manufacturers :as manufacturers]
     [app.admin.frontend.pages.domain.expenses.price-observations :as price-observations]
     [app.admin.frontend.pages.reset-password :as reset-password]
+    [app.admin.frontend.pages.domain.expenses.store-aliases :as store-aliases]
+    [app.admin.frontend.pages.domain.expenses.stores :as stores]
     [app.admin.frontend.pages.domain.expenses.supplier-aliases :as supplier-aliases]
     [app.admin.frontend.pages.domain.expenses.suppliers :as suppliers]
     [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
@@ -91,9 +93,19 @@
            :view suppliers/admin-suppliers-page
            :controllers [(guarded-start nil)]}]
 
+         ["/stores"
+          {:name :admin-stores
+           :view stores/admin-stores-page
+           :controllers [(guarded-start nil)]}]
+
          ["/supplier-aliases"
           {:name :admin-supplier-aliases
            :view supplier-aliases/admin-supplier-aliases-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/store-aliases"
+          {:name :admin-store-aliases
+           :view store-aliases/admin-store-aliases-page
            :controllers [(guarded-start nil)]}]
 
          ["/manufacturers"

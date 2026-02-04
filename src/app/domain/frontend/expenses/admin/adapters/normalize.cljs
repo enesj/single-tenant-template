@@ -214,6 +214,37 @@
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 
+(defn store->template-entity
+  [store]
+  (entity-utils/normalize-entity
+    store
+    {:entity-ns :stores
+     :id-keys [:id]
+     :stringify-keys [:supplier_id :supplier-id]
+     :alias-keys {:supplier_id [:supplier-id]
+                  :display_name [:display-name]
+                  :normalized_key [:normalized-key]
+                  :place_id [:place-id]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
+(defn store-alias->template-entity
+  [alias]
+  (entity-utils/normalize-entity
+    alias
+    {:entity-ns :store-aliases
+     :id-keys [:id]
+     :stringify-keys [:store_id :store-id :supplier_id :supplier-id]
+     :alias-keys {:store_id [:store-id]
+                  :supplier_id [:supplier-id]
+                  :supplier_display_name [:supplier-display-name]
+                  :store_display_name [:store-display-name]
+                  :store_address [:store-address]
+                  :raw_label [:raw-label]
+                  :raw_label_normalized [:raw-label-normalized]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
 (defn price-observation->template-entity
   [obs]
   (entity-utils/normalize-entity

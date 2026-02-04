@@ -9,6 +9,18 @@
     [app.domain.frontend.expenses.admin.adapters.normalize :as normalize]
     [app.template.frontend.shared.utils.entity :as entity-utils]))
 
+(entity-utils/register-sync-event!
+  {:event-id ::sync-stores
+   :entity-key :stores
+   :normalize-fn normalize/store->template-entity
+   :log-prefix "[expenses] Syncing stores to template:"})
+
+(entity-utils/register-sync-event!
+  {:event-id ::sync-store-aliases
+   :entity-key :store-aliases
+   :normalize-fn normalize/store-alias->template-entity
+   :log-prefix "[expenses] Syncing store aliases to template:"})
+
 ;; =============================================================================
 ;; Template sync events
 ;; =============================================================================
@@ -104,6 +116,10 @@
   {:sync-event-id ::sync-receipts})
 (entity-sync/register-sync-handler! :suppliers
   {:sync-event-id ::sync-suppliers})
+(entity-sync/register-sync-handler! :stores
+  {:sync-event-id ::sync-stores})
+(entity-sync/register-sync-handler! :store-aliases
+  {:sync-event-id ::sync-store-aliases})
 (entity-sync/register-sync-handler! :manufacturers
   {:sync-event-id ::sync-manufacturers})
 (entity-sync/register-sync-handler! :payers

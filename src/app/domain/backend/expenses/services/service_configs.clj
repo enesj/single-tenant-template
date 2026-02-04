@@ -77,6 +77,26 @@
         (->> (remove str/blank?) vec canonicalize-tokens)
         (->> (str/join "-"))))))
 
+(defn normalize-store-key
+  "Normalize store/address strings into a stable key for dedupe."
+  [value]
+  (when value
+    (-> value
+      str/trim
+      (Normalizer/normalize Normalizer$Form/NFD)
+      (str/replace #"\p{M}+" "")
+      (str/replace #"Đ" "D")
+      (str/replace #"đ" "d")
+      str/lower-case
+      (str/replace #"[^a-z0-9\s-]" "")
+      (str/replace #"-" " ")
+      join-single-letter-tokens
+      (str/replace #"\s+" " ")
+      str/trim
+      (str/split #"\s+")
+      (->> (remove str/blank?)
+        (str/join "-")))))
+
 (defn normalize-manufacturer-key
   "Normalize manufacturer name to lowercase, replace spaces with hyphens, remove special chars.
    Used for deduplication and fuzzy matching."
@@ -145,6 +165,31 @@
    :has-search? true
    :has-count? true})
 
+(def store-alias-config
+  {:table-name "store_aliases"
+   :table-alias :sta
+   :primary-key :sta/id
+   :required-fields [:raw_label :raw_label_normalized]
+   :allowed-order-by {:created-at :sta/created_at
+                      :updated-at :sta/updated_at
+                      :raw-label :sta/raw_label
+                      :raw-label-normalized :sta/raw_label_normalized
+                      :store-display-name :st/display_name
+                      :supplier-display-name :s/display_name
+                      :confidence :sta/confidence}
+   :default-order-by :sta/created_at
+   :search-fields [:sta/raw_label :sta/raw_label_normalized :st/display_name :st/address :s/display_name]
+   :joins [[:stores :st] [:= :st/id :sta/store_id]
+           [:suppliers :s] [:= :s/id :st/supplier_id]]
+   :select-fields [[:sta.*]
+                   [:st/display_name :store_display_name]
+                   [:st/address :store_address]
+                   [:st/supplier_id :supplier_id]
+                   [:s/display_name :supplier_display_name]]
+   :field-transformers {:raw_label_normalized normalize-store-key}
+   :has-search? true
+   :has-count? true})
+
 (def price-observation-config
   {:table-name "price_observations"
    :table-alias :po
@@ -191,6 +236,33 @@
                         :normalized_key (normalize-supplier-key (:display_name updates))
                         :updated_at [:now])
                       (assoc updates :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
+(def store-config
+  {:table-name "stores"
+   :primary-key :id
+   :required-fields [:supplier_id :display_name]
+   :allowed-order-by {:display-name :display_name
+                      :normalized-key :normalized_key
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :display_name
+   :search-fields [:display_name :normalized_key :address :place_id]
+   :field-transformers {:normalized_key normalize-store-key}
+   :before-insert (fn [data]
+                    (let [display-name (:display_name data)
+                          address (:address data)
+                          key-src (str (or display-name "") " " (or address ""))]
+                      (-> data
+                        (assoc :normalized_key (normalize-store-key key-src))
+                        (assoc :id (UUID/randomUUID)))))
+   :before-update (fn [_id updates]
+                    (let [display-name (:display_name updates)
+                          address (:address updates)]
+                      (cond-> (assoc updates :updated_at [:now])
+                        (or display-name address)
+                        (assoc :normalized_key (normalize-store-key (str (or display-name "") " " (or address "")))))))
    :has-search? true
    :has-count? true})
 
@@ -437,8 +509,10 @@
 (def ^:private entity-configs
   {:article-alias article-alias-config
    :supplier-alias supplier-alias-config
+   :store-alias store-alias-config
    :price-observation price-observation-config
    :supplier supplier-config
+   :store store-config
    :manufacturer manufacturer-config
    :payer-type payer-type-config
    :payer payer-config

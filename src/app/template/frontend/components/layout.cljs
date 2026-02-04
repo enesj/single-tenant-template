@@ -22,13 +22,16 @@
 
 (defn- stop-and-push! [e route href]
   (.preventDefault e)
-  (try
-    (rtfe/push-state route)
-    (catch :default _e
-      ;; If the route name isn't registered (or push-state fails), fall back to
-      ;; a plain navigation so sidebar links still work.
-      (when href
-        (set! (.-href js/window.location) href)))))
+  (if (nil? route)
+    (when href
+      (set! (.-href js/window.location) href))
+    (try
+      (rtfe/push-state route)
+      (catch :default _e
+        ;; If the route name isn't registered (or push-state fails), fall back to
+        ;; a plain navigation so sidebar links still work.
+        (when href
+          (set! (.-href js/window.location) href))))))
 
 (defn- nav-item
   [{:keys [id label href route icon active?]}]
@@ -127,7 +130,21 @@
                                         :icon ($ payers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-payers})})]
                             (when power-user?
-                              [(nav-item {:id "user-sidebar-payer-types"
+                              [(nav-item {:id "user-sidebar-admin-stores"
+                                          :label "Stores"
+                                          :href "/admin/stores"
+                                          :route nil
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? false})
+
+                               (nav-item {:id "user-sidebar-admin-store-aliases"
+                                          :label "Store Aliases"
+                                          :href "/admin/store-aliases"
+                                          :route nil
+                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                                          :active? false})
+
+                               (nav-item {:id "user-sidebar-payer-types"
                                           :label "Payer Types"
                                           :href "/payer-types"
                                           :route :expense-payer-types

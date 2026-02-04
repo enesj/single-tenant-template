@@ -203,6 +203,7 @@
     (update-if-present :payer_id #(parse-uuid! :payer_id %))
     (update-if-present :user_id #(parse-uuid! :user_id %))
     (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
+    (update-if-present :store_id #(parse-uuid! :store_id %))
     (update-if-present :purchased_at #(parse-instant! :purchased_at %))
     (update-if-present :total_amount #(parse-bigdec! :total_amount %))
     (update-if-present :currency #(some-> % str str/trim blank->nil))
@@ -353,14 +354,27 @@
   ([db expense-data items]
    (let [expense-data* (normalize-expense-data expense-data)
          items* (mapv normalize-expense-item (or items []))]
-     (require-keys! expense-data* [:supplier_id :payer_id :purchased_at :total_amount])
      (when (empty? items*)
        (throw (ex-info "At least one line item is required" {:status 400 :field :items})))
 
      (jdbc/with-transaction [tx db]
-       (let [expense-id (UUID/randomUUID)
+       (let [expense-data* (if (and (nil? (:supplier_id expense-data*))
+                                 (:store_id expense-data*))
+                             (if-let [store (jdbc/execute-one!
+                                              tx
+                                              (sql/format {:select [:supplier_id]
+                                                           :from [:stores]
+                                                           :where [:= :id (:store_id expense-data*)]
+                                                           :limit 1})
+                                              {:builder-fn rs/as-unqualified-lower-maps})]
+                               (assoc expense-data* :supplier_id (:supplier_id store))
+                               expense-data*)
+                             expense-data*)
+             _ (require-keys! expense-data* [:supplier_id :payer_id :purchased_at :total_amount])
+             expense-id (UUID/randomUUID)
              expense-row (-> expense-data*
-                           (select-keys [:supplier_id
+                           (select-keys [:store_id
+                                         :supplier_id
                                          :payer_id
                                          :user_id
                                          :receipt_id
@@ -432,7 +446,7 @@
         updates* (-> body
                    (dissoc :items)
                    normalize-expense-data
-                   (select-keys [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
+                   (select-keys [:store_id :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
                    (update-if-present :currency #(when % [:cast % :currency]))
                    (assoc :updated_at [:now]))]
     (jdbc/with-transaction [tx db]
