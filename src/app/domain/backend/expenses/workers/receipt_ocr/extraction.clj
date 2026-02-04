@@ -196,7 +196,10 @@
            :store-guess store-guess
            :source :alias}
           (let [{:keys [store-id store-alias-label]}
-                (stores/resolve-store-from-merchant db supplier-id merchant opts)]
+                (stores/resolve-store-from-merchant db supplier-id merchant
+                  (assoc opts
+                    :store-alias-raw-label (:raw_label alias-row)
+                    :store-alias-normalized (:raw_label_normalized alias-row)))]
             (when (and alias-id store-id)
               (store-aliases/map-alias-to-store-if-unmapped! db alias-id store-id 25))
             {:store-id store-id
@@ -387,7 +390,9 @@
            :store-guess nil
            :source :unknown}
           (try
-            (resolve-store-and-alias db supplier-id extraction opts)
+            (resolve-store-and-alias db supplier-id extraction
+              (cond-> opts
+                (seq markdown) (assoc :receipt-markdown markdown)))
             (catch Exception e
               ;; Never fail extraction just because store resolution failed.
               (log/warn e "Failed to resolve store from merchant" {:receipt-id receipt-id})

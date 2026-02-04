@@ -10,6 +10,8 @@
     [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
+    [app.domain.backend.expenses.services.stores.matching :as store-matching]
+    [app.domain.backend.expenses.services.stores.receipt-fingerprint :as receipt-fp]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -127,24 +129,33 @@
   Keys accepted (snake or kebab):
   - supplier_id / supplier-id (required)
   - display_name / display-name (required)
+  - normalized_key / normalized-key (optional, used when :place_id is not present)
   - address (optional)
   - place_id / place-id (optional)
 
   Returns the store row."
   [db {:keys [supplier_id supplier-id
               display_name display-name
+              normalized_key normalized-key
               address
               place_id place-id]}]
   (let [supplier-id* (try-uuid (or supplier_id supplier-id))
         display-name* (some-> (or display_name display-name) str str/trim not-empty)
         address* (some-> address str str/trim not-empty)
-        place-id* (some-> (or place_id place-id) str str/trim not-empty)]
+        place-id* (some-> (or place_id place-id) str str/trim not-empty)
+        normalized* (some-> (or normalized_key normalized-key) str str/trim not-empty)]
     (when-not supplier-id*
       (throw (ex-info "supplier_id is required" {:status 400 :field :supplier_id})))
     (when-not display-name*
       (throw (ex-info "display_name is required" {:status 400 :field :display_name})))
-    (let [normalized (if place-id*
+    (let [normalized (cond
+                       place-id*
                        (configs/normalize-store-key (str "place " place-id*))
+
+                       normalized*
+                       (configs/normalize-store-key normalized*)
+
+                       :else
                        (configs/normalize-store-key (str display-name* " " (or address* ""))))
           row {:id (UUID/randomUUID)
                :supplier_id supplier-id*
@@ -167,6 +178,56 @@
         (sql/format sql-map)
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
+(defn- list-stores-for-supplier
+  [db supplier-id]
+  (jdbc/execute!
+    db
+    (sql/format {:select [:id :normalized_key :display_name :address :place_id]
+                 :from [:stores]
+                 :where [:= :supplier_id supplier-id]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- store-match-key
+  [{:keys [normalized_key display_name address place_id] :as _store}]
+  (let [normalized* (some-> normalized_key str str/trim not-empty)
+        place-id* (some-> place_id str str/trim not-empty)
+        address* (some-> address str str/trim not-empty)
+        address-key (some-> address* configs/normalize-store-key)
+        pj-or-places-key? (and (seq normalized*)
+                            (or (str/starts-with? normalized* "pj-")
+                              (str/starts-with? normalized* "place-")))
+        display-name* (some-> display_name str str/trim not-empty)
+        label (->> [display-name* address*]
+                (remove str/blank?)
+                (str/join " "))
+        derived (some-> label not-empty configs/normalize-store-key)]
+    (cond
+      ;; For PJ/Places-keyed stores, prefer an address-derived key so we can still
+      ;; match future OCR alias variants that don't include PJ/Places data.
+      (and pj-or-places-key? (seq address-key))
+      address-key
+
+      ;; For normal stores, use the stored normalized_key as the primary match key.
+      (seq normalized*)
+      normalized*
+
+      ;; Fallbacks.
+      (seq address-key)
+      address-key
+
+      (and (seq place-id*) (seq derived))
+      derived
+
+      :else
+      nil)))
+
+(defn- store-candidates-for-supplier
+  [db supplier-id]
+  (mapv (fn [{:keys [id] :as row}]
+          {:id id
+           :key (store-match-key row)})
+    (list-stores-for-supplier db supplier-id)))
+
 (defn resolve-store-from-merchant
   "Best-effort store resolution from merchant data.
 
@@ -179,18 +240,39 @@
   multiple OCR variants (store_name/address noise) can converge on the same
   store row.
 
+  Additionally:
+  - when `:receipt-markdown` is present in opts, we try to derive a stable store
+    key from the receipt header (e.g. `PJ` branch number) to avoid duplicates
+  - when `:store-alias-normalized` is present in opts, treat it as the primary
+    alias key for matching/heuristics (script-style)
+
   Returns {:store <row> :store-id <uuid> :store-alias-label <string>} or nil when
   it cannot infer a store label."
   ([db supplier-id merchant]
    (resolve-store-from-merchant db supplier-id merchant nil))
-  ([db supplier-id {:keys [name store_name address] :as _merchant} {:keys [places-cfg user-region] :as _opts}]
+  ([db supplier-id {:keys [name store_name address] :as _merchant}
+    {:keys [places-cfg user-region receipt-markdown
+            store-alias-normalized store-alias-raw-label]
+     :as _opts}]
    (let [supplier-id* (try-uuid supplier-id)
          supplier-name* (some-> name str str/trim not-empty)
          address* (some-> address str str/trim not-empty)
          store-name* (some-> store_name str str/trim not-empty)
          store-label (or address* store-name*)
          store-display-basic (or store-name* address* "Store")
-         places-enabled? (and (map? places-cfg) (seq (:api-key places-cfg)))
+         alias-key (or (some-> store-alias-normalized str str/trim not-empty)
+                     (some-> store-label configs/normalize-store-key))
+         pj-source (->> [receipt-markdown store-alias-raw-label store-name* address*]
+                     (remove str/blank?)
+                     (str/join "\n"))
+         pj (some-> (receipt-fp/pj-number pj-source) str str/trim not-empty)
+         pj-key (when pj
+                  (configs/normalize-store-key (str "pj " pj)))
+         store-key (or pj-key alias-key)
+         places-enabled? (and (map? places-cfg)
+                           (seq (:api-key places-cfg))
+                           (not (seq pj-key))
+                           (not (seq store-alias-normalized)))
          places-query (when (and places-enabled? (seq store-label))
                         (->> [supplier-name* store-name* address*]
                           (remove str/blank?)
@@ -218,6 +300,16 @@
                             :address effective-address
                             :place_id place-id}))
 
+                       ;; If we already created a store without Places (script-style
+                       ;; or PJ-key), attach place_id now.
+                       (when-let [existing (and (seq store-key)
+                                             (find-by-supplier-and-normalized-key db supplier-id* store-key))]
+                         (update-store! db (:id existing)
+                           {:display_name effective-display
+                            :address effective-address
+                            :place_id place-id}))
+
+                       ;; Legacy key format (before script-style normalized_key).
                        (when-let [legacy (find-by-supplier-and-normalized-key
                                            db
                                            supplier-id*
@@ -235,11 +327,34 @@
                           :place_id place-id}))
 
                      :else
-                     (find-or-create-store!
-                       db
-                       {:supplier_id supplier-id*
-                        :display_name store-display-basic
-                        :address address*}))
+                     (or
+                       ;; Prefer stable store key (PJ branch number) when available.
+                       (when (seq store-key)
+                         (find-by-supplier-and-normalized-key db supplier-id* store-key))
+
+                       ;; In case store-key came from PJ, also allow exact alias-key
+                       ;; matches to reuse pre-existing stores.
+                       (when (and (seq alias-key) (not= alias-key store-key))
+                         (find-by-supplier-and-normalized-key db supplier-id* alias-key))
+
+                       (when-let [store-id (receipt-fp/match-store-id db supplier-id* pj-source)]
+                         (get-store db store-id))
+
+                       (when-let [{:keys [store-id]} (store-matching/match-store
+                                                       alias-key
+                                                       (store-candidates-for-supplier db supplier-id*))]
+                         (get-store db store-id))
+
+                       (find-or-create-store!
+                         db
+                         {:supplier_id supplier-id*
+                          :display_name (or store-display-basic
+                                          (some-> store-alias-raw-label str str/trim not-empty)
+                                          store-key
+                                          alias-key
+                                          "Store")
+                          :address address*
+                          :normalized_key store-key})))
              _ (when (and (seq place-id) (:id store))
                  (merge-duplicate-stores-by-place-id! db supplier-id* place-id (:id store)))]
          {:store store
