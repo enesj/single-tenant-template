@@ -35,6 +35,40 @@
 (defonce ^:private ui-ocr-executor
   (Executors/newFixedThreadPool ui-ocr-max-concurrent))
 
+(defn- env-truthy?
+  [k]
+  (let [v (some-> (System/getenv k) str str/trim str/lower-case)]
+    (contains? #{"1" "true" "yes" "y" "on"} v)))
+
+(defonce ^:private receipt-refine-include-store-context?
+  (env-truthy? "RECEIPT_REFINE_INCLUDE_STORE_CONTEXT"))
+
+(defn- receipt-refine-context
+  [db receipt-id]
+  (try
+    (when-let [ctx (receipt-queries/get-receipt-refine-context db receipt-id)]
+      (let [supplier-key (some-> (:supplier_key ctx) str str/trim not-empty)
+            store-key (some-> (:store_key ctx) str str/trim not-empty)
+            fingerprint (when (and supplier-key store-key)
+                          (str supplier-key "/" store-key))]
+        (cond-> ctx
+          fingerprint (assoc :store_fingerprint fingerprint))))
+    (catch Exception e
+      (log/warn e "Failed to load receipt refine context" {:receipt-id receipt-id})
+      nil)))
+
+(defn- store-receipt-refine-context-best-effort!
+  "Store receipt refine context into `receipts.raw_extract_json`.
+
+  Returns the context map (possibly enriched with :store_fingerprint), or nil."
+  [db receipt-id]
+  (when-let [ctx (receipt-refine-context db receipt-id)]
+    (try
+      (receipt-status/store-receipt-refine-context! db receipt-id ctx)
+      (catch Exception e
+        (log/warn e "Failed to persist receipt refine context" {:receipt-id receipt-id})))
+    ctx))
+
 (defn- user-allows-receipt-refine?
   [db receipt]
   (try
@@ -76,30 +110,52 @@
              :has-api-key? has-api-key?
              :has-markdown? has-markdown?}))
         extract-result)
-      (try
-        (log/info "Cerebras receipt refine starting" {:receipt-id receipt-id :user-id user-id :filename filename})
-        (let [started (System/nanoTime)
-              refine (cerebras/refine-receipt-markdown! cerebras-cfg markdown)
-              duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
-          (log/info "Cerebras receipt refine applied"
-            {:receipt-id receipt-id
-             :user-id user-id
-             :filename filename
-             :duration-ms duration-ms
-             :model (:model refine)
-             :has-extraction? (boolean (:extraction refine))})
-          (cond-> extract-result
-            (:extraction refine) (assoc :extraction (:extraction refine))
-            refine (assoc :llm_refine refine)))
-        (catch Exception e
-          (let [details (common/safe-ex-data e)]
-            (log/warn e "Cerebras receipt refine failed; continuing without refine"
+      (let [ctx (store-receipt-refine-context-best-effort! db receipt-id)
+            supplier-key (some-> (:supplier_key ctx) str str/trim not-empty)
+            store-key (some-> (:store_key ctx) str str/trim not-empty)
+            fingerprint (some-> (:store_fingerprint ctx) str str/trim not-empty)
+            refine-opts (when (and receipt-refine-include-store-context? (map? ctx))
+                          {:context ctx})]
+        (try
+          (log/info "Cerebras receipt refine starting"
+            (cond-> {:receipt-id receipt-id
+                     :user-id user-id
+                     :filename filename
+                     :include-store-context? receipt-refine-include-store-context?}
+              supplier-key (assoc :supplier-key supplier-key)
+              store-key (assoc :store-key store-key)
+              fingerprint (assoc :fingerprint fingerprint)))
+          (let [started (System/nanoTime)
+                refine (if refine-opts
+                         (cerebras/refine-receipt-markdown! cerebras-cfg markdown refine-opts)
+                         (cerebras/refine-receipt-markdown! cerebras-cfg markdown))
+                duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
+            (log/info "Cerebras receipt refine applied"
               (cond-> {:receipt-id receipt-id
                        :user-id user-id
                        :filename filename
-                       :error_message (or (.getMessage e) (str (class e)))}
-                (seq details) (assoc :error_details details))))
-          extract-result)))))
+                       :duration-ms duration-ms
+                       :model (:model refine)
+                       :has-extraction? (boolean (:extraction refine))}
+                supplier-key (assoc :supplier-key supplier-key)
+                store-key (assoc :store-key store-key)
+                fingerprint (assoc :fingerprint fingerprint)))
+            (cond-> extract-result
+              (:extraction refine) (assoc :extraction (:extraction refine))
+              refine (assoc :llm_refine refine)))
+          (catch Exception e
+            ;; Keep this best-effort: we still want the fingerprint context persisted
+            ;; for later inspection even when refine fails.
+            (when db
+              (store-receipt-refine-context-best-effort! db receipt-id))
+            (let [details (common/safe-ex-data e)]
+              (log/warn e "Cerebras receipt refine failed; continuing without refine"
+                (cond-> {:receipt-id receipt-id
+                         :user-id user-id
+                         :filename filename
+                         :error_message (or (.getMessage e) (str (class e)))}
+                  (seq details) (assoc :error_details details))))
+            extract-result))))))
 
 (defn- maybe-refine-review-required
   [db receipt extract-result persist-result opts]
@@ -114,6 +170,10 @@
                                (assoc opts :auto-post-after-upload? false)
                                opts)
                 updated (extraction/persist-extract-result! db (:id receipt) refined persist-opts)]
+            ;; `persist-extract-result!` rewrites raw_extract_json; ensure the
+            ;; refine context stays persisted for later inspection.
+            (when (and db (:id receipt))
+              (store-receipt-refine-context-best-effort! db (:id receipt)))
             (cond-> (assoc updated :receipt receipt :extract-result refined)
               auto-post-present? (assoc :auto-post-after-upload? auto-post-after-upload?)))
           (do

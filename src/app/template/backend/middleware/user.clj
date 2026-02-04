@@ -2,6 +2,7 @@
    "Enhanced middleware for authenticating regular (non-admin) API requests and
     authorizing access to entities with comprehensive security controls."
    (:require
+     [app.shared.http :as shared-http]
      [app.template.backend.security.entity-access :as entity-access]
      [ring.util.response :as response]
      [taoensso.timbre :as log]))
@@ -9,9 +10,9 @@
 (defn- unauthorized
   ([] (unauthorized "Authentication required"))
   ([message]
-   (-> (response/response {:error message})
-     (response/status 401)
-     (response/content-type "application/json"))))
+   ;; Return a JSON *string* body because this middleware short-circuits the
+   ;; downstream response encoding middleware.
+   (shared-http/json-string-response 401 {:error message})))
 
 (defn wrap-user-authentication
   "Require a logged-in user session for protected API routes.

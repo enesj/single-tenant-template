@@ -4,11 +4,11 @@
     [clojure.test :refer [deftest is testing]]))
 
 (defn- schema-nodes
-  "Return a lazy seq of all nodes (maps + scalars) in a JSON-schema-shaped structure." 
+  "Return a lazy seq of all nodes (maps + scalars) in a JSON-schema-shaped structure."
   [x]
   (letfn [(branch? [v]
             (or (map? v)
-                (sequential? v)))
+              (sequential? v)))
           (children [v]
             (cond
               (map? v) (vals v)
@@ -47,3 +47,39 @@
       (is (contains? (get props "merchant") "anyOf"))
       (is (contains? (get props "purchased_at") "anyOf"))
       (is (contains? (get props "currency") "anyOf")))))
+
+(deftest build-chat-messages-adds-context-system-message
+  (testing "When context is provided, we add an extra system message"
+    (let [markdown "# receipt"
+          ctx {:supplier_key "konzum"
+               :supplier_name "Konzum"
+               :store_key "pj-66"
+               :store_display_name "Konzum PJ 66"
+               :store_address "Somewhere"
+               :store_fingerprint "konzum/pj-66"}
+          msgs (receipt-refine/build-chat-messages markdown ctx)]
+      (is (= 3 (count msgs)))
+      (is (= "system" (:role (nth msgs 0))))
+      (is (= "system" (:role (nth msgs 1))))
+      (is (= "user" (:role (nth msgs 2))))
+      (let [content (:content (nth msgs 1))]
+        (is (re-find #"supplier_key: konzum" content))
+        (is (re-find #"store_key: pj-66" content))
+        (is (re-find #"store_fingerprint: konzum/pj-66" content))
+        (is (re-find #"pj-" content))))))
+
+(deftest build-chat-messages-appends-hints-when-configured
+  (testing "Hints are appended when a matching supplier/store fingerprint is present"
+    (with-redefs [receipt-refine/hints-config
+                  (fn []
+                    {"konzum" ["Currency is usually BAM."]
+                     "konzum/pj-66" ["Items table starts after 'Naziv' header."]})]
+      (let [markdown "# receipt"
+            ctx {:supplier_key "konzum"
+                 :store_key "pj-66"}
+            msgs (receipt-refine/build-chat-messages markdown ctx)
+            content (:content (nth msgs 1))]
+        (is (re-find #"Format hints" content))
+        (is (re-find #"Items table starts" content))
+        (is (re-find #"Currency is usually" content))))))
+

@@ -16,6 +16,44 @@
                  :where [:= :id receipt-id]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
+(defn get-receipt-refine-context
+  "Load canonical supplier/store context for a receipt.
+
+  Returns (keys are snake_case to match DB conventions):
+  {:supplier_id uuid
+   :supplier_key string
+   :supplier_name string
+   :store_id uuid
+   :store_key string
+   :store_display_name string
+   :store_address string}
+
+  Values can be nil when the receipt has not been mapped to canonical supplier/store
+  rows yet (e.g. alias is still unmapped).
+
+  Returns nil when the receipt does not exist."
+  [db receipt-id]
+  (when receipt-id
+    (jdbc/execute-one!
+      db
+      (sql/format
+        {:select [[[:coalesce :sup_from_store.id :sup_from_alias.id] :supplier_id]
+                  [[:coalesce :sup_from_store.normalized_key :sup_from_alias.normalized_key] :supplier_key]
+                  [[:coalesce :sup_from_store.display_name :sup_from_alias.display_name] :supplier_name]
+                  [:st.id :store_id]
+                  [:st.normalized_key :store_key]
+                  [:st.display_name :store_display_name]
+                  [:st.address :store_address]]
+         :from [[:receipts :r]]
+         :left-join [[:store_aliases :sta] [:= :sta.id :r.store_alias_id]
+                     [:stores :st] [:= :st.id :sta.store_id]
+                     [:suppliers :sup_from_store] [:= :sup_from_store.id :st.supplier_id]
+                     [:supplier_aliases :sa] [:= :sa.id :r.supplier_alias_id]
+                     [:suppliers :sup_from_alias] [:= :sup_from_alias.id :sa.supplier_id]]
+         :where [:= :r.id receipt-id]
+         :limit 1})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
 (defn delete-receipt!
   "Hard-delete a receipt and return the deleted row.
 

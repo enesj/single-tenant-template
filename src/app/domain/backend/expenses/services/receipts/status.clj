@@ -2,6 +2,7 @@
   "Receipt status transitions, claims, and extraction result storage."
   (:require
     [app.domain.backend.expenses.services.receipts.storage :as storage]
+    [cheshire.core :as json]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
@@ -135,6 +136,28 @@
                    :set set-map
                    :where [:= :id receipt-id]
                    :returning [:*]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn store-receipt-refine-context!
+  "Persist receipt refine context into `receipts.raw_extract_json` under key `receipt_refine/context`.
+
+  This is for observability/debugging. It should not change extraction/refine behavior.
+
+  Returns {:id <receipt-id>} when updated, otherwise nil."
+  [db receipt-id context]
+  (when (and db receipt-id (map? context))
+    (jdbc/execute-one!
+      db
+      [(str "update receipts "
+         "set raw_extract_json = jsonb_set("
+         "coalesce(raw_extract_json, '{}'::jsonb), "
+         "'{receipt_refine/context}', "
+         "?::jsonb, true), "
+         "updated_at = now() "
+         "where id = ? "
+         "returning id")
+       (json/generate-string context)
+       receipt-id]
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn clear-refine-pending!

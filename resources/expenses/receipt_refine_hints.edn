@@ -1,0 +1,12 @@
+{;; Optional receipt refine hints.
+ ;;
+ ;; Keys:
+ ;; - supplier key: "<supplier_key>" (e.g. "konzum")
+ ;; - store fingerprint: "<supplier_key>/<store_key>" (e.g. "konzum/pj-66")
+ ;;
+ ;; Values:
+ ;; - a string, or
+ ;; - a vector of strings
+ ;;
+ ;; Keep hints minimal and generic. Avoid including real receipt values.
+ }

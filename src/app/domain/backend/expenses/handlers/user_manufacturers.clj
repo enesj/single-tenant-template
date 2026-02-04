@@ -50,7 +50,8 @@
                 search (h/get-param qp :search)
                 rows (to-app ((:list manufacturers/service) db {:limit limit
                                                                 :offset offset
-                                                                :search search}))]
+                                                                :search search}))
+                rows (cond-> rows (sequential? rows) vec)]
             (h/json-response {:data rows :limit limit :offset offset}))
           (catch Exception e
             (log/error e "Failed to list manufacturers" {:message (.getMessage e)})

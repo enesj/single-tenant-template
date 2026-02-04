@@ -11,6 +11,8 @@
   Optional fields are represented as nullable values, so the top-level shape is
   stable even when the model cannot confidently extract a value."
   (:require
+    [clojure.edn :as edn]
+    [clojure.java.io :as io]
     [clojure.string :as str]))
 
 (def receipt-extraction-json-schema
@@ -19,32 +21,32 @@
    "additionalProperties" false
    "properties"
    {"merchant" {"anyOf" [{"type" "object"
-                           "additionalProperties" false
-                           "properties" {"name" {"anyOf" [{"type" "string"}
+                          "additionalProperties" false
+                          "properties" {"name" {"anyOf" [{"type" "string"}
+                                                         {"type" "null"}]}
+                                        "address" {"anyOf" [{"type" "string"}
                                                             {"type" "null"}]}
-                                         "address" {"anyOf" [{"type" "string"}
-                                                               {"type" "null"}]}
-                                         "tax_id" {"anyOf" [{"type" "string"}
-                                                              {"type" "null"}]}}
-                           "required" ["name" "address" "tax_id"]}
-                          {"type" "null"}]}
+                                        "tax_id" {"anyOf" [{"type" "string"}
+                                                           {"type" "null"}]}}
+                          "required" ["name" "address" "tax_id"]}
+                         {"type" "null"}]}
 
     "purchased_at" {"anyOf" [{"type" "string"}
-                              {"type" "null"}]
+                             {"type" "null"}]
                     "description" "ISO-8601 timestamp if present, else null."}
 
     "currency" {"anyOf" [{"type" "string"}
-                          {"type" "null"}]
+                         {"type" "null"}]
                 "description" "ISO 4217 currency code (e.g. BAM/EUR/USD), else null."}
 
     "totals" {"type" "object"
               "additionalProperties" false
               "properties" {"subtotal_cents" {"anyOf" [{"type" "integer"}
-                                                        {"type" "null"}]}
+                                                       {"type" "null"}]}
                             "tax_cents" {"anyOf" [{"type" "integer"}
-                                                   {"type" "null"}]}
+                                                  {"type" "null"}]}
                             "total_cents" {"anyOf" [{"type" "integer"}
-                                                     {"type" "null"}]}}
+                                                    {"type" "null"}]}}
               "required" ["subtotal_cents" "tax_cents" "total_cents"]}
 
     "items" {"type" "array"
@@ -52,13 +54,13 @@
                       "additionalProperties" false
                       "properties" {"name" {"type" "string"}
                                     "quantity" {"anyOf" [{"type" "number"}
-                                                          {"type" "null"}]
+                                                         {"type" "null"}]
                                                 "description" "Quantity can be decimal (up to 3 decimals)."}
                                     "unit_price_cents" {"anyOf" [{"type" "integer"}
-                                                                   {"type" "null"}]
+                                                                 {"type" "null"}]
                                                         "description" "Final per-unit price after discounts."}
                                     "line_total_cents" {"anyOf" [{"type" "integer"}
-                                                                  {"type" "null"}]
+                                                                 {"type" "null"}]
                                                         "description" "Final line total after discounts."}}
                       "required" ["name" "quantity" "unit_price_cents" "line_total_cents"]}}}
    "required" ["merchant" "purchased_at" "currency" "totals" "items"]})
@@ -102,11 +104,152 @@
       md
       "\n```")))
 
+(def ^:private default-hints-resource
+  "expenses/receipt_refine_hints.edn")
+
+(defonce ^:private hints-cache*
+  (atom {:loaded? false
+         :value {}}))
+
+(defn- safe-read-edn-map
+  [s]
+  (try
+    (let [v (edn/read-string (or s ""))]
+      (if (map? v) v {}))
+    (catch Exception _
+      {})))
+
+(defn hints-config
+  "Load optional receipt refine hints.
+
+  The hints file is an EDN map. Lookup keys:
+  - supplier key: <supplier_key>
+  - store fingerprint: <supplier_key>/<store_key>
+
+  Values can be a string or a vector of strings.
+
+  Optional env override:
+  - RECEIPT_REFINE_HINTS_PATH
+
+  Returns an empty map when not configured or invalid."
+  []
+  (let [{:keys [loaded? value]} @hints-cache*]
+    (if loaded?
+      value
+      (let [path (some-> (System/getenv "RECEIPT_REFINE_HINTS_PATH") str str/trim not-empty)
+            resource (io/resource default-hints-resource)
+            s (cond
+                (seq path) (try (slurp path) (catch Exception _ nil))
+                resource (try (slurp resource) (catch Exception _ nil))
+                :else nil)
+            cfg (safe-read-edn-map s)]
+        (reset! hints-cache* {:loaded? true
+                              :value cfg})
+        cfg))))
+
+(defn- normalize-hints
+  [x]
+  (cond
+    (string? x)
+    (let [s (some-> x str str/trim not-empty)]
+      (cond-> [] (seq s) (conj s)))
+
+    (sequential? x)
+    (->> x
+      (map (fn [v] (some-> v str str/trim not-empty)))
+      (remove nil?)
+      vec)
+
+    :else
+    []))
+
+(defn- hint-val
+  [m k]
+  (or (get m k)
+    (when (string? k)
+      (get m (keyword k)))))
+
+(defn- hints-for-context
+  [context]
+  (let [cfg (hints-config)
+        suppliers-map (when (map? (get cfg :suppliers)) (get cfg :suppliers))
+        fingerprints-map (when (map? (get cfg :fingerprints)) (get cfg :fingerprints))
+        supplier-key (some-> (:supplier_key context) str str/trim not-empty)
+        store-key (some-> (:store_key context) str str/trim not-empty)
+        fingerprint (when (and (seq supplier-key) (seq store-key))
+                      (str supplier-key "/" store-key))
+        supplier-hints (normalize-hints
+                         (or (when (map? suppliers-map) (hint-val suppliers-map supplier-key))
+                           (hint-val cfg supplier-key)))
+        fingerprint-hints (normalize-hints
+                            (or (when (map? fingerprints-map) (hint-val fingerprints-map fingerprint))
+                              (hint-val cfg fingerprint)))]
+    (->> (concat fingerprint-hints supplier-hints)
+      (remove nil?)
+      distinct
+      vec)))
+
+(defn- store-fingerprint
+  [context]
+  (or (some-> (:store_fingerprint context) str str/trim not-empty)
+    (let [supplier-key (some-> (:supplier_key context) str str/trim not-empty)
+          store-key (some-> (:store_key context) str str/trim not-empty)]
+      (when (and (seq supplier-key) (seq store-key))
+        (str supplier-key "/" store-key)))))
+
+(defn- context-system-message
+  "Build an additional system message with supplier/store context.
+
+  This message is intended as a *hint*, not a source of truth. The receipt
+  markdown remains the only authoritative input."
+  [context]
+  (when (map? context)
+    (let [supplier-key (some-> (:supplier_key context) str str/trim not-empty)
+          supplier-name (some-> (:supplier_name context) str str/trim not-empty)
+          store-key (some-> (:store_key context) str str/trim not-empty)
+          store-name (some-> (:store_display_name context) str str/trim not-empty)
+          store-address (some-> (:store_address context) str str/trim not-empty)
+          fingerprint (store-fingerprint context)
+          pj-key? (and (seq store-key) (str/starts-with? store-key "pj-"))
+          hints (hints-for-context context)]
+      (when (or (seq supplier-key) (seq supplier-name) (seq store-key) (seq store-name) (seq store-address))
+        (str
+          "Store context (extra signal; do not invent values):\n"
+          (when supplier-key (str "- supplier_key: " supplier-key "\n"))
+          (when supplier-name (str "- supplier_name: " supplier-name "\n"))
+          (when store-key (str "- store_key: " store-key "\n"))
+          (when fingerprint (str "- store_fingerprint: " fingerprint "\n"))
+          (when store-name (str "- store_display_name: " store-name "\n"))
+          (when store-address (str "- store_address: " store-address "\n"))
+          (when pj-key?
+            "- Note: store_key starts with `pj-` (stable branch identifier).\n")
+          (when (seq hints)
+            (str
+              "\nFormat hints (apply only when consistent with the markdown):\n"
+              (->> hints
+                (map (fn [h] (str "- " h)))
+                (str/join "\n")))))))))
+
 (defn build-chat-messages
-  "Build the OpenAI-style messages payload for receipt extraction."
-  [markdown]
-  [{:role "system" :content receipt-extraction-system-prompt}
-   {:role "user" :content (receipt-extraction-user-prompt markdown)}])
+  "Build the OpenAI-style messages payload for receipt extraction.
+
+  When `context` is provided, we add an additional system message with supplier/store
+  fingerprint context and optional format hints.
+
+  Context is a map that may contain:
+  {:supplier_key .. :supplier_name .. :store_key .. :store_display_name .. :store_address ..}
+
+  The receipt markdown remains the only authoritative input."
+  ([markdown]
+   (build-chat-messages markdown nil))
+  ([markdown context]
+   (let [ctx-msg (context-system-message context)]
+     (cond-> [{:role "system" :content receipt-extraction-system-prompt}]
+       (seq ctx-msg)
+       (conj {:role "system" :content ctx-msg})
+
+       true
+       (conj {:role "user" :content (receipt-extraction-user-prompt markdown)})))))
 
 (defn normalize-llm-extraction
   "Normalize a parsed JSON extraction map by trimming strings and dropping empty values.

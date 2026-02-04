@@ -3,6 +3,7 @@
     [clojure.test :refer [deftest is testing use-fixtures]]
     [app.domain.backend.expenses.handlers.user-manufacturers :as user-manu]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [app.domain.backend.expenses.services.manufacturers :as manufacturers]
     [cheshire.core :as json]))
 
 (def db :test-db)
@@ -32,17 +33,19 @@
       (is (= 403 (:status resp)))))
 
   (testing "200 for admin role with stubbed service"
-    (with-redefs [app.domain.backend.expenses.services.manufacturers/service
+    (with-redefs [manufacturers/service
                   {:list (fn [_db opts]
                            ;; Return a simple vector obeying opts
                            (repeat (or (:limit opts) 1) {:id (java.util.UUID/randomUUID)
                                                          :display_name "Test Mfg"}))}
                   h/json-response (fn [body & [status]] {:status (or status 200) :body body})]
       (let [handler (user-manu/list-manufacturers-handler db)
-            req (request :get "/api/v1/expenses/manufacturers"
-                         {:auth-session {:user {:id (java.util.UUID/randomUUID)
-                                                :role "admin"}}}
-                         nil)
+            req (-> (request :get "/api/v1/expenses/manufacturers"
+                             {:auth-session {:user {:id (java.util.UUID/randomUUID)
+                                                    :role "admin"}}}
+                             nil)
+                  ;; Keep the test output small on failure.
+                  (assoc :query-params {:limit "2"}))
             resp (handler req)]
         (is (= 200 (:status resp)))
         (is (map? (:body resp)))
@@ -50,7 +53,7 @@
 
 (deftest create-manufacturer-validation
   (testing "400 when display_name missing"
-    (with-redefs [app.domain.backend.expenses.services.manufacturers/service
+    (with-redefs [manufacturers/service
                   {:create! (fn [& _] (throw (ex-info "Missing display name" {:type :validation})))}
                   h/json-response (fn [body & [status]] {:status (or status 200) :body body})]
       (let [handler (user-manu/create-manufacturer-handler db)
@@ -62,7 +65,7 @@
         (is (= 400 (:status resp))))))
 
   (testing "201 when valid payload provided"
-    (with-redefs [app.domain.backend.expenses.services.manufacturers/service
+    (with-redefs [manufacturers/service
                   {:create! (fn [_db {:keys [display_name]}]
                               {:id (java.util.UUID/randomUUID)
                                :display_name display_name})}
@@ -74,4 +77,4 @@
                          {:display_name "ACME"})
             resp (handler req)]
         (is (= 201 (:status resp)))
-        (is (= "ACME" (get-in resp [:body :data :display_name])))))))
+      (is (= "ACME" (get-in resp [:body :data :display-name])))))))
