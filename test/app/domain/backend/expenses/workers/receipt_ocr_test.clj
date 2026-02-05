@@ -10,6 +10,7 @@
     [app.domain.backend.expenses.workers.receipt-ocr.core :as core]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]])
   (:import
     [java.util.concurrent CountDownLatch TimeUnit]))
@@ -62,6 +63,112 @@
         (is (= 0 (:map-alias @calls)))
         ;; Still creates article aliases for line items.
         (is (= 1 (:article-aliases @calls)))))))
+
+(deftest persist-extract-result-filters-non-item-rows-before-alias-creation
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        calls (atom {:article-aliases 0
+                     :labels []})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results! (fn [& _] nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias! (fn [_db _raw-label]
+                                                           {:id alias-id
+                                                            :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places! (fn [& _]
+                                                                      (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [_db _supplier-id raw-label]
+                    (swap! calls (fn [m]
+                                   (-> m
+                                     (update :article-aliases inc)
+                                     (update :labels conj raw-label))))
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "HOŠE-KOMERC"}
+                                         :totals {:total 20.00}
+                                         :items [{:raw_label "ITEM A" :qty 1 :unit_price 10.00 :line_total 10.00}
+                                                 {:raw_label "POPUST -10,00%:" :qty 1 :unit_price 9.00 :line_total 9.00}
+                                                 {:raw_label "ITEM B" :qty 1 :unit_price 5.00 :line_total 5.00}
+                                                 {:raw_label "ITEM B" :qty 1 :unit_price 5.00 :line_total 5.00}
+                                                 {:raw_label "V.: 17,00%" :qty 1 :unit_price 2.38 :line_total 2.38}
+                                                 {:raw_label "KARTICA" :qty 1 :unit_price 20.00 :line_total 20.00}
+                                                 {:raw_label "UKUPNO" :qty 1 :unit_price 20.00 :line_total 20.00}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})
+            labels (set (:labels @calls))]
+        ;; Only the real purchased items should result in alias creation:
+        ;; - ITEM A
+        ;; - ITEM B (twice - duplicate items are preserved as separate purchases)
+        (is (= 3 (:article-aliases @calls)))
+        (is (= #{"ITEM A" "ITEM B"} labels))
+        ;; Sum matches total, so no mismatch-based review-required.
+        (is (= "extracted" (:status _res)))
+        (is (= "extracted" (:effective-status _res)))))))
+
+(deftest persist-extract-result-applies-discount-override-for-popost-ocr-misread
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:article-aliases 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias! (fn [_db _raw-label]
+                                                           {:id alias-id
+                                                            :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places! (fn [& _]
+                                                                      (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    (swap! calls update :article-aliases inc)
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "HOŠE-KOMERC"}
+                                         :totals {:total 14.00}
+                                         :items [{:raw_label "ITEM A" :qty 1 :unit_price 10.00 :line_total 10.00}
+                                                 ;; OCR sometimes misreads "POPUST" as "POPOST"; we should still apply the override.
+                                                 {:raw_label "POPOST -10,00%:" :qty 1 :unit_price 9.00 :line_total 9.00}
+                                                 {:raw_label "ITEM B" :qty 1 :unit_price 5.00 :line_total 5.00}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})
+            stored-items (get-in @stored [:raw_extract_json :extraction :items])
+            post-processing (get-in @stored [:raw_extract_json :post_processing])]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= "extracted" (:status res)))
+        (is (= 2 (count stored-items)))
+        (let [normalize-item (fn [m]
+                               (-> m
+                                 (select-keys [:raw_label :qty :unit_price :line_total])
+                                 (update :qty (comp double common/parse-money))
+                                 (update :unit_price (comp double common/parse-money))
+                                 (update :line_total (comp double common/parse-money))))]
+          (is (= #{{:raw_label "ITEM A" :qty 1.0 :unit_price 9.0 :line_total 9.0}
+                   {:raw_label "ITEM B" :qty 1.0 :unit_price 5.0 :line_total 5.0}}
+                (set (map normalize-item stored-items)))))
+        (is (= 1 (:discount-overrides post-processing)))
+        (is (= 2 (:article-aliases @calls)))))))
 
 (deftest persist-extract-result-does-not-create-article-aliases-when-supplier-unknown
   (let [receipt-id (java.util.UUID/randomUUID)
@@ -202,6 +309,23 @@
             :unit_price 5.70M
             :line_total 5.70M}
           (nth items 2)))))
+
+(deftest markdown-line-item-candidates-supports-price-with-vat-letter-suffix
+  (testing "BA receipts with VAT category suffix (e.g. 2,00A)"
+    (let [candidates #'markdown/markdown->line-item-candidates
+          ;; Real-world example from caffe bar receipts in Bosnia:
+          ;; Lines end with X,XXA where A is the VAT category letter.
+          markdown (str "FISKALNI RAČUN\n"
+                     "ESPRESSO KAFA/co 2,00A\n"
+                     "CAJ/co 2,50A\n")
+          items (candidates markdown)]
+      (is (= 2 (count items)) "Should parse two line items")
+      ;; The parser may prepend non-money-prefix lines to the first item label.
+      ;; Focus on the key behavior: parsing the price correctly despite the A suffix.
+      (is (= 2.00M (:line_total (first items))))
+      (is (= 2.50M (:line_total (second items))))
+      (is (str/includes? (:raw_label (first items)) "ESPRESSO"))
+      (is (str/includes? (:raw_label (second items)) "CAJ")))))
 
 (deftest markdown-line-item-candidates-supports-mixed-qty-and-inline-price
   (let [candidates #'markdown/markdown->line-item-candidates
@@ -349,6 +473,20 @@
     (is (= "DM" (:merchant_name result)))
     (is (= "ul. Marsala Tita 25, 71000 Sarajevo" (:address result)))))
 
+(deftest markdown-purchased-at-extracts-ba-datetime-format
+  (testing "parses dd.mm.yyyy. hh:mm with trailing dot"
+    (let [markdown "UR CAFFE BAR\n29.01.2026. 14:31\nESPRESSO KAFA 2,00"]
+      (is (= "2026-01-29T14:31:00" (markdown/markdown->purchased-at markdown)))))
+  (testing "parses dd.mm.yyyy hh:mm without trailing dot"
+    (let [markdown "BINGO\n21.01.2026 17:25\nItem 5,00"]
+      (is (= "2026-01-21T17:25:00" (markdown/markdown->purchased-at markdown)))))
+  (testing "parses date-only format dd.mm.yyyy"
+    (let [markdown "MERCHANT\n15.03.2026\nItem 10,00"]
+      (is (= "2026-03-15" (markdown/markdown->purchased-at markdown)))))
+  (testing "returns nil when no date found"
+    (is (nil? (markdown/markdown->purchased-at "No date here")))
+    (is (nil? (markdown/markdown->purchased-at nil)))))
+
 (deftest process-extract-auto-retries-review-required-once
   (let [process-extract! #'core/process-extract!
         receipt-id (java.util.UUID/randomUUID)
@@ -434,17 +572,17 @@
         res (clojure.core/with-redefs-fn
               {#'core/maybe-refine-with-cerebras (fn [_db _receipt extract-result _opts]
                                                   ;; Skip/failed refine: no :llm_refine returned.
-                                                  extract-result)
+                                                   extract-result)
                #'receipt-status/clear-refine-pending! (fn [_db rid]
                                                         (swap! cleared conj rid)
                                                         {:id rid})}
               (fn []
                 (#'core/maybe-refine-review-required
-                  ::db
-                  {:id receipt-id}
-                  {:parsed-markdown "x"}
-                  {:receipt-id receipt-id :review-required? true}
-                  {:clear-refine-pending? true})))]
+                 ::db
+                 {:id receipt-id}
+                 {:parsed-markdown "x"}
+                 {:receipt-id receipt-id :review-required? true}
+                 {:clear-refine-pending? true})))]
     (is (= {:receipt-id receipt-id :review-required? true} res))
     (is (= [receipt-id] @cleared))))
 

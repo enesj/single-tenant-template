@@ -138,12 +138,24 @@
     (rf/reg-event-fx
       (keyword event-ns "load-list")
       (fn [{:keys [db]} [_ params]]
-        (let [{:keys [limit offset] :as pagination} (resolve-pagination entity-key db params pag-opts)
-              extra-params (extra-query-params params pag-opts)
-              request-params (merge {:limit limit :offset offset} extra-params)]
-          {:db (-> db
-                 (begin-load entity-key base-path)
-                 (update-pagination-state entity-key pagination))
+        (let [params (or params {})
+              fetch-limit (:fetch-limit params)
+              fetch-offset (or (:fetch-offset params) 0)
+              fetch-mode? (some? fetch-limit)
+              params* (cond-> params
+                        fetch-mode? (dissoc :fetch-limit :fetch-offset))
+              {:keys [limit offset] :as pagination} (when-not fetch-mode?
+                                                      (resolve-pagination entity-key db params* pag-opts))
+              extra-params (extra-query-params params* pag-opts)
+              request-params (if fetch-mode?
+                               (merge {:limit fetch-limit :offset fetch-offset} extra-params)
+                               (merge {:limit limit :offset offset} extra-params))
+              db* (-> db
+                    (begin-load entity-key base-path))
+              db* (if pagination
+                    (update-pagination-state db* entity-key pagination)
+                    db*)]
+          {:db db*
            :http-xhrio (admin-http/admin-get
                          {:uri api-endpoint
                           :params request-params
@@ -157,11 +169,12 @@
       (fn [{:keys [db]} [_ pagination response]]
         (let [db* (-> db
                     (finish-load entity-key base-path nil)
-                    (assoc-in (conj base-path :items) (vec (or (get response (keyword (name entity-key))) []))))
-              {:keys [_page per-page]} pagination
-              _per-page (or per-page (:default-per-page pag-opts) 25)]
-          {:db (-> db*
-                 (update-pagination-state entity-key pagination))
+                    (assoc-in (conj base-path :items)
+                      (vec (or (get response (keyword (name entity-key))) []))))
+              db* (if pagination
+                    (update-pagination-state db* entity-key pagination)
+                    db*)]
+          {:db db*
            :dispatch-n [[:admin/refresh-entity-list entity-key response]]})))
 
     ;; load-failed event

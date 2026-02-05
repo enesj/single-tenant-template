@@ -90,10 +90,237 @@
 (defn- lines-total-mismatch?
   [items total-amount]
   (let [items* (mapv normalize-line-item (or items []))
-        lines-total (receipt-parsing/lines-total items*)]
-    (and (some? total-amount)
-      (some? lines-total)
-      (> (abs-decimal-diff lines-total total-amount) 0.01))))
+        lines-total (receipt-parsing/lines-total items*)
+        diff (when (and (some? lines-total) (some? total-amount))
+               (- (bigdec lines-total) (bigdec total-amount)))]
+    ;; We only flag *overages* as a mismatch.
+    ;;
+    ;; Underages are common when receipts list VAT/tax separately or when OCR misses
+    ;; some items. Treating those as "review_required" in list views caused noisy
+    ;; false positives.
+    (and (some? diff)
+      (> (double diff) 0.01))))
+
+(def ^:private discount-label-pattern
+  #"(?iu)\b(popust|popost|rabat|discount|akcija)\b")
+
+(def ^:private totals-label-pattern
+  #"(?iu)\b(ukupno|ukupan|ukupna|total|subtotal|za\s+uplatu|za\s+pla[ćc]anje|upla[ćc]eno|primljeno|gotovina|kartica|kusur|povrat|razlika|saldo)\b")
+
+(def ^:private tax-label-pattern
+  ;; Includes a few common abbreviations and OCR misreads seen in BA receipts:
+  ;; - OSN/CSN (osnovica)
+  ;; - POU (often a misread of PDV)
+  #"(?iu)\b(pdv|vat|porez|osnovica|stopa|(?:osn|csn)\.?|pou)\b")
+
+(def ^:private payment-label-pattern
+  #"(?iu)\b(gotovina|kartica|visa|master(card)?|diners|amex|american|paypal)\b")
+
+(def ^:private meta-label-pattern
+  #"(?iu)\b(ra[čc]un|fiskalni|kasa|kasir|operator|datum|vrijeme|broj|br\.?|id)\b")
+
+(def ^:private header-label-pattern
+  #"(?iu)\b(naziv|opis|artik(al)?|šifra|sifra|kol(\.|i[čc]ina)?|qty|cijena|price|jed(\.|inica)?)\b")
+
+(defn- normalize-item-label
+  "Normalize a raw item label for robust matching.
+
+  This is used only for heuristics (filtering/deduping). It should not change
+  the raw label displayed to users."
+  [raw-label]
+  (when-let [s (some-> raw-label str str/trim not-empty)]
+    (-> s
+      str/lower-case
+      (str/replace #"[,:;]+" " ")
+      (str/replace #"\s+" " ")
+      str/trim)))
+
+(defn- label-matches?
+  [pattern label]
+  (boolean
+    (and (seq label)
+      (re-find pattern label))))
+
+(defn- discount-row?
+  [label]
+  (label-matches? discount-label-pattern label))
+
+(defn- vat-percent-row?
+  [label]
+  (and (seq label)
+    (str/includes? label "%")
+    (boolean (re-find #"(?iu)\b(v\.?|pdv|vat|porez)\b" label))))
+
+(defn- likely-grand-total-row?
+  "Heuristic: drop rows that restate the grand total inside the items list.
+
+  We only apply this when there are multiple items; otherwise a single-item
+  receipt could legitimately have line_total == grand total."
+  [{:keys [items-count grand-total]} raw-label line-total]
+  (and (some? grand-total)
+    (some? line-total)
+    (> (long (or items-count 0)) 3)
+    (<= (abs-decimal-diff line-total grand-total) 0.01)
+    (let [raw (some-> raw-label str str/trim)
+          label (normalize-item-label raw)
+          short? (<= (count (or label "")) 8)
+          colon? (boolean (and raw (str/ends-with? raw ":")))]
+      (or (label-matches? totals-label-pattern label)
+        colon?
+        short?))))
+
+(defn- abbrev-summary-row?
+  "Heuristic: drop short colon-terminated abbreviation rows inside the items list.
+
+  Some receipts include summary rows like \"OSN. E:\" (tax base) or \"PDV:\" (tax),
+  but OCR can misread them (e.g. \"CSN. E:\", \"POU:\"). These are not purchased
+  items and frequently inflate the computed line-item total.
+
+  We keep this conservative by requiring:
+  - item list is non-trivial (>3)
+  - raw label ends with ':'
+  - label is very short and mostly letters/dots/spaces
+  - line_total exists
+
+  Returns true when the row should be dropped as non-item metadata."
+  [{:keys [items-count]} raw-label label line-total]
+  (let [raw (some-> raw-label str str/trim)]
+    (and (some? line-total)
+      (> (long (or items-count 0)) 3)
+      (seq raw)
+      (str/ends-with? raw ":")
+      (seq label)
+      (let [compact (-> label
+                      (str/replace #"[\s\.]" "")
+                      (str/trim))]
+        (and (<= (count compact) 6)
+          (boolean (re-matches #"(?iu)\p{L}+" compact)))))))
+
+(defn- non-item-reason
+  "Return a keyword reason when the item looks like a non-purchased row.
+
+  Returns nil when the row looks like a normal purchased item."
+  [ctx item]
+  (let [raw-label (:raw_label item)
+        label (normalize-item-label raw-label)
+        line-total (common/parse-money (:line_total item))]
+    (cond
+      (str/blank? (or label "")) :blank-label
+      (nil? line-total) :missing-line-total
+      (label-matches? header-label-pattern label) :header
+      (label-matches? meta-label-pattern label) :metadata
+      (or (= "maestro" label)
+        (label-matches? payment-label-pattern label)) :payment
+      (label-matches? tax-label-pattern label) :tax
+      (vat-percent-row? label) :tax
+      (abbrev-summary-row? ctx raw-label label line-total) :metadata
+      (likely-grand-total-row? ctx raw-label line-total) :grand-total
+      (label-matches? totals-label-pattern label) :totals
+      :else nil)))
+
+(defn- discount-override?
+  "Return true when a discount row likely overrides the previous item's final price."
+  [prev-item discount-item]
+  (let [prev-total (common/parse-money (:line_total prev-item))
+        disc-total (common/parse-money (:line_total discount-item))
+        prev-label (normalize-item-label (:raw_label prev-item))
+        diff (when (and prev-total disc-total)
+               (abs-decimal-diff prev-total disc-total))]
+    (and prev-total
+      disc-total
+      (not (discount-row? prev-label))
+      (< (double disc-total) (double prev-total))
+      (some? diff)
+      ;; Be conservative: treat as override only when close-ish (e.g. -10%).
+      (<= (double diff) (* 0.6 (double prev-total))))))
+
+(defn- apply-discount-override
+  [prev-item discount-item]
+  (let [disc-total (common/parse-money (:line_total discount-item))
+        qty (common/parse-money (:qty prev-item))
+        qty-one? (and (some? qty) (= 1M (bigdec qty)))]
+    (cond-> (assoc prev-item :line_total disc-total)
+      (or qty-one? (nil? (:unit_price prev-item)))
+      (assoc :unit_price disc-total))))
+
+(defn- clean-extraction-items
+  "Drop obvious non-item rows (totals/payment/tax/headers).
+
+  Also attempts a conservative discount-override rewrite:
+  if a discount row follows an item and looks like a discounted final price,
+  we keep the item but replace its line_total with the discount row's line_total.
+
+  Returns {:items .. :post-processing ..}."
+  [items {:keys [items-count grand-total] :as ctx}]
+  (let [label-sample-limit 5
+        add-sample (fn [m reason raw-label]
+                     (let [s (some-> raw-label str str/trim not-empty)]
+                       (if-not s
+                         m
+                         (update m reason (fn [v]
+                                            (let [v (vec (or v []))]
+                                              (if (>= (count v) label-sample-limit)
+                                                v
+                                                (conj v s))))))))
+        {:keys [items dropped-by-reason dropped-labels-sample discount-overrides]}
+        (reduce
+          (fn [{:keys [items] :as acc} item]
+            (let [raw-label (:raw_label item)
+                  label (normalize-item-label raw-label)]
+              (cond
+                (discount-row? label)
+                (let [prev (peek items)]
+                  (if (and prev (discount-override? prev item))
+                    (-> acc
+                      (update :items (fn [v] (conj (pop v) (apply-discount-override prev item))))
+                      (update :discount-overrides (fnil inc 0)))
+                    (-> acc
+                      (update-in [:dropped-by-reason :discount] (fnil inc 0))
+                      (update :dropped-labels-sample add-sample :discount raw-label))))
+
+                :else
+                (if-let [reason (non-item-reason ctx item)]
+                  (-> acc
+                    (update-in [:dropped-by-reason reason] (fnil inc 0))
+                    (update :dropped-labels-sample add-sample reason raw-label))
+                  (update acc :items conj item)))))
+          {:items []
+           :dropped-by-reason {}
+           :dropped-labels-sample {}
+           :discount-overrides 0}
+          (or items []))
+        ;; NOTE: We no longer dedupe items because legitimate duplicate purchases
+        ;; (e.g., buying "Milk 2.8% masti" twice) should be preserved.
+        ;; OCR providers rarely produce spurious duplicate lines.
+        original-count (long (or items-count (count (or items []))))
+        kept-count (count items)
+        dropped-count (->> dropped-by-reason vals (reduce + 0))
+        post-processing
+        (when (or (pos? dropped-count) (pos? (long discount-overrides)))
+          {:original-count original-count
+           :kept-count kept-count
+           :dropped-count dropped-count
+           :discount-overrides (long (or discount-overrides 0))
+           :dropped-by-reason dropped-by-reason
+           :dropped-labels-sample (not-empty dropped-labels-sample)
+           :grand-total (when grand-total (str grand-total))})]
+    {:items items
+     :post-processing post-processing}))
+
+(defn- post-process-extraction
+  "Apply heuristic extraction cleanup.
+
+  Returns {:extraction <updated> :post-processing <stats|nil>}."
+  [extraction]
+  (if-not (and (map? extraction) (sequential? (:items extraction)))
+    {:extraction extraction
+     :post-processing nil}
+    (let [items (:items extraction)
+          ctx {:items-count (count items)
+               :grand-total (common/parse-money (get-in extraction [:totals :total]))}
+          {:keys [items post-processing]} (clean-extraction-items items ctx)]
+      {:extraction (assoc extraction :items items)
+       :post-processing post-processing})))
 
 (defn- best-markdown-item-match [markdown-items item]
   (let [item-total (common/parse-money (:line_total item))
@@ -342,6 +569,7 @@
                             markdown-merchant-name
                             (markdown/markdown->supplier-guess markdown))
         markdown-total (markdown/markdown->total-amount markdown)
+        markdown-purchased-at (markdown/markdown->purchased-at markdown)
         extraction0 (or (:extraction extract-result) {})
         extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
         extraction0 (cond
@@ -356,6 +584,9 @@
                           (> (abs-decimal-diff markdown-total provider-total) 0.05)))
                       (assoc :totals {:total markdown-total})
 
+                      (and (nil? (:purchased_at extraction0)) markdown-purchased-at)
+                      (assoc :purchased_at markdown-purchased-at)
+
                       (and (nil? (get-in extraction0 [:merchant :name])) markdown-supplier)
                       (assoc :merchant (cond-> {:name markdown-supplier}
                                          (:store_name markdown-merchant-header)
@@ -364,6 +595,8 @@
                                          (assoc :address (:address markdown-merchant-header)))))
         {:keys [extraction changed? changes]}
         (reconcile-extraction-with-markdown extraction0 markdown)
+        {:keys [extraction post-processing]}
+        (post-process-extraction extraction)
         valid-shape? (and (map? extraction) (m/validate ReceiptExtraction extraction))
         guesses (when (map? extraction)
                   (let [g (extraction->guesses extraction opts)]
@@ -414,9 +647,13 @@
                                   :valid_shape? valid-shape?}
                            (map? llm-refine)
                            (assoc :llm_refine (dissoc llm-refine :extraction))
+
                            changed?
                            (assoc :reconciliation {:changes changes
-                                                   :source :parsed_markdown}))]
+                                                   :source :parsed_markdown})
+
+                           (map? post-processing)
+                           (assoc :post_processing post-processing))]
     (receipt-status/store-extraction-results!
       db
       receipt-id

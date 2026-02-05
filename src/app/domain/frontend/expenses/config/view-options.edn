@@ -40,8 +40,23 @@
    :show-highlights? true,
    :per-page 50},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
+ :stores
+ {:display-defaults
+  {:show-edit? false, :show-delete? false, :per-page 10},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {:id false}},
  :article-aliases
  {:display-defaults {:show-edit? false},
   :display-locks {},
+  :column-defaults {},
+  :column-locks {:id false}},
+ :store-aliases
+ {:display-defaults
+  {:per-page 100,
+   :show-add-button? false,
+   :show-edit? false,
+   :show-delete? false},
+  :display-locks {:show-add-button? false},
   :column-defaults {},
   :column-locks {:id false}}}

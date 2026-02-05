@@ -70,6 +70,12 @@
    :show-highlights? true,
    :per-page 50},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
+ :stores
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 10},
+  :display-locks {:show-add-button? false},
+  :column-defaults {},
+  :column-locks {}},
  :login-events
  {:display-locks
   {:show-add-button? false,
@@ -77,9 +83,14 @@
    :show-batch-edit? false},
   :display-defaults {:show-batch-delete? false}},
  :article-aliases
+ {:display-defaults {:show-filtering? true, :show-edit? true},
+  :display-locks {:per-page 5},
+  :column-defaults {},
+  :column-locks {}},
+ :store-aliases
  {:display-defaults
-  {:show-filtering? true, :per-page 25, :show-edit? true},
-  :display-locks {},
+  {:show-edit? true, :show-filtering? true, :per-page 25},
+  :display-locks {:show-add-button? false},
   :column-defaults {},
   :column-locks {}},
  :users

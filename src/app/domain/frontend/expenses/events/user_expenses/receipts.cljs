@@ -38,39 +38,61 @@
 ;; -----------------------------------------------------------------------------
 ;; Template CRUD bridge overrides
 ;;
-;; The template list-view delete button dispatches template CRUD events for the
-;; entity keyword (e.g. :receipts). For user pages (/receipts), we need delete to
-;; hit the user receipts API (/api/v1/expenses/receipts/:id) instead of the generic
-;; template admin entity API (/admin/api/receipts/:id).
+;; The template list-view delete/batch-delete buttons dispatch template CRUD events
+;; for an entity keyword (e.g. :receipts). For user pages (/receipts), we must
+;; route deletions to the user receipts API:
+;;   - DELETE /api/v1/expenses/receipts/:id
+;;   - DELETE /api/v1/expenses/receipts/batch
+;; and NOT to the generic template entity endpoints (/api/v1/entities/*), which
+;; are deny-by-default for non-admin users.
 ;; -----------------------------------------------------------------------------
 
 (crud-bridges/register-crud-bridge!
   {:entity-key :receipts
    :bridge-id :expenses-user-receipts
    :priority 90
-   :context-pred (constantly true)
+   ;; IMPORTANT: User receipts pages live outside the admin UI. Do not route
+   ;; deletes through the template entity endpoints (/api/v1/entities/*), which
+   ;; are deny-by-default and will be blocked for regular users.
+   :context-pred (fn [db]
+                   (not (crud-bridges/in-admin-context? db)))
    :operations
-   {:batch-delete
-    {:request
-     (fn [{:keys [db]} entity-type ids default-effect]
-       (let [ids* (->> (or ids []) (remove nil?) (map str) distinct vec)]
-         (assoc default-effect
-           :db (assoc-in db (paths/entity-loading? entity-type) true)
-           :http-xhrio
-           (x/xhrio db
-             {:method :delete
-              :uri (str endpoints/receipts-endpoint "/batch")
-              :params {:ids ids*}
-              :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
-              :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]}))))
+   {:delete
+    {:request (fn [{:keys [db]} entity-type id default-effect]
+                (assoc default-effect
+                  :db (assoc-in db (paths/entity-loading? entity-type) true)
+                  :http-xhrio
+                  (x/xhrio db
+                    {:method :delete
+                     :uri (str endpoints/receipts-endpoint "/" id)
 
-     :on-success
-     (fn [{:keys [db]} entity-type _ids _response default-effect]
-       (assoc default-effect
-         :db (-> db
-               (assoc-in (paths/entity-loading? entity-type) false)
-               (assoc-in (paths/entity-error entity-type) nil))
-         :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}}})
+                     :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
+                     :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]})))
+     :on-success (fn [{:keys [db]} entity-type _id default-effect]
+                   (assoc default-effect
+                     :db (-> db
+                           (assoc-in (paths/entity-loading? entity-type) false)
+                           (assoc-in (paths/entity-error entity-type) nil))
+                     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}
+
+    :batch-delete
+    {:request (fn [{:keys [db]} entity-type ids default-effect]
+                (assoc default-effect
+                  :db (assoc-in db (paths/entity-loading? entity-type) true)
+                  :http-xhrio
+                  (x/xhrio db
+                    {:method :delete
+                     :uri (str endpoints/receipts-endpoint "/batch")
+                     :params {:ids ids}
+
+                     :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids]
+                     :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids]})))
+     :on-success (fn [{:keys [db]} entity-type _ids default-effect]
+                   (assoc default-effect
+                     :db (-> db
+                           (assoc-in (paths/entity-loading? entity-type) false)
+                           (assoc-in (paths/entity-error entity-type) nil))
+                     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}}})
 
 ;; ---------------------------------------------------------------------------
 ;; List receipts
@@ -388,6 +410,41 @@
   common-interceptors
   (fn [db [_receipt-id error]]
     (log/warn "Failed to trigger OCR" {:error error})
+    (-> db
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/ocr-selected
+  common-interceptors
+  (fn [{:keys [db]} [receipt-ids]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri (str endpoints/receipts-endpoint "/ocr")
+
+                    :params {:receipt_ids (vec receipt-ids)}
+                    :on-success [:user-expenses/ocr-selected-success receipt-ids]
+                    :on-failure [:user-expenses/ocr-selected-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/ocr-selected-success
+  common-interceptors
+  (fn [{:keys [db]} [_receipt-ids _response]]
+    {:db (-> db
+           (assoc-in (conj base-path :action-loading?) false)
+           (assoc-in (conj base-path :error) nil))
+     ;; Refresh the receipts list and clear selection
+     :dispatch-n [[:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+                  [:app.template.frontend.events.list/clear-selection :receipts]]}))
+
+(rf/reg-event-db
+  :user-expenses/ocr-selected-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to trigger batch OCR" {:error error})
     (-> db
       (assoc-in (conj base-path :action-loading?) false)
       (assoc-in (conj base-path :error) (http/extract-error-message error)))))

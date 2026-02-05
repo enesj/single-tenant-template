@@ -108,6 +108,21 @@
    {:type "select",
     :label "Article",
     :options ["articles" "canonical_name"]}}},
+   :stores
+   {:edit-fields ["display_name" "address" "place_id"],
+    :field-config
+    {:display_name {:type "text", :label "Display name"},
+     :address {:type "textarea", :label "Address"},
+     :place_id {:type "text", :label "Place ID"}}},
+   :store-aliases
+   {:edit-fields
+    ["raw_label" "raw_label_normalized" "store_id" "confidence"],
+    :field-config
+    {:raw_label {:type "text", :label "Raw label"},
+     :raw_label_normalized {:type "text", :label "Alias"},
+     :store_id
+     {:type "select", :label "Store", :options ["stores" "display_name"]},
+     :confidence {:type "number", :step 1}}},
  :users
  {:create-fields ["email" "status" "full-name"],
   :edit-fields ["email" "full-name" "role" "status"],

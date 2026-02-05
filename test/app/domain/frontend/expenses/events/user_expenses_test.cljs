@@ -102,6 +102,42 @@
     (is (= #{} (get-in @rf-db/app-db (paths/entity-selected-ids :expenses))))
     (is (= 1 (get-in @rf-db/app-db (paths/list-total-items :expenses))))))
 
+(deftest template-delete-receipts-is-bridged
+  (testing "template delete-entity for :receipts uses /api/v1/expenses/receipts/batch (not generic /api/v1/entities)"
+    (reset-db!)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-entity :receipts "rec-1"])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/api/v1/expenses/receipts/batch" (req-uri req)))
+      (is (= ["rec-1"] (req-ids req))))))
+
+(deftest template-delete-receipts-is-bridged-when-entity-type-is-string
+  (testing "template delete-entity for \"receipts\" (string) is still bridged to /api/v1/expenses/receipts/batch"
+    (reset-db!)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-entity "receipts" "rec-1"])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/api/v1/expenses/receipts/batch" (req-uri req)))
+      (is (= ["rec-1"] (req-ids req))))))
+
+(deftest template-delete-receipts-not-bridged-in-admin-context
+  (testing "in admin route context, receipts delete uses the admin receipts API (not the user receipts API)"
+    (reset-db!)
+    ;; Use the route name convention used by the admin router (e.g. :admin-users).
+    (swap! rf-db/app-db assoc-in (paths/current-route-name) :admin-users)
+    (swap! rf-db/app-db assoc :admin/token "test-token")
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/delete-entity :receipts "rec-1"])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/admin/api/expenses/receipts/batch" (req-uri req)))
+      (is (= ["rec-1"] (req-ids req))))))
+
 (deftest template-delete-article-aliases-is-bridged
   (testing "template delete-entity for :article-aliases uses /api/v1/expenses/article-aliases/batch (not generic /api/v1/entities)"
     (reset-db!)

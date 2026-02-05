@@ -27,8 +27,7 @@
                          ;; Template list-view pagination is client-side; fetch a reasonably large
                          ;; set so the list can paginate without additional backend wiring.
                          (rf/dispatch [:app.domain.frontend.expenses.events.articles/load-list
-                                       {:limit 1000
-                                        :offset 0}]))
+                                       {:fetch-limit 1000 :fetch-offset 0}]))
                        [])]
     (use-effect
       (fn []

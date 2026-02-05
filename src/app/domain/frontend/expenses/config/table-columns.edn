@@ -105,7 +105,22 @@
   :always-visible ["label"]},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "deleted_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id"],
+  ["purchased_at"
+   "supplier_display_name"
+   "payer_label"
+   "currency"
+   "total_amount"
+   "notes"
+   "is_posted"
+   "id"
+   "receipt_id"
+   "created_at"
+   "deleted_at"
+   "updated_at"
+   "user_id"
+   "supplier_id"
+   "payer_id"
+   "store_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :payer_label {:type "string", :label "Payer"}},
@@ -224,7 +239,31 @@
   :column-config {}},
  :receipts
  {:available-columns
-  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-parse-json" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id"],
+  ["original-filename"
+   "status"
+   "supplier-guess"
+   "created-at"
+   "updated-at"
+   "id"
+   "file-size"
+   "raw-parse-json"
+   "raw-extract-json"
+   "parsed-markdown"
+   "total-amount-guess"
+   "currency-guess"
+   "purchased-at-guess"
+   "error-message"
+   "error-details"
+   "retry-count"
+   "expense-id"
+   "user-id"
+   "payer-id"
+   "storage-key"
+   "file-hash"
+   "content-type"
+   "supplier-alias-id"
+   "store-guess"
+   "store-alias-id"],
   :default-visible-columns
   ["original-filename"
    "status"
@@ -244,6 +283,31 @@
    "created-at"
    "updated-at"],
   :always-visible ["original-filename" "status" "purchased-at-guess"],
+  :computed-fields {},
+  :column-config {}},
+ :stores
+ {:available-columns
+  ["supplier_id"
+   "display_name"
+   "normalized_key"
+   "address"
+   "place_id"
+   "archived_at"
+   "created_at"
+   "updated_at"
+   "id"],
+  :default-visible-columns
+  ["display_name" "normalized_key" "address" "place_id" "created_at"],
+  :filterable-columns
+  ["display_name"
+   "normalized_key"
+   "address"
+   "place_id"
+   "archived_at"
+   "created_at"],
+  :sortable-columns
+  ["display_name" "normalized_key" "created_at" "updated_at"],
+  :always-visible ["display_name"],
   :computed-fields {},
   :column-config {}},
  :article-aliases
@@ -276,4 +340,44 @@
   :always-visible ["raw_label"],
   :computed-fields
   {:supplier_display_name {}, :article_canonical_name {}},
+  :column-config {}},
+ :store-aliases
+ {:available-columns
+  ["supplier_display_name"
+   "store_display_name"
+   "store_address"
+   "raw_label"
+   "raw_label_normalized"
+   "confidence"
+   "created_at"
+   "updated_at"
+   "store_id"
+   "id"],
+  :default-visible-columns
+  ["supplier_display_name"
+   "raw_label"
+   "raw_label_normalized"
+   "store_display_name"
+   "confidence"
+   "created_at"],
+  :filterable-columns
+  ["supplier_display_name"
+   "store_display_name"
+   "store_address"
+   "raw_label"
+   "raw_label_normalized"
+   "confidence"
+   "created_at"],
+  :sortable-columns
+  ["supplier_display_name"
+   "store_display_name"
+   "raw_label"
+   "raw_label_normalized"
+   "confidence"
+   "created_at"],
+  :always-visible ["raw_label"],
+  :computed-fields
+  {:supplier_display_name {},
+   :store_display_name {},
+   :store_address {}},
   :column-config {}}}

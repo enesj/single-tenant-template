@@ -20,6 +20,8 @@
                  :suppliers
                  :supplier-aliases
                  :manufacturers
+                 :stores
+                 :store-aliases
                  :price-observations
                  :unmapped-aliases}
      :color "accent"
@@ -32,6 +34,8 @@
      :entities #{:expenses
                  :receipts
                  :suppliers
+                 :stores
+                 :store-aliases
                  :payers
                  :expense-items
                  :articles

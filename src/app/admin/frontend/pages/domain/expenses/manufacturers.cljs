@@ -23,8 +23,7 @@
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list
-                                       {:limit 1000
-                                        :offset 0}]))
+                                       {:fetch-limit 1000 :fetch-offset 0}]))
                        [])]
     (use-effect
       (fn []

@@ -1,4 +1,27 @@
-{:expenses
+{:expense-items
+ {:edit-fields ["article_id" "qty" "unit_price" "line_total"],
+  :field-config
+  {:article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]},
+   :qty {:type "number", :step 0.001},
+   :unit_price {:type "number", :step 0.01},
+   :line_total {:type "number", :step 0.01}},
+  :removed-fields {:edit-fields ["raw_label"]}},
+ :articles
+ {:edit-fields
+  ["manufacturer_id"
+   "canonical_name"
+   "category"
+   "link"
+   "normalized_key"],
+  :field-config
+  {:manufacturer_id
+   {:type "select",
+    :label "Manufacturer",
+    :options ["manufacturers" "display_name"]}}},
+ :expenses
  {:create-fields
   ["purchased_at"
    "supplier_id"
@@ -28,52 +51,10 @@
    :total_amount {:type "number", :step 0.01},
    :notes {:type "textarea"},
    :is_posted {:type "checkbox"}}},
- :article-aliases
- {:edit-fields
-  ["raw_label" "raw_label_normalized" "supplier_id" "article_id"],
-  :field-config
-  {:supplier_id
-   {:type "select",
-    :label "Supplier",
-    :options ["suppliers" "display_name"]},
-   :article_id
-   {:type "select",
-    :label "Article",
-    :options ["articles" "canonical_name"]}}},
- :supplier-aliases
- {:edit-fields ["raw_label" "raw_label_normalized" "supplier_id"],
-  :field-config
-  {:supplier_id
-   {:type "select",
-    :label "Supplier",
-    :options ["suppliers" "display_name"]}}},
- :articles
- {:edit-fields
-  ["manufacturer_id"
-   "canonical_name"
-   "category"
-   "link"
-   "normalized_key"],
-  :field-config
-  {:manufacturer_id
-   {:type "select",
-    :label "Manufacturer",
-    :options ["manufacturers" "display_name"]}}},
  :manufacturers
  {:create-fields ["display_name"],
   :edit-fields ["display_name"],
   :field-config {:display_name {:type "text", :label "Display name"}}},
- :expense-items
- {:edit-fields ["article_id" "qty" "unit_price" "line_total"],
-  :field-config
-  {:article_id
-   {:type "select",
-    :label "Article",
-    :options ["articles" "canonical_name"]},
-   :qty {:type "number", :step 0.001},
-   :unit_price {:type "number", :step 0.01},
-   :line_total {:type "number", :step 0.01}},
-  :removed-fields {:edit-fields ["raw_label"]}},
  :price-observations
  {:edit-fields
   ["observed_at" "article_id" "supplier_id" "unit_price" "currency"],
@@ -89,4 +70,40 @@
     :options ["suppliers" "display_name"]},
    :unit_price {:type "number", :step 0.01},
    :currency
-   {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}}}
+   {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}},
+ :supplier-aliases
+ {:edit-fields ["raw_label" "raw_label_normalized" "supplier_id"],
+  :field-config
+  {:supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]}}},
+ :stores
+ {:edit-fields ["display_name" "address" "place_id"],
+  :field-config
+  {:display_name {:type "text", :label "Display name"},
+   :address {:type "textarea", :label "Address"},
+   :place_id {:type "text", :label "Place ID"}}},
+ :article-aliases
+ {:edit-fields
+  ["raw_label" "raw_label_normalized" "supplier_id" "article_id"],
+  :field-config
+  {:supplier_id
+   {:type "select",
+    :label "Supplier",
+    :options ["suppliers" "display_name"]},
+   :article_id
+   {:type "select",
+    :label "Article",
+    :options ["articles" "canonical_name"]}}},
+ :store-aliases
+ {:edit-fields
+  ["raw_label" "raw_label_normalized" "store_id" "confidence"],
+  :field-config
+  {:raw_label {:type "text", :label "Raw label"},
+   :raw_label_normalized {:type "text", :label "Alias"},
+   :store_id
+   {:type "select",
+    :label "Store",
+    :options ["stores" "display_name"]},
+   :confidence {:type "number", :step 1}}}}

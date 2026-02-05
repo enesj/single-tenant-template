@@ -245,6 +245,37 @@
                     (common/parse-money line)))))
         last))))
 
+(def ^:private ba-datetime-re
+  "Regex for BA receipt datetime pattern: dd.mm.yyyy. hh:mm or dd.mm.yyyy hh:mm"
+  #"(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s+(\d{1,2}):(\d{2})")
+
+(def ^:private ba-date-re
+  "Regex for BA receipt date pattern: dd.mm.yyyy (optionally with trailing dot)"
+  #"(\d{1,2})\.(\d{1,2})\.(\d{4})\.?(?:\s|$)")
+
+(defn markdown->purchased-at
+  "Best-effort extract purchase datetime from receipt markdown.
+
+  Looks for BA date patterns like '29.01.2026. 14:31' or '29.01.2026' and
+  returns an ISO8601 string compatible with common/parse-instant."
+  [markdown]
+  (when (string? markdown)
+    (or
+      ;; Try datetime first (more specific)
+      (when-let [[_ day month year hour minute] (re-find ba-datetime-re markdown)]
+        (format "%s-%02d-%02dT%02d:%02d:00"
+          year
+          (parse-long month)
+          (parse-long day)
+          (parse-long hour)
+          (parse-long minute)))
+      ;; Fall back to date only
+      (when-let [[_ day month year] (re-find ba-date-re markdown)]
+        (format "%s-%02d-%02d"
+          year
+          (parse-long month)
+          (parse-long day))))))
+
 (defn- markdown->pipe-line-items [markdown]
   (when (string? markdown)
     (let [pipe-row->cells (fn [line]
@@ -512,7 +543,7 @@
                     (recur (rest remaining) pending items)))))))))))
 
 (def ^:private trailing-money-re
-  #"(?i)^(.*?)(\d{1,9}[\.,]\d{2})\s*(?:e|km|bam|€)?\s*$")
+  #"(?i)^(.*?)(\d{1,9}[\.,]\d{2})\s*(?:[A-Z])?\s*(?:e|km|bam|€)?\s*$")
 
 (defn- line->trailing-money [line]
   (when (string? line)
@@ -521,7 +552,7 @@
                  (str/replace #"\|" " ")
                  (str/replace #"\s+" " ")
                  str/trim)]
-      (when-let [[_ prefix amount] (re-matches trailing-money-re line)]
+      (when-let [[_ prefix amount _vat] (re-matches trailing-money-re line)]
         (let [money (common/parse-money amount)
               prefix (some-> prefix str/trim not-empty)]
           (when money

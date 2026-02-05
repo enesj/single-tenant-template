@@ -8,4 +8,6 @@
  :payers {:title "Payers"},
  :supplier-aliases {:title "Supplier Aliases"},
  :receipts {:title "Receipts"},
- :article-aliases {:title "Article Aliases"}}
+ :stores {:title "Stores"},
+ :article-aliases {:title "Article Aliases"},
+ :store-aliases {:title "Store Aliases"}}
