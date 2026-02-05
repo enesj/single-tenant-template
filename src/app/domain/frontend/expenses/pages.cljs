@@ -21,6 +21,8 @@
     [app.domain.frontend.expenses.pages.user.price-observations :refer [price-observations-page]]
     [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]
     [app.domain.frontend.expenses.pages.user.receipts-list :refer [receipts-list-page]]
+    [app.domain.frontend.expenses.pages.user.store-aliases :refer [store-aliases-page]]
+    [app.domain.frontend.expenses.pages.user.stores :refer [stores-page]]
     [app.domain.frontend.expenses.pages.user.supplier-aliases :refer [supplier-aliases-page]]
     [app.domain.frontend.expenses.pages.user.suppliers :refer [suppliers-page]]
     [app.domain.frontend.expenses.pages.user.unmapped-items :refer [unmapped-items-page]]))
@@ -41,6 +43,8 @@
    :expense-settings expense-settings-page
    :expense-suppliers suppliers-page
    :expense-payers payers-page
+   :expense-stores stores-page
+   :expense-store-aliases store-aliases-page
    :expense-items expense-items-page
    :expense-articles articles-page
    :expense-manufacturers manufacturers-page

@@ -43,6 +43,8 @@
     "/manufacturers"
     "/article-aliases"
     "/supplier-aliases"
+    "/stores"
+    "/store-aliases"
     "/price-observations"]})
 
 (def enabled-domains

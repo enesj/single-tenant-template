@@ -38,8 +38,9 @@
   common-interceptors
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :entities)}))
-     ;; Remove fetch-entities dispatch - the entities component handles this
-     ;; based on route parameters, not UI state
+
+;; Remove fetch-entities dispatch - the entities component handles this
+;; based on route parameters, not UI state
 
 (rf/reg-event-fx
   :page/init-entity-detail
@@ -225,6 +226,22 @@
          :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
                       [:app.template.frontend.events.config/set-editing nil]
                       [:user-expenses/fetch-payers]]}))))
+
+(rf/reg-event-fx
+  :page/init-expense-stores
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-stores)})))
+
+(rf/reg-event-fx
+  :page/init-expense-store-aliases
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-store-aliases)})))
 
 (rf/reg-event-fx
   :page/init-expense-items

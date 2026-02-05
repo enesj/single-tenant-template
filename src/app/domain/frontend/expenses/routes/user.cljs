@@ -90,6 +90,17 @@
      :view :expense-payers
      :controllers (controllers/make-simple-controller :page/init-expense-payers)}]
 
+   ;; New: Stores / Store Aliases (user-facing, power-user)
+   ["/stores"
+    {:name :expense-stores
+     :view :expense-stores
+     :controllers (controllers/make-simple-controller :page/init-expense-stores)}]
+
+   ["/store-aliases"
+    {:name :expense-store-aliases
+     :view :expense-store-aliases
+     :controllers (controllers/make-simple-controller :page/init-expense-store-aliases)}]
+
    ;; Power-user reference management (admin/owner only)
    ["/expense-items"
     {:name :expense-items

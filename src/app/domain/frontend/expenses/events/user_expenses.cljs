@@ -19,6 +19,7 @@
     app.domain.frontend.expenses.events.user-expenses.reference-crud
     app.domain.frontend.expenses.events.user-expenses.recent
     app.domain.frontend.expenses.events.user-expenses.settings
+    app.domain.frontend.expenses.events.user-expenses.stores
     app.domain.frontend.expenses.events.user-expenses.summary))
 
 ;; This namespace exists purely to aggregate requires.

@@ -55,8 +55,8 @@
  {:display-defaults
   {:per-page 100,
    :show-add-button? false,
-   :show-edit? false,
-   :show-delete? false},
+   :show-delete? false,
+   :show-edit? true},
   :display-locks {:show-add-button? false},
   :column-defaults {},
   :column-locks {:id false}}}

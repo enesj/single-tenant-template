@@ -10,6 +10,9 @@
 (def expense-detail-endpoint (api/versioned-endpoint "/expenses"))
 
 (def suppliers-endpoint (api/versioned-endpoint "/expenses/suppliers"))
+
+(def stores-endpoint (api/versioned-endpoint "/expenses/stores"))
+(def store-aliases-endpoint (api/versioned-endpoint "/expenses/store-aliases"))
 (def payers-endpoint (api/versioned-endpoint "/expenses/payers"))
 (def payer-types-endpoint (api/versioned-endpoint "/expenses/payer-types"))
 (def expense-items-endpoint (api/versioned-endpoint "/expenses/expense-items"))

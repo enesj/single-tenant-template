@@ -240,6 +240,109 @@
                                     on-success]))
          :button-text "Save Alias"}))))
 
+(def ^:private store-edit-form-spec
+  [{:id :display_name
+    :type :text
+    :label "Display name"
+    :required true
+    :placeholder "e.g. Mega Market"}
+   {:id :address
+    :type :textarea
+    :label "Address"
+    :required false
+    :placeholder "Optional"}
+   {:id :place_id
+    :type :text
+    :label "Place ID"
+    :required false
+    :placeholder "Optional"}])
+
+(defui user-store-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :stores true])
+        item (normalization/convert-db-keys->app-keys item)
+        store-id (id-utils/extract-entity-id item)
+        initial-values (-> {}
+                         (assoc :display_name (or (:display-name item) (:displayName item) ""))
+                         (assoc :address (or (:address item) ""))
+                         (assoc :place_id (or (:place-id item) (:placeId item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "stores"
+         :entity-spec (when-not (seq dynamic-spec) store-edit-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-store-modal
+                                    (some-> store-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Store"}))))
+
+(def ^:private store-alias-edit-form-spec
+  [{:id :raw_label
+    :type :text
+    :label "Raw label"
+    :required true
+    :placeholder "e.g. MEGA MARKET"}
+   {:id :raw_label_normalized
+    :type :text
+    :label "Normalized label"
+    :required true
+    :placeholder "e.g. mega-market"}
+   {:id :store_id
+    :type :select
+    :label "Store"
+    :required false
+    :options ["stores" "display_name"]}
+   {:id :confidence
+    :type :number
+    :label "Confidence"
+    :required false
+    :step 0.01
+    :min 0
+    :max 1}])
+
+(defui user-store-alias-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :store-aliases true])
+        item (normalization/convert-db-keys->app-keys item)
+        store-alias-id (id-utils/extract-entity-id item)
+        store-id (or (:store-id item)
+                   (:store_id item)
+                   (:storeId item))
+        initial-values (-> {}
+                         (assoc :raw_label (or (:raw-label item) ""))
+                         (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
+                         (assoc :store_id (some-> store-id str))
+                         (assoc :confidence (or (:confidence item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "store-aliases"
+         :entity-spec (when-not (seq dynamic-spec) store-alias-edit-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-store-alias-modal
+                                    (some-> store-alias-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Alias"}))))
+
 (defn- pad-two
   [value]
   (let [s (str value)]
@@ -334,4 +437,3 @@
                                     values
                                     on-success]))
          :button-text "Save Observation"}))))
-

@@ -258,9 +258,7 @@
                       :on-click (fn [e]
                                   (.preventDefault e)
                                   (rf/dispatch [::ui-events/clear-display-prefs entity-kw]))}
-            (str "Clear local overrides"
-              (when (pos? local-overrides-count)
-                (str " (" local-overrides-count ")"))))))
+            "Reset to default settings")))
 
       ;; Entity header for global settings
       (when (not compact?)

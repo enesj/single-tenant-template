@@ -17,7 +17,9 @@
     [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
     [app.domain.backend.expenses.handlers.user-manufacturers :as user-manufacturers]
     [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
-    [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]))
+    [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]
+    [app.domain.backend.expenses.handlers.user-store-aliases :as user-store-aliases]
+    [app.domain.backend.expenses.handlers.user-stores :as user-stores]))
 
 (defn routes
   "User expense routes (requires authenticated user).
@@ -75,6 +77,21 @@
 
    ["/supplier-aliases/:id"
     {:put {:handler (user-expenses-supplier-aliases/update-supplier-alias-handler db)}}]
+
+   ;; Stores (admin/owner only)
+   ["/stores" {:get {:handler (user-stores/list-stores-handler db)}}]
+
+   ["/stores/batch" {:delete {:handler (user-stores/batch-delete-stores-handler db)}}]
+
+   ["/stores/:id" {:put {:handler (user-stores/update-store-handler db)}}]
+
+   ;; Store aliases (admin/owner only)
+   ["/store-aliases" {:get {:handler (user-store-aliases/list-store-aliases-handler db)}}]
+
+   ["/store-aliases/batch"
+    {:delete {:handler (user-store-aliases/batch-delete-store-aliases-handler db)}}]
+
+   ["/store-aliases/:id" {:put {:handler (user-store-aliases/update-store-alias-handler db)}}]
 
    ["/price-observations"
     ["" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]

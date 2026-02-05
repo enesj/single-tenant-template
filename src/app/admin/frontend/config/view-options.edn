@@ -90,7 +90,10 @@
   :column-locks {}},
  :store-aliases
  {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 25},
+  {:show-edit? true,
+   :show-filtering? true,
+   :per-page 25,
+   :show-delete? false},
   :display-locks {:show-add-button? false},
   :column-defaults {},
   :column-locks {}},

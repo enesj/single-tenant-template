@@ -130,19 +130,19 @@
                                         :icon ($ payers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-payers})})]
                             (when power-user?
-                              [(nav-item {:id "user-sidebar-admin-stores"
+                              [(nav-item {:id "user-sidebar-stores"
                                           :label "Stores"
-                                          :href "/admin/stores"
-                                          :route nil
+                                          :href "/stores"
+                                          :route :expense-stores
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? false})
+                                          :active? (active? #{:expense-stores})})
 
-                               (nav-item {:id "user-sidebar-admin-store-aliases"
+                               (nav-item {:id "user-sidebar-store-aliases"
                                           :label "Store Aliases"
-                                          :href "/admin/store-aliases"
-                                          :route nil
+                                          :href "/store-aliases"
+                                          :route :expense-store-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                          :active? false})
+                                          :active? (active? #{:expense-store-aliases})})
 
                                (nav-item {:id "user-sidebar-payer-types"
                                           :label "Payer Types"
