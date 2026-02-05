@@ -40,11 +40,11 @@
     :label "Canonical name"
     :required true
     :placeholder "e.g. Coffee Beans"}
-   {:id :category
-    :type :text
-    :label "Category"
+   {:id :subcategory_id
+    :type :select
+    :label "Subcategory"
     :required false
-    :placeholder "Optional"}
+    :options ["subcategories" "name"]}
    {:id :manufacturer_id
     :type :select
     :label "Manufacturer"
@@ -65,6 +65,11 @@
         initial-values (-> {}
                          (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
                          (assoc :category (or (:category item) ""))
+                         (assoc :subcategory_id (or (some-> (or (:subcategory-id item)
+                                                              (:subcategory_id item)
+                                                              (:subcategoryId item))
+                                                      str)
+                                                  ""))
                          (assoc :manufacturer_id (some-> manufacturer-id str))
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
@@ -146,6 +151,131 @@
                                     values
                                     on-success]))
          :button-text "Save Manufacturer"}))))
+
+(def ^:private category-form-spec
+  [{:id :name
+    :type :text
+    :label "Name"
+    :required true
+    :placeholder "e.g. Beverages"}
+   {:id :description
+    :type :textarea
+    :label "Description"
+    :required false
+    :placeholder "Optional"}])
+
+(defui user-category-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "categories"
+         :entity-spec category-form-spec
+         :editing false
+         :initial-values {}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-category-modal values on-success]))
+         :button-text "Save Category"}))))
+
+(defui user-category-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :categories true])
+        item (normalization/convert-db-keys->app-keys item)
+        category-id (id-utils/extract-entity-id item)
+        initial-values (-> {}
+                         (assoc :name (or (:name item) ""))
+                         (assoc :description (or (:description item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "categories"
+         :entity-spec (when-not (seq dynamic-spec) category-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-category-modal
+                                    (some-> category-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Category"}))))
+
+(def ^:private subcategory-form-spec
+  [{:id :category_id
+    :type :select
+    :label "Category"
+    :required true
+    :options ["categories" "name"]}
+   {:id :name
+    :type :text
+    :label "Name"
+    :required true
+    :placeholder "e.g. Coffee"}
+   {:id :description
+    :type :textarea
+    :label "Description"
+    :required false
+    :placeholder "Optional"}])
+
+(defui user-subcategory-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "subcategories"
+         :entity-spec subcategory-form-spec
+         :editing false
+         :initial-values {}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-subcategory-modal values on-success]))
+         :button-text "Save Subcategory"}))))
+
+(defui user-subcategory-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :subcategories true])
+        item (normalization/convert-db-keys->app-keys item)
+        subcategory-id (id-utils/extract-entity-id item)
+        category-id (or (:category-id item)
+                      (:category_id item)
+                      (:categoryId item))
+        initial-values (-> {}
+                         (assoc :category_id (some-> category-id str))
+                         (assoc :name (or (:name item) ""))
+                         (assoc :description (or (:description item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "subcategories"
+         :entity-spec (when-not (seq dynamic-spec) subcategory-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-subcategory-modal
+                                    (some-> subcategory-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Subcategory"}))))
 
 (def ^:private article-alias-edit-form-spec
   [{:id :raw_label

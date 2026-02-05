@@ -117,6 +117,16 @@
      :view :expense-manufacturers
      :controllers (controllers/make-simple-controller :page/init-expense-manufacturers)}]
 
+   ["/categories"
+    {:name :expense-categories
+     :view :expense-categories
+     :controllers (controllers/make-simple-controller :page/init-expense-categories)}]
+
+   ["/subcategories"
+    {:name :expense-subcategories
+     :view :expense-subcategories
+     :controllers (controllers/make-simple-controller :page/init-expense-subcategories)}]
+
    ["/payer-types"
     {:name :expense-payer-types
      :view :expense-payer-types}]

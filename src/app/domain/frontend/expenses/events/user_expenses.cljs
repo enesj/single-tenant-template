@@ -7,6 +7,7 @@
     ;; All sub-namespaces - order doesn't matter for registration
     app.domain.frontend.expenses.events.user-expenses.by-month
     app.domain.frontend.expenses.events.user-expenses.by-supplier
+    app.domain.frontend.expenses.events.user-expenses.categories
     app.domain.frontend.expenses.events.user-expenses.crud
     app.domain.frontend.expenses.events.user-expenses.dashboard
     app.domain.frontend.expenses.events.user-expenses.detail
@@ -20,6 +21,7 @@
     app.domain.frontend.expenses.events.user-expenses.recent
     app.domain.frontend.expenses.events.user-expenses.settings
     app.domain.frontend.expenses.events.user-expenses.stores
+    app.domain.frontend.expenses.events.user-expenses.subcategories
     app.domain.frontend.expenses.events.user-expenses.summary))
 
 ;; This namespace exists purely to aggregate requires.

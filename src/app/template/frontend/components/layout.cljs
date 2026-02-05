@@ -162,6 +162,18 @@
                                           :route :expense-manufacturers
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-manufacturers})})
+                               (nav-item {:id "user-sidebar-categories"
+                                          :label "Categories"
+                                          :href "/categories"
+                                          :route :expense-categories
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-categories})})
+                               (nav-item {:id "user-sidebar-subcategories"
+                                          :label "Subcategories"
+                                          :href "/subcategories"
+                                          :route :expense-subcategories
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-subcategories})})
                                (nav-item {:id "user-sidebar-article-aliases"
                                           :label "Article Aliases"
                                           :href "/article-aliases"

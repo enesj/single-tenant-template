@@ -13,14 +13,18 @@
  {:edit-fields
   ["manufacturer_id"
    "canonical_name"
-   "category"
+   "subcategory_id"
    "link"
    "normalized_key"],
   :field-config
   {:manufacturer_id
    {:type "select",
     :label "Manufacturer",
-    :options ["manufacturers" "display_name"]}}},
+    :options ["manufacturers" "display_name"]}
+   :subcategory_id
+   {:type "select",
+    :label "Subcategory",
+    :options ["subcategories" "name"]}}},
  :expenses
  {:create-fields
   ["purchased_at"
@@ -106,4 +110,22 @@
    {:type "select",
     :label "Store",
     :options ["stores" "display_name"]},
-   :confidence {:type "number", :step 1}}}}
+   :confidence {:type "number", :step 1}}}
+
+ :categories
+ {:create-fields ["name" "description"],
+  :edit-fields ["name" "description"],
+  :field-config
+  {:name {:type "text", :label "Name"},
+   :description {:type "textarea", :label "Description"}}}
+
+ :subcategories
+ {:create-fields ["category_id" "name" "description"],
+  :edit-fields ["category_id" "name" "description"],
+  :field-config
+  {:category_id
+   {:type "select",
+    :label "Category",
+    :options ["categories" "name"]},
+   :name {:type "text", :label "Name"},
+   :description {:type "textarea", :label "Description"}}}}

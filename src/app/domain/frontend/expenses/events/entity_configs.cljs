@@ -122,11 +122,29 @@
 ;; Configuration Registry
 ;; =============================================================================
 
+(def categories-config
+  {:entity-key :categories
+   :base-path [:admin :expenses :categories]
+   :api-endpoint "/admin/api/expenses/categories"
+   :detail-response-key :category
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
+(def subcategories-config
+  {:entity-key :subcategories
+   :base-path [:admin :expenses :subcategories]
+   :api-endpoint "/admin/api/expenses/subcategories"
+   :detail-response-key :subcategory
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
 (def all-entity-configs
   "Map of all entity configurations for easy lookup."
   {:suppliers suppliers-config
    :stores stores-config
    :manufacturers manufacturers-config
+   :categories categories-config
+   :subcategories subcategories-config
    :payers payers-config
    :articles articles-config
    :receipts receipts-config

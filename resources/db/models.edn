@@ -27,6 +27,21 @@
   [[:idx_suppliers_normalized_key
     :btree
     {:fields [:normalized_key], :unique true}]]},
+ :subcategories
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:category_id
+    :uuid
+    {:foreign-key :categories/id, :null false, :on-delete :cascade}]
+   [:name [:varchar 255] {:null false}]
+   [:description :text]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_subcategories_category_id :btree {:fields [:category_id]}]
+   [:idx_subcategories_category_name
+    :btree
+    {:fields [:category_id :name], :unique true}]]},
  :admins
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -54,6 +69,9 @@
    [:canonical_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
    [:category [:varchar 100]]
+   [:subcategory_id
+    :uuid
+    {:foreign-key :subcategories/id, :on-delete :set-null}]
    [:link :text]
    [:manufacturer_id
     :uuid
@@ -65,6 +83,7 @@
     :btree
     {:fields [:normalized_key], :unique true}]
    [:idx_articles_category :btree {:fields [:category]}]
+   [:idx_articles_subcategory_id :btree {:fields [:subcategory_id]}]
    [:idx_articles_manufacturer_id
     :btree
     {:fields [:manufacturer_id]}]]},
@@ -201,6 +220,15 @@
    [:updated_at :timestamptz {:default "NOW()"}]],
   :indexes
   [[:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]},
+ :categories
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:name [:varchar 255] {:null false}]
+   [:description :text]
+   [:created_at :timestamptz {:default "NOW()"}]
+   [:updated_at :timestamptz {:default "NOW()"}]],
+  :indexes
+  [[:idx_categories_name :btree {:fields [:name], :unique true}]]},
  :price_observations
  {:fields
   [[:id :uuid {:primary-key true}]

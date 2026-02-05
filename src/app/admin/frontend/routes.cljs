@@ -5,6 +5,7 @@
     [app.admin.frontend.pages.domain.expenses.article-aliases :as article-aliases]
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
+    [app.admin.frontend.pages.domain.expenses.categories :as categories]
     [app.admin.frontend.pages.dashboard :as dashboard]
     [app.admin.frontend.pages.forgot-password :as forgot-password]
     [app.admin.frontend.pages.login :as login]
@@ -14,6 +15,7 @@
     [app.admin.frontend.pages.reset-password :as reset-password]
     [app.admin.frontend.pages.domain.expenses.store-aliases :as store-aliases]
     [app.admin.frontend.pages.domain.expenses.stores :as stores]
+    [app.admin.frontend.pages.domain.expenses.subcategories :as subcategories]
     [app.admin.frontend.pages.domain.expenses.supplier-aliases :as supplier-aliases]
     [app.admin.frontend.pages.domain.expenses.suppliers :as suppliers]
     [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
@@ -106,6 +108,16 @@
          ["/store-aliases"
           {:name :admin-store-aliases
            :view store-aliases/admin-store-aliases-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/categories"
+          {:name :admin-categories
+           :view categories/admin-categories-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/subcategories"
+          {:name :admin-subcategories
+           :view subcategories/admin-subcategories-page
            :controllers [(guarded-start nil)]}]
 
          ["/manufacturers"

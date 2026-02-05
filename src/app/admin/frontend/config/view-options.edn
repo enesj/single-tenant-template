@@ -15,6 +15,18 @@
   {:show-edit? true, :show-filtering? true, :per-page 25},
   :display-locks {},
   :column-defaults {},
+  :column-locks {}}
+ :categories
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 50},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}}
+ :subcategories
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 50},
+  :display-locks {},
+  :column-defaults {},
   :column-locks {}},
  :payer-types
  {:display-locks {},

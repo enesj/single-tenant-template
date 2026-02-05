@@ -291,6 +291,45 @@
    :has-search? true
    :has-count? true})
 
+(def category-config
+  {:table-name "categories"
+   :primary-key :id
+   :required-fields [:name]
+   :allowed-order-by {:name :name
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :name
+   :search-fields [:name :description]
+   :before-insert (fn [data]
+                    (-> data
+                      (assoc :id (UUID/randomUUID))))
+   :before-update (fn [_id updates]
+                    (-> updates
+                      (assoc :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
+(def subcategory-config
+  {:table-name "subcategories"
+   :primary-key :id
+   :required-fields [:category_id :name]
+   :allowed-order-by {:name :name
+                      :category-id :category_id
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :name
+   :search-fields [:name :description]
+   :before-insert (fn [data]
+                    (when-not (:category_id data)
+                      (throw (ex-info "category_id is required" {:data data})))
+                    (-> data
+                      (assoc :id (UUID/randomUUID))))
+   :before-update (fn [_id updates]
+                    (-> updates
+                      (assoc :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
 (def payer-config
   {:table-name "payers"
    :table-alias :p
@@ -514,6 +553,8 @@
    :supplier supplier-config
    :store store-config
    :manufacturer manufacturer-config
+   :category category-config
+   :subcategory subcategory-config
    :payer-type payer-type-config
    :payer payer-config
    :article article-config

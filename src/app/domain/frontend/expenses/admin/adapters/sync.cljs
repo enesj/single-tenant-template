@@ -62,6 +62,18 @@
    :log-prefix "[expenses] Syncing manufacturers to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-categories
+   :entity-key :categories
+   :normalize-fn normalize/category->template-entity
+   :log-prefix "[expenses] Syncing categories to template:"})
+
+(entity-utils/register-sync-event!
+  {:event-id ::sync-subcategories
+   :entity-key :subcategories
+   :normalize-fn normalize/subcategory->template-entity
+   :log-prefix "[expenses] Syncing subcategories to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-payers
    :entity-key :payers
    :normalize-fn normalize/payer->template-entity
@@ -122,6 +134,10 @@
   {:sync-event-id ::sync-store-aliases})
 (entity-sync/register-sync-handler! :manufacturers
   {:sync-event-id ::sync-manufacturers})
+(entity-sync/register-sync-handler! :categories
+  {:sync-event-id ::sync-categories})
+(entity-sync/register-sync-handler! :subcategories
+  {:sync-event-id ::sync-subcategories})
 (entity-sync/register-sync-handler! :payers
   {:sync-event-id ::sync-payers})
 (entity-sync/register-sync-handler! :payer-types
@@ -144,6 +160,8 @@
 
 (form-interceptors/register-bridge-entity! :suppliers)
 (form-interceptors/register-bridge-entity! :manufacturers)
+(form-interceptors/register-bridge-entity! :categories)
+(form-interceptors/register-bridge-entity! :subcategories)
 (form-interceptors/register-bridge-entity! :expenses)
 (form-interceptors/register-bridge-entity! :expense-items)
 (form-interceptors/register-bridge-entity! :receipts)

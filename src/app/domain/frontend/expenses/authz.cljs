@@ -30,6 +30,8 @@
    :expenses/unmapped.access 3
    :expenses/articles.manage 3
    :expenses/manufacturers.manage 3
+   :expenses/categories.manage 3
+   :expenses/subcategories.manage 3
    :expenses/stores.manage 3
    :expenses/store-aliases.manage 3
    :expenses/supplier-aliases.manage 3

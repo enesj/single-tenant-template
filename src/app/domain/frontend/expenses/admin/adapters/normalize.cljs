@@ -145,6 +145,26 @@
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 
+(defn category->template-entity
+  [category]
+  (entity-utils/normalize-entity
+    category
+    {:entity-ns :categories
+     :id-keys [:id]
+     :alias-keys {:created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
+(defn subcategory->template-entity
+  [subcategory]
+  (entity-utils/normalize-entity
+    subcategory
+    {:entity-ns :subcategories
+     :id-keys [:id]
+     :stringify-keys [:category_id]
+     :alias-keys {:category_id [:category-id]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
 (defn payer->template-entity
   [payer]
   (entity-utils/normalize-entity
@@ -173,7 +193,7 @@
     article
     {:entity-ns :articles
      :id-keys [:id]
-     :stringify-keys [:manufacturer_id]
+     :stringify-keys [:manufacturer_id :subcategory_id]
      :alias-keys {:canonical_name [:canonical-name]
                   :normalized_key [:normalized-key]
                   :category [:category]
@@ -181,6 +201,8 @@
                   ;; manufacturer FK + display
                   :manufacturer_id [:manufacturer-id]
                   :manufacturer_display_name [:manufacturer-display-name]
+                  ;; subcategory FK
+                  :subcategory_id [:subcategory-id]
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 

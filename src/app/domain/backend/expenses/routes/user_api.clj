@@ -6,6 +6,7 @@
   (:require
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
+    [app.domain.backend.expenses.handlers.user-categories :as user-categories]
     [app.domain.backend.expenses.handlers.user-expenses.article-aliases :as user-expenses-article-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
@@ -19,7 +20,8 @@
     [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]
     [app.domain.backend.expenses.handlers.user-store-aliases :as user-store-aliases]
-    [app.domain.backend.expenses.handlers.user-stores :as user-stores]))
+    [app.domain.backend.expenses.handlers.user-stores :as user-stores]
+    [app.domain.backend.expenses.handlers.user-subcategories :as user-subcategories]))
 
 (defn routes
   "User expense routes (requires authenticated user).
@@ -154,6 +156,24 @@
 
     ["/:id" {:put {:handler (user-manufacturers/update-manufacturer-handler db)}}]]
 
+   ;; Categories (admin/owner only)
+   ["/categories"
+    ["" {:get {:handler (user-categories/list-categories-handler db)}
+         :post {:handler (user-categories/create-category-handler db)}}]
+
+    ["/batch" {:delete {:handler (user-categories/batch-delete-categories-handler db)}}]
+
+    ["/:id" {:put {:handler (user-categories/update-category-handler db)}}]]
+
+   ;; Subcategories (admin/owner only)
+   ["/subcategories"
+    ["" {:get {:handler (user-subcategories/list-subcategories-handler db)}
+         :post {:handler (user-subcategories/create-subcategory-handler db)}}]
+
+    ["/batch" {:delete {:handler (user-subcategories/batch-delete-subcategories-handler db)}}]
+
+    ["/:id" {:put {:handler (user-subcategories/update-subcategory-handler db)}}]]
+
    ;; Articles + unmapped aliases (role-gated to admin/owner)
    ;; IMPORTANT: Must come before the "/:id" expense route.
    ["/articles"
@@ -182,3 +202,8 @@
 
    ["/:id" {:get {:handler (user-expenses-crud/get-expense-handler db)}
             :put {:handler (user-expenses-crud/update-expense-handler db)}}]])
+
+
+
+
+

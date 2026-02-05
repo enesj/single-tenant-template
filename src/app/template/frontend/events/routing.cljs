@@ -268,6 +268,22 @@
       {:db (assoc-in db (paths/current-page) :expense-manufacturers)})))
 
 (rf/reg-event-fx
+  :page/init-expense-categories
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-categories)})))
+
+(rf/reg-event-fx
+  :page/init-expense-subcategories
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-subcategories)})))
+
+(rf/reg-event-fx
   :page/init-expense-article-aliases
   common-interceptors
   (fn [{:keys [db]} _]

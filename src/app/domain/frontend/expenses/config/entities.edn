@@ -1,6 +1,8 @@
 {:expense-items {:title "Expense Items"},
  :suppliers {:title "Suppliers"},
  :articles {:title "Articles"},
+ :categories {:title "Categories"},
+ :subcategories {:title "Subcategories"},
  :payer-types {:title "Payer Types"},
  :expenses {:title "My Expenses"},
  :manufacturers {:title "Manufacturers"},

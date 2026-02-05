@@ -4,6 +4,30 @@
  :articles
  {:display-locks {},
   :display-defaults {:show-edit? false, :show-delete? false}},
+ :categories
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
+  :column-defaults {},
+  :column-locks {}},
+ :subcategories
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
+  :column-defaults {},
+  :column-locks {}},
  :payer-types
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},

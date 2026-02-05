@@ -39,13 +39,5 @@
         "ENABLED_TOOLS": "edit_file,warpgrep_codebase_search"
       }
     },
-    "lattice": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "PATH=/Users/enes/.nvm/versions/node/v22.17.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin exec lattice-mcp"
-      ]
-    }
   }
 }

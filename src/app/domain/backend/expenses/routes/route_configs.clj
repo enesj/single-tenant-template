@@ -14,6 +14,36 @@
   ;; Use direct keyword access like (:search qp).
   :ok)
 
+(def category-config
+  {:entity-key :category
+   :entity-plural :categories
+   :route-segment "categories"
+   :service 'app.domain.backend.expenses.services.categories
+   :default-limit 100
+   :default-order-by "name"
+   :required-fields [:name]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
+                          {:search (:search qp)})})
+
+(def subcategory-config
+  {:entity-key :subcategory
+   :entity-plural :subcategories
+   :route-segment "subcategories"
+   :service 'app.domain.backend.expenses.services.subcategories
+   :default-limit 100
+   :default-order-by "name"
+   :required-fields [:category-id :name]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
+                          {:search (:search qp)})})
+
 (def supplier-config
   {:entity-key :supplier
    :entity-plural :suppliers
@@ -245,7 +275,9 @@
 
 (def entity-configs
   "Map of all entity configurations for easy lookup."
-  {:suppliers supplier-config
+  {:categories category-config
+   :subcategories subcategory-config
+   :suppliers supplier-config
    :stores store-config
    :manufacturers manufacturer-config
    :payers payer-config
@@ -258,3 +290,4 @@
    :article-aliases article-alias-config
    :supplier-aliases supplier-alias-config
    :store-aliases store-alias-config})
+

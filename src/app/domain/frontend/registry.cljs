@@ -20,6 +20,8 @@
                  :suppliers
                  :supplier-aliases
                  :manufacturers
+                 :categories
+                 :subcategories
                  :stores
                  :store-aliases
                  :price-observations
@@ -39,6 +41,8 @@
                  :payers
                  :expense-items
                  :articles
+                 :categories
+                 :subcategories
                  :article-aliases
                  :price-observations}
      :color "accent"

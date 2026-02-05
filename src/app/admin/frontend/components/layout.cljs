@@ -57,6 +57,16 @@
                          :href "/admin/articles"
                          :icon ($ articles-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-articles)}
+                        {:id "admin-sidebar-expenses-categories"
+                         :label "Categories"
+                         :href "/admin/categories"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-categories)}
+                        {:id "admin-sidebar-expenses-subcategories"
+                         :label "Subcategories"
+                         :href "/admin/subcategories"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-subcategories)}
                         {:id "admin-sidebar-expenses-article-aliases"
                          :label "Article Aliases"
                          :href "/admin/article-aliases"

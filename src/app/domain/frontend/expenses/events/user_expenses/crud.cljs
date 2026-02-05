@@ -130,6 +130,42 @@
             :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
             :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
 
+(crud-bridges/register-crud-bridge!
+  {:entity-key :categories
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:fetch
+    {:request
+     (fn [{:keys [db]} entity-type default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (http/api-request
+           {:method :get
+            :uri (lookup-uri endpoints/categories-endpoint)
+            :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :subcategories
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:fetch
+    {:request
+     (fn [{:keys [db]} entity-type default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (http/api-request
+           {:method :get
+            :uri (lookup-uri endpoints/subcategories-endpoint)
+            :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
+
 ;; ---------------------------------------------------------------------------
 ;; Create expense
 ;; ---------------------------------------------------------------------------

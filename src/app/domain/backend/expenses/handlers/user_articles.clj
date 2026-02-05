@@ -85,6 +85,7 @@
             (try
               (let [body (h/read-body-params request)
                     canonical-provided? (contains? body :canonical_name)
+
                     manufacturer-id-provided? (or (contains? body :manufacturer_id)
                                                 (contains? body :manufacturer-id)
                                                 (contains? body :manufacturerId))
@@ -95,7 +96,19 @@
                     manufacturer-id (when manufacturer-id-provided?
                                       (let [v (some-> manufacturer-id-raw str str/trim)]
                                         (when-not (str/blank? v)
-                                          (h/try-parse-uuid v))))]
+                                          (h/try-parse-uuid v))))
+
+                    subcategory-id-provided? (or (contains? body :subcategory_id)
+                                               (contains? body :subcategory-id)
+                                               (contains? body :subcategoryId))
+                    subcategory-id-raw (when subcategory-id-provided?
+                                         (or (:subcategory_id body)
+                                           (:subcategory-id body)
+                                           (:subcategoryId body)))
+                    subcategory-id (when subcategory-id-provided?
+                                     (let [v (some-> subcategory-id-raw str str/trim)]
+                                       (when-not (str/blank? v)
+                                         (h/try-parse-uuid v))))]
 
                 (when (and manufacturer-id-provided?
                         (some? manufacturer-id-raw)
@@ -105,12 +118,23 @@
                                                              :manufacturer-id manufacturer-id-raw
                                                              :article-id article-id})))
 
+                (when (and subcategory-id-provided?
+                        (some? subcategory-id-raw)
+                        (not (str/blank? (some-> subcategory-id-raw str str/trim)))
+                        (nil? subcategory-id))
+                  (throw (ex-info "Invalid subcategory id" {:status 400
+                                                            :subcategory-id subcategory-id-raw
+                                                            :article-id article-id})))
+
                 (let [updates (cond-> {}
                                 canonical-provided?
                                 (assoc :canonical_name (:canonical_name body))
 
                                 (contains? body :category)
                                 (assoc :category (:category body))
+
+                                subcategory-id-provided?
+                                (assoc :subcategory_id subcategory-id)
 
                                 (contains? body :link)
                                 (assoc :link (:link body))

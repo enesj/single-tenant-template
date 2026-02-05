@@ -29,4 +29,7 @@
 
 ;; Manufacturers (role-gated in backend)
 (def manufacturers-endpoint (api/versioned-endpoint "/expenses/manufacturers"))
+
+(def categories-endpoint (api/versioned-endpoint "/expenses/categories"))
+(def subcategories-endpoint (api/versioned-endpoint "/expenses/subcategories"))
 (def articles-unmapped-aliases-endpoint (api/versioned-endpoint "/expenses/articles/unmapped-aliases"))

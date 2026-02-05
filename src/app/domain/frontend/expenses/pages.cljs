@@ -7,6 +7,7 @@
   (:require
     [app.domain.frontend.expenses.pages.user.article-aliases :refer [article-aliases-page]]
     [app.domain.frontend.expenses.pages.user.articles :refer [articles-page]]
+    [app.domain.frontend.expenses.pages.user.categories :refer [categories-page]]
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.domain.frontend.expenses.pages.user.expense-items :refer [expense-items-page]]
     [app.domain.frontend.expenses.pages.user.expense-new :refer [expense-new-page]]
@@ -23,6 +24,7 @@
     [app.domain.frontend.expenses.pages.user.receipts-list :refer [receipts-list-page]]
     [app.domain.frontend.expenses.pages.user.store-aliases :refer [store-aliases-page]]
     [app.domain.frontend.expenses.pages.user.stores :refer [stores-page]]
+    [app.domain.frontend.expenses.pages.user.subcategories :refer [subcategories-page]]
     [app.domain.frontend.expenses.pages.user.supplier-aliases :refer [supplier-aliases-page]]
     [app.domain.frontend.expenses.pages.user.suppliers :refer [suppliers-page]]
     [app.domain.frontend.expenses.pages.user.unmapped-items :refer [unmapped-items-page]]))
@@ -48,6 +50,8 @@
    :expense-items expense-items-page
    :expense-articles articles-page
    :expense-manufacturers manufacturers-page
+   :expense-categories categories-page
+   :expense-subcategories subcategories-page
    :expense-article-aliases article-aliases-page
    :expense-supplier-aliases supplier-aliases-page
    :expense-payer-types payer-types-page
