@@ -678,7 +678,7 @@
                                 {:dispatch [:admin/redirect-to-login]}))
                    :on-success (fn [_ _ _ default-effect]
                                  (assoc default-effect
-                                   :dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))}
+                                   :dispatch [:app.domain.frontend.expenses.events.stores/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -690,7 +690,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.stores/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -703,7 +703,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.stores/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
 
 (defn- store-aliases-request
   "Create HTTP request config for store aliases admin API."
@@ -747,7 +747,7 @@
                                 {:dispatch [:admin/redirect-to-login]}))
                    :on-success (fn [_ _ _ default-effect]
                                  (assoc default-effect
-                                   :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]))}
+                                   :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -759,7 +759,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -772,7 +772,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
 
 (defn- manufacturers-request
   "Create HTTP request config for manufacturers admin API."

@@ -1,6 +1,6 @@
 {:suppliers
  {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 25},
+  {:show-edit? true, :show-filtering? true, :per-page 10},
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
@@ -50,7 +50,7 @@
   :column-locks {}},
  :supplier-aliases
  {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 25},
+  {:show-edit? true, :show-filtering? true, :per-page 10},
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
@@ -83,8 +83,9 @@
    :show-batch-edit? false},
   :display-defaults {:show-batch-delete? false}},
  :article-aliases
- {:display-defaults {:show-filtering? true, :show-edit? true},
-  :display-locks {:per-page 5},
+ {:display-defaults
+  {:show-filtering? true, :show-edit? true, :per-page 10},
+  :display-locks {},
   :column-defaults {},
   :column-locks {}},
  :store-aliases

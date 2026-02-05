@@ -84,8 +84,10 @@
         ;; Vector-config is only enabled once admin config is loaded.
         ;; We still use the unified visible-columns subscription underneath so policy defaults/locks apply.
         admin-config-loaded? (use-subscribe [:admin/config-loaded?])
-        ;; Domain/template config loaded? (for user routes like /expenses/*)
         template-config-loaded? (use-subscribe [::ui-subs/template-config-loaded?])
+        current-route (use-subscribe [:current-route])
+        route-name (get-in current-route [:data :name])
+        admin-route? (and route-name (boolean (re-find #"^admin" (name route-name))))
         vector-mode? (and admin-config-loaded?
                        (column-config/vector-config? entity-kw))
         visible-columns-raw (use-subscribe (column-config/visible-columns-source vector-mode? entity-kw))
@@ -108,10 +110,16 @@
                                            (string? raw) (js/parseInt raw 10)
                                            :else nil)]
                               (when (and (number? parsed) (pos? parsed)) parsed))
+        local-display-prefs (or (use-subscribe [::ui-subs/entity-display-prefs entity-name]) {})
+        local-per-page? (contains? local-display-prefs :per-page)
+        per-page-config-ready? (if admin-route? admin-config-loaded? template-config-loaded?)
+        configured-per-page-usable? (or (= configured-per-page-source :prop)
+                                      local-per-page?
+                                      per-page-config-ready?)
         existing-per-page (or (:per-page ui-state)
                             (get-in ui-state [:pagination :per-page]))
         effective-per-page (or existing-per-page
-                             configured-per-page
+                             (when configured-per-page-usable? configured-per-page)
                              10)
         {:keys [show-highlights?]} merged-display-settings
         ;; Subscribe to table width configuration for header alignment
@@ -161,15 +169,18 @@
     (use-effect
       (fn []
         (let [missing-per-page? (nil? existing-per-page)]
-          (when (and configured-per-page missing-per-page?
-                  ;; If :per-page comes in explicitly as a prop (admin pages), seed immediately.
-                  ;; Otherwise wait until the relevant config is loaded so we don't lock in fallback defaults.
-                  (or (= configured-per-page-source :prop)
-                    ;; On admin routes, admin-config-loaded? gates; on user routes, template-config-loaded? gates.
-                    admin-config-loaded? template-config-loaded?))
+          (when (and configured-per-page missing-per-page? configured-per-page-usable?)
             (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page])))
         (fn [] nil))
-      [entity-name configured-per-page configured-per-page-source existing-per-page admin-config-loaded? template-config-loaded?])
+      [entity-name
+       configured-per-page
+       configured-per-page-source
+       configured-per-page-usable?
+       existing-per-page
+       admin-route?
+       admin-config-loaded?
+       template-config-loaded?
+       local-per-page?])
 
     ;; Sync inline filter value with active filters when they change
     (use-effect

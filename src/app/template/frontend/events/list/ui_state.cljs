@@ -54,7 +54,7 @@
 
 (rf/reg-event-db
   ::set-per-page
-  common-interceptors
+  [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type per-page]]
     (if-let [entity-key (->entity-key entity-type)]
       (let [parsed (cond
@@ -65,6 +65,9 @@
         (-> db
           (sync-per-page entity-key clamped)
           (sync-current-page entity-key 1)
+          ;; Persist as a display preference so it survives refresh.
+          ;; This also makes it available to the unified resolver via [:ui :entity-prefs].
+          (assoc-in (conj (paths/entity-prefs-display entity-key) :per-page) clamped)
           ((fn [db*] (log/info "LIST SET-PER-PAGE →" (name entity-key) "to" clamped) db*))))
       db)))
 
