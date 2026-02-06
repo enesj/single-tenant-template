@@ -430,6 +430,10 @@
   {:doc "Spellcheck `articles.canonical_name` using the JSpell Checker MCP server (RapidAPI via mcp-remote) and write suggestions to an EDN file in the project root.\n\nRequires: Node/npx + a RapidAPI key in env (JSPELL_RAPIDAPI_KEY preferred, or RAPIDAPI_KEY).\n\nUsage: bb spellcheck-article-names [--dev|--test|dev|test] [--out <path>] [--lang <bs|hr|sr|...>] [--limit N] [--max-suggestions N]",
     :task (apply shell "/bin/sh" "-c" "repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; cd \"$repo_root\" || exit 1; set -a; [ -f \"$repo_root/.env\" ] && . \"$repo_root/.env\"; set +a; exec clj -M:spellcheck scripts/bb/expenses/spellcheck_article_canonical_names.clj \"$@\"" "--" *command-line-args*)},
 
+  google-search
+  {:doc "Run a Google Custom Search JSON API query and print results.\n\nRequires env (source .env automatically if present):\n  - GOOGLE_SEARCH_API_KEY (or GOOGLE_API_KEY)\n  - GOOGLE_SEARCH_CX (or GOOGLE_CSE_ID)\n\nUsage:\n  bb google-search \"<query>\" [--num N] [--start N] [--gl CC] [--lr lang_xx] [--site example.com] [--format pretty|edn|json]",
+   :task (apply shell "/bin/sh" "-c" "repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; cd \"$repo_root\" || exit 1; set -a; [ -f \"$repo_root/.env\" ] && . \"$repo_root/.env\"; set +a; exec bb scripts/bb/web/google_search.clj \"$@\"" "--" *command-line-args*)},
+
   check-migrations
   {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]

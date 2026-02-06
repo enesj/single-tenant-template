@@ -52,6 +52,15 @@
   - After edits, reload explicitly: `(require 'my.ns :reload)`.
   - For CLJS, select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
   - Prefer returning values over printing.
+  - REPL validation checklist (required for behavior changes / non-trivial changes; encouraged always)
+    - Verify via REPL validation and/or focused tests; **at least one is required** (REPL is preferred for iteration).
+    - Confirm you’re connected to the right runtime:
+      - Clojure: correct nREPL port (prefer `clj-nrepl-eval --discover-ports`).
+      - ClojureScript: select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
+    - Reload the namespaces you changed (`(require 'my.ns :reload)`) and re-evaluate the smallest thing that proves the change.
+    - Minimum edge cases to validate (as applicable): happy path, `nil`, empty collections, invalid/boundary inputs.
+    - If you use tests, run the smallest focused set and **save the output once** (don’t re-run just to grep).
+    - Remove any temporary instrumentation (`println`, extra logging, debug `def`s) before finishing; keep RCF `(comment ...)` examples when they’re useful.
 - Docstrings and function templates
   - Put docstrings immediately after the function name and before the arg vector.
   ```clj

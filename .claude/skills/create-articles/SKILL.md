@@ -17,7 +17,7 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 
 ## Prerequisites
 - PostgreSQL MCP server must be available
-- Web search tools must be available
+- Google Search API must be configured (via `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX`, typically sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
@@ -90,13 +90,17 @@ For each unique `raw_label`, search the web to find the actual product.
 
 ### Example Web Search
 ```clojure
-;; Use web-search-prime tool
-;; Query: "KEKS RONDINI LASTA" Bosnia
-;; Expected: Find Lasta Rondini product page with:
-;;   - Canonical name: "Lasta Rondini keks 200g"
-;;   - Manufacturer: "Lasta"
-;;   - Category: "Slatkiši i grickalice"
-;;   - Link: https://lasta.com/lasta-product/rondini-...
+;; Use the bb task `google-search` (Google Custom Search JSON API)
+;;
+;; Example:
+;;   bb google-search "KEKS RONDINI LASTA" --gl ba --num 5
+;;
+;; Then pick the best product page URL from the results and use a web reader
+;; (or `fetch_webpage` in tooling) to extract:
+;;   - canonical name (with weight/size)
+;;   - manufacturer
+;;   - category
+;;   - product page link
 ```
 
 ### Web Reader for Product Details

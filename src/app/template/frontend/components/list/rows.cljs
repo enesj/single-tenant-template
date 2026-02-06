@@ -127,10 +127,14 @@
                                                       day (.getDate date)
                                                       hours (.getHours date)
                                                       minutes (.getMinutes date)
-                                                      formatted-time (str (when (< hours 10) "0") hours ":" (when (< minutes 10) "0") minutes)]
+                                                      seconds (.getSeconds date)
+                                                      hh (str (when (< hours 10) "0") hours)
+                                                      mm (str (when (< minutes 10) "0") minutes)
+                                                      ss (str (when (< seconds 10) "0") seconds)]
                                                   ($ :div
-                                                    ($ :span {:class "text-primary"} (str month " " day))
-                                                    ($ :span {:class "ml-1"} formatted-time))))))
+                                                    ($ :span (str month " " day))
+                                                    ($ :span {:class "ml-1"} (str hh ":" mm))
+                                                    ($ :span {:class "text-warning"} (str ":" ss)))))))
                          has-created? (contains? timestamp-field-ids created-key)
                          has-updated? (contains? timestamp-field-ids updated-key)]
                      [(when (and has-created? (column-visible? created-key))

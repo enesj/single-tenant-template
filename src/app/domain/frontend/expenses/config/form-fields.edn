@@ -9,6 +9,14 @@
    :unit_price {:type "number", :step 0.01},
    :line_total {:type "number", :step 0.01}},
   :removed-fields {:edit-fields ["raw_label"]}},
+ :subcategories
+ {:create-fields ["category_id" "name" "description"],
+  :edit-fields ["category_id" "name" "description"],
+  :field-config
+  {:category_id
+   {:type "select", :label "Category", :options ["categories" "name"]},
+   :name {:type "text", :label "Name"},
+   :description {:type "textarea", :label "Description"}}},
  :articles
  {:edit-fields
   ["manufacturer_id"
@@ -20,7 +28,7 @@
   {:manufacturer_id
    {:type "select",
     :label "Manufacturer",
-    :options ["manufacturers" "display_name"]}
+    :options ["manufacturers" "display_name"]},
    :subcategory_id
    {:type "select",
     :label "Subcategory",
@@ -75,6 +83,12 @@
    :unit_price {:type "number", :step 0.01},
    :currency
    {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}},
+ :categories
+ {:create-fields ["name" "description"],
+  :edit-fields ["name" "description"],
+  :field-config
+  {:name {:type "text", :label "Name"},
+   :description {:type "textarea", :label "Description"}}},
  :supplier-aliases
  {:edit-fields ["raw_label" "raw_label_normalized" "supplier_id"],
   :field-config
@@ -110,22 +124,4 @@
    {:type "select",
     :label "Store",
     :options ["stores" "display_name"]},
-   :confidence {:type "number", :step 1}}}
-
- :categories
- {:create-fields ["name" "description"],
-  :edit-fields ["name" "description"],
-  :field-config
-  {:name {:type "text", :label "Name"},
-   :description {:type "textarea", :label "Description"}}}
-
- :subcategories
- {:create-fields ["category_id" "name" "description"],
-  :edit-fields ["category_id" "name" "description"],
-  :field-config
-  {:category_id
-   {:type "select",
-    :label "Category",
-    :options ["categories" "name"]},
-   :name {:type "text", :label "Name"},
-   :description {:type "textarea", :label "Description"}}}}
+   :confidence {:type "number", :step 1}}}}

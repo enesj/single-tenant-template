@@ -17,7 +17,9 @@
             {:id :status :label "status" :type :text}
             {:id :supplier-guess :label "supplier guess" :type :text}
             ;; Single column: show total; include line total only when it differs.
-            {:id :total-display :label "total" :type :text}]})
+            {:id :total-display :label "total" :type :text}
+            {:id :created-at :label "created at" :type :datetime}
+            {:id :updated-at :label "updated at" :type :datetime}]})
 
 (def ^:private receipt-processing-statuses
   #{"uploaded" "parsing" "parsed" "extracting"})

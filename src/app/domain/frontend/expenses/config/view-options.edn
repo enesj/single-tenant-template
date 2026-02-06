@@ -1,21 +1,6 @@
 {:suppliers
  {:display-locks {:show-batch-edit? false},
   :display-defaults {:per-page 100, :show-edit? false}},
- :articles
- {:display-locks {},
-  :display-defaults {:show-edit? false, :show-delete? false}},
- :categories
- {:display-locks {},
-  :display-defaults
-  {:show-add-button? true,
-   :show-delete? true,
-   :show-edit? true,
-   :show-filtering? true,
-   :show-highlights? true,
-   :show-pagination? true,
-   :per-page 50},
-  :column-defaults {},
-  :column-locks {}},
  :subcategories
  {:display-locks {},
   :display-defaults
@@ -28,6 +13,9 @@
    :per-page 50},
   :column-defaults {},
   :column-locks {}},
+ :articles
+ {:display-locks {},
+  :display-defaults {:show-edit? false, :show-delete? false}},
  :payer-types
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},
@@ -50,6 +38,18 @@
   :display-defaults {:per-page 50, :show-edit? false},
   :column-defaults {},
   :column-locks {}},
+ :categories
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
+  :column-defaults {},
+  :column-locks {}},
  :supplier-aliases
  {:display-defaults {:show-edit? false},
   :display-locks {},
@@ -63,7 +63,9 @@
    :show-filtering? true,
    :show-highlights? true,
    :per-page 50},
-  :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
+  :display-locks {:show-batch-edit? false, :show-batch-delete? true},
+  :column-defaults {:created-at true, :updated-at true},
+  :column-locks {}},
  :stores
  {:display-defaults
   {:show-edit? false, :show-delete? false, :per-page 10},

@@ -53,11 +53,12 @@ This repo also supports the lightweight `clojure-mcp-light` CLI tools (useful wh
 - Database schema changes must happen ONLY via the migrations process. Never alter the schema directly (manual SQL, psql, ORM/DSL hacks, or ad-hoc edits to `resources/db/models.edn` or the live database). All changes must be captured as forward/backward migrations under `resources/db/migrations/` and applied using the documented tooling (`app.template.backend.migrations.simple-repl` or bb tasks).
 - **No Python scripting** in this repo. Use Babashka (`.bb`) or Bash (`.sh`) when necessary.
 - **Never commit secrets**. Keep them in `config/.secrets.edn` (or `~/.secrets.edn`) and environment variables.
+- **Secret handling (agents)**: Do not read, quote, or request secrets from `config/.secrets.edn`, `~/.secrets.edn`, `.env`, `.postgres.env`, CI secrets, or similar. If configuration context is needed to debug, ask for the minimal relevant snippet with sensitive values redacted.
 - Keep changes small and focused; avoid unrelated refactors.
 
 ## Project Structure (Quick Map)
 
-```
+```text
 src/app/        # admin, template, domain, shared (plus a small frontend/ folder for global assets)
 test/           # *_test.clj / *_test.cljs mirroring src
 resources/      # public assets, db models/migrations
@@ -96,9 +97,11 @@ Use these to tail combined backend and frontend dev output:
 - See `docs/testing/README.md` for deeper guidance.
 - For REPL-driven workflows and examples (Clojure + ClojureScript), see `.github/copilot-instructions.md#testing-from-the-repl`.
 
+Verification (behavior changes / non-trivial changes): validate via **REPL and/or focused tests**; **at least one is required**. Minimum edge cases: happy path, `nil`, empty collections, invalid/boundary inputs. See the full checklist in `.github/copilot-instructions.md`.
+
 Example save-output pattern:
 
-```
+```bash
 bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
 bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt
 ```
@@ -113,7 +116,7 @@ Use chrome-mcp for interactive browser testing and element verification (IDs are
 ID patterns (examples):
 
 | Component Type | Pattern | Example |
-|---------------|---------|---------|
+| -------------- | ------- | ------- |
 | Form fields | `(str formId "-" field-type)` | `"login-form-input"` |
 | Buttons | `(str "btn-" action "-" context)` | `"btn-submit-login"` |
 | Settings toggles | `(str "toggle-" label "-" entity)` | `"toggle-timestamps-users"` |
@@ -122,6 +125,7 @@ ID patterns (examples):
 | Filter controls | `(str "filter-" type "-" field)` | `"filter-toggle-users-name"` |
 
 When creating new components:
+
 1. Always accept an `:id` prop.
 2. Generate fallback IDs when not provided.
 3. Error elements should have IDs too (`(str field-id "-error")`).
