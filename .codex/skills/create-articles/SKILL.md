@@ -26,14 +26,17 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 
 ## Prerequisites
 - PostgreSQL MCP server must be available
-- Serper.dev Search API must be configured (via `SERPER_API_KEY`, typically sourced from `.env`)
+- Web search is feature-flagged:
+  - Set `ENABLE_SERPER_SEARCH=true` (in `.env`) to enable calling `bb serper-search`
+  - If not enabled, this skill MUST skip web search and proceed with generic article creation
+- If web search is enabled: Serper.dev Search API must be configured (via `SERPER_API_KEY`, typically sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
 ## Process Overview
 
 1. **Extract unmapped article aliases** from receipts
-2. **Web search** each alias to find actual products
+2. **Web search** each alias to find actual products (optional)
 3. **Create canonical articles** in database
 4. **Map aliases to articles** via article_id
 5. **Identify OCR noise** and optionally remove it
@@ -80,7 +83,9 @@ ORDER BY raw_label;
 
 ---
 
-## Step 2: Web Search for Products
+## Step 2: (Optional) Web Search for Products
+
+Only do this step when `ENABLE_SERPER_SEARCH=true`.
 
 For each unique `raw_label`, search the web to find the actual product.
 
@@ -99,6 +104,8 @@ For each unique `raw_label`, search the web to find the actual product.
 
 ### Example Web Search
 ```clojure
+;; Only when ENABLE_SERPER_SEARCH=true
+;;
 ;; Use the bb task `serper-search` (Serper.dev Google SERP API)
 ;;
 ;; Example:
@@ -126,7 +133,12 @@ After finding product URLs, use web-reader to extract structured data:
 
 ## Step 3: Create Canonical Articles
 
-Insert articles into the database with web search results.
+If web search is disabled, create a best-effort *generic* canonical article from the OCR label:
+- `canonical_name`: cleaned-up `raw_label` (remove receipt noise / extra punctuation; keep grams/ml when present)
+- `link`: NULL
+- `manufacturer`: NULL
+
+Insert articles into the database with web search results (when available) or generic values (when disabled).
 
 ### Article Schema
 ```sql
