@@ -26,10 +26,10 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 
 ## Prerequisites
 - PostgreSQL MCP server must be available
-- Web search is feature-flagged:
-  - Set `ENABLE_SERPER_SEARCH=true` (in `.env`) to enable calling `bb serper-search`
-  - If not enabled, this skill MUST skip web search and proceed with generic article creation
-- If web search is enabled: Serper.dev Search API must be configured (via `SERPER_API_KEY`, typically sourced from `.env`)
+- Web search priority:
+  1. Preferred: use the agent's built-in web search/browsing tools to find product pages
+  2. Optional fallback: use `bb serper-search` **only** when `ENABLE_SERPER_SEARCH=true` (in `.env`)
+- If Serper fallback is enabled: Serper.dev Search API must be configured via `SERPER_API_KEY` (typically sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
@@ -83,26 +83,22 @@ ORDER BY raw_label;
 
 ---
 
-## Step 2: (Optional) Web Search for Products
+## Step 2: Web Search for Products
 
-Only do this step when `ENABLE_SERPER_SEARCH=true`.
+Try in this order:
 
-For each unique `raw_label`, search the web to find the actual product.
+1) **Agent web search (preferred)**
+- Use the agent's web search to find 1-3 high-quality product pages.
+- Then use a web reader / `fetch_webpage` to extract:
+  - canonical name (with weight/size)
+  - manufacturer
+  - category
+  - product page link
 
-### Search Strategy
-1. **Start with specific queries** including supplier name + Bosnia region
-2. **Use English and local languages** (Bosnian/Croatian/Serbian)
-3. **Look for e-commerce sites** (Vocar, Bingo, Maxi, Hoše komerc, etc.)
-4. **Find canonical product info**: name, manufacturer, GTIN/EAN, product page URL
+2) **Serper CLI fallback (only if enabled)**
+- Only if `ENABLE_SERPER_SEARCH=true`, run `bb serper-search` to get candidate pages.
 
-### Search Query Format
-```
-"{raw_label}" {supplier_name} Bosnia
-"{raw_label}" product Bosnia
-{raw_label} kupovina online
-```
-
-### Example Web Search
+### Serper example
 ```clojure
 ;; Only when ENABLE_SERPER_SEARCH=true
 ;;
@@ -113,32 +109,18 @@ For each unique `raw_label`, search the web to find the actual product.
 ;;
 ;; Tip: include `--site` to focus results:
 ;;   bb serper-search "RONDINI keks" --site vocar.ba --gl BA --num 5
-;;
-;; Then pick the best product page URL from the results and use a web reader
-;; (or `fetch_webpage` in tooling) to extract:
-;;   - canonical name (with weight/size)
-;;   - manufacturer
-;;   - category
-;;   - product page link
-```
-
-### Web Reader for Product Details
-After finding product URLs, use web-reader to extract structured data:
-```clojure
-;; Use web-reader tool with product URL
-;; Extract: product name, description, manufacturer, GTIN, price
 ```
 
 ---
 
 ## Step 3: Create Canonical Articles
 
-If web search is disabled, create a best-effort *generic* canonical article from the OCR label:
+If you could not find reliable product info via web search, create a best-effort *generic* canonical article from the OCR label:
 - `canonical_name`: cleaned-up `raw_label` (remove receipt noise / extra punctuation; keep grams/ml when present)
 - `link`: NULL
 - `manufacturer`: NULL
 
-Insert articles into the database with web search results (when available) or generic values (when disabled).
+Insert articles into the database with web search results (when available) or generic values (when not).
 
 ### Article Schema
 ```sql
