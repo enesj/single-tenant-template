@@ -80,9 +80,9 @@
                :query-parts []}]
     (if (empty? args)
       (let [query (->> (:query-parts opts)
-                       (remove str/blank?)
-                       (str/join " ")
-                       (str/trim))]
+                    (remove str/blank?)
+                    (str/join " ")
+                    (str/trim))]
         (assoc opts :query query))
       (let [[a & more] args]
         (case a
@@ -137,12 +137,12 @@
 (defn- api-key
   []
   (or (env "GOOGLE_SEARCH_API_KEY")
-      (env "GOOGLE_API_KEY")))
+    (env "GOOGLE_API_KEY")))
 
 (defn- cx
   []
   (or (env "GOOGLE_SEARCH_CX")
-      (env "GOOGLE_CSE_ID")))
+    (env "GOOGLE_CSE_ID")))
 
 (defn- clamp
   [n lo hi]
@@ -154,10 +154,10 @@
         cx (cx)]
     (when-not key
       (die! (str "Missing API key. Set GOOGLE_SEARCH_API_KEY (preferred) or GOOGLE_API_KEY.\n"
-                 "Tip: put placeholders in .env and source it before running.")))
+              "Tip: put placeholders in .env and source it before running.")))
     (when-not cx
       (die! (str "Missing CX. Set GOOGLE_SEARCH_CX (preferred) or GOOGLE_CSE_ID.\n"
-                 "CX is your Programmable Search Engine id.")))
+              "CX is your Programmable Search Engine id.")))
     (when (str/blank? query)
       (usage! "Missing query."))
 
@@ -175,15 +175,15 @@
                safe (assoc :safe safe)
                site (assoc :siteSearch site))
           resp (http/get endpoint {:query-params qp
-                                  :as :text
-                                  :throw false})]
+                                   :as :string
+                                   :throw false})]
       (when-not (= 200 (:status resp))
         (let [body (:body resp)
               parsed (try (json/read-str body :key-fn keyword)
-                          (catch Exception _ nil))
+                       (catch Exception _ nil))
               msg (or (get-in parsed [:error :message])
-                      body
-                      (str "HTTP " (:status resp)))]
+                    body
+                    (str "HTTP " (:status resp)))]
           (die! (str "Google Search API request failed (HTTP " (:status resp) ")\n" msg))))
       (json/read-str (:body resp) :key-fn keyword))))
 
@@ -197,7 +197,7 @@
                        :link (:link it)
                        :display-link (:displayLink it)
                        :snippet (:snippet it)})
-                    items)
+                items)
      :search-information (:searchInformation raw)}))
 
 (defn- print-pretty

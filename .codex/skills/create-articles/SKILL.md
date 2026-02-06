@@ -26,7 +26,7 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 
 ## Prerequisites
 - PostgreSQL MCP server must be available
-- Google Search API must be configured (via `GOOGLE_SEARCH_API_KEY` + `GOOGLE_SEARCH_CX`, typically sourced from `.env`)
+- Serper.dev Search API must be configured (via `SERPER_API_KEY`, typically sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
@@ -99,10 +99,13 @@ For each unique `raw_label`, search the web to find the actual product.
 
 ### Example Web Search
 ```clojure
-;; Use the bb task `google-search` (Google Custom Search JSON API)
+;; Use the bb task `serper-search` (Serper.dev Google SERP API)
 ;;
 ;; Example:
-;;   bb google-search "KEKS RONDINI LASTA" --gl ba --num 5
+;;   bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
+;;
+;; Tip: include `--site` to focus results:
+;;   bb serper-search "RONDINI keks" --site vocar.ba --gl BA --num 5
 ;;
 ;; Then pick the best product page URL from the results and use a web reader
 ;; (or `fetch_webpage` in tooling) to extract:
