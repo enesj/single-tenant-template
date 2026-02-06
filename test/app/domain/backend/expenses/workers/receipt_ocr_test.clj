@@ -111,9 +111,10 @@
         ;; - ITEM B (twice - duplicate items are preserved as separate purchases)
         (is (= 3 (:article-aliases @calls)))
         (is (= #{"ITEM A" "ITEM B"} labels))
-        ;; Sum matches total, so no mismatch-based review-required.
+        ;; Raw extraction status is still "extracted", but the effective status is
+        ;; review_required because line totals and receipt total differ.
         (is (= "extracted" (:status _res)))
-        (is (= "extracted" (:effective-status _res)))))))
+        (is (= "review_required" (:effective-status _res)))))))
 
 (deftest persist-extract-result-applies-discount-override-for-popost-ocr-misread
   (let [receipt-id (java.util.UUID/randomUUID)
@@ -239,6 +240,15 @@
       (is (true? (review-required? {:supplier_guess "Store" :total_amount_guess 1M :currency_guess "BAM" :items-count 0}))))
     (testing "looks good"
       (is (false? (review-required? {:supplier_guess "Store" :total_amount_guess 1M :currency_guess "BAM" :items-count 2}))))))
+
+(deftest lines-total-mismatch-detects-absolute-difference
+  (let [mismatch? #'extraction/lines-total-mismatch?]
+    (testing "overage mismatch"
+      (is (true? (mismatch? [{:raw_label "A" :line_total 12.00M}] 10.00M))))
+    (testing "underage mismatch"
+      (is (true? (mismatch? [{:raw_label "A" :line_total 8.00M}] 10.00M))))
+    (testing "exact total"
+      (is (false? (mismatch? [{:raw_label "A" :line_total 10.00M}] 10.00M))))))
 
 (deftest reconcile-extraction-prefers-ocr-markdown-label
   (let [reconcile #'extraction/reconcile-extraction-with-markdown
@@ -486,6 +496,19 @@
   (testing "returns nil when no date found"
     (is (nil? (markdown/markdown->purchased-at "No date here")))
     (is (nil? (markdown/markdown->purchased-at nil)))))
+
+(deftest markdown-total-amount-prefers-total-over-trailing-ukupno-zero
+  (let [markdown (str "TOTAL: 19,50\n"
+                   "UPLACENO: 19,50\n"
+                   "GOTOVINA: 19,50\n"
+                   "UKUPNO: 0,00\n"
+                   "POVRAT: 0,00\n")]
+    (is (= 19.50M (markdown/markdown->total-amount markdown)))))
+
+(deftest markdown-total-amount-falls-back-to-ukupno-when-total-missing
+  (let [markdown (str "UKUPNO: 42,00\n"
+                   "POVRAT: 0,00\n")]
+    (is (= 42.00M (markdown/markdown->total-amount markdown)))))
 
 (deftest process-extract-auto-retries-review-required-once
   (let [process-extract! #'core/process-extract!

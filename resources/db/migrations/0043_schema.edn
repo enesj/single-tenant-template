@@ -1,0 +1,6 @@
+({:action :alter-column,
+  :field-name :article-id,
+  :model-name :article_aliases,
+  :options
+  {:foreign-key :articles/id, :on-delete :set-null, :type :uuid},
+  :changes {:on-delete {:from :cascade, :to :set-null}}})

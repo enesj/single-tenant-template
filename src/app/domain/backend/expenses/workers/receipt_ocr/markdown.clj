@@ -220,10 +220,17 @@
         first))))
 
 (defn markdown->total-amount
-  "Best-effort find the last line that looks like a total and parse money from it.
+  "Best-effort parse receipt total from OCR markdown.
 
-  Handles totals embedded in markdown table rows by stripping pipe characters first.
-  Supports common Latin + Cyrillic variants (ukupno/ukupan iznos/укупно/укупан износ)."
+  Handles totals embedded in markdown table rows by stripping pipe characters.
+
+  Selection strategy:
+  - Prefer explicit grand-total prefixes (e.g. TOTAL / UKUPAN IZNOS).
+  - Within the chosen group, prefer the latest non-zero amount.
+  - Fallback to the latest parsed amount when all candidates are zero.
+
+  This avoids false overrides from trailing balance rows such as
+  `UKUPNO: 0,00` that can appear after `TOTAL: <amount>`."
   [markdown]
   (when (string? markdown)
     (let [clean-line (fn [s]
@@ -233,17 +240,36 @@
                          (str/replace #"\s+" " ")
                          str/trim
                          not-empty))
-          total-prefixes ["total" "ukupno" "ukupna" "ukupan iznos" "укупно" "укупан износ"]
-          exclude-substrings ["bez porez" "без порез" "porez" "порез" "pdv" "пдв" "vat"]]
-      (->> (str/split-lines markdown)
-        (keep (fn [line0]
-                (let [line (clean-line line0)
-                      norm (normalize-text line)]
-                  (when (and norm
-                          (some #(str/starts-with? norm %) total-prefixes)
-                          (not (some #(str/includes? norm %) exclude-substrings)))
-                    (common/parse-money line)))))
-        last))))
+          preferred-prefixes ["total" "ukupan iznos" "ukupna" "укупан износ"]
+          fallback-prefixes ["ukupno" "укупно"]
+          exclude-substrings ["bez porez" "без порез" "porez" "порез" "pdv" "пдв" "vat"]
+          non-zero? (fn [money]
+                      (and (some? money)
+                        (not (zero? (.compareTo (bigdec money) 0M)))))
+          pick-best (fn [rows]
+                      (let [amounts (->> rows (map :amount) vec)]
+                        (or (last (filter non-zero? amounts))
+                          (last amounts))))
+          candidates (->> (str/split-lines markdown)
+                       (keep (fn [line0]
+                               (let [line (clean-line line0)
+                                     norm (normalize-text line)
+                                     prefix-kind (cond
+                                                   (and norm (some #(str/starts-with? norm %) preferred-prefixes)) :preferred
+                                                   (and norm (some #(str/starts-with? norm %) fallback-prefixes)) :fallback
+                                                   :else nil)
+                                     amount (common/parse-money line)]
+                                 (when (and prefix-kind
+                                         amount
+                                         (not (some #(str/includes? norm %) exclude-substrings)))
+                                   {:kind prefix-kind
+                                    :amount amount}))))
+                       vec)
+          preferred (->> candidates
+                      (filter (fn [{:keys [kind]}] (= :preferred kind)))
+                      vec)]
+      (when (seq candidates)
+        (pick-best (if (seq preferred) preferred candidates))))))
 
 (def ^:private ba-datetime-re
   "Regex for BA receipt datetime pattern: dd.mm.yyyy. hh:mm or dd.mm.yyyy hh:mm"

@@ -293,7 +293,7 @@
                             [:raw_label :text]
                             [:raw_label_normalized [:varchar 255] {:null false}]
                             ;; CHANGED (Phase 1): allow NULL = unmapped
-                            [:article_id :uuid {:foreign-key :articles/id :on-delete :cascade}]
+                            [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
                             [:confidence :integer {:default 100}]
                             [:created_at :timestamptz {:default "NOW()"}]]
                    :indexes [[:idx_article_aliases_supplier_label :btree

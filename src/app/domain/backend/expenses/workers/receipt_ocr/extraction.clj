@@ -90,16 +90,11 @@
 (defn- lines-total-mismatch?
   [items total-amount]
   (let [items* (mapv normalize-line-item (or items []))
-        lines-total (receipt-parsing/lines-total items*)
-        diff (when (and (some? lines-total) (some? total-amount))
-               (- (bigdec lines-total) (bigdec total-amount)))]
-    ;; We only flag *overages* as a mismatch.
-    ;;
-    ;; Underages are common when receipts list VAT/tax separately or when OCR misses
-    ;; some items. Treating those as "review_required" in list views caused noisy
-    ;; false positives.
-    (and (some? diff)
-      (> (double diff) 0.01))))
+        lines-total (receipt-parsing/lines-total items*)]
+    ;; Keep mismatch semantics aligned with list status derivation:
+    ;; `abs(lines_total - total_amount_guess) > 0.01`.
+    (when-let [abs-diff (abs-decimal-diff lines-total total-amount)]
+      (> abs-diff 0.01))))
 
 (def ^:private discount-label-pattern
   #"(?iu)\b(popust|popost|rabat|discount|akcija)\b")
