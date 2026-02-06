@@ -130,54 +130,23 @@ Deploy specialized research agent for deep codebase investigation:
 
 ### Frontend Testing Tools
 
-**ClojureScript Evaluation**:
+**ClojureScript REPL (via `clj-nrepl-eval`)**:
 ```clojure
-;; Test component mounting and lifecycle
-clojure_mcp_clojurescript_eval "
-(require '[app.frontend.components.auth :as auth])
+;; Connect via `clj-nrepl-eval` to the shadow-cljs nREPL, then select a build:
+(shadow.cljs.devtools.api/nrepl-select :app) ; or :admin / :test / :karma-test
 
-;; Test component lifecycle
-(let [test-db (re-frame.db/atom {:auth {:loading? false :error nil})
-      component (auth/auth-form {})]
-
-  ;; Verify component renders without errors
-  (when-not (nil? component)
-    (println \"✓ Auth component mounts successfully\"))
-
-  ;; Test event handlers
-  (when-let [event-result ((:on-login component) {:email \"test@example.com\"})]
-    (println \"✓ Login event handler works:\" event-result)))"
-
-;; Test subscription handling
-clojure_mcp_clojurescript_eval "
 (require '[re-frame.core :as rf])
 
-;; Verify subscription patterns
-(let [sub-data (rf/subscribe [:auth/current-user identity])
-      dispatch-result (rf/dispatch [:auth/check-auth])]
-
-  (println \"Subscription data:\" sub-data)
-  (println \"Dispatch result:\" dispatch-result))"
+;; Example: trigger an auth check (then inspect app-db / subscriptions as needed)
+(rf/dispatch [:auth/check-auth])
 ```
 
-**Clojure Evaluation**:
+**Backend REPL (via `clj-nrepl-eval`)**:
 ```clojure
-;; Test backend integration for frontend
-clojure_mcp_clojure_eval "
 (require '[app.backend.handlers.auth :as auth-handlers])
 
 ;; Verify handler implementations
-(println \"Available auth handlers:\" (keys auth-handlers))
-(println \"Login handler exists:\" (contains? (keys auth-handlers) :login))
-
-;; Test validation functions
-(when-let [validate-fn (get-in auth-handlers [:validation :email])]
-  (println \"Email validation:\" (validate-fn \"test@example.com\")))"
-
-;; Check database schema for auth
-(require '[app.db.models :as models])
-(when-let [user-schema (:users models)]
-  (println \"User schema:\" (select-keys user-schema [:email :password :role])))"
+(println "Available auth handlers:" (keys auth-handlers))
 ```
 
 **Chrome MCP Tools**:
@@ -363,17 +332,16 @@ done
 **Test Database Setup**:
 ```clojure
 ;; Ensure test database is properly configured
-clojure_mcp_clojure_eval "
 (require '[app.db.connection :as db])
 
 ;; Test database connection for tests
 (when-let [conn (db/test-connection)]
-  (println \"✓ Test database connection:\" (:status conn))
-  (println \"Available tables:\" (:tables conn))
+  (println "✓ Test database connection:" (:status conn))
+  (println "Available tables:" (:tables conn))
 
   ;; Clean test data
   (db/clean-test-data conn)
-  (println \"✓ Test database cleaned\"))"
+  (println "✓ Test database cleaned"))
 ```
 
 **API Endpoint Mocking**:
@@ -397,7 +365,6 @@ clojure_mcp_clojure_eval "
 **Component Render Performance**:
 ```clojure
 ;; Test component rendering performance
-clojure_mcp_clojurescript_eval "
 (require '[app.frontend.components.user-list :as user-list])
 
 ;; Measure render time
@@ -406,15 +373,14 @@ clojure_mcp_clojurescript_eval "
       end-time (js/performance.now)
       render-time (- end-time start-time)]
 
-  (println \"📊 Component render time:\" render-time \"ms\")
+  (println "📊 Component render time:" render-time "ms")
   (when (> render-time 100)  ; Log slow renders
-    (println \"⚠ Slow component rendering detected\")))"
+    (println "⚠ Slow component rendering detected")))
 ```
 
 **Memory Leak Detection**:
 ```clojure
 ;; Test for memory leaks in component lifecycle
-clojure_mcp_clojurescript_eval "
 (require '[app.frontend.components.data-table :as data-table])
 
 ;; Test component cleanup
@@ -489,21 +455,10 @@ inotifywait -r modify src/app/frontend/ -e create,modify -- npm run test:cljs:wa
 ```
 
 **Test Coverage Analysis**:
-```clojure
-;; Analyze test coverage using clojure-mcp
-clojure_mcp_clojure_eval "
-(require '[clojure.walk :as walk])
-
-;; Find uncovered frontend files
-(let [source-files (->> (walk/walk \"src/app/frontend\")
-                     (filter #(clojure.string/ends-with? % \".cljs\"))
-                     (remove #(clojure.string/includes? % \"test_\")))
-      test-files (->> (walk/walk \"test/frontend\")
-                     (filter #(clojure.string/ends-with? % \".cljs\")))
-
-  (println \"Source files:\" (count source-files))
-  (println \"Test files:\" (count test-files))
-  (println \"Coverage ratio:\" (/ (count test-files) (count source-files))))"
+```bash
+# Heuristic sanity check (not real coverage): compare number of source vs test files
+find src -name '*.cljs' | wc -l
+find test -name '*-test.cljs' -o -name '*_test.cljs' | wc -l
 ```
 
 ### Build Integration Testing
@@ -511,7 +466,6 @@ clojure_mcp_clojure_eval "
 **Shadow-CLJS with Tests**:
 ```clojure
 ;; Test compilation of test files
-clojure_mcp_clojure_eval "
 (require '[shadow-cljs.devtools.api :as shadow])
 
 ;; Compile tests and check for errors
@@ -523,7 +477,7 @@ clojure_mcp_clojure_eval "
   (when (:warnings compile-result)
     (println \"⚠ Test compilation warnings:\")
     (doseq [warning (:warnings compile-result)]
-      (println \"  \" (:file warning) \":\" (:line warning) \" - \" (:message warning)))))"
+      (println \"  \" (:file warning) \":\" (:line warning) \" - \" (:message warning)))))
 ```
 
 ## Output Format

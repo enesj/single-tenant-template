@@ -5,9 +5,17 @@
 ## MCP tools (use these first)
 
 - **Clojure/EDN edits**: For `.clj`/`.cljs`/`.cljc`/`.edn`, use `clojure-mcp` structural editing tools (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit produces reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text diffs.
-- **REPL evaluation is the main debugger/test runner**: Use `mcp__clojure-mcp__clojure_eval` / `mcp__clojure-mcp__clojurescript_eval` for exploration, debugging, and running focused tests (examples below).
+- **REPL evaluation is the main debugger/test runner**: Use `clj-nrepl-eval` for exploration, debugging, and running focused tests.
 - **Database operations**: Use `postgres-mcp` tools for queries and schema inspection (e.g. `mcp__postgres__execute_sql`, `mcp__postgres__list_tables`).
 - **Browser interactions**: Use `chrome-mcp` tools for interactive UI testing; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
+
+## Clojure CLI fallbacks (clojure-mcp-light)
+
+If you’re running in a client that *doesn’t* have the MCP tools available (or you want to keep the client’s native diff UI), the following commands are installed:
+
+- `clj-paren-repair-claude-hook` is configured via `.claude/settings.json` to auto-fix delimiter issues on Clojure file edits.
+- If you still encounter unbalanced delimiters (often after shell edits), run `clj-paren-repair path/to/file.clj` instead of manually chasing parentheses.
+- For REPL evaluation without MCP, use `clj-nrepl-eval` (discover ports with `--discover-ports`, then evaluate with `-p <PORT>`). This repo’s `deps.edn` includes a `:nrepl` alias (port **7888**).
 
 ## Big picture / entrypoints
 - **Backend system entry**: `src/app/template/backend/core.clj` (loads `config/base.edn`, `resources/db/models.edn`, starts webserver + DI container).

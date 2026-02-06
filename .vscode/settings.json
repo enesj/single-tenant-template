@@ -21,6 +21,7 @@
     "/^echo \"META:\" && readlink /tmp/active_command\\.txt && echo \"---\" && cat /tmp/active_command\\.txt && echo \"---\" && source /tmp/active_command\\.txt 2>/dev/null \\|\\| true$/": {
       "approve": true,
       "matchCommandLine": true
-    }
+    },
+    "diff": true
   }
 }

@@ -1,6 +1,7 @@
 ---
 description: "Trace and summarize re-frame event/subscription activity in dev builds"
-tags: ["clojurescript", "re-frame", "debugging", "performance", "events"]
+metadata:
+  tags: ["clojurescript", "re-frame", "debugging", "performance", "events"]
 ---
 
 # reframe-events-analysis
@@ -13,7 +14,7 @@ Use this to answer “what events happened?”, “why did state change?”, and
 - You need the recent event sequence around a bug
 
 ## Fast path
-1) Use the `clojurescript_eval` MCP tool to evaluate ClojureScript code.
+1) Use `clj-nrepl-eval` against the shadow-cljs nREPL to evaluate ClojureScript code.
 2) Load helpers:
 ```clojure
 (require '[app.template.frontend.dev.repl-tracing :as rt])

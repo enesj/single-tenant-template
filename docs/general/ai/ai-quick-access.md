@@ -32,7 +32,7 @@ If you get a `FileNotFoundException` when requiring `.cljs` files in the REPL, s
 ## 📊 Re-frame trace buffer (CLJS REPL)
 The `reframe-events-analysis` skill uses `app.template.frontend.dev.repl-tracing` (REPL query helpers) on top of the dev trace buffer.
 
-- It’s included in the `:app` dev build via `shadow-cljs.edn` under `:builds :app :dev :modules :app :preloads` (so `clojurescript_eval` can `require` it).
+- It’s included in the `:app` dev build via `shadow-cljs.edn` under `:builds :app :dev :modules :app :preloads` (so your CLJS REPL session—e.g. `clj-nrepl-eval` connected to the shadow nREPL—can `require` it).
 - If `(require '[app.template.frontend.dev.repl-tracing :as repl-trace])` fails, verify that preload entry and reload the page.
 
 ## Canonical entry points

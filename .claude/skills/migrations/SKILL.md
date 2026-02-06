@@ -1,6 +1,7 @@
 ---
 description: "Complete migration workflow guide - models, schema, functions, triggers, policies, views"
-tags: ["migrations", "database", "schema", "automigrate", "models", "postgresql"]
+metadata:
+  tags: ["migrations", "database", "schema", "automigrate", "models", "postgresql"]
 ---
 
 # migrations

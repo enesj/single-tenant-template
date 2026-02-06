@@ -1,7 +1,8 @@
 ---
 name: debugging
 description: "Short, evidence-based debugging playbook for Clojure/ClojureScript"
-tags: ["debugging", "troubleshooting", "testing", "clojure", "clojurescript", "re-frame", "backend", "frontend"]
+metadata:
+  tags: ["debugging", "troubleshooting", "testing", "clojure", "clojurescript", "re-frame", "backend", "frontend"]
 ---
 
 # debugging
@@ -25,10 +26,16 @@ Find the root cause quickly, using evidence (not guesses).
 ## Evaluation (preferred)
 
 ### Backend (Clojure)
-Use the `mcp__clojure-mcp__clojure_eval` MCP tool to evaluate Clojure code.
+Use `clj-nrepl-eval` to evaluate Clojure code against the running backend nREPL.
+
+- Discover ports: `clj-nrepl-eval --discover-ports`
+- Evaluate: `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload) (my.ns/foo)"`
 
 ### Frontend (ClojureScript)
-Use the `mcp__clojure-mcp__clojurescript_eval` MCP tool to evaluate ClojureScript code.
+Use `clj-nrepl-eval` against the **shadow-cljs nREPL**, then select a build inside the eval.
+
+- Discover ports: `clj-nrepl-eval --discover-ports`
+- Select build + eval: `clj-nrepl-eval -p <SHADOW_PORT> "(shadow.cljs.devtools.api/nrepl-select :app) (require 'app.template.frontend.dev.repl-tracing :reload)"`
 
 ## Logs
 ```bash

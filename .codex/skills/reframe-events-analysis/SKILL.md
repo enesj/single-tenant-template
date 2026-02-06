@@ -1,7 +1,8 @@
 ---
 name: reframe-events-analysis
 description: "Trace and summarize re-frame event/subscription activity in dev builds"
-tags: ["clojurescript", "re-frame", "debugging", "performance", "events"]
+metadata:
+  tags: ["clojurescript", "re-frame", "debugging", "performance", "events"]
 ---
 
 # reframe-events-analysis
@@ -14,8 +15,8 @@ Use this to answer “what events happened?”, “why did state change?”, and
 - You need the recent event sequence around a bug
 
 ## Fast path
-1) Use the `clojure-mcp` `clojurescript_eval` tool (built into Codex) to run CLJS directly against the live shadow build. Remember that app is always running and automatically refreshed, no need to try to start app.
-2) If you need to switch builds, issue inside the eval: `(require '[shadow.cljs.devtools.api :as shadow]) (shadow/repl :app)` (or `:admin`).
+1) Use `clj-nrepl-eval` against the shadow-cljs nREPL to run CLJS directly against the live build.
+2) If you need to switch builds, issue inside the eval: `(shadow.cljs.devtools.api/nrepl-select :app)` (or `:admin`).
 3) Load helpers via eval:
 ```clojure
 (require '[app.template.frontend.dev.repl-tracing :as rt])

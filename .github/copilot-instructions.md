@@ -5,7 +5,7 @@
 ## MCP tools (use these first)
 
 - **Clojure/EDN edits**: For `.clj`/`.cljs`/`.cljc`/`.edn`, use `clojure-mcp` structural editing tools (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit produces reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text diffs.
-- **REPL evaluation is the main debugger/test runner**: Use `mcp__clojure-mcp__clojure_eval` / `mcp__clojure-mcp__clojurescript_eval` for exploration, debugging, and running focused tests (examples below).
+- **REPL evaluation is the main debugger/test runner**: Use `clj-nrepl-eval` (shell) for exploration, debugging, and running focused tests (examples below).
 - **Database operations**: Use `postgres-mcp` tools for queries and schema inspection (e.g. `mcp__postgres__execute_sql`, `mcp__postgres__list_tables`).
 - **Browser interactions**: Use `chrome-mcp` tools for interactive UI testing; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
 
@@ -44,7 +44,10 @@
 ## Clojure development patterns
 - REPL-first workflow
   - Evaluate code in the connected REPL; do not spawn new REPLs.
-  - Only edit files when the REPL is connected; if evaluation errors indicate the REPL is unavailable, pause and reconnect before continuing.
+  - Prefer `clj-nrepl-eval` for REPL interaction:
+    - Discover: `clj-nrepl-eval --discover-ports`
+    - Eval: `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload)"`
+    - For CLJS via shadow nREPL, select build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
   - Use `clojure-mcp` structural edits for Clojure/EDN changes (don’t free-type large diffs). If you hit reader/compilation errors after a plain-text edit, immediately switch/redo using `clojure-mcp` to keep forms balanced.
   - After edits, reload explicitly: `(require 'my.ns :reload)`.
   - For CLJS, select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.

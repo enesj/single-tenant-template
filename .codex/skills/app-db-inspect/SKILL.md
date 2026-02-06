@@ -1,8 +1,6 @@
 ---
 name: app-db-inspect
 description: Inspect re-frame app-db state safely in ClojureScript when debugging frontend state (auth/session, routing, data loading, UI state).
-allowed-tools:
-  - clojure-mcp:clojurescript_eval
 ---
 
 # app-db-inspect

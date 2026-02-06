@@ -371,7 +371,7 @@ grep -A 5 "FAIL in" /tmp/test-output.txt
 
 **Cause**: The trace query helpers namespace isn’t loaded in the running app build.
 
-**Solution**: Ensure `app.template.frontend.dev.repl-tracing` is included in the `:app` dev preloads (`shadow-cljs.edn` → `:builds :app :dev :modules :app :preloads`), then reload the page so `clojurescript_eval` can `require` it.
+**Solution**: Ensure `app.template.frontend.dev.repl-tracing` is included in the `:app` dev preloads (`shadow-cljs.edn` → `:builds :app :dev :modules :app :preloads`), then reload the page so your CLJS REPL session (e.g. via `clj-nrepl-eval` connected to the shadow nREPL) can `require` it.
 
 #### Issue: Test passes in Node.js but fails in Karma
 
