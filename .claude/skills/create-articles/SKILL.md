@@ -7,13 +7,17 @@ metadata:
 # create-articles
 
 ## Goal
-Map raw article aliases extracted from receipt OCR data to canonical products by finding actual products via web search, then create database entries for articles and map aliases to them.
+Map raw article aliases extracted from receipt OCR data to canonical products by finding actual products via web search, then create database entries for articles **and all related taxonomy tables** (manufacturers, categories, subcategories), and finally map aliases to articles.
 
 ## When to use
 - You need to populate the articles table with actual products found from web search
 - Article aliases from receipts need to be mapped to canonical articles
 - You have OCR-extracted labels (raw_label) that need to be resolved to real products
 - Building product catalog from receipt data
+
+This skill is also the right place to backfill/maintain the *taxonomy* tables used by articles:
+- `manufacturers` (canonical brands)
+- `categories` and `subcategories` (FK-driven categorization)
 
 ## Prerequisites
 - PostgreSQL MCP server must be available
@@ -28,9 +32,10 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 
 1. **Extract unmapped article aliases** from receipts
 2. **Web search** each alias to find actual products
-3. **Create canonical articles** in database
-4. **Map aliases to articles** via article_id
-5. **Identify OCR noise** and optionally remove it
+3. **Upsert taxonomy** (manufacturers, categories, subcategories)
+4. **Create canonical articles** (linking to taxonomy via FK columns)
+5. **Map aliases to articles** via article_id
+6. **Identify OCR noise** and optionally remove it
 
 ---
 
@@ -82,8 +87,8 @@ Try in this order:
 - Use the agent's web search to find 1-3 high-quality product pages.
 - Then use a web reader / `fetch_webpage` to extract:
   - canonical name (with weight/size)
-  - manufacturer
-  - category
+  - manufacturer (brand)
+  - category + subcategory (when reasonably confident)
   - product page link
 
 2) **Serper CLI fallback (only if enabled)**
@@ -104,12 +109,86 @@ Try in this order:
 
 ---
 
-## Step 3: Create Canonical Articles
+## Step 3: Upsert Taxonomy (Manufacturers, Categories, Subcategories)
+
+Articles should reference taxonomy via foreign keys:
+- `articles.manufacturer_id` → `manufacturers.id`
+- `articles.subcategory_id` → `subcategories.id` (and subcategory points to a `category_id`)
+
+If you have taxonomy info from web search, **insert it first** and then reference the IDs from the article.
+
+### 3.1 Upsert Manufacturer
+
+Use a stable `normalized_key` (lowercase, hyphenated, ASCII-only) for deduplication.
+
+```sql
+-- Upsert manufacturer and return its id
+WITH ins AS (
+  INSERT INTO manufacturers (id, display_name, normalized_key)
+  VALUES (gen_random_uuid(), 'Lasta', 'lasta')
+  ON CONFLICT (normalized_key) DO NOTHING
+  RETURNING id
+)
+SELECT id FROM ins
+UNION ALL
+SELECT id FROM manufacturers WHERE normalized_key = 'lasta'
+LIMIT 1;
+```
+
+### 3.2 Upsert Category
+
+```sql
+-- Upsert category by unique name
+WITH ins AS (
+  INSERT INTO categories (id, name, description)
+  VALUES (gen_random_uuid(), 'Food', 'Food & groceries')
+  ON CONFLICT (name) DO NOTHING
+  RETURNING id
+)
+SELECT id FROM ins
+UNION ALL
+SELECT id FROM categories WHERE name = 'Food'
+LIMIT 1;
+```
+
+### 3.3 Upsert Subcategory
+
+Subcategories are unique by `(category_id, name)`.
+
+```sql
+-- Upsert subcategory under a known category
+WITH category AS (
+  SELECT id
+  FROM categories
+  WHERE name = 'Food'
+  LIMIT 1
+), ins AS (
+  INSERT INTO subcategories (id, category_id, name, description)
+  SELECT gen_random_uuid(), category.id, 'Snacks', 'Chips, biscuits, sweets'
+  FROM category
+  ON CONFLICT (category_id, name) DO NOTHING
+  RETURNING id
+)
+SELECT id FROM ins
+UNION ALL
+SELECT s.id
+FROM subcategories s
+JOIN categories c ON c.id = s.category_id
+WHERE c.name = 'Food' AND s.name = 'Snacks'
+LIMIT 1;
+```
+
+If you *don’t* have reliable taxonomy, it’s fine to leave `manufacturer_id` and/or `subcategory_id` as NULL and just create the article.
+
+---
+
+## Step 4: Create Canonical Articles
 
 If you could not find reliable product info via web search, create a best-effort *generic* canonical article from the OCR label:
 - `canonical_name`: cleaned-up `raw_label` (remove receipt noise / extra punctuation; keep grams/ml when present)
 - `link`: NULL
-- `manufacturer`: NULL
+- `manufacturer_id`: NULL
+- `subcategory_id`: NULL
 
 Insert articles into the database with web search results (when available) or generic values (when not).
 
@@ -119,24 +198,93 @@ Insert articles into the database with web search results (when available) or ge
 id              UUID PRIMARY KEY
 canonical_name  VARCHAR(255) NOT NULL
 normalized_key  VARCHAR(255) NOT NULL UNIQUE
-category        VARCHAR(100)
+category         VARCHAR(100)          -- legacy free-text (optional)
+subcategory_id   UUID                 -- FK -> subcategories.id (preferred)
 link            TEXT
-manufacturer    VARCHAR(255)
+manufacturer_id  UUID                 -- FK -> manufacturers.id
 created_at      TIMESTAMPTZ DEFAULT NOW()
 updated_at      TIMESTAMPTZ DEFAULT NOW()
 ```
 
 ### Insert Article
 ```sql
--- Insert a new article
-INSERT INTO articles (id, canonical_name, normalized_key, category, link, manufacturer)
+-- Insert a new article (FK-driven manufacturer + subcategory)
+INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)
 VALUES (
   gen_random_uuid(),
   'Lasta Rondini keks 200g',
   'lasta-rondini-keks-200g',
-  'Slatkiši i grickalice',
+  (SELECT s.id
+   FROM subcategories s
+   JOIN categories c ON c.id = s.category_id
+   WHERE c.name = 'Food' AND s.name = 'Snacks'
+   LIMIT 1),
   'https://lasta.com/lasta-product/rondini-limun-i-mak/',
-  'Lasta'
+  (SELECT id FROM manufacturers WHERE normalized_key = 'lasta' LIMIT 1)
+)
+ON CONFLICT (normalized_key) DO NOTHING
+RETURNING id, canonical_name, manufacturer_id, subcategory_id;
+```
+
+### Insert Article + Taxonomy in One Go (CTE)
+
+This pattern is convenient when you’re adding a brand-new manufacturer/category/subcategory.
+
+```sql
+WITH manufacturer AS (
+  SELECT id
+  FROM (
+    WITH ins AS (
+      INSERT INTO manufacturers (id, display_name, normalized_key)
+      VALUES (gen_random_uuid(), 'Lasta', 'lasta')
+      ON CONFLICT (normalized_key) DO NOTHING
+      RETURNING id
+    )
+    SELECT id FROM ins
+    UNION ALL
+    SELECT id FROM manufacturers WHERE normalized_key = 'lasta'
+    LIMIT 1
+  ) x
+), category AS (
+  SELECT id
+  FROM (
+    WITH ins AS (
+      INSERT INTO categories (id, name)
+      VALUES (gen_random_uuid(), 'Food')
+      ON CONFLICT (name) DO NOTHING
+      RETURNING id
+    )
+    SELECT id FROM ins
+    UNION ALL
+    SELECT id FROM categories WHERE name = 'Food'
+    LIMIT 1
+  ) x
+), subcategory AS (
+  SELECT id
+  FROM (
+    WITH ins AS (
+      INSERT INTO subcategories (id, category_id, name)
+      SELECT gen_random_uuid(), category.id, 'Snacks'
+      FROM category
+      ON CONFLICT (category_id, name) DO NOTHING
+      RETURNING id
+    )
+    SELECT id FROM ins
+    UNION ALL
+    SELECT s.id
+    FROM subcategories s
+    WHERE s.category_id = (SELECT id FROM category) AND s.name = 'Snacks'
+    LIMIT 1
+  ) x
+)
+INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)
+VALUES (
+  gen_random_uuid(),
+  'Lasta Rondini keks 200g',
+  'lasta-rondini-keks-200g',
+  (SELECT id FROM subcategory),
+  'https://lasta.com/lasta-product/rondini-limun-i-mak/',
+  (SELECT id FROM manufacturer)
 )
 ON CONFLICT (normalized_key) DO NOTHING
 RETURNING id, canonical_name;
@@ -144,14 +292,13 @@ RETURNING id, canonical_name;
 
 ### Normalization Rules
 - Lowercase: `Lasta Rondini` → `lasta-rondini`
-- Remove special chars: `Šljiva` → `sljiva`
+- Remove non-ASCII/special chars during normalization (e.g. `Š` is dropped). Prefer ASCII canonical names when possible.
 - Replace spaces with hyphens
-- Remove diacritics (ć → c, š → s, ž → z, đ → d)
 - Keep it URL-safe
 
 ---
 
-## Step 4: Map Aliases to Articles
+## Step 5: Map Aliases to Articles
 
 Update article_aliases to link raw OCR labels to canonical articles.
 
@@ -196,7 +343,7 @@ RETURNING raw_label, article_id;
 
 ---
 
-## Step 5: Handle Generic Products
+## Step 6: Handle Generic Products
 
 For items without specific brands, create generic articles with descriptive names.
 
@@ -223,7 +370,7 @@ VALUES (
 
 ---
 
-## Step 6: Identify and Remove OCR Noise
+## Step 7: Identify and Remove OCR Noise
 
 After mapping valid products, identify remaining unmapped aliases that are OCR noise.
 
@@ -257,7 +404,7 @@ WHERE raw_label IN ('PARTICA:', 'POPRAT', 'POU:', 'POPUST -10,00%:', 'CSN. E:')
 
 ---
 
-## Step 7: Verify and Report Progress
+## Step 8: Verify and Report Progress
 
 Track mapping progress and final statistics.
 
@@ -282,12 +429,15 @@ FROM stats;
 
 ### Articles by Category
 ```sql
--- Articles distribution by category
+-- Articles distribution by FK-driven category/subcategory (preferred)
 SELECT
-  COALESCE(category, 'Uncategorized') as category,
+  COALESCE(c.name, 'Uncategorized') as category,
+  COALESCE(s.name, 'Uncategorized') as subcategory,
   COUNT(*) as article_count
-FROM articles
-GROUP BY category
+FROM articles a
+LEFT JOIN subcategories s ON s.id = a.subcategory_id
+LEFT JOIN categories c ON c.id = s.category_id
+GROUP BY c.name, s.name
 ORDER BY article_count DESC;
 ```
 
@@ -295,10 +445,11 @@ ORDER BY article_count DESC;
 ```sql
 -- Articles by manufacturer
 SELECT
-  COALESCE(manufacturer, 'Generic') as manufacturer,
+  COALESCE(m.display_name, 'Generic') as manufacturer,
   COUNT(*) as article_count
-FROM articles
-GROUP BY manufacturer
+FROM articles a
+LEFT JOIN manufacturers m ON m.id = a.manufacturer_id
+GROUP BY m.display_name
 ORDER BY article_count DESC;
 ```
 
@@ -319,25 +470,34 @@ LIMIT 10;
 
 -- 2. For each alias, web search: "{raw_label}" {supplier} Bosnia
 
--- 3. After web search, insert article
-INSERT INTO articles (id, canonical_name, normalized_key, category, link, manufacturer)
+-- 3. After web search, upsert taxonomy (manufacturer/category/subcategory)
+--    then insert article referencing manufacturer_id + subcategory_id
+
+-- (See Step 3 for upsert examples)
+
+-- 4. Insert article
+INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)
 VALUES (
   gen_random_uuid(),
   'Found Product Name from Web',
   'normalized-product-name',
-  'Category from research',
+  (SELECT s.id
+   FROM subcategories s
+   JOIN categories c ON c.id = s.category_id
+   WHERE c.name = 'Food' AND s.name = 'Snacks'
+   LIMIT 1),
   'https://product-page-url',
-  'Manufacturer Name'
+  (SELECT id FROM manufacturers WHERE normalized_key = 'manufacturer-key' LIMIT 1)
 )
 ON CONFLICT DO NOTHING;
 
--- 4. Map alias
+-- 5. Map alias
 UPDATE article_aliases
 SET article_id = (SELECT id FROM articles WHERE canonical_name = 'Found Product Name')
 WHERE raw_label = 'OCR_EXTRACTED_LABEL'
   AND supplier_id = (SELECT id FROM suppliers WHERE display_name = 'Supplier Name');
 
--- 5. Check progress
+-- 6. Check progress
 SELECT
   COUNT(*) as total_aliases,
   COUNT(article_id) as mapped,
@@ -377,7 +537,9 @@ FROM article_aliases;
 
 ## Related Files
 
-- `resources/db/models.edn` - Database schema for articles and article_aliases
-- `src/app/domain/backend/expenses/services/article_aliases.clj` - Alias service logic
-- `scripts/bb/expenses/list_unmapped_article_aliases.clj` - Extraction script
-- `scripts/bb/expenses/seed_manufacturer_aliases_from_articles.clj` - Manufacturer inference
+- `resources/db/domain/models.edn` - Domain schema for articles + taxonomy tables (manufacturers/categories/subcategories)
+- `src/app/domain/backend/expenses/services/articles.clj` - Article CRUD + alias normalization
+- `src/app/domain/backend/expenses/services/manufacturers.clj` - Manufacturer CRUD
+- `scripts/bb/expenses/list_unmapped_article_aliases.clj` - Print candidate aliases from receipt extracts
+- `scripts/bb/expenses/search_article_products.clj` - Helper to print aliases in a web-search-friendly format
+- `scripts/bb/expenses/spellcheck_article_canonical_names.clj` - Spellcheck `articles.canonical_name` and generate suggestions
