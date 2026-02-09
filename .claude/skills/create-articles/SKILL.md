@@ -15,6 +15,18 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 - You have OCR-extracted labels (raw_label) that need to be resolved to real products
 - Building product catalog from receipt data
 
+### How this fits the “resolve during extraction” approach
+
+Receipt extraction already creates `article_aliases` for each line item (when the label is valid). With the “resolve during extraction” approach, you typically want receipt pages to show canonical articles **as early as possible**.
+
+This skill is what makes that possible:
+
+- First, extraction gives you the backlog: `article_aliases` rows with `article_id IS NULL`.
+- Then you run this skill to create canonical `articles` (+ taxonomy) and set `article_aliases.article_id`.
+- After that, anything that renders a receipt/expense and joins through `article_aliases` can show canonical article info.
+
+**Recommendation (to avoid staleness):** persist the stable `article_aliases.id` on receipt-derived items (or keep the raw label + supplier_id) and derive the current `articles` mapping by joining `article_aliases.article_id` at read time. Only store an `article_id` “snapshot” on receipts if you also plan a backfill/update strategy when mappings change.
+
 This skill is also the right place to backfill/maintain the *taxonomy* tables used by articles:
 - `manufacturers` (canonical brands)
 - `categories` and `subcategories` (FK-driven categorization)
@@ -44,20 +56,17 @@ This skill is also the right place to backfill/maintain the *taxonomy* tables us
 Use PostgreSQL to query receipts and extract unique article aliases from OCR data.
 
 ```sql
--- Get all unique article aliases from receipt OCR data
-SELECT DISTINCT
-  rl.raw_label,
-  r.supplier_guess,
-  rl.supplier_id,
-  rl.id as alias_id
-FROM article_aliases rl
-JOIN receipts r ON r.supplier_alias_id = (
-  SELECT sa.id FROM supplier_aliases sa
-  WHERE sa.raw_label_normalized = r.supplier_guess
-  LIMIT 1
-)
-WHERE rl.article_id IS NULL
-ORDER BY rl.raw_label;
+-- List unmapped aliases (preferred: extraction already populates article_aliases)
+SELECT
+  aa.id AS alias_id,
+  aa.raw_label,
+  aa.raw_label_normalized,
+  aa.supplier_id,
+  s.display_name AS supplier
+FROM article_aliases aa
+LEFT JOIN suppliers s ON s.id = aa.supplier_id
+WHERE aa.article_id IS NULL
+ORDER BY s.display_name NULLS LAST, aa.raw_label;
 ```
 
 Alternative - query directly from receipts:

@@ -9,6 +9,31 @@ description: "Create canonical stores from unmapped store_aliases by inferring s
 
 Turn raw `store_aliases` (OCR / heuristic store labels) into canonical `stores`, and map `store_aliases.store_id` for all aliases where it can be inferred safely.
 
+## How this fits the “resolve during extraction” approach
+
+Receipt extraction already creates `store_aliases` and may be able to resolve a canonical store.
+
+With the “resolve during extraction” approach, this skill becomes something you run **as soon as you notice unmapped store aliases**, so that:
+
+- future extractions immediately resolve `store_aliases.store_id` (and optionally persist `receipts.store_id` if you choose to denormalize), and
+- the receipt review experience shows a canonical store early.
+
+**Recommendation (to avoid staleness):** keep `receipts.store_alias_id` as the durable link and derive the current canonical store via `store_aliases.store_id` when rendering receipts.
+
+If you *also* persist `receipts.store_id` for convenience/performance, you must keep it in sync (e.g., backfill/update receipts when an alias becomes mapped).
+
+Optional backfill query (only if you store `receipts.store_id`):
+
+```sql
+UPDATE receipts r
+SET store_id = sa.store_id,
+    updated_at = NOW()
+FROM store_aliases sa
+WHERE r.store_id IS NULL
+  AND r.store_alias_id = sa.id
+  AND sa.store_id IS NOT NULL;
+```
+
 ## Safety defaults
 
 - Prefer **dry-run** first.
