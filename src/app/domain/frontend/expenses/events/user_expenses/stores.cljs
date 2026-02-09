@@ -69,6 +69,45 @@
     (finish-entity-load db :stores error)))
 
 (rf/reg-event-fx
+  :user-expenses/create-store-modal
+  common-interceptors
+  (fn [{:keys [db]} [form-data on-success]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri endpoints/stores-endpoint
+                    :params (or form-data {})
+                    :on-success [:user-expenses/create-store-modal-success on-success]
+                    :on-failure [:user-expenses/create-store-modal-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/create-store-modal-success
+  common-interceptors
+  (fn [{:keys [db]} [on-success response]]
+    (let [store (:data response)
+          store-id (:id store)
+          highlight-id (some-> store-id str)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] false)
+             (assoc-in [:user-expenses :form :error] nil)
+             (cond-> highlight-id
+               (crud-success/track-recently-created :stores highlight-id)))
+       :dispatch-n [[:user-expenses/fetch-stores]]
+       :fx [(when on-success
+              [:dispatch-later {:ms 100
+                                :dispatch [:user-expenses/call-modal-callback on-success store]}])]})))
+
+(rf/reg-event-db
+  :user-expenses/create-store-modal-failure
+  common-interceptors
+  (fn [db [error]]
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+(rf/reg-event-fx
   :user-expenses/update-store-modal
   common-interceptors
   (fn [{:keys [db]} [store-id form-data on-success]]

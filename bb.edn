@@ -434,6 +434,14 @@
   {:doc "Run a Serper.dev (Google SERP) API query and print results.\n\nRequires env (source .env automatically if present):\n  - SERPER_API_KEY\n\nUsage:\n  bb serper-search \"<query>\" [--type web|news|images] [--num N] [--page N] [--gl CC] [--hl LL] [--location STR] [--tbs STR] [--autocorrect true|false] [--site example.com] [--format pretty|edn|json]",
    :task (apply shell "/bin/sh" "-c" "repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; cd \"$repo_root\" || exit 1; set -a; [ -f \"$repo_root/.env\" ] && . \"$repo_root/.env\"; set +a; exec bb scripts/bb/web/serper_search.clj \"$@\"" "--" *command-line-args*)},
 
+  group-aliases-by-brand
+  {:doc "Group unmapped article aliases by detected brand/product family.\n\nShows size tokens and supplier type (restaurant vs retail) to help spot variant\nconflicts BEFORE creating articles.\n\nUsage:\n  bb group-aliases-by-brand [dev|test] [--mapped] [--min-group N] [--json]",
+   :task (apply shell "bb" "scripts/bb/expenses/group_aliases_by_brand.clj" *command-line-args*)},
+
+  validate-article-mappings
+  {:doc "Validate existing article alias mappings for suspicious patterns.\n\nDetects size conflicts (different sizes mapped to same article),\nrestaurant/retail mix, and single-alias articles.\n\nUsage:\n  bb validate-article-mappings [dev|test] [--json] [--fix-suggestions]",
+   :task (apply shell "bb" "scripts/bb/expenses/validate_article_mappings.clj" *command-line-args*)},
+
   check-migrations
   {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]

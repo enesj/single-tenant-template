@@ -81,7 +81,8 @@
     {:put {:handler (user-expenses-supplier-aliases/update-supplier-alias-handler db)}}]
 
    ;; Stores (admin/owner only)
-   ["/stores" {:get {:handler (user-stores/list-stores-handler db)}}]
+   ["/stores" {:get {:handler (user-stores/list-stores-handler db)}
+               :post {:handler (user-stores/create-store-handler db)}}]
 
    ["/stores/batch" {:delete {:handler (user-stores/batch-delete-stores-handler db)}}]
 

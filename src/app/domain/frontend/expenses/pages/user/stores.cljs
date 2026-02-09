@@ -5,7 +5,8 @@
   (:require
     [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
-    [app.domain.frontend.expenses.components.user-power-forms :refer [user-store-edit-form-modal]]
+    [app.domain.frontend.expenses.components.user-power-forms :refer [user-store-add-form-modal
+                                                                      user-store-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
@@ -15,6 +16,12 @@
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
     app.domain.frontend.expenses.subs.user-expenses))
+
+(defn- render-add-form
+  [{:keys [on-success on-cancel]}]
+  ($ user-store-add-form-modal
+    {:on-success on-success
+     :on-cancel on-cancel}))
 
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
@@ -71,6 +78,8 @@
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
                        (fn []
+                         ;; Ensure suppliers are available for FK selects when adding a store.
+                         (rf/dispatch [:user-expenses/fetch-suppliers])
                          (rf/dispatch [:user-expenses/fetch-stores]))
                        [])]
     (use-effect
@@ -108,9 +117,11 @@
               :title "Stores"
               :form-display :modal
               :disallowed-action-mode :disable
-              :allow-add? false
+              :allow-add? can-manage?
               :allow-edit? can-manage?
               :allow-delete? can-manage?
+              :render-add-form render-add-form
               :render-edit-form render-edit-form
+              :on-add-success refresh-list
               :on-edit-success refresh-list
               :render-actions render-actions})))})))

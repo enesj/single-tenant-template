@@ -96,8 +96,8 @@
  :articles
  {:available-columns
   ["canonical_name"
-   "category"
-   "subcategory_id"
+   "category_name"
+   "subcategory_name"
    "manufacturer_display_name"
    "manufacturer_id"
    "link"
@@ -107,12 +107,14 @@
    "id"],
   :default-visible-columns
   ["canonical_name"
-   "subcategory_id"
+   "category_name"
+   "subcategory_name"
    "manufacturer_display_name"
    "created_at"],
   :filterable-columns
   ["canonical_name"
-   "subcategory_id"
+   "category_name"
+   "subcategory_name"
    "manufacturer_display_name"
    "link"
    "normalized_key"
@@ -120,7 +122,8 @@
    "updated_at"],
   :sortable-columns
   ["canonical_name"
-   "subcategory_id"
+   "category_name"
+   "subcategory_name"
    "manufacturer_display_name"
    "link"
    "normalized_key"
@@ -128,7 +131,9 @@
    "updated_at"],
   :always-visible ["canonical_name"],
   :computed-fields
-  {:manufacturer_display_name {:type "string", :label "Manufacturer"}},
+  {:manufacturer_display_name {:type "string", :label "Manufacturer"}
+   :category_name {:type "string", :label "Category"}
+   :subcategory_name {:type "string", :label "Subcategory"}},
   :column-config {}},
  :payer-types
  {:available-columns

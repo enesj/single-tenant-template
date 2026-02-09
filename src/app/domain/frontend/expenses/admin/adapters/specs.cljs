@@ -60,7 +60,9 @@
 (def articles-entity-spec
   {:id :articles
    :fields [{:id :canonical-name :label "Name" :type :text}
-            {:id :category :label "Category" :type :text}
+            {:id :category-name :label "Category" :type :text}
+            {:id :subcategory-name :label "Subcategory" :type :text}
+            {:id :manufacturer-display-name :label "Manufacturer" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
 (def article-aliases-entity-spec

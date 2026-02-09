@@ -370,6 +370,46 @@
                                     on-success]))
          :button-text "Save Alias"}))))
 
+(def ^:private store-add-form-spec
+  [{:id :supplier_id
+    :type :select
+    :label "Supplier"
+    :required true
+    :options ["suppliers" "display_name"]}
+   {:id :display_name
+    :type :text
+    :label "Display name"
+    :required true
+    :placeholder "e.g. Mega Market"}
+   {:id :address
+    :type :textarea
+    :label "Address"
+    :required false
+    :placeholder "Optional"}
+   {:id :place_id
+    :type :text
+    :label "Place ID"
+    :required false
+    :placeholder "Optional"}])
+
+(defui user-store-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "stores"
+         :entity-spec store-add-form-spec
+         :editing false
+         :initial-values {}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-store-modal values on-success]))
+         :button-text "Save Store"}))))
+
 (def ^:private store-edit-form-spec
   [{:id :display_name
     :type :text

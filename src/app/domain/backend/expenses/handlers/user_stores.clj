@@ -11,6 +11,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.stores :as stores]
     [app.shared.adapters.database :as shared-db]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 ;; -----------------------------------------------------------------------------
@@ -65,6 +66,54 @@
           (catch Exception e
             (log/error e "Failed to list stores" {:query-params (:query-params request)})
             (h/json-response {:error "Failed to list stores"} 500))))
+      (h/unauthorized-response))))
+
+(defn create-store-handler
+  "Create a store (admin/owner only).
+
+  Expects JSON body like:
+  {:supplier_id \"<uuid>\"
+   :display_name \"Mega Market\"
+   :address \"...\"     ;; optional
+   :place_id \"...\"}   ;; optional"
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (ensure-admin-or-owner request)]
+        forbidden
+        (try
+          (let [body (h/read-body-params request)
+                supplier-id-raw (h/get-param body :supplier_id)
+                supplier-id (h/try-parse-uuid supplier-id-raw)
+                display-name (some-> (h/get-param body :display_name) str str/trim)
+                address (some-> (h/get-param body :address) str str/trim)
+                place-id (some-> (h/get-param body :place_id) str str/trim)
+                address* (when-not (str/blank? address) address)
+                place-id* (when-not (str/blank? place-id) place-id)]
+            (cond
+              (nil? supplier-id-raw)
+              (h/json-response {:error "supplier_id is required"} 400)
+
+              (nil? supplier-id)
+              (h/json-response {:error "Invalid supplier id"} 400)
+
+              (str/blank? display-name)
+              (h/json-response {:error "display_name is required"} 400)
+
+              :else
+              (let [store (-> (stores/find-or-create-store! db {:supplier_id supplier-id
+                                                                :display_name display-name
+                                                                :address address*
+                                                                :place_id place-id*})
+                            to-app)]
+                (h/json-response {:data store} 201))))
+          (catch clojure.lang.ExceptionInfo e
+            (log/warn "Validation error creating store" {:error (ex-message e)
+                                                         :data (ex-data e)})
+            (h/json-response {:error (ex-message e)} 400))
+          (catch Exception e
+            (log/error e "Failed to create store" {:message (.getMessage e)})
+            (h/json-response {:error "Failed to create store"} 500))))
       (h/unauthorized-response))))
 
 (defn update-store-handler

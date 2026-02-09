@@ -530,6 +530,35 @@ FROM article_aliases;
 - Keep canonical names descriptive but consistent
 - Include manufacturer when known, NULL for generic items
 
+### Size & Variant Differentiation (critical)
+- **Each distinct size/volume/weight is a separate article.** Never map aliases with different sizes to the same article (e.g. Coca-Cola 0.25L, 1.25L, 2L must be three articles).
+- Extract size clues from the alias (`2L`, `0,25`, `1 25L`, `025`, `500G`, etc.) and from the supplier context.
+- **Supplier type matters:** a restaurant/fast-food supplier (e.g. "ČEVABDŽINICA") selling "Coca cola" almost certainly means a single-serve portion — create a separate article like `coca-cola-restoran` or `coca-cola-033l` rather than mapping to a retail bottle.
+- When an alias has no size info **and** the supplier is a retailer, prefer the most common retail size for that product. When in doubt, create a generic variant (no size in the key) rather than force-mapping to a specific size.
+- Before mapping a batch of aliases that share a brand, list them all and compare sizes first.
+
+#### Preflight helper: group aliases by brand (recommended)
+
+Use the helper script `scripts/bb/expenses/group_aliases_by_brand.clj` to pre-group aliases by detected brand/product family and extract size tokens.
+
+This is specifically designed to prevent size/variant conflation (e.g. mapping Coca-Cola 0.25L + 1.25L + 2L to a single canonical article).
+
+Usage examples:
+
+- Show *unmapped only* (default):
+  - `bb group-aliases-by-brand dev`
+- Include already-mapped aliases too:
+  - `bb group-aliases-by-brand dev --mapped`
+- Focus on clusters (e.g. only groups with 2+ aliases):
+  - `bb group-aliases-by-brand dev --min-group 2`
+
+How to interpret output:
+
+- **VARIANT RISK** groups are the ones to handle first.
+  - Multiple detected sizes (e.g. `0.25l`, `1.25l`, `2l`) => create separate articles per size.
+  - Mixed supplier types (restaurant + retail) => likely separate “serving” vs “retail-pack” articles.
+- **Single-variant** groups are usually safe to map directly (still sanity-check manufacturer and product type).
+
 ### Quality Assurance
 - Verify web search results are actual products, not similar items
 - Check manufacturer names are correctly spelled
@@ -538,7 +567,9 @@ FROM article_aliases;
 
 ### Common Issues
 - **Supplier name mismatch**: Suppliers may have different display names in DB vs receipts
-- **Multiple products per alias**: One OCR label may match multiple product variants - choose the most common
+- **Multiple products per alias**: One OCR label may match multiple product variants — choose the most common **but create separate articles when sizes differ** (see "Size & Variant Differentiation" above)
+- **Same brand, different sizes**: Group aliases by brand first; inspect size tokens (`0,25`, `1 25L`, `2L PET`, etc.) before inserting articles. Creating one article per size avoids costly remapping later.
+- **Restaurant vs retail**: Aliases from restaurants/cafés/fast-food often refer to single-serve or on-tap portions, not retail packs. Create a dedicated `(restoran)` or serving-size article.
 - **No web results**: Some products may be local/private label - create generic article
 - **OCR noise**: Filter out receipt metadata, discount info, totals
 
@@ -551,4 +582,5 @@ FROM article_aliases;
 - `src/app/domain/backend/expenses/services/manufacturers.clj` - Manufacturer CRUD
 - `scripts/bb/expenses/list_unmapped_article_aliases.clj` - Print candidate aliases from receipt extracts
 - `scripts/bb/expenses/search_article_products.clj` - Helper to print aliases in a web-search-friendly format
+- `scripts/bb/expenses/group_aliases_by_brand.clj` - Preflight grouping + size extraction to prevent size/variant mapping mistakes
 - `scripts/bb/expenses/spellcheck_article_canonical_names.clj` - Spellcheck `articles.canonical_name` and generate suggestions

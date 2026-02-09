@@ -54,13 +54,51 @@
                  :returning [:*]}]
     (jdbc/execute-one! db (sql/format sql-map) {:builder-fn rs/as-unqualified-lower-maps})))
 
+(defn get-article-by-normalized-key
+  "Fetch an article by its `normalized_key`."
+  [db normalized-key]
+  (when (seq (some-> normalized-key str str/trim))
+    (jdbc/execute-one!
+      db
+      (sql/format {:select [:*]
+                   :from [:articles]
+                   :where [:= :normalized_key normalized-key]
+                   :limit 1})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn find-or-create-article-by-canonical-name!
+  "Find or create an article based on the normalized key derived from `canonical-name`.
+
+  This is safe under concurrency because the `articles.normalized_key` unique index
+  enforces deduplication.
+
+  Notes:
+  - We do not overwrite existing canonical data if the row already exists.
+  - When a unique violation happens, we fetch and return the existing row."
+  [db canonical-name]
+  (let [canonical-name* (some-> canonical-name str str/trim not-empty)]
+    (when-not canonical-name*
+      (throw (ex-info "canonical_name is required" {:canonical-name canonical-name})))
+    (let [normalized (normalize-article-key canonical-name*)]
+      (try
+        (create-article! db {:canonical_name canonical-name*})
+        (catch org.postgresql.util.PSQLException e
+          (if (= "23505" (.getSQLState e))
+            (or (get-article-by-normalized-key db normalized)
+              (throw e))
+            (throw e)))))))
+
 (defn get-article
   [db id]
   (jdbc/execute-one! db
     (sql/format {:select [[:a.*]
-                          [:m.display_name :manufacturer_display_name]]
+                          [:m.display_name :manufacturer_display_name]
+                          [:s.name :subcategory_name]
+                          [:c.name :category_name]]
                  :from [[:articles :a]]
-                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                             [:subcategories :s] [:= :s.id :a.subcategory_id]
+                             [:categories :c] [:= :c.id :s.category_id]]
                  :where [:= :a.id id]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
@@ -69,9 +107,13 @@
   [db {:keys [search limit offset order-by order-dir]
        :or {limit 50 offset 0 order-by :canonical_name order-dir :asc}}]
   (let [base {:select [[:a.*]
-                       [:m.display_name :manufacturer_display_name]]
+                       [:m.display_name :manufacturer_display_name]
+                       [:s.name :subcategory_name]
+                       [:c.name :category_name]]
               :from [[:articles :a]]
-              :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+              :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                          [:subcategories :s] [:= :s.id :a.subcategory_id]
+                          [:categories :c] [:= :c.id :s.category_id]]
               :order-by [[(keyword "a" (name order-by)) order-dir]]
               :limit limit
               :offset offset}

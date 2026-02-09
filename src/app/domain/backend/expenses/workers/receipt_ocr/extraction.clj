@@ -430,11 +430,58 @@
              :source :resolved}))))))
 
 (defn- auto-create-aliases!
-  [db supplier-id extraction]
-  (when (and (map? extraction) (sequential? (:items extraction)))
-    (doseq [{:keys [raw_label] :as _item} (:items extraction)]
-      (when (valid-alias-label? raw_label)
-        (aliases/find-or-create-alias! db supplier-id (str/trim (str raw_label)))))))
+  "Best-effort alias creation for extracted line items.
+
+  Returns a per-item snapshot vector aligned with `extraction.items`:
+  [{:raw_label <string|nil>
+    :article_alias_id <uuid|nil>
+    :article_id <uuid|nil>}
+   ...]
+
+  When `opts.auto-create-articles?` is true, this will also:
+  - create (or reuse) a canonical article for each alias that is still unmapped
+  - map the alias to that article
+
+  Never throws; per-item failures are logged and produce nil ids."
+  [db supplier-id extraction opts]
+  (let [auto-create-articles? (true? (:auto-create-articles? opts))]
+    (when (and (map? extraction) (sequential? (:items extraction)))
+      (mapv
+        (fn [{:keys [raw_label] :as _item}]
+          (let [raw-label* (some-> raw_label str str/trim)]
+            (if-not (valid-alias-label? raw-label*)
+              {:raw_label raw-label*
+               :article_alias_id nil
+               :article_id nil}
+              (try
+                (let [alias-row (aliases/find-or-create-alias! db supplier-id raw-label*)
+                      alias-id (:id alias-row)
+                      existing-article-id (:article_id alias-row)
+                      article-id
+                      (cond
+                        existing-article-id existing-article-id
+
+                        (and auto-create-articles? alias-id)
+                        (let [article (articles/find-or-create-article-by-canonical-name! db raw-label*)
+                              article-id (:id article)]
+                          (when article-id
+                            ;; Only map when the alias is still unmapped.
+                            (aliases/map-alias-to-article! db alias-id article-id))
+                          article-id)
+
+                        :else nil)]
+                  {:raw_label raw-label*
+                   :article_alias_id alias-id
+                   :article_id article-id})
+                (catch Exception e
+                  (log/warn e "Failed to auto-create article alias/article from receipt extraction item"
+                    {:supplier-id supplier-id
+                     :raw_label raw-label*
+                     :auto-create-articles? auto-create-articles?})
+                  {:raw_label raw-label*
+                   :article_alias_id nil
+                   :article_id nil})))))
+        (:items extraction)))))
 
 (defn- resolve-payer-id
   [db {:keys [payer_id user_id]}]
@@ -611,7 +658,7 @@
             {:supplier-id (aliases/get-unknown-supplier-id db)
              :supplier-alias-id nil
              :source :unknown}))
-        {:keys [store-id store-alias-id store-guess]}
+        store-res
         (if (= :unknown source)
           {:store-id nil
            :store-alias-id nil
@@ -628,18 +675,42 @@
                :store-alias-id nil
                :store-guess nil
                :source :unknown})))
+        {:keys [store-id store-alias-id store-guess] :as store-res*}
+        store-res
+        store-source (:source store-res*)
         status (if (and valid-shape? guesses (not (review-required? guesses)))
                  "extracted"
                  "review_required")
         lines-total-mismatch (and (= status "extracted")
                                (lines-total-mismatch? (:items extraction) (:total_amount_guess guesses)))
         llm-refine (:llm_refine extract-result)
+        item-aliases-snapshot (if (= :unknown source)
+                                (when (and (map? extraction) (sequential? (:items extraction)))
+                                  (mapv (fn [{:keys [raw_label] :as _item}]
+                                          {:raw_label (some-> raw_label str str/trim)
+                                           :article_alias_id nil})
+                                    (:items extraction)))
+                                (try
+                                  (auto-create-aliases! db supplier-id extraction opts)
+                                  (catch Exception e
+                                    (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})
+                                    nil)))
+        resolution-snapshot {:supplier {:supplier_id supplier-id
+                                        :supplier_alias_id supplier-alias-id
+                                        :supplier_guess supplier-guess
+                                        :source source}
+                             :store {:store_id store-id
+                                     :store_alias_id store-alias-id
+                                     :store_guess store-guess
+                                     :source store-source}
+                             :items item-aliases-snapshot}
         raw-extract-json (cond-> {:provider "mistral"
                                   :received_at (:received-at extract-result)
                                   :model (:model extract-result)
                                   :response (:raw extract-result)
                                   :extraction extraction
-                                  :valid_shape? valid-shape?}
+                                  :valid_shape? valid-shape?
+                                  :resolution_snapshot resolution-snapshot}
                            (map? llm-refine)
                            (assoc :llm_refine (dissoc llm-refine :extraction))
 
@@ -662,11 +733,7 @@
         (when store-guess {:store_guess store-guess})
         (when store-alias-id {:store_alias_id store-alias-id})))
     (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
-    (when-not (= :unknown source)
-      (try
-        (auto-create-aliases! db supplier-id extraction)
-        (catch Exception e
-          (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id}))))
+
     (let [auto-post? (and (not (:defer-refine? opts))
                        (get opts :auto-post-after-upload? true))
           auto-res (when (and (= status "extracted") auto-post?)
