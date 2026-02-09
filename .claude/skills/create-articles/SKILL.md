@@ -33,10 +33,8 @@ This skill is also the right place to backfill/maintain the *taxonomy* tables us
 
 ## Prerequisites
 - PostgreSQL MCP server must be available
-- Web search priority:
-  1. Preferred: use the agent's built-in web search/browsing tools to find product pages
-  2. Optional fallback: use `bb serper-search` **only** when `ENABLE_SERPER_SEARCH=true` (in `.env`)
-- If Serper fallback is enabled: Serper.dev Search API must be configured via `SERPER_API_KEY` (typically sourced from `.env`)
+- Web search: use `bb serper-search` (`scripts/bb/web/serper_search.clj`) **only** when `ENABLE_SERPER_SEARCH=true` (in `.env`). When disabled, skip web search entirely and create best-effort generic articles from the OCR labels.
+- If Serper is enabled: Serper.dev Search API must be configured via `SERPER_API_KEY` (typically sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
@@ -90,31 +88,45 @@ ORDER BY raw_label;
 
 ## Step 2: Web Search for Products
 
-Try in this order:
+Web search uses **only** `bb serper-search` (`scripts/bb/web/serper_search.clj`). If `ENABLE_SERPER_SEARCH` is not `true`, skip this step entirely and create best-effort generic articles from the OCR labels (see Step 6).
 
-1) **Agent web search (preferred)**
-- Use the agent's web search to find 1-3 high-quality product pages.
-- Then use a web reader / `fetch_webpage` to extract:
-  - canonical name (with weight/size)
-  - manufacturer (brand)
-  - category + subcategory (when reasonably confident)
-  - product page link
+### Check if Serper is enabled
 
-2) **Serper CLI fallback (only if enabled)**
-- Only if `ENABLE_SERPER_SEARCH=true`, run `bb serper-search` to get candidate pages.
-
-### Serper example
-```clojure
-;; Only when ENABLE_SERPER_SEARCH=true
-;;
-;; Use the bb task `serper-search` (Serper.dev Google SERP API)
-;;
-;; Example:
-;;   bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
-;;
-;; Tip: include `--site` to focus results:
-;;   bb serper-search "RONDINI keks" --site vocar.ba --gl BA --num 5
+Before searching, verify the env var is set:
+```bash
+# Check .env for ENABLE_SERPER_SEARCH
+grep ENABLE_SERPER_SEARCH .env
 ```
+
+If not enabled, skip to Step 3 and create generic articles without web-sourced metadata.
+
+### Serper search usage
+
+When enabled, use `bb serper-search` to find product info:
+
+```bash
+# Basic search
+bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
+
+# Focus on a specific retailer site
+bb serper-search "RONDINI keks" --site vocar.ba --gl BA --num 5
+
+# Get machine-readable output
+bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format edn
+```
+
+From the search results, extract:
+- canonical name (with weight/size)
+- manufacturer (brand)
+- category + subcategory (when reasonably confident)
+- product page link
+
+### Tips for effective searches
+- Include supplier name in queries for better results
+- Use local language (Bosnian/Croatian/Serbian) for local products
+- Use `--site` to target known retailers (e.g. `vocar.ba`, `konzum.ba`)
+- Use `--gl BA --hl bs` for Bosnia-specific results
+- Use `--format edn` for structured output when processing programmatically
 
 ---
 
@@ -477,7 +489,9 @@ WHERE raw_extract_json IS NOT NULL
 GROUP BY raw_label, supplier_guess
 LIMIT 10;
 
--- 2. For each alias, web search: "{raw_label}" {supplier} Bosnia
+-- 2. For each alias, search with bb serper-search (only if ENABLE_SERPER_SEARCH=true):
+--    bb serper-search "{raw_label}" --gl BA --hl bs --num 5 --format pretty
+--    If Serper is not enabled, skip to step 4 and create generic articles.
 
 -- 3. After web search, upsert taxonomy (manufacturer/category/subcategory)
 --    then insert article referencing manufacturer_id + subcategory_id
@@ -518,10 +532,12 @@ FROM article_aliases;
 
 ## Tips & Best Practices
 
-### Web Search Tips
+### Web Search Tips (Serper only)
+- Only search when `ENABLE_SERPER_SEARCH=true`; otherwise create generic articles
 - Include supplier name in queries for better results
 - Use local language (Bosnian/Croatian/Serbian) for local products
-- Look for official manufacturer pages or major retailers
+- Use `--site` to focus on known retailers or manufacturer sites
+- Use `--gl BA --hl bs` for Bosnia-specific results
 - Check multiple sources to verify product details
 
 ### Database Tips
@@ -580,6 +596,7 @@ How to interpret output:
 - `resources/db/domain/models.edn` - Domain schema for articles + taxonomy tables (manufacturers/categories/subcategories)
 - `src/app/domain/backend/expenses/services/articles.clj` - Article CRUD + alias normalization
 - `src/app/domain/backend/expenses/services/manufacturers.clj` - Manufacturer CRUD
+- `scripts/bb/web/serper_search.clj` - Serper.dev web search helper (the only web search tool for this skill)
 - `scripts/bb/expenses/list_unmapped_article_aliases.clj` - Print candidate aliases from receipt extracts
 - `scripts/bb/expenses/search_article_products.clj` - Helper to print aliases in a web-search-friendly format
 - `scripts/bb/expenses/group_aliases_by_brand.clj` - Preflight grouping + size extraction to prevent size/variant mapping mistakes
