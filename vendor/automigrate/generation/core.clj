@@ -19,7 +19,6 @@
     [next.jdbc :as jdbc]
     [slingshot.slingshot :refer [throw+ try+]]))
 
-
 (def ^:private RESOURCES-DIR "resources")
 (def ^:private MODELS-FILE "db/models.edn")
 (def ^:private MIGRATIONS-DIR "db/migrations")
@@ -32,22 +31,38 @@
 (def ^:private FORWARD-DIRECTION :forward)
 (def ^:private BACKWARD-DIRECTION :backward)
 
+(def ^:dynamic *verbose-output?*
+  "When true, print extra debugging output while generating migrations.
+
+  Keep this off by default to avoid printing huge migrations to stdout.
+
+  You can enable it in a REPL via:
+
+    (binding [automigrate.generation.core/*verbose-output?* true]
+      (automigrate.core/make ...))"
+  false)
+
+(defn- vprintln
+  [& xs]
+  (when *verbose-output?*
+    (apply println xs)))
+
 (defn- read-models
   "Read and validate models from file or hierarchical structure."
   [models-file]
-  (println "Read models" models-file (io/resource models-file))
+  (vprintln "Read models" models-file)
   (if (= models-file MODELS-FILE)
     ;; Check if consolidated models file exists first
     (if (io/resource models-file)
       (do
-        (println "Using consolidated models file:" models-file)
+        (vprintln "Using consolidated models file:" models-file)
         (->> models-file
           (io/resource)
           (file-util/read-edn)
           (models/->internal-models)))
       ;; Fallback to hierarchical structure if consolidated doesn't exist
       (let [db-path "db"]
-        (println "Using hierarchical model structure from" db-path)
+        (vprintln "Using hierarchical model structure from" db-path)
         (files/read-models-hierarchical db-path)))
     ;; Fallback to single file for custom paths
     (->> models-file
@@ -130,11 +145,11 @@
     (if (and (empty? auto-migration-files) (not-empty new-schema))
       ;; Force creation of initial schema migration by using empty old schema
       (do
-        (println "No .edn migration files found but models exist - forcing initial schema migration")
-        (println "New schema contains" (count new-schema) "models:" (keys new-schema))
+        (vprintln "No .edn migration files found but models exist - forcing initial schema migration")
+        (vprintln "New schema contains" (count new-schema) "models" (count (keys new-schema)))
         (let [result (diffing/make-migration* {} new-schema)]
-          (println "make-migration* result:" (count result) "actions")
-          (println "First few actions:" (take 3 result))
+          (vprintln "make-migration* result:" (count result) "actions")
+          (vprintln "First few actions:" (take 3 result))
           (-> result
             (flatten)
             (seq))))
@@ -166,7 +181,7 @@
 
 (defmethod make-migration :default
   ; Make new migration based on models definition automatically.
-  [{:keys [models-file migrations-dir resources-dir :generate-all]
+  [{:keys [models-file migrations-dir resources-dir]
     :or {models-file MODELS-FILE
          migrations-dir MIGRATIONS-DIR
          resources-dir RESOURCES-DIR}
@@ -177,14 +192,14 @@
     ; Create migrations dir if it doesn't exist
     (create-migrations-dir!
       (file-util/join-path resources-dir migrations-dir))
-    (println "Make migration" [models-file migrations-dir resources-dir])
+    (vprintln "Make migration" [models-file migrations-dir resources-dir])
 
     ;; First, create schema migration if there are changes
     (let [schema-created?
           (if-let [next-migration (make-next-migration {:models-file models-file
                                                         :migrations-dir migrations-dir})]
             (let [next-migration-name (get-next-migration-name next-migration custom-migration-name)
-                  _ (println "next-migration" next-migration next-migration-name)
+                  _ (vprintln "next migration:" next-migration-name "actions:" (count next-migration))
                   migration-file-name-full-path (get-next-migration-file-path
                                                   {:migration-type AUTO-MIGRATION-EXT
                                                    :resources-dir resources-dir

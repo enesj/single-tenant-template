@@ -67,6 +67,9 @@ scripts/bb/code_quality/check_unused_reframe/unused_keywords.edn
 # Clojure MCP scratch pad
 .clojure-mcp/scratch_pad.edn
 
+# Migrations temp artifacts
+resources/db/models_processed.edn
+
 # Temporary dev watcher smoke tests
 dev/__watch_smoke_test__.clj
 

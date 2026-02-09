@@ -1,52 +1,23 @@
 (ns automigrate.schema
   "Module for generating db schema from migrations."
   (:require
-   [automigrate.actions :as actions]
-   [automigrate.models :as models]
-   [automigrate.util.file :as file-util]
-   [automigrate.util.map :as map-util]
-   [automigrate.util.model :as model-util]
-   [automigrate.util.spec :as spec-util]
-   [clojure.java.io :as io]))
+    [automigrate.actions :as actions]
+    [automigrate.models :as models]
+    [automigrate.util.file :as file-util]
+    [automigrate.util.map :as map-util]
+    [automigrate.util.model :as model-util]
+    [automigrate.util.spec :as spec-util]
+    [clojure.java.io :as io]))
 
 (defn- load-migrations-from-files
   [migrations-files]
-  (println "🐛 DEBUG SCHEMA 1: load-migrations-from-files called with" (count migrations-files) "files")
-  (println "🐛 DEBUG SCHEMA 2: files:" migrations-files)
-  (try
-    (let [result (map (fn [file-ref]
-                        (println "🐛 DEBUG SCHEMA 3: processing file-ref:" file-ref)
-                        (try
-                          (if (string? file-ref)
-                            (let [resource (io/resource file-ref)
-                                  _ (println "🐛 DEBUG SCHEMA 4: got resource:" resource)]
-                              (if resource
-                                (do
-                                  (println "🐛 DEBUG SCHEMA 5: reading EDN from resource")
-                                  (file-util/read-edn resource))
-                                (do
-                                  (println "🐛 DEBUG SCHEMA 6: resource not found, returning empty vector")
-                                  [])))
-                            (do
-                              (println "🐛 DEBUG SCHEMA 7: reading EDN from file-ref directly")
-                              (file-util/read-edn file-ref)))
-                          (catch Exception e
-                            (println "🐛 DEBUG SCHEMA 8: Exception processing file-ref:" file-ref)
-                            (println "  Exception type:" (type e))
-                            (println "  Exception message:" (.getMessage e))
-                            (println "  Stack trace:")
-                            (.printStackTrace e)
-                            (throw e))))
-                   migrations-files)]
-      (println "🐛 DEBUG SCHEMA 9: load-migrations-from-files completed successfully")
-      result)
-    (catch Exception e
-      (println "🐛 DEBUG SCHEMA 10: Exception in load-migrations-from-files:")
-      (println "  Exception type:" (type e))
-      (println "  Exception message:" (.getMessage e))
-      (println "  Stack trace:")
-      (.printStackTrace e)
-      (throw e))))
+  (map (fn [file-ref]
+         (if (string? file-ref)
+           (if-let [resource (io/resource file-ref)]
+             (file-util/read-edn resource)
+             [])
+           (file-util/read-edn file-ref)))
+    migrations-files))
 
 (defmulti apply-action-to-schema
   "Apply migrating action to schema in memory to reproduce current db state."
@@ -131,8 +102,7 @@
 
 (defn- actions->internal-models
   [actions]
-  ; Throws spec exception if not valid.
-  (println "🐛 actions->internal-models:" actions)
+  ;; Throws spec exception if not valid.
   (actions/validate-actions! actions)
   (->> actions
     (reduce apply-action-to-schema {})
@@ -141,28 +111,5 @@
 (defn current-db-schema
   "Return map of models derived from existing migrations."
   [migrations-files]
-  (println "🐛 DEBUG SCHEMA 11: current-db-schema called with" (count migrations-files) "files")
-  (try
-    (let [_ (println "🐛 DEBUG SCHEMA 12: loading migrations from files")
-          actions (flatten (load-migrations-from-files migrations-files))
-          _ (println "🐛 DEBUG SCHEMA 13: got" (count actions) "actions")
-          _ (println "🐛 DEBUG SCHEMA 14: converting actions to internal models")]
-      (println "🐛 DEBUG SCHEMA 15: calling actions->internal-models")
-      (try
-        (let [result (actions->internal-models actions)]
-          (println "🐛 DEBUG SCHEMA 16: actions->internal-models completed successfully")
-          result)
-        (catch Exception e
-          (println "🐛 DEBUG SCHEMA 17: Exception in actions->internal-models:")
-          (println "  Exception type:" (type e))
-          (println "  Exception message:" (.getMessage e))
-          (println "  Stack trace:")
-          (.printStackTrace e)
-          (throw e))))
-    (catch Exception e
-      (println "🐛 DEBUG SCHEMA 18: Exception in current-db-schema:")
-      (println "  Exception type:" (type e))
-      (println "  Exception message:" (.getMessage e))
-      (println "  Stack trace:")
-      (.printStackTrace e)
-      (throw e))))
+  (let [actions (flatten (load-migrations-from-files migrations-files))]
+    (actions->internal-models actions)))

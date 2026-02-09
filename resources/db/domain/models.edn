@@ -13,8 +13,8 @@
                       [:normalized_key [:varchar 255] {:null false}]
                       [:address :text]
                       [:archived_at :timestamptz]
-                      [:created_at :timestamptz {:default "NOW()"}]
-                      [:updated_at :timestamptz {:default "NOW()"}]]
+                      [:created_at :timestamptz {:default [:now]}]
+                      [:updated_at :timestamptz {:default [:now]}]]
              :indexes [[:idx_suppliers_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
@@ -28,8 +28,8 @@
                    [:address :text]
                    [:place_id :text]
                    [:archived_at :timestamptz]
-                   [:created_at :timestamptz {:default "NOW()"}]
-                   [:updated_at :timestamptz {:default "NOW()"}]]
+                   [:created_at :timestamptz {:default [:now]}]
+                   [:updated_at :timestamptz {:default [:now]}]]
           :indexes [[:idx_stores_supplier :btree {:fields [:supplier_id]}]
                     [:idx_stores_supplier_normalized_key
                      :btree
@@ -48,8 +48,8 @@
                           ;; NULL = unmapped
                           [:store_id :uuid {:foreign-key :stores/id :on-delete :set-null}]
                           [:confidence :integer {:default 100}]
-                          [:created_at :timestamptz {:default "NOW()"}]
-                          [:updated_at :timestamptz {:default "NOW()"}]]
+                          [:created_at :timestamptz {:default [:now]}]
+                          [:updated_at :timestamptz {:default [:now]}]]
                  :indexes [[:idx_store_aliases_raw_label_normalized
                             :btree
                             {:fields [:raw_label_normalized] :unique true}]
@@ -69,8 +69,8 @@
                              ;; NULL = unmapped
                              [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :set-null}]
                              [:confidence :integer {:default 100}]
-                             [:created_at :timestamptz {:default "NOW()"}]
-                             [:updated_at :timestamptz {:default "NOW()"}]]
+                             [:created_at :timestamptz {:default [:now]}]
+                             [:updated_at :timestamptz {:default [:now]}]]
                     :indexes [[:idx_supplier_aliases_raw_label_normalized
                                :btree
                                {:fields [:raw_label_normalized] :unique true}]
@@ -87,8 +87,8 @@
                    [:label [:varchar 255] {:null false}]
                    [:last4 [:varchar 4]]
                    [:is_default :boolean {:default false}]
-                   [:created_at :timestamptz {:default "NOW()"}]
-                   [:updated_at :timestamptz {:default "NOW()"}]]
+                   [:created_at :timestamptz {:default [:now]}]
+                   [:updated_at :timestamptz {:default [:now]}]]
           :indexes [[:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]}
 
  ;; ----------------------------------------------------------------------------
@@ -98,8 +98,8 @@
  :payer_types {:fields [[:id :uuid {:primary-key true}]
                         [:label [:varchar 255] {:null false}]
                         [:is_default :boolean {:null false :default false}]
-                        [:created_at :timestamptz {:default "NOW()"}]
-                        [:updated_at :timestamptz {:default "NOW()"}]]
+                        [:created_at :timestamptz {:default [:now]}]
+                        [:updated_at :timestamptz {:default [:now]}]]
                :indexes [[:idx_payer_types_label :btree {:fields [:label] :unique true}]
                          [:uniq_payer_types_default :btree {:fields [:is_default]
                                                             :unique true
@@ -132,8 +132,8 @@
                      [:error_details :jsonb]
                      [:retry_count :integer {:default 0}]
                      [:expense_id :uuid]
-                     [:created_at :timestamptz {:default "NOW()"}]
-                     [:updated_at :timestamptz {:default "NOW()"}]]
+                     [:created_at :timestamptz {:default [:now]}]
+                     [:updated_at :timestamptz {:default [:now]}]]
             :types [[:receipt-status :enum {:choices ["uploaded" "parsing" "parsed"
                                                       "extracting" "extracted" "review_required"
                                                       "approved" "posted" "failed"]}]]
@@ -160,8 +160,8 @@
                      [:notes :text]
                      [:is_posted :boolean {:default true :null false}]
                      [:deleted_at :timestamptz]
-                     [:created_at :timestamptz {:default "NOW()"}]
-                     [:updated_at :timestamptz {:default "NOW()"}]]
+                     [:created_at :timestamptz {:default [:now]}]
+                     [:updated_at :timestamptz {:default [:now]}]]
             :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]
             :indexes [[:idx_expenses_user :btree {:fields [:user_id]}]
                       [:idx_expenses_store :btree {:fields [:store_id]}]
@@ -183,8 +183,8 @@
                                   [:auto_post_after_upload_enabled :boolean {:null false :default false}]
                                   [:receipt_refine_enabled :boolean {:null false :default false}]
                                   [:receipt_ocr_provider :text {:null false :default "mistral"}]
-                                  [:created_at :timestamptz {:default "NOW()"}]
-                                  [:updated_at :timestamptz {:default "NOW()"}]]}
+                                  [:created_at :timestamptz {:default [:now]}]
+                                  [:updated_at :timestamptz {:default [:now]}]]}
 
  ;; ----------------------------------------------------------------------------
  ;; Expense Items (line items on receipts)
@@ -197,8 +197,8 @@
  :raw_labels {:fields [[:id :uuid {:primary-key true}]
                        [:raw_label :text {:null false}]
                        [:normalized_key [:varchar 255] {:null false}]
-                       [:created_at :timestamptz {:default "NOW()"}]
-                       [:updated_at :timestamptz {:default "NOW()"}]]
+                       [:created_at :timestamptz {:default [:now]}]
+                       [:updated_at :timestamptz {:default [:now]}]]
               :indexes [[:idx_raw_labels_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
 
  :expense_items {:fields [[:id :uuid {:primary-key true}]
@@ -214,7 +214,7 @@
                           [:unit_price [:decimal 12 2]]
                           [:line_total [:decimal 12 2] {:null false}]
                           [:deleted_at :timestamptz]
-                          [:created_at :timestamptz {:default "NOW()"}]]
+                          [:created_at :timestamptz {:default [:now]}]]
                  :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
                            [:idx_expense_items_article :btree {:fields [:article_id]}]
                            [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]
@@ -227,8 +227,8 @@
  :manufacturers {:fields [[:id :uuid {:primary-key true}]
                           [:display_name [:varchar 255] {:null false}]
                           [:normalized_key [:varchar 255] {:null false}]
-                          [:created_at :timestamptz {:default "NOW()"}]
-                          [:updated_at :timestamptz {:default "NOW()"}]]
+                          [:created_at :timestamptz {:default [:now]}]
+                          [:updated_at :timestamptz {:default [:now]}]]
                  :indexes [[:idx_manufacturers_normalized_key
                             :btree
                             {:fields [:normalized_key] :unique true}]
@@ -243,8 +243,8 @@
  :categories {:fields [[:id :uuid {:primary-key true}]
                        [:name [:varchar 255] {:null false}]
                        [:description :text]
-                       [:created_at :timestamptz {:default "NOW()"}]
-                       [:updated_at :timestamptz {:default "NOW()"}]]
+                       [:created_at :timestamptz {:default [:now]}]
+                       [:updated_at :timestamptz {:default [:now]}]]
               :indexes [[:idx_categories_name :btree {:fields [:name] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
@@ -255,8 +255,8 @@
                           [:category_id :uuid {:foreign-key :categories/id :null false :on-delete :cascade}]
                           [:name [:varchar 255] {:null false}]
                           [:description :text]
-                          [:created_at :timestamptz {:default "NOW()"}]
-                          [:updated_at :timestamptz {:default "NOW()"}]]
+                          [:created_at :timestamptz {:default [:now]}]
+                          [:updated_at :timestamptz {:default [:now]}]]
                  :indexes [[:idx_subcategories_category_id :btree {:fields [:category_id]}]
                            [:idx_subcategories_category_name
                             :btree
@@ -276,8 +276,8 @@
                      [:link :text]
                      ;; Canonical manufacturer reference.
                      [:manufacturer_id :uuid {:foreign-key :manufacturers/id :on-delete :set-null}]
-                     [:created_at :timestamptz {:default "NOW()"}]
-                     [:updated_at :timestamptz {:default "NOW()"}]]
+                     [:created_at :timestamptz {:default [:now]}]
+                     [:updated_at :timestamptz {:default [:now]}]]
             :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]
                       [:idx_articles_category :btree {:fields [:category]}]
                       [:idx_articles_subcategory_id :btree {:fields [:subcategory_id]}]
@@ -295,7 +295,7 @@
                             ;; CHANGED (Phase 1): allow NULL = unmapped
                             [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
                             [:confidence :integer {:default 100}]
-                            [:created_at :timestamptz {:default "NOW()"}]]
+                            [:created_at :timestamptz {:default [:now]}]]
                    :indexes [[:idx_article_aliases_supplier_label :btree
                               {:fields [:supplier_id :raw_label_normalized] :unique true}]
                              [:idx_article_aliases_article :btree {:fields [:article_id]}]]}
@@ -311,7 +311,7 @@
                                [:observed_at :timestamptz {:null false}]
                                [:unit_price [:decimal 12 2]]
                                [:currency [:enum :currency] {:default "BAM"}]
-                               [:created_at :timestamptz {:default "NOW()"}]]
+                               [:created_at :timestamptz {:default [:now]}]]
                       :indexes [[:idx_price_obs_article :btree {:fields [:article_id]}]
                                 [:idx_price_obs_supplier :btree {:fields [:supplier_id]}]
                                 [:idx_price_obs_observed_at :btree {:fields [:observed_at]}]]}}

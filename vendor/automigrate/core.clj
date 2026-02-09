@@ -87,25 +87,12 @@
 
 (defn- run-fn
   [f args args-spec]
-  (println "🐛 DEBUG RUN-FN 1: run-fn called with f:" f "args:" args "args-spec:" args-spec)
   (try+
     (let [args* (spec-util/conform args-spec (or args {}))]
-      (println "🐛 DEBUG RUN-FN 2: args conformed to:" args*)
-      (println "🐛 DEBUG RUN-FN 3: about to call function f with args*")
-      (let [result (f args*)]
-        (println "🐛 DEBUG RUN-FN 4: function f completed successfully with result:" result)
-        result))
+      (f args*))
     (catch [:type ::s/invalid] e
-      (println "🐛 DEBUG RUN-FN 5: spec validation error:" e)
       (file-util/prn-err e))
     (catch Object e
-      (println "🐛 DEBUG RUN-FN 6: general exception caught:")
-      (println "  Exception type:" (type e))
-      (println "  Exception:" e)
-      (when (instance? Exception e)
-        (println "  Exception message:" (.getMessage e))
-        (println "  Stack trace:")
-        (.printStackTrace e))
       (let [message (or (ex-message e) (str e))]
         (-> {:title "UNEXPECTED ERROR"
              :message message}

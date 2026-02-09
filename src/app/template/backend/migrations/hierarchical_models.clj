@@ -3,6 +3,18 @@
   (:require
     [clojure.java.io :as io]))
 
+(def ^:dynamic *verbose-output?*
+  "When true, print extra info while merging hierarchical EDN models.
+
+  This is false by default because these messages are usually not actionable and
+  add noise to migration output."
+  false)
+
+(defn- vprintln
+  [& xs]
+  (when *verbose-output?*
+    (apply println xs)))
+
 (defn read-consolidated-edn
   "Safely read an EDN file, returning empty map if file doesn't exist.
    Handles comments in EDN files."
@@ -54,10 +66,10 @@
                                          (merge acc data)))
                                {}
                                domain-dirs))
-        
+
         ;; Merge direct domain file with subdirectory data
         domain-data (merge domain-direct-data domain-subdir-data)]
 
-    (println "Domain direct file:" (if (seq domain-direct-data) domain-direct-path "not found"))
-    (println "Domain subdirectories found:" (or domain-dirs []))
+    (vprintln "Domain direct file:" (if (seq domain-direct-data) domain-direct-path "not found"))
+    (vprintln "Domain subdirectories found:" (or domain-dirs []))
     (merge template-data domain-data shared-data)))
