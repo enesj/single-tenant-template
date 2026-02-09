@@ -9,9 +9,10 @@
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.services.places-api :as places-api]
-    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
+    [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
     [clojure.string :as str]
@@ -335,10 +336,16 @@
         {:receipt-id receipt-id :stage :parse :result :skipped :reason :missing-api-key})
       (if-let [_claimed (receipt-status/claim-for-parsing! db receipt-id {:lease-seconds (:lease-seconds opts)})]
         (try
-          (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
-                parse-result (mistral-ocr/ocr-parse! ocr-cfg {:bytes bytes
+          (let [{:keys [bytes path]} (common/read-receipt-bytes! receipt opts)
+                prepared (image-preprocess/prepare-for-ocr {:bytes bytes
+                                                            :path path
+                                                            :content-type (:content_type receipt)
+                                                            :filename (:original_filename receipt)})
+                bytes* (:bytes prepared)
+                content-type* (or (:content-type prepared) (:content_type receipt))
+                parse-result (mistral-ocr/ocr-parse! ocr-cfg {:bytes bytes*
                                                               :filename (:original_filename receipt)
-                                                              :content-type (:content_type receipt)})]
+                                                              :content-type content-type*})]
             (receipt-status/store-extraction-results! db receipt-id {:raw_parse_json (:raw parse-result)
                                                                      :parsed_markdown (:parsed-markdown parse-result)})
             (receipt-status/update-status! db receipt-id "parsed" {:error_message nil :error_details nil})
@@ -371,9 +378,15 @@
         {:receipt-id receipt-id :stage :extract :result :skipped :reason :missing-api-key})
       (if-let [_claimed (receipt-status/claim-for-extracting! db receipt-id {:lease-seconds (:lease-seconds opts)})]
         (try
-          (let [{:keys [bytes]} (common/read-receipt-bytes! receipt opts)
-                extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes
-                                                                  :content-type (:content_type receipt)})
+          (let [{:keys [bytes path]} (common/read-receipt-bytes! receipt opts)
+                prepared (image-preprocess/prepare-for-ocr {:bytes bytes
+                                                            :path path
+                                                            :content-type (:content_type receipt)
+                                                            :filename (:original_filename receipt)})
+                bytes* (:bytes prepared)
+                content-type* (or (:content-type prepared) (:content_type receipt))
+                extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes*
+                                                                  :content-type content-type*})
                 user-auto-post? (user-allows-auto-post? db receipt)
                 auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?)
                 opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)

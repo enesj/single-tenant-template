@@ -12,6 +12,7 @@
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
@@ -226,15 +227,39 @@
                     (let [qp (:query-params request)
                           download? (truthy-param? (or (:download qp) (get qp "download")))
                           disposition (if download? "attachment" "inline")
+                          format (some-> (or (:format qp) (get qp "format") (:as qp) (get qp "as")) str str/trim str/lower-case)
+                          want-jpeg? (contains? #{"jpg" "jpeg"} format)
+                          preview? (truthy-param? (or (:preview qp) (get qp "preview")))
                           filename (safe-filename (:original-filename receipt-app) (str "receipt-" id))
                           content-type (or (some-> (:content-type receipt-app) str/trim not-empty)
                                          (receipt-storage/infer-content-type (:original-filename receipt-app))
                                          (receipt-storage/infer-content-type (:storage-key receipt-app))
-                                         "application/octet-stream")]
-                      (-> (response/file-response (.getPath file))
-                        (response/content-type content-type)
-                        (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
-                        (response/header "Cache-Control" "private, max-age=0, no-store")))))
+                                         "application/octet-stream")
+                          ct* (some-> content-type str str/trim str/lower-case)
+                          heic? (or (contains? #{"image/heic" "image/heif"} ct*)
+                                  (contains? #{"image/heic" "image/heif"}
+                                    (some-> (receipt-storage/infer-content-type filename) str str/trim str/lower-case)))]
+                      (if (or (and want-jpeg? heic?) preview?)
+                        (let [{:keys [bytes preprocessed?]} (image-preprocess/prepare-for-preview {:path (.getPath file)
+                                                                                                   :content-type content-type
+                                                                                                   :filename filename})]
+                          (if preprocessed?
+                            (let [filename* (safe-filename (if (re-find #"\.[A-Za-z0-9]+$" filename)
+                                                             (str/replace filename #"\.[A-Za-z0-9]+$" ".jpg")
+                                                             (str filename ".jpg"))
+                                              (str "receipt-" id ".jpg"))]
+                              (-> (response/response bytes)
+                                (response/content-type "image/jpeg")
+                                (response/header "Content-Disposition" (str disposition "; filename=\"" filename* "\""))
+                                (response/header "Cache-Control" "private, max-age=0, no-store")))
+                            (-> (response/file-response (.getPath file))
+                              (response/content-type content-type)
+                              (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
+                              (response/header "Cache-Control" "private, max-age=0, no-store"))))
+                        (-> (response/file-response (.getPath file))
+                          (response/content-type content-type)
+                          (response/header "Content-Disposition" (str disposition "; filename=\"" filename "\""))
+                          (response/header "Cache-Control" "private, max-age=0, no-store"))))))
                 (h/json-response {:error "Receipt not found"} 404))
               (h/json-response {:error "Invalid id"} 400))))
         (h/unauthorized-response)))

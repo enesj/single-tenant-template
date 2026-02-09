@@ -1,6 +1,9 @@
 (ns app.domain.backend.expenses.routes.receipts-test
   (:require
     [app.domain.backend.expenses.routes.receipts :as receipts-routes]
+    [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [clojure.test :refer [deftest is testing]]))
 
@@ -58,3 +61,63 @@
         (is (nil? (:supplier-guess-supplier enriched)))
         (is (= 10M (:lines-total-amount-guess enriched)))
         (is (false? (:total-guess-equals-lines-total-guess? enriched)))))))
+
+(deftest download-receipt-handler-converts-heic-to-jpeg-when-requested
+  (let [id (java.util.UUID/randomUUID)
+        handler (receipts-routes/download-receipt-handler :db)
+        tmp (java.io.File/createTempFile "receipt-test-" ".heic")]
+    (spit tmp "not-a-real-heic")
+    (with-redefs [receipt-queries/get-receipt
+                  (fn [_db rid]
+                    (is (= id rid))
+                    {:id rid
+                     :storage_key "test/receipt.heic"
+                     :original_filename "IMG_3885.HEIC"
+                     :content_type "image/heic"})
+
+                  receipt-storage/resolve-local-receipt-file
+                  (fn [_storage-key] tmp)
+
+                  image-preprocess/prepare-for-preview
+                  (fn [{:keys [path content-type filename]}]
+                    (is (string? path))
+                    (is (= "image/heic" content-type))
+                    (is (= "IMG_3885.HEIC" filename))
+                    {:bytes (byte-array [1 2 3])
+                     :content-type "image/jpeg"
+                     :preprocessed? true})]
+      (let [resp (handler {:path-params {:id (str id)}
+                           :query-params {"format" "jpeg"}})]
+        (is (= 200 (:status resp)))
+        (is (= "image/jpeg" (get-in resp [:headers "Content-Type"])))
+        (is (= 3 (alength ^bytes (:body resp))))))))
+
+(deftest download-receipt-handler-generates-jpeg-preview-when-requested
+  (let [id (java.util.UUID/randomUUID)
+        handler (receipts-routes/download-receipt-handler :db)
+        tmp (java.io.File/createTempFile "receipt-test-" ".jpg")]
+    (spit tmp "not-a-real-jpg")
+    (with-redefs [receipt-queries/get-receipt
+                  (fn [_db rid]
+                    (is (= id rid))
+                    {:id rid
+                     :storage_key "test/receipt.jpg"
+                     :original_filename "receipt.jpg"
+                     :content_type "image/jpeg"})
+
+                  receipt-storage/resolve-local-receipt-file
+                  (fn [_storage-key] tmp)
+
+                  image-preprocess/prepare-for-preview
+                  (fn [{:keys [path content-type filename]}]
+                    (is (string? path))
+                    (is (= "image/jpeg" content-type))
+                    (is (= "receipt.jpg" filename))
+                    {:bytes (byte-array [4 5 6 7])
+                     :content-type "image/jpeg"
+                     :preprocessed? true})]
+      (let [resp (handler {:path-params {:id (str id)}
+                           :query-params {"preview" "1"}})]
+        (is (= 200 (:status resp)))
+        (is (= "image/jpeg" (get-in resp [:headers "Content-Type"])))
+        (is (= 4 (alength ^bytes (:body resp))))))))

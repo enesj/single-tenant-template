@@ -328,6 +328,17 @@ Notes:
 - Run one-shot processing: `bb receipt-ocr-worker dev`
 - Run continuously: `bb receipt-ocr-worker dev --loop` (polls every 30s by default)
 - Requires `MISTRAL_API_KEY` (disable with `MISTRAL_OCR_ENABLED=false`); see `PLAN-mistral-ocr-pos-receipts.md` for details.
+- Before calling Mistral, receipt **images** are preprocessed (best-effort):
+  - HEIC/HEIF → JPEG
+  - monochrome (default: grayscale; optional bilevel threshold)
+  - crop receipt from the image (heuristic)
+  - Requires ImageMagick (`magick` preferred; falls back to `convert`) in the runtime environment.
+  - Config:
+    - `RECEIPT_OCR_PREPROCESS_ENABLED=true|false` (default true)
+    - `RECEIPT_OCR_PREPROCESS_CROP_ENABLED=true|false` (default true)
+    - `RECEIPT_OCR_PREPROCESS_MONO_MODE=grayscale|bilevel` (default grayscale)
+    - `RECEIPT_OCR_PREPROCESS_MAX_DIM=2200` (default 2200)
+    - `RECEIPT_OCR_PREPROCESS_HEIC_STRICT=true|false` (default true)
 - Optional: **AI receipt refinement** (post-process the OCR markdown into a more reliable structured extraction)
     - Controlled per-user via `/expenses/settings` (setting key `receipt-refine-enabled`).
     - Requires `CEREBRAS_API_KEY` to be configured; if missing, refine is skipped.

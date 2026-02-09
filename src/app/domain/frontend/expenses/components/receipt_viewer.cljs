@@ -91,6 +91,18 @@
                     (contains? image-exts ext))
         pdfish? (or (= content-type "application/pdf") (= ext "pdf"))
         previewable? (or imageish? pdfish?)
+        ct* (some-> content-type str str/trim str/lower-case)
+        heicish? (or (contains? #{"heic" "heif"} ext)
+                   (contains? #{"image/heic" "image/heif"} ct*))
+        preview-download-url (when (seq download-url)
+                               (cond
+                                 (not imageish?) download-url
+                                 :else
+                                 (let [sep (if (str/includes? download-url "?") "&" "?")
+                                       base (str download-url sep "preview=1")]
+                                   (if heicish?
+                                     (str base "&format=jpeg")
+                                     base))))
         ;; Always expanded when expanded? is provided (no toggle)
         current-expanded? (if (some? expanded?) expanded? true)
         [zoom set-zoom!] (use-state 1.0)
@@ -104,7 +116,7 @@
         [loading? set-loading!] (use-state false)
         [load-error set-load-error!] (use-state nil)
         preview-url (when (and (some? preview)
-                            (= (:source-url preview) download-url))
+                            (= (:source-url preview) preview-download-url))
                       (:blob-url preview))]
     ;; Clean up object URLs when preview changes/unmounts.
     (use-effect
@@ -114,7 +126,7 @@
             (.revokeObjectURL js/URL (:blob-url preview)))))
       [preview])
 
-    ;; Reset preview state when the receipt (download-url) changes.
+    ;; Reset preview state when the receipt changes.
     (use-effect
       (fn []
         (set-preview! nil)
@@ -124,7 +136,7 @@
         (set-pan! {:x 0 :y 0})
         (set-drag! nil)
         js/undefined)
-      [download-url])
+      [preview-download-url download-url])
 
     (use-effect
       (fn []
@@ -140,19 +152,19 @@
         (if (and admin-protected?
               previewable?
               current-expanded?
-              (seq download-url)
+              (seq preview-download-url)
               (nil? preview-url)
               (nil? load-error))
           (let [controller (js/AbortController.)
                 opts #js {:signal (.-signal controller)}]
             (set-loading! true)
-            (-> (fetch-receipt-blob download-url opts)
+            (-> (fetch-receipt-blob preview-download-url opts)
               (.then (fn [blob]
                        (let [url (.createObjectURL js/URL blob)]
-                         (set-preview! {:source-url download-url
+                         (set-preview! {:source-url preview-download-url
                                         :blob-url url}))))
               (.catch (fn [err]
-                          ;; Ignore abort errors.
+                        ;; Ignore abort errors.
                         (when-not (= "AbortError" (.-name err))
                           (set-load-error! (or (.-message err) "Failed to load preview.")))))
               (.finally (fn []
@@ -160,7 +172,7 @@
             (fn []
               (.abort controller)))
           js/undefined))
-      [admin-protected? previewable? current-expanded? download-url preview-url load-error])
+      [admin-protected? previewable? current-expanded? preview-download-url preview-url load-error])
     ($ :div {:class "flex flex-col h-full min-h-0"}
       ($ :div {:class "flex items-center justify-between gap-2 mb-2 px-2"}
         ($ :h3 {:class "text-sm font-semibold"} title)
@@ -210,13 +222,13 @@
                                  (.stopPropagation e)
                                  (set-loading! true)
                                  (set-load-error! nil)
-                                 (-> (fetch-receipt-blob download-url #js {})
+                                 (-> (fetch-receipt-blob preview-download-url #js {})
                                    (.then (fn [blob]
                                             (let [url (.createObjectURL js/URL blob)]
-                                              (set-preview! {:source-url download-url
+                                              (set-preview! {:source-url preview-download-url
                                                              :blob-url url})
-                                                ;; NOTE: async open may be popup-blocked; once preview-url is set,
-                                                ;; the anchor will point to the blob URL and a second click works.
+                                              ;; NOTE: async open may be popup-blocked; once preview-url is set,
+                                              ;; the anchor will point to the blob URL and a second click works.
                                               (open-url-in-new-tab! url))))
                                    (.catch (fn [err]
                                              (when-not (= "AbortError" (.-name err))
@@ -238,7 +250,7 @@
           ;; Prefer rendering image/pdf directly; blob preview will swap in when ready.
         imageish?
         (let [zoomed? (> zoom 1.0)
-              img-src (or preview-url download-url)
+              img-src (or preview-url preview-download-url download-url)
               {:keys [x y]} pan
               cursor-class (cond
                              (not zoomed?) ""

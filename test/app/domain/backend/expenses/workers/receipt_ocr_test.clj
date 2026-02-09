@@ -2,6 +2,7 @@
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.services.article-aliases :as article-aliases]
+    [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
@@ -519,6 +520,10 @@
                                                          true)
                   common/read-receipt-bytes! (fn [_receipt _opts]
                                                {:bytes (.getBytes "x")})
+                  image-preprocess/prepare-for-ocr (fn [{:keys [bytes content-type] :as _req}]
+                                                     {:bytes bytes
+                                                      :content-type content-type
+                                                      :preprocessed? false})
                   mistral-ocr/ocr-extract! (fn [_cfg _req]
                                              (swap! calls update :ocr inc)
                                              {})
@@ -537,6 +542,39 @@
         (is (= 1 (:ocr @calls)))
         (is (= 1 (:persist @calls)))
         (is (= 0 (:retry @calls)))))))
+
+(deftest process-extract-preprocesses-image-before-mistral
+  (let [process-extract! #'core/process-extract!
+        receipt-id (java.util.UUID/randomUUID)
+        seen (atom nil)
+        prepared-bytes (.getBytes "prepared")]
+    (with-redefs [receipt-status/claim-for-extracting! (fn [_db _rid _opts] true)
+                  common/read-receipt-bytes! (fn [_receipt _opts]
+                                               {:bytes (.getBytes "original")
+                                                :path "/tmp/receipt-orig.heic"})
+                  image-preprocess/prepare-for-ocr (fn [_req]
+                                                     {:bytes prepared-bytes
+                                                      :content-type "image/jpeg"
+                                                      :preprocessed? true})
+                  mistral-ocr/ocr-extract! (fn [_cfg req]
+                                             (reset! seen req)
+                                             {:raw {}
+                                              :parsed-markdown ""})
+                  extraction/persist-extract-result! (fn [_db _rid _extract-result _opts]
+                                                       {:receipt-id receipt-id
+                                                        :stage :extract
+                                                        :result :ok
+                                                        :status "extracted"})]
+      (let [res (process-extract! nil
+                  {:api-key "k" :auto-post-after-upload? false}
+                  {:id receipt-id
+                   :content_type "image/heic"
+                   :original_filename "r.heic"}
+                  {:lease-seconds 900
+                   :defer-refine? true})]
+        (is (= "extracted" (:status res)))
+        (is (= "image/jpeg" (:content-type @seen)))
+        (is (= "prepared" (String. ^bytes (:bytes @seen))))))))
 
 (deftest refine-review-required-results-respects-concurrency-limit
   (let [limit 2
