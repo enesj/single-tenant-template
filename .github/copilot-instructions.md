@@ -29,6 +29,7 @@
 - Frontend tests: `bb fe-test-parallel` (fast) or `npm run test:cljs`.
 - **Temporary files**: Use project-local `tmp/` (not system `/tmp`) for all transient artifacts; remove them when no longer needed.
 - **Save test output once** (don’t re-run to grep; see `AGENTS.md` “Testing discipline”): `mkdir -p tmp && bb be-test 2>&1 | tee tmp/be-test.txt`.
+- **Alias mapping throughput**: For mixed alias→article mappings, prepare `tmp/<name>.edn` and run one `map_aliases.clj --mappings-file ...` command instead of one-by-one alias loops.
 
 ## Config & ports
 - Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.

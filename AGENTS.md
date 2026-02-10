@@ -15,6 +15,7 @@
   - Docs vs code alignment → **doc-alignment-audit**
 - Interactive browser testing → **chrome-mcp** (use IDs and verify selectability).
 - Database work (queries, inspection, schema info) → **postgres-mcp** tools.
+- Article alias mapping throughput: for mixed alias→article targets, use `bb scripts/bb/articles/map_aliases.clj ... --mappings-file tmp/<file>.edn` in one batch call; do not run one-by-one alias loops.
 
 ## MCP tool discipline (mandatory)
 

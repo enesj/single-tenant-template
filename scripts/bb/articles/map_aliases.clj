@@ -2,6 +2,7 @@
 
 (ns scripts.bb.articles.map-aliases
   (:require
+    [clojure.edn :as edn]
     [articles.db :as db]))
 
 (defn- usage
@@ -11,29 +12,34 @@
      (binding [*out* *err*]
        (println msg)
        (println "")))
-   (println "Map one or more article_aliases rows to an article by setting article_aliases.article_id.")
+   (println "Map article_aliases rows to canonical articles by setting article_aliases.article_id.")
    (println "")
    (println "Usage:")
    (println "  bb scripts/bb/articles/map_aliases.clj [dev|test] (alias selector) (article selector) [--dry-run] [--allow-reassign] [--pretty]")
+   (println "  bb scripts/bb/articles/map_aliases.clj [dev|test] --mappings-file /path/to/mappings.edn [--dry-run] [--allow-reassign] [--pretty]")
    (println "")
-   (println "Alias selector (choose exactly one mode):")
-   (println "  --alias-id UUID                (repeat for batch updates)")
+   (println "Single-mapping alias selector (choose exactly one mode):")
+   (println "  --alias-id UUID                (repeat for many aliases to the same article)")
    (println "  --raw-label TEXT --supplier DISPLAY_NAME")
    (println "")
-   (println "Article selector (exactly one):")
+   (println "Single-mapping article selector (exactly one):")
    (println "  --article-id UUID")
    (println "  --article-key NORMALIZED_KEY")
    (println "  --canonical-name TEXT")
+   (println "")
+   (println "Batch mappings:")
+   (println "  --mappings-file PATH           (EDN map/vector; each entry defines alias selector + article selector)")
    (println "")
    (println "Options:")
    (println "  --allow-reassign   Allow remapping aliases that already have article_id")
    (println "")
    (println "Output:")
-   (println "  EDN: {:updated <n> :requested <n> :rows [...] :article_id <uuid> :not_updated_alias_ids [...]}")
+   (println "  EDN: {:updated <n> :requested <n> :rows [...] :mapping_count <n> :mappings [...]}")
    (println "")
    (println "Notes:")
    (println "  - Default behavior only updates currently unmapped aliases (article_id IS NULL).")
-   (println "  - In batch mode, --alias-id may be repeated.")
+   (println "  - For same article target, repeat --alias-id in one call.")
+   (println "  - For many different targets, use --mappings-file in one call.")
    (println "  - This script uses `psql` (no JDBC).")))
 
 (defn- parse-args
@@ -59,6 +65,9 @@
         (= a "--pretty")
         (recur (cons b more) (assoc parsed :pretty? true))
 
+        (= a "--mappings-file")
+        (recur more (assoc parsed :mappings-file b))
+
         (= a "--alias-id")
         (recur more (update parsed :alias-ids conj b))
 
@@ -81,6 +90,89 @@
         (do
           (usage (str "Unknown arg: " a))
           (System/exit 1))))))
+
+(defn- keywordize-k
+  [k]
+  (cond
+    (keyword? k) (keyword (clojure.string/replace (name k) "_" "-"))
+    (string? k) (keyword (clojure.string/replace k "_" "-"))
+    :else k))
+
+(defn- normalize-map-keys
+  [m]
+  (reduce-kv
+    (fn [acc k v]
+      (assoc acc (keywordize-k k) v))
+    {}
+    m))
+
+(defn- normalize-alias-ids
+  [value]
+  (->> (cond
+         (nil? value) []
+         (sequential? value) value
+         :else [value])
+    (remove nil?)
+    (map str)
+    distinct
+    vec))
+
+(defn- read-mappings-file!
+  [path]
+  (let [raw (slurp path)
+        parsed (try
+                 (edn/read-string raw)
+                 (catch Exception e
+                   (throw (ex-info "Failed to parse --mappings-file EDN"
+                            {:mappings-file path}
+                            e))))]
+    (cond
+      (map? parsed)
+      [(normalize-map-keys parsed)]
+
+      (vector? parsed)
+      (->> parsed
+        (map-indexed
+          (fn [idx row]
+            (if (map? row)
+              (normalize-map-keys row)
+              (throw (ex-info "Each entry in --mappings-file must be a map"
+                       {:mappings-file path
+                        :mapping-index idx
+                        :value row})))))
+        vec)
+
+      :else
+      (throw (ex-info "--mappings-file must contain an EDN map or vector of maps"
+               {:mappings-file path
+                :value-type (type parsed)})))))
+
+(defn- mapping-from-cli
+  [opts]
+  {:alias-ids (normalize-alias-ids (:alias-ids opts))
+   :raw-label (:raw-label opts)
+   :supplier-display-name (:supplier-display-name opts)
+   :article-id (:article-id opts)
+   :article-key (:article-key opts)
+   :canonical-name (:canonical-name opts)
+   :allow-reassign? (:allow-reassign? opts)})
+
+(defn- normalize-mapping
+  [mapping default-allow-reassign?]
+  (let [base (normalize-map-keys mapping)
+        alias-ids (normalize-alias-ids (if-let [alias-id (:alias-id base)]
+                                         (conj (vec (:alias-ids base)) alias-id)
+                                         (:alias-ids base)))
+        allow-reassign? (if (contains? base :allow-reassign?)
+                          (boolean (:allow-reassign? base))
+                          default-allow-reassign?)
+        supplier-display-name (or (:supplier-display-name base)
+                                (:supplier base))]
+    (-> base
+      (assoc :alias-ids alias-ids
+        :supplier-display-name supplier-display-name
+        :allow-reassign? allow-reassign?)
+      (dissoc :alias-id :supplier))))
 
 (defn- resolve-supplier-id!
   [db supplier-display-name]
@@ -158,76 +250,130 @@
     (if article-key 1 0)
     (if canonical-name 1 0)))
 
+(defn- mapping-summary
+  [{:keys [alias-ids raw-label supplier-display-name article-id article-key canonical-name allow-reassign?]}]
+  {:alias (if (seq alias-ids)
+            {:alias_ids alias-ids}
+            {:raw_label raw-label
+             :supplier_display_name supplier-display-name})
+   :article (cond-> {}
+              article-id (assoc :article-id article-id)
+              article-key (assoc :article-key article-key)
+              canonical-name (assoc :canonical-name canonical-name))
+   :allow_reassign allow-reassign?})
+
+(defn- validate-mapping!
+  [mapping context]
+  (let [{:keys [alias-ids raw-label supplier-display-name]} mapping
+        _ (when (or (and raw-label (not supplier-display-name))
+                  (and supplier-display-name (not raw-label)))
+            (throw (ex-info "--raw-label and --supplier must be provided together"
+                     {:context context
+                      :mapping (mapping-summary mapping)})))
+        alias-selector-count* (alias-selector-count mapping)
+        article-selector-count* (article-selector-count mapping)]
+    (when (not= alias-selector-count* 1)
+      (throw (ex-info "Choose exactly one alias selector: one or more --alias-id OR (--raw-label and --supplier)"
+               {:context context
+                :mapping (mapping-summary mapping)})))
+    (when (not= article-selector-count* 1)
+      (throw (ex-info "Choose exactly one article selector: --article-id, --article-key, or --canonical-name"
+               {:context context
+                :mapping (mapping-summary mapping)})))
+    mapping))
+
+(defn- collect-mappings!
+  [opts]
+  (if-let [path (:mappings-file opts)]
+    (do
+      (when (or (seq (:alias-ids opts))
+              (:raw-label opts)
+              (:supplier-display-name opts)
+              (:article-id opts)
+              (:article-key opts)
+              (:canonical-name opts))
+        (throw (ex-info "When --mappings-file is used, do not pass direct alias/article selectors"
+                 {:selectors (select-keys opts [:alias-ids :raw-label :supplier-display-name :article-id :article-key :canonical-name])})))
+      (->> (read-mappings-file! path)
+        (map-indexed (fn [idx mapping]
+                       (-> (normalize-mapping mapping (:allow-reassign? opts))
+                         (validate-mapping! (str "mappings-file index " idx)))))
+        vec))
+    [(-> (mapping-from-cli opts)
+       (validate-mapping! "cli options"))]))
+
+(defn- execute-mapping!
+  [db mapping]
+  (let [{:keys [alias-ids raw-label supplier-display-name allow-reassign?]} mapping
+        supplier-id (when (and (empty? alias-ids) supplier-display-name)
+                      (resolve-supplier-id! db supplier-display-name))
+        _ (when (and (empty? alias-ids) (nil? supplier-id))
+            (throw (ex-info "Supplier not found" {:supplier-display-name supplier-display-name})))
+        resolved-article-id (resolve-article-id! db mapping)
+        _ (when-not resolved-article-id
+            (throw (ex-info
+                     "Article not found (provide --article-id, --article-key, or --canonical-name)"
+                     {:mapping (mapping-summary mapping)})))
+        rows (if (seq alias-ids)
+               (update-by-alias-ids! db alias-ids resolved-article-id allow-reassign?)
+               (update-by-raw-label-and-supplier!
+                 db
+                 {:raw-label raw-label
+                  :supplier-id supplier-id
+                  :article-id resolved-article-id
+                  :allow-reassign? allow-reassign?}))
+        updated-alias-id-set (set (map :id rows))
+        not-updated-alias-ids (if (seq alias-ids)
+                                (->> alias-ids
+                                  (remove updated-alias-id-set)
+                                  vec)
+                                [])
+        _ (when (empty? rows)
+            (throw (ex-info (if allow-reassign?
+                              "No alias rows updated"
+                              "No alias rows updated. Alias may already be mapped; rerun with --allow-reassign to override.")
+                     {:mapping (mapping-summary mapping)
+                      :supplier-id supplier-id
+                      :allow-reassign? allow-reassign?})))]
+    (cond-> {:updated (count rows)
+             :requested (if (seq alias-ids) (count alias-ids) 1)
+             :article_id resolved-article-id
+             :rows rows}
+      (seq not-updated-alias-ids)
+      (assoc :not_updated_alias_ids not-updated-alias-ids))))
+
 (defn -main
   [& args]
   (let [{:keys [profile args]} (db/parse-profile args)
         opts (parse-args args)
-        {:keys [dry-run? pretty? allow-reassign? raw-label supplier-display-name]} opts
-        alias-ids (->> (:alias-ids opts)
-                    (remove nil?)
-                    distinct
-                    vec)
-        _ (when (or (and raw-label (not supplier-display-name))
-                  (and supplier-display-name (not raw-label)))
-            (usage "--raw-label and --supplier must be provided together")
-            (System/exit 1))
-        alias-selector-count* (alias-selector-count (assoc opts :alias-ids alias-ids))
-        article-selector-count* (article-selector-count opts)
-        _ (when (not= alias-selector-count* 1)
-            (usage "Choose exactly one alias selector: one or more --alias-id OR (--raw-label and --supplier)")
-            (System/exit 1))
-        _ (when (not= article-selector-count* 1)
-            (usage "Choose exactly one article selector: --article-id, --article-key, or --canonical-name")
-            (System/exit 1))
+        {:keys [dry-run? pretty?]} opts
+        mappings (collect-mappings! opts)
         config (db/read-config profile)
         db (:database config)
-        planned {:alias (if (seq alias-ids)
-                          {:alias_ids alias-ids}
-                          {:raw_label raw-label
-                           :supplier_display_name supplier-display-name})
-                 :article (select-keys opts [:article-id :article-key :canonical-name])
-                 :allow_reassign allow-reassign?}]
+        planned {:mapping_count (count mappings)
+                 :mappings (mapv mapping-summary mappings)}]
     (if dry-run?
       (if pretty?
         (db/pprint-edn {:dry_run true :planned planned})
         (db/prn-edn {:dry_run true :planned planned}))
-      (let [supplier-id (when (and (empty? alias-ids) supplier-display-name)
-                          (resolve-supplier-id! db supplier-display-name))
-            _ (when (and (empty? alias-ids) (nil? supplier-id))
-                (throw (ex-info "Supplier not found" {:supplier-display-name supplier-display-name})))
-            resolved-article-id (resolve-article-id! db opts)
-            _ (when-not resolved-article-id
-                (throw (ex-info
-                         "Article not found (provide --article-id, --article-key, or --canonical-name)"
-                         {:opts (select-keys opts [:article-id :article-key :canonical-name])})))
-            rows (if (seq alias-ids)
-                   (update-by-alias-ids! db alias-ids resolved-article-id allow-reassign?)
-                   (update-by-raw-label-and-supplier!
-                     db
-                     {:raw-label raw-label
-                      :supplier-id supplier-id
-                      :article-id resolved-article-id
-                      :allow-reassign? allow-reassign?}))
-            updated-alias-id-set (set (map :id rows))
-            not-updated-alias-ids (if (seq alias-ids)
-                                    (->> alias-ids
-                                      (remove updated-alias-id-set)
-                                      vec)
-                                    [])
-            _ (when (empty? rows)
-                (throw (ex-info (if allow-reassign?
-                                  "No alias rows updated"
-                                  "No alias rows updated. Alias may already be mapped; rerun with --allow-reassign to override.")
-                         {:alias-ids alias-ids
-                          :raw-label raw-label
-                          :supplier-id supplier-id
-                          :allow-reassign? allow-reassign?})))
-            result (cond-> {:updated (count rows)
-                            :requested (if (seq alias-ids) (count alias-ids) 1)
-                            :article_id resolved-article-id
-                            :rows rows}
-                     (seq not-updated-alias-ids)
-                     (assoc :not_updated_alias_ids not-updated-alias-ids))]
+      (let [results (->> mappings
+                      (mapv #(execute-mapping! db %)))
+            not-updated (->> results
+                          (mapcat :not_updated_alias_ids)
+                          distinct
+                          vec)
+            result (cond-> {:updated (reduce + (map :updated results))
+                            :requested (reduce + (map :requested results))
+                            :mapping_count (count results)
+                            :rows (vec (mapcat :rows results))}
+                     (= 1 (count results))
+                     (assoc :article_id (:article_id (first results)))
+
+                     (> (count results) 1)
+                     (assoc :mappings (mapv #(dissoc % :rows) results))
+
+                     (seq not-updated)
+                     (assoc :not_updated_alias_ids not-updated))]
         (if pretty?
           (db/pprint-edn result)
           (db/prn-edn result))))))

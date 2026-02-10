@@ -253,21 +253,14 @@ You don’t need CTEs for this workflow anymore—`create_articles.clj` and `ens
 
 Update article_aliases to link raw OCR labels to canonical articles.
 
-### Map Aliases (Single or Batch)
-Prefer mapping by stable `alias_id` to avoid ambiguity. `map_aliases.clj` accepts one or more `--alias-id` values and exactly one article selector.
+### Map Aliases (Preferred Batch Modes)
+Prefer mapping by stable `alias_id` to avoid ambiguity.
 
 ```bash
 # 1) List unmapped aliases to get alias_id
 bb scripts/bb/articles/list_unmapped_aliases.clj dev --limit 200 --pretty
 
-# 2) Map a specific alias_id to an article (by normalized_key)
-#    Default behavior updates only currently unmapped aliases (article_id IS NULL).
-bb scripts/bb/articles/map_aliases.clj dev \
-  --alias-id "<ALIAS_UUID>" \
-  --article-key "lasta-rondini-keks-200g" \
-  --pretty
-
-# 3) Batch-map multiple alias_ids to the same article
+# 2) Same target article: map many alias_ids in one call
 bb scripts/bb/articles/map_aliases.clj dev \
   --alias-id "<ALIAS_UUID_1>" \
   --alias-id "<ALIAS_UUID_2>" \
@@ -275,46 +268,57 @@ bb scripts/bb/articles/map_aliases.clj dev \
   --article-key "lasta-rondini-keks-200g" \
   --pretty
 
-# 4) Intentionally remap already mapped aliases
+# 3) Mixed target articles: use one mappings file + one map_aliases call
+mkdir -p tmp
+cat >tmp/map-aliases-batch.edn <<'EDN'
+[{:alias-id "ab155f5b-312a-499c-b4b9-36ff54272444"
+  :article-key "milka-choco-creme-biscuits-260g"}
+ {:alias-id "a136f8fb-4456-4f38-9b6b-a77df83f4de7"
+  :article-key "ground-biscuits-3600g-tin"}
+ {:alias-id "67678da1-a5f0-400a-a720-f06925dc9d61"
+  :article-key "marlenka-eclairs-230g"}]
+EDN
+
 bb scripts/bb/articles/map_aliases.clj dev \
-  --alias-id "<ALIAS_UUID>" \
-  --article-key "lasta-rondini-keks-200g" \
-  --allow-reassign \
-  --pretty
+  --mappings-file tmp/map-aliases-batch.edn \
+  --pretty 2>&1 | tee tmp/map-aliases-batch.log
+
+# 4) Clean temporary mapping file when no longer needed
+rm -f tmp/map-aliases-batch.edn
 ```
 
 ### Required Batch Mode (Important)
-- Default operating mode is **one canonical article variant → many alias IDs in one `map_aliases.clj` call**.
-- Do **not** run `map_aliases.clj` in a one-by-one alias loop when aliases resolve to the same article variant.
-- Create/update the canonical article once, then map all matching alias IDs for that variant in a single command (or chunked commands).
+- Do **not** run `map_aliases.clj` in alias-by-alias loops.
+- For aliases that resolve to the same canonical article, send repeated `--alias-id` in one command.
+- For aliases that resolve to different canonical articles, use one `--mappings-file` command.
+- Always write temporary files under project `tmp/` and delete them when no longer needed.
 
 ### Practical Batch Recipe
 ```bash
-# 1) Create canonical article once
+# 1) Create/update canonical articles first
 bb scripts/bb/articles/create_articles.clj dev \
-  --canonical-name "Lasta Rondini keks 200g" \
-  --normalized-key "lasta-rondini-keks-200g" \
+  --articles-file tmp/articles-batch.edn \
   --pretty
 
-# 2) Collect alias IDs for that same product variant (one UUID per line)
+# 2) Prepare alias->article mappings in tmp/
 mkdir -p tmp
-cat >tmp/lasta-rondini.alias-ids.txt <<'EOF'
-<ALIAS_UUID_1>
-<ALIAS_UUID_2>
-<ALIAS_UUID_3>
-EOF
+cat >tmp/map-aliases-batch.edn <<'EDN'
+[{:alias-id "<ALIAS_UUID_1>" :article-key "lasta-rondini-keks-200g"}
+ {:alias-id "<ALIAS_UUID_2>" :article-key "milka-choco-creme-biscuits-260g"}
+ {:alias-id "<ALIAS_UUID_3>" :article-key "ground-biscuits-3600g-tin"}]
+EDN
 
-# 3) Map them in one call by repeating --alias-id
+# 3) Execute mapping once and save output with tee
 bb scripts/bb/articles/map_aliases.clj dev \
-  --alias-id "<ALIAS_UUID_1>" \
-  --alias-id "<ALIAS_UUID_2>" \
-  --alias-id "<ALIAS_UUID_3>" \
-  --article-key "lasta-rondini-keks-200g" \
-  --pretty
+  --mappings-file tmp/map-aliases-batch.edn \
+  --pretty 2>&1 | tee tmp/map-aliases-batch.log
+
+# 4) Remove temporary mapping file after run
+rm -f tmp/map-aliases-batch.edn
 ```
 
 ### Batch Throughput Tips
-Use repeated `--alias-id` in one command to reduce process/DB overhead. For very large batches, run in chunks (e.g. 50-200 alias IDs per call). Prefer alias IDs over raw labels to avoid “same text, different supplier” collisions.
+Use one `--mappings-file` call to reduce process/DB overhead when targets differ. For very large batches, split mappings into chunks (e.g. 50-200 rows per file). Prefer alias IDs over raw labels to avoid “same text, different supplier” collisions.
 
 ---
 
@@ -432,13 +436,17 @@ bb scripts/bb/articles/create_articles.clj dev \
   --link "https://example.com/product" \
   --pretty
 
-# 4) Map aliases (prefer alias_id; repeat --alias-id for batch)
+# 4) Map aliases in one call (mixed targets via mappings file)
+mkdir -p tmp
+cat >tmp/workflow-map-aliases.edn <<'EDN'
+[{:alias-id "<ALIAS_UUID_1>" :article-key "lasta-rondini-keks-200g"}
+ {:alias-id "<ALIAS_UUID_2>" :article-key "milka-choco-creme-biscuits-260g"}
+ {:alias-id "<ALIAS_UUID_3>" :article-key "ground-biscuits-3600g-tin"}]
+EDN
 bb scripts/bb/articles/map_aliases.clj dev \
-  --alias-id "<ALIAS_UUID_1>" \
-  --alias-id "<ALIAS_UUID_2>" \
-  --alias-id "<ALIAS_UUID_3>" \
-  --article-key "lasta-rondini-keks-200g" \
-  --pretty
+  --mappings-file tmp/workflow-map-aliases.edn \
+  --pretty 2>&1 | tee tmp/workflow-map-aliases.log
+rm -f tmp/workflow-map-aliases.edn
 
 # 5) Check progress
 bb scripts/bb/articles/report_progress.clj dev --pretty
@@ -464,8 +472,9 @@ bb scripts/bb/articles/report_progress.clj dev --pretty
 - Never create new categories during mapping; pick an existing one, and use `Other` when no fit exists
 - Use English names for all newly created subcategories
 - Taxonomy upserts preserve existing canonical values by default; use explicit `--update-*` flags only for intentional overwrites
-- `map_aliases.clj` updates only unmapped aliases by default; repeat `--alias-id` for batch updates and use `--allow-reassign` only for deliberate remaps
-- Batch-first rule: group aliases by target canonical article and map each group in one command instead of alias-by-alias loops.
+- `map_aliases.clj` updates only unmapped aliases by default; use repeated `--alias-id` for same-target batches, use `--mappings-file` for mixed targets, and use `--allow-reassign` only for deliberate remaps
+- Batch-first rule: map aliases in grouped batches, never one-by-one loops.
+- Save command output with `tee` when writing logs and place temporary artifacts under `tmp/`.
 
 ### Size & Variant Differentiation (critical)
 - **Each distinct size/volume/weight is a separate article.** Never map aliases with different sizes to the same article (e.g. Coca-Cola 0.25L, 1.25L, 2L must be three articles).

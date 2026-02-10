@@ -165,7 +165,6 @@
       (println "✅ Done")
       (println "  deleted articles:" deleted-articles)
       (println "  deleted subcategories:" deleted-subcategories)
-      (println "  deleted categories:" deleted-categories)
       (println "  deleted manufacturers:" deleted-manufacturers)
       (println "")
       (println "After:")
