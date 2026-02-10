@@ -26,6 +26,10 @@ These MCP servers are part of the app and should be your primary interface:
   - Evaluate code: `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload)"`
   - For ClojureScript via shadow-cljs nREPL: connect to the shadow nREPL port and select a build first (e.g. `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`).
 - **DB access and operations**: Use `postgres-mcp` tools (e.g. `mcp__postgres__execute_sql`, schema inspection, lock inspection) instead of guessing schema or writing pseudo-SQL.
+  - For agent-driven DB reads/writes, use `postgres-mcp` only. Do not run direct `psql` commands (including `bb -e` + `clojure.java.shell`) for DB inspection/querying.
+  - If `mcp__postgres__execute_sql` returns `(empty)`, do not assume the query failed: the table may genuinely be empty, or the MCP session may not be connected to the expected DB.
+  - Quick verification flow: run `mcp__postgres__list_tables`, then `SELECT current_database(), current_user;` and `SELECT COUNT(*) FROM <table>;` for the target table.
+  - In VS Code, if results look suspicious, reconnect/restart the PostgreSQL MCP session and re-run the same checks before changing queries.
 - **Browser interactions**: Use `chrome-mcp` tools (read/click/fill/screenshot) for interactive UI testing and element verification; rely on stable `:id` attributes (see Component ID requirements below).
 
 ## Non-MCP Clojure helper CLIs (installed)
@@ -54,6 +58,7 @@ This repo also supports the lightweight `clojure-mcp-light` CLI tools (useful wh
 - **No Python scripting** in this repo. Use Babashka (`.bb`) or Bash (`.sh`) when necessary.
 - **Never commit secrets**. Keep them in `config/.secrets.edn` (or `~/.secrets.edn`) and environment variables.
 - **Secret handling (agents)**: Do not read, quote, or request secrets from `config/.secrets.edn`, `~/.secrets.edn`, `.env`, `.postgres.env`, CI secrets, or similar. If configuration context is needed to debug, ask for the minimal relevant snippet with sensitive values redacted.
+- **Temporary files**: Always write temporary artifacts under the project-local `tmp/` directory (not system `/tmp`) to avoid sandbox/agent path issues; delete them when no longer needed.
 - Keep changes small and focused; avoid unrelated refactors.
 
 ## Project Structure (Quick Map)
@@ -93,7 +98,7 @@ Use these to tail combined backend and frontend dev output:
 ## Testing discipline
 
 - Run only relevant tests; avoid full-suite runs for targeted changes.
-- Always save full output once and analyze it; do not re-run just to grep.
+- Always save full output once and analyze it; do not re-run just to grep. Use `tee` when saving output to a file.
 - See `docs/testing/README.md` for deeper guidance.
 - For REPL-driven workflows and examples (Clojure + ClojureScript), see `.github/copilot-instructions.md#testing-from-the-repl`.
 
@@ -102,8 +107,9 @@ Verification (behavior changes / non-trivial changes): validate via **REPL and/o
 Example save-output pattern:
 
 ```bash
-bb fe-test-parallel 2>&1 | tee /tmp/frontend-test-$(date +%H%M%S).txt
-bb be-test 2>&1 | tee /tmp/backend-test-$(date +%H%M%S).txt
+mkdir -p tmp
+bb fe-test-parallel 2>&1 | tee tmp/frontend-test-$(date +%H%M%S).txt
+bb be-test 2>&1 | tee tmp/backend-test-$(date +%H%M%S).txt
 ```
 
 ## Component ID requirements (browser testing)

@@ -1,14 +1,23 @@
 ---
 name: create-articles
-description: "Map article aliases extracted from receipt OCR data to canonical products via web search and database entry"
-metadata:
-  tags: ["articles", "article-aliases", "web-search", "database", "products", "receipts", "ocr", "mapping"]
+description: "Map article aliases from receipt OCR to canonical products via web search and database entry"
+tags:
+  - articles
+  - article-aliases
+  - web-search
+  - database
+  - products
+  - receipts
+  - ocr
+  - mapping
+allowed-tools:
+  - postgres:*
 ---
 
 # create-articles
 
 ## Goal
-Map raw article aliases extracted from receipt OCR data to canonical products by finding actual products via web search, then create database entries for articles **and all related taxonomy tables** (manufacturers, categories, subcategories), and finally map aliases to articles.
+Map raw article aliases extracted from receipt OCR data to canonical products by finding actual products via web search, then create database entries for articles and related taxonomy (manufacturers + subcategories under existing categories), and finally map aliases to articles.
 
 ## When to use
 - You need to populate the articles table with actual products found from web search
@@ -16,16 +25,28 @@ Map raw article aliases extracted from receipt OCR data to canonical products by
 - You have OCR-extracted labels (raw_label) that need to be resolved to real products
 - Building product catalog from receipt data
 
+### How this fits the “resolve during extraction” approach
+
+Receipt extraction already creates `article_aliases` for each line item (when the label is valid). With the “resolve during extraction” approach, you typically want receipt pages to show canonical articles **as early as possible**.
+
+This skill is what makes that possible:
+
+- First, extraction gives you the backlog: `article_aliases` rows with `article_id IS NULL`.
+- Then you run this skill to create canonical `articles` (+ taxonomy) and set `article_aliases.article_id`.
+- After that, anything that renders a receipt/expense and joins through `article_aliases` can show canonical article info.
+
+**Recommendation (to avoid staleness):** persist the stable `article_aliases.id` on receipt-derived items (or keep the raw label + supplier_id) and derive the current `articles` mapping by joining `article_aliases.article_id` at read time. Only store an `article_id` “snapshot” on receipts if you also plan a backfill/update strategy when mappings change.
+
 This skill is also the right place to backfill/maintain the *taxonomy* tables used by articles:
 - `manufacturers` (canonical brands)
 - `categories` and `subcategories` (FK-driven categorization)
 
 ## Prerequisites
-- PostgreSQL MCP server must be available
-- Web search priority:
-  1. Preferred: use the agent's built-in web search/browsing tools to find product pages
-  2. Optional fallback: use `bb serper-search` **only** when `ENABLE_SERPER_SEARCH=true` (in `.env`)
-- If Serper fallback is enabled: Serper.dev Search API must be configured via `SERPER_API_KEY` (typically sourced from `.env`)
+- Babashka (`bb`) must be available
+- `psql` must be available on your PATH (these scripts shell out to `psql` for DB access)
+- Postgres must be reachable using the DB settings in `config/base.edn` (profile `:dev` / `:test`)
+- Web search: use `bb serper-search` (`scripts/bb/web/serper_search.clj`) **only** when `ENABLE_SERPER_SEARCH=true` (in `.env`). When disabled, skip web search entirely and create best-effort generic articles from the OCR labels.
+- If Serper is enabled: Serper.dev Search API must be configured via `SERPER_API_KEY` (typically sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
@@ -42,71 +63,60 @@ This skill is also the right place to backfill/maintain the *taxonomy* tables us
 
 ## Step 1: Extract Article Aliases from Receipts
 
-Use PostgreSQL to query receipts and extract unique article aliases from OCR data.
+Preferred (fast + deterministic): query the `article_aliases` backlog created by extraction.
 
-```sql
--- Get all unique article aliases from receipt OCR data
-SELECT DISTINCT
-  rl.raw_label,
-  r.supplier_guess,
-  rl.supplier_id,
-  rl.id as alias_id
-FROM article_aliases rl
-JOIN receipts r ON r.supplier_alias_id = (
-  SELECT sa.id FROM supplier_aliases sa
-  WHERE sa.raw_label_normalized = r.supplier_guess
-  LIMIT 1
-)
-WHERE rl.article_id IS NULL
-ORDER BY rl.raw_label;
+```bash
+# List unmapped aliases (default limit 200)
+bb scripts/bb/articles/list_unmapped_aliases.clj dev --pretty
+
+# Increase/adjust limit
+bb scripts/bb/articles/list_unmapped_aliases.clj dev --limit 1000 --pretty
+
+# Include already-mapped aliases too
+bb scripts/bb/articles/list_unmapped_aliases.clj dev --all --limit 200 --pretty
 ```
 
 Alternative - query directly from receipts:
 
-```sql
--- Extract aliases from receipts with OCR data
-SELECT DISTINCT
-  jsonb_array_elements_text(
-    jsonb_path_query_array(
-      raw_extract_json,
-      '$.extraction.items[*].raw_label'
-    )
-  ) as raw_label,
-  supplier_guess
-FROM receipts
-WHERE raw_extract_json IS NOT NULL
-ORDER BY raw_label;
+```bash
+# Fallback: extract distinct raw_label values directly from receipts.raw_extract_json
+bb scripts/bb/articles/list_aliases_from_receipts.clj dev --limit 500 --pretty
 ```
 
 ---
 
 ## Step 2: Web Search for Products
 
-Try in this order:
+Web search uses **only** `bb serper-search` (`scripts/bb/web/serper_search.clj`).
 
-1) **Agent web search (preferred)**
-- Use the agent's web search to find 1-3 high-quality product pages.
-- Then use a web reader / `fetch_webpage` to extract:
-  - canonical name (with weight/size)
-  - manufacturer (brand)
-  - category + subcategory (when reasonably confident)
-  - product page link
 
-2) **Serper CLI fallback (only if enabled)**
-- Only if `ENABLE_SERPER_SEARCH=true`, run `bb serper-search` to get candidate pages.
+### Serper search usage
 
-### Serper example
-```clojure
-;; Only when ENABLE_SERPER_SEARCH=true
-;;
-;; Use the bb task `serper-search` (Serper.dev Google SERP API)
-;;
-;; Example:
-;;   bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
-;;
-;; Tip: include `--site` to focus results:
-;;   bb serper-search "RONDINI keks" --site vocar.ba --gl BA --num 5
+When enabled, use `bb serper-search` to find product info:
+
+```bash
+# Basic search
+bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
+
+# Focus on a specific retailer site
+bb serper-search "RONDINI keks" --site vocar.ba --gl BA --num 5
+
+# Get machine-readable output
+bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format edn
 ```
+
+From the search results, extract:
+- canonical name (with weight/size)
+- manufacturer (brand)
+- category + subcategory (when reasonably confident)
+- product page link
+
+### Tips for effective searches
+- Include supplier name in queries for better results
+- Use local language (Bosnian/Croatian/Serbian) for local products
+- Use `--site` to target known retailers (e.g. `vocar.ba`, `konzum.ba`)
+- Use `--gl BA --hl bs` for Bosnia-specific results
+- Use `--format edn` for structured output when processing programmatically
 
 ---
 
@@ -118,68 +128,57 @@ Articles should reference taxonomy via foreign keys:
 
 If you have taxonomy info from web search, **insert it first** and then reference the IDs from the article.
 
+### Category Policy (Hard Rule)
+- Do **not** create new categories while mapping articles.
+- Categories are pre-seeded and must be treated as fixed.
+- Creating new subcategories under existing categories is allowed.
+- Subcategory names must be in English.
+- If no adequate existing category is available, put the article in category `Other`.
+- Use only category names that already exist in the `categories` table; never add categories from this workflow.
+- `Food` is the only food-related top-level category. For food and beverage items, always use top-level category `Food` with an English subcategory (for example `Snacks`, `Carbonated Drinks`, `Dairy`).
+- If research suggests a category that is not present in the `categories` table, map the article to `Other` and create an English subcategory (for example `General`) under `Other`.
+
+By default, taxonomy upsert scripts preserve existing canonical values on conflicts. Use explicit update flags only when you intentionally want to overwrite existing values:
+- `--update-manufacturer-name`
+- `--update-category-description`
+- `--update-subcategory-description`
+
 ### 3.1 Upsert Manufacturer
 
 Use a stable `normalized_key` (lowercase, hyphenated, ASCII-only) for deduplication.
 
-```sql
--- Upsert manufacturer and return its id
-WITH ins AS (
-  INSERT INTO manufacturers (id, display_name, normalized_key)
-  VALUES (gen_random_uuid(), 'Lasta', 'lasta')
-  ON CONFLICT (normalized_key) DO NOTHING
-  RETURNING id
-)
-SELECT id FROM ins
-UNION ALL
-SELECT id FROM manufacturers WHERE normalized_key = 'lasta'
-LIMIT 1;
+```bash
+# Ensure just a manufacturer (returns its id)
+bb scripts/bb/articles/ensure_taxonomy.clj dev --manufacturer-name "Lasta" --manufacturer-key "lasta" --pretty
 ```
 
-### 3.2 Upsert Category
+### 3.2 Select Existing Category (Do Not Create)
+
+```bash
+# Inspect available categories (pick one; do not create new ones)
+bb scripts/bb/articles/report_progress.clj dev --pretty
+```
 
 ```sql
--- Upsert category by unique name
-WITH ins AS (
-  INSERT INTO categories (id, name, description)
-  VALUES (gen_random_uuid(), 'Food', 'Food & groceries')
-  ON CONFLICT (name) DO NOTHING
-  RETURNING id
-)
-SELECT id FROM ins
-UNION ALL
-SELECT id FROM categories WHERE name = 'Food'
-LIMIT 1;
+-- Direct DB check when needed (run via mcp__postgres__execute_sql)
+SELECT name FROM categories ORDER BY name;
 ```
 
 ### 3.3 Upsert Subcategory
 
 Subcategories are unique by `(category_id, name)`.
+Use English names only (for example: `Tea`, `Carbonated Drinks`, `General`).
 
-```sql
--- Upsert subcategory under a known category
-WITH category AS (
-  SELECT id
-  FROM categories
-  WHERE name = 'Food'
-  LIMIT 1
-), ins AS (
-  INSERT INTO subcategories (id, category_id, name, description)
-  SELECT gen_random_uuid(), category.id, 'Snacks', 'Chips, biscuits, sweets'
-  FROM category
-  ON CONFLICT (category_id, name) DO NOTHING
-  RETURNING id
-)
-SELECT id FROM ins
-UNION ALL
-SELECT s.id
-FROM subcategories s
-JOIN categories c ON c.id = s.category_id
-WHERE c.name = 'Food' AND s.name = 'Snacks'
-LIMIT 1;
+```bash
+# Ensure category + subcategory together (also returns their ids)
+bb scripts/bb/articles/ensure_taxonomy.clj dev \
+  --category-name "Food" \
+  --subcategory-name "Snacks" \
+  --subcategory-description "Chips, biscuits, sweets" \
+  --pretty
 ```
 
-If you *don’t* have reliable taxonomy, it’s fine to leave `manufacturer_id` and/or `subcategory_id` as NULL and just create the article.
+If you *don’t* have reliable taxonomy, keep `manufacturer_id` optional, but use category `Other` (with an `Other` subcategory such as `General`) instead of creating a new category.
 
 ---
 
@@ -189,111 +188,67 @@ If you could not find reliable product info via web search, create a best-effort
 - `canonical_name`: cleaned-up `raw_label` (remove receipt noise / extra punctuation; keep grams/ml when present)
 - `link`: NULL
 - `manufacturer_id`: NULL
-- `subcategory_id`: NULL
+- `subcategory_id`: point to a subcategory under `Other` (create one if needed, e.g. `General`)
 
 Insert articles into the database with web search results (when available) or generic values (when not).
 
 ### Article Schema
-```sql
--- articles table structure
-id              UUID PRIMARY KEY
-canonical_name  VARCHAR(255) NOT NULL
-normalized_key  VARCHAR(255) NOT NULL UNIQUE
-category         VARCHAR(100)          -- legacy free-text (optional)
-subcategory_id   UUID                 -- FK -> subcategories.id (preferred)
-link            TEXT
-manufacturer_id  UUID                 -- FK -> manufacturers.id
-created_at      TIMESTAMPTZ DEFAULT NOW()
-updated_at      TIMESTAMPTZ DEFAULT NOW()
+
+Key columns (simplified):
+
+- `id` (UUID, PK)
+- `canonical_name` (string, required)
+- `normalized_key` (string, required, unique)
+- `category` (legacy free-text, optional)
+- `subcategory_id` (UUID, FK → `subcategories.id`, preferred)
+- `manufacturer_id` (UUID, FK → `manufacturers.id`, optional)
+- `link` (text, optional)
+
+### Insert Article (Single)
+```bash
+# Create an article and ensure taxonomy in the same call.
+# Output includes :created? and the resolved IDs.
+bb scripts/bb/articles/create_articles.clj dev \
+  --canonical-name "Lasta Rondini keks 200g" \
+  --normalized-key "lasta-rondini-keks-200g" \
+  --manufacturer-name "Lasta" \
+  --manufacturer-key "lasta" \
+  --category-name "Food" \
+  --subcategory-name "Snacks" \
+  --link "https://lasta.com/lasta-product/rondini-limun-i-mak/" \
+  --pretty
 ```
 
-### Insert Article
-```sql
--- Insert a new article (FK-driven manufacturer + subcategory)
-INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)
-VALUES (
-  gen_random_uuid(),
-  'Lasta Rondini keks 200g',
-  'lasta-rondini-keks-200g',
-  (SELECT s.id
-   FROM subcategories s
-   JOIN categories c ON c.id = s.category_id
-   WHERE c.name = 'Food' AND s.name = 'Snacks'
-   LIMIT 1),
-  'https://lasta.com/lasta-product/rondini-limun-i-mak/',
-  (SELECT id FROM manufacturers WHERE normalized_key = 'lasta' LIMIT 1)
-)
-ON CONFLICT (normalized_key) DO NOTHING
-RETURNING id, canonical_name, manufacturer_id, subcategory_id;
+### Insert Articles in Batch (Faster)
+```bash
+mkdir -p tmp
+cat >tmp/articles-batch.edn <<'EDN'
+[{:canonical-name "Lasta Rondini keks 200g"
+  :manufacturer-name "Lasta"
+  :category-name "Food"
+  :subcategory-name "Snacks"
+  :link "https://example.com/rondini"}
+ {:canonical-name "Vreće za smeće 60L crne"
+  :normalized-key "vrece-za-smece-60l-crne"
+  :category-name "Other"
+  :subcategory-name "General"}]
+EDN
+
+bb scripts/bb/articles/create_articles.clj dev \
+  --articles-file tmp/articles-batch.edn \
+  --pretty
 ```
+
+`create_articles.clj` supports the same explicit taxonomy overwrite flags as `ensure_taxonomy.clj`: `--update-manufacturer-name`, `--update-category-description`, and `--update-subcategory-description`.
+Do not use it to introduce new categories; category names must come from the existing category set.
 
 ### Insert Article + Taxonomy in One Go (CTE)
 
-This pattern is convenient when you’re adding a brand-new manufacturer/category/subcategory.
-
-```sql
-WITH manufacturer AS (
-  SELECT id
-  FROM (
-    WITH ins AS (
-      INSERT INTO manufacturers (id, display_name, normalized_key)
-      VALUES (gen_random_uuid(), 'Lasta', 'lasta')
-      ON CONFLICT (normalized_key) DO NOTHING
-      RETURNING id
-    )
-    SELECT id FROM ins
-    UNION ALL
-    SELECT id FROM manufacturers WHERE normalized_key = 'lasta'
-    LIMIT 1
-  ) x
-), category AS (
-  SELECT id
-  FROM (
-    WITH ins AS (
-      INSERT INTO categories (id, name)
-      VALUES (gen_random_uuid(), 'Food')
-      ON CONFLICT (name) DO NOTHING
-      RETURNING id
-    )
-    SELECT id FROM ins
-    UNION ALL
-    SELECT id FROM categories WHERE name = 'Food'
-    LIMIT 1
-  ) x
-), subcategory AS (
-  SELECT id
-  FROM (
-    WITH ins AS (
-      INSERT INTO subcategories (id, category_id, name)
-      SELECT gen_random_uuid(), category.id, 'Snacks'
-      FROM category
-      ON CONFLICT (category_id, name) DO NOTHING
-      RETURNING id
-    )
-    SELECT id FROM ins
-    UNION ALL
-    SELECT s.id
-    FROM subcategories s
-    WHERE s.category_id = (SELECT id FROM category) AND s.name = 'Snacks'
-    LIMIT 1
-  ) x
-)
-INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)
-VALUES (
-  gen_random_uuid(),
-  'Lasta Rondini keks 200g',
-  'lasta-rondini-keks-200g',
-  (SELECT id FROM subcategory),
-  'https://lasta.com/lasta-product/rondini-limun-i-mak/',
-  (SELECT id FROM manufacturer)
-)
-ON CONFLICT (normalized_key) DO NOTHING
-RETURNING id, canonical_name;
-```
+You don’t need CTEs for this workflow anymore—`create_articles.clj` and `ensure_taxonomy.clj` handle the deterministic upsert/select pattern.
 
 ### Normalization Rules
 - Lowercase: `Lasta Rondini` → `lasta-rondini`
-- Remove non-ASCII/special chars during normalization (e.g. `Š` is dropped). Prefer ASCII canonical names when possible.
+- Strip diacritics first (e.g. `Š` → `S`), then replace non `[a-z0-9]` runs with `-`
 - Replace spaces with hyphens
 - Keep it URL-safe
 
@@ -303,44 +258,68 @@ RETURNING id, canonical_name;
 
 Update article_aliases to link raw OCR labels to canonical articles.
 
-### Map Single Alias
-```sql
--- Map alias to article
-UPDATE article_aliases
-SET article_id = (
-  SELECT id FROM articles
-  WHERE canonical_name = 'Lasta Rondini keks 200g'
-  LIMIT 1
-)
-WHERE raw_label = 'KEKS RONDINI LASTA/KO (E)'
-  AND supplier_id = (
-    SELECT id FROM suppliers
-    WHERE display_name = 'TROPIC MALOPRUDAJA d.o.o. Banja Luka'
-  )
-RETURNING id, raw_label, article_id;
+### Map Aliases (Single or Batch)
+Prefer mapping by stable `alias_id` to avoid ambiguity. `map_aliases.clj` accepts one or more `--alias-id` values and exactly one article selector.
+
+```bash
+# 1) List unmapped aliases to get alias_id
+bb scripts/bb/articles/list_unmapped_aliases.clj dev --limit 200 --pretty
+
+# 2) Map a specific alias_id to an article (by normalized_key)
+#    Default behavior updates only currently unmapped aliases (article_id IS NULL).
+bb scripts/bb/articles/map_aliases.clj dev \
+  --alias-id "<ALIAS_UUID>" \
+  --article-key "lasta-rondini-keks-200g" \
+  --pretty
+
+# 3) Batch-map multiple alias_ids to the same article
+bb scripts/bb/articles/map_aliases.clj dev \
+  --alias-id "<ALIAS_UUID_1>" \
+  --alias-id "<ALIAS_UUID_2>" \
+  --alias-id "<ALIAS_UUID_3>" \
+  --article-key "lasta-rondini-keks-200g" \
+  --pretty
+
+# 4) Intentionally remap already mapped aliases
+bb scripts/bb/articles/map_aliases.clj dev \
+  --alias-id "<ALIAS_UUID>" \
+  --article-key "lasta-rondini-keks-200g" \
+  --allow-reassign \
+  --pretty
 ```
 
-### Batch Map Multiple Aliases
-```sql
--- Map multiple aliases using CASE
-UPDATE article_aliases
-SET article_id = (
-  SELECT id FROM articles
-  WHERE canonical_name = CASE
-    WHEN raw_label = 'KEKS RONDINI LASTA/KO (E)' THEN 'Lasta Rondini keks 200g'
-    WHEN raw_label = 'CIRIO PASSATA BRIK 3X200ML' THEN 'Cirio Passata Brik 3x200ml'
-    WHEN raw_label = 'SIR ZANETI PARD 150G' THEN 'Zanetti Parmigiano Reggiano 150g'
-    -- ... more cases
-  END
-  LIMIT 1
-)
-WHERE raw_label IN (
-  'KEKS RONDINI LASTA/KO (E)',
-  'CIRIO PASSATA BRIK 3X200ML',
-  'SIR ZANETI PARD 150G'
-)
-RETURNING raw_label, article_id;
+### Required Batch Mode (Important)
+- Default operating mode is **one canonical article variant → many alias IDs in one `map_aliases.clj` call**.
+- Do **not** run `map_aliases.clj` in a one-by-one alias loop when aliases resolve to the same article variant.
+- Create/update the canonical article once, then map all matching alias IDs for that variant in a single command (or chunked commands).
+
+### Practical Batch Recipe
+```bash
+# 1) Create canonical article once
+bb scripts/bb/articles/create_articles.clj dev \
+  --canonical-name "Lasta Rondini keks 200g" \
+  --normalized-key "lasta-rondini-keks-200g" \
+  --pretty
+
+# 2) Collect alias IDs for that same product variant (one UUID per line)
+mkdir -p tmp
+cat >tmp/lasta-rondini.alias-ids.txt <<'EOF'
+<ALIAS_UUID_1>
+<ALIAS_UUID_2>
+<ALIAS_UUID_3>
+EOF
+
+# 3) Map them in one call by repeating --alias-id
+bb scripts/bb/articles/map_aliases.clj dev \
+  --alias-id "<ALIAS_UUID_1>" \
+  --alias-id "<ALIAS_UUID_2>" \
+  --alias-id "<ALIAS_UUID_3>" \
+  --article-key "lasta-rondini-keks-200g" \
+  --pretty
 ```
+
+### Batch Throughput Tips
+Use repeated `--alias-id` in one command to reduce process/DB overhead. For very large batches, run in chunks (e.g. 50-200 alias IDs per call). Prefer alias IDs over raw labels to avoid “same text, different supplier” collisions.
 
 ---
 
@@ -349,24 +328,22 @@ RETURNING raw_label, article_id;
 For items without specific brands, create generic articles with descriptive names.
 
 ### Generic Article Examples
-```sql
--- Generic aluminum containers
-INSERT INTO articles (id, canonical_name, normalized_key, category)
-VALUES (
-  gen_random_uuid(),
-  'Aluminijumska posuda za teletinu 500ml',
-  'aluminijumska-posuda-teletina-500ml',
-  'Ambalaža'
-);
+```bash
+# Generic aluminum containers
+bb scripts/bb/articles/create_articles.clj dev \
+  --canonical-name "Aluminijumska posuda za teletinu 500ml" \
+  --normalized-key "aluminijumska-posuda-teletina-500ml" \
+  --category-name "Other" \
+  --subcategory-name "General" \
+  --pretty
 
--- Generic garbage bags
-INSERT INTO articles (id, canonical_name, normalized_key, category)
-VALUES (
-  gen_random_uuid(),
-  'Vreće za smeće 60L crne',
-  'vrace-smece-60l-crne',
-  'Kućne potrepštine'
-);
+# Generic garbage bags
+bb scripts/bb/articles/create_articles.clj dev \
+  --canonical-name "Vreće za smeće 60L crne" \
+  --normalized-key "vrace-smece-60l-crne" \
+  --category-name "Other" \
+  --subcategory-name "General" \
+  --pretty
 ```
 
 ---
@@ -382,25 +359,30 @@ After mapping valid products, identify remaining unmapped aliases that are OCR n
 - Fragments: `"KONICA:"`, `"KONTIČ:"`, `"ROVRAT:"`, `"UJIPNO"`, `"UJUPNO"`
 
 ### Query Unmapped Aliases
-```sql
--- Check remaining unmapped aliases
-SELECT
-  aa.raw_label,
-  s.display_name as supplier,
-  COUNT(*) as occurrence_count
-FROM article_aliases aa
-LEFT JOIN suppliers s ON s.id = aa.supplier_id
-WHERE aa.article_id IS NULL
-GROUP BY aa.raw_label, s.display_name
-ORDER BY occurrence_count DESC, aa.raw_label;
+```bash
+# Check remaining unmapped aliases (grouped + counted)
+bb scripts/bb/articles/unmapped_aliases_counts.clj dev --limit 200 --pretty
 ```
 
 ### Remove OCR Noise (Optional)
-```sql
--- Remove identified noise aliases
-DELETE FROM article_aliases
-WHERE raw_label IN ('PARTICA:', 'POPRAT', 'POU:', 'POPUST -10,00%:', 'CSN. E:')
-  AND article_id IS NULL;
+```bash
+# Dry-run first (default)
+bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
+  --raw-label "PARTICA:" \
+  --raw-label "POPRAT" \
+  --raw-label "POU:" \
+  --raw-label "POPUST -10,00%:" \
+  --raw-label "CSN. E:" \
+  --pretty
+
+# Apply (will prompt unless --yes)
+bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
+  --raw-label "PARTICA:" \
+  --raw-label "POPRAT" \
+  --raw-label "POU:" \
+  --raw-label "POPUST -10,00%:" \
+  --raw-label "CSN. E:" \
+  --apply
 ```
 
 ---
@@ -410,110 +392,73 @@ WHERE raw_label IN ('PARTICA:', 'POPRAT', 'POU:', 'POPUST -10,00%:', 'CSN. E:')
 Track mapping progress and final statistics.
 
 ### Coverage Statistics
-```sql
--- Final mapping statistics
-WITH stats AS (
-  SELECT
-    COUNT(DISTINCT aa.id) as total_aliases,
-    COUNT(DISTINCT CASE WHEN aa.article_id IS NOT NULL THEN aa.id END) as mapped_aliases,
-    COUNT(DISTINCT a.id) as total_articles
-  FROM article_aliases aa
-  LEFT JOIN articles a ON a.id = aa.article_id
-)
-SELECT
-  total_aliases,
-  mapped_aliases,
-  total_articles,
-  ROUND(100.0 * mapped_aliases / NULLIF(total_aliases, 0), 1) as coverage_percent
-FROM stats;
+```bash
+bb scripts/bb/articles/report_progress.clj dev --pretty
+
+# Coverage only
+bb scripts/bb/articles/report_progress.clj dev --coverage-only --pretty
 ```
+
+### Save Output to File (Use `tee`)
+```bash
+mkdir -p tmp
+# Save full progress output while still printing to terminal
+bb scripts/bb/articles/report_progress.clj dev --pretty 2>&1 | tee tmp/articles-progress-$(date +%Y%m%d-%H%M%S).txt
+
+# Save coverage-only output while still printing to terminal
+bb scripts/bb/articles/report_progress.clj dev --coverage-only --pretty 2>&1 | tee tmp/articles-coverage-$(date +%Y%m%d-%H%M%S).txt
+```
+
+Use this pattern instead of plain `>` redirection when saving output.
 
 ### Articles by Category
-```sql
--- Articles distribution by FK-driven category/subcategory (preferred)
-SELECT
-  COALESCE(c.name, 'Uncategorized') as category,
-  COALESCE(s.name, 'Uncategorized') as subcategory,
-  COUNT(*) as article_count
-FROM articles a
-LEFT JOIN subcategories s ON s.id = a.subcategory_id
-LEFT JOIN categories c ON c.id = s.category_id
-GROUP BY c.name, s.name
-ORDER BY article_count DESC;
-```
+Included in `report_progress.clj` output under `:by-category`.
 
 ### Articles by Manufacturer
-```sql
--- Articles by manufacturer
-SELECT
-  COALESCE(m.display_name, 'Generic') as manufacturer,
-  COUNT(*) as article_count
-FROM articles a
-LEFT JOIN manufacturers m ON m.id = a.manufacturer_id
-GROUP BY m.display_name
-ORDER BY article_count DESC;
-```
+Included in `report_progress.clj` output under `:by-manufacturer`.
 
 ---
 
 ## Complete Example Workflow
 
-```sql
--- 1. Get unmapped aliases
-SELECT raw_label, supplier_guess
-FROM receipts r,
-  jsonb_array_elements(
-    jsonb_path_query_array(r.raw_extract_json, '$.extraction.items[*].raw_label')
-  ) as raw_label
-WHERE raw_extract_json IS NOT NULL
-GROUP BY raw_label, supplier_guess
-LIMIT 10;
+```bash
+# 1) Get unmapped aliases (backlog)
+bb scripts/bb/articles/list_unmapped_aliases.clj dev --limit 50 --pretty
 
--- 2. For each alias, web search: "{raw_label}" {supplier} Bosnia
+# 2) For a given raw label, optionally web-search (only when ENABLE_SERPER_SEARCH=true)
+bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
 
--- 3. After web search, upsert taxonomy (manufacturer/category/subcategory)
---    then insert article referencing manufacturer_id + subcategory_id
+# 3) Create the canonical article (+ ensure taxonomy)
+bb scripts/bb/articles/create_articles.clj dev \
+  --canonical-name "Lasta Rondini keks 200g" \
+  --manufacturer-name "Lasta" \
+  --category-name "Food" \
+  --subcategory-name "Snacks" \
+  --link "https://example.com/product" \
+  --pretty
 
--- (See Step 3 for upsert examples)
+# 4) Map aliases (prefer alias_id; repeat --alias-id for batch)
+bb scripts/bb/articles/map_aliases.clj dev \
+  --alias-id "<ALIAS_UUID_1>" \
+  --alias-id "<ALIAS_UUID_2>" \
+  --alias-id "<ALIAS_UUID_3>" \
+  --article-key "lasta-rondini-keks-200g" \
+  --pretty
 
--- 4. Insert article
-INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)
-VALUES (
-  gen_random_uuid(),
-  'Found Product Name from Web',
-  'normalized-product-name',
-  (SELECT s.id
-   FROM subcategories s
-   JOIN categories c ON c.id = s.category_id
-   WHERE c.name = 'Food' AND s.name = 'Snacks'
-   LIMIT 1),
-  'https://product-page-url',
-  (SELECT id FROM manufacturers WHERE normalized_key = 'manufacturer-key' LIMIT 1)
-)
-ON CONFLICT DO NOTHING;
-
--- 5. Map alias
-UPDATE article_aliases
-SET article_id = (SELECT id FROM articles WHERE canonical_name = 'Found Product Name')
-WHERE raw_label = 'OCR_EXTRACTED_LABEL'
-  AND supplier_id = (SELECT id FROM suppliers WHERE display_name = 'Supplier Name');
-
--- 6. Check progress
-SELECT
-  COUNT(*) as total_aliases,
-  COUNT(article_id) as mapped,
-  ROUND(100.0 * COUNT(article_id) / COUNT(*), 1) as percent
-FROM article_aliases;
+# 5) Check progress
+bb scripts/bb/articles/report_progress.clj dev --pretty
 ```
 
 ---
 
 ## Tips & Best Practices
 
-### Web Search Tips
+### Web Search Tips (Serper only)
+- Only search when `ENABLE_SERPER_SEARCH=true`; otherwise create generic articles
 - Include supplier name in queries for better results
 - Use local language (Bosnian/Croatian/Serbian) for local products
-- Look for official manufacturer pages or major retailers
+- Use `--site` to focus on known retailers or manufacturer sites
+- Use `--gl BA --hl bs` for Bosnia-specific results
 - Check multiple sources to verify product details
 
 ### Database Tips
@@ -521,6 +466,40 @@ FROM article_aliases;
 - Use normalized_key for unique constraints
 - Keep canonical names descriptive but consistent
 - Include manufacturer when known, NULL for generic items
+- Never create new categories during mapping; pick an existing one, and use `Other` when no fit exists
+- Use English names for all newly created subcategories
+- Taxonomy upserts preserve existing canonical values by default; use explicit `--update-*` flags only for intentional overwrites
+- `map_aliases.clj` updates only unmapped aliases by default; repeat `--alias-id` for batch updates and use `--allow-reassign` only for deliberate remaps
+- Batch-first rule: group aliases by target canonical article and map each group in one command instead of alias-by-alias loops.
+
+### Size & Variant Differentiation (critical)
+- **Each distinct size/volume/weight is a separate article.** Never map aliases with different sizes to the same article (e.g. Coca-Cola 0.25L, 1.25L, 2L must be three articles).
+- Extract size clues from the alias (`2L`, `0,25`, `1 25L`, `025`, `500G`, etc.) and from the supplier context.
+- **Supplier type matters:** a restaurant/fast-food supplier (e.g. "ČEVABDŽINICA") selling "Coca cola" almost certainly means a single-serve portion — create a separate article like `coca-cola-restoran` or `coca-cola-033l` rather than mapping to a retail bottle.
+- When an alias has no size info **and** the supplier is a retailer, prefer the most common retail size for that product. When in doubt, create a generic variant (no size in the key) rather than force-mapping to a specific size.
+- Before mapping a batch of aliases that share a brand, list them all and compare sizes first.
+
+#### Preflight helper: group aliases by brand (recommended)
+
+Use the helper script `scripts/bb/expenses/group_aliases_by_brand.clj` to pre-group aliases by detected brand/product family and extract size tokens.
+
+This is specifically designed to prevent size/variant conflation (e.g. mapping Coca-Cola 0.25L + 1.25L + 2L to a single canonical article).
+
+Usage examples:
+
+- Show *unmapped only* (default):
+  - `bb group-aliases-by-brand dev`
+- Include already-mapped aliases too:
+  - `bb group-aliases-by-brand dev --mapped`
+- Focus on clusters (e.g. only groups with 2+ aliases):
+  - `bb group-aliases-by-brand dev --min-group 2`
+
+How to interpret output:
+
+- **VARIANT RISK** groups are the ones to handle first.
+  - Multiple detected sizes (e.g. `0.25l`, `1.25l`, `2l`) => create separate articles per size.
+  - Mixed supplier types (restaurant + retail) => likely separate “serving” vs “retail-pack” articles.
+- **Single-variant** groups are usually safe to map directly (still sanity-check manufacturer and product type).
 
 ### Quality Assurance
 - Verify web search results are actual products, not similar items
@@ -530,7 +509,9 @@ FROM article_aliases;
 
 ### Common Issues
 - **Supplier name mismatch**: Suppliers may have different display names in DB vs receipts
-- **Multiple products per alias**: One OCR label may match multiple product variants - choose the most common
+- **Multiple products per alias**: One OCR label may match multiple product variants — choose the most common **but create separate articles when sizes differ** (see "Size & Variant Differentiation" above)
+- **Same brand, different sizes**: Group aliases by brand first; inspect size tokens (`0,25`, `1 25L`, `2L PET`, etc.) before inserting articles. Creating one article per size avoids costly remapping later.
+- **Restaurant vs retail**: Aliases from restaurants/cafés/fast-food often refer to single-serve or on-tap portions, not retail packs. Create a dedicated `(restoran)` or serving-size article.
 - **No web results**: Some products may be local/private label - create generic article
 - **OCR noise**: Filter out receipt metadata, discount info, totals
 
@@ -541,6 +522,16 @@ FROM article_aliases;
 - `resources/db/domain/models.edn` - Domain schema for articles + taxonomy tables (manufacturers/categories/subcategories)
 - `src/app/domain/backend/expenses/services/articles.clj` - Article CRUD + alias normalization
 - `src/app/domain/backend/expenses/services/manufacturers.clj` - Manufacturer CRUD
+- `scripts/bb/web/serper_search.clj` - Serper.dev web search helper (the only web search tool for this skill)
 - `scripts/bb/expenses/list_unmapped_article_aliases.clj` - Print candidate aliases from receipt extracts
 - `scripts/bb/expenses/search_article_products.clj` - Helper to print aliases in a web-search-friendly format
+- `scripts/bb/expenses/group_aliases_by_brand.clj` - Preflight grouping + size extraction to prevent size/variant mapping mistakes
 - `scripts/bb/expenses/spellcheck_article_canonical_names.clj` - Spellcheck `articles.canonical_name` and generate suggestions
+- `scripts/bb/articles/list_unmapped_aliases.clj` - Deterministic backlog query for unmapped aliases
+- `scripts/bb/articles/list_aliases_from_receipts.clj` - Fallback raw label extraction from receipts JSON
+- `scripts/bb/articles/ensure_taxonomy.clj` - Deterministic taxonomy upserts (manufacturer/category/subcategory)
+- `scripts/bb/articles/create_articles.clj` - Create/fetch one or many canonical articles (optionally ensuring taxonomy)
+- `scripts/bb/articles/map_aliases.clj` - Map alias(es) → article via alias_id(s) and article selector
+- `scripts/bb/articles/unmapped_aliases_counts.clj` - Find likely OCR noise via grouped occurrence counts
+- `scripts/bb/articles/delete_unmapped_aliases.clj` - Safe deletion of unmapped OCR noise aliases (dry-run by default)
+- `scripts/bb/articles/report_progress.clj` - Coverage + breakdown reports

@@ -59,7 +59,13 @@ If `(shadow.cljs.devtools.api/nrepl-select ...)` fails, you’re likely connecte
 
 For behavior changes / non-trivial work, follow the repo’s REPL validation checklist (see `.github/copilot-instructions.md` “REPL validation checklist”). Minimum edge cases to consider: happy path, `nil`, empty collections, invalid/boundary inputs.
 
-If you run tests, run the smallest focused set and **save the output once** (don’t re-run just to grep).
+If you run tests, run the smallest focused set and **save the output once** with `tee` (don’t re-run just to grep).
+
+```bash
+mkdir -p tmp
+bb be-test 2>&1 | tee tmp/be-test.txt
+npm run test:cljs 2>&1 | tee tmp/fe-test.txt
+```
 
 ## Troubleshooting
 

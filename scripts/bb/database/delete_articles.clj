@@ -160,7 +160,6 @@
     (println "Deleting articles and taxonomy tables...")
     (let [deleted-articles (update-count (jdbc/execute-one! ds ["DELETE FROM articles"]))
           deleted-subcategories (update-count (jdbc/execute-one! ds ["DELETE FROM subcategories"]))
-          deleted-categories (update-count (jdbc/execute-one! ds ["DELETE FROM categories"]))
           deleted-manufacturers (update-count (jdbc/execute-one! ds ["DELETE FROM manufacturers"]))
           after (stats ds)]
       (println "✅ Done")

@@ -45,11 +45,12 @@ Use `clj-nrepl-eval` against the **shadow-cljs nREPL**, then select a build insi
 
 ## Tests (save output once)
 ```bash
+mkdir -p tmp
 # Frontend
-npm run test:cljs 2>&1 | tee /tmp/fe-test.txt
+npm run test:cljs 2>&1 | tee tmp/fe-test.txt
 
 # Backend
-bb be-test 2>&1 | tee /tmp/be-test.txt
+bb be-test 2>&1 | tee tmp/be-test.txt
 ```
 
 Prefer focused runs over full suites:

@@ -7,6 +7,10 @@
 - **Clojure/EDN edits**: For `.clj`/`.cljs`/`.cljc`/`.edn`, use `clojure-mcp` structural editing tools (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit produces reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text diffs.
 - **REPL evaluation is the main debugger/test runner**: Use `clj-nrepl-eval` (shell) for exploration, debugging, and running focused tests (examples below).
 - **Database operations**: Use `postgres-mcp` tools for queries and schema inspection (e.g. `mcp__postgres__execute_sql`, `mcp__postgres__list_tables`).
+  - For agent-driven DB reads/writes, use `postgres-mcp` only. Do not run direct `psql` commands (including `bb -e` + `clojure.java.shell`) for DB inspection/querying.
+  - If a query returns `(empty)`, verify before assuming failure: table may be empty, or MCP may be attached to the wrong/disconnected DB session.
+  - Run: `mcp__postgres__list_tables`, then `SELECT current_database(), current_user;`, then `SELECT COUNT(*) FROM <table>;`.
+  - In VS Code, reconnect/restart the PostgreSQL MCP session and re-run the same query when results look inconsistent.
 - **Browser interactions**: Use `chrome-mcp` tools for interactive UI testing; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
 
 ## Big picture / entrypoints
@@ -23,7 +27,8 @@
 - User starts the app using `bb run-app`. App is automatically reloaded on file changes so no need to ever start it again.
 - Backend tests: `bb be-test` (Kaocha, uses `:test` profile).
 - Frontend tests: `bb fe-test-parallel` (fast) or `npm run test:cljs`.
-- **Save test output once** (don’t re-run to grep; see `AGENTS.md` “Testing discipline”): `bb be-test 2>&1 | tee /tmp/be-test.txt`.
+- **Temporary files**: Use project-local `tmp/` (not system `/tmp`) for all transient artifacts; remove them when no longer needed.
+- **Save test output once** (don’t re-run to grep; see `AGENTS.md` “Testing discipline”): `mkdir -p tmp && bb be-test 2>&1 | tee tmp/be-test.txt`.
 
 ## Config & ports
 - Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.
@@ -59,7 +64,7 @@
       - ClojureScript: select the build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
     - Reload the namespaces you changed (`(require 'my.ns :reload)`) and re-evaluate the smallest thing that proves the change.
     - Minimum edge cases to validate (as applicable): happy path, `nil`, empty collections, invalid/boundary inputs.
-    - If you use tests, run the smallest focused set and **save the output once** (don’t re-run just to grep).
+    - If you use tests, run the smallest focused set and **save the output once** with `tee` (don’t re-run just to grep), e.g. `mkdir -p tmp && bb be-test 2>&1 | tee tmp/be-test.txt`.
     - Remove any temporary instrumentation (`println`, extra logging, debug `def`s) before finishing; keep RCF `(comment ...)` examples when they’re useful.
 - Docstrings and function templates
   - Put docstrings immediately after the function name and before the arg vector.
