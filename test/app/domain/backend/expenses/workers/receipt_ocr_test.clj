@@ -6,6 +6,8 @@
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.store-aliases :as store-aliases]
+    [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
@@ -65,6 +67,142 @@
         (is (= 0 (:map-alias @calls)))
         ;; Still creates article aliases for line items.
         (is (= 1 (:article-aliases @calls)))))))
+
+(deftest persist-extract-result-infers-supplier-from-mapped-store-alias
+  (let [receipt-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        mapped-store-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:places 0
+                     :store-alias 0
+                     :map-supplier-alias 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id supplier-alias-id
+                     :supplier_id nil})
+                  supplier-aliases/map-alias-to-supplier-if-unmapped!
+                  (fn [_db alias-id supplier-id confidence]
+                    (swap! calls update :map-supplier-alias inc)
+                    (is (= supplier-alias-id alias-id))
+                    (is (= mapped-supplier-id supplier-id))
+                    (is (= 25 confidence))
+                    nil)
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (swap! calls update :places inc)
+                    (throw (ex-info "Should not be called" {})))
+
+                  store-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    (swap! calls update :store-alias inc)
+                    {:id (java.util.UUID/randomUUID)
+                     :store_id mapped-store-id})
+                  stores/get-store
+                  (fn [_db store-id]
+                    (is (= mapped-store-id store-id))
+                    {:id store-id
+                     :supplier_id mapped-supplier-id})
+
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "???"
+                                                    :address "Some address"
+                                                    :store_name "Bingo Ilidza"}
+                                         :totals {:total 1.00}
+                                         :items [{:raw_label "ITEM" :line_total 1.00}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})
+            supplier-snapshot (get-in @stored [:raw_extract_json :resolution_snapshot :supplier])]
+        (is (= 0 (:places @calls)))
+        (is (= mapped-supplier-id (:supplier_id supplier-snapshot)))
+        (is (= supplier-alias-id (:supplier_alias_id supplier-snapshot)))
+        (is (= :store_alias (:source supplier-snapshot)))))))
+
+(deftest persist-extract-result-infers-existing-supplier-from-store-name
+  (let [receipt-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:places 0
+                     :find-supplier 0
+                     :map-supplier-alias 0})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id supplier-alias-id
+                     :supplier_id nil})
+                  supplier-aliases/map-alias-to-supplier-if-unmapped!
+                  (fn [_db alias-id supplier-id confidence]
+                    (swap! calls update :map-supplier-alias inc)
+                    (is (= supplier-alias-id alias-id))
+                    (is (= mapped-supplier-id supplier-id))
+                    (is (= 10 confidence))
+                    nil)
+
+                  store-aliases/find-or-create-alias! (fn [_db _raw-label]
+                                                       {:id (java.util.UUID/randomUUID)
+                                                        :store_id nil})
+                  stores/resolve-store-from-merchant (fn [& _]
+                                                      {:store-id nil
+                                                       :store-alias-label nil})
+
+                  suppliers/find-by-normalized-key
+                  (fn [_db normalized-key]
+                    (swap! calls update :find-supplier inc)
+                    (when (= normalized-key (suppliers/normalize-supplier-key "Bingo"))
+                      {:id mapped-supplier-id}))
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (swap! calls update :places inc)
+                    (throw (ex-info "Should not be called" {})))
+
+                  article-aliases/find-or-create-alias! (fn [& _]
+                                                         {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "NOISY SUPPLIER"
+                                                    :store_name "Bingo Ilidza"}
+                                         :totals {:total 1.00}
+                                         :items [{:raw_label "ITEM" :line_total 1.00}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})
+            supplier-snapshot (get-in @stored [:raw_extract_json :resolution_snapshot :supplier])]
+        (is (= 0 (:places @calls)))
+        (is (>= (:find-supplier @calls) 1))
+        (is (= mapped-supplier-id (:supplier_id supplier-snapshot)))
+        (is (= supplier-alias-id (:supplier_alias_id supplier-snapshot)))
+        (is (= :store_name_db (:source supplier-snapshot)))))))
 
 (deftest persist-extract-result-auto-creates-articles-when-enabled
   (let [receipt-id (java.util.UUID/randomUUID)

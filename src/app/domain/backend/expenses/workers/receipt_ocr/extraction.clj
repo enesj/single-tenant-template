@@ -364,12 +364,71 @@
 ;; IMPORTANT: We must consult supplier_aliases first.
 ;; If an alias is already mapped, we can skip Places entirely.
 (defn- resolve-supplier-and-alias
-  [db supplier-guess opts]
-  (let [supplier-guess* (some-> supplier-guess str str/trim not-empty)]
+  "Resolve supplier + supplier_alias_id.
+
+  Priority:
+  1) If `supplier_guess` has an already-mapped supplier alias -> use it.
+  2) Otherwise, if store context is present, attempt to infer an existing supplier via:
+     - mapped store alias -> store -> supplier_id (high confidence)
+     - store_name-derived supplier candidates that match an existing supplier row
+       (best-effort; avoids creating a new supplier from a noisy guess)
+  3) Fallback: resolve/create supplier from supplier_guess (may call Places).
+
+  Returns {:supplier-id uuid :supplier-alias-id uuid|nil :source keyword}."
+  [db supplier-guess extraction opts]
+  (let [supplier-guess* (some-> supplier-guess str str/trim not-empty)
+        merchant (:merchant extraction)
+        address (some-> merchant :address str str/trim not-empty)
+        store-name (some-> merchant :store_name str str/trim not-empty)
+        store-guess (or address store-name)
+        store-name-tokens (when store-name
+                            (->> (str/split (str/trim store-name) #"\s+")
+                              (remove str/blank?)
+                              vec))
+        store-name-first-two (when (and (seq store-name-tokens)
+                                     (>= (count store-name-tokens) 2))
+                               (str (nth store-name-tokens 0) " " (nth store-name-tokens 1)))
+        store-name-first-one (when (seq store-name-tokens)
+                               (nth store-name-tokens 0))
+        store-name-candidates (->> [store-name-first-two
+                                    store-name-first-one]
+                                (remove str/blank?)
+                                distinct
+                                vec)
+        infer-supplier-from-store-alias
+        (fn []
+          (when (seq store-guess)
+            (try
+              (let [alias-row (store-aliases/find-or-create-alias! db store-guess)
+                    store-id (:store_id alias-row)
+                    store (when store-id (stores/get-store db store-id))
+                    supplier-id (:supplier_id store)]
+                (when (and store-id supplier-id)
+                  {:supplier-id supplier-id
+                   :source :store_alias}))
+              (catch Exception _
+                nil))))
+        infer-existing-supplier-from-store-name
+        (fn []
+          (when (seq store-name-candidates)
+            (some
+              (fn [cand]
+                (try
+                  (let [normalized (suppliers/normalize-supplier-key cand)]
+                    (when (seq normalized)
+                      (when-let [supplier (suppliers/find-by-normalized-key db normalized)]
+                        {:supplier-id (:id supplier)
+                         :source :store_name_db})))
+                  (catch Exception _
+                    nil)))
+              store-name-candidates)))]
     (if-not supplier-guess*
-      {:supplier-id (aliases/get-unknown-supplier-id db)
-       :supplier-alias-id nil
-       :source :unknown}
+      ;; No supplier guess -> try store-based inference, otherwise unknown.
+      (or (infer-supplier-from-store-alias)
+        (infer-existing-supplier-from-store-name)
+        {:supplier-id (aliases/get-unknown-supplier-id db)
+         :supplier-alias-id nil
+         :source :unknown})
       (let [alias-row (supplier-aliases/find-or-create-alias! db supplier-guess*)
             alias-id (:id alias-row)
             mapped-supplier-id (:supplier_id alias-row)]
@@ -377,17 +436,31 @@
           {:supplier-id mapped-supplier-id
            :supplier-alias-id alias-id
            :source :alias}
-          (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
-                                            db
-                                            supplier-guess*
-                                            opts)
-                supplier-id (:id supplier)]
-            (when (and alias-id supplier-id)
-              ;; Safe during ingestion; won't overwrite manual mappings.
-              (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
-            {:supplier-id supplier-id
-             :supplier-alias-id alias-id
-             :source (or source :resolved)}))))))
+          (let [inferred (or (infer-supplier-from-store-alias)
+                           (infer-existing-supplier-from-store-name))]
+            (if (and (map? inferred) (:supplier-id inferred))
+              (let [supplier-id (:supplier-id inferred)
+                    source (:source inferred)
+                    confidence (case source
+                                 :store_alias 25
+                                 :store_name_db 10
+                                 10)]
+                (when (and alias-id supplier-id)
+                  (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id confidence))
+                {:supplier-id supplier-id
+                 :supplier-alias-id alias-id
+                 :source source})
+              (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
+                                                db
+                                                supplier-guess*
+                                                opts)
+                    supplier-id (:id supplier)]
+                (when (and alias-id supplier-id)
+                  ;; Safe during ingestion; won't overwrite manual mappings.
+                  (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
+                {:supplier-id supplier-id
+                 :supplier-alias-id alias-id
+                 :source (or source :resolved)}))))))))
 
 (defn- resolve-store-and-alias
   "Resolve a store (branch/location) for an already-resolved supplier.
@@ -651,7 +724,7 @@
         supplier-guess (or (:supplier_guess guesses) markdown-supplier)
         {:keys [supplier-id supplier-alias-id source]}
         (try
-          (resolve-supplier-and-alias db supplier-guess opts)
+          (resolve-supplier-and-alias db supplier-guess extraction opts)
           (catch Exception e
             ;; Never fail extraction just because canonicalization failed.
             (log/warn e "Failed to resolve supplier from supplier_guess" {:receipt-id receipt-id})

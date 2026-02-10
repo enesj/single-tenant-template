@@ -394,13 +394,24 @@
     distinct
     (some #(find-by-normalized-key-or-legacy db %))))
 
+(defn- maybe-unescape-existing-display-name!
+  [db {:keys [id display_name] :as supplier}]
+  (let [dn (some-> display_name str)
+        dn* (some-> dn configs/unescape-html-entities str str/trim not-empty)
+        looks-escaped? (boolean (and dn (re-find #"&(#\d+|#x[0-9A-Fa-f]+|[A-Za-z]+);?" dn)))]
+    (if (and looks-escaped? dn* (not= dn dn*))
+      (or ((:update! service) db id {:display_name dn*}) supplier)
+      supplier)))
+
 (defn find-or-create-supplier!
   "Find supplier by normalized name or create new one.
    Returns {:existing? bool :supplier {...}}"
   [db display-name & [{:keys [address]}]]
-  (let [normalized (normalize-supplier-key display-name)]
+  (let [display-name (some-> display-name configs/unescape-html-entities str str/trim not-empty)
+        normalized (normalize-supplier-key display-name)]
     (if-let [existing (find-by-normalized-key db normalized)]
-      {:existing? true :supplier existing}
+      {:existing? true
+       :supplier (maybe-unescape-existing-display-name! db existing)}
       {:existing? false
        :supplier ((:create! service) db {:display_name display-name
                                          :address address})})))
@@ -424,13 +435,13 @@
 
   Returns {:supplier <row> :source :db|:places-api|:ocr-fallback}."
   [db ocr-guess & [opts]]
-  (let [display-name (some-> ocr-guess str str/trim not-empty)]
+  (let [display-name (some-> ocr-guess configs/unescape-html-entities str str/trim not-empty)]
     (if-not display-name
       {:supplier nil :source :ocr-fallback}
       (let [normalized (normalize-supplier-key display-name)
             legacy-normalized (legacy-normalize-supplier-key-v0 display-name)]
         (if-let [existing (find-by-normalized-keys-or-legacy db [normalized legacy-normalized])]
-          {:supplier existing :source :db}
+          {:supplier (maybe-unescape-existing-display-name! db existing) :source :db}
           (let [places-cfg (:places-cfg opts)
                 input-norm (normalize-for-similarity display-name)
                 use-bias? (and (<= (normalized-length input-norm) 4)
@@ -443,13 +454,13 @@
                              (places-api/search-text! places-cfg display-name search-opts))
                 candidate (best-place-candidate display-name (:places places-res))]
             (if-let [{:keys [place]} candidate]
-              (let [candidate-name (:name place)
+              (let [candidate-name (some-> (:name place) configs/unescape-html-entities)
                     candidate-normalized (normalize-supplier-key candidate-name)
                     candidate-legacy-normalized (legacy-normalize-supplier-key-v0 candidate-name)]
                 (if-let [existing (find-by-normalized-keys-or-legacy
                                     db
                                     [candidate-normalized candidate-legacy-normalized])]
-                  {:supplier existing :source :places-api}
+                  {:supplier (maybe-unescape-existing-display-name! db existing) :source :places-api}
                   {:supplier (create-supplier-idempotent! db candidate-name)
                    :source :places-api}))
               {:supplier (create-supplier-idempotent! db display-name)

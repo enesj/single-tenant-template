@@ -1,4 +1,5 @@
 ---
+name: create-articles
 description: "Map article aliases extracted from receipt OCR data to canonical products via web search and database entry"
 metadata:
   tags: ["articles", "article-aliases", "web-search", "database", "products", "receipts", "ocr", "mapping"]

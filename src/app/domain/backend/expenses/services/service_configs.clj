@@ -34,6 +34,73 @@
         (str/join " " acc))
       value)))
 
+(def ^:private html-entity->text
+  {"amp" "&"
+   "lt" "<"
+   "gt" ">"
+   "quot" "\""
+   "apos" "'"
+   "nbsp" " "})
+
+(defn- codepoint->str
+  "Convert a Unicode codepoint (0..0x10FFFF) to a string.
+
+  Returns nil when the codepoint is invalid."
+  [n]
+  (try
+    (when (and (number? n)
+            (<= 0 (long n) 1114111))
+      (String. (Character/toChars (int n))))
+    (catch Exception _
+      nil)))
+
+(defn- unescape-html-entities-once
+  "Best-effort decode of common HTML entities.
+
+  Supports:
+  - Named: &amp;, &lt;, &gt;, &quot;, &apos;, &nbsp; (semicolon optional)
+  - Numeric: &#38;, &#x26; (semicolon optional)
+
+  Unknown entities are preserved as-is."
+  [s]
+  (let [s (some-> s str)]
+    (when s
+      (-> s
+        (str/replace
+          #"&#x([0-9A-Fa-f]{1,6});?"
+          (fn [[m hex]]
+            (try
+              (let [n (Long/parseLong hex 16)]
+                (or (codepoint->str n) m))
+              (catch Exception _
+                m))))
+        (str/replace
+          #"&#([0-9]{1,7});?"
+          (fn [[m dec]]
+            (try
+              (let [n (Long/parseLong dec 10)]
+                (or (codepoint->str n) m))
+              (catch Exception _
+                m))))
+        (str/replace
+          #"&([A-Za-z]+);?"
+          (fn [[m ent]]
+            (or (get html-entity->text (str/lower-case ent)) m)))))))
+
+(defn unescape-html-entities
+  "Decode HTML entities, with a small bounded repeat to handle double-encoding.
+
+  Example: `&amp;amp;` -> `&amp;` -> `&`"
+  [s]
+  (let [s (some-> s str)]
+    (when s
+      (loop [i 0
+             cur s]
+        (let [nxt (unescape-html-entities-once cur)]
+          (if (or (>= i 2) (= nxt cur))
+            nxt
+            (recur (inc i) nxt)))))))
+
 (defn normalize-supplier-key
   "Normalize supplier name to lowercase, replace spaces with hyphens, remove special chars.
    Used for deduplication and fuzzy matching."
@@ -60,6 +127,7 @@
                   (vec tokens)))
               []))]
       (-> name
+        unescape-html-entities
         str/trim
         (Normalizer/normalize Normalizer$Form/NFD)
         (str/replace #"\p{M}+" "")
@@ -82,6 +150,7 @@
   [value]
   (when value
     (-> value
+      unescape-html-entities
       str/trim
       (Normalizer/normalize Normalizer$Form/NFD)
       (str/replace #"\p{M}+" "")
@@ -103,6 +172,7 @@
   [name]
   (when name
     (-> name
+      unescape-html-entities
       str/trim
       (Normalizer/normalize Normalizer$Form/NFD)
       (str/replace #"\p{M}+" "")
@@ -226,15 +296,18 @@
    :search-fields [:display_name :normalized_key]
    :field-transformers {:normalized_key normalize-supplier-key}
    :before-insert (fn [data]
-                    (let [display-name (:display_name data)]
+                    (let [display-name (unescape-html-entities (:display_name data))]
                       (assoc data
+                        :display_name display-name
                         :normalized_key (normalize-supplier-key display-name)
                         :id (UUID/randomUUID))))
    :before-update (fn [_id updates]
                     (if (:display_name updates)
-                      (assoc updates
-                        :normalized_key (normalize-supplier-key (:display_name updates))
-                        :updated_at [:now])
+                      (let [display-name (unescape-html-entities (:display_name updates))]
+                        (assoc updates
+                          :display_name display-name
+                          :normalized_key (normalize-supplier-key display-name)
+                          :updated_at [:now]))
                       (assoc updates :updated_at [:now])))
    :has-search? true
    :has-count? true})
@@ -251,17 +324,27 @@
    :search-fields [:display_name :normalized_key :address :place_id]
    :field-transformers {:normalized_key normalize-store-key}
    :before-insert (fn [data]
-                    (let [display-name (:display_name data)
-                          address (:address data)
+                    (let [display-name (unescape-html-entities (:display_name data))
+                          address (unescape-html-entities (:address data))
                           key-src (str (or display-name "") " " (or address ""))]
                       (-> data
+                        (assoc :display_name display-name)
+                        (assoc :address address)
                         (assoc :normalized_key (normalize-store-key key-src))
                         (assoc :id (UUID/randomUUID)))))
    :before-update (fn [_id updates]
-                    (let [display-name (:display_name updates)
-                          address (:address updates)]
-                      (cond-> (assoc updates :updated_at [:now])
-                        (or display-name address)
+                    (let [display-name (when (contains? updates :display_name)
+                                         (unescape-html-entities (:display_name updates)))
+                          address (when (contains? updates :address)
+                                    (unescape-html-entities (:address updates)))
+                          updates (cond-> (assoc updates :updated_at [:now])
+                                    (contains? updates :display_name)
+                                    (assoc :display_name display-name)
+                                    (contains? updates :address)
+                                    (assoc :address address))]
+                      (cond-> updates
+                        (or (contains? updates :display_name)
+                          (contains? updates :address))
                         (assoc :normalized_key (normalize-store-key (str (or display-name "") " " (or address "")))))))
    :has-search? true
    :has-count? true})
@@ -278,15 +361,18 @@
    :search-fields [:display_name :normalized_key]
    :field-transformers {:normalized_key normalize-manufacturer-key}
    :before-insert (fn [data]
-                    (let [display-name (:display_name data)]
+                    (let [display-name (unescape-html-entities (:display_name data))]
                       (-> data
+                        (assoc :display_name display-name)
                         (assoc :id (UUID/randomUUID))
                         (assoc :normalized_key (normalize-manufacturer-key display-name)))))
    :before-update (fn [_id updates]
                     (if (:display_name updates)
-                      (assoc updates
-                        :normalized_key (normalize-manufacturer-key (:display_name updates))
-                        :updated_at [:now])
+                      (let [display-name (unescape-html-entities (:display_name updates))]
+                        (assoc updates
+                          :display_name display-name
+                          :normalized_key (normalize-manufacturer-key display-name)
+                          :updated_at [:now]))
                       (assoc updates :updated_at [:now])))
    :has-search? true
    :has-count? true})

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Create Stores"
-  short_description: "Create stores from unmapped store aliases"
-  default_prompt: "Create missing stores by reading unmapped store_aliases, inferring supplier from receipts/supplier_aliases, inserting stores when unambiguous, and mapping store_aliases.store_id."

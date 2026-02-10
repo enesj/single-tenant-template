@@ -31,6 +31,20 @@
             second (suppliers/find-or-create-supplier! db "  bingo-centar " {})]
         (is (= (:id (:supplier first)) (:id (:supplier second))))))))
 
+(deftest find-or-create-supplier-unescapes-existing-display-name-test
+  (when-let [db fixtures/*test-db*]
+    (let [id (java.util.UUID/randomUUID)
+          display "B&amp;K d.o.o. Sarajevo"
+          normalized (suppliers/normalize-supplier-key display)
+          _ (jdbc/execute-one!
+              db
+              ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
+               id display normalized]
+              {:builder-fn rs/as-unqualified-lower-maps})
+          res (suppliers/find-or-create-supplier! db "B&K d.o.o. Sarajevo" {})]
+      (is (= id (get-in res [:supplier :id])))
+      (is (= "B&K d.o.o. Sarajevo" (get-in res [:supplier :display_name]))))))
+
 (deftest resolve-or-create-supplier-with-places-test
   (when-let [db fixtures/*test-db*]
     (testing "DB hit skips Places"
