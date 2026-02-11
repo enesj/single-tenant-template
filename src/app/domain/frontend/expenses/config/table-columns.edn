@@ -320,7 +320,6 @@
    "display_name"
    "normalized_key"
    "address"
-   "city"
    "city_id"
    "place_id"
    "archived_at"
@@ -328,18 +327,17 @@
    "updated_at"
    "id"]
   :default-visible-columns
-  ["display_name" "normalized_key" "address" "city" "city_id" "place_id" "created_at"]
+  ["display_name" "normalized_key" "address" "city_id" "place_id" "created_at"]
   :filterable-columns
   ["display_name"
    "normalized_key"
    "address"
-   "city"
    "city_id"
    "place_id"
    "archived_at"
    "created_at"]
   :sortable-columns
-  ["display_name" "normalized_key" "address" "city" "city_id" "created_at" "updated_at"]
+  ["display_name" "normalized_key" "address" "city_id" "created_at" "updated_at"]
   :always-visible ["display_name"]
   :computed-fields {}
   :column-config {}},

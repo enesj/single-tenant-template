@@ -375,7 +375,6 @@
    [:display_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
-   [:city [:varchar 255]]
    [:city_id :uuid {:foreign-key :cities/id, :on-delete :set-null}]
    [:place_id :text]
    [:archived_at :timestamptz]

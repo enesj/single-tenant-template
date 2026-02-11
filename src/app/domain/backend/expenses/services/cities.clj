@@ -106,11 +106,10 @@
 (defn backfill-store-cities!
   "Idempotent backfill function to populate cities and set stores.city_id.
   
-  Processes stores where city_id IS NULL and address/display_name/city is present.
+  Processes stores where city_id IS NULL and address/display_name is present.
   For each store:
   1. Extract city name using stores/extract-city-from-address (address, display-name)
-  2. If extraction yields nil/blank, fallback to legacy stores.city value
-  3. If city-name is non-blank:
+  2. If city-name is non-blank:
      - Call ensure-city! to get/create city-id
      - Update stores.city_id = city-id
   
@@ -137,14 +136,13 @@
     ;; Full backfill (all stores with NULL city_id)
     (backfill-store-cities! db)"
   [db & {:keys [dry-run? limit] :or {dry-run? false}}]
-  (let [query {:select [:id :address :display_name :city]
+  (let [query {:select [:id :address :display_name]
                :from [:stores]
                :where [:and
                        [:is :city_id nil]
                        [:or
                         [:is-not :address nil]
-                        [:is-not :display_name nil]
-                        [:is-not :city nil]]]}
+                        [:is-not :display_name nil]]]}
         query-with-limit (if limit
                            (assoc query :limit limit)
                            query)
@@ -162,18 +160,12 @@
     (println (format "Limit: %s\n" (or limit "none")))
 
     (let [result (reduce
-                   (fn [acc {:keys [id address display_name city]}]
+                   (fn [acc {:keys [id address display_name]}]
                      (try
-                       (let [;; Step 1: Extract city from address/display_name
-                             extracted-city (stores/extract-city-from-address address display_name)
-                             ;; Step 2: Fallback to legacy city column if extraction failed
-                             city-name (or (some-> extracted-city str str/trim not-empty)
-                                         (some-> city str str/trim not-empty))
+                       (let [;; Extract city from address/display_name
+                             city-name (stores/extract-city-from-address address display_name)
                              ;; Determine source for logging
-                             source (cond
-                                      (and extracted-city (seq extracted-city)) :extracted
-                                      (and city (seq city)) :legacy-fallback
-                                      :else :none)]
+                             source (if (seq city-name) :extracted :none)]
                          (if (seq city-name)
                            (do
                              (when-not dry-run?
