@@ -289,7 +289,7 @@
          place-address (some-> place :raw :formattedAddress str str/trim not-empty)
          effective-alias-label (or address* place-address store-name*)
          effective-address (or place-address address*)
-         effective-display (or store-name* place-name effective-address store-display-basic)]
+         effective-display (or store-name* effective-address place-name store-display-basic)]
      (when (and supplier-id* (seq effective-alias-label))
        (let [store (cond
                      (seq place-id)

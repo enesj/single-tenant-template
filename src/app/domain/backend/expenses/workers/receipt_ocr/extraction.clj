@@ -96,6 +96,36 @@
     (when-let [abs-diff (abs-decimal-diff lines-total total-amount)]
       (> abs-diff 0.01))))
 
+(defn- items-total-amount
+  [items]
+  (when (sequential? items)
+    (let [items* (mapv normalize-line-item items)]
+      (when (seq items*)
+        (receipt-parsing/lines-total items*)))))
+
+(defn- prefer-markdown-items?
+  "Prefer markdown-derived items when they explain the final total much better.
+
+  This is primarily used for receipts where provider items capture pre-discount
+  prices, while markdown rows include final discounted line totals."
+  [provider-items markdown-items final-total]
+  (let [provider-items (vec (or provider-items []))
+        markdown-items (vec (or markdown-items []))
+        final-total (common/parse-money final-total)
+        provider-total (items-total-amount provider-items)
+        markdown-total (items-total-amount markdown-items)
+        provider-diff (abs-decimal-diff provider-total final-total)
+        markdown-diff (abs-decimal-diff markdown-total final-total)]
+    (and final-total
+      (seq provider-items)
+      (seq markdown-items)
+      (= (count provider-items) (count markdown-items))
+      (some? provider-diff)
+      (some? markdown-diff)
+      (> provider-diff 0.05)
+      (<= markdown-diff 0.05)
+      (< (+ markdown-diff 0.01) provider-diff))))
+
 (def ^:private discount-label-pattern
   #"(?iu)\b(popust|popost|rabat|discount|akcija)\b")
 
@@ -302,20 +332,109 @@
     {:items items
      :post-processing post-processing}))
 
+(def ^:private branch-store-prefix-pattern
+  #"(?iu)^(ogranak|podružnica|poslovnica|pj\b|tc\b|pc\b|cc\b|centar|market|maloprodaja|prodavnica)\b")
+
+(def ^:private legal-entity-pattern
+  #"(?iu)\b(d\.?\s*o\.?\s*o\.?|d\.?\s*d\.?|a\.?\s*d\.?|j\.?\s*p\.?|s\.?\s*p\.?|ustanova|inc\.?|llc\.?|ltd\.?)\b")
+
+(defn- branch-store-name?
+  [s]
+  (boolean
+    (and (string? s)
+      (re-find branch-store-prefix-pattern (str/trim s)))))
+
+(defn- legal-entity-name?
+  [s]
+  (boolean
+    (and (string? s)
+      (re-find legal-entity-pattern s))))
+
+(defn- post-process-merchant
+  "Normalize provider merchant fields.
+
+  Handles two common OCR patterns:
+  - merged `merchant.address` containing `store_name + address`
+  - legal entity in `merchant.name` with brand in `merchant.store_name`
+
+  When we detect the second pattern and can split the merged address into a
+  branch store name, we promote:
+  - brand -> `merchant.name` (used as supplier guess)
+  - legal entity -> `merchant.legal_name`
+  - branch -> `merchant.store_name`
+  - remainder -> `merchant.address`.
+
+  Best-effort; returns the original extraction when no safe normalization exists."
+  [extraction]
+  (if-not (map? extraction)
+    extraction
+    (let [merchant (:merchant extraction)]
+      (if-not (map? merchant)
+        extraction
+        (let [merchant-name (some-> merchant :name str str/trim not-empty)
+              store-name0-raw (some-> merchant :store_name str str/trim not-empty)
+              store-name0 (when (and (seq store-name0-raw)
+                                  (not (and (seq merchant-name)
+                                         (= (str/lower-case store-name0-raw)
+                                           (str/lower-case merchant-name)))))
+                            store-name0-raw)
+              address0 (some-> merchant :address str str/trim not-empty)
+              raw-address0 (some-> merchant :raw_address str str/trim not-empty)
+              split-addr (when (seq address0)
+                           (markdown/split-store-name-and-address address0))
+              split-store-name (some-> split-addr :store_name str str/trim not-empty)
+              split-address (some-> split-addr :address str str/trim not-empty)
+              merchant*
+              (cond-> merchant
+                (and (seq address0) (not (seq raw-address0)))
+                (assoc :raw_address address0)
+
+                (and (seq store-name0-raw) (not (seq store-name0)))
+                (dissoc :store_name))
+              promote-brand-and-branch?
+              (and (seq merchant-name)
+                (seq store-name0)
+                (seq split-store-name)
+                (seq split-address)
+                (legal-entity-name? merchant-name)
+                (not (branch-store-name? store-name0))
+                (branch-store-name? split-store-name))]
+          (cond
+            promote-brand-and-branch?
+            (assoc extraction :merchant (assoc merchant*
+                                          :legal_name merchant-name
+                                          :name store-name0
+                                          :store_name split-store-name
+                                          :address split-address))
+
+            (and (not (seq store-name0))
+              (seq split-store-name)
+              (seq split-address))
+            (assoc extraction :merchant (assoc merchant*
+                                          :store_name split-store-name
+                                          :address split-address))
+
+            :else
+            extraction))))))
+
 (defn- post-process-extraction
   "Apply heuristic extraction cleanup.
 
-  Returns {:extraction <updated> :post-processing <stats|nil>}."
+  Returns {:extraction <updated> :post-processing <stats|nil>}.
+
+  This is intentionally best-effort. It should never throw and should avoid
+  destructive changes when signals are ambiguous."
   [extraction]
-  (if-not (and (map? extraction) (sequential? (:items extraction)))
-    {:extraction extraction
-     :post-processing nil}
-    (let [items (:items extraction)
-          ctx {:items-count (count items)
-               :grand-total (common/parse-money (get-in extraction [:totals :total]))}
-          {:keys [items post-processing]} (clean-extraction-items items ctx)]
-      {:extraction (assoc extraction :items items)
-       :post-processing post-processing})))
+  (let [extraction (post-process-merchant extraction)]
+    (if-not (and (map? extraction) (sequential? (:items extraction)))
+      {:extraction extraction
+       :post-processing nil}
+      (let [items (:items extraction)
+            ctx {:items-count (count items)
+                 :grand-total (common/parse-money (get-in extraction [:totals :total]))}
+            {:keys [items post-processing]} (clean-extraction-items items ctx)]
+        {:extraction (assoc extraction :items items)
+         :post-processing post-processing}))))
 
 (defn- best-markdown-item-match [markdown-items item]
   (let [item-total (common/parse-money (:line_total item))
@@ -359,6 +478,44 @@
         (catch Exception _
           nil)))))
 
+(defn- token-char-diff
+  [a b]
+  (when (and (string? a)
+          (string? b)
+          (= (count a) (count b)))
+    (reduce
+      (fn [acc [ca cb]]
+        (if (= ca cb)
+          acc
+          (inc acc)))
+      0
+      (map vector a b))))
+
+(defn- close-ocr-supplier-keys?
+  "Treat very small per-token OCR substitutions as the same supplier key.
+
+  Example: hese-kemerc ~ hose-komerc.
+
+  This is intentionally conservative and only applies when token counts/lengths
+  align and each token differs by at most one character."
+  [a b]
+  (let [a* (some-> a str str/trim not-empty)
+        b* (some-> b str str/trim not-empty)]
+    (when (and (seq a*) (seq b*))
+      (let [tokens-a (->> (str/split a* #"-") (remove str/blank?) vec)
+            tokens-b (->> (str/split b* #"-") (remove str/blank?) vec)
+            token-diffs (when (= (count tokens-a) (count tokens-b))
+                          (mapv token-char-diff tokens-a tokens-b))
+            flat-a (str/replace a* #"-" "")
+            flat-b (str/replace b* #"-" "")]
+        (boolean
+          (and (seq token-diffs)
+            (every? some? token-diffs)
+            (>= (max (count flat-a) (count flat-b)) 8)
+            (every? #(>= (count %) 3) tokens-a)
+            (every? #(<= % 1) token-diffs)
+            (<= (reduce + 0 token-diffs) 2)))))))
+
 ;; Returns {:supplier-id uuid :supplier-alias-id uuid|nil :source keyword}
 ;;
 ;; IMPORTANT: We must consult supplier_aliases first.
@@ -377,10 +534,13 @@
   Returns {:supplier-id uuid :supplier-alias-id uuid|nil :source keyword}."
   [db supplier-guess extraction opts]
   (let [supplier-guess* (some-> supplier-guess str str/trim not-empty)
+        supplier-display-guess (or (markdown/strip-legal-suffix supplier-guess*) supplier-guess*)
         merchant (:merchant extraction)
+        raw-address (some-> merchant :raw_address str str/trim not-empty)
         address (some-> merchant :address str str/trim not-empty)
         store-name (some-> merchant :store_name str str/trim not-empty)
-        store-guess (or address store-name)
+        ;; Keep store alias keying consistent with `resolve-store-and-alias`.
+        store-alias-guess (or raw-address address store-name)
         store-name-tokens (when store-name
                             (->> (str/split (str/trim store-name) #"\s+")
                               (remove str/blank?)
@@ -395,11 +555,12 @@
                                 (remove str/blank?)
                                 distinct
                                 vec)
+        brand-promoted? (some-> merchant :legal_name str str/trim not-empty)
         infer-supplier-from-store-alias
         (fn []
-          (when (seq store-guess)
+          (when (seq store-alias-guess)
             (try
-              (let [alias-row (store-aliases/find-or-create-alias! db store-guess)
+              (let [alias-row (store-aliases/find-or-create-alias! db store-alias-guess)
                     store-id (:store_id alias-row)
                     store (when store-id (stores/get-store db store-id))
                     supplier-id (:supplier_id store)]
@@ -421,7 +582,61 @@
                          :source :store_name_db})))
                   (catch Exception _
                     nil)))
-              store-name-candidates)))]
+              store-name-candidates)))
+        inferred-conflicts-with-promoted-brand?
+        (fn [inferred]
+          (let [inferred-supplier-id (:supplier-id inferred)
+                inferred-supplier (when inferred-supplier-id
+                                    (try
+                                      ((:get suppliers/service) db inferred-supplier-id)
+                                      (catch Exception _
+                                        nil)))
+                inferred-normalized (some-> inferred-supplier :normalized_key str str/trim not-empty)
+                guess-normalized (some-> supplier-guess* suppliers/normalize-supplier-key)]
+            (and (seq brand-promoted?)
+              (seq guess-normalized)
+              (seq inferred-normalized)
+              (not= guess-normalized inferred-normalized)
+              (not (close-ocr-supplier-keys? guess-normalized inferred-normalized)))))
+        alias-needs-brand-repair?
+        (fn [alias-row]
+          (let [mapped-supplier-id (:supplier_id alias-row)
+                mapped-confidence (long (or (:confidence alias-row) 0))
+                mapped-supplier (when mapped-supplier-id
+                                  (try
+                                    ((:get suppliers/service) db mapped-supplier-id)
+                                    (catch Exception _
+                                      nil)))
+                mapped-normalized (some-> mapped-supplier :normalized_key str str/trim not-empty)
+                alias-normalized (some-> alias-row :raw_label_normalized str str/trim not-empty)
+                guess-normalized (some-> supplier-guess* suppliers/normalize-supplier-key)]
+            (and (seq supplier-guess*)
+              mapped-supplier-id
+              (< mapped-confidence 100)
+              (or (and (seq alias-normalized)
+                    (seq mapped-normalized)
+                    (not= alias-normalized mapped-normalized))
+                (and (seq guess-normalized)
+                  (seq mapped-normalized)
+                  (not= guess-normalized mapped-normalized))))))
+        maybe-repair-mapped-alias
+        (fn [alias-row]
+          (when (alias-needs-brand-repair? alias-row)
+            (try
+              (let [{:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-display-guess {})
+                    supplier-id (:id supplier)
+                    alias-id (:id alias-row)]
+                (when (and alias-id supplier-id)
+                  ;; This repairs previous OCR auto-mappings that promoted legal
+                  ;; entity names into canonical supplier names.
+                  (supplier-aliases/map-alias-to-supplier! db alias-id supplier-id 25))
+                {:supplier-id supplier-id
+                 :supplier-alias-id alias-id
+                 :source :alias_repaired})
+              (catch Exception e
+                (log/warn e "Failed to repair supplier alias mapping to OCR brand"
+                  {:supplier-alias-id (:id alias-row)})
+                nil))))]
     (if-not supplier-guess*
       ;; No supplier guess -> try store-based inference, otherwise unknown.
       (or (infer-supplier-from-store-alias)
@@ -433,11 +648,14 @@
             alias-id (:id alias-row)
             mapped-supplier-id (:supplier_id alias-row)]
         (if mapped-supplier-id
-          {:supplier-id mapped-supplier-id
-           :supplier-alias-id alias-id
-           :source :alias}
-          (let [inferred (or (infer-supplier-from-store-alias)
-                           (infer-existing-supplier-from-store-name))]
+          (or (maybe-repair-mapped-alias alias-row)
+            {:supplier-id mapped-supplier-id
+             :supplier-alias-id alias-id
+             :source :alias})
+          (let [inferred0 (or (infer-supplier-from-store-alias)
+                            (infer-existing-supplier-from-store-name))
+                inferred (when-not (inferred-conflicts-with-promoted-brand? inferred0)
+                           inferred0)]
             (if (and (map? inferred) (:supplier-id inferred))
               (let [supplier-id (:supplier-id inferred)
                     source (:source inferred)
@@ -452,7 +670,7 @@
                  :source source})
               (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
                                                 db
-                                                supplier-guess*
+                                                supplier-display-guess
                                                 opts)
                     supplier-id (:id supplier)]
                 (when (and alias-id supplier-id)
@@ -465,8 +683,12 @@
 (defn- resolve-store-and-alias
   "Resolve a store (branch/location) for an already-resolved supplier.
 
-  Store aliases are keyed by the OCR-extracted merchant address (preferred) or
-  store_name (fallback).
+  Store aliases are keyed by the provider's raw address guess when available
+  (`merchant.raw_address`), otherwise by the post-processed address (preferred)
+  or store_name (fallback).
+
+  This keeps alias keying stable (so re-uploads map to the same alias) even when
+  we split merged provider strings into `merchant.store_name` + `merchant.address`.
 
   When Places is configured, store resolution will attempt to canonicalize by
   store.place_id (without changing alias keying).
@@ -474,22 +696,44 @@
   Returns {:store-id uuid|nil :store-alias-id uuid|nil :store-guess string|nil :source keyword}."
   [db supplier-id extraction opts]
   (let [merchant (:merchant extraction)
+        raw-address (some-> merchant :raw_address str str/trim not-empty)
         address (some-> merchant :address str str/trim not-empty)
         store-name (some-> merchant :store_name str str/trim not-empty)
-        store-guess (or address store-name)]
-    (if (or (nil? supplier-id) (not (seq store-guess)))
+        supplier-name (some-> merchant :name str str/trim not-empty)
+        store-alias-guess (or raw-address address store-name)
+        store-guess (or store-name address)]
+    (if (or (nil? supplier-id) (not (seq store-alias-guess)))
       {:store-id nil
        :store-alias-id nil
        :store-guess store-guess
        :source :unknown}
-      (let [alias-row (store-aliases/find-or-create-alias! db store-guess)
+      (let [alias-row (store-aliases/find-or-create-alias! db store-alias-guess)
             alias-id (:id alias-row)
             mapped-store-id (:store_id alias-row)]
         (if mapped-store-id
-          {:store-id mapped-store-id
-           :store-alias-id alias-id
-           :store-guess store-guess
-           :source :alias}
+          (do
+            (try
+              (when (seq store-name)
+                (let [mapped-store (stores/get-store db mapped-store-id)
+                      existing-display (some-> mapped-store :display_name str str/trim not-empty)
+                      looks-like-supplier-name? (and (seq supplier-name)
+                                                  (seq existing-display)
+                                                  (= (str/lower-case existing-display)
+                                                    (str/lower-case supplier-name)))
+                      should-promote-store-name? (or (not (seq existing-display))
+                                                   looks-like-supplier-name?)]
+                  (when should-promote-store-name?
+                    (stores/update-store! db mapped-store-id
+                      (cond-> {:display_name store-name}
+                        (seq address) (assoc :address address))))))
+              (catch Exception e
+                (log/warn e "Failed to promote mapped store display_name from merchant.store_name"
+                  {:store-id mapped-store-id
+                   :store-alias-id alias-id})))
+            {:store-id mapped-store-id
+             :store-alias-id alias-id
+             :store-guess store-guess
+             :source :alias})
           (let [{:keys [store-id store-alias-label]}
                 (stores/resolve-store-from-merchant db supplier-id merchant
                   (assoc opts
@@ -499,7 +743,7 @@
               (store-aliases/map-alias-to-store-if-unmapped! db alias-id store-id 25))
             {:store-id store-id
              :store-alias-id alias-id
-             :store-guess (or store-alias-label store-guess)
+             :store-guess (or store-name store-alias-label store-guess)
              :source :resolved}))))))
 
 (defn- auto-create-aliases!
@@ -667,6 +911,65 @@
        :changed? changed?
        :changes changes})))
 
+(defn- merge-markdown-merchant-header
+  "Merge markdown-derived merchant header fields into a provider merchant map.
+
+  This prefers preserving provider values, but will:
+  - fill in missing `:store_name` / `:address`
+  - replace a provider `:address` that appears to be a merged
+    `store_name + address` string (when markdown provides a cleaner split)
+
+  Some providers also duplicate `merchant.name` into `merchant.store_name`,
+  which prevents downstream splitting/merging. We treat that as \"missing\" for
+  the purposes of merging.
+
+  We also preserve the provider's raw address under `:raw_address` so that store
+  alias keying can remain stable even when we split `:store_name` / `:address`.
+
+  Returns the updated merchant map (or the original value when it cannot merge)."
+  [merchant markdown-merchant-header]
+  (if-not (and (map? merchant) (map? markdown-merchant-header))
+    merchant
+    (let [merchant-name0 (some-> merchant :name str str/trim not-empty)
+          store-name0-raw (some-> merchant :store_name str str/trim not-empty)
+          store-name0 (when (and (seq store-name0-raw)
+                              (not (and (seq merchant-name0)
+                                     (= (str/lower-case store-name0-raw)
+                                       (str/lower-case merchant-name0)))))
+                        store-name0-raw)
+          redundant-store-name? (and (seq store-name0-raw) (not (seq store-name0)))
+          address0 (some-> merchant :address str str/trim not-empty)
+          raw-address0 (some-> merchant :raw_address str str/trim not-empty)
+          merchant*
+          (cond-> merchant
+            (and (seq address0) (not (seq raw-address0)))
+            (assoc :raw_address address0)
+
+            redundant-store-name?
+            (dissoc :store_name))
+          store-name-h (some-> markdown-merchant-header :store_name str str/trim not-empty)
+          address-h (some-> markdown-merchant-header :address str str/trim not-empty)
+          merged-address?
+          (and (not (seq store-name0))
+            (seq store-name-h)
+            (seq address-h)
+            (seq address0)
+            (not= address0 address-h)
+            (str/includes?
+              (str/lower-case address0)
+              (str/lower-case store-name-h)))
+          address-new (cond
+                        merged-address? address-h
+                        (and (not (seq address0)) (seq address-h)) address-h
+                        :else address0)
+          store-name-new (or store-name0 store-name-h)]
+      (cond-> merchant*
+        (and (not (seq store-name0)) (seq store-name-new))
+        (assoc :store_name store-name-new)
+
+        (and (or merged-address? (not (seq address0))) (seq address-new))
+        (assoc :address address-new)))))
+
 (defn persist-extract-result!
   "Persist a provider extract result, enriched with markdown-derived guesses.
 
@@ -692,22 +995,25 @@
                       (seq markdown-items) (assoc extraction0 :items markdown-items)
                       (sequential? (:items extraction0)) extraction0
                       :else (assoc extraction0 :items []))
-        provider-total (common/parse-money (get-in extraction0 [:totals :total]))
+        provider-total0 (common/parse-money (get-in extraction0 [:totals :total]))
         extraction0 (cond-> extraction0
                       (and markdown-total
-                        (or (nil? provider-total)
-                          (> (abs-decimal-diff markdown-total provider-total) 0.05)))
+                        (or (nil? provider-total0)
+                          (> (abs-decimal-diff markdown-total provider-total0) 0.05)))
                       (assoc :totals {:total markdown-total})
 
                       (and (nil? (:purchased_at extraction0)) markdown-purchased-at)
                       (assoc :purchased_at markdown-purchased-at)
 
                       (and (nil? (get-in extraction0 [:merchant :name])) markdown-supplier)
-                      (assoc :merchant (cond-> {:name markdown-supplier}
-                                         (:store_name markdown-merchant-header)
-                                         (assoc :store_name (:store_name markdown-merchant-header))
-                                         (:address markdown-merchant-header)
-                                         (assoc :address (:address markdown-merchant-header)))))
+                      (assoc :merchant {:name markdown-supplier})
+
+                      (map? markdown-merchant-header)
+                      (update :merchant merge-markdown-merchant-header markdown-merchant-header))
+        final-total (common/parse-money (get-in extraction0 [:totals :total]))
+        extraction0 (cond-> extraction0
+                      (prefer-markdown-items? (:items extraction0) markdown-items final-total)
+                      (assoc :items markdown-items))
         {:keys [extraction changed? changes]}
         (reconcile-extraction-with-markdown extraction0 markdown)
         {:keys [extraction post-processing]}

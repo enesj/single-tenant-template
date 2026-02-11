@@ -23,6 +23,7 @@
   - Prompts for a confirmation phrase unless --yes is provided
 
   Usage:
+    bb empty-stores-suppliers-receipts [--dev|--test|dev|test] [--apply] [--yes]
     clj -M scripts/bb/database/empty_stores_suppliers_receipts.clj [--dev|--test|dev|test] [--apply] [--yes]"
   (:require
     [aero.core :as aero]
@@ -40,6 +41,7 @@
        (println msg)
        (println "")))
    (println "Usage:")
+   (println "  bb empty-stores-suppliers-receipts [--dev|--test|dev|test] [--apply] [--yes]")
    (println "  clj -M scripts/bb/database/empty_stores_suppliers_receipts.clj [--dev|--test|dev|test] [--apply] [--yes]")
    (println "")
    (println "Default is dry-run (no DB writes).")))

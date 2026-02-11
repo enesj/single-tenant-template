@@ -18,6 +18,7 @@
  {:fields
   [[:id :uuid {:primary-key true}]
    [:display_name [:varchar 255] {:null false}]
+
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
    [:archived_at :timestamptz]

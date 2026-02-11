@@ -430,6 +430,28 @@
           (throw e))
         (throw e)))))
 
+(defn- choose-create-display-name
+  "Choose which display name to persist when Places suggests a candidate.
+
+  We keep the OCR/display guess when it already normalizes to the same supplier key
+  as the Places name (preserves promoted brand names). Otherwise we persist the
+  Places candidate to avoid canonicalizing obvious OCR typos as new suppliers."
+  [ocr-display-name candidate-name]
+  (let [ocr-display-name (some-> ocr-display-name configs/unescape-html-entities str str/trim not-empty)
+        candidate-name (some-> candidate-name configs/unescape-html-entities str str/trim not-empty)
+        ocr-normalized (normalize-supplier-key ocr-display-name)
+        candidate-normalized (normalize-supplier-key candidate-name)]
+    (cond
+      (and (seq ocr-display-name)
+        (seq candidate-name)
+        (seq ocr-normalized)
+        (seq candidate-normalized)
+        (not= ocr-normalized candidate-normalized))
+      candidate-name
+
+      (seq ocr-display-name) ocr-display-name
+      :else candidate-name)))
+
 (defn resolve-or-create-supplier-with-places!
   "Resolve or create a supplier using Places as a canonicalizer.
 
@@ -456,12 +478,13 @@
             (if-let [{:keys [place]} candidate]
               (let [candidate-name (some-> (:name place) configs/unescape-html-entities)
                     candidate-normalized (normalize-supplier-key candidate-name)
-                    candidate-legacy-normalized (legacy-normalize-supplier-key-v0 candidate-name)]
+                    candidate-legacy-normalized (legacy-normalize-supplier-key-v0 candidate-name)
+                    create-display-name (choose-create-display-name display-name candidate-name)]
                 (if-let [existing (find-by-normalized-keys-or-legacy
                                     db
                                     [candidate-normalized candidate-legacy-normalized])]
                   {:supplier (maybe-unescape-existing-display-name! db existing) :source :places-api}
-                  {:supplier (create-supplier-idempotent! db candidate-name)
+                  {:supplier (create-supplier-idempotent! db create-display-name)
                    :source :places-api}))
               {:supplier (create-supplier-idempotent! db display-name)
                :source :ocr-fallback})))))))

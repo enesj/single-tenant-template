@@ -426,6 +426,10 @@
   {:doc "Delete ALL stores from the database and unmap store_aliases. Dry-run by default. Usage: bb delete-stores [--dev|--test|dev|test] [--apply] [--yes]",
    :task (apply shell "clj" "-M" "scripts/bb/database/delete_stores.clj" *command-line-args*)},
 
+  empty-stores-suppliers-receipts
+  {:doc "Empty suppliers/stores/aliases/receipts (and dependent expenses + expense_items). Dry-run by default. Usage: bb empty-stores-suppliers-receipts [--dev|--test|dev|test] [--apply] [--yes]",
+   :task (apply shell "clj" "-M" "scripts/bb/database/empty_stores_suppliers_receipts.clj" *command-line-args*)},
+
   spellcheck-article-names
   {:doc "Spellcheck `articles.canonical_name` using the JSpell Checker MCP server (RapidAPI via mcp-remote) and write suggestions to an EDN file in the project root.\n\nRequires: Node/npx + a RapidAPI key in env (JSPELL_RAPIDAPI_KEY preferred, or RAPIDAPI_KEY).\n\nUsage: bb spellcheck-article-names [--dev|--test|dev|test] [--out <path>] [--lang <bs|hr|sr|...>] [--limit N] [--max-suggestions N]",
    :task (apply shell "/bin/sh" "-c" "repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; cd \"$repo_root\" || exit 1; set -a; [ -f \"$repo_root/.env\" ] && . \"$repo_root/.env\"; set +a; exec clj -M:spellcheck scripts/bb/expenses/spellcheck_article_canonical_names.clj \"$@\"" "--" *command-line-args*)},

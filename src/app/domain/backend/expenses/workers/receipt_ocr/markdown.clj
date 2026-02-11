@@ -79,10 +79,21 @@
   ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "fiskalni" "racun" "račun" "фискални" "рачун"])
 
 (def ^:private legal-suffix-re
-  #"(?i)\s+(d\.?o\.?o\.?|d\.?d\.?|a\.?d\.?|s\.?p\.?|j\.?p\.?)\.?\s*$")
+  ;; Match legal form tokens anywhere (we truncate before them).
+  #"(?i)\b(?:d\s*\.?\s*o\s*\.?\s*o|d\s*\.?\s*d|a\s*\.?\s*d|s\s*\.?\s*p|j\s*\.?\s*p|u\s*\.?\s*o|llc|ltd|inc|gmbh|ag)\b\.?")
 
 (def ^:private store-name-prefixes
-  ["podružnica" "poslovnica" "tc " "pc " "cc " "centar" "market" "maloprodaja" "prodavnica"])
+  ["ogranak"
+   "podružnica"
+   "poslovnica"
+   "pj "
+   "tc "
+   "pc "
+   "cc "
+   "centar"
+   "market"
+   "maloprodaja"
+   "prodavnica"])
 
 (def ^:private address-prefixes
   ["ul." "ul " "ulica" "bb" "br." "br " "trg"])
@@ -100,14 +111,28 @@
   (when (string? line)
     (boolean (re-matches #"^\d{5}\s+\S.*$" (str/trim line)))))
 
-(defn- strip-legal-suffix
-  "Remove legal suffixes like d.o.o., d.d., etc."
+(defn strip-legal-suffix
+  "Truncate company name before legal suffix tokens like d.o.o., d.d., etc.
+
+  Examples:
+  - \"HOŠE-KOMERC d.o.o. Sarajevo\" -> \"HOŠE-KOMERC\"
+  - \"HAKCHI L. u.o. Kiseljak\" -> \"HAKCHI L.\"
+
+  Returns a trimmed string when input is stringy, otherwise nil."
   [name]
   (when (string? name)
-    (-> name
-      (str/replace legal-suffix-re "")
-      str/trim
-      not-empty)))
+    (when-let [name* (some-> name str str/trim not-empty)]
+      (let [m (re-matcher legal-suffix-re name*)]
+        (if (.find m)
+          (let [idx (.start m)]
+            (if (pos? (long idx))
+              (some-> (subs name* 0 (long idx))
+                str/trim
+                (str/replace #"[\\s,;:]+$" "")
+                str/trim
+                not-empty)
+              name*))
+          name*)))))
 
 (defn- is-header-stop-line?
   "Check if this line marks end of merchant header (tax IDs, receipt markers)"
@@ -129,6 +154,38 @@
   [norm line]
   (or (some #(str/starts-with? norm %) address-prefixes)
     (looks-like-postal-city? line)))
+
+(defn split-store-name-and-address
+  "Best-effort split of a merged store+address string.
+
+  Some OCR providers return a single `merchant.address` string containing both
+  a store/branch label and the street/city address, often comma-separated.
+
+  Example input:
+  - `Ogranak Sarajevo 1, Milana Preloga 2 S, 71120 Novo Sarajevo`
+
+  Returns {:store_name .. :address ..} when we can confidently infer a split;
+  otherwise returns nil."
+  [s]
+  (when (string? s)
+    (let [s (some-> s str str/trim not-empty)]
+      (when s
+        (let [parts (->> (str/split s #"\s*,\s*")
+                      (map str/trim)
+                      (remove str/blank?)
+                      vec)
+              first* (first parts)
+              rest* (subvec parts 1)
+              norm-first (normalize-text first*)]
+          (when (and (>= (count parts) 2)
+                  (seq norm-first)
+                  (is-store-name-line? norm-first))
+            (when-let [address (some->> rest*
+                                 (str/join ", ")
+                                 str/trim
+                                 not-empty)]
+              {:store_name first*
+               :address address})))))))
 
 (defn markdown->merchant-header
   "Parse receipt header into structured merchant info.
@@ -302,6 +359,8 @@
           (parse-long month)
           (parse-long day))))))
 
+(declare apply-discount-to-item)
+
 (defn- markdown->pipe-line-items [markdown]
   (when (string? markdown)
     (let [pipe-row->cells (fn [line]
@@ -346,6 +405,7 @@
           row-looks-like-tax? (fn [cells]
                                 (let [joined (->> cells (map normalize-text) (remove nil?) (str/join " "))]
                                   (boolean (re-find #"(?:porez|порез|pdv|пдв|vat|tax)" joined))))
+          discount-label-pattern #"(?iu)\b(popust|popost|rabat|discount|akcija)\b"
           parse-item (fn [cells {:keys [label-idx qty-idx unit-idx total-idx]}]
                        (let [raw-label (normalize-item-label (nth cells label-idx nil))
                              qty (common/parse-money (nth cells qty-idx nil))
@@ -356,6 +416,30 @@
                             :qty qty
                             :unit_price unit-price
                             :line_total line-total})))
+          discount-from-item (fn [{:keys [raw_label qty line_total]}]
+                               (let [label (normalize-text raw_label)
+                                     pct (common/parse-money qty)
+                                     amount (common/parse-money line_total)]
+                                 (when (and (seq label)
+                                         (re-find discount-label-pattern label)
+                                         pct
+                                         amount
+                                         (pos? (double (.abs (bigdec pct)))))
+                                   {:pct (.abs (bigdec pct))
+                                    :amount (bigdec amount)})))
+          discount-from-cells (fn [cells]
+                                (let [raw-label (normalize-item-label (nth cells 0 nil))
+                                      label (normalize-text raw-label)
+                                      pct (common/parse-money (nth cells 1 nil))
+                                      amount (common/parse-money (peek cells))]
+                                  (when (and (>= (count cells) 3)
+                                          (seq label)
+                                          (re-find discount-label-pattern label)
+                                          pct
+                                          amount
+                                          (pos? (double (.abs (bigdec pct)))))
+                                    {:pct (.abs (bigdec pct))
+                                     :amount (bigdec amount)})))
           default-mapping {:label-idx 0 :qty-idx 1 :unit-idx 2 :total-idx 3}]
       (loop [remaining (str/split-lines markdown)
              pending-header nil
@@ -384,10 +468,33 @@
               (and (>= (count cells) 4) (= table-kind :tax))
               (recur (rest remaining) nil table-kind mapping items)
 
+              (and (>= (count cells) 3)
+                (seq items)
+                (discount-from-cells cells))
+              (let [discount (discount-from-cells cells)]
+                (recur (rest remaining)
+                  nil
+                  table-kind
+                  mapping
+                  (conj (pop items) (apply-discount-to-item (peek items) discount))))
+
               (>= (count cells) 4)
               (let [item (when-not (row-looks-like-tax? cells)
-                           (parse-item cells (or mapping default-mapping)))]
-                (recur (rest remaining) nil table-kind mapping (cond-> items item (conj item))))
+                           (parse-item cells (or mapping default-mapping)))
+                    discount (some-> item discount-from-item)]
+                (recur (rest remaining)
+                  nil
+                  table-kind
+                  mapping
+                  (cond
+                    (and discount (seq items))
+                    (conj (pop items) (apply-discount-to-item (peek items) discount))
+
+                    item
+                    (conj items item)
+
+                    :else
+                    items)))
 
               :else
               (recur (rest remaining) nil nil nil items))))))))

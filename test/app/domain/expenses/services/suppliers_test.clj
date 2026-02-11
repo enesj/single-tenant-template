@@ -33,17 +33,49 @@
 
 (deftest find-or-create-supplier-unescapes-existing-display-name-test
   (when-let [db fixtures/*test-db*]
-    (let [id (java.util.UUID/randomUUID)
-          display "B&amp;K d.o.o. Sarajevo"
+    (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+          id (java.util.UUID/randomUUID)
+          display (str "B&amp;K " suffix " d.o.o. Sarajevo")
           normalized (suppliers/normalize-supplier-key display)
           _ (jdbc/execute-one!
               db
               ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
                id display normalized]
               {:builder-fn rs/as-unqualified-lower-maps})
-          res (suppliers/find-or-create-supplier! db "B&K d.o.o. Sarajevo" {})]
+          res (suppliers/find-or-create-supplier!
+                db
+                (str "B&K " suffix " d.o.o. Sarajevo")
+                {})]
       (is (= id (get-in res [:supplier :id])))
-      (is (= "B&K d.o.o. Sarajevo" (get-in res [:supplier :display_name]))))))
+      (is (= (str "B&K " suffix " d.o.o. Sarajevo")
+            (get-in res [:supplier :display_name]))))))
+
+(deftest suppliers-create-update-test
+  (testing "address can be set on update without affecting normalized_key"
+    (when-let [db fixtures/*test-db*]
+      (let [created ((:create! suppliers/service)
+                     db
+                     {:display_name "Brand X"})
+            id (:id created)
+            normalized (:normalized_key created)
+            updated ((:update! suppliers/service)
+                     db
+                     id
+                     {:address "Street 123"})]
+        (is (= id (:id updated)))
+        (is (= "Street 123" (:address updated)))
+        (is (= normalized (:normalized_key updated))))))
+
+  (testing "autocomplete searches display_name"
+    (when-let [db fixtures/*test-db*]
+      (let [id (java.util.UUID/randomUUID)
+            _ (jdbc/execute-one!
+                db
+                ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
+                 id "ShortBrand" (suppliers/normalize-supplier-key "ShortBrand")]
+                {:builder-fn rs/as-unqualified-lower-maps})
+            results (suppliers/search-suppliers-autocomplete db "Short" {:limit 20})]
+        (is (some #(= id (:id %)) results))))))
 
 (deftest resolve-or-create-supplier-with-places-test
   (when-let [db fixtures/*test-db*]
@@ -127,9 +159,10 @@
             (is (= :ocr-fallback (:source result)))))))
 
     (testing "Places hit resolves to legacy supplier with legal suffix key"
-      (let [legacy-id (java.util.UUID/randomUUID)
-            legacy-display "HOŠE-KOMERC d.o.o. Sarajevo"
-            legacy-normalized "hose-komerc-doo-sarajevo"
+      (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+            legacy-id (java.util.UUID/randomUUID)
+            legacy-display (str "HOŠE-KOMERC " suffix " d.o.o. Sarajevo")
+            legacy-normalized (str "hose-komerc-" suffix "-doo-sarajevo")
             _ (jdbc/execute-one!
                 db
                 ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
@@ -137,22 +170,23 @@
                 {:builder-fn rs/as-unqualified-lower-maps})
             opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
             result (with-redefs [places-api/search-text! (fn [& _]
-                                                           {:places [{:name "Hoše komerc" :raw {}}]
+                                                           {:places [{:name (str "Hoše komerc " suffix) :raw {}}]
                                                             :error nil})]
                      (suppliers/resolve-or-create-supplier-with-places!
                        db
-                       "HUŠE KEMERC d.o.o. Sarajevo"
+                       (str "HUŠE KEMERC " suffix " d.o.o. Sarajevo")
                        opts))]
         (is (= legacy-id (get-in result [:supplier :id])))
         (is (= legacy-normalized (get-in result [:supplier :normalized_key])))
         (is (= :places-api (:source result)))))
 
     (testing "Places hit resolves to legacy supplier with diacritics-stripped + legal suffix key"
-      (let [legacy-id (java.util.UUID/randomUUID)
-            legacy-display "Šamon d.o.o. Sarajevo"
-        ;; Simulate the pre-diacritic-folding bug:
-        ;; "Š" is dropped by the legacy ASCII whitelist.
-            legacy-normalized "amon-doo-sarajevo"
+      (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+            legacy-id (java.util.UUID/randomUUID)
+            legacy-display (str "Šamon " suffix " d.o.o. Sarajevo")
+            ;; Simulate the pre-diacritic-folding bug:
+            ;; "Š" is dropped by the legacy ASCII whitelist.
+            legacy-normalized (str "amon-" suffix "-doo-sarajevo")
             _ (jdbc/execute-one!
                 db
                 ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
@@ -164,7 +198,7 @@
                                                             :error nil})]
                      (suppliers/resolve-or-create-supplier-with-places!
                        db
-                       "SAMON d.o.o. Sarajevo"
+                       (str "SAMON " suffix " d.o.o. Sarajevo")
                        opts))]
         (is (= legacy-id (get-in result [:supplier :id])))
         (is (= legacy-normalized (get-in result [:supplier :normalized_key])))
@@ -182,27 +216,76 @@
                        opts))]
         (is (= (:id supplier) (get-in result [:supplier :id])))
         (is (= :places-api (:source result)))))))
+
+(deftest resolve-or-create-supplier-with-places-preserves-ocr-brand-name
+  (when-let [db fixtures/*test-db*]
+    (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+          brand-name (str "LUPRIV PLUS Mostar " suffix)
+          legal-name (str brand-name " d.o.o. Sarajevo")
+          opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+          result (with-redefs [places-api/search-text! (fn [& _]
+                                                         {:places [{:name legal-name
+                                                                    :raw {:displayName {:text legal-name}}}]
+                                                          :error nil})]
+                   (suppliers/resolve-or-create-supplier-with-places! db brand-name opts))]
+      (is (= :places-api (:source result)))
+      (is (= brand-name (get-in result [:supplier :display_name])))
+      (is (= (suppliers/normalize-supplier-key brand-name)
+            (get-in result [:supplier :normalized_key]))))))
+
+(deftest resolve-or-create-supplier-with-places-prefers-places-name-for-ocr-typo
+  (when-let [db fixtures/*test-db*]
+    (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+          ocr-name (str "HESE-KEMERC " suffix)
+          places-name (str "HOŠE-KOMERC " suffix)
+          opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+          places-calls (atom 0)]
+      (with-redefs [places-api/search-text! (fn [& _]
+                                              (swap! places-calls inc)
+                                              {:places [{:name places-name
+                                                         :raw {:displayName {:text places-name}}}]
+                                               :error nil})]
+        (let [first-res (suppliers/resolve-or-create-supplier-with-places! db ocr-name opts)
+              first-id (get-in first-res [:supplier :id])
+              second-res (suppliers/resolve-or-create-supplier-with-places! db places-name opts)]
+          (is (= :places-api (:source first-res)))
+          (is (= places-name (get-in first-res [:supplier :display_name])))
+          (is (= (suppliers/normalize-supplier-key places-name)
+                (get-in first-res [:supplier :normalized_key])))
+          (is (= first-id (get-in second-res [:supplier :id])))
+          (is (= :db (:source second-res)))
+          (is (= 1 @places-calls)))))))
 (deftest delete-supplier-blocked-when-expenses-exist
   (testing "delete is blocked when supplier has expenses (FK RESTRICT)"
     (when-let [db fixtures/*test-db*]
       (let [supplier-name (str "Delete Supplier Blocked " (java.util.UUID/randomUUID))
             {:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-name {})
             supplier-id (:id supplier)
-            payer (th/create-payer! db {:type "cash" :label "Cash"})]
-        (expenses/create-expense!
-          db
-          {:supplier_id supplier-id
-           :payer_id (:id payer)
-           :purchased_at (java.time.Instant/now)
-           :total_amount 10M
-           :currency "BAM"
-           :items [{:raw_label "Milk" :line_total 10M}]})
-
+            payer (th/create-payer! db {:type "cash" :label "Cash"})
+            expense (expenses/create-expense!
+                      db
+                      {:supplier_id supplier-id
+                       :payer_id (:id payer)
+                       :purchased_at (java.time.Instant/now)
+                       :total_amount 10M
+                       :currency "BAM"
+                       :items [{:raw_label "Milk" :line_total 10M}]})
+            expense-id (:id expense)]
         (try
           (suppliers/delete-supplier! db supplier-id)
           (is false "Expected delete to fail due to FK restrict")
           (catch org.postgresql.util.PSQLException e
-            (is (= "23503" (.getSQLState e)))))))))
+            (is (= "23503" (.getSQLState e))))
+          (finally
+            ;; Prevent residual rows during standalone REPL runs without rollback fixture.
+            ;; When wrapped in `with-transaction-rollback`, the expected FK exception
+            ;; marks the tx as aborted, so cleanup must be skipped there.
+            (when-not (instance? java.sql.Connection db)
+              (when expense-id
+                (jdbc/execute! db ["delete from expense_items where expense_id = ?" expense-id])
+                (jdbc/execute! db ["delete from expenses where id = ?" expense-id]))
+              (jdbc/execute! db ["delete from suppliers where id = ?" supplier-id])
+              (jdbc/execute! db ["delete from payers where id = ?" (:id payer)]))))))))
 
 (deftest delete-supplier-succeeds-without-expenses
   (testing "delete succeeds when supplier has no expenses"
