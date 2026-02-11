@@ -18,7 +18,6 @@
  {:fields
   [[:id :uuid {:primary-key true}]
    [:display_name [:varchar 255] {:null false}]
-
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
    [:archived_at :timestamptz]
@@ -365,6 +364,7 @@
    [:display_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
+   [:city [:varchar 255]]
    [:place_id :text]
    [:archived_at :timestamptz]
    [:created_at :timestamptz {:default [:now]}]

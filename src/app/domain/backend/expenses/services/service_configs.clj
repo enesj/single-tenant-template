@@ -321,19 +321,23 @@
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :display_name
-   :search-fields [:display_name :normalized_key :address :place_id]
+   :search-fields [:display_name :normalized_key :address :place_id :city]
    :field-transformers {:normalized_key normalize-store-key}
    :before-insert (fn [data]
-                    (let [display-name (unescape-html-entities (:display_name data))
+                    (let [extract-city (requiring-resolve 'app.domain.backend.expenses.services.stores/extract-city-from-address)
+                          display-name (unescape-html-entities (:display_name data))
                           address (unescape-html-entities (:address data))
-                          key-src (str (or display-name "") " " (or address ""))]
+                          key-src (str (or display-name "") " " (or address ""))
+                          city (extract-city address display-name)]
                       (-> data
                         (assoc :display_name display-name)
                         (assoc :address address)
+                        (assoc :city city)
                         (assoc :normalized_key (normalize-store-key key-src))
                         (assoc :id (UUID/randomUUID)))))
    :before-update (fn [_id updates]
-                    (let [display-name (when (contains? updates :display_name)
+                    (let [extract-city (requiring-resolve 'app.domain.backend.expenses.services.stores/extract-city-from-address)
+                          display-name (when (contains? updates :display_name)
                                          (unescape-html-entities (:display_name updates)))
                           address (when (contains? updates :address)
                                     (unescape-html-entities (:address updates)))
@@ -341,7 +345,22 @@
                                     (contains? updates :display_name)
                                     (assoc :display_name display-name)
                                     (contains? updates :address)
-                                    (assoc :address address))]
+                                    (assoc :address address))
+                          ;; Recompute city when address or display-name changes
+                          updates (cond
+                                    ;; Address updated → recompute city from both
+                                    (contains? updates :address)
+                                    (assoc updates :city (extract-city address display-name))
+
+                                    ;; Only display-name updated → try extracting, don't overwrite with blank
+                                    (contains? updates :display_name)
+                                    (let [new-city (extract-city nil display-name)]
+                                      (if (str/blank? new-city)
+                                        updates
+                                        (assoc updates :city new-city)))
+
+                                    :else
+                                    updates)]
                       (cond-> updates
                         (or (contains? updates :display_name)
                           (contains? updates :address))

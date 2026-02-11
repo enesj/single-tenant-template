@@ -172,3 +172,112 @@
             {:places []
              :error {:type :places/exception
                      :message (or (.getMessage e) (str (class e)))}}))))))
+
+(defn get-place-details!
+  "Fetch detailed place information for a given place-id.
+  
+  Returns map with :id, :display-name, :formatted-address, :address-components on success.
+  Returns nil on errors (API error, HTTP error, or exception).
+  
+  Example:
+    (get-place-details! cfg \"ChIJQR...place-id\")
+    ;; => {:id \"ChIJQR...\", 
+    ;;     :display-name \"Bingo Sarajevo\",
+    ;;     :formatted-address \"Ul. Kolodvorska 12, 71000 Sarajevo\",
+    ;;     :address-components [{:longText \"Sarajevo\" :types [\"locality\" \"political\"]} ...]}"
+  [cfg place-id]
+  (let [api-key (:api-key cfg)
+        place-id* (some-> place-id str str/trim not-empty)
+        field-mask "id,displayName,formattedAddress,addressComponents"]
+    (cond
+      (str/blank? place-id*)
+      (do
+        (log/debug "get-place-details: blank place-id")
+        nil)
+
+      (not (seq api-key))
+      (do
+        (log/warn "get-place-details: no api-key configured")
+        nil)
+
+      :else
+      (let [url (str "https://places.googleapis.com/v1/places/" place-id*)
+            req-opts {:headers {"X-Goog-Api-Key" api-key
+                                "X-Goog-FieldMask" field-mask}
+                      :as :text
+                      :throw-exceptions false
+                      :socket-timeout (:timeout-ms cfg)
+                      :conn-timeout (:timeout-ms cfg)}]
+        (try
+          (let [resp (http/get url req-opts)
+                status (:status resp)
+                data (parse-json-body (:body resp))]
+            (if (= 200 status)
+              (let [display-name (or (get-in data [:displayName :text])
+                                   (get data :displayName))
+                    formatted-address (get data :formattedAddress)
+                    address-components (get data :addressComponents)
+                    id (get data :id)]
+                (log/debug "get-place-details success"
+                  {:place-id place-id*
+                   :display-name display-name
+                   :address-components-count (count address-components)})
+                {:id id
+                 :display-name display-name
+                 :formatted-address formatted-address
+                 :address-components address-components})
+              (do
+                (log/warn "get-place-details non-200 response"
+                  {:status status
+                   :place-id place-id*
+                   :raw-body-snippet (safe-body-snippet (:body resp))})
+                nil)))
+          (catch Exception e
+            (log/warn e "get-place-details request failed"
+              {:place-id place-id*})
+            nil))))))
+
+(defn extract-city-from-address-components
+  "Extract city name from Places API addressComponents array.
+  
+  Tries in order:
+  1. Component with type \"locality\" (city)
+  2. Component with type \"postal_town\"
+  3. Component with type \"administrative_area_level_2\"
+  
+  Returns the longText field from first matching component, or nil if not found.
+  
+  Example addressComponents structure:
+    [{:longText \"Sarajevo\"
+      :shortText \"Sarajevo\"
+      :types [\"locality\" \"political\"]
+      :languageCode \"bs\"}
+     {:longText \"71000\"
+      :types [\"postal_code\"]}]
+  
+  Example:
+    (extract-city-from-address-components
+      [{:longText \"Sarajevo\" :types [\"locality\" \"political\"]}
+       {:longText \"71000\" :types [\"postal_code\"]}])
+    ;; => \"Sarajevo\""
+  [address-components]
+  (when (sequential? address-components)
+    (let [;; Try locality first (most common for cities)
+          locality (some (fn [component]
+                           (when (and (map? component)
+                                   (some #{"locality"} (:types component)))
+                             (:longText component)))
+                     address-components)]
+      (or locality
+        ;; Fallback to postal_town
+        (some (fn [component]
+                (when (and (map? component)
+                        (some #{"postal_town"} (:types component)))
+                  (:longText component)))
+          address-components)
+        ;; Last fallback: administrative_area_level_2
+        (some (fn [component]
+                (when (and (map? component)
+                        (some #{"administrative_area_level_2"} (:types component)))
+                  (:longText component)))
+          address-components)))))
