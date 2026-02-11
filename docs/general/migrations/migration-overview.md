@@ -57,7 +57,7 @@ graph TD
     A["Edit Source Files<br/>(template/shared/*.edn + domain/*/*.edn)"] --> B["Generate Migrations<br/>(mig/make-all-migrations!)"]
     B --> C["Merges to models.edn<br/>+ Creates migration files"]
     C --> D["Review Generated Files"]
-    D --> E["Apply Migrations<br/>(mig/migrate!)"]
+    D --> E["Apply Migrations<br/>(mig/migrate! + mig/migrate! :test)"]
     E --> F["Update Database Schema"]
     F --> G["Verify application functions"]
 ```
@@ -116,8 +116,9 @@ The system uses centralized field type handling (`app.shared.field-casting`):
 ;; Merge hierarchical models -> schema migration -> extended migrations
 (mig/make-all-migrations!)
 
-;; Apply pending migrations + verify alignment (default :dev)
+;; Apply pending migrations + verify alignment (:dev), then keep test DB in sync
 (mig/migrate!)
+(mig/migrate! :test)
 (mig/status)
 ```
 
@@ -243,7 +244,8 @@ bb clean-db --dev
     [[:idx-new-entity-created :btree {:fields [:created-at]}]]}}
 # (require '[app.template.backend.migrations.simple-repl :as mig])
 # (mig/make-all-migrations!)  ; Merges template/shared/domain → models.edn, generates migrations
-# (mig/migrate!)              ; Applies migrations to database
+# (mig/migrate!)              ; Applies migrations to dev database
+# (mig/migrate! :test)        ; Always keep test DB migrated too
 
 # 4. Validate frontend config alignment (migration-adjacent)
 # bb validate-frontend-config

@@ -56,9 +56,10 @@ This repo also supports the lightweight `clojure-mcp-light` CLI tools (useful wh
 ## 🚨 Hard rules
 
 - Database schema changes must happen ONLY via the migrations process. Never alter the schema directly (manual SQL, psql, ORM/DSL hacks, or ad-hoc edits to `resources/db/models.edn` or the live database). All changes must be captured as forward/backward migrations under `resources/db/migrations/` and applied using the documented tooling (`app.template.backend.migrations.simple-repl` or bb tasks).
+- When you generate or change migrations, **always apply them to both the dev and test databases** (so tests and local dev stay in sync).
 - **No Python scripting** in this repo. Use Babashka (`.bb`) or Bash (`.sh`) when necessary.
 - **Never commit secrets**. Keep them in `config/.secrets.edn` (or `~/.secrets.edn`) and environment variables.
-- **Secret handling (agents)**: Do not read, quote, or request secrets from `config/.secrets.edn`, `~/.secrets.edn`, `.env`, `.postgres.env`, CI secrets, or similar. If configuration context is needed to debug, ask for the minimal relevant snippet with sensitive values redacted.
+- **Secret handling (agents)**: Do not read, quote, request, or **edit** secrets in `config/.secrets.edn`, `~/.secrets.edn`, `.env`, `.postgres.env`, CI secrets, or similar. If a change is required, ask the user to do it and give precise instructions (exact file path + exact keys/shape to add/change) using placeholder values (e.g. `"REDACTED"`).
 - **Temporary files**: Always write temporary artifacts under the project-local `tmp/` directory (not system `/tmp`) to avoid sandbox/agent path issues; delete them when no longer needed.
 - Keep changes small and focused; avoid unrelated refactors.
 

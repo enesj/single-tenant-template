@@ -72,7 +72,8 @@ Run migrations through `src/app/template/backend/migrations/simple_repl.clj` ins
 (require '[app.template.backend.migrations.simple-repl :as mig])
 
 (mig/make-all-migrations!)            ;; merge models → schema → extended
-(mig/migrate!)                       ;; apply pending migrations + verify alignment (default :dev)
+(mig/migrate!)                       ;; apply pending migrations + verify alignment (:dev)
+(mig/migrate! :test)                 ;; always keep test DB migrated too
 (mig/status)                         ;; list applied/pending
 (mig/regenerate-extended-migrations-clean!) ;; prune extended and regenerate
 (mig/check-duplicate-migrations)     ;; find duplicate numbers

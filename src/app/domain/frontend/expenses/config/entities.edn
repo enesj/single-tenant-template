@@ -7,7 +7,8 @@
  :manufacturers {:title "Manufacturers"},
  :price-observations {:title "Price Observations"},
  :payers {:title "Payers"},
- :categories {:title "Categories"},
+ :categories {:title "Categories"}
+ :cities {:title "Cities"},
  :supplier-aliases {:title "Supplier Aliases"},
  :receipts {:title "Receipts"},
  :stores {:title "Stores"},

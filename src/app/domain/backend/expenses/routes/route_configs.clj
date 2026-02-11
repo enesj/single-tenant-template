@@ -74,6 +74,21 @@
    :custom-count-params (fn [qp]
                           {:search (:search qp)})})
 
+(def city-config
+  {:entity-key :city
+   :entity-plural :cities
+   :route-segment "cities"
+   :service 'app.domain.backend.expenses.services.cities
+   :default-limit 100
+   :default-order-by "name"
+   :required-fields [:name]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
+                          {:search (:search qp)})})
+
 (def manufacturer-config
   {:entity-key :manufacturer
    :entity-plural :manufacturers
@@ -279,6 +294,7 @@
    :subcategories subcategory-config
    :suppliers supplier-config
    :stores store-config
+   :cities city-config
    :manufacturers manufacturer-config
    :payers payer-config
    :payer-types payer-type-config

@@ -91,6 +91,13 @@
             {:id :created-at :label "Created at" :type :datetime}
             {:id :updated-at :label "Updated at" :type :datetime}]})
 
+(def cities-entity-spec
+  {:id :cities
+   :fields [{:id :name :label "Name" :type :text}
+            {:id :normalized-key :label "Normalized key" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
 (def store-aliases-entity-spec
   {:id :store-aliases
    :fields [{:id :supplier-display-name :label "Supplier" :type :text}
@@ -158,6 +165,10 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :stores
    :value-fn (fn [spec _] (or spec stores-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :cities
+   :value-fn (fn [spec _] (or spec cities-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :store-aliases

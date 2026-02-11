@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-categories :as user-categories]
+    [app.domain.backend.expenses.handlers.user-cities :as user-cities]
     [app.domain.backend.expenses.handlers.user-expenses.article-aliases :as user-expenses-article-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
@@ -87,6 +88,15 @@
    ["/stores/batch" {:delete {:handler (user-stores/batch-delete-stores-handler db)}}]
 
    ["/stores/:id" {:put {:handler (user-stores/update-store-handler db)}}]
+
+   ;; Cities (admin/owner only)
+   ["/cities"
+    ["" {:get {:handler (user-cities/list-cities-handler db)}
+         :post {:handler (user-cities/create-city-handler db)}}]
+
+    ["/batch" {:delete {:handler (user-cities/batch-delete-cities-handler db)}}]
+
+    ["/:id" {:put {:handler (user-cities/update-city-handler db)}}]]
 
    ;; Store aliases (admin/owner only)
    ["/store-aliases" {:get {:handler (user-store-aliases/list-store-aliases-handler db)}}]

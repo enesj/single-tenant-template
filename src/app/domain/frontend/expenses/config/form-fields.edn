@@ -88,7 +88,11 @@
   :edit-fields ["name" "description"],
   :field-config
   {:name {:type "text", :label "Name"},
-   :description {:type "textarea", :label "Description"}}},
+   :description {:type "textarea", :label "Description"}}}
+ :cities
+ {:create-fields ["name"],
+  :edit-fields ["name"],
+  :field-config {:name {:type "text", :label "Name"}}},
  :supplier-aliases
  {:edit-fields ["raw_label" "raw_label_normalized" "supplier_id"],
   :field-config

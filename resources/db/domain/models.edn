@@ -18,6 +18,17 @@
              :indexes [[:idx_suppliers_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
+ ;; Cities (canonical city names)
+ ;; ----------------------------------------------------------------------------
+
+ :cities {:fields [[:id :uuid {:primary-key true}]
+                   [:name [:varchar 255] {:null false}]
+                   [:normalized_key [:varchar 255] {:null false}]
+                   [:created_at :timestamptz {:default [:now]}]
+                   [:updated_at :timestamptz {:default [:now]}]]
+          :indexes [[:idx_cities_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
+
+ ;; ----------------------------------------------------------------------------
  ;; Stores (locations/branches for a supplier)
  ;; ----------------------------------------------------------------------------
 
@@ -27,6 +38,7 @@
                    [:normalized_key [:varchar 255] {:null false}]
                    [:address :text]
                    [:city [:varchar 255]]
+                   [:city_id :uuid {:foreign-key :cities/id :on-delete :set-null}]
                    [:place_id :text]
                    [:archived_at :timestamptz]
                    [:created_at :timestamptz {:default [:now]}]
@@ -35,7 +47,8 @@
                     [:idx_stores_supplier_normalized_key
                      :btree
                      {:fields [:supplier_id :normalized_key] :unique true}]
-                    [:idx_stores_place_id :btree {:fields [:place_id]}]]}
+                    [:idx_stores_place_id :btree {:fields [:place_id]}]
+                    [:idx_stores_city_id :btree {:fields [:city_id]}]]}
 
  ;; ----------------------------------------------------------------------------
  ;; Store Aliases (deduplicated raw store/address guesses -> canonical stores)

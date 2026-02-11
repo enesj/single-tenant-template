@@ -117,96 +117,104 @@
     :else
     "ds-badge-outline"))
 
+(defn- normalize-field-key
+  [field-key]
+  (some-> (cond
+            (keyword? field-key) (name field-key)
+            (string? field-key) field-key
+            (some? field-key) (str field-key)
+            :else nil)
+    (str/replace "_" "-")
+    str/lower-case))
+
+(defn- lookup-item-value
+  [item field-key]
+  (when (and (map? item) field-key)
+    (when-let [normalized-key (normalize-field-key field-key)]
+      (let [db-key (str/replace normalized-key "-" "_")
+            candidates (remove nil? [field-key
+                                     (keyword normalized-key)
+                                     (keyword db-key)
+                                     normalized-key
+                                     db-key])]
+        (or (some #(get item %) candidates)
+          (some (fn [[k v]]
+                  (when (and (keyword? k)
+                          (= normalized-key (normalize-field-key (name k))))
+                    v))
+            item))))))
+
 (defn get-field-display-value
   "Gets the display value for a field, handling select fields specially and truncating long text content."
-  [field value]
-  (if (and (= (:type field) "select")
-        (:options field)
-        value)
-    ($ select-field-value {:field field :value value})
-    (let [field-id (:id field)
-          input-type (:input-type field)
-          field-type (:type field)
-          text-value (str (if (keyword? value) (name value) (or value "")))
+  ([field value]
+   (get-field-display-value field value nil))
+  ([field value item]
+   (if (and (= (:type field) "select")
+         (:options field)
+         value)
+     ($ select-field-value {:field field :value value})
+     (let [field-id (:id field)
+           normalized-field-id (normalize-field-key field-id)
+           display-source-field (:display-source-field field)
+           display-value (or (lookup-item-value item display-source-field) value)
+           input-type (:input-type field)
+           field-type (:type field)
+           text-value (str (if (keyword? display-value)
+                             (name display-value)
+                             (or display-value "")))
+           status-field-id? (or (= field-id :status)
+                              (= field-id "status")
+                              (= (name field-id) "status"))
+           status-str (when status-field-id? (some-> text-value str/trim not-empty))
+           status-lower (some-> status-str str/lower-case)
+           is-json-field? (or (= field-type "json")
+                            (= field-type "jsonb"))
+           is-datetime-field? (or (= field-type :datetime)
+                                (= field-type "datetime")
+                                (= field-type :timestamp)
+                                (= field-type "timestamp")
+                                (= field-type :datetime-local)
+                                (= field-type "datetime-local")
+                                (= input-type "datetime-local")
+                                (= input-type :datetime-local))
+           show-seconds? (contains? #{"created-at" "updated-at"} normalized-field-id)
+           should-truncate? (or
+                              (= input-type "url")
+                              (= input-type "email")
+                              (= field-type "text")
+                              (= field-type "textarea")
+                              is-json-field?
+                              (= field-id :avatar_url)
+                              (= field-id :settings)
+                              (= field-id :financial_settings)
+                              (= field-id :metadata)
+                              (= field-id :tags)
+                              (= field-id :attachments)
+                              (= field-id :changes)
+                              (= field-id :calculation_details)
+                              (= field-id :template_data))
+           max-length (cond
+                        is-json-field? 25
+                        (= input-type "url") 40
+                        (= input-type "email") 30
+                        (= field-type "textarea") 100
+                        (= field-type "text") 50
+                        :else 30)]
+       (cond
+         status-str
+         ($ :span {:class (str "ds-badge uppercase tracking-wide text-xs px-3 py-1 rounded-full border shadow-sm "
+                            (status->badge-variant status-lower))}
+           (titleize-status status-str))
 
-          ;; Check for status field - handle both keyword and string field IDs
-          status-field-id? (or (= field-id :status)
-                             (= field-id "status")
-                             (= (name field-id) "status"))
-          status-str (when status-field-id? (some-> text-value str/trim not-empty))
-          status-lower (some-> status-str str/lower-case)
+         is-datetime-field?
+         ($ :span {:class "whitespace-nowrap"}
+           (format-timestamp display-value {:show-seconds? show-seconds?}))
 
-          ;; JSON detection based only on field type from database schema
-          is-json-field? (or (= field-type "json")
-                           (= field-type "jsonb"))
+         should-truncate?
+         ($ truncated-text-value {:text text-value
+                                  :max-length max-length
+                                  :field-type field-type
+                                  :field-id field-id})
 
-          ;; Datetime detection - handle both keyword and string types
-          ;; Also check input-type for fields from database schema (e.g., :input-type "datetime-local")
-          is-datetime-field? (or (= field-type :datetime)
-                               (= field-type "datetime")
-                               (= field-type :timestamp)
-                               (= field-type "timestamp")
-                               (= field-type :datetime-local)
-                               (= field-type "datetime-local")
-                               (= input-type "datetime-local")
-                               (= input-type :datetime-local))
-
-          ;; Show seconds only for system timestamps (created/updated) across all list views.
-          ;; Accept both kebab-case and snake_case field IDs.
-          show-seconds? (let [raw (cond
-                                    (keyword? field-id) (name field-id)
-                                    (string? field-id) field-id
-                                    :else (str field-id))
-                              normalized (some-> raw (str/replace "_" "-"))]
-                          (contains? #{"created-at" "updated-at"}
-                            normalized))
-
-          ;; Determine if this field should be truncated based on type or ID
-          should-truncate? (or
-                             (= input-type "url")          ; URL fields
-                             (= input-type "email")        ; Email fields
-                             (= field-type "text")         ; Text fields
-                             (= field-type "textarea")     ; Textarea fields
-                             is-json-field?               ; JSON fields based on schema
-                             (= field-id :avatar_url)      ; Specific field IDs
-                             (= field-id :settings)        ; JSON fields that might be long
-                             (= field-id :financial_settings)
-                             (= field-id :metadata)
-                             (= field-id :tags)
-                             (= field-id :attachments)
-                             (= field-id :changes)         ; Audit log changes field
-                             (= field-id :calculation_details) ; Balance calculation details
-                             (= field-id :template_data))   ; Template data
-
-          max-length (cond
-                      ;; JSON fields get very aggressive truncation as they can be huge
-                       is-json-field? 25
-                      ;; URLs get shorter truncation as they're typically very long
-                       (= input-type "url") 40
-                      ;; Emails get medium truncation
-                       (= input-type "email") 30
-                      ;; Text areas get generous truncation
-                       (= field-type "textarea") 100
-                      ;; General text fields
-                       (= field-type "text") 50
-                      ;; Default for other truncatable fields
-                       :else 30)]
-
-      (cond
-        status-str
-        ($ :span {:class (str "ds-badge uppercase tracking-wide text-xs px-3 py-1 rounded-full border shadow-sm "
-                           (status->badge-variant status-lower))}
-          (titleize-status status-str))
-
-        is-datetime-field?
-        ($ :span {:class "whitespace-nowrap"}
-          (format-timestamp value {:show-seconds? show-seconds?}))
-
-        should-truncate?
-        ($ truncated-text-value {:text text-value
-                                 :max-length max-length
-                                 :field-type field-type
-                                 :field-id field-id})
-
-        :else
-        ($ :span text-value)))))
+         :else
+         ($ :span text-value))))))

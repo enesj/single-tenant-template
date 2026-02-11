@@ -136,6 +136,12 @@
                                           :route :expense-stores
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-stores})})
+                               (nav-item {:id "user-sidebar-cities"
+                                          :label "Cities"
+                                          :href "/cities"
+                                          :route :expense-cities
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-cities})})
 
                                (nav-item {:id "user-sidebar-store-aliases"
                                           :label "Store Aliases"

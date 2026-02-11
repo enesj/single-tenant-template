@@ -31,5 +31,6 @@
 (def manufacturers-endpoint (api/versioned-endpoint "/expenses/manufacturers"))
 
 (def categories-endpoint (api/versioned-endpoint "/expenses/categories"))
+(def cities-endpoint (api/versioned-endpoint "/expenses/cities"))
 (def subcategories-endpoint (api/versioned-endpoint "/expenses/subcategories"))
 (def articles-unmapped-aliases-endpoint (api/versioned-endpoint "/expenses/articles/unmapped-aliases"))

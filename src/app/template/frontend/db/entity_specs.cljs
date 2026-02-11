@@ -106,8 +106,17 @@
       ;; to the same columns the table renders).
       (if (seq available-cols)
         (mapv (fn [k]
-                (or (get merged-by-id k)
-                  (computed-field-spec k)))
+                (let [field-spec (or (get merged-by-id k)
+                                   (computed-field-spec k))
+                      db-col (app-col->db-col k)
+                      column-config (or (get-in table-config [:column-config k])
+                                      (get-in table-config [:column-config (name k)])
+                                      (when db-col
+                                        (or (get-in table-config [:column-config db-col])
+                                          (get-in table-config [:column-config (name db-col)]))))]
+                  (if (map? column-config)
+                    (merge field-spec column-config)
+                    field-spec)))
           available-cols)
         ;; Fallback: preserve backend/models-derived field order, and append any
         ;; computed fields not already present.

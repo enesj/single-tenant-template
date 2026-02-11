@@ -6,6 +6,7 @@
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
     [app.admin.frontend.pages.domain.expenses.categories :as categories]
+    [app.admin.frontend.pages.domain.expenses.cities :as cities]
     [app.admin.frontend.pages.dashboard :as dashboard]
     [app.admin.frontend.pages.forgot-password :as forgot-password]
     [app.admin.frontend.pages.login :as login]
@@ -113,6 +114,11 @@
          ["/categories"
           {:name :admin-categories
            :view categories/admin-categories-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/cities"
+          {:name :admin-cities
+           :view cities/admin-cities-page
            :controllers [(guarded-start nil)]}]
 
          ["/subcategories"

@@ -1,0 +1,21 @@
+({:action :create-table,
+  :model-name :cities,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :add-column,
+  :field-name :city-id,
+  :model-name :stores,
+  :options
+  {:foreign-key :cities/id, :on-delete :set-null, :type :uuid}}
+ {:action :create-index,
+  :index-name :idx-stores-city-id,
+  :model-name :stores,
+  :options {:fields [:city_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-cities-normalized-key,
+  :model-name :cities,
+  :options {:fields [:normalized_key], :unique true, :type :btree}})

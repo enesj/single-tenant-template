@@ -1,5 +1,5 @@
-(ns app.admin.frontend.pages.domain.expenses.stores
-  "Admin Stores page.
+(ns app.admin.frontend.pages.domain.expenses.cities
+  "Admin Cities page.
 
   Renders an admin-native list backed by the expenses admin API."
   (:require
@@ -13,22 +13,16 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.cities
-    app.domain.frontend.expenses.events.suppliers
-    app.domain.frontend.expenses.events.stores))
+    app.domain.frontend.expenses.events.cities))
 
-(defui admin-stores-page
-  "Admin route: /admin/stores"
+(defui admin-cities-page
+  "Admin route: /admin/cities"
   []
-  (let [entity-name :stores
-        entity-spec (use-subscribe [:entity-specs/by-name entity-name])
+  (let [entity-name :cities
+        entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.suppliers/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}])
                          (rf/dispatch [:app.domain.frontend.expenses.events.cities/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}])
-                         (rf/dispatch [:app.domain.frontend.expenses.events.stores/load-list
                                        {:fetch-limit 1000 :fetch-offset 0}]))
                        [])]
     (use-effect
@@ -41,16 +35,16 @@
       ($ :div {:class "p-6 min-h-screen"}
         ($ :div {:class "mb-6"}
           ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Stores")
+            "Cities")
           ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Stores (locations/branches) from the Expenses domain (admin API)."))
+            "Cities from the Expenses domain (admin API)."))
 
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Stores"
+           :title "Cities"
            :form-display :modal
-           :allow-add? false
+           :disallowed-action-mode :hide
+           :allow-add? true
            :allow-edit? true
-           :allow-delete? true
-           :disallowed-action-mode :hide})))))
+           :allow-delete? true})))))

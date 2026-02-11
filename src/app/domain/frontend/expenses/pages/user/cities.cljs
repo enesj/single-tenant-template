@@ -1,12 +1,10 @@
-(ns app.domain.frontend.expenses.pages.user.stores
-  "Power-user view of stores.
-
-  Stores are used to normalize expense sources (e.g. for analytics and aliasing)."
+(ns app.domain.frontend.expenses.pages.user.cities
+  "Power-user cities list (used for store normalization)."
   (:require
     [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
-    [app.domain.frontend.expenses.components.user-power-forms :refer [user-store-add-form-modal
-                                                                      user-store-edit-form-modal]]
+    [app.domain.frontend.expenses.components.user-power-forms :refer [user-city-add-form-modal
+                                                                      user-city-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
@@ -19,21 +17,21 @@
 
 (defn- render-add-form
   [{:keys [on-success on-cancel]}]
-  ($ user-store-add-form-modal
+  ($ user-city-add-form-modal
     {:on-success on-success
      :on-cancel on-cancel}))
 
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
-  ($ user-store-edit-form-modal
+  ($ user-city-edit-form-modal
     {:item item
      :on-success on-success
      :on-cancel on-cancel}))
 
 (defn- render-actions
   [item]
-  (let [store-id (id-utils/extract-entity-id item)
-        store-id-str (some-> store-id str)
+  (let [city-id (id-utils/extract-entity-id item)
+        city-id-str (some-> city-id str)
         on-edit-click (:on-edit-click item)
         show-edit? (not (false? (:show-edit? item)))
         show-delete? (not (false? (:show-delete? item)))
@@ -43,7 +41,7 @@
     ($ :div {:class "flex items-center justify-center gap-2"}
       (when show-edit?
         ($ button
-          {:id (str "btn-edit-stores-" store-id-str)
+          {:id (str "btn-edit-cities-" city-id-str)
            :btn-type :primary
            :shape "circle"
            :disabled edit-disabled?
@@ -56,7 +54,7 @@
 
       (when show-delete?
         ($ button
-          {:id (str "btn-delete-stores-" store-id-str)
+          {:id (str "btn-delete-cities-" city-id-str)
            :btn-type :danger
            :shape "circle"
            :disabled delete-disabled?
@@ -64,24 +62,21 @@
                        (.stopPropagation e)
                        (when-not delete-disabled?
                          (confirm-dialog/show-confirm
-                           {:title "Delete store"
-                            :message "Do you want to delete this store?"
-                            :on-confirm #(rf/dispatch [:user-expenses/delete-store store-id-str])
+                           {:title "Delete city"
+                            :message "Do you want to delete this city?"
+                            :on-confirm #(rf/dispatch [:user-expenses/delete-city city-id-str])
                             :on-cancel nil})))}
           ($ delete-icon))))))
 
-(defui stores-page
+(defui cities-page
   []
   (let [role (use-subscribe [:expenses/user-role])
-        can-manage? (authz/can? role :expenses/stores.manage)
-        entity-name :stores
+        can-manage? (authz/can? role :expenses/cities.manage)
+        entity-name :cities
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
                        (fn []
-                         ;; Ensure suppliers are available for FK selects when adding a store.
-                         (rf/dispatch [:user-expenses/fetch-suppliers])
-                         (rf/dispatch [:user-expenses/fetch-cities])
-                         (rf/dispatch [:user-expenses/fetch-stores]))
+                         (rf/dispatch [:user-expenses/fetch-cities]))
                        [])]
     (use-effect
       (fn []
@@ -90,32 +85,27 @@
       [refresh-list])
 
     ($ expenses-page-guard
-      {:capability :expenses/stores.manage
+      {:capability :expenses/cities.manage
        :children
        ($ :div {:class "min-h-screen bg-base-100"}
          ($ :header {:class "bg-white border-b border-base-200"}
            ($ :div {:class "w-full px-4 py-4 sm:py-6"}
              ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                ($ :div
-                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"}
-                   "Stores")
+                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Cities")
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user store catalog (used for normalization and store aliases)."))
+                   "Power-user city catalog (used for store normalization)."))
                ($ :div {:class "flex gap-2 flex-wrap"}
-                 ($ button {:id "btn-back-expenses-dashboard-stores"
+                 ($ button {:id "btn-back-expenses-dashboard-cities"
                             :btn-type :ghost
                             :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")
-                 ($ button {:id "btn-go-store-aliases-stores"
-                            :btn-type :primary
-                            :on-click #(rf/dispatch [:navigate-to "/store-aliases"])}
-                   "Store Aliases")))))
+                   "Dashboard")))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title "Stores"
+              :title "Cities"
               :form-display :modal
               :disallowed-action-mode :disable
               :allow-add? can-manage?

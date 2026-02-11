@@ -47,6 +47,11 @@
   {:name {:type "text", :label "Name"},
    :description {:type "textarea", :label "Description"}}}
 
+ :cities
+ {:create-fields ["name"],
+  :edit-fields ["name"],
+  :field-config {:name {:type "text", :label "Name"}}}
+
  :subcategories
  {:create-fields ["category_id" "name" "description"],
   :edit-fields ["category_id" "name" "description"],

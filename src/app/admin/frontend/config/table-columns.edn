@@ -398,26 +398,28 @@
    "normalized_key"
    "address"
    "city"
+   "city_id"
    "place_id"
    "archived_at"
    "created_at"
    "updated_at"
    "id"]
   :default-visible-columns
-  ["display_name" "normalized_key" "address" "city" "place_id" "created_at"]
+  ["display_name" "normalized_key" "address" "city" "city_id" "place_id" "created_at"]
   :filterable-columns
   ["display_name"
    "normalized_key"
    "address"
    "city"
+   "city_id"
    "place_id"
    "archived_at"
    "created_at"]
   :sortable-columns
-  ["display_name" "normalized_key" "address" "city" "created_at" "updated_at"]
+  ["display_name" "normalized_key" "address" "city" "city_id" "created_at" "updated_at"]
   :always-visible ["display_name"]
   :computed-fields {}
-  :column-config {}},
+  :column-config {:city_id {:display-source-field "city_fk_name"}}},
  :store-aliases
  {:available-columns
   ["supplier_display_name"
@@ -463,6 +465,16 @@
   :default-visible-columns ["name" "description" "created_at"],
   :filterable-columns ["name" "description" "created_at"],
   :sortable-columns ["name" "created_at" "updated_at"],
+  :always-visible ["name"],
+  :computed-fields {},
+  :column-config {}}
+
+ :cities
+ {:available-columns
+  ["name" "normalized_key" "created_at" "updated_at" "id"],
+  :default-visible-columns ["name" "normalized_key" "created_at"],
+  :filterable-columns ["name" "normalized_key" "created_at"],
+  :sortable-columns ["name" "normalized_key" "created_at" "updated_at"],
   :always-visible ["name"],
   :computed-fields {},
   :column-config {}}

@@ -122,6 +122,11 @@
      :view :expense-categories
      :controllers (controllers/make-simple-controller :page/init-expense-categories)}]
 
+   ["/cities"
+    {:name :expense-cities
+     :view :expense-cities
+     :controllers (controllers/make-simple-controller :page/init-expense-cities)}]
+
    ["/subcategories"
     {:name :expense-subcategories
      :view :expense-subcategories

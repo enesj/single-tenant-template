@@ -263,7 +263,7 @@ Test system failed to start
 **Check**:
 1. Test database is running: `docker-compose up -d postgres-test`
 2. Port 55433 is available
-3. Migrations are applied: `clj -X:migrations-test`
+3. Migrations are applied (dev + test): `clj -X:migrations` and `clj -X:migrations-test`
 
 ### Database Not Available
 

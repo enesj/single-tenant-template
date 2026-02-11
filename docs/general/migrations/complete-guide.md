@@ -86,7 +86,8 @@ docker-compose up -d
 # Launch a REPL (e.g., clj -M:nrepl) and run:
 # (require '[app.template.backend.migrations.simple-repl :as mig])
 # (mig/make-all-migrations!)  ;; merge models -> schema -> extended
-# (mig/migrate!)              ;; apply pending migrations + verify alignment (default :dev)
+# (mig/migrate!)              ;; apply pending migrations + verify alignment (:dev)
+# (mig/migrate! :test)        ;; always keep test DB migrated too
 # (mig/status)                ;; inspect status
 ```
 
@@ -156,13 +157,13 @@ docker-compose up -d
 ```clojure
 (require '[app.template.backend.migrations.simple-repl :as mig])
 
-;; Merge models -> schema -> extended, then apply
+;; Merge models -> schema -> extended, then apply (dev + test)
 (mig/make-all-migrations!)
 (mig/migrate!)
+(mig/migrate! :test)
 (mig/status)
 
-;; Target another profile (e.g., test)
-(mig/migrate! :test)
+;; Check test DB status
 (mig/status :test)
 
 ;; Explain SQL for a migration number
@@ -381,6 +382,7 @@ After editing these EDN files, regenerate and apply extended migrations from a R
 (require '[app.template.backend.migrations.simple-repl :as mig])
 (mig/make-all-migrations!)  ;; or (mig/regenerate-extended-migrations-clean!)
 (mig/migrate!)              ;; apply to :dev
+(mig/migrate! :test)        ;; keep test DB migrated too
 ```
 
 ## Views and Complex Queries

@@ -90,6 +90,7 @@ The starter intentionally ships with **no business domain**. To add one:
      - `(require '[app.template.backend.migrations.simple-repl :as mig])`
      - `(mig/make-schema-migration!)`
      - `(mig/migrate!)`
+     - `(mig/migrate! :test)`
    - (Optional) Align frontend config with schema if you have admin UI config:
      - `(mig/migrate! :dev {:sync-frontend-config? true})` or `bb migrate-and-sync-frontend-config`
 3. **Add backend domain code**:

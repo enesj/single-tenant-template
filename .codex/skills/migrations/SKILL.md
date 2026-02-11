@@ -34,8 +34,9 @@ Safely evolve the database schema through automigrate using canonical EDN source
 ;; Merge hierarchical models → schema → extended migrations
 (mig/make-all-migrations!)
 
-;; Apply pending migrations + verify alignment (default :dev)
+;; Apply pending migrations + verify alignment (:dev), then keep test DB in sync
 (mig/migrate!)
+(mig/migrate! :test)
 
 ;; Check status
 (mig/status)

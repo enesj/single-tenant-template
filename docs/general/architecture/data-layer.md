@@ -7,7 +7,7 @@ Single schema, no RLS. Core tables: `admins`, `users`, `audit_events`, `login_ev
 ## Schema Source
 - Canonical inputs: source EDN in `resources/db/{template,shared,domain}/**`.
 - Generated output: `resources/db/models.edn` (auto-merged from template/shared/domain sources).
-- Migrations: generate/apply via `app.template.backend.migrations.simple-repl` (`mig/make-all-migrations!`, `mig/migrate!`). Do not hand-edit `resources/db/migrations/*`.
+- Migrations: generate/apply via `app.template.backend.migrations.simple-repl` (`mig/make-all-migrations!`, `mig/migrate!`). Do not hand-edit `resources/db/migrations/*`. After any migration change, apply to both dev and test DBs.
 
 ## Key Tables (current app)
 - `admins`: platform admins (email, role, password_hash, created_at).
@@ -23,24 +23,24 @@ Single schema, no RLS. Core tables: `admins`, `users`, `audit_events`, `login_ev
 ## Migrations Workflow
 ```clojure
 (require '[app.template.backend.migrations.simple-repl :as mig])
-(mig/make-all-migrations!)  ; regen from models.edn
-(mig/migrate!)             ; apply
-(mig/status)               ; inspect
+(mig/make-all-migrations!)  ; regen from canonical sources
+(mig/migrate!)             ; apply to :dev
+(mig/migrate! :test)       ; apply to :test
+(mig/status)               ; inspect :dev status
+(mig/status :test)         ; inspect :test status
 ```
-+
-+Frontend config alignment (migration-adjacent):
-+
-+```clojure
-+;; Apply sync + validate via migrate! (opt-in)
-+(mig/migrate! :dev {:sync-frontend-config? true})
-+```
-+
-+```bash
-+# One-shot command outside the REPL
-+bb migrate-and-sync-frontend-config
-+```
-+
-Use `:test` profile when running against test DB: `(mig/migrate! :test)`.
+
+Frontend config alignment (migration-adjacent):
+
+```clojure
+;; Apply sync + validate via migrate! (opt-in)
+(mig/migrate! :dev {:sync-frontend-config? true})
+```
+
+```bash
+# One-shot command outside the REPL
+bb migrate-and-sync-frontend-config
+```
 
 ## Performance/Indexes
 - Keep indexes aligned with query patterns in services (principal_id/type for audit/login events, email for users/admins).

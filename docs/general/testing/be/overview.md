@@ -47,8 +47,9 @@ Tests run with `-Daero.profile=test`, which provides:
 # Start test database
 docker-compose up -d postgres-test
 
-# Run migrations on test DB
-clj -X:migrations-test
+# After any schema/migration change, keep both DBs in sync
+clj -X:migrations       # dev DB
+clj -X:migrations-test  # test DB
 ```
 
 ## Architecture

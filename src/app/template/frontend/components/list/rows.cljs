@@ -84,7 +84,7 @@
                                                (when raw-kw (get item raw-kw))
                                                (when namespaced-raw (get item namespaced-raw))
                                                (when namespaced-canonical (get item namespaced-canonical)))]
-                                   (get-field-display-value field value)))))
+                                   (get-field-display-value field value item)))))
                        filtered-entity-fields)
 
         ;; Filter out nil values (from columns that should be hidden)

@@ -32,13 +32,15 @@
 - **Alias mapping throughput**: For mixed alias→article mappings, prepare `tmp/<name>.edn` and run one `map_aliases.clj --mappings-file ...` command instead of one-by-one alias loops.
 
 ## Config & ports
-- Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Keep secrets in `config/.secrets.edn` or `~/.secrets.edn`.
+- Runtime config: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**).
+- Secrets live in `config/.secrets.edn` or `~/.secrets.edn` (or env vars). **Agents must not edit secrets files**; instead, tell the user exactly what to change (file path + keys/shape) using placeholder values like `"REDACTED"`.
 - Domain/user UI config EDNs are edited at runtime via `/admin/user-settings` and loaded dynamically (see `src/app/template/backend/routes/api.clj`).
 - Dev helpers: rate limit/session helpers exist under `/admin/api/*` (see `docs/template/backend/security-middleware.md`).
 
 ## Database & migrations
 - Edit canonical schema inputs under `resources/db/{template,shared,domain}`; **never** hand-edit `resources/db/migrations/*`.
 - Preferred REPL helpers live in `src/app/template/backend/migrations/simple_repl.clj` (see `docs/general/migrations/migration-overview.md`).
+- After generating migrations, **always apply them to both dev and test DBs** (keep the environments in sync): `(mig/migrate!)` and `(mig/migrate! :test)` (or `clj -X:migrations` and `clj -X:migrations-test`).
 
 ## Project-specific conventions (common footguns)
 - Naming boundary: DB is `snake_case`, app/runtime is kebab-case; normalize with `app.shared.model-naming/db-keyword->app` + `ensure-app-keyword`.

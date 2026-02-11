@@ -26,6 +26,63 @@
 
 (def ^:private try-uuid type-conv/try-parse-uuid)
 
+;; ============================================================================
+;; City Helpers
+;; ============================================================================
+
+(defn- normalize-city-name
+  "Create normalized key from city name for stable matching.
+  
+  Handles Turkish characters (İ/Ş/Ç/Ğ/Ü/Ö) by stripping diacritics.
+  Converts to lowercase and trims whitespace.
+  
+  Examples:
+    (normalize-city-name \"İzmir\")    ;; => \"izmir\"
+    (normalize-city-name \"SARAJEVO\") ;; => \"sarajevo\"
+    (normalize-city-name \"  Banja Luka  \") ;; => \"banja luka\"
+    (normalize-city-name nil)          ;; => nil"
+  [city-name]
+  (when-let [name-str (some-> city-name str str/trim not-empty)]
+    (-> name-str
+      (java.text.Normalizer/normalize java.text.Normalizer$Form/NFD)
+      (str/replace #"\p{M}+" "")
+      (str/replace #"Đ" "D")
+      (str/replace #"đ" "d")
+      str/lower-case
+      (str/replace #"\s{2,}" " ")
+      str/trim)))
+
+(defn- find-or-create-city!
+  "Lookup city by normalized key, create if doesn't exist.
+  
+  Uses normalized_key for matching to handle variations like \"İzmir\" vs \"Izmir\".
+  Returns city uuid, or nil if city-name is nil/blank.
+  
+  Safe to call concurrently (uses ON CONFLICT).
+  
+  Examples:
+    (find-or-create-city! db \"İzmir\")    ;; => #uuid \"...\"
+    (find-or-create-city! db \"Izmir\")    ;; => same uuid as above
+    (find-or-create-city! db \"SARAJEVO\") ;; => #uuid \"...\"
+    (find-or-create-city! db nil)          ;; => nil"
+  [db city-name]
+  (when-let [name-str (some-> city-name str str/trim not-empty)]
+    (let [normalized (normalize-city-name name-str)
+          city-id (UUID/randomUUID)
+          sql-map {:insert-into :cities
+                   :values [{:id city-id
+                             :name name-str
+                             :normalized_key normalized
+                             :created_at [:now]
+                             :updated_at [:now]}]
+                   :on-conflict [:normalized_key]
+                   :do-update-set {:updated_at [:now]}
+                   :returning [:id]}]
+      (:id (jdbc/execute-one!
+             db
+             (sql/format sql-map)
+             {:builder-fn rs/as-unqualified-lower-maps})))))
+
 (defn- title-case
   "Convert string to title case (capitalize each word)."
   [s]
@@ -346,12 +403,16 @@
        (extract-city-via-places-api place-id places-config)))))
 
 (defn get-store
+  "Fetch a store by ID with city name populated from cities table.
+
+  Returns store row with :city field containing the city name (or nil if no city)."
   [db store-id]
   (jdbc/execute-one!
     db
-    (sql/format {:select [:*]
-                 :from [:stores]
-                 :where [:= :id store-id]
+    (sql/format {:select [[:s.*] [:c.name :city]]
+                 :from [[:stores :s]]
+                 :left-join [[:cities :c] [:= :c.id :s.city_id]]
+                 :where [:= :s.id store-id]
                  :limit 1})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
@@ -384,18 +445,23 @@
 (defn update-store!
   "Patch a store row and return the updated store.
 
-  Accepts snake_case or kebab-case keys: display_name/display-name, address, place_id/place-id."
+  Accepts snake_case or kebab-case keys: display_name/display-name, address, place_id/place-id.
+
+  When address is updated:
+  - Extracts city from address/display_name
+  - Creates/finds city in cities table
+  - Updates stores.city_id foreign key"
   [db store-id {:keys [display_name display-name address place_id place-id]}]
   (let [display-name* (some-> (or display_name display-name) str str/trim not-empty)
         address* (some-> address str str/trim not-empty)
         place-id* (some-> (or place_id place-id) str str/trim not-empty)
-        ;; If address is being updated, compute city
-        city* (when address* (extract-city-from-address address* display-name*))
+        city-name (when address* (extract-city-from-address address* display-name*))
+        city-id (when city-name (find-or-create-city! db city-name))
         set-map (cond-> {:updated_at [:now]}
                   (some? display-name*) (assoc :display_name display-name*)
                   (some? address*) (assoc :address address*)
                   (some? place-id*) (assoc :place_id place-id*)
-                  (some? address*) (assoc :city city*))]
+                  (some? address*) (assoc :city_id city-id))]
     (jdbc/execute-one!
       db
       (sql/format {:update :stores
@@ -455,6 +521,11 @@
   - address (optional)
   - place_id / place-id (optional)
 
+  City handling:
+  - Extracts city from address/display_name
+  - Creates/finds city in cities table (via find-or-create-city!)
+  - Stores city foreign key in stores.city_id
+
   Returns the store row."
   [db {:keys [supplier_id supplier-id
               display_name display-name
@@ -479,14 +550,15 @@
 
                        :else
                        (configs/normalize-store-key (str display-name* " " (or address* ""))))
-          city (extract-city-from-address address* display-name*)
+          city-name (extract-city-from-address address* display-name*)
+          city-id (when city-name (find-or-create-city! db city-name))
           row {:id (UUID/randomUUID)
                :supplier_id supplier-id*
                :display_name display-name*
                :normalized_key normalized
                :address address*
                :place_id place-id*
-               :city city
+               :city_id city-id
                :created_at [:now]
                :updated_at [:now]}
           sql-map {:insert-into :stores
@@ -495,7 +567,7 @@
                    :do-update-set (cond-> {:display_name :excluded/display_name
                                            :updated_at [:now]}
                                     (some? address*) (assoc :address :excluded/address
-                                                       :city :excluded/city)
+                                                       :city_id :excluded/city_id)
                                     (some? place-id*) (assoc :place_id :excluded/place_id))
                    :returning [:*]}]
       (jdbc/execute-one!
@@ -504,12 +576,19 @@
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn- list-stores-for-supplier
+  "List all stores for a supplier with city name populated from cities table."
   [db supplier-id]
   (jdbc/execute!
     db
-    (sql/format {:select [:id :normalized_key :display_name :address :place_id]
-                 :from [:stores]
-                 :where [:= :supplier_id supplier-id]})
+    (sql/format {:select [[:s.id :id]
+                          [:s.normalized_key :normalized_key]
+                          [:s.display_name :display_name]
+                          [:s.address :address]
+                          [:s.place_id :place_id]
+                          [:c.name :city]]
+                 :from [[:stores :s]]
+                 :left-join [[:cities :c] [:= :c.id :s.city_id]]
+                 :where [:= :s.supplier_id supplier-id]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- store-match-key

@@ -113,6 +113,14 @@
                                    :lng 18.4131
                                    :radius-m 150000.0}}}
 
+ ;; Serper.dev configuration (optional)
+ :serper {:api-key #ref [:secrets :serper :api-key]
+          :base-url "https://google.serper.dev"
+          :endpoint "/search"
+          :timeout-ms 4000
+          :gl "ba"
+          :hl "bs"}
+
  ;; Cerebras configuration (optional)
  ;; - Keep secrets (API keys) in env / config/.secrets.edn
  ;; - Receipt refinement is controlled per-user via the Expenses Settings toggle.

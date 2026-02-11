@@ -5,7 +5,7 @@
 Quick guide for configuring and running the template locally. Defaults match `config/base.edn` (added 2025‑12‑01).
 
 ## Initial Setup
-1) **Secrets file** – create `config/.secrets.edn` (or `~/.secrets.edn`) with keys referenced in `config/base.edn`:
+1) **Secrets file** – create `config/.secrets.edn` (or `~/.secrets.edn`) with keys referenced in `config/base.edn` (edit this yourself; agents should only provide precise instructions with placeholder values):
    - `:db {:dev-password "...", :test-password "..."}`  
    - Optional: `:oauth {:google {...} :github {...}}`, `:stripe {...}`, `:gmail {...}`, `:postmark {...}`
 2) **PostgreSQL** – ensure ports **55432 (dev)** and **55433 (test)** are available. Start your DB (e.g., `docker-compose up db`) before running the app.

@@ -82,6 +82,11 @@
                          :href "/admin/stores"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-stores)}
+                        {:id "admin-sidebar-expenses-cities"
+                         :label "Cities"
+                         :href "/admin/cities"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-cities)}
                         {:id "admin-sidebar-expenses-supplier-aliases"
                          :label "Supplier Aliases"
                          :href "/admin/supplier-aliases"

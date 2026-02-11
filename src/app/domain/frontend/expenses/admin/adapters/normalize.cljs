@@ -154,6 +154,16 @@
      :alias-keys {:created_at [:created-at]
                   :updated_at [:updated-at]}}))
 
+(defn city->template-entity
+  [city]
+  (entity-utils/normalize-entity
+    city
+    {:entity-ns :cities
+     :id-keys [:id]
+     :alias-keys {:normalized_key [:normalized-key]
+                  :created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
 (defn subcategory->template-entity
   [subcategory]
   (entity-utils/normalize-entity
@@ -242,8 +252,9 @@
     store
     {:entity-ns :stores
      :id-keys [:id]
-     :stringify-keys [:supplier_id :supplier-id]
+     :stringify-keys [:supplier_id :supplier-id :city_id :city-id]
      :alias-keys {:supplier_id [:supplier-id]
+                  :city_id [:city-id]
                   :display_name [:display-name]
                   :normalized_key [:normalized-key]
                   :place_id [:place-id]

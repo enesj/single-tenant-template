@@ -49,6 +49,18 @@
    :show-pagination? true,
    :per-page 50},
   :column-defaults {},
+  :column-locks {}}
+ :cities
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
+  :column-defaults {},
   :column-locks {}},
  :supplier-aliases
  {:display-defaults {:show-edit? false},

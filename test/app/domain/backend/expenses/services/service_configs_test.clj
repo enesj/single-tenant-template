@@ -28,3 +28,10 @@
   (testing "double-encoding is handled with bounded repeats"
     (is (= "bk"
           (service-configs/normalize-supplier-key "B&amp;amp;K d.o.o.")))))
+
+(deftest city-config-present-test
+  (testing "city config exists in the service registry"
+    (is (some #{:city} (service-configs/list-entity-configs)))
+    (let [cfg (service-configs/get-entity-config :city)]
+      (is (= "cities" (:table-name cfg)))
+      (is (= :id (:primary-key cfg))))))

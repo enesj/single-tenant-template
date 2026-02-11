@@ -190,6 +190,23 @@
       (->> (remove str/blank?)
         (str/join "-")))))
 
+(defn normalize-city-key
+  "Normalize city name into a stable key for uniqueness checks."
+  [city-name]
+  (when city-name
+    (some-> city-name
+      unescape-html-entities
+      str/trim
+      not-empty
+      (Normalizer/normalize Normalizer$Form/NFD)
+      (str/replace #"\p{M}+" "")
+      (str/replace #"Đ" "D")
+      (str/replace #"đ" "d")
+      str/lower-case
+      (str/replace #"\s+" " ")
+      str/trim
+      not-empty)))
+
 ;; ============================================================================
 ;; Simple Entity Configs
 ;; ============================================================================
@@ -314,14 +331,18 @@
 
 (def store-config
   {:table-name "stores"
+   :table-alias :st
    :primary-key :id
    :required-fields [:supplier_id :display_name]
-   :allowed-order-by {:display-name :display_name
-                      :normalized-key :normalized_key
-                      :created-at :created_at
-                      :updated-at :updated_at}
-   :default-order-by :display_name
-   :search-fields [:display_name :normalized_key :address :place_id :city]
+   :allowed-order-by {:display-name :st/display_name
+                      :normalized-key :st/normalized_key
+                      :created-at :st/created_at
+                      :updated-at :st/updated_at}
+   :default-order-by :st/display_name
+   :search-fields [:st/display_name :st/normalized_key :st/address :st/place_id :st/city :c/name]
+   :joins [[:cities :c] [:= :c.id :st/city_id]]
+   :select-fields [[:st.*]
+                   [:c/name :city_fk_name]]
    :field-transformers {:normalized_key normalize-store-key}
    :before-insert (fn [data]
                     (let [extract-city (requiring-resolve 'app.domain.backend.expenses.services.stores/extract-city-from-address)
@@ -411,6 +432,37 @@
    :before-update (fn [_id updates]
                     (-> updates
                       (assoc :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
+(def city-config
+  {:table-name "cities"
+   :primary-key :id
+   :required-fields [:name]
+   :allowed-order-by {:name :name
+                      :normalized-key :normalized_key
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :name
+   :search-fields [:name :normalized_key]
+   :before-insert (fn [data]
+                    (let [name (some-> (:name data) unescape-html-entities str str/trim not-empty)]
+                      (when-not name
+                        (throw (ex-info "name is required" {:status 400 :field :name})))
+                      (-> data
+                        (assoc :id (UUID/randomUUID))
+                        (assoc :name name)
+                        (assoc :normalized_key (normalize-city-key name)))))
+   :before-update (fn [_id updates]
+                    (if (contains? updates :name)
+                      (let [name (some-> (:name updates) unescape-html-entities str str/trim)]
+                        (when (str/blank? name)
+                          (throw (ex-info "name is required" {:status 400 :field :name})))
+                        (assoc updates
+                          :name name
+                          :normalized_key (normalize-city-key name)
+                          :updated_at [:now]))
+                      (assoc updates :updated_at [:now])))
    :has-search? true
    :has-count? true})
 
@@ -659,6 +711,7 @@
    :store store-config
    :manufacturer manufacturer-config
    :category category-config
+   :city city-config
    :subcategory subcategory-config
    :payer-type payer-type-config
    :payer payer-config

@@ -210,6 +210,58 @@
                                     on-success]))
          :button-text "Save Category"}))))
 
+(def ^:private city-form-spec
+  [{:id :name
+    :type :text
+    :label "Name"
+    :required true
+    :placeholder "e.g. Sarajevo"}])
+
+(defui user-city-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "cities"
+         :entity-spec city-form-spec
+         :editing false
+         :initial-values {}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-city-modal values on-success]))
+         :button-text "Save City"}))))
+
+(defui user-city-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :cities true])
+        item (normalization/convert-db-keys->app-keys item)
+        city-id (id-utils/extract-entity-id item)
+        initial-values (-> {}
+                         (assoc :name (or (:name item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "cities"
+         :entity-spec (when-not (seq dynamic-spec) city-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-city-modal
+                                    (some-> city-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save City"}))))
+
 (def ^:private subcategory-form-spec
   [{:id :category_id
     :type :select

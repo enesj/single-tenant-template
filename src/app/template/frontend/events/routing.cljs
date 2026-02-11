@@ -276,6 +276,14 @@
       {:db (assoc-in db (paths/current-page) :expense-categories)})))
 
 (rf/reg-event-fx
+  :page/init-expense-cities
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :expense-cities)})))
+
+(rf/reg-event-fx
   :page/init-expense-subcategories
   common-interceptors
   (fn [{:keys [db]} _]
