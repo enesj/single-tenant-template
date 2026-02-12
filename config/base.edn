@@ -111,7 +111,7 @@
           ;; Optional bias for short/ambiguous queries
           :location-bias {:circle {:lat 43.8563
                                    :lng 18.4131
-                                   :radius-m 150000.0}}}
+                                   :radius-m 50000.0}}}
 
  ;; Serper.dev configuration (optional)
  :serper {:api-key #ref [:secrets :serper :api-key]

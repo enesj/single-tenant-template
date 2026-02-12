@@ -7,6 +7,7 @@
   remain supplier-level (article_aliases.supplier_id) while expenses/receipts can
   carry store context."
   (:require
+    [app.domain.backend.expenses.services.cities :as cities]
     [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
@@ -30,17 +31,10 @@
 ;; City Helpers
 ;; ============================================================================
 
-(defn- normalize-city-name
+(defn- ^:unused normalize-city-name
   "Create normalized key from city name for stable matching.
-  
-  Handles Turkish characters (İ/Ş/Ç/Ğ/Ü/Ö) by stripping diacritics.
-  Converts to lowercase and trims whitespace.
-  
-  Examples:
-    (normalize-city-name \"İzmir\")    ;; => \"izmir\"
-    (normalize-city-name \"SARAJEVO\") ;; => \"sarajevo\"
-    (normalize-city-name \"  Banja Luka  \") ;; => \"banja luka\"
-    (normalize-city-name nil)          ;; => nil"
+
+  Handles diacritics, lowercases text, and trims/collapses whitespace."
   [city-name]
   (when-let [name-str (some-> city-name str str/trim not-empty)]
     (-> name-str
@@ -52,19 +46,11 @@
       (str/replace #"\s{2,}" " ")
       str/trim)))
 
-(defn- find-or-create-city!
-  "Lookup city by normalized key, create if doesn't exist.
-  
-  Uses normalized_key for matching to handle variations like \"İzmir\" vs \"Izmir\".
-  Returns city uuid, or nil if city-name is nil/blank.
-  
-  Safe to call concurrently (uses ON CONFLICT).
-  
-  Examples:
-    (find-or-create-city! db \"İzmir\")    ;; => #uuid \"...\"
-    (find-or-create-city! db \"Izmir\")    ;; => same uuid as above
-    (find-or-create-city! db \"SARAJEVO\") ;; => #uuid \"...\"
-    (find-or-create-city! db nil)          ;; => nil"
+(defn find-or-create-city!
+  "Legacy city upsert helper retained for compatibility.
+
+  NOTE: Store/receipt flows now use ZIP-only city resolution via
+  `app.domain.backend.expenses.services.cities/resolve-city-id-from-text`."
   [db city-name]
   (when-let [name-str (some-> city-name str str/trim not-empty)]
     (let [normalized (normalize-city-name name-str)
@@ -189,22 +175,10 @@
        ;; Token count should be reasonable for a city name
         (<= token-count 5)))))
 
-(defn- bad-city?
-  "Check if an existing city value is polluted/invalid.
-  
-  Returns true if the city appears to be corrupted by OCR noise or contains
-  suspicious patterns that indicate it's not a real city name.
-  
-  Detects:
-  - Contains digits (e.g., postal codes leaked into city field)
-  - Too long (> 50 characters suggests address leakage)
-  - Contains known noise tokens (tropic, maloprodaja, prodavnica, hipemarket, merkur, d.o.o, doo)
-  - Contains \"centar\" as standalone/dominant token (but allows \"City Centar\" patterns)
-  - Contains newline or control characters
-  - Contains multiple sentences (periods followed by capitals)
-  - All uppercase with length > 15 (likely OCR artifact)
-  
-  Returns boolean."
+(defn bad-city?
+  "Check if a city value looks polluted by OCR/address noise.
+
+  This helper is currently not part of ZIP-only city_id resolution."
   [city]
   (when-let [text (some-> city str str/trim not-empty)]
     (let [lower-text (str/lower-case text)
@@ -447,28 +421,34 @@
 
   Accepts snake_case or kebab-case keys: display_name/display-name, address, place_id/place-id.
 
-  When address is updated:
-  - Extracts city from address/display_name
-  - Creates/finds city in cities table
-  - Updates stores.city_id foreign key"
-  [db store-id {:keys [display_name display-name address place_id place-id]}]
-  (let [display-name* (some-> (or display_name display-name) str str/trim not-empty)
-        address* (some-> address str str/trim not-empty)
-        place-id* (some-> (or place_id place-id) str str/trim not-empty)
-        city-name (when address* (extract-city-from-address address* display-name*))
-        city-id (when city-name (find-or-create-city! db city-name))
-        set-map (cond-> {:updated_at [:now]}
-                  (some? display-name*) (assoc :display_name display-name*)
-                  (some? address*) (assoc :address address*)
-                  (some? place-id*) (assoc :place_id place-id*)
-                  (some? address*) (assoc :city_id city-id))]
-    (jdbc/execute-one!
-      db
-      (sql/format {:update :stores
-                   :set set-map
-                   :where [:= :id store-id]
-                   :returning [:*]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+  City resolution for `city_id` is ZIP-based:
+  - when address is provided, resolve via cities service
+  - if ZIP is missing/invalid/unresolvable, set city_id to nil
+  - when Places opts are present, resolver may confirm and create/resolve city rows"
+  ([db store-id patch]
+   (update-store! db store-id patch nil))
+  ([db store-id {:keys [display_name display-name address place_id place-id]} opts]
+   (let [display-name* (some-> (or display_name display-name) str str/trim not-empty)
+         address* (some-> address str str/trim not-empty)
+         place-id* (some-> (or place_id place-id) str str/trim not-empty)
+         city-source-text (some->> [display-name* address*]
+                            (remove str/blank?)
+                            (str/join "\n")
+                            (not-empty))
+         city-id (when address*
+                   (cities/resolve-city-id-from-text! db (or city-source-text address*) opts))
+         set-map (cond-> {:updated_at [:now]}
+                   (some? display-name*) (assoc :display_name display-name*)
+                   (some? address*) (assoc :address address*)
+                   (some? place-id*) (assoc :place_id place-id*)
+                   (some? address*) (assoc :city_id city-id))]
+     (jdbc/execute-one!
+       db
+       (sql/format {:update :stores
+                    :set set-map
+                    :where [:= :id store-id]
+                    :returning [:*]})
+       {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn- merge-duplicate-stores-by-place-id!
   "Merge stores for a supplier that resolve to the same Places `place_id`.
@@ -521,59 +501,66 @@
   - address (optional)
   - place_id / place-id (optional)
 
-  City handling:
-  - Extracts city from address/display_name
-  - Creates/finds city in cities table (via find-or-create-city!)
-  - Stores city foreign key in stores.city_id
+  City handling is ZIP-based:
+  - resolve city from address text
+  - set stores.city_id to resolved id (or nil when unresolved)
+  - when Places opts are present, resolver may confirm and create/resolve city rows
 
   Returns the store row."
-  [db {:keys [supplier_id supplier-id
-              display_name display-name
-              normalized_key normalized-key
-              address
-              place_id place-id]}]
-  (let [supplier-id* (try-uuid (or supplier_id supplier-id))
-        display-name* (some-> (or display_name display-name) str str/trim not-empty)
-        address* (some-> address str str/trim not-empty)
-        place-id* (some-> (or place_id place-id) str str/trim not-empty)
-        normalized* (some-> (or normalized_key normalized-key) str str/trim not-empty)]
-    (when-not supplier-id*
-      (throw (ex-info "supplier_id is required" {:status 400 :field :supplier_id})))
-    (when-not display-name*
-      (throw (ex-info "display_name is required" {:status 400 :field :display_name})))
-    (let [normalized (cond
-                       place-id*
-                       (configs/normalize-store-key (str "place " place-id*))
+  ([db store-attrs]
+   (find-or-create-store! db store-attrs nil))
+  ([db {:keys [supplier_id supplier-id
+               display_name display-name
+               normalized_key normalized-key
+               address
+               place_id place-id]}
+    opts]
+   (let [supplier-id* (try-uuid (or supplier_id supplier-id))
+         display-name* (some-> (or display_name display-name) str str/trim not-empty)
+         address* (some-> address str str/trim not-empty)
+         place-id* (some-> (or place_id place-id) str str/trim not-empty)
+         normalized* (some-> (or normalized_key normalized-key) str str/trim not-empty)]
+     (when-not supplier-id*
+       (throw (ex-info "supplier_id is required" {:status 400 :field :supplier_id})))
+     (when-not display-name*
+       (throw (ex-info "display_name is required" {:status 400 :field :display_name})))
+     (let [normalized (cond
+                        place-id*
+                        (configs/normalize-store-key (str "place " place-id*))
 
-                       normalized*
-                       (configs/normalize-store-key normalized*)
+                        normalized*
+                        (configs/normalize-store-key normalized*)
 
-                       :else
-                       (configs/normalize-store-key (str display-name* " " (or address* ""))))
-          city-name (extract-city-from-address address* display-name*)
-          city-id (when city-name (find-or-create-city! db city-name))
-          row {:id (UUID/randomUUID)
-               :supplier_id supplier-id*
-               :display_name display-name*
-               :normalized_key normalized
-               :address address*
-               :place_id place-id*
-               :city_id city-id
-               :created_at [:now]
-               :updated_at [:now]}
-          sql-map {:insert-into :stores
-                   :values [row]
-                   :on-conflict [:supplier_id :normalized_key]
-                   :do-update-set (cond-> {:display_name :excluded/display_name
-                                           :updated_at [:now]}
-                                    (some? address*) (assoc :address :excluded/address
-                                                       :city_id :excluded/city_id)
-                                    (some? place-id*) (assoc :place_id :excluded/place_id))
-                   :returning [:*]}]
-      (jdbc/execute-one!
-        db
-        (sql/format sql-map)
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+                        :else
+                        (configs/normalize-store-key (str display-name* " " (or address* ""))))
+           city-source-text (some->> [display-name* address*]
+                              (remove str/blank?)
+                              (str/join "\n")
+                              (not-empty))
+           city-id (when address*
+                     (cities/resolve-city-id-from-text! db (or city-source-text address*) opts))
+           row {:id (UUID/randomUUID)
+                :supplier_id supplier-id*
+                :display_name display-name*
+                :normalized_key normalized
+                :address address*
+                :place_id place-id*
+                :city_id city-id
+                :created_at [:now]
+                :updated_at [:now]}
+           sql-map {:insert-into :stores
+                    :values [row]
+                    :on-conflict [:supplier_id :normalized_key]
+                    :do-update-set (cond-> {:display_name :excluded/display_name
+                                            :updated_at [:now]}
+                                     (some? address*) (assoc :address :excluded/address
+                                                        :city_id :excluded/city_id)
+                                     (some? place-id*) (assoc :place_id :excluded/place_id))
+                    :returning [:*]}]
+       (jdbc/execute-one!
+         db
+         (sql/format sql-map)
+         {:builder-fn rs/as-unqualified-lower-maps})))))
 
 (defn- list-stores-for-supplier
   "List all stores for a supplier with city name populated from cities table."
@@ -657,7 +644,7 @@
   ([db supplier-id {:keys [name store_name address] :as _merchant}
     {:keys [places-cfg user-region receipt-markdown
             store-alias-normalized store-alias-raw-label]
-     :as _opts}]
+     :as opts}]
    (let [supplier-id* (try-uuid supplier-id)
          supplier-name* (some-> name str str/trim not-empty)
          address* (some-> address str str/trim not-empty)
@@ -702,7 +689,8 @@
                          (update-store! db (:id existing)
                            {:display_name effective-display
                             :address effective-address
-                            :place_id place-id}))
+                            :place_id place-id}
+                           opts))
 
                        ;; If we already created a store without Places (script-style
                        ;; or PJ-key), attach place_id now.
@@ -711,7 +699,8 @@
                          (update-store! db (:id existing)
                            {:display_name effective-display
                             :address effective-address
-                            :place_id place-id}))
+                            :place_id place-id}
+                           opts))
 
                        ;; Legacy key format (before script-style normalized_key).
                        (when-let [legacy (find-by-supplier-and-normalized-key
@@ -721,14 +710,16 @@
                          (update-store! db (:id legacy)
                            {:display_name effective-display
                             :address effective-address
-                            :place_id place-id}))
+                            :place_id place-id}
+                           opts))
 
                        (find-or-create-store!
                          db
                          {:supplier_id supplier-id*
                           :display_name effective-display
                           :address effective-address
-                          :place_id place-id}))
+                          :place_id place-id}
+                         opts))
 
                      :else
                      (or
@@ -758,7 +749,8 @@
                                           alias-key
                                           "Store")
                           :address address*
-                          :normalized_key store-key})))
+                          :normalized_key store-key}
+                         opts)))
              _ (when (and (seq place-id) (:id store))
                  (merge-duplicate-stores-by-place-id! db supplier-id* place-id (:id store)))]
          {:store store
@@ -818,7 +810,9 @@
                      store_id
                      {:place_id place-id
                       :address (or place-address store_address)
-                      :display_name store_display_name})
+                      :display_name store_display_name}
+                     {:places-cfg places-cfg
+                      :user-region (or region-code (:region-code places-cfg))})
                    (merge-duplicate-stores-by-place-id! db supplier_id place-id store_id)
                    (update acc :updated inc))
                  (update acc :no-match inc)))
@@ -832,4 +826,4 @@
 
 ;; Legacy backfill-store-cities! function removed.
 ;; Use app.domain.backend.expenses.services.cities/backfill-store-cities! instead.
-;; That function populates stores.city_id foreign key from extracted city names.
+;; That function resolves stores.city_id via ZIP lookup in existing cities rows.

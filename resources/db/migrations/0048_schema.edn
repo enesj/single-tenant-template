@@ -1,0 +1,12 @@
+;; Create countries table only
+({:action :create-table,
+  :model-name :countries,
+  :fields
+  {:country {:primary-key true, :type [:varchar 255]},
+   :code {:null false, :type [:varchar 2]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-countries-code,
+  :model-name :countries,
+  :options {:fields [:code], :unique true, :type :btree}})

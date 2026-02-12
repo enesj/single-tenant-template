@@ -6,6 +6,7 @@
     [app.domain.backend.expenses.routes.article-aliases :as article-aliases]
     [app.domain.backend.expenses.routes.categories :as categories]
     [app.domain.backend.expenses.routes.cities :as cities]
+    [app.domain.backend.expenses.routes.countries :as countries]
     [app.domain.backend.expenses.routes.expense-items :as expense-items]
     [app.domain.backend.expenses.routes.expenses :as expenses]
     [app.domain.backend.expenses.routes.manufacturers :as manufacturers]
@@ -30,6 +31,7 @@
    (suppliers/routes db)
    (stores/routes db)
    (cities/routes db)
+   (countries/routes db)
    (manufacturers/routes db)
    (categories/routes db)
    (subcategories/routes db)

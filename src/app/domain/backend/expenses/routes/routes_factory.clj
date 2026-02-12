@@ -254,11 +254,14 @@
 
 (defn build-get-handler
   "Builds a generic get-by-id handler for an entity."
-  [{:keys [service entity-key custom-get-fn transform-response]}]
+  [{:keys [service entity-key custom-get-fn transform-response parse-id]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
+        (let [raw-id (get-in request [:path-params :id])
+              id (if parse-id
+                   (parse-id raw-id)
+                   (utils/parse-uuid-custom raw-id))
               get-fn (or (when custom-get-fn (resolve-fn service custom-get-fn))
                        (resolve-service-op-fn service (symbol (str "get-" (name entity-key))) :get))
               result (when id (get-fn db id))]
@@ -273,11 +276,14 @@
 
 (defn build-update-handler
   "Builds a generic update handler for an entity."
-  [{:keys [service entity-key _entity-plural transform-request transform-response]}]
+  [{:keys [service entity-key _entity-plural transform-request transform-response parse-id]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
+        (let [raw-id (get-in request [:path-params :id])
+              id (if parse-id
+                   (parse-id raw-id)
+                   (utils/parse-uuid-custom raw-id))
               body (normalize-keys-deep->app (read-json-body request))
               data (if transform-request (transform-request body) body)
               update-fn (resolve-service-op-fn service (symbol (str "update-" (name entity-key) "!")) :update!)
@@ -293,11 +299,14 @@
 
 (defn build-delete-handler
   "Builds a generic delete handler for an entity."
-  [{:keys [service entity-key _entity-plural custom-delete-fn delete-response-type]}]
+  [{:keys [service entity-key _entity-plural custom-delete-fn delete-response-type parse-id]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
-        (let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))
+        (let [raw-id (get-in request [:path-params :id])
+              id (if parse-id
+                   (parse-id raw-id)
+                   (utils/parse-uuid-custom raw-id))
               delete-fn (or (when custom-delete-fn (resolve-fn service custom-delete-fn))
                           (resolve-service-op-fn service (symbol (str "delete-" (name entity-key) "!")) :delete!))
               deleted (when id (delete-fn db id))]
@@ -314,13 +323,15 @@
 
   Expects JSON body like:
   {:ids [<uuid-str> ...]}"
-  [{:keys [service entity-key custom-delete-fn]}]
+  [{:keys [service entity-key custom-delete-fn parse-id]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
         (let [body (normalize-keys-deep->app (read-json-body request))
               raw-ids (or (:ids body) [])
-              ids (->> raw-ids (map utils/parse-uuid-custom) (filter some?) vec)
+              ids (if parse-id
+                    (mapv parse-id raw-ids)
+                    (->> raw-ids (map utils/parse-uuid-custom) (filter some?) vec))
               delete-fn (or (when custom-delete-fn (resolve-fn service custom-delete-fn))
                           (resolve-service-op-fn service (symbol (str "delete-" (name entity-key) "!")) :delete!))]
           (cond

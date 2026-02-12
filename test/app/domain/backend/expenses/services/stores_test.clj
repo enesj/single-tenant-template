@@ -1,107 +1,118 @@
 (ns app.domain.backend.expenses.services.stores-test
-  "Tests for store services, focusing on city extraction logic."
+  "Focused tests for ZIP-only city_id behavior in store flows."
   (:require
+    [app.domain.backend.expenses.services.cities :as cities]
+    [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.stores :as stores]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing]]
+    [next.jdbc :as jdbc])
+  (:import
+    [java.util UUID]))
 
-(deftest extract-city-from-address-test
-  (testing "standard address format with postal code"
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "ul. Kolodvorska br.12, 71000 Sarajevo"))))
+(deftest find-or-create-store-resolves-city-id-via-zip-only-test
+  (testing "create flow resolves city_id via cities/resolve-city-id-from-text!"
+    (let [resolved-city-id (UUID/randomUUID)
+          supplier-id (UUID/randomUUID)
+          captured-sql (atom nil)
+          opts {:places-cfg {:api-key "x"}
+                :user-region "BA"}]
+      (with-redefs [cities/resolve-city-id-from-text! (fn [_db text resolver-opts]
+                                                        (is (= "Test Store\nVrbanja 1, 71 000 Sarajevo" text))
+                                                        (is (= opts resolver-opts))
+                                                        resolved-city-id)
+                    stores/extract-city-from-address (fn [& _]
+                                                       (throw (ex-info "city-name extraction must not be used" {})))
+                    jdbc/execute-one! (fn [_db sql-params _opts]
+                                        (reset! captured-sql sql-params)
+                                        {:id (UUID/randomUUID)
+                                         :supplier_id supplier-id
+                                         :city_id resolved-city-id})]
+        (let [row (stores/find-or-create-store!
+                    :db
+                    {:supplier_id supplier-id
+                     :display_name "Test Store"
+                     :address "Vrbanja 1, 71 000 Sarajevo"}
+                    opts)]
+          (is (= resolved-city-id (:city_id row)))
+          (is (vector? @captured-sql))
+          (is (str/includes? (str/lower-case (first @captured-sql)) "insert into stores")))))))
 
-  (testing "uppercase city (title-case normalization)"
-    (is (= "Sarajevo Centar"
-          (stores/extract-city-from-address "JUKIĆEVA DO BROJA 2, 71103 SARAJEVO CENTAR"))))
+(deftest find-or-create-store-does-not-infer-city-without-resolvable-zip-test
+  (testing "create flow keeps city_id nil when ZIP is missing/invalid/unresolvable"
+    (let [supplier-id (UUID/randomUUID)]
+      (with-redefs [cities/resolve-city-id-from-text! (fn [_db _text _opts] nil)
+                    stores/extract-city-from-address (fn [& _]
+                                                       (throw (ex-info "city-name extraction must not be used" {})))
+                    jdbc/execute-one! (fn [_db _sql-params _opts]
+                                        {:id (UUID/randomUUID)
+                                         :supplier_id supplier-id
+                                         :city_id nil})]
+        (let [row (stores/find-or-create-store!
+                    :db
+                    {:supplier_id supplier-id
+                     :display_name "No Zip Store"
+                     :address "No valid postal code here"})]
+          (is (nil? (:city_id row))))))))
 
-  (testing "multi-word city"
-    (is (= "Novo Sarajevo"
-          (stores/extract-city-from-address "Milana Preloga 2 S, 71120 Novo Sarajevo"))))
+(deftest update-store-address-unresolvable-zip-sets-city-id-nil-test
+  (testing "update flow explicitly sets city_id to nil when address is provided but ZIP is unresolved"
+    (let [store-id (UUID/randomUUID)
+          captured-sql (atom nil)
+          opts {:places-cfg {:api-key "x"}}]
+      (with-redefs [cities/resolve-city-id-from-text! (fn [_db text resolver-opts]
+                                                        (is (= "No valid ZIP in this address" text))
+                                                        (is (= opts resolver-opts))
+                                                        nil)
+                    stores/extract-city-from-address (fn [& _]
+                                                       (throw (ex-info "city-name extraction must not be used" {})))
+                    jdbc/execute-one! (fn [_db sql-params _opts]
+                                        (reset! captured-sql sql-params)
+                                        {:id store-id
+                                         :city_id nil})]
+        (let [row (stores/update-store! :db store-id {:address "No valid ZIP in this address"} opts)
+              sql-lc (str/lower-case (first @captured-sql))]
+          (is (nil? (:city_id row)))
+          (is (str/includes? sql-lc "city_id"))
+          (is (str/includes? sql-lc "null")))))))
 
-  (testing "different city"
-    (is (= "Mostar"
-          (stores/extract-city-from-address "Kardinala Stepinca bb, 88000 Mostar")))))
+(deftest update-store-without-address-does-not-touch-city-id-test
+  (testing "update flow does not resolve or set city_id when address is absent"
+    (let [store-id (UUID/randomUUID)
+          captured-sql (atom nil)]
+      (with-redefs [cities/resolve-city-id-from-text! (fn [& _]
+                                                        (throw (ex-info "ZIP resolver must not run without address" {})))
+                    jdbc/execute-one! (fn [_db sql-params _opts]
+                                        (reset! captured-sql sql-params)
+                                        {:id store-id
+                                         :display_name "Renamed"
+                                         :city_id (UUID/randomUUID)})]
+        (stores/update-store! :db store-id {:display_name "Renamed"})
+        (is (not (str/includes? (str/lower-case (first @captured-sql)) "city_id")))))))
 
-(deftest extract-city-edge-cases-test
-  (testing "nil address"
-    (is (nil? (stores/extract-city-from-address nil))))
-
-  (testing "empty string"
-    (is (nil? (stores/extract-city-from-address ""))))
-
-  (testing "blank/whitespace"
-    (is (nil? (stores/extract-city-from-address "   "))))
-
-  (testing "no postal code"
-    (is (nil? (stores/extract-city-from-address "UL. MERHEMIČA TRG BR. 3"))))
-
-  (testing "postal code only"
-    (is (nil? (stores/extract-city-from-address "71000"))))
-
-  (testing "city only (no postal)"
-    (is (nil? (stores/extract-city-from-address "Sarajevo")))))
-
-(deftest extract-city-complex-addresses-test
-  (testing "multiple commas with nested info"
-    (is (= "Sarajevo Centar"
-          (stores/extract-city-from-address
-            "Bulevar Franca Lehara br. 2.,, Alta Shopping Centar, 71101 SARAJEVO CENTAR"))))
-
-  (testing "trailing punctuation is trimmed"
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "Street Address, 71000 Sarajevo,"))))
-
-  (testing "lowercase address components"
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "bulevar mese selimovica 31, 71000 sarajevo"))))
-
-  (testing "mixed case with preserving proper capitalization"
-    (is (= "Istočna Ilidža"
-          (stores/extract-city-from-address "Trg, 71210 istočna ilidža")))))
-
-(deftest extract-city-known-edge-cases-test
-  (testing "postal code with spaces"
-    ;; From backfill: "Vrbanja 1, 71 000 Sarajevo"
-    ;; Spaces are normalized before matching the 5-digit code.
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "Vrbanja 1, 71 000 Sarajevo"))))
-
-  (testing "4-digit postal code (unsupported)"
-    ;; From backfill: "Ul. Brače Begića broj 1, 1000 Sarajevo"
-    ;; Expected: nil because regex requires 5 digits
-    (is (nil? (stores/extract-city-from-address "Ul. Brače Begića broj 1, 1000 Sarajevo"))))
-
-  (testing "complex multi-digit postal pattern"
-    ;; From backfill: "Gralicacka 1, 71 100 001 13vo"
-    ;; Expected: might extract "13vo" after finding 71100 (incorrect but documented)
-    (let [result (stores/extract-city-from-address "Gralicacka 1, 71 100 001 13vo")]
-      ;; Document current behavior: finds last 5-digit sequence (00113) and gets "vo"
-      ;; This is a known limitation for malformed addresses
-      (is (or (nil? result) (= "Vo" result))
-        "Complex multi-digit patterns may extract incorrect city or nil")))
-
-  (testing "address without city after postal code"
-    ;; Edge case: postal code at the end with no city
-    (is (nil? (stores/extract-city-from-address "Street Name 123, 71000"))))
-
-  (testing "multiple postal codes - uses last one"
-    ;; Algorithm uses the last postal code found
-    (is (= "Mostar"
-          (stores/extract-city-from-address "71000 Sarajevo office, moved to 88000 Mostar")))))
-
-(deftest extract-city-real-world-addresses-test
-  (testing "addresses from actual stores database"
-    ;; Real addresses from stores table that were successfully parsed
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "BULEVAR MESE SELIMOVICA 31, 71000 Sarajevo")))
-
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "BRAĆE BEGIĆ br.4, 71000 Sarajevo")))
-
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "BULEVAR FRANCA LEHARA B.B, 71000 SARAJEVO")))
-
-    (is (= "Východna Ilidža"
-          (stores/extract-city-from-address "Trg BiH 22, 71201 Východna ilidža")))
-
-    (is (= "Sarajevo"
-          (stores/extract-city-from-address "Hamdije Kreševljakovića 56-56a, 71000 Sarajevo")))))
+(deftest resolve-store-from-merchant-threads-opts-to-store-writes-test
+  (testing "resolve-store-from-merchant passes opts into update-store! when Places resolves place-id"
+    (let [supplier-id (UUID/randomUUID)
+          existing-store-id (UUID/randomUUID)
+          passed-opts (atom nil)
+          merchant {:name "Bingo"
+                    :store_name "Bingo Store"
+                    :address "Vrbanja 1, 71000 Sarajevo"}
+          opts {:places-cfg {:api-key "x"
+                             :region-code "BA"}
+                :user-region "BA"}]
+      (with-redefs [places-api/search-text! (fn [_cfg _query _places-opts]
+                                              {:places [{:name "Bingo Store"
+                                                         :raw {:id "place-123"
+                                                               :formattedAddress "Vrbanja 1, 71000 Sarajevo"}}]})
+                    stores/find-by-supplier-and-place-id (fn [_db _supplier-id _place-id]
+                                                           {:id existing-store-id})
+                    stores/update-store! (fn [_db store-id _patch resolver-opts]
+                                           (is (= existing-store-id store-id))
+                                           (reset! passed-opts resolver-opts)
+                                           {:id existing-store-id
+                                            :supplier_id supplier-id})
+                    stores/merge-duplicate-stores-by-place-id! (fn [& _] {:kept existing-store-id :merged 0})]
+        (let [res (stores/resolve-store-from-merchant :db supplier-id merchant opts)]
+          (is (= existing-store-id (:store-id res)))
+          (is (= opts @passed-opts)))))))

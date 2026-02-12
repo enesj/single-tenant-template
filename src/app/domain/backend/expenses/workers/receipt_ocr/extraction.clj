@@ -725,7 +725,8 @@
                   (when should-promote-store-name?
                     (stores/update-store! db mapped-store-id
                       (cond-> {:display_name store-name}
-                        (seq address) (assoc :address address))))))
+                        (seq address) (assoc :address address))
+                      opts))))
               (catch Exception e
                 (log/warn e "Failed to promote mapped store display_name from merchant.store_name"
                   {:store-id mapped-store-id

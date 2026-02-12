@@ -72,7 +72,9 @@
  :articles
  {:available-columns
   ["canonical_name"
+   "category"
    "category_name"
+   "subcategory_id"
    "subcategory_name"
    "manufacturer_display_name"
    "manufacturer_id"
@@ -254,7 +256,8 @@
   :default-visible-columns ["country" "code"],
   :filterable-columns ["country" "code"],
   :sortable-columns ["country" "code" "created_at" "updated_at"],
-  :always-visible ["country"]},
+  :always-visible ["country"],
+  :computed-fields {:id {:type "string"}}},
  :supplier-aliases
  {:available-columns
   ["supplier_display_name"

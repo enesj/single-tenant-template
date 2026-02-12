@@ -74,6 +74,12 @@
    :log-prefix "[expenses] Syncing cities to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-countries
+   :entity-key :countries
+   :normalize-fn normalize/country->template-entity
+   :log-prefix "[expenses] Syncing countries to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-subcategories
    :entity-key :subcategories
    :normalize-fn normalize/subcategory->template-entity
@@ -144,6 +150,8 @@
   {:sync-event-id ::sync-categories})
 (entity-sync/register-sync-handler! :cities
   {:sync-event-id ::sync-cities})
+(entity-sync/register-sync-handler! :countries
+  {:sync-event-id ::sync-countries})
 (entity-sync/register-sync-handler! :subcategories
   {:sync-event-id ::sync-subcategories})
 (entity-sync/register-sync-handler! :payers
@@ -170,6 +178,7 @@
 (form-interceptors/register-bridge-entity! :manufacturers)
 (form-interceptors/register-bridge-entity! :categories)
 (form-interceptors/register-bridge-entity! :cities)
+(form-interceptors/register-bridge-entity! :countries)
 (form-interceptors/register-bridge-entity! :subcategories)
 (form-interceptors/register-bridge-entity! :expenses)
 (form-interceptors/register-bridge-entity! :expense-items)
@@ -180,3 +189,12 @@
 (form-interceptors/register-bridge-entity! :article-aliases)
 (form-interceptors/register-bridge-entity! :supplier-aliases)
 (form-interceptors/register-bridge-entity! :price-observations)
+
+(comment
+  ;; Loading this namespace registers `:countries` with the generic sync dispatcher
+  ;; (`:admin/refresh-entity-list`) and with the admin form bridge.
+  ;;
+  ;; Example event payload (after a successful list response):
+  ;; [:admin/refresh-entity-list :countries
+  ;;  {:countries [{:id "1" :country "Germany" :code "DE"}]}]
+  :rcf)

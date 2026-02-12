@@ -45,12 +45,27 @@
        :error-message (:message err)
        :error-reason (:reason first-detail)})))
 
+(def ^:private min-circle-radius-m 0.0)
+(def ^:private max-circle-radius-m 50000.0)
+
+(defn- finite-number?
+  [x]
+  (and (number? x)
+    (let [x* (double x)]
+      (and (not (Double/isNaN x*))
+        (not (Double/isInfinite x*))))))
+
 (defn- location-bias->request [location-bias]
   (when-let [circle (:circle location-bias)]
     (let [{:keys [lat lng radius-m]} circle]
-      (when (and (number? lat) (number? lng) (number? radius-m))
-        {:circle {:center {:latitude lat :longitude lng}
-                  :radius radius-m}}))))
+      (when (and (finite-number? lat)
+              (finite-number? lng)
+              (finite-number? radius-m))
+        {:circle {:center {:latitude (double lat)
+                           :longitude (double lng)}
+                  :radius (-> (double radius-m)
+                            (max min-circle-radius-m)
+                            (min max-circle-radius-m))}}))))
 
 (defn http-post!
   "Wrapper around clj-http POST. Kept as a var for tests."
@@ -88,13 +103,37 @@
   - :field-mask (string, optional). Example:
     \"places.displayName,places.id,places.formattedAddress\"
 
+  Additional behavior:
+  - Retries transient HTTP failures (5xx) a small number of times.
+  - If a 5xx response occurs while requesting `places.addressComponents`, we
+    retry once with that field removed. (The upstream API has been observed to
+    intermittently return 500 for some queries + field masks.)
+
   Returns {:places [{:name \"Bingo\" :raw <place>} ...] :error nil} on success.
   Returns {:places [] :error {:type ...}} on failure."
-  [cfg text {:keys [region-code language-code location-bias max-results field-mask] :as _opts}]
+  [cfg text {:keys [region-code language-code location-bias max-results field-mask
+                    retries retry-sleep-ms]
+             :as _opts}]
   (let [api-key (:api-key cfg)
         text* (some-> text str str/trim not-empty)
         field-mask* (or (some-> field-mask str str/trim not-empty)
-                      "places.displayName,places.id")]
+                      "places.displayName,places.id")
+        max-retries (long (or retries 1))
+        base-sleep-ms (long (or retry-sleep-ms 150))
+        retryable-status? (fn [status]
+                            (contains? #{500 502 503 504} status))
+        strip-address-components-field (fn [mask]
+                                         (->> (str/split (str mask) #",")
+                                           (map str/trim)
+                                           (remove str/blank?)
+                                           (remove #{"places.addressComponents"})
+                                           (str/join ",")))
+        bias (location-bias->request location-bias)
+        body (cond-> {:textQuery text*}
+               (seq region-code) (assoc :regionCode region-code)
+               (seq language-code) (assoc :languageCode language-code)
+               (some? max-results) (assoc :maxResultCount (long max-results))
+               bias (assoc :locationBias bias))]
     (cond
       (str/blank? text*)
       {:places [] :error {:type :places/blank-query}}
@@ -105,73 +144,123 @@
         {:places [] :error {:type :places/missing-api-key}})
 
       :else
-      (let [bias (location-bias->request location-bias)
-            _ (log/debug "Places API request"
-                {:api-key-redacted (redact-api-key api-key)
-                 :query text*
-                 :region-code region-code
-                 :language-code language-code
-                 :field-mask field-mask*})
-            body (cond-> {:textQuery text*}
-                   (seq region-code) (assoc :regionCode region-code)
-                   (seq language-code) (assoc :languageCode language-code)
-                   (some? max-results) (assoc :maxResultCount (long max-results))
-                   bias (assoc :locationBias bias))
-            req-opts {:headers {"X-Goog-Api-Key" api-key
-                                "X-Goog-FieldMask" field-mask*
-                                "Content-Type" "application/json"}
-                      :body (json/generate-string body)
-                      :as :text
-                      :throw-exceptions false
-                      :socket-timeout (:timeout-ms cfg)
-                      :conn-timeout (:timeout-ms cfg)}]
-        (try
-          (let [resp (http-post! (:base-url cfg) req-opts)
-                status (:status resp)
-                data (parse-json-body (:body resp))]
-            (if (= 200 status)
-              (let [places (->> (:places data)
-                             (keep (fn [place]
-                                     (let [display-name (:displayName place)
-                                           name (cond
-                                                  (string? display-name) display-name
-                                                  (string? (:text display-name)) (:text display-name)
-                                                  :else nil)]
-                                       (when (seq (some-> name str str/trim))
-                                         {:name (str/trim name)
-                                          :raw place}))))
-                             vec)
-                    place-names (mapv :name places)]
-                (log/info "Places API response"
-                  {:status status
-                   :query text*
-                   :region-code region-code
-                   :language-code language-code
-                   :field-mask field-mask*
-                   :places place-names
-                   :raw-body-snippet (safe-body-snippet (:body resp))})
-                {:places places :error nil})
-              (do
-                (log/info "Places API non-200 response"
-                  (merge
+      (let [request-once (fn [field-mask attempt]
+                           (let [mask* (some-> field-mask str str/trim not-empty)
+                                 req-opts {:headers {"X-Goog-Api-Key" api-key
+                                                     "X-Goog-FieldMask" mask*
+                                                     "Content-Type" "application/json"}
+                                           :body (json/generate-string body)
+                                           :as :text
+                                           :throw-exceptions false
+                                           :socket-timeout (:timeout-ms cfg)
+                                           :conn-timeout (:timeout-ms cfg)}]
+                             (log/debug "Places API request"
+                               {:api-key-redacted (redact-api-key api-key)
+                                :query text*
+                                :region-code region-code
+                                :language-code language-code
+                                :field-mask mask*
+                                :attempt attempt})
+                             (try
+                               (let [resp (http-post! (:base-url cfg) req-opts)
+                                     status (:status resp)
+                                     data (parse-json-body (:body resp))]
+                                 {:type :http
+                                  :status status
+                                  :mask mask*
+                                  :resp resp
+                                  :data data})
+                               (catch Exception e
+                                 {:type :exception
+                                  :mask mask*
+                                  :exception e}))))]
+        (loop [attempt 0
+               current-mask field-mask*]
+          (let [{:keys [type status mask resp data exception]} (request-once current-mask attempt)]
+            (case type
+              :http
+              (cond
+                (= 200 status)
+                (let [places (->> (:places data)
+                               (keep (fn [place]
+                                       (let [display-name (:displayName place)
+                                             name (cond
+                                                    (string? display-name) display-name
+                                                    (string? (:text display-name)) (:text display-name)
+                                                    :else nil)]
+                                         (when (seq (some-> name str str/trim))
+                                           {:name (str/trim name)
+                                            :raw place}))))
+                               vec)
+                      place-names (mapv :name places)]
+                  (log/info "Places API response"
                     {:status status
                      :query text*
                      :region-code region-code
                      :language-code language-code
-                     :field-mask field-mask*
-                     :raw-body-snippet (safe-body-snippet (:body resp))}
-                    (parsed-error-info data)))
-                {:places []
-                 :error (response->error "Places API error" resp data)})))
-          (catch Exception e
-            (log/warn e "Places API request failed"
-              {:query text*
-               :region-code region-code
-               :language-code language-code
-               :field-mask field-mask*})
-            {:places []
-             :error {:type :places/exception
-                     :message (or (.getMessage e) (str (class e)))}}))))))
+                     :field-mask mask
+                     :places place-names
+                     :raw-body-snippet (safe-body-snippet (:body resp))})
+                  {:places places :error nil})
+
+                (and (retryable-status? status)
+                  (< attempt max-retries))
+                (let [simplified (when (str/includes? (str mask) "places.addressComponents")
+                                   (strip-address-components-field mask))
+                      next-mask (cond
+                                  (and (seq simplified) (not= simplified mask)) simplified
+                                  :else mask)]
+                  (log/info "Places API retrying after transient non-200 response"
+                    (merge
+                      {:status status
+                       :query text*
+                       :region-code region-code
+                       :language-code language-code
+                       :field-mask mask
+                       :next-field-mask next-mask
+                       :attempt attempt
+                       :max-retries max-retries
+                       :raw-body-snippet (safe-body-snippet (:body resp))}
+                      (parsed-error-info data)))
+                  (Thread/sleep (* base-sleep-ms (inc attempt)))
+                  (recur (inc attempt) next-mask))
+
+                :else
+                (do
+                  (log/info "Places API non-200 response"
+                    (merge
+                      {:status status
+                       :query text*
+                       :region-code region-code
+                       :language-code language-code
+                       :field-mask mask
+                       :raw-body-snippet (safe-body-snippet (:body resp))}
+                      (parsed-error-info data)))
+                  {:places []
+                   :error (response->error "Places API error" resp data)}))
+
+              :exception
+              (if (< attempt max-retries)
+                (do
+                  (log/warn exception "Places API request failed; retrying"
+                    {:query text*
+                     :region-code region-code
+                     :language-code language-code
+                     :field-mask mask
+                     :attempt attempt
+                     :max-retries max-retries})
+                  (Thread/sleep (* base-sleep-ms (inc attempt)))
+                  (recur (inc attempt) current-mask))
+                (do
+                  (log/warn exception "Places API request failed"
+                    {:query text*
+                     :region-code region-code
+                     :language-code language-code
+                     :field-mask mask
+                     :attempt attempt})
+                  {:places []
+                   :error {:type :places/exception
+                           :message (or (.getMessage exception) (str (class exception)))}})))))))))
 
 (defn get-place-details!
   "Fetch detailed place information for a given place-id.
@@ -281,3 +370,16 @@
                         (some #{"administrative_area_level_2"} (:types component)))
                   (:longText component)))
           address-components)))))
+
+(defn extract-postal-code-from-address-components
+  "Extract postal code from Places API addressComponents array.
+
+  Returns the first postal code longText/shortText value, or nil."
+  [address-components]
+  (when (sequential? address-components)
+    (some (fn [component]
+            (when (and (map? component)
+                    (some #{"postal_code"} (:types component)))
+              (or (:longText component)
+                (:shortText component))))
+      address-components)))

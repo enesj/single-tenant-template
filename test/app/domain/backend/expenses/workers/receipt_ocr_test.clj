@@ -452,7 +452,7 @@
                        :display_name "Ljekarnička zdraustvena ustanova"}
                       nil))
                   stores/update-store!
-                  (fn [_db store-id data]
+                  (fn [_db store-id data _opts]
                     {:id store-id
                      :display_name (:display_name data)
                      :address (:address data)})
@@ -541,7 +541,7 @@
                        :display_name "HOŠE-KOMERC"}
                       nil))
                   stores/update-store!
-                  (fn [_db store-id data]
+                  (fn [_db store-id data _opts]
                     {:id store-id
                      :display_name (:display_name data)
                      :address (:address data)})
@@ -642,7 +642,7 @@
                     {:id store-id
                      :display_name "LUPRIV PLUS Mostar"})
                   stores/update-store!
-                  (fn [_db store-id data]
+                  (fn [_db store-id data _opts]
                     (is (= mapped-store-id store-id))
                     (swap! calls assoc :store-update data)
                     {:id store-id

@@ -2,8 +2,9 @@
   "Configuration maps for expenses domain route generation."
   (:require
     [app.domain.backend.expenses.services.service-configs :as svc-configs]
+    [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
-    [app.template.backend.middleware.admin :as admin-mw]))
+    [clojure.string :as str]))
 
 ;; =============================================================================
 ;; Entity Route Configurations
@@ -88,6 +89,21 @@
                           {:search (:search qp)})
    :custom-count-params (fn [qp]
                           {:search (:search qp)})})
+
+(def country-config
+  {:entity-key :country
+   :entity-plural :countries
+   :route-segment "countries"
+   :service 'app.domain.backend.expenses.services.countries
+   :default-limit 500
+   :default-order-by "country"
+   :required-fields [:country :code]
+   :parse-id (fn [v]
+               (let [s (some-> v str str/trim)]
+                 (if (seq s)
+                   s
+                   (throw (ex-info "Invalid id" {:status 400
+                                                 :value v})))))})
 
 (def manufacturer-config
   {:entity-key :manufacturer

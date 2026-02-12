@@ -164,6 +164,15 @@
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 
+(defn country->template-entity
+  [country]
+  (entity-utils/normalize-entity
+    country
+    {:entity-ns :countries
+     :id-keys [:id]
+     :alias-keys {:created_at [:created-at]
+                  :updated_at [:updated-at]}}))
+
 (defn subcategory->template-entity
   [subcategory]
   (entity-utils/normalize-entity

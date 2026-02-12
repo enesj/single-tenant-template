@@ -138,6 +138,14 @@
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
+(def countries-config
+  {:entity-key :countries
+   :base-path [:admin :expenses :countries]
+   :api-endpoint "/admin/api/expenses/countries"
+   :detail-response-key :country
+   :has-forms? false
+   :pagination-opts {:default-per-page 25}})
+
 (def subcategories-config
   {:entity-key :subcategories
    :base-path [:admin :expenses :subcategories]
@@ -153,6 +161,7 @@
    :manufacturers manufacturers-config
    :categories categories-config
    :cities cities-config
+   :countries countries-config
    :subcategories subcategories-config
    :payers payers-config
    :articles articles-config

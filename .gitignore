@@ -39,6 +39,11 @@ node_modules
 /.lsp/
 /.portal/
 .DS_Store
+
+# Local Python utilities (kept untracked)
+bih_zip_to_csv.py
+__pycache__/
+*.pyc
 /resources/public/
 !resources/public/index.html
 resources/public/assets/css/*.css

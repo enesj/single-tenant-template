@@ -98,6 +98,13 @@
             {:id :created-at :label "Created at" :type :datetime}
             {:id :updated-at :label "Updated at" :type :datetime}]})
 
+(def countries-entity-spec
+  {:id :countries
+   :fields [{:id :country :label "Country" :type :text}
+            {:id :code :label "Code" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
 (def store-aliases-entity-spec
   {:id :store-aliases
    :fields [{:id :supplier-display-name :label "Supplier" :type :text}
@@ -169,6 +176,10 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :cities
    :value-fn (fn [spec _] (or spec cities-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :countries
+   :value-fn (fn [spec _] (or spec countries-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :store-aliases

@@ -215,6 +215,26 @@
         js/undefined)
       [on-edit-success use-modal-forms? edit-modal-open? has-custom-edit-form? form-success? form-submitted? entity-kw])
 
+    ;; Auto-close default modal add form after success.
+    ;; (Custom modal add forms are expected to call the provided :on-success callback.)
+    (use-effect
+      (fn []
+        (when (and use-modal-forms?
+                add-modal-open?
+                (not has-custom-add-form?)
+                form-success?
+                form-submitted?)
+          ;; Give the success alert a brief moment to show, then close.
+          (js/setTimeout
+            (fn []
+              (rf/dispatch [::form-events/cancel-form entity-kw])
+              (set-add-modal-open! false)
+              (when on-add-success
+                (on-add-success)))
+            500))
+        js/undefined)
+      [on-add-success use-modal-forms? add-modal-open? has-custom-add-form? form-success? form-submitted? entity-kw])
+
     ;; Handle single item selection toggle
     (let [handle-select-change (fn [item-id selected?]
                                  (rf/dispatch [::selection-events/select-item entity-name item-id selected?]))
@@ -257,15 +277,20 @@
                              (when (not (false? allow-add?))
                                (rf/dispatch [::crud-events/clear-error entity-kw])
                                (rf/dispatch [::form-events/clear-form-errors entity-kw])
-                               (if (and use-modal-forms? has-custom-add-form?)
-                                 ;; Open add modal
+                               ;; Ensure we don't reuse stale form state between opens.
+                               (rf/dispatch [::form-events/cancel-form entity-kw])
+                               (if use-modal-forms?
+                                 ;; Modal behavior (default or custom): keep table visible.
                                  (set-add-modal-open! true)
-                                 ;; Fall back to inline behavior
+                                 ;; Inline behavior
                                  (do
                                    (rf/dispatch [::config-events/set-show-add-form true])
                                    (rf/dispatch [::config-events/set-editing nil])))))
 
           handle-add-modal-close (fn []
+                                   (rf/dispatch [::crud-events/clear-error entity-kw])
+                                   (rf/dispatch [::form-events/clear-form-errors entity-kw])
+                                   (rf/dispatch [::form-events/cancel-form entity-kw])
                                    (set-add-modal-open! false))
 
           handle-add-modal-success (fn []
@@ -358,17 +383,40 @@
                :id (str "table-" (kw/ensure-name entity-name))}
         ($ :div {:class "p-2 w-full"}
           ;; Modal for custom add form
-          (when (and add-modal-open? has-custom-add-form?)
+          (when add-modal-open?
             ($ modal-wrapper
               {:visible? true
                :title (str "Add " title)
                :size :large
                :on-close handle-add-modal-close
                :close-button-id (str "btn-close-add-modal-" (kw/ensure-name entity-name))}
-              (render-add-form {:entity-name entity-name
-                                :entity-spec entity-spec
-                                :on-success handle-add-modal-success
-                                :on-cancel handle-add-modal-close})))
+              (if has-custom-add-form?
+                (render-add-form {:entity-name entity-name
+                                  :entity-spec entity-spec
+                                  :on-success handle-add-modal-success
+                                  :on-cancel handle-add-modal-close})
+                (let [effective-form-spec (or form-entity-spec
+                                            (when (vector? entity-spec) entity-spec)
+                                            (when (map? entity-spec)
+                                              (let [fields (:fields entity-spec)]
+                                                (cond
+                                                  (vector? fields) fields
+                                                  (sequential? fields) (vec fields)
+                                                  :else nil)))
+                                            [])
+                      default-values (reduce (fn [acc field-spec]
+                                               (if-let [default-value (:default-value field-spec)]
+                                                 (assoc acc (keyword (:id field-spec)) default-value)
+                                                 acc))
+                                       {}
+                                       effective-form-spec)]
+                  ($ form
+                    {:key (str "modal-add-" (kw/ensure-name entity-name))
+                     :entity-name entity-kw
+                     :entity-spec effective-form-spec
+                     :editing false
+                     :initial-values default-values
+                     :on-cancel handle-add-modal-close})))))
 
           ;; Modal for edit form (custom or default)
           (when (and edit-modal-open? edit-modal-item)
@@ -493,7 +541,7 @@
                        ;; Allow callers to provide a direct add click handler (e.g., navigate to upload),
                        ;; otherwise fall back to the modal-mode handler when using custom add forms.
                        :on-add-click (or (:on-add-click props)
-                                       (when (and use-modal-forms? has-custom-add-form?)
+                                       (when use-modal-forms?
                                          handle-add-click))})
 
                     ($ :div {:class "ds-divider"})                    ;; Divider after header

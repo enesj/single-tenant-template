@@ -1,7 +1,7 @@
 ---
 name: Coder
 description: Implements changes in this repository using its Clojure-first workflow and constraints.
-model: Claude Opus 4.6 (copilot)
+model: GPT-5.3-Codex (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-mcp/*']
 ---
 
