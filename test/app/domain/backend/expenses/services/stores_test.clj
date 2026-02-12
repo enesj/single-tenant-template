@@ -46,10 +46,8 @@
           (stores/extract-city-from-address
             "Bulevar Franca Lehara br. 2.,, Alta Shopping Centar, 71101 SARAJEVO CENTAR"))))
 
-  (testing "trailing punctuation (not currently trimmed)"
-    ;; Known behavior: trailing commas are not stripped
-    ;; This could be enhanced in the future if needed
-    (is (= "Sarajevo,"
+  (testing "trailing punctuation is trimmed"
+    (is (= "Sarajevo"
           (stores/extract-city-from-address "Street Address, 71000 Sarajevo,"))))
 
   (testing "lowercase address components"
@@ -61,10 +59,11 @@
           (stores/extract-city-from-address "Trg, 71210 istočna ilidža")))))
 
 (deftest extract-city-known-edge-cases-test
-  (testing "postal code with spaces (unsupported)"
+  (testing "postal code with spaces"
     ;; From backfill: "Vrbanja 1, 71 000 Sarajevo"
-    ;; Expected: nil because regex doesn't match spaced postal codes
-    (is (nil? (stores/extract-city-from-address "Vrbanja 1, 71 000 Sarajevo"))))
+    ;; Spaces are normalized before matching the 5-digit code.
+    (is (= "Sarajevo"
+          (stores/extract-city-from-address "Vrbanja 1, 71 000 Sarajevo"))))
 
   (testing "4-digit postal code (unsupported)"
     ;; From backfill: "Ul. Brače Begića broj 1, 1000 Sarajevo"

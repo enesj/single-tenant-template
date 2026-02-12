@@ -469,11 +469,29 @@
 
  :cities
  {:available-columns
-  ["name" "normalized_key" "created_at" "updated_at" "id"],
-  :default-visible-columns ["name" "normalized_key" "created_at"],
-  :filterable-columns ["name" "normalized_key" "created_at"],
-  :sortable-columns ["name" "normalized_key" "created_at" "updated_at"],
+  ["name" "normalized_key" "zip" "country" "created_at" "updated_at" "id"],
+  :default-visible-columns
+  ["name" "country" "zip" "normalized_key" "created_at"],
+  :filterable-columns
+  ["name" "normalized_key" "zip" "country" "created_at"],
+  :sortable-columns
+  ["name"
+   "normalized_key"
+   "zip"
+   "country"
+   "created_at"
+   "updated_at"],
   :always-visible ["name"],
+  :computed-fields {},
+  :column-config {}}
+
+ :countries
+ {:available-columns
+  ["country" "code" "created_at" "updated_at" "id"],
+  :default-visible-columns ["country" "code"],
+  :filterable-columns ["country" "code"],
+  :sortable-columns ["country" "code" "created_at" "updated_at"],
+  :always-visible ["country"],
   :computed-fields {},
   :column-config {}}
 

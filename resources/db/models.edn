@@ -47,12 +47,23 @@
   [[:id :uuid {:primary-key true}]
    [:name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
+   [:zip [:varchar 20]]
+   [:country
+    [:varchar 255]
+    {:foreign-key :countries/country,
+     :null false,
+     :default "Bosnia and Herzegovina",
+     :on-delete :restrict,
+     :on-update :cascade}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_cities_normalized_key
     :btree
-    {:fields [:normalized_key], :unique true}]]},
+    {:fields [:normalized_key], :unique true}]
+   [:uniq_cities_country_zip
+    :btree
+    {:fields [:country :zip], :unique true}]]},
  :admins
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -188,6 +199,14 @@
    [:idx_login_events_principal
     :btree
     {:fields [:principal_type :principal_id]}]]},
+ :countries
+ {:fields
+  [[:country [:varchar 255] {:primary-key true}]
+   [:code [:varchar 2] {:null false}]
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
+  :indexes
+  [[:idx_countries_code :btree {:fields [:code], :unique true}]]},
  :payer_types
  {:fields
   [[:id :uuid {:primary-key true}]
