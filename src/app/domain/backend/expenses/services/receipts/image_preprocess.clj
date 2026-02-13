@@ -1,21 +1,19 @@
 (ns app.domain.backend.expenses.services.receipts.image-preprocess
   "Image preprocessing for receipt OCR.
 
-  Pipeline (best-effort by default):
+  OCR pipeline (best-effort by default):
   1) Convert HEIC/HEIF to JPEG
   2) Convert images to monochrome (default: grayscale)
-  3) Crop receipt from image (best-effort heuristic)
 
   The OCR worker uses this to improve text extraction quality before sending the
   image to Mistral OCR.
 
-  Implementation uses ImageMagick (\"magick\" preferred, falls back to \"convert\").
+  Implementation uses ImageMagick (`magick` preferred, falls back to `convert`).
   When the tool is unavailable or processing fails, we fall back to the original
   bytes for non-HEIC images. HEIC can be configured to fail fast.
 
   Env toggles:
   - RECEIPT_OCR_PREPROCESS_ENABLED=true|false (default true)
-  - RECEIPT_OCR_PREPROCESS_CROP_ENABLED=true|false (default true)
   - RECEIPT_OCR_PREPROCESS_MONO_MODE=grayscale|bilevel (default grayscale)
   - RECEIPT_OCR_PREPROCESS_MAX_DIM=2200 (default 2200)
   - RECEIPT_OCR_PREPROCESS_HEIC_STRICT=true|false (default true)"
@@ -53,8 +51,6 @@
       default-val)))
 
 (defn preprocess-enabled? [] (env-truthy? "RECEIPT_OCR_PREPROCESS_ENABLED" true))
-
-(defn- crop-enabled? [] (env-truthy? "RECEIPT_OCR_PREPROCESS_CROP_ENABLED" true))
 
 (defn- heic-strict? [] (env-truthy? "RECEIPT_OCR_PREPROCESS_HEIC_STRICT" true))
 
@@ -190,19 +186,13 @@
                 :filename filename})))))
 
 (defn- build-magick-args
-  "Build ImageMagick args for input -> output conversion."
+  "Build ImageMagick args for OCR input -> output conversion.
+
+  OCR preprocessing intentionally does not crop; it focuses on orientation,
+  resize, contrast leveling, and monochrome conversion."
   [{:keys [input-path output-path]}]
   (let [max-dim (max-dim)
-        crop? (crop-enabled?)
         mono (mono-mode)
-        ;; A conservative best-effort crop heuristic. This is intentionally
-        ;; non-destructive: if the background isn't uniform, -trim might do
-        ;; nothing (which is fine).
-        trim-args (when crop?
-                    ["-fuzz" "10%"
-                     "-trim" "+repage"
-                     "-bordercolor" "white"
-                     "-border" "20"])
         mono-args (case mono
                     :bilevel ["-colorspace" "Gray" "-threshold" "55%" "-type" "Bilevel"]
                     :grayscale ["-colorspace" "Gray"])]
@@ -213,10 +203,8 @@
          "-strip"
          ;; tame huge scans/photos
          "-resize" (str max-dim "x" max-dim ">")
-         ;; mild contrast helps receipts with poor lighting and improves trimming
+         ;; mild contrast helps receipts with poor lighting
          "-auto-level"]
-        ;; Crop BEFORE monochrome conversion (helps -trim on colored/noisy backgrounds)
-        trim-args
         mono-args
         ["-quality" "90"
          output-path]))))
@@ -397,7 +385,6 @@
               {:duration-ms duration-ms
                :heic? heic?
                :mono-mode (name (mono-mode))
-               :crop-enabled? (crop-enabled?)
                :input-path (.getAbsolutePath input)
                :output-bytes (alength ^bytes out-bytes)})
             {:bytes out-bytes

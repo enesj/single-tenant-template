@@ -142,7 +142,12 @@
   #"(?iu)\b(gotovina|kartica|visa|master(card)?|diners|amex|american|paypal)\b")
 
 (def ^:private meta-label-pattern
-  #"(?iu)\b(ra[čc]un|fiskalni|kasa|kasir|operator|datum|vrijeme|broj|br\.?|id)\b")
+  #"(?iu)\b(ra[čc]un|fiskalni|kasa|kasir|operator|datum|vrijeme|broj|id)\b")
+
+(def ^:private meta-reference-number-pattern
+  ;; Keep this strict: metadata reference markers should look like "br." or "br:" + value.
+  ;; This avoids false positives for legitimate product labels ending with "BR".
+  #"(?iu)\bbr(?:\.|:)\s*[:#-]?\s*[\p{L}\p{N}/-]+\b")
 
 (def ^:private header-label-pattern
   #"(?iu)\b(naziv|opis|artik(al)?|šifra|sifra|kol(\.|i[čc]ina)?|qty|cijena|price|jed(\.|inica)?)\b")
@@ -233,7 +238,8 @@
       (str/blank? (or label "")) :blank-label
       (nil? line-total) :missing-line-total
       (label-matches? header-label-pattern label) :header
-      (label-matches? meta-label-pattern label) :metadata
+      (or (label-matches? meta-label-pattern label)
+        (label-matches? meta-reference-number-pattern raw-label)) :metadata
       (or (= "maestro" label)
         (label-matches? payment-label-pattern label)) :payment
       (label-matches? tax-label-pattern label) :tax

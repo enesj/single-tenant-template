@@ -76,3 +76,30 @@
     (is (= (seq jpg-bytes) (seq (:bytes res))))
     (is (some #(= "-trim" %) args))
     (is (some #(= "-auto-level" %) args))))
+
+(deftest prepare-for-ocr-does-not-apply-crop-args
+  (let [calls (atom [])
+        jpg-bytes (byte-array [9 8 7 6])
+        in-bytes (byte-array [1 2 3])
+        res (binding [image-preprocess/*imagemagick-binary* "magick"
+                      image-preprocess/*sh*
+                      (fn [& args]
+                        (swap! calls conj args)
+                        (let [out-path (last args)]
+                          (java.nio.file.Files/write
+                            (.toPath (java.io.File. ^String out-path))
+                            ^bytes jpg-bytes
+                            (into-array java.nio.file.OpenOption [])))
+                        {:exit 0 :out "" :err ""})]
+              (image-preprocess/prepare-for-ocr {:bytes in-bytes
+                                                 :content-type "image/png"
+                                                 :filename "x.png"}))
+        cmd (first (first @calls))
+        args (mapcat identity (map rest @calls))]
+    (is (= "magick" cmd))
+    (is (= "image/jpeg" (:content-type res)))
+    (is (true? (:preprocessed? res)))
+    (is (= (seq jpg-bytes) (seq (:bytes res))))
+    ;; OCR preprocessing no longer applies trim/crop flags.
+    (is (not (some #(= "-trim" %) args)))
+    (is (some #(= "-auto-level" %) args))))

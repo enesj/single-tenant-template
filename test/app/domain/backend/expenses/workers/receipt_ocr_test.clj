@@ -841,6 +841,81 @@
         (is (= "extracted" (:status _res)))
         (is (= "review_required" (:effective-status _res)))))))
 
+(deftest persist-extract-result-keeps-legitimate-item-label-ending-with-br
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:article-aliases 0
+                     :labels []})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias! (fn [_db _raw-label]
+                                                           {:id alias-id
+                                                            :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places! (fn [& _]
+                                                                      (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [_db _supplier-id raw-label]
+                    (swap! calls (fn [m]
+                                   (-> m
+                                     (update :article-aliases inc)
+                                     (update :labels conj raw-label))))
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "HOŠE-KOMERC"}
+                                         :totals {:total 12.50}
+                                         :items [{:raw_label "CIG DUNHIL ESSEN BR"
+                                                  :qty 1
+                                                  :unit_price 12.50
+                                                  :line_total 12.50}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})
+            stored-items (get-in @stored [:raw_extract_json :extraction :items])
+            resolution-items (get-in @stored [:raw_extract_json :resolution_snapshot :items])
+            post-processing (get-in @stored [:raw_extract_json :post_processing])]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= "extracted" (:status res)))
+        (is (= ["CIG DUNHIL ESSEN BR"] (mapv :raw_label stored-items)))
+        (is (= ["CIG DUNHIL ESSEN BR"] (mapv :raw_label resolution-items)))
+        (is (= 1 (:article-aliases @calls)))
+        (is (= ["CIG DUNHIL ESSEN BR"] (:labels @calls)))
+        ;; Regression: this line-item must never be misclassified as metadata.
+        (is (not (contains? (set (get-in post-processing [:dropped-labels-sample :metadata]))
+                   "CIG DUNHIL ESSEN BR")))))))
+
+(deftest non-item-reason-keeps-legitimate-item-label-with-br-fino
+  (let [non-item-reason #'extraction/non-item-reason
+        ctx {:items-count 10
+             :grand-total 41.94M}
+        item {:raw_label "MILERAM BR&FINO 400G"
+              :qty 1
+              :unit_price 3.30
+              :line_total 3.30}]
+    (is (nil? (non-item-reason ctx item)))))
+
+(deftest non-item-reason-filters-br-colon-reference-as-metadata
+  (let [non-item-reason #'extraction/non-item-reason
+        ctx {:items-count 10
+             :grand-total 41.94M}
+        item {:raw_label "br: 12345/AB"
+              :qty 1
+              :unit_price 1.00
+              :line_total 1.00}]
+    (is (= :metadata (non-item-reason ctx item)))))
+
 (deftest persist-extract-result-applies-discount-override-for-popost-ocr-misread
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)
