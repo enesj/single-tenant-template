@@ -1,0 +1,437 @@
+enum Currency { bam | eur | usd }
+
+entity User {
+    role: member | owner | admin
+}
+
+external entity Supplier { name: String }
+external entity Store { name: String, supplier: Supplier, address: String? }
+external entity Payer { name: String }
+
+value LineItem {
+    raw_label: String
+    qty: Decimal?
+    unit_price: Decimal?
+    line_total: Decimal
+}
+
+value MerchantGuess {
+    name: String?
+    legal_name: String?
+    store_name: String?
+    address: String?
+    raw_address: String?
+}
+
+value Extraction {
+    merchant: MerchantGuess?
+    purchased_at: Timestamp?
+    currency: Currency?
+    total_amount: Decimal?
+    items: List<LineItem>
+}
+
+entity Receipt {
+    owner: User?
+    payer: Payer?
+
+    storage_key: String
+    file_hash: String
+    original_filename: String?
+    content_type: String?
+    file_size_bytes: Integer?
+
+    status: uploaded | parsing | parsed | extracting | extracted | review_required | approved | posted | failed
+    retry_count: Integer
+
+    raw_parse_payload: String?
+    parsed_markdown: String?
+    extraction: Extraction?
+
+    supplier_guess: String?
+    store_guess: String?
+    total_amount_guess: Decimal?
+    currency_guess: Currency?
+    purchased_at_guess: Timestamp?
+
+    error_message: String?
+    error_details: String?
+    refine_pending: Boolean
+
+    expense: Expense with receipt = this
+
+    item_count: extraction?.items.count ?? 0
+
+    totals_match:
+        total_amount_guess != null
+        and extraction?.items != null
+        and abs(sum_line_totals(extraction.items) - total_amount_guess) <= 0.01
+
+    requires_human_review:
+        supplier_guess = null
+        or total_amount_guess = null
+        or currency_guess = null
+        or item_count = 0
+
+    effective_status:
+        if status = extracted and not totals_match: review_required
+        else: status
+
+    visible_to(actor): owner = actor or owner = null
+}
+
+external entity Expense {
+    receipt: Receipt
+    user: User?
+    supplier: Supplier
+    store: Store?
+    payer: Payer
+    purchased_at: Timestamp
+    total_amount: Decimal
+    currency: Currency
+    items: List<LineItem>
+}
+
+config {
+    max_upload_size_bytes: Integer = 10_485_760
+    default_currency: Currency = bam
+    auto_post_after_upload: Boolean = false
+    defer_refine: Boolean = true
+}
+
+rule UploadReceiptNew {
+    when: UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?)
+
+    requires: file_size_bytes <= config.max_upload_size_bytes
+    requires: not exists Receipt{file_hash: file_hash}
+
+    ensures: Receipt.created(
+        owner: actor,
+        payer: payer,
+        storage_key: storage_key,
+        file_hash: file_hash,
+        original_filename: original_filename,
+        content_type: content_type,
+        file_size_bytes: file_size_bytes,
+        status: uploaded,
+        retry_count: 0,
+        refine_pending: false
+    )
+}
+
+rule UploadReceiptDuplicate {
+    when: UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?)
+
+    requires: exists Receipt{file_hash: file_hash}
+
+    ensures: DuplicateReceiptDetected(actor: actor, file_hash: file_hash)
+}
+
+rule QueueSingleReceiptForOCR {
+    when: RequestReceiptOCR(actor, receipt)
+
+    requires: receipt.visible_to(actor) or actor.role = admin
+
+    ensures: receipt.status = uploaded
+    ensures: receipt.retry_count = receipt.retry_count + 1
+
+    ensures: receipt.raw_parse_payload = null
+    ensures: receipt.parsed_markdown = null
+    ensures: receipt.extraction = null
+
+    ensures: receipt.supplier_guess = null
+    ensures: receipt.store_guess = null
+    ensures: receipt.total_amount_guess = null
+    ensures: receipt.currency_guess = null
+    ensures: receipt.purchased_at_guess = null
+
+    ensures: receipt.error_message = null
+    ensures: receipt.error_details = null
+    ensures: receipt.refine_pending = false
+
+    ensures: ReceiptQueuedForProcessing(receipt: receipt)
+}
+
+rule QueuePendingReceiptsForOCRSweep {
+    when: RunReceiptOCRSweep()
+
+    for receipt in Receipts where receipt.status in {uploaded, parsing, parsed, extracting}:
+        ensures: ReceiptQueuedForProcessing(receipt: receipt)
+}
+
+rule StartReceiptExtraction {
+    when: ReceiptQueuedForProcessing(receipt)
+
+    requires: receipt.status in {uploaded, parsing, parsed, extracting}
+
+    ensures: receipt.status = extracting
+    ensures: OCRExtractionRequested(receipt: receipt)
+}
+
+rule HandleOCRExtractionSuccess {
+    when: OCRExtractionCompleted(receipt, provider_extraction, parsed_markdown)
+
+    requires: receipt.status = extracting
+
+    let extraction = normalize_and_reconcile_extraction(provider_extraction, parsed_markdown)
+    let guesses = derive_receipt_guesses(extraction, config.default_currency)
+
+    ensures: receipt.extraction = extraction
+    ensures: receipt.parsed_markdown = parsed_markdown
+
+    ensures: receipt.supplier_guess = guesses.supplier_guess
+    ensures: receipt.store_guess = guesses.store_guess
+    ensures: receipt.total_amount_guess = guesses.total_amount_guess
+    ensures: receipt.currency_guess = guesses.currency_guess
+    ensures: receipt.purchased_at_guess = guesses.purchased_at_guess
+
+    ensures: receipt.error_message = null
+    ensures: receipt.error_details = null
+
+    ensures:
+        if receipt.requires_human_review:
+            receipt.status = review_required
+        else:
+            receipt.status = extracted
+
+    ensures:
+        if receipt.status = review_required and config.defer_refine:
+            receipt.refine_pending = true
+            ReceiptRefinementRequested(receipt: receipt)
+        else:
+            receipt.refine_pending = false
+
+    ensures:
+        if receipt.status = extracted and config.auto_post_after_upload:
+            AutoPostRequested(receipt: receipt)
+}
+
+rule HandleOCRExtractionFailure {
+    when: OCRExtractionFailed(receipt, message, details?)
+
+    requires: receipt.status in {parsing, extracting, uploaded, parsed}
+
+    ensures: receipt.status = failed
+    ensures: receipt.retry_count = receipt.retry_count + 1
+    ensures: receipt.error_message = message
+    ensures: receipt.error_details = details
+    ensures: receipt.refine_pending = false
+}
+
+rule ApplyReceiptRefinement {
+    when: ReceiptRefinementCompleted(receipt, refined_extraction)
+
+    requires: receipt.status = review_required
+    requires: receipt.refine_pending
+
+    ensures: receipt.extraction = refined_extraction
+    ensures: receipt.refine_pending = false
+}
+
+rule SkipOrFailReceiptRefinement {
+    when: ReceiptRefinementSkipped(receipt, reason)
+
+    requires: receipt.status = review_required
+    requires: receipt.refine_pending
+
+    ensures: receipt.refine_pending = false
+    ensures: ReceiptRefinementNotApplied(receipt: receipt, reason: reason)
+}
+
+rule AutoPostExtractedReceipt {
+    when: AutoPostRequested(receipt)
+
+    requires: receipt.status = extracted
+    requires: not receipt.requires_human_review
+
+    requires: receipt.payer != null
+    requires: receipt.purchased_at_guess != null
+    requires: receipt.total_amount_guess != null
+    requires: receipt.item_count > 0
+
+    let resolved = resolve_canonical_supplier_store(receipt.extraction)
+
+    ensures: Expense.created(
+        receipt: receipt,
+        user: receipt.owner,
+        supplier: resolved.supplier,
+        store: resolved.store,
+        payer: receipt.payer,
+        purchased_at: receipt.purchased_at_guess,
+        total_amount: receipt.total_amount_guess,
+        currency: receipt.currency_guess ?? config.default_currency,
+        items: receipt.extraction.items
+    )
+    ensures: receipt.status = posted
+    ensures: receipt.refine_pending = false
+}
+
+rule AutoPostBlockedMovesToReviewRequired {
+    when: AutoPostRequested(receipt)
+
+    requires:
+        receipt.status = extracted
+        and (
+            receipt.payer = null
+            or receipt.purchased_at_guess = null
+            or receipt.total_amount_guess = null
+            or receipt.item_count = 0
+        )
+
+    ensures: receipt.status = review_required
+    ensures: receipt.error_message = "Auto-post preconditions not satisfied"
+}
+
+rule SaveReceiptReview {
+    when: SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+
+    requires: receipt.visible_to(actor) or actor.role = admin
+    requires: receipt.status in {extracted, review_required}
+
+    requires: supplier != null
+    requires: payer != null
+    requires: purchased_at != null
+    requires: total_amount != null
+    requires: items.count > 0
+
+    ensures: receipt.owner = if receipt.owner = null: actor else: receipt.owner
+    ensures: receipt.payer = payer
+
+    ensures: receipt.supplier_guess = supplier.name
+    ensures: receipt.total_amount_guess = total_amount
+    ensures: receipt.currency_guess = currency
+    ensures: receipt.purchased_at_guess = purchased_at
+    ensures: receipt.extraction = with_reviewed_items(receipt.extraction, items)
+
+    ensures:
+        if receipt.status = review_required and reviewed_items_match_guess(items, receipt.total_amount_guess):
+            receipt.status = extracted
+}
+
+rule ApproveReceipt {
+    when: ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+
+    requires: receipt.visible_to(actor) or actor.role = admin
+    requires: receipt.status in {extracted, review_required}
+
+    requires: supplier != null
+    requires: payer != null
+    requires: purchased_at != null
+    requires: total_amount != null
+    requires: items.count > 0
+
+    ensures: Expense.created(
+        receipt: receipt,
+        user: if receipt.owner = null: actor else: receipt.owner,
+        supplier: supplier,
+        payer: payer,
+        purchased_at: purchased_at,
+        total_amount: total_amount,
+        currency: currency,
+        items: items
+    )
+
+    ensures: receipt.owner = if receipt.owner = null: actor else: receipt.owner
+    ensures: receipt.status = posted
+    ensures: receipt.refine_pending = false
+}
+
+rule RetryReceiptProcessing {
+    when: RetryReceiptProcessing(receipt)
+
+    ensures: receipt.status = uploaded
+    ensures: receipt.retry_count = receipt.retry_count + 1
+}
+
+rule MarkReceiptFailedManually {
+    when: MarkReceiptFailed(receipt, message, details?)
+
+    requires: message != null
+
+    ensures: receipt.status = failed
+    ensures: receipt.retry_count = receipt.retry_count + 1
+    ensures: receipt.error_message = message
+    ensures: receipt.error_details = details
+}
+
+rule DeleteReceipt {
+    when: DeleteReceipt(actor, receipt)
+
+    requires: receipt.visible_to(actor) or actor.role = admin
+    requires: receipt.status != posted
+    requires: not exists receipt.expense
+
+    ensures: not exists receipt
+    ensures: ReceiptFileDeleted(receipt: receipt)
+}
+
+surface ReceiptUploadBoundary {
+    facing actor: User
+
+    provides:
+        UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?)
+}
+
+surface UserReceiptOperations {
+    facing actor: User
+
+    context receipt: Receipt where receipt.visible_to(actor)
+
+    exposes:
+        receipt.original_filename
+        receipt.status
+        receipt.effective_status
+        receipt.supplier_guess
+        receipt.store_guess
+        receipt.total_amount_guess
+        receipt.currency_guess
+        receipt.purchased_at_guess
+        receipt.refine_pending
+
+    provides:
+        RequestReceiptOCR(actor, receipt)
+        SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+            when receipt.status in {extracted, review_required}
+        ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+            when receipt.status in {extracted, review_required}
+        DeleteReceipt(actor, receipt)
+            when receipt.status != posted
+
+    guarantee:
+        receipt.effective_status = if receipt.status = extracted and not receipt.totals_match: review_required else: receipt.status
+}
+
+surface AdminReceiptOperations {
+    facing admin: User
+
+    context receipt: Receipt
+
+    exposes:
+        receipt.status
+        receipt.effective_status
+        receipt.retry_count
+        receipt.error_message
+        receipt.refine_pending
+
+    provides:
+        RequestReceiptOCR(admin, receipt)
+        RetryReceiptProcessing(receipt)
+        MarkReceiptFailed(receipt, message, details?)
+        SaveReceiptReview(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+            when receipt.status in {extracted, review_required}
+        ApproveReceipt(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+            when receipt.status in {extracted, review_required}
+        DeleteReceipt(admin, receipt)
+            when receipt.status != posted
+        RunReceiptOCRSweep()
+
+    guarantee:
+        admin.role = admin
+}
+
+deferred ReceiptExtraction.normalize_and_reconcile_extraction
+deferred ReceiptResolution.resolve_canonical_supplier_store
+deferred ReceiptReview.reviewed_items_match_guess
+
+open question "Status 'approved' exists in the enum but appears unused by current runtime flow; should it remain in the lifecycle?"
+open question "Current flow may auto-post extracted receipts even when line-item totals mismatch the guessed total; should mismatch block auto-post?"

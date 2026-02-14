@@ -1,0 +1,168 @@
+entity BackendDomainManifest {
+    id: String
+    has_admin_api_route: Boolean
+    has_user_api_route: Boolean
+    has_user_ui_config_paths: Boolean
+    has_admin_ui_config_paths: Boolean
+    has_post_login_path: Boolean
+    has_spa_routes: Boolean
+}
+
+entity FrontendDomainManifest {
+    id: String
+    has_user_routes: Boolean
+    has_init_hook: Boolean
+    admin_entities_count: Integer
+    admin_domain_groups_count: Integer
+    user_domain_groups_count: Integer
+}
+
+entity CanonicalRouteDescriptor {
+    id: String
+    path: String
+    spa_fallback: Boolean
+}
+
+surface BackendDomainRegistryBoundary {
+    context manifests: List<BackendDomainManifest>
+
+    provides:
+        ReadEnabledBackendDomains()
+        CollectAdminApiRoutes(db, service_container)
+        CollectUserApiRoutes(db, wrap_user_auth, app_config)
+        CollectUserUiConfigPaths()
+        ReadPrimaryUserUiConfigPaths()
+        CollectAdminUiConfigPaths()
+        ResolvePostLoginPath()
+        CollectSpaFallbackPaths()
+
+    guarantee:
+        ReadEnabledBackendDomains() preserves enabled-domains declaration order.
+
+    guarantee:
+        CollectAdminApiRoutes(db, service_container) maps enabled-domains in order and emits null entries for domains without `:routes :admin-api`.
+
+    guarantee:
+        CollectUserApiRoutes(db, wrap_user_auth, app_config) accepts optional app_config and passes it to each domain `:routes :user-api` builder.
+
+    guarantee:
+        CollectUserUiConfigPaths() returns domain-id -> `:ui-config :user :paths` and may include null values when a domain omits user paths.
+
+    guarantee:
+        ReadPrimaryUserUiConfigPaths() is a backwards-compat helper returning the first enabled domain's user-path map; it returns null when no domains are enabled.
+
+    guarantee:
+        CollectAdminUiConfigPaths() prefers `:ui-config :admin :paths`, falls back to `:ui-config :user :paths`, and skips domains that provide neither.
+
+    guarantee:
+        ResolvePostLoginPath() returns the first defined `:redirects :post-login-path`; default is "/".
+
+    guarantee:
+        CollectSpaFallbackPaths() concatenates each domain's `:spa-routes`, removes null paths, de-duplicates with stable first-seen order, and returns a vector.
+
+    guidance:
+        `all-spa-routes` treats missing domain `:spa-routes` as empty via sequence flattening, then applies nil filtering and `distinct`.
+}
+
+surface FrontendDomainRegistryBoundary {
+    context manifests: List<FrontendDomainManifest>
+
+    provides:
+        ReadEnabledFrontendDomains()
+        InitAllDomains()
+        CollectAllUserRoutes()
+        CollectAllAdminEntities()
+        CollectAllAdminDomainGroups()
+        CollectAllUserDomainGroups()
+
+    guarantee:
+        ReadEnabledFrontendDomains() preserves enabled-domains declaration order.
+
+    guarantee:
+        InitAllDomains() calls each domain `:init!` only when present.
+
+    guarantee:
+        CollectAllUserRoutes() supports lazy route declarations: if `:routes :user` is a function, it is invoked; otherwise route data is consumed directly.
+
+    guarantee:
+        CollectAllAdminEntities() merges maps from all domains using `merge`; duplicate keys are last-domain-wins.
+
+    guarantee:
+        CollectAllAdminDomainGroups() merges maps from all domains using `merge`; duplicate keys are last-domain-wins.
+
+    guarantee:
+        CollectAllUserDomainGroups() merges maps from all domains using `merge`; duplicate keys are last-domain-wins.
+}
+
+surface SharedRouteDescriptorContractBoundary {
+    context descriptors: List<CanonicalRouteDescriptor>
+
+    provides:
+        ValidateDescriptor(descriptor)
+        ExtractDescriptorPaths(descriptors)
+        DetectDuplicatePaths(descriptors)
+        CheckUniquePaths(descriptors)
+        ExtractSpaFallbackPaths(descriptors)
+
+    guarantee:
+        ValidateDescriptor(descriptor) requires `:id` and `:path`, `:id` keyword shape, and non-blank string `:path`.
+
+    guarantee:
+        ExtractDescriptorPaths(descriptors) keeps only non-null `:path` values in descriptor iteration order.
+
+    guarantee:
+        DetectDuplicatePaths(descriptors) returns only paths whose frequency is greater than 1.
+
+    guarantee:
+        CheckUniquePaths(descriptors) is true only when duplicate-path detection returns empty.
+
+    guarantee:
+        ExtractSpaFallbackPaths(descriptors) filters descriptors where `:spa-fallback?` is truthy, keeps non-null paths, and de-duplicates with first-seen order.
+
+    guidance:
+        Expenses canonical user paths are declared once in `expenses_user.cljc`; backend SPA fallback extraction reads from these descriptors.
+}
+
+surface TemplateDomainCompositionBoundary {
+    provides:
+        ComposeVersionedUserApiRoutes()
+        ComposeBackendSpaFallbackRoutes()
+
+    guarantee:
+        Top-level user API is mounted under "/api/v1" before domain user routes are appended.
+
+    guarantee:
+        ComposeVersionedUserApiRoutes() reads app_config from service-container and passes it to `all-user-api-routes(db, wrap-user-authentication, app_config)`.
+
+    guarantee:
+        ComposeVersionedUserApiRoutes() filters null domain route trees before inclusion in the versioned API route vector.
+
+    guarantee:
+        ComposeBackendSpaFallbackRoutes() maps `domain-registry/all-spa-routes` to GET handlers that render the SPA shell.
+}
+
+rule EmptyDomainSetDefaults {
+    when: DomainRegistryEvaluatedWithNoEnabledDomains()
+
+    ensures: ReadPrimaryUserUiConfigPaths() = null
+    ensures: CollectAdminUiConfigPaths().count = 0
+    ensures: CollectSpaFallbackPaths().count = 0
+    ensures: ResolvePostLoginPath() = "/"
+}
+
+rule DuplicateSpaPathCollapsesToSingleFallback {
+    when: DomainSpaPathsContainDuplicates()
+
+    ensures:
+        for p in CollectSpaFallbackPaths():
+            occurrence_count(CollectSpaFallbackPaths(), p) = 1
+
+    guidance:
+        Distinct fallback output keeps first-seen order from enabled domain traversal and each domain path declaration order.
+}
+
+rule NilDomainUserRouteTreesAreIgnoredAtComposition {
+    when: SomeDomainsHaveNoUserApiRouteBuilder()
+
+    ensures: ComposeVersionedUserApiRoutes() excludes null domain route trees.
+}

@@ -1,0 +1,104 @@
+entity DomainModule {
+    id: String
+    admin_api_capabilities: Set<String>
+    user_api_capabilities: Set<String>
+    user_spa_paths: Set<String>
+}
+
+entity TemplatePlatform {
+    user_api_prefix: String
+    admin_api_prefix: String
+    template_user_spa_paths: Set<String>
+    admin_spa_paths: Set<String>
+    enabled_domains: Set<DomainModule>
+}
+
+entity RouteCatalog {
+    backend_spa_fallback_paths: Set<String>
+    frontend_navigable_paths: Set<String>
+}
+
+surface AdminApiBoundary {
+    facing admin_client: String
+
+    context platform: TemplatePlatform
+
+    exposes:
+        platform.admin_api_prefix
+
+    provides:
+        AuthenticateAdmin(admin_client)
+        ExecuteAdminCapability(admin_client, capability)
+
+    guarantee:
+        platform.admin_api_prefix = "/admin/api"
+
+    guarantee:
+        for d in platform.enabled_domains:
+            d.admin_api_capabilities.count >= 0
+
+    guidance:
+        Admin API composes template-owned admin capabilities with domain-contributed admin capabilities.
+}
+
+surface UserApiBoundary {
+    facing user_client: String
+
+    context platform: TemplatePlatform
+
+    exposes:
+        platform.user_api_prefix
+
+    provides:
+        ExecuteUserCapability(user_client, capability)
+        ReadUsersCollection(user_client)
+
+    guarantee:
+        platform.user_api_prefix = "/api/v1"
+
+    guarantee:
+        for d in platform.enabled_domains:
+            d.user_api_capabilities.count >= 0
+
+    guarantee:
+        ReadUsersCollection(user_client) delegates_to ExecuteAdminCapability(user_client, "list-users")
+
+    guidance:
+        The users-read delegation from User API to Admin capability is temporary and explicit coupling.
+        Keep it documented and isolated until replaced by a dedicated user-boundary capability.
+}
+
+surface SpaNavigationBoundary {
+    facing browser_client: String
+
+    context catalog: RouteCatalog
+
+    exposes:
+        catalog.frontend_navigable_paths
+
+    provides:
+        NavigateTo(browser_client, path)
+
+    guarantee:
+        catalog.backend_spa_fallback_paths = catalog.frontend_navigable_paths
+
+    guidance:
+        Backend SPA fallback paths and frontend routes must share one authoritative route catalog.
+        Route additions or removals must update that single source so deep links resolve consistently.
+}
+
+rule ComposeTemplateAndDomainBoundaries {
+    when: PlatformBoundaryConfigured(platform)
+
+    ensures:
+        for d in platform.enabled_domains:
+            d.admin_api_capabilities.count >= 0
+
+    ensures:
+        for d in platform.enabled_domains:
+            d.user_api_capabilities.count >= 0
+
+    ensures:
+        for d in platform.enabled_domains:
+            d.user_spa_paths.count >= 0
+}

@@ -211,15 +211,18 @@
   "Batch delete multiple entities.
 
   Sends a single request to the template batch endpoint for the entity.
-  NOTE: This uses DELETE with a JSON body {:ids [...]}."
+  NOTE: This uses DELETE with a JSON body {:ids [...]}"
   [{:keys [entity-name ids on-success on-failure timeout]
     :or {timeout 8000}}]
-  (delete-request
-    {:uri (api/batch-endpoint entity-name "delete")
-     :params {:ids (vec (or ids []))}
-     :timeout timeout
-     :on-success on-success
-     :on-failure on-failure}))
+  (let [entity-name-str (if (keyword? entity-name)
+                          (name entity-name)
+                          (str entity-name))]
+    (delete-request
+      {:uri (api/batch-endpoint entity-name-str "delete")
+       :params {:ids (vec (or ids []))}
+       :timeout timeout
+       :on-success on-success
+       :on-failure on-failure})))
 
 ;;; -------------------------
 ;;; Error Handling

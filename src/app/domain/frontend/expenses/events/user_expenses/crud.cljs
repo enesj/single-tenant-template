@@ -465,6 +465,25 @@
                           :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]}))))}}})
 
 (crud-bridges/register-crud-bridge!
+  {:entity-key :stores
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:batch-delete
+    {:request
+     (fn [{:keys [db]} entity-type ids default-effect]
+       (let [ids* (normalize-id-list ids)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio (http/api-request
+                         {:method :delete
+                          :uri endpoints/stores-batch-endpoint
+                          :params {:ids ids*}
+                          :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                          :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]}))))}}})
+
+(crud-bridges/register-crud-bridge!
   {:entity-key :payers
    :bridge-id :expenses-user-lookups
    :priority 90

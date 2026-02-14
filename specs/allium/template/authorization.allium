@@ -1,0 +1,217 @@
+use "./authentication.allium" as auth
+
+entity GenericCrudRequest {
+    session: auth/BrowserSession
+    entity: String
+    method: String
+    path: String
+    tenant_id: String?
+    is_admin_context: Boolean
+}
+
+entity AdminRouteRequest {
+    session: auth/BrowserSession
+    required_role: support | admin | owner | super_admin
+    path: String
+    method: String
+    authenticated_admin: auth/Admin?
+}
+
+entity ExpensesActionRequest {
+    session: auth/BrowserSession
+    action: read | write | power
+    resource: String
+}
+
+rule RequireUserSessionForProtectedUserRoutes {
+    when: UserProtectedRouteRequested(request)
+
+    requires: request.session.user != null
+
+    ensures: UserRouteAuthenticated(request: request)
+}
+
+rule RejectMissingUserSessionForProtectedUserRoutes {
+    when: UserProtectedRouteRequested(request)
+
+    requires: request.session.user = null
+
+    ensures: AuthorizationDenied(scope: user_route, reason: authentication_required)
+}
+
+rule AuthenticateAdminRouteByToken {
+    when: AdminRouteRequested(request)
+
+    requires: request.session.admin_token != null
+
+    let admin_session = auth/AdminSession{token: request.session.admin_token}
+
+    requires: exists admin_session
+    requires: admin_session.expires_at > now
+
+    ensures: request.authenticated_admin = admin_session.admin
+    ensures: admin_session.last_activity = now
+    ensures: AdminRouteAuthenticated(request: request)
+}
+
+rule RejectAdminRouteWhenTokenMissingOrInvalid {
+    when: AdminRouteRequested(request)
+
+    let admin_session = auth/AdminSession{token: request.session.admin_token}
+
+    requires:
+        request.session.admin_token = null
+        or not exists admin_session
+        or (exists admin_session and admin_session.expires_at <= now)
+
+    ensures: AuthorizationDenied(scope: admin_route, reason: invalid_or_missing_admin_session)
+}
+
+rule AdminRoleGuardAllowsSufficientPrivilege {
+    when: AdminRoleGateChecked(request)
+
+    requires: request.authenticated_admin != null
+    requires: admin_role_includes(request.authenticated_admin.role, request.required_role)
+
+    ensures: AuthorizationGranted(scope: admin_role_guard)
+}
+
+rule AdminRoleGuardRejectsInsufficientPrivilege {
+    when: AdminRoleGateChecked(request)
+
+    requires: request.authenticated_admin != null
+    requires: not admin_role_includes(request.authenticated_admin.role, request.required_role)
+
+    ensures: AuthorizationDenied(scope: admin_role_guard, reason: insufficient_permissions)
+}
+
+rule BlockAdminOnlyEntitiesFromGenericCrud {
+    when: GenericCrudRequested(request)
+
+    requires: request.entity in {"admins", "admin-sessions", "audit-logs"}
+
+    ensures: AuthorizationDenied(scope: generic_crud, reason: admin_only_entity)
+}
+
+rule AllowProtectedUsersEntityWithTenantContext {
+    when: GenericCrudRequested(request)
+
+    requires: request.entity = "users"
+    requires: request.tenant_id != null
+
+    ensures: AuthorizationGranted(scope: generic_crud_users)
+}
+
+rule RejectProtectedUsersEntityWithoutTenantContext {
+    when: GenericCrudRequested(request)
+
+    requires: request.entity = "users"
+    requires: request.tenant_id = null
+
+    ensures: AuthorizationDenied(scope: generic_crud_users, reason: tenant_context_required)
+}
+
+rule BlockUnknownEntitiesByDefault {
+    when: GenericCrudRequested(request)
+
+    requires: request.entity not in {"users", "admins", "admin-sessions", "audit-logs"}
+
+    ensures: AuthorizationDenied(scope: generic_crud, reason: unknown_entity_blocked)
+}
+
+rule AllowExpensesReadForAssignedRoles {
+    when: ExpensesActionRequested(request)
+
+    requires: request.action = read
+    requires: request.session.user != null
+    requires: request.session.user.role in {viewer, member, admin, owner}
+
+    ensures: AuthorizationGranted(scope: expenses_read)
+}
+
+rule AllowExpensesWriteForMemberAndAbove {
+    when: ExpensesActionRequested(request)
+
+    requires: request.action = write
+    requires: request.session.user != null
+    requires: request.session.user.role in {member, admin, owner}
+
+    ensures: AuthorizationGranted(scope: expenses_write)
+}
+
+rule AllowExpensesPowerActionsForAdminOwner {
+    when: ExpensesActionRequested(request)
+
+    requires: request.action = power
+    requires: request.session.user != null
+    requires: request.session.user.role in {admin, owner}
+
+    ensures: AuthorizationGranted(scope: expenses_power)
+}
+
+rule RejectExpensesActionForInsufficientRole {
+    when: ExpensesActionRequested(request)
+
+    requires:
+        request.session.user = null
+        or (request.action = read and request.session.user.role not in {viewer, member, admin, owner})
+        or (request.action = write and request.session.user.role not in {member, admin, owner})
+        or (request.action = power and request.session.user.role not in {admin, owner})
+
+    ensures: AuthorizationDenied(scope: expenses_role_gate, reason: insufficient_role)
+}
+
+surface UserApiAuthorizationBoundary {
+    facing request: GenericCrudRequest
+
+    exposes:
+        request.entity
+        request.method
+        request.path
+        request.tenant_id
+
+    provides:
+        UserProtectedRouteRequested(request)
+        GenericCrudRequested(request)
+
+    guarantee:
+        request.entity in {"admins", "admin-sessions", "audit-logs"}
+        implies AuthorizationDenied(scope: generic_crud, reason: admin_only_entity)
+
+    guidance:
+        Generic CRUD access is deny-by-default.
+        Protected entity "users" requires tenant context.
+}
+
+surface AdminApiAuthorizationBoundary {
+    facing request: AdminRouteRequest
+
+    exposes:
+        request.path
+        request.method
+        request.required_role
+
+    provides:
+        AdminRouteRequested(request)
+        AdminRoleGateChecked(request)
+
+    guidance:
+        Admin auth accepts token from header, session or cookie upstream; this boundary models the normalized result.
+}
+
+surface ExpensesAuthorizationBoundary {
+    facing request: ExpensesActionRequest
+
+    exposes:
+        request.action
+        request.resource
+        request.session.user.role
+
+    provides:
+        ExpensesActionRequested(request)
+
+    guarantee:
+        request.action = power implies request.session.user.role in {admin, owner}
+}
+
+open question "`wrap-entities-authorization` contains tenant-specific handling for :tenants, but current entity allowlist blocks unknown entities before that branch. Should :tenants be formally allowlisted or the dead branch removed?"

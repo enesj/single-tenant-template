@@ -2,7 +2,8 @@
   "Domain backend registry; register domain services/routes."
   (:require
     [app.domain.backend.expenses.routes.core :as expenses-admin-routes]
-    [app.domain.backend.expenses.routes.user-api :as expenses-user-routes]))
+    [app.domain.backend.expenses.routes.user-api :as expenses-user-api-routes]
+    [app.domain.shared.routes.expenses-user :as expenses-user-route-contract]))
 
 (def ^:private expenses-manifest
   {:id :expenses
@@ -10,7 +11,7 @@
    {:admin-api (fn [db _service-container]
                  (expenses-admin-routes/routes db))
     :user-api (fn [db wrap-user-auth app-config]
-                (expenses-user-routes/routes db wrap-user-auth app-config))}
+                (expenses-user-api-routes/routes db wrap-user-auth app-config))}
 
    :ui-config
    {:user {:root-dir "src/app/domain/frontend/expenses/config"
@@ -22,31 +23,7 @@
    :redirects
    {:post-login-path "/expenses"}
 
-   :spa-routes
-   ["/waiting-room"
-    "/dashboard"
-    "/unmapped-items"
-    "/expenses"
-    "/expenses/list"
-    "/expenses/upload"
-    "/receipts"
-    "/receipts/:receipt-id"
-    "/expenses/new"
-    "/expenses/reports"
-    "/expenses/settings"
-    "/expenses/:expense-id"
-    "/suppliers"
-    "/payers"
-    "/payer-types"
-    "/expense-items"
-    "/articles"
-    "/manufacturers"
-    "/expense-categories"
-    "/article-aliases"
-    "/supplier-aliases"
-    "/stores"
-    "/store-aliases"
-    "/price-observations"]})
+   :spa-routes expenses-user-route-contract/spa-fallback-paths})
 
 (def enabled-domains
   "Vector of enabled domain manifests.
@@ -135,6 +112,13 @@
 
 (defn all-spa-routes
   "Collect all SPA routes from enabled domains.
-   These paths should serve index.html for client-side routing."
+   These paths should serve index.html for client-side routing.
+
+   Returns distinct paths in stable first-seen order.
+   Nil paths and nil domain spa-route collections are ignored."
   []
-  (mapcat :spa-routes enabled-domains))
+  (->> enabled-domains
+    (mapcat :spa-routes)
+    (remove nil?)
+    (distinct)
+    (vec)))

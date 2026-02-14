@@ -124,6 +124,30 @@
       (is (= "/api/v1/expenses/receipts/batch" (req-uri req)))
       (is (= ["rec-1"] (req-ids req))))))
 
+(deftest template-batch-delete-stores-is-routed-to-expenses-endpoint
+  (testing "template batch-delete for :stores uses /api/v1/expenses/stores/batch (not generic /api/v1/entities/stores/batch)"
+    (reset-db!)
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/batch-delete :stores ["store-1" "store-2"]])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/api/v1/expenses/stores/batch" (req-uri req)))
+      (is (= ["store-1" "store-2"] (req-ids req))))))
+
+(deftest template-batch-delete-stores-uses-admin-endpoint-in-admin-context
+  (testing "in admin route context, stores batch-delete uses /admin/api/expenses/stores/batch"
+    (reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/current-route-name) :admin-users)
+    (swap! rf-db/app-db assoc :admin/token "test-token")
+
+    (rf/dispatch-sync [:app.template.frontend.events.list.crud/batch-delete :stores ["store-1"]])
+
+    (let [req (last-http-request)]
+      (is (= :delete (req-method req)))
+      (is (= "/admin/api/expenses/stores/batch" (req-uri req)))
+      (is (= ["store-1"] (req-ids req))))))
+
 (deftest template-delete-receipts-not-bridged-in-admin-context
   (testing "in admin route context, receipts delete uses the admin receipts API (not the user receipts API)"
     (reset-db!)

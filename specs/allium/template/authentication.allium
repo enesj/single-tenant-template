@@ -1,0 +1,391 @@
+entity User {
+    email: String
+    full_name: String?
+    avatar_url: String?
+    role: unassigned | viewer | member | admin | owner
+    status: active | suspended | deactivated
+    auth_provider: password | google | github | test
+    password_hash: String
+    email_verified: Boolean
+
+    verification_tokens: EmailVerificationToken with user = this
+    reset_tokens: PasswordResetToken with principal_user = this
+}
+
+entity Admin {
+    email: String
+    full_name: String?
+    role: support | admin | owner | super_admin
+    status: active | suspended
+    password_hash: String
+
+    sessions: AdminSession with admin = this
+    reset_tokens: PasswordResetToken with principal_admin = this
+}
+
+entity AdminSession {
+    admin: Admin
+    token: String
+    created_at: Timestamp
+    last_activity: Timestamp
+    expires_at: Timestamp
+
+    is_active: expires_at > now
+}
+
+entity BrowserSession {
+    user: User?
+    admin_token: String?
+}
+
+entity PasswordResetToken {
+    principal_type: user | admin
+    principal_user: User?
+    principal_admin: Admin?
+    token: String
+    expires_at: Timestamp
+    used_at: Timestamp?
+
+    is_valid: used_at = null and expires_at > now
+}
+
+entity EmailVerificationToken {
+    user: User
+    token: String
+    expires_at: Timestamp
+    used_at: Timestamp?
+    attempts: Integer
+    last_attempted_at: Timestamp?
+
+    is_valid: used_at = null and expires_at > now and attempts < 5
+}
+
+rule RegisterUserWithPassword {
+    when: UserRegistersWithPassword(email, full_name, password, session)
+
+    requires: email != null
+    requires: full_name != null
+    requires: length(full_name) > 0
+    requires: valid_email(email)
+    requires: length(password) >= 10
+    requires: not exists User{email: email}
+
+    ensures:
+        let user = User.created(
+            email: email,
+            full_name: full_name,
+            avatar_url: null,
+            role: member,
+            status: active,
+            auth_provider: password,
+            password_hash: hash_password(password),
+            email_verified: false
+        )
+        let token = EmailVerificationToken.created(
+            user: user,
+            token: generate_verification_token(),
+            expires_at: now + 24.hours,
+            used_at: null,
+            attempts: 0,
+            last_attempted_at: null
+        )
+        session.user = user
+        VerificationEmailDispatched(user: user, token: token)
+}
+
+rule LoginWithPassword {
+    when: UserLogsInWithPassword(email, password, session)
+
+    let user = User{email: email}
+
+    requires: exists user
+    requires: user.status = active
+    requires: verify_password(password, user.password_hash)
+
+    ensures: session.user = user
+    ensures: UserAuthenticated(user: user)
+}
+
+rule LoginWithPasswordRejected {
+    when: UserLogsInWithPassword(email, password, _)
+
+    let user = User{email: email}
+
+    requires:
+        not exists user
+        or (exists user and user.status != active)
+        or (exists user and not verify_password(password, user.password_hash))
+
+    ensures: AuthenticationRejected(email: email, reason: invalid_credentials)
+}
+
+rule OAuthCreatesUser {
+    when: OAuthCallbackReceived(provider, oauth_email, oauth_name, oauth_avatar, provider_user_id, session)
+
+    requires: oauth_email != null
+    requires: not exists User{email: oauth_email}
+
+    ensures:
+        let user = User.created(
+            email: oauth_email,
+            full_name: oauth_name,
+            avatar_url: oauth_avatar,
+            role: admin,
+            status: active,
+            auth_provider: provider,
+            password_hash: hash_password(placeholder_password(provider)),
+            email_verified: false
+        )
+        session.user = user
+        UserAuthenticated(user: user)
+}
+
+rule OAuthUpdatesExistingOAuthUser {
+    when: OAuthCallbackReceived(provider, oauth_email, oauth_name, oauth_avatar, provider_user_id, session)
+
+    let user = User{email: oauth_email}
+
+    requires: exists user
+    requires: user.auth_provider != password
+
+    ensures: user.full_name = oauth_name
+    ensures: user.avatar_url = oauth_avatar
+    ensures: user.auth_provider = provider
+    ensures: session.user = user
+    ensures: UserAuthenticated(user: user)
+}
+
+rule OAuthRejectsPasswordAccount {
+    when: OAuthCallbackReceived(provider, oauth_email, _, _, _, _)
+
+    let user = User{email: oauth_email}
+
+    requires: exists user
+    requires: user.auth_provider = password
+
+    ensures: AuthenticationRejected(email: oauth_email, reason: account_conflict)
+}
+
+rule UserLogoutClearsOnlyUserAuth {
+    when: UserLogsOut(session)
+
+    requires: session.user != null
+
+    ensures: session.user = null
+    ensures: session.admin_token = session.admin_token
+}
+
+rule AdminLogin {
+    when: AdminLogsIn(email, password, ip_address, user_agent, session)
+
+    let admin = Admin{email: email}
+
+    requires: exists admin
+    requires: admin.status = active
+    requires: verify_password(password, admin.password_hash)
+
+    ensures:
+        let admin_session = AdminSession.created(
+            admin: admin,
+            token: generate_admin_session_token(),
+            created_at: now,
+            last_activity: now,
+            expires_at: now + 8.hours
+        )
+        session.admin_token = admin_session.token
+        AdminAuthenticated(admin: admin, token: admin_session.token)
+}
+
+rule AdminLoginRejected {
+    when: AdminLogsIn(email, password, _, _, _)
+
+    let admin = Admin{email: email}
+
+    requires:
+        not exists admin
+        or (exists admin and admin.status != active)
+        or (exists admin and not verify_password(password, admin.password_hash))
+
+    ensures: AuthenticationRejected(email: email, reason: invalid_credentials)
+}
+
+rule AdminLogoutClearsOnlyAdminToken {
+    when: AdminLogsOut(session)
+
+    requires: session.admin_token != null
+
+    let active = AdminSession{token: session.admin_token}
+
+    ensures:
+        if exists active:
+            not exists active
+    ensures: session.admin_token = null
+    ensures: session.user = session.user
+}
+
+rule RequestUserPasswordReset {
+    when: UserRequestsPasswordReset(email)
+
+    let user = User{email: email}
+
+    ensures:
+        if exists user:
+            for t in user.reset_tokens where used_at = null:
+                not exists t
+    ensures:
+        if exists user:
+            let token = PasswordResetToken.created(
+                principal_type: user,
+                principal_user: user,
+                principal_admin: null,
+                token: generate_reset_token(),
+                expires_at: now + 1.hour,
+                used_at: null
+            )
+            PasswordResetEmailDispatched(email: email, token: token)
+    ensures: PasswordResetRequestAcknowledged(email: email)
+}
+
+rule RequestAdminPasswordReset {
+    when: AdminRequestsPasswordReset(email)
+
+    let admin = Admin{email: email}
+
+    ensures:
+        if exists admin:
+            for t in admin.reset_tokens where used_at = null:
+                not exists t
+    ensures:
+        if exists admin:
+            let token = PasswordResetToken.created(
+                principal_type: admin,
+                principal_user: null,
+                principal_admin: admin,
+                token: generate_reset_token(),
+                expires_at: now + 1.hour,
+                used_at: null
+            )
+            PasswordResetEmailDispatched(email: email, token: token)
+    ensures: PasswordResetRequestAcknowledged(email: email)
+}
+
+rule ResetPasswordWithToken {
+    when: PasswordResetSubmitted(token_value, new_password)
+
+    let token = PasswordResetToken{token: token_value}
+
+    requires: exists token
+    requires: token.is_valid
+    requires: length(new_password) >= 10
+
+    ensures:
+        if token.principal_type = user:
+            token.principal_user.password_hash = hash_password(new_password)
+        else:
+            token.principal_admin.password_hash = hash_password(new_password)
+    ensures: token.used_at = now
+    ensures: PasswordChanged(principal_type: token.principal_type)
+}
+
+rule ChangePasswordForAuthenticatedUser {
+    when: AuthenticatedUserChangesPassword(user, current_password, new_password)
+
+    requires: verify_password(current_password, user.password_hash)
+    requires: not verify_password(new_password, user.password_hash)
+    requires: length(new_password) >= 10
+
+    ensures: user.password_hash = hash_password(new_password)
+    ensures: PasswordChanged(principal_type: user)
+}
+
+rule ChangePasswordForAuthenticatedAdmin {
+    when: AuthenticatedAdminChangesPassword(admin, current_password, new_password)
+
+    requires: verify_password(current_password, admin.password_hash)
+    requires: not verify_password(new_password, admin.password_hash)
+    requires: length(new_password) >= 10
+
+    ensures: admin.password_hash = hash_password(new_password)
+    ensures: PasswordChanged(principal_type: admin)
+}
+
+rule VerifyEmailToken {
+    when: EmailVerificationSubmitted(token_value)
+
+    let token = EmailVerificationToken{token: token_value}
+
+    requires: exists token
+    requires: token.is_valid
+
+    ensures: token.used_at = now
+    ensures: token.attempts = token.attempts + 1
+    ensures: token.last_attempted_at = now
+    ensures: token.user.email_verified = true
+    ensures: EmailVerified(user: token.user)
+}
+
+rule ResendVerification {
+    when: VerificationResendRequested(user)
+
+    requires: not user.email_verified
+
+    ensures:
+        for t in user.verification_tokens:
+            not exists t
+    ensures:
+        let token = EmailVerificationToken.created(
+            user: user,
+            token: generate_verification_token(),
+            expires_at: now + 24.hours,
+            used_at: null,
+            attempts: 0,
+            last_attempted_at: null
+        )
+        VerificationEmailDispatched(user: user, token: token)
+}
+
+surface UserAuthenticationBoundary {
+    facing session: BrowserSession
+
+    exposes:
+        session.user
+        session.admin_token
+
+    provides:
+        UserRegistersWithPassword(email, full_name, password, session)
+        UserLogsInWithPassword(email, password, session)
+        OAuthCallbackReceived(provider, oauth_email, oauth_name, oauth_avatar, provider_user_id, session)
+        UserLogsOut(session)
+            when session.user != null
+        UserRequestsPasswordReset(email)
+        PasswordResetSubmitted(token_value, new_password)
+        VerificationResendRequested(session.user)
+            when session.user != null and not session.user.email_verified
+        AuthenticatedUserChangesPassword(session.user, current_password, new_password)
+            when session.user != null
+
+    guidance:
+        Password-based register/login merge into existing HTTP session state.
+        OAuth callback currently sets user auth session directly.
+}
+
+surface AdminAuthenticationBoundary {
+    facing session: BrowserSession
+
+    exposes:
+        session.admin_token
+        session.user
+
+    provides:
+        AdminLogsIn(email, password, ip_address, user_agent, session)
+        AdminLogsOut(session)
+            when session.admin_token != null
+        AdminRequestsPasswordReset(email)
+        PasswordResetSubmitted(token_value, new_password)
+        AuthenticatedAdminChangesPassword(admin, current_password, new_password)
+
+    guidance:
+        Admin logout removes only admin token and keeps any user auth session.
+}
+
+open question "OAuth callback currently writes a fresh session map instead of merging existing session keys. Should it preserve :admin-token like password login/register do?"

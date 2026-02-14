@@ -90,10 +90,9 @@
           result (http/create-entity-admin config)]
       (is (= :post (:method result)))
       (is (= "/admin/api/entities/users" (:uri result)))
-      (is (not (contains? result :headers))))
-      )
+      (is (not (contains? result :headers)))))
 
-  ;; cleanup
+;; cleanup
   (reset! rf-db/app-db {}))
 
 (deftest test-update-entity
@@ -157,6 +156,28 @@
 
   ;; cleanup
   (reset! rf-db/app-db {}))
+
+(deftest test-batch-delete-entities-remains-generic-for-stores
+  (testing "batch-delete-entities uses generic template batch endpoint for stores (string entity)"
+    (let [config {:entity-name "stores"
+                  :ids ["store-1" "store-2"]
+                  :on-success [:success]
+                  :on-failure [:failure]}
+          result (http/batch-delete-entities config)]
+      (is (= :delete (:method result)))
+      (is (= (api/batch-endpoint "stores" "delete") (:uri result)))
+      (is (= {:ids ["store-1" "store-2"]} (:params result)))
+      (is (= [:success] (:on-success result)))
+      (is (= [:failure] (:on-failure result)))))
+
+  (testing "batch-delete-entities also stays generic for keyword entity types"
+    (let [result (http/batch-delete-entities {:entity-name :stores
+                                              :ids ["store-3"]
+                                              :on-success [:ok]
+                                              :on-failure [:err]})]
+      (is (= :delete (:method result)))
+      (is (= (api/batch-endpoint "stores" "delete") (:uri result)))
+      (is (= {:ids ["store-3"]} (:params result))))))
 
 (deftest test-extract-error-message
   (testing "extract-error-message extracts error from various response formats"

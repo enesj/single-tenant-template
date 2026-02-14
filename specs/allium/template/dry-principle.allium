@@ -1,0 +1,271 @@
+entity FrontendEntityTemplate {
+    entity_id: String
+    uses_entity_page_wrapper: Boolean
+    uses_shared_list_view: Boolean
+    entity_spec_driven: Boolean
+    supports_inline_form_mode: Boolean
+    supports_modal_form_mode: Boolean
+}
+
+entity FrontendAdapterToolkit {
+    normalizer: String
+    entity_spec_subscription_registration: String
+    sync_registration: String
+    upsert_registration: String
+}
+
+entity CrudBridgeRuntime {
+    entity_key: String
+    operation: delete | batch-delete | create | update
+    handler_type: request | on-success | on-failure
+    admin_context_detected: Boolean
+}
+
+entity BackendGenericCrudTemplate {
+    generic_path: String
+    versioned_entity_path: String
+    is_metadata_driven: Boolean
+    requires_user_authentication: Boolean
+    requires_entities_authorization: Boolean
+}
+
+entity GenericCrudAccessPolicy {
+    admin_only_entities: Set<String>
+    protected_entities: Set<String>
+    public_entities: Set<String>
+    unknown_entities_blocked: Boolean
+}
+
+entity TemplateServiceGraph {
+    registered_service_ids: Set<String>
+    dependency_ordered_lifecycle: Boolean
+    exposes_crud_routes_service: Boolean
+}
+
+entity DomainPluginManifest {
+    id: String
+    has_admin_api_builder: Boolean
+    has_user_api_builder: Boolean
+    has_spa_fallback_paths: Boolean
+}
+
+surface FrontendListAndEntityManagerReuseBoundary {
+    context templates: List<FrontendEntityTemplate>
+
+    provides:
+        RenderEntityPage(entity)
+        ResolveTableEntitySpec(entity)
+        ComposeListViewProps(entity)
+        RenderListView(entity)
+
+    guarantee:
+        RenderEntityPage(entity) reuses `entity-page` as the shared wrapper and derives `effective-entity` from URL/entity-set/default fallback logic.
+
+    guarantee:
+        ResolveTableEntitySpec(entity) reads from shared `:entity-specs` and passes the resolved spec to `list-view` as `:entity-spec`.
+
+    guarantee:
+        ComposeListViewProps(entity) always includes `:entity-name` + `:entity-spec`, then merges caller-provided `:list-view-props`.
+
+    guarantee:
+        RenderEntityPage(entity) dispatches `::crud-events/fetch-entities` when `effective-entity` and `table-entity-spec` are present.
+
+    guarantee:
+        RenderListView(entity) centralizes table/filter/pagination/selection/form behavior in one `list-view` component, with form mode selected by `:form-display` (`:inline` or `:modal`).
+
+    guidance:
+        DRY at this layer is configuration-driven: each page changes entity specs/props, not list mechanics.
+}
+
+surface FrontendEntitySpecAndAdapterUtilitiesBoundary {
+    context toolkit: FrontendAdapterToolkit
+
+    provides:
+        NormalizeEntityName(entity_name)
+        BuildEntitySpec(entity_name)
+        NormalizeEntity(entity, options)
+        RegisterEntitySpecSub(options)
+        RegisterSyncEvent(options)
+        RegisterUpsertEvent(options)
+
+    guarantee:
+        `:entity-specs/by-name` normalizes identifiers with `normalize-entity-name` so snake_case and kebab-case inputs resolve consistently.
+
+    guarantee:
+        `:entity-specs/by-name` merges backend/model fields with route-aware table config (`:admin` or `:domain` table-columns), including computed field metadata when present.
+
+    guarantee:
+        `normalize-entity` centralizes ID coercion to strings, namespaced alias generation, optional alias mirroring, fallback ID synthesis, and post-transform hooks.
+
+    guarantee:
+        `register-entity-spec-sub!`, `register-sync-event!`, and `register-upsert-event!` provide reusable adapter registration primitives instead of per-entity subscription/event boilerplate.
+
+    guidance:
+        Adapter reuse is intentionally data-shape focused; HTTP event ownership remains outside these utility helpers.
+}
+
+surface FrontendCrudBridgeAndSuccessBoundary {
+    context runtime: CrudBridgeRuntime
+
+    provides:
+        RegisterCrudBridge(options)
+        RunBridgeOperation(operation, handler_type, entity_type, args)
+        BuildDefaultCrudRequest(entity_type, payload)
+        HandleCreateSuccess(entity_type, response)
+        HandleUpdateSuccess(entity_type, id, response)
+
+    guarantee:
+        `register-crud-bridge!` stores bridge overrides per entity and merges nested operation configs, enabling additive customization without replacing entire handlers.
+
+    guarantee:
+        `run-bridge-operation` computes a default effect first, then applies only context-eligible bridges ordered by descending priority.
+
+    guarantee:
+        Default create/update/delete request handlers route to admin or public endpoints via `in-admin-context?` (route-name/path based, token presence ignored).
+
+    guarantee:
+        Shared success handling is centralized in `app.template.frontend.shared.crud.success` (`extract-entity-id`, recently-created/recently-updated tracking, form success-state merge).
+
+    guidance:
+        DRY here standardizes success/failure semantics while still permitting domain/admin-specific bridge overrides.
+}
+
+surface BackendGenericCrudReuseBoundary {
+    context boundary: BackendGenericCrudTemplate
+
+    provides:
+        BuildGenericCrudHandlers(crud_service)
+        BuildGenericCrudRouteTree(crud_service)
+        ResolveEntityRoutesFromContainer(db, models_data, service_container)
+        ComposeVersionedEntityCrudRoutes(db, models_data, service_container)
+
+    guarantee:
+        `routes/crud.clj` exposes reusable handler constructors (`get-items-handler`, `get-item-handler`, `create-item-handler`, `update-item-handler`, `delete-item-handler`, batch handlers, validation handler`) that delegate to `crud-protocols/*`.
+
+    guarantee:
+        `crud-routes` defines one metadata-driven route template (`/api/:entity` + subroutes) instead of duplicating per-entity backend route definitions.
+
+    guarantee:
+        `entities-routes` requires a non-nil service container and reuses container-provided `:crud-routes` rather than rebuilding route trees per caller.
+
+    guarantee:
+        `create-versioned-api-routes` remaps the generic path to `/entities/:entity`, adds user-auth + entities-authorization middleware, and mounts it inside the versioned API composition.
+
+    guarantee:
+        `create-versioned-api-routes` keeps an explicit users-read exception: GET `/entities/users` delegates to `app.backend.routes.admin-api/list-users-handler`.
+
+    guidance:
+        Generic CRUD reuse is intentionally broad for mechanical CRUD, but explicit exceptions are kept where existing behavior requires tighter coupling.
+}
+
+surface GenericCrudSecurityConstraintBoundary {
+    context policy: GenericCrudAccessPolicy
+
+    provides:
+        CheckGenericCrudEntityAccess(entity_key, is_admin)
+        BuildBlockedEntityResponse(entity_key, reason)
+        ReadAllowedUserEntities()
+
+    guarantee:
+        `entity-allowed-for-generic-crud?` is fail-safe deny-by-default: unknown entities are blocked.
+
+    guarantee:
+        Admin-only entities (`:admins`, `:admin-sessions`, `:audit-logs`) are blocked from generic CRUD regardless of request context.
+
+    guarantee:
+        Protected entities (`:users`) are allowed only through protected handling paths; public-entity set is currently empty.
+
+    guidance:
+        This is a deliberate DRY boundary: shared generic handlers exist, but security policy intentionally narrows what can reuse them.
+}
+
+surface DIContainerAndFactoryReuseBoundary {
+    context graph: TemplateServiceGraph
+
+    provides:
+        RegisterTemplateServices(di_container, config, db_connection, metadata, domain_config)
+        InitializeContainer(di_container)
+        StartContainer(di_container)
+        BuildServiceContainer(config, db_connection, metadata, domain_config)
+
+    guarantee:
+        `register-template-services!` registers shared constructors once (`:db-adapter`, metadata/type-casting/validation/query services, `:crud-service`, auth/email services, route services including `:crud-routes`).
+
+    guarantee:
+        `initialize-services!` and `start-services!` execute service lifecycle in topological dependency order, preventing duplicate manual boot ordering across callers.
+
+    guarantee:
+        `create-service-container` reuses the DI container and exposes a compatibility map (`:crud-service`, `:crud-routes`, `:get-service`, etc.) for downstream route composition.
+
+    guidance:
+        DRY at this layer removes repeated service wiring while preserving explicit service IDs and dependency declarations.
+}
+
+surface DomainRegistryPluginReuseBoundary {
+    context manifests: List<DomainPluginManifest>
+
+    provides:
+        CollectAdminDomainRoutes(db, service_container)
+        CollectUserDomainRoutes(db, wrap_user_auth, app_config)
+        CollectDomainSpaFallbackRoutes()
+        ComposeAdminApiWithDomains(db, service_container)
+        ComposeUserApiWithDomains(db, service_container)
+
+    guarantee:
+        `enabled-domains` is the single plugin list; each manifest contributes optional `:routes :admin-api`, optional `:routes :user-api`, and SPA fallback paths.
+
+    guarantee:
+        `all-admin-api-routes` and `all-user-api-routes` map enabled manifests in order and permit nil entries when a domain omits a route builder.
+
+    guarantee:
+        Both API composers filter nil domain route trees before mounting (`admin_api.clj` and `api.clj`), enabling plugin-style reuse without route duplication.
+
+    guarantee:
+        `all-spa-routes` concatenates domain SPA paths, drops nils, and de-duplicates in stable first-seen order.
+
+    guidance:
+        Domain reuse is composition-first: template route shells stay stable while domain modules plug in route trees.
+}
+
+rule FrontendCrudReuseIsSpecDriven {
+    when: EntityPageUsesTemplateList(entity)
+
+    ensures: ComposeListViewProps(entity) includes `:entity-name` and `:entity-spec`.
+    ensures: ResolveTableEntitySpec(entity) is sourced from shared entity-spec subscriptions.
+    ensures: RenderListView(entity) reuses one list implementation for filtering/sorting/pagination/selection/forms.
+}
+
+rule AdapterUtilitiesEliminatePerEntityGlueDuplication {
+    when: DomainOrAdminAdapterRegisters(entity)
+
+    ensures: NormalizeEntity(entity, options) applies one reusable normalization pipeline.
+    ensures: RegisterEntitySpecSub(options) avoids per-entity subscription boilerplate.
+    ensures: RegisterSyncEvent(options) and RegisterUpsertEvent(options) avoid repeated entity-store sync event templates.
+}
+
+rule BridgeAndSuccessReuseKeepsCrudSemanticsConsistent {
+    when: CrudOperationDispatched(operation, entity)
+
+    ensures: RunBridgeOperation(operation, handler_type, entity, args) starts from default effect and applies context-eligible bridge overrides.
+    ensures: HandleCreateSuccess(entity, response) and HandleUpdateSuccess(entity, id, response) use shared ID extraction + highlight tracking semantics.
+}
+
+rule GenericCrudReuseIsConstrainedBySecurityBoundaries {
+    when: GenericCrudRequestReceived(entity)
+
+    ensures: CheckGenericCrudEntityAccess(entity, is_admin) denies unknown and admin-only entities by default.
+    ensures: Protected entity handling remains explicit (`:users`) rather than broad allowlisting.
+    ensures: Domain-specific business operations should prefer domain APIs when generic semantics are insufficient.
+}
+
+rule DIAndRegistryReuseMinimizeRouteAndServiceDuplication {
+    when: BackendComposesApisAndServices()
+
+    ensures: BuildServiceContainer(config, db_connection, metadata, domain_config) reuses DI registration/lifecycle rather than ad-hoc service construction.
+    ensures: ComposeAdminApiWithDomains(db, service_container) and ComposeUserApiWithDomains(db, service_container) append registry-provided domain route trees.
+    ensures: CollectDomainSpaFallbackRoutes() provides one shared domain fallback list for backend SPA route composition.
+}
+
+open question "GET /entities/users currently delegates to `app.backend.routes.admin-api/list-users-handler` as an explicit coupling point. Should this eventually move to a dedicated user-boundary endpoint while preserving existing behavior?"
+
+open question "`public-entities` is currently empty in generic entity access policy. If broadened later, should expansion require explicit per-entity security and domain-rule validation tests before allowlisting?"

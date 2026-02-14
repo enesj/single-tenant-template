@@ -3,7 +3,8 @@
    Verifies that the registry provides correct domain manifests and aggregated data."
   (:require
     [clojure.test :refer [deftest is testing]]
-    [app.domain.backend.registry :as domain-registry]))
+    [app.domain.backend.registry :as domain-registry]
+    [app.domain.shared.routes.expenses-user :as expenses-user-route-contract]))
 
 (deftest enabled-domains-test
   (testing "enabled-domains returns non-empty vector of manifests"
@@ -21,6 +22,12 @@
       (is (contains? manifest :ui-config))
       (is (contains? manifest :redirects))
       (is (contains? manifest :spa-routes)))))
+
+(deftest expenses-manifest-spa-routes-single-source-test
+  (testing "expenses manifest spa-routes are derived from shared descriptor contract"
+    (let [manifest (domain-registry/get-domain :expenses)]
+      (is (= expenses-user-route-contract/spa-fallback-paths
+            (:spa-routes manifest))))))
 
 (deftest get-domain-test
   (testing "get-domain returns manifest for valid domain"
@@ -117,17 +124,38 @@
       (is (.startsWith path "/")))))
 
 (deftest all-spa-routes-test
-  (testing "all-spa-routes returns collection of path strings"
+  (testing "all-spa-routes returns non-empty vector of distinct path strings"
     (let [routes (domain-registry/all-spa-routes)]
+      (is (vector? routes))
       (is (seq routes))
-      (is (every? string? routes))))
+      (is (every? string? routes))
+      (is (= (count routes) (count (set routes))))))
 
   (testing "spa-routes include expected expense paths"
     (let [routes (set (domain-registry/all-spa-routes))]
       (is (contains? routes "/expenses"))
       (is (contains? routes "/expenses/list"))
       (is (contains? routes "/expenses/new"))
-      (is (contains? routes "/expenses/upload")))))
+      (is (contains? routes "/expenses/upload"))))
+
+  (testing "all-spa-routes stays aligned with shared descriptor paths"
+    (let [routes (domain-registry/all-spa-routes)
+          shared-paths (set expenses-user-route-contract/all-paths)]
+      (is (every? shared-paths routes))))
+
+  (testing "all-spa-routes returns empty vector when no domains are enabled"
+    (clojure.core/with-redefs-fn {#'domain-registry/enabled-domains []}
+      (fn []
+        (is (= [] (domain-registry/all-spa-routes))))))
+
+  (testing "all-spa-routes ignores nil route collections and nil paths"
+    (clojure.core/with-redefs-fn
+      {#'domain-registry/enabled-domains [{:id :d1 :spa-routes nil}
+                                          {:id :d2 :spa-routes [nil "/a" "/b"]}
+                                          {:id :d3 :spa-routes ["/b" "/c"]}]}
+      (fn []
+        (is (= ["/a" "/b" "/c"]
+              (domain-registry/all-spa-routes)))))))
 
 (deftest manifest-routes-are-functions-test
   (testing "admin-api route is a function"
