@@ -45,6 +45,21 @@
             {:id :address :label "Address" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
+(def categories-entity-spec
+  {:id :categories
+   :fields [{:id :name :label "Name" :type :text}
+            {:id :description :label "Description" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
+(def subcategories-entity-spec
+  {:id :subcategories
+   :fields [{:id :name :label "Name" :type :text}
+            {:id :description :label "Description" :type :text}
+            {:id :category-id :label "Category" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
+
 (def expense-categories-entity-spec
   {:id :expense-categories
    :fields [{:id :name :label "Name" :type :text}
@@ -159,6 +174,14 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :expense-categories
    :value-fn (fn [spec _] (or spec expense-categories-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :categories
+   :value-fn (fn [spec _] (or spec categories-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :subcategories
+   :value-fn (fn [spec _] (or spec subcategories-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :manufacturers

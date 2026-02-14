@@ -980,3 +980,141 @@
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
                              :dispatch [:app.domain.frontend.expenses.events.countries/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
+
+(defn- categories-request
+  "Create HTTP request config for categories admin API."
+  [{:keys [method id ids params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/categories"
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
+    (log/info "📂 categories-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :categories
+
+   :operations
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (categories-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (categories-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.categories/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (categories-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.categories/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (categories-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.categories/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
+
+(defn- subcategories-request
+  "Create HTTP request config for subcategories admin API."
+  [{:keys [method id ids params on-success on-failure]}]
+  (let [base-uri "/admin/api/expenses/subcategories"
+        uri (cond
+              (seq ids) (str base-uri "/batch")
+              id (str base-uri "/" id)
+              :else base-uri)
+        params (if (seq ids) {:ids (mapv str ids)} params)]
+    (log/info "📁 subcategories-request:" {:method method :uri uri :params params})
+    (admin-http/admin-request {:method method
+                               :uri uri
+                               :params params
+                               :on-success on-success
+                               :on-failure on-failure})))
+
+(adapters.core/register-admin-crud-bridge!
+  {:entity-key :subcategories
+
+   :operations
+   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
+                       (if (adapters.core/admin-token db)
+                         (assoc default-effect
+                           :http-xhrio (subcategories-request
+                                         {:method :get
+                                          :params lookup-params
+                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
+                         {:dispatch [:admin/redirect-to-login]}))}
+
+    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
+                              (if (adapters.core/admin-token db)
+                                (let [ids* (mapv str ids)]
+                                  (assoc default-effect
+                                    :http-xhrio (subcategories-request
+                                                  {:method :delete
+                                                   :ids ids*
+                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
+                                {:dispatch [:admin/redirect-to-login]}))
+                   :on-success (fn [_ _ _ default-effect]
+                                 (assoc default-effect
+                                   :dispatch [:app.domain.frontend.expenses.events.subcategories/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (subcategories-request
+                                          {:method :post
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
+                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.subcategories/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
+                        (if (adapters.core/admin-token db)
+                          (assoc default-effect
+                            :http-xhrio (subcategories-request
+                                          {:method :put
+                                           :id id
+                                           :params form-data
+                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
+                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
+                          {:dispatch [:admin/redirect-to-login]}))
+             :on-success (fn [_ _ _ _ default-effect]
+                           (assoc default-effect
+                             :dispatch [:app.domain.frontend.expenses.events.subcategories/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
