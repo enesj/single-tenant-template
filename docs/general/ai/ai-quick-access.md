@@ -42,7 +42,7 @@ If you get a `FileNotFoundException` when requiring `.cljs` files in the REPL, s
 
 The `reframe-events-analysis` skill uses `app.template.frontend.dev.repl-tracing` (REPL query helpers) on top of the dev trace buffer.
 
-- It’s included in the `:app` dev build via `shadow-cljs.edn` under `:builds :app :dev :modules :app :preloads` (so your CLJS REPL session—e.g. `clj-nrepl-eval` connected to the shadow nREPL—can `require` it).
+- It’s included in the `:app` dev build via `shadow-cljs.edn` under `:builds :app :dev :modules :app :preloads` (so your CLJS REPL session—e.g. via `clojure-mcp` eval tools connected to the shadow nREPL—can `require` it).
 - If `(require '[app.template.frontend.dev.repl-tracing :as repl-trace])` fails, verify that preload entry and reload the page.
 
 ## Canonical entry points
@@ -83,7 +83,7 @@ All skills are available in `.claude/skills/`, `.codex/skills/`, and `.github/sk
 | **session-context-bundle** | Session bootstrap bundle (Morph → `bb audit-bundle` → Lattice) | `start session`, `bootstrap context`, `prepare bundle`, `multi-file task` |
 | **reframe-events-analysis** | Analyze re-frame event history and performance | `events`, `event history`, `tracing`, `re-frame` |
 | **system-logs** | Monitor backend + shadow-cljs logs from dev output | `logs`, `build output`, `compilation errors` |
-| **clojure-eval** | REPL exploration + evaluation workflow (nREPL, CLJS build selection) | `repl`, `nrepl`, `clj-nrepl-eval`, `eval` |
+| **clojure-eval** | REPL exploration + evaluation workflow (nREPL, CLJS build selection) | `repl`, `nrepl`, `clojure-mcp`, `eval` |
 | **fe-tests** | Automated frontend test failure analysis | `test failure`, `frontend test`, `test error` |
 | **new-prompt** | Research repo docs and draft next-session prompt | `new prompt`, `session summary` |
 

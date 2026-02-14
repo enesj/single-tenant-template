@@ -28,14 +28,21 @@
         current-admin-role (use-subscribe [:admin/current-user-role])
         is-owner? (= current-admin-role :owner)
 
-        system-admin-items (cond-> [{:label "Dashboard"
+        system-admin-items (cond-> [{:id "admin-sidebar-dashboard"
+                                     :label "Dashboard"
                                      :href "/admin/dashboard"
                                      :icon ($ dashboard-icon {:class "w-6 h-6"})
                                      :active? (contains? #{:admin-dashboard :admin-dashboard-alt} route-name)}
-                                    {:label "Users"
+                                    {:id "admin-sidebar-users"
+                                     :label "Users"
                                      :href "/admin/users"
                                      :icon ($ users-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-users)}]
+                                     :active? (= route-name :admin-users)}
+                                    {:id "admin-sidebar-backlog"
+                                     :label "Backlog"
+                                     :href "/admin/backlog"
+                                     :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                     :active? (= route-name :admin-backlog)}]
                              is-owner?
                              (conj {:label "Admins"
                                     :href "/admin/admins"

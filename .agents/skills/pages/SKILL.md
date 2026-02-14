@@ -29,12 +29,14 @@ You implement canonical **admin** and **user** pages for this repository, wiring
 ## Canonical page implementation playbook
 
 Use this checklist for every page task. Apply only the parts required by the request.
+Creating a new page without implementing its frontend route in the same task is not allowed.
 
 ### A) User page flow (canonical)
 
 1. **Create page component**
    - Add the page/view component in the domain/template user frontend area.
    - Ensure interactive controls have stable, unique `:id` values.
+   - Immediately continue to route wiring; do not leave new pages unreachable.
 
 2. **Register route**
    - Add route entry in user routing layer.
@@ -65,6 +67,7 @@ Use this checklist for every page task. Apply only the parts required by the req
 1. **Create admin page component**
    - Add page in admin frontend domain/template area.
    - Keep IDs stable and unique for all interactive components.
+   - Immediately continue to route wiring; do not leave new pages unreachable.
 
 2. **Register admin route**
    - Wire route in admin route composition.

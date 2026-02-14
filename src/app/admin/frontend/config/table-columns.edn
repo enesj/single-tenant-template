@@ -538,4 +538,13 @@
    :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
    :created-at {:width "140px", :formatter "date"}},
-  :removed-fields {:available-columns ["preferred-name"]}}}
+  :removed-fields {:available-columns ["preferred-name"]}}
+
+ :backlog
+ {:available-columns ["number" "description" "status" "type" "priority"],
+  :default-visible-columns ["number" "description" "status" "type" "priority"],
+  :filterable-columns ["number" "description" "status" "type" "priority"],
+  :sortable-columns ["number" "status" "type" "priority"],
+  :always-visible ["number"],
+  :computed-fields {},
+  :column-config {}}}

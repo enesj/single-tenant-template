@@ -4,6 +4,7 @@
     [app.admin.frontend.adapters.audit :as audit-adapter]
     [app.admin.frontend.adapters.login-events :as login-events-adapter]
     [app.admin.frontend.adapters.admins :as admins-adapter]
+    [app.admin.frontend.adapters.backlog :as backlog-adapter]
     [app.admin.frontend.events.admins] ; Required for side effects (event registration)
     [app.admin.frontend.events.entity-sync] ; Sync domain entities into template store
     [app.admin.frontend.subs.admins] ; Required for side effects (subscription registration)
@@ -42,7 +43,11 @@
      :admins
      {:init-fn admins-adapter/init-admins-adapter!
       :actions enhanced-actions/enhanced-action-buttons
-      :custom-actions admin-actions/admin-admin-actions}}
+      :custom-actions admin-actions/admin-admin-actions}
+
+     :backlog
+     {:init-fn backlog-adapter/init-backlog-adapter!
+      :actions enhanced-actions/enhanced-action-buttons}}
 
     ;; Domain entities from registry (decoupled from template/admin)
     ;; Domain registry provides :init-fn for each entity; we add default :actions

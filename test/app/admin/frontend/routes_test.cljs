@@ -22,6 +22,7 @@
                      :admin-dashboard
                      :admin-dashboard-alt
                      :admin-users
+                     :admin-backlog
                      :admin-audit
                      :admin-login-events
                      :admin-admins
@@ -54,4 +55,15 @@
         (start-fn {:path {}}))
       (is (= [:admin/check-auth-protected
               [[:admin/load-users]]]
+            @captured)))))
+
+(deftest backlog-route-triggers-guarded-fetch-event
+  (testing "backlog controller dispatches auth guard with initial backlog fetch"
+    (let [route (find-route routes/admin-routes :admin-backlog)
+          start-fn (-> route :controllers first :start)
+          captured (atom nil)]
+      (with-redefs [rf/dispatch (fn [event] (reset! captured event))]
+        (start-fn {:path {}}))
+      (is (= [:admin/check-auth-protected
+              [[:app.template.frontend.events.list.crud/fetch-entities :backlog]]]
             @captured)))))

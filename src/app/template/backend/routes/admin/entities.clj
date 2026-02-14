@@ -6,7 +6,203 @@
     [app.admin.backend.services.admin.users.deletion :as user-deletion]
     [app.admin.backend.services.admin.users.validation :as user-validation]
     [app.shared.adapters.database :as shared-db]
+    [clojure.string :as str]
+    [next.jdbc :as next-jdbc]
     [taoensso.timbre :as log]))
+
+(def ^:private backlog-status-options
+  #{"Waiting" "In progres" "Completed" "Need improvments"})
+
+(def ^:private backlog-type-options
+  #{"Issue" "Feature" "Refactoring" "Review"})
+
+(defn- payload-value
+  [payload k]
+  (or (get payload k)
+    (get payload (name k))))
+
+(defn- backlog-row-value
+  [row k]
+  (or (get row k)
+    (get row (keyword "backlog" (name k)))
+    (get row (name k))))
+
+(defn- normalize-fetched-backlog-item
+  [row]
+  {:id (backlog-row-value row :id)
+   :number (backlog-row-value row :number)
+   :description (backlog-row-value row :description)
+   :status (backlog-row-value row :status)
+   :type (backlog-row-value row :type)
+   :priority (backlog-row-value row :priority)})
+
+(defn- parse-backlog-number!
+  [value]
+  (let [parsed (try
+                 (Integer/parseInt (str value))
+                 (catch Exception _ nil))]
+    (when-not (some? parsed)
+      (throw (ex-info "Backlog number must be an integer"
+               {:status 400
+                :field :number
+                :value value})))
+    parsed))
+
+(defn- parse-backlog-priority!
+  [value]
+  (let [priority (try
+                   (Integer/parseInt (str value))
+                   (catch Exception _ nil))]
+    (when-not (some? priority)
+      (throw (ex-info "Backlog priority must be an integer"
+               {:status 400
+                :field :priority
+                :value value})))
+    (when-not (<= 1 priority 5)
+      (throw (ex-info "Backlog priority must be between 1 and 5"
+               {:status 400
+                :field :priority
+                :value value
+                :allowed [1 2 3 4 5]})))
+    priority))
+
+(defn- normalize-backlog-enum!
+  [field allowed value]
+  (let [normalized (some-> value str str/trim)]
+    (when-not (contains? allowed normalized)
+      (throw (ex-info
+               (str "Invalid backlog " (name field))
+               {:status 400
+                :field field
+                :value value
+                :allowed (vec allowed)})))
+    normalized))
+
+(defn- require-backlog-description!
+  [value]
+  (let [description (some-> value str str/trim)]
+    (when (or (nil? description) (str/blank? description))
+      (throw (ex-info "Backlog description is required"
+               {:status 400
+                :field :description})))
+    description))
+
+(defn- normalize-backlog-create-payload
+  [payload]
+  (let [status-value (payload-value payload :status)
+        priority-value (payload-value payload :priority)]
+    {:description (require-backlog-description! (payload-value payload :description))
+     :status (if (or (nil? status-value)
+                   (and (string? status-value) (str/blank? status-value)))
+               "Waiting"
+               (normalize-backlog-enum! :status backlog-status-options status-value))
+     :type (normalize-backlog-enum! :type backlog-type-options (payload-value payload :type))
+     :priority (if (or (nil? priority-value)
+                     (and (string? priority-value) (str/blank? priority-value)))
+                 5
+                 (parse-backlog-priority! priority-value))}))
+
+(defn- normalize-backlog-update-payload
+  [payload]
+  (let [has-key? (fn [k]
+                   (or (contains? payload k)
+                     (contains? payload (name k))))
+        updates (cond-> {}
+                  (has-key? :description)
+                  (assoc :description (require-backlog-description! (payload-value payload :description)))
+
+                  (has-key? :status)
+                  (assoc :status (normalize-backlog-enum! :status backlog-status-options (payload-value payload :status)))
+
+                  (has-key? :type)
+                  (assoc :type (normalize-backlog-enum! :type backlog-type-options (payload-value payload :type)))
+
+                  (has-key? :priority)
+                  (assoc :priority (parse-backlog-priority! (payload-value payload :priority))))]
+    (when (empty? updates)
+      (throw (ex-info "No backlog fields supplied for update"
+               {:status 400
+                :field :payload})))
+    updates))
+
+(defn- fetch-backlog-item
+  [tx number]
+  (next-jdbc/execute-one!
+    tx
+    ["SELECT number AS id, number, description, status::text AS status, type::text AS type, priority
+      FROM backlog
+      WHERE number = ?"
+     number]))
+
+(defn- list-backlog-items
+  [db]
+  (next-jdbc/with-transaction [tx db]
+    (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+    (next-jdbc/execute!
+      tx
+      ["SELECT number AS id, number, description, status::text AS status, type::text AS type, priority
+        FROM backlog
+        ORDER BY priority ASC, number ASC"])))
+
+(defn- create-backlog-item!
+  [db data]
+  (next-jdbc/with-transaction [tx db]
+    (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+    (next-jdbc/execute-one!
+      tx
+      ["INSERT INTO backlog (description, status, type, priority)
+        VALUES (?, ?::backlog_status, ?::backlog_type, ?)
+        RETURNING number AS id, number, description, status::text AS status, type::text AS type, priority"
+       (:description data)
+       (:status data)
+       (:type data)
+       (:priority data)])))
+
+(defn- update-backlog-item!
+  [db number updates]
+  (next-jdbc/with-transaction [tx db]
+    (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+    (if-let [existing (fetch-backlog-item tx number)]
+      (let [normalized-existing (normalize-fetched-backlog-item existing)
+            final-state (merge normalized-existing updates)]
+        (next-jdbc/execute-one!
+          tx
+          ["UPDATE backlog
+            SET description = ?,
+                status = ?::backlog_status,
+                type = ?::backlog_type,
+                priority = ?
+            WHERE number = ?
+            RETURNING number AS id, number, description, status::text AS status, type::text AS type, priority"
+           (:description final-state)
+           (:status final-state)
+           (:type final-state)
+           (:priority final-state)
+           number]))
+      nil)))
+
+(defn- delete-backlog-item!
+  [db number]
+  (next-jdbc/with-transaction [tx db]
+    (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+    (next-jdbc/execute-one!
+      tx
+      ["DELETE FROM backlog
+        WHERE number = ?
+        RETURNING number AS id, number"
+       number])))
+
+(defn- batch-delete-backlog-items!
+  [db numbers]
+  (if (empty? numbers)
+    0
+    (next-jdbc/with-transaction [tx db]
+      (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+      (let [placeholders (str/join "," (repeat (count numbers) "?"))
+            sql (str "DELETE FROM backlog WHERE number IN (" placeholders ")")
+            params (into [sql] numbers)
+            result (next-jdbc/execute-one! tx params)]
+        (:next.jdbc/update-count result 0)))))
 
 (defn delete-entity-handler
   "Delete entity with admin privileges (cross-tenant)"
@@ -58,11 +254,23 @@
                               :message (ex-message e)
                               :error-details error-data})))
 
+                       "backlog"
+                       (let [backlog-number (parse-backlog-number! id)
+                             deleted-row (delete-backlog-item! db backlog-number)]
+                         (if deleted-row
+                           {:success true
+                            :message "Backlog item deleted successfully"
+                            :deleted-at (java.time.Instant/now)
+                            :backlog deleted-row}
+                           {:error true
+                            :status 404
+                            :message "Backlog item not found"}))
+
                        ;; Default case for unsupported entity types
                        {:error true
                         :status 501
                         :message "Delete operation not supported for this entity type"
-                        :supported-entities ["users"]
+                        :supported-entities ["users" "backlog"]
                         :requested-entity entity})]
 
           (cond
@@ -99,6 +307,7 @@
               ;; Additional audit logging is already handled in the service layer
               (let [entity-key (case entity
                                  "users" :deleted-user
+                                 "backlog" :deleted-backlog
                                  nil)
                     payload (cond-> {:message (:message result)
                                      :deleted-entity entity
@@ -107,6 +316,7 @@
                                      :impact-summary (:impact-summary result)}
                               entity-key (assoc entity-key (get result (case entity
                                                                          "users" :user
+                                                                         "backlog" :backlog
                                                                          nil))))]
                 (utils/success-response
                   (shared-db/to-app payload))))
@@ -125,7 +335,7 @@
     (fn [request]
       (let [{:keys [entity]} (:path-params request)
             admin (:admin request)
-            data (:body request)  ; FIXED: Use :body instead of :body-params
+            data (:body request)
             ip-address (utils/get-client-ip request)
             user-agent (get-in request [:headers "user-agent"])]
 
@@ -143,6 +353,9 @@
                                (throw (ex-info "Failed to create entity"
                                         {:status 500 :original-error (.getMessage e)}))))))
 
+                       "backlog"
+                       (create-backlog-item! db (normalize-backlog-create-payload data))
+
                        ;; For other entity types, add cases here
                        ;; "tenants" (TODO: implement tenant create handler)
                        nil)]
@@ -152,7 +365,7 @@
               (log/info "Successfully created" entity "by admin" (:email admin))
               ;; Log admin action with request context
               (utils/log-admin-action-with-context
-                "create_entity" (:id admin) entity (:id result)
+                "create_entity" (:id admin) entity (or (:id result) (:number result))
                 {:entity-type entity :data data :result result}
                 ip-address user-agent)
               (utils/success-response
@@ -175,6 +388,12 @@
                        "users"
                        (admin-users/get-user-details db (utils/parse-uuid-custom id))
 
+                       "backlog"
+                       (let [backlog-number (parse-backlog-number! id)]
+                         (next-jdbc/with-transaction [tx db]
+                           (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+                           (fetch-backlog-item tx backlog-number)))
+
                        ;; For other entity types, add cases here
                        ;; "tenants" (TODO: implement tenant details handler)
                        nil)]
@@ -192,7 +411,7 @@
     (fn [request]
       (let [{:keys [entity id]} (:path-params request)
             admin (:admin request)
-            updates (:body request)  ; FIXED: Use :body instead of :body-params
+            updates (:body request)
             ip-address (utils/get-client-ip request)
             user-agent (get-in request [:headers "user-agent"])]
 
@@ -210,6 +429,12 @@
                                (throw e)
                                (throw (ex-info "Failed to update entity"
                                         {:status 500 :original-error (.getMessage e)}))))))
+
+                       "backlog"
+                       (update-backlog-item!
+                         db
+                         (parse-backlog-number! id)
+                         (normalize-backlog-update-payload updates))
 
                        ;; For other entity types, add cases here
                        ;; "tenants" (TODO: implement tenant update handler)
@@ -248,15 +473,55 @@
                                       :email-verified (utils/parse-boolean-param query-params :email-verified)}]
                          (admin-users/list-all-users db (merge filters pagination)))
 
+                       "backlog"
+                       (list-backlog-items db)
+
                        ;; Default case - return empty for unsupported entities
                        [])]
 
           (utils/success-response
             (shared-db/to-app
-              (if (= entity "users")
-                {:users result}
+              (case entity
+                "users" {:users result}
+                "backlog" {:backlog result}
                 result))))))
     "Failed to list entities"))
+
+(defn batch-delete-entities-handler
+  "Batch delete entities with admin privileges.
+   Currently supports entity = \"backlog\" with JSON body {:ids [..]}"
+  [db _crud-service]
+  (utils/with-error-handling
+    (fn [request]
+      (let [{:keys [entity]} (:path-params request)
+            admin (:admin request)
+            ids (or (get-in request [:body :ids]) [])]
+        (log/info "Admin" (:email admin) "batch deleting" entity "count" (count ids))
+
+        (let [result (case entity
+                       "backlog"
+                       (let [numbers (->> ids
+                                       (map parse-backlog-number!)
+                                       distinct
+                                       vec)
+                             deleted-count (batch-delete-backlog-items! db numbers)]
+                         {:success true
+                          :message (str deleted-count " backlog items deleted successfully")
+                          :deleted-count deleted-count})
+
+                       {:error true
+                        :status 501
+                        :message "Batch delete operation not supported for this entity type"
+                        :supported-entities ["backlog"]
+                        :requested-entity entity})]
+          (if (:error result)
+            (utils/error-response
+              (:message result)
+              :status (:status result)
+              :details (dissoc result :error :message :status))
+            (utils/success-response
+              (shared-db/to-app result))))))
+    "Failed to batch delete entities"))
 
 (defn check-deletion-constraints-batch-handler
   "Batch-check deletion constraints for given entity type.
@@ -274,7 +539,7 @@
             _ (log/info "Admin" (:email admin) "batch checking deletion constraints for" entity
                 {:count (count entity-ids)})
             result (case entity
-                 "users" (user-validation/check-users-deletion-constraints-batch db entity-ids)
+                     "users" (user-validation/check-users-deletion-constraints-batch db entity-ids)
                      {:error true
                       :status 501
                       :message "Batch deletion constraints not supported for this entity type"
@@ -293,11 +558,15 @@
   ["/entities"
    ["/:entity/deletion-constraints/batch"
     {:post (check-deletion-constraints-batch-handler db crud-service)}]
+
+   ["/:entity/batch"
+    {:delete (batch-delete-entities-handler db crud-service)}]
+
    ["/:entity"
     {:get (list-entities-handler db crud-service)
      :post (create-entity-handler db crud-service)}]
 
    ["/:entity/:id"
-    {:get    (get-entity-handler db crud-service)
-     :put    (update-entity-handler db crud-service)
+    {:get (get-entity-handler db crud-service)
+     :put (update-entity-handler db crud-service)
      :delete (delete-entity-handler db crud-service)}]])

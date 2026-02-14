@@ -12,6 +12,7 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
   - `/admin/login` (public) → login page
   - `/admin` or `/admin/dashboard` → dashboard (guarded)
   - `/admin/users` → user management + per-user activity modal (guarded)
+  - `/admin/backlog` → canonical backlog page (guarded; priority-sorted list + CRUD)
   - `/admin/audit` → global audit logs (guarded)
   - `/admin/login-events` → global login events (guarded)
   - `/admin/admin-settings` → admin UI configuration (view options, form fields, table columns)
@@ -39,6 +40,7 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 All Expenses domain admin pages use the shared `list-view` component, entity specs, and the admin API under `/admin/api/expenses/*`. Typical features include dynamic columns, filters, pagination, selection, and inline/export actions.
 
 - Articles, Article Aliases, Suppliers, Supplier Aliases, Manufacturers (new 2026-01-29), Price Observations, Unmapped Aliases.
+- `/admin/articles` includes a row action **Show related records** that opens a 3-step modal wizard (type → record → details) with Back navigation between steps; supported types are Expenses, Receipts, Providers, Stores, Manufacturers, and Subcategories.
 - Default edit flows may use modal forms; see Component Library for `:form-display :modal` and auto-close on success.
 
 ## Monitoring Pages

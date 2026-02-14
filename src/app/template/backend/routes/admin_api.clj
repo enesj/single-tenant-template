@@ -40,7 +40,7 @@
       ["/dashboard" (admin-dashboard/routes db)]
 
       ;; Entity management routes
-      ["/entities" (admin-entities/routes db nil)]
+      (admin-entities/routes db nil)
 
       ;; Audit logs
       ["/audit" (admin-audit/routes db)]

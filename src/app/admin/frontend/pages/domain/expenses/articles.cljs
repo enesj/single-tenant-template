@@ -5,7 +5,11 @@
    the admin shell stays visible and we don't depend on a user session/capability."
   (:require
     [app.admin.frontend.components.layout :as layout]
+    [app.domain.frontend.expenses.components.article-related-records-wizard :as related-records-wizard]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.list.cells :as list-cells]
+    [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
@@ -15,7 +19,34 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.articles))
+    [app.domain.frontend.expenses.events.articles :as articles-events]))
+
+(defn- show-related-records-actions
+  [article]
+  [{:group-title "Related"
+    :items [{:id "show-related-records"
+             :icon "🔗"
+             :label "Show related records"
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (rf/dispatch [::articles-events/open-related-records-modal article]))}]}])
+
+(defn- render-article-row-actions
+  [article]
+  (let [item-id (id-utils/extract-entity-id article)]
+    ($ list-cells/action-buttons
+      {:item article
+       :entity-name :articles
+       :show-edit? (:show-edit? article)
+       :show-delete? (:show-delete? article)
+       :edit-disabled? (:edit-disabled? article)
+       :delete-disabled? (:delete-disabled? article)
+       :on-edit-click (:on-edit-click article)
+       :custom-actions (fn [_]
+                         ($ dropdown/action-dropdown
+                           {:entity-id item-id
+                            :actions (show-related-records-actions article)
+                            :position :portal}))})))
 
 (defui admin-articles-page
   "Admin route: /admin/articles"
@@ -51,4 +82,7 @@
            :allow-add? false
            :allow-edit? true
            :allow-delete? true
-           :disallowed-action-mode :hide})))))
+           :disallowed-action-mode :hide
+           :render-actions render-article-row-actions})
+
+        ($ related-records-wizard/article-related-records-wizard)))))

@@ -440,6 +440,24 @@
    [:idx_supplier_aliases_supplier_id
     :btree
     {:fields [:supplier_id]}]]},
+ :backlog
+ {:fields
+  [[:number :integer {:primary-key true}]
+   [:description :text {:null false}]
+   [:status [:enum :backlog-status] {:null false, :default "Waiting"}]
+   [:type [:enum :backlog-type] {:null false}]
+   [:priority
+    :integer
+    {:null false,
+     :default 5,
+     :check [:raw "priority BETWEEN 1 AND 5"]}]],
+  :types
+  [[:backlog-status
+    :enum
+    {:choices ["Waiting" "In progres" "Completed" "Need improvments"]}]
+   [:backlog-type
+    :enum
+    {:choices ["Issue" "Feature" "Refactoring" "Review"]}]]},
  :raw_labels
  {:fields
   [[:id :uuid {:primary-key true}]

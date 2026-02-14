@@ -50,37 +50,56 @@
    #?(:clj [:fn (fn [v] (instance? java.time.LocalDate v))]
       :cljs [:fn (fn [v] (instance? js/Date v))])])
 
+(defn- normalize-schema-field-type
+  [field-type]
+  (cond
+    (keyword? field-type) field-type
+    (string? field-type) (keyword (str/lower-case field-type))
+    (symbol? field-type) (keyword (name field-type))
+    :else field-type))
+
+(defn- normalize-schema-field-definition
+  [field-type]
+  (if (vector? field-type)
+    (into [(normalize-schema-field-type (first field-type))]
+      (rest field-type))
+    (normalize-schema-field-type field-type)))
+
 (defn get-base-schema
   "Returns the base Malli schema for a field type"
   [field-type opts]
-  (cond
-    ;; Handle vector field types (e.g., [:decimal 15 2], [:varchar 255])
-    (vector? field-type)
-    (case (first field-type)
-      :decimal [:or number? [:string {:decode/string type-conv/parse-number}]]
-      :varchar [:string]
-      :array (let [array-type (second field-type)]
-               (case array-type
-                 :uuid [:vector [:or uuid? [:string {:decode/string (uuid-decoder)}]]]
-                 [:vector :any]))
-      [:string])
+  (let [field-type (normalize-schema-field-definition field-type)]
+    (cond
+      ;; Handle vector field types (e.g., [:decimal 15 2], [:varchar 255])
+      (vector? field-type)
+      (case (first field-type)
+        :decimal [:or number? [:string {:decode/string type-conv/parse-number}]]
+        :integer [:or int? [:string {:decode/string type-conv/parse-number}]]
+        :number [:or number? [:string {:decode/string type-conv/parse-number}]]
+        :varchar [:string]
+        :array (let [array-type (normalize-schema-field-type (second field-type))]
+                 (case array-type
+                   :uuid [:vector [:or uuid? [:string {:decode/string (uuid-decoder)}]]]
+                   [:vector :any]))
+        [:string])
 
-    ;; Handle simple keyword field types
-    :else
-    (case field-type
-      :text [:string]
-      :varchar [:string]
-      :decimal [:or number? [:string {:decode/string type-conv/parse-number}]]
-      :integer [:or int? [:string {:decode/string type-conv/parse-number}]]
-      :timestamp string?
-      :timestamptz string?
-      :date (date-validator)
-      :uuid [:or uuid? [:string {:decode/string (uuid-decoder)}]]
-      :jsonb [:or map? [:and string? (json-validator)]]
-      :inet [:string]
-      :boolean :boolean
-      :enum [:and string? (enum-validator (get-in opts [:enum :choices]))]
-      [:string])))
+      ;; Handle simple keyword field types
+      :else
+      (case field-type
+        :text [:string]
+        :varchar [:string]
+        :decimal [:or number? [:string {:decode/string type-conv/parse-number}]]
+        :integer [:or int? [:string {:decode/string type-conv/parse-number}]]
+        :number [:or number? [:string {:decode/string type-conv/parse-number}]]
+        :timestamp string?
+        :timestamptz string?
+        :date (date-validator)
+        :uuid [:or uuid? [:string {:decode/string (uuid-decoder)}]]
+        :jsonb [:or map? [:and string? (json-validator)]]
+        :inet [:string]
+        :boolean :boolean
+        :enum [:and string? (enum-validator (get-in opts [:enum :choices]))]
+        [:string]))))
 
 (defn convert-field-value
   "Convert a field value to the correct type based on the field definition.

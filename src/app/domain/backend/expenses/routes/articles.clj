@@ -76,4 +76,23 @@
                   "Failed to batch-create article aliases")
                 request))}]
 
+     ["/:id/related-records"
+      {:get (fn [request]
+              ((utils/with-error-handling
+                 (fn [req]
+                   (let [article-id (utils/parse-uuid-custom (get-in req [:path-params :id]))
+                         qp (:query-params req)
+                         related-type (or (get qp "type") (:type qp))
+                         limit (utils/parse-int-param qp :limit 100)]
+                     (when-not article-id
+                       (throw (ex-info "Invalid article id" {:status 400})))
+                     (let [rows (articles/list-related-records
+                                  db
+                                  article-id
+                                  {:type related-type
+                                   :limit limit})]
+                       (utils/success-response {:related-records (factory/to-app rows)}))))
+                 "Failed to list article related records")
+               request))}]
+
      id-route]))

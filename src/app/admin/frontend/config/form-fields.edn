@@ -161,4 +161,28 @@
    :role
    {:type "select", :options ["admin" "member" "viewer" "unassigned"]},
    :status
-   {:type "select", :options ["active" "inactive" "suspended"]}}}}
+   {:type "select", :options ["active" "inactive" "suspended"]}}}
+
+ :backlog
+ {:create-fields ["description" "status" "type" "priority"],
+  :edit-fields ["description" "status" "type" "priority"],
+  :required-fields ["description" "type"],
+  :field-config
+  {:number {:type "number", :label "Number", :step 1},
+   :description {:type "textarea", :label "Description"},
+   :status
+   {:type "select",
+    :label "Status",
+    :default "Waiting",
+    :options ["Waiting" "In progres" "Completed" "Need improvments"]},
+   :type
+   {:type "select",
+    :label "Type",
+    :options ["Issue" "Feature" "Refactoring" "Review"]},
+   :priority
+   {:type "number",
+    :label "Priority",
+    :default 5,
+    :min 1,
+    :max 5,
+    :step 1}}}}

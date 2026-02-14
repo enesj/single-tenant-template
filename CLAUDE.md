@@ -21,26 +21,26 @@
 These MCP servers are part of the app and should be your primary interface:
 
 - **Clojure/EDN edits**: Always use `clojure-mcp` structural editors for `.clj`/`.cljs`/`.cljc`/`.edn` changes (prefer `mcp__clojure-mcp__clojure_edit` and `mcp__clojure-mcp__clojure_edit_replace_sexp`). If a non-structural edit causes reader/compilation errors (unbalanced parens, invalid EDN, etc.), stop immediately and redo/fix using `clojure-mcp` instead of continuing with ad-hoc text edits.
-- **REPL evaluation is the main feedback loop**: Use `clj-nrepl-eval` (shell) for exploration, debugging, and running focused tests.
-  - Discover running REPLs: `clj-nrepl-eval --discover-ports`
-  - Evaluate code: `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload)"`
-  - For ClojureScript via shadow-cljs nREPL: connect to the shadow nREPL port and select a build first (e.g. `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`).
+- **REPL evaluation is the main feedback loop**: Use `clojure-mcp` eval tools for exploration, debugging, and running focused tests.
+  - Discover running REPLs: `mcp__clojure-mcp__list_nrepl_ports`
+  - Evaluate code: use the `clojure-mcp` eval tool available in your client (avoid shell-based REPL commands)
+  - For ClojureScript via shadow-cljs nREPL: select a build first via eval (e.g. `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`).
 - **DB access and operations**: Use `postgres-mcp` tools (e.g. `mcp__postgres__execute_sql`, schema inspection, lock inspection) instead of guessing schema or writing pseudo-SQL.
 - **Browser interactions**: Use `chrome-mcp` tools (read/click/fill/screenshot) for interactive UI testing and element verification; rely on stable `:id` attributes (see Component ID requirements below).
 
-## Non-MCP Clojure helper CLIs (installed)
+## Clojure helper tools (installed)
 
-This repo also supports the lightweight `clojure-mcp-light` CLI tools (useful when an MCP tool isn’t available in your client, or when you want to keep the client’s native diff UI).
+This repo also supports `clojure-mcp` tools and the lightweight `clojure-mcp-light` CLI tools (useful when a specific MCP capability isn’t available in your client, or when you want to keep the client’s native diff UI).
 
 - **Auto paren repair via hooks (Claude Code)**: `clj-paren-repair-claude-hook`
   - Configured via `.claude/settings.json`.
   - If Clojure edits produce delimiter issues, do **not** manually “hunt parens”; rely on the hook and/or run `clj-paren-repair`.
 - **On-demand paren repair (any shell-capable client)**: `clj-paren-repair path/to/file.clj`
   - Use this after Bash-based edits or when you hit the classic “Paren Edit Death Loop”.
-- **REPL evaluation from shell (fallback)**: `clj-nrepl-eval`
-  - Discover: `clj-nrepl-eval --discover-ports`
-  - Evaluate: `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload)"`
-  - Note: this project’s `deps.edn` includes a `:nrepl` alias (default port **7888**).
+- **REPL evaluation (preferred)**: use `clojure-mcp` eval tools.
+  - Discover running REPLs: `mcp__clojure-mcp__list_nrepl_ports`
+  - Evaluate code: use the `clojure-mcp` eval tool available in your client (avoid shell-based REPL commands)
+  - Note: this project’s `deps.edn` includes a `:nrepl` alias (default port **7888**) for environments that still require manual nREPL startup.
 
 ## Instruction Scope & Precedence
 

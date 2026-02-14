@@ -1,0 +1,22 @@
+({:action :create-type,
+  :type-name :backlog-status,
+  :model-name :backlog,
+  :options
+  {:choices ["Waiting" "In progres" "Completed" "Need improvments"],
+   :type :enum}}
+ {:action :create-type,
+  :type-name :backlog-type,
+  :model-name :backlog,
+  :options
+  {:choices ["Issue" "Feature" "Refactoring" "Review"], :type :enum}}
+ {:action :create-table,
+  :model-name :backlog,
+  :fields
+  {:number {:primary-key true, :type :integer},
+   :description {:null false, :type :text},
+   :status {:null false, :type [:enum :backlog-status]},
+   :type {:null false, :type [:enum :backlog-type]},
+   :priority
+   {:null false,
+    :check [:raw "priority BETWEEN 1 AND 5"],
+    :type :integer}}})

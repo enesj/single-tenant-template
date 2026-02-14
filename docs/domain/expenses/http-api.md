@@ -78,6 +78,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /admin/api/expenses/articles/unmapped-aliases` – article aliases missing article mapping.
 - `POST /admin/api/expenses/articles/aliases/:alias-id/map` – attach article to alias.
 - `POST /admin/api/expenses/articles/:id/aliases` – add/replace alias for supplier/raw label.
+- `GET /admin/api/expenses/articles/:id/related-records` – list records related to an article; requires query param `type` (`expenses|receipts|providers|stores|manufacturers|subcategories`) and supports optional `limit` (clamped to `1..500`). For `expenses`, matching includes both direct `expense_items.article_id` links and alias-linked items (`expense_items.alias_id -> article_aliases.article_id`). `receipts` include that expense-item path plus receipt alias-to-supplier resolution (`receipts.supplier_alias_id -> supplier_aliases.supplier_id` and `receipts.store_alias_id -> store_aliases.store_id -> stores.supplier_id`) matched through `article_aliases.article_id`. `stores` include expense-linked stores plus supplier-linked stores via `article_aliases.supplier_id`.
 - `GET /admin/api/expenses/articles/:id/price-history` – price observations (optional `supplier_id`, `limit`).
 - `GET /admin/api/expenses/articles/:id/latest-prices` – latest price per supplier.
 - `GET /admin/api/expenses/articles/:id/compare` – price observations for comparisons (optional `from`, `limit`).

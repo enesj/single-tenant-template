@@ -2,6 +2,7 @@
   "Admin routes; update when adding admin pages."
   (:require
     [app.admin.frontend.pages.admins :as admins]
+    [app.admin.frontend.pages.backlog :as backlog]
     [app.admin.frontend.pages.domain.expenses.article-aliases :as article-aliases]
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
@@ -81,6 +82,11 @@
            :view users/admin-users-page
            :controllers [{:start (fn [params]
                                    ((:start (guarded-start [[:admin/load-users]])) params))}]}]
+
+         ["/backlog"
+          {:name :admin-backlog
+           :view backlog/admin-backlog-page
+           :controllers [(guarded-start [:app.template.frontend.events.list.crud/fetch-entities :backlog])]}]
 
          ;; Articles (embedded user route; keeps admin shell visible)
          ["/articles"
