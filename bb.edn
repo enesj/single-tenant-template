@@ -456,6 +456,11 @@
    :task (let [env (or (first *command-line-args*) "dev")]
            (shell "clj" "-M" "scripts/bb/database/seed_admin.clj" env))},
 
+  seed-categories
+  {:doc "Seed or refresh the article categories (default env: dev). Usage: bb seed-categories [dev|test]",
+   :task (let [env (or (first *command-line-args*) "dev")]
+           (shell "clj" "-M" "scripts/bb/database/seed_categories.clj" env))},
+
   clear-rate-limits
   {:doc "Clear all rate limiting data (for development and testing).
 

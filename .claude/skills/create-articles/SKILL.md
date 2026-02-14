@@ -39,8 +39,8 @@ This skill is also the right place to backfill/maintain the *taxonomy* tables us
 - Babashka (`bb`) must be available
 - `psql` must be available on your PATH (these scripts shell out to `psql` for DB access)
 - Postgres must be reachable using the DB settings in `config/base.edn` (profile `:dev` / `:test`)
-- Web search: use `bb serper-search` (`scripts/bb/web/serper_search.clj`) **only** when `ENABLE_SERPER_SEARCH=true` (in `.env`). When disabled, skip web search entirely and create best-effort generic articles from the OCR labels.
-- If Serper is enabled: Serper.dev Search API must be configured via `SERPER_API_KEY` (typically sourced from `.env`)
+- Web search: use `bb serper-search` (`scripts/bb/web/serper_search.clj`). `ENABLE_SERPER_SEARCH=true` is always set; Serper is always available.
+- Serper.dev Search API is configured via `SERPER_API_KEY` (sourced from `.env`)
 - Database connection configured in `config/base.edn`
 - Receipts with `raw_extract_json` data containing article items
 
@@ -81,13 +81,13 @@ bb scripts/bb/articles/list_aliases_from_receipts.clj dev --limit 500 --pretty
 
 ## Step 2: Web Search for Products
 
-Web search uses **only** `bb serper-search` (`scripts/bb/web/serper_search.clj`). .
+Web search uses **only** `bb serper-search` (`scripts/bb/web/serper_search.clj`).
 
-If not enabled, skip to Step 3 and create generic articles without web-sourced metadata.
+Serper is always enabled — **always use web search** to find real product info before creating articles.
 
 ### Serper search usage
 
-When enabled, use `bb serper-search` to find product info:
+Use `bb serper-search` to find product info:
 
 ```bash
 # Basic search
@@ -130,7 +130,10 @@ If you have taxonomy info from web search, **insert it first** and then referenc
 - Subcategory names must be in English.
 - If no adequate existing category is available, put the article in category `Other`.
 - Use only category names that already exist in the `categories` table; never add categories from this workflow.
-- `Food` is the only food-related top-level category. For food and beverage items, always use top-level category `Food` with an English subcategory (for example `Snacks`, `Carbonated Drinks`, `Dairy`).
+- Food-related categorization is **tenant-specific**. Do not assume a top-level category named `Food` exists.
+- Always pick a category **from the existing `categories` table** (query it when unsure).
+- When web search is disabled/unavailable, it is acceptable to assign a best-fit existing category using **deterministic heuristics** (supplier-based and/or keyword-based) and create an English subcategory under it (often `General`).
+- Only fall back to `Other` (with a subcategory such as `General`) when you genuinely cannot classify the item.
 - If research suggests a category that is not present in the `categories` table, map the article to `Other` and create an English subcategory (for example `General`) under `Other`.
 
 By default, taxonomy upsert scripts preserve existing canonical values on conflicts. Use explicit update flags only when you intentionally want to overwrite existing values:
@@ -167,13 +170,13 @@ Use English names only (for example: `Tea`, `Carbonated Drinks`, `General`).
 ```bash
 # Ensure category + subcategory together (also returns their ids)
 bb scripts/bb/articles/ensure_taxonomy.clj dev \
-  --category-name "Food" \
+  --category-name "Packaged Foods & Drinks" \
   --subcategory-name "Snacks" \
   --subcategory-description "Chips, biscuits, sweets" \
   --pretty
 ```
 
-If you *don’t* have reliable taxonomy, keep `manufacturer_id` optional, but use category `Other` (with an `Other` subcategory such as `General`) instead of creating a new category.
+If you *don’t* have reliable taxonomy, keep `manufacturer_id` optional. Prefer choosing a plausible existing category and creating a `General` subcategory under it; use `Other/General` only when classification is unclear.
 
 ---
 
@@ -183,7 +186,28 @@ If you could not find reliable product info via web search, create a best-effort
 - `canonical_name`: cleaned-up `raw_label` (remove receipt noise / extra punctuation; keep grams/ml when present)
 - `link`: NULL
 - `manufacturer_id`: NULL
-- `subcategory_id`: point to a subcategory under `Other` (create one if needed, e.g. `General`)
+- `subcategory_id`: point to a subcategory under the best-fit existing category (create one if needed, often `General`). If classification is unclear, use `Other/General`.
+
+### Fallback categorization when web search yields no useful results
+
+When web search returns no useful product info for a given alias, you should still try to avoid dumping everything into `Other`.
+
+Use **deterministic** rules (not “vibes”) to pick an existing category and create a `General` subcategory under it:
+
+1. **Supplier-based default** (strongest signal)
+  - Pharmacy suppliers (e.g. names containing `APOTEKE`, `PHARM`, `LUPRIV`) → `Health & Pharmacy` / `General`
+  - Clothing retailers (e.g. `New Yorker`) → `Clothing & Accessories` / `General`
+  - Drugstore/personal-care retailers (e.g. `dm`) → `Personal Care` / `General` (or `Household Essentials` if the item is clearly non-cosmetic)
+
+2. **Keyword-based override** (when supplier is generic like a supermarket)
+  - `sir`, `mileram`, `kajmak`, `jogurt`, `mlijeko` → `Dairy & Eggs`
+  - `hljeb`, `pecivo`, `kroasan`, `torta` → `Bakery & Desserts`
+  - `pilet`, `pile`, `jun`, `telet`, `sunka`, `kobas` → `Meat, Seafood & Deli`
+  - `sok`, `cola`, `pivo`, `voda`, `kafa` → `Packaged Foods & Drinks`
+  - `brasno`, `ulje`, `biber`, `secer`, `tjesten` → `Packaged Foods & Drinks`
+  - `kesa`, `vreca`, `vrecica` → `Disposables & Packaging`
+
+If none of the above rules match confidently, use `Other` / `General`.
 
 Insert articles into the database with web search results (when available) or generic values (when not).
 
@@ -208,7 +232,7 @@ bb scripts/bb/articles/create_articles.clj dev \
   --normalized-key "lasta-rondini-keks-200g" \
   --manufacturer-name "Lasta" \
   --manufacturer-key "lasta" \
-  --category-name "Food" \
+  --category-name "Packaged Foods & Drinks" \
   --subcategory-name "Snacks" \
   --link "https://lasta.com/lasta-product/rondini-limun-i-mak/" \
   --pretty
@@ -220,7 +244,7 @@ mkdir -p tmp
 cat >tmp/articles-batch.edn <<'EDN'
 [{:canonical-name "Lasta Rondini keks 200g"
   :manufacturer-name "Lasta"
-  :category-name "Food"
+  :category-name "Packaged Foods & Drinks"
   :subcategory-name "Snacks"
   :link "https://example.com/rondini"}
  {:canonical-name "Vreće za smeće 60L crne"
@@ -424,14 +448,14 @@ Included in `report_progress.clj` output under `:by-manufacturer`.
 # 1) Get unmapped aliases (backlog)
 bb scripts/bb/articles/list_unmapped_aliases.clj dev --limit 50 --pretty
 
-# 2) For a given raw label, optionally web-search (only when ENABLE_SERPER_SEARCH=true)
+# 2) Web-search each alias to find the real product
 bb serper-search "KEKS RONDINI LASTA" --gl BA --hl bs --num 5 --format pretty
 
 # 3) Create the canonical article (+ ensure taxonomy)
 bb scripts/bb/articles/create_articles.clj dev \
   --canonical-name "Lasta Rondini keks 200g" \
   --manufacturer-name "Lasta" \
-  --category-name "Food" \
+  --category-name "Packaged Foods & Drinks" \
   --subcategory-name "Snacks" \
   --link "https://example.com/product" \
   --pretty
@@ -457,7 +481,7 @@ bb scripts/bb/articles/report_progress.clj dev --pretty
 ## Tips & Best Practices
 
 ### Web Search Tips (Serper only)
-- Only search when `ENABLE_SERPER_SEARCH=true`; otherwise create generic articles
+- Serper is always enabled — always attempt a web search before creating generic articles
 - Include supplier name in queries for better results
 - Use local language (Bosnian/Croatian/Serbian) for local products
 - Use `--site` to focus on known retailers or manufacturer sites

@@ -1,7 +1,7 @@
 ---
 name: CreateArticles
 description: Maps OCR article aliases to canonical products using web research, deterministic taxonomy upserts, and batch alias mapping.
-model: GPT-5.3-Codex (copilot)
+model: Claude Opus 4.6 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*']
 ---
 
@@ -25,6 +25,9 @@ If there is any conflict, follow the stricter rule.
 - **Clojure/EDN edits** (`.clj`, `.cljs`, `.cljc`, `.edn`) must use `clojure-mcp` structural editors.
 - **Database inspection/querying** must use `postgres-mcp` tools only (no direct `psql`).
 - **No secrets editing** (`config/.secrets.edn`, `~/.secrets.edn`, `.env`, `.postgres.env`, CI secrets). If needed, instruct user with placeholders.
+- **Do not translate article names to English.** Keep canonical article names in Bosnian/local language as written on receipts and local market labels (normalized keys can remain ASCII/slugified).
+- **Do not stop early.** Continue running batches until the unmapped alias backlog is fully resolved (`article_aliases.article_id IS NULL` count is `0`).
+- **Do not mark the task complete before taxonomy is populated.** Ensure taxonomy tables (`manufacturers`, `subcategories`, and existing `categories` usage via `subcategory_id`) are populated and linked for created articles.
 - Keep diffs small and focused; avoid unrelated refactors.
 
 ## Core mission
@@ -40,9 +43,22 @@ Convert `article_aliases` backlog (`article_id IS NULL`) into reliable canonical
 3. Ensure taxonomy before creating articles:
    - Upsert manufacturers/subcategories deterministically.
    - Use existing categories only.
+   - Ensure created articles are linked to taxonomy (`manufacturer_id` / `subcategory_id`) instead of leaving taxonomy empty.
 4. Create canonical articles with `scripts/bb/articles/create_articles.clj`.
 5. Map aliases in **batch mode** using `scripts/bb/articles/map_aliases.clj`.
-6. Verify coverage with `scripts/bb/articles/report_progress.clj` and clean OCR noise when requested.
+6. Repeat steps 1-5 until unmapped backlog is `0`.
+7. Verify final coverage with `scripts/bb/articles/report_progress.clj` and clean OCR noise when requested.
+
+## Completion gate (hard rule)
+
+The task is complete only when **all** of the following are true:
+
+1. `article_aliases` backlog is fully resolved (`article_id IS NULL` count is `0`).
+2. Canonical article names remain in Bosnian/local language (no forced English translation).
+3. Taxonomy tables are populated and used by created articles:
+   - `manufacturers` has relevant rows for mapped branded products,
+   - `subcategories` has relevant rows under existing categories,
+   - created articles are linked through taxonomy FKs where applicable.
 
 ## Category/taxonomy policy (hard rule)
 
