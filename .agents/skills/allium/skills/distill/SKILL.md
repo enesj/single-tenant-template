@@ -143,14 +143,16 @@ rule SendInvitation {
 
     requires: slots.all(s => s.status = confirmed)
 
-    ensures: slots.each(s => s.status = proposed)
+    ensures:
+        for s in slots:
+            s.status = proposed
     ensures: Invitation.created(
         candidacy: candidacy,
         slots: slots,
         expires_at: now + 7.days,
         status: pending
     )
-    ensures: Email.sent(
+    ensures: Email.created(
         to: candidacy.candidate.email,
         template: interview_invitation
     )
@@ -185,10 +187,10 @@ For every detail in the code, ask:
 
 | Means (code) | Ends (spec) |
 |--------------|-------------|
-| `requests.post('https://slack.com/api/...')` | `Notification.sent(channel: slack)` |
+| `requests.post('https://slack.com/api/...')` | `Notification.created(channel: slack)` |
 | `candidate.oauth_token = google.exchange(code)` | `Candidate authenticated` |
 | `redis.setex(f'session:{id}', 86400, data)` | `Session.created(expires: 24.hours)` |
-| `for slot in slots: slot.status = 'cancelled'` | `slots.each(s => s.status = cancelled)` |
+| `for slot in slots: slot.status = 'cancelled'` | `for s in slots: s.status = cancelled` |
 
 ## The concrete detail problem
 
@@ -269,7 +271,7 @@ Spec:
 ```
 external entity Candidate {
     name: String
-    email: Email
+    email: String
     source: CandidateSource
 }
 ```
@@ -283,7 +285,7 @@ Spec:
 ```
 external entity Candidate {
     name: String
-    email: Email
+    email: String
     greenhouse_id: String?  -- explicitly modeled
 }
 
@@ -400,14 +402,16 @@ rule CandidateAcceptsInvitation {
 
     ensures: invitation.status = accepted
     ensures: slot.status = booked
-    ensures: invitation.other_slots.each(s => s.status = available)
+    ensures:
+        for s in invitation.slots:
+            if s != slot: s.status = available
     ensures: Interview.created(
         candidacy: invitation.candidacy,
         slot: slot,
         status: scheduled
     )
-    ensures: Notification.sent(to: slot.interviewers, ...)
-    ensures: Email.sent(to: invitation.candidate.email, ...)
+    ensures: Notification.created(to: slot.interviewers, ...)
+    ensures: Email.created(to: invitation.candidate.email, ...)
 }
 ```
 
@@ -420,8 +424,8 @@ rule CandidateAcceptsInvitation {
 | `if item not in collection: raise` | `requires: item in collection` |
 | `x.status = 'accepted'` | `ensures: x.status = accepted` |
 | `Model.create(...)` | `ensures: Model.created(...)` |
-| `send_email(...)` | `ensures: Email.sent(...)` |
-| `notify(...)` | `ensures: Notification.sent(...)` |
+| `send_email(...)` | `ensures: Email.created(...)` |
+| `notify(...)` | `ensures: Notification.created(...)` |
 
 ### Step 4: Find temporal triggers
 
@@ -463,7 +467,9 @@ rule InvitationExpires {
     requires: invitation.status = pending
 
     ensures: invitation.status = expired
-    ensures: invitation.slots.each(s => s.status = available)
+    ensures:
+        for s in invitation.slots:
+            s.status = available
     ensures: CandidateInformed(candidate: invitation.candidate, about: invitation_expired)
 }
 
@@ -471,7 +477,7 @@ rule InterviewReminder {
     when: interview: Interview.slot.time - 1.hour <= now
     requires: interview.status = scheduled
 
-    ensures: Notification.sent(to: interview.interviewers, template: reminder)
+    ensures: Notification.created(to: interview.interviewers, template: reminder)
 }
 ```
 
@@ -499,7 +505,7 @@ Suggests:
 ```
 external entity Candidate {
     name: String
-    email: Email
+    email: String
 }
 ```
 
@@ -638,7 +644,7 @@ rule ImportCandidate {
 If the integration is minor, just abstract it:
 ```
 -- Don't specify Slack details, just:
-ensures: Notification.sent(
+ensures: Notification.created(
     to: interviewers,
     channel: slack
 )
@@ -693,7 +699,7 @@ When you find two terms for the same concept (across specs, within a spec, or be
 ```
 -- BAD: Acknowledges duplication without resolving it
 -- Order vs Purchase
--- checkout.alm uses "Purchase" - these are equivalent concepts.
+-- checkout.allium uses "Purchase" - these are equivalent concepts.
 ```
 
 This is not a resolution. When different parts of a codebase are built against different specs, both terms end up in the implementation: duplicate models, redundant join tables, foreign keys pointing both ways.
@@ -798,7 +804,7 @@ def send_notification(user, message):
 
 The spec should capture the intended behaviour, not the bug:
 ```
-ensures: Notification.sent(to: user, channel: slack)
+ensures: Notification.created(to: user, channel: slack)
 ```
 
 Whether the current implementation properly handles failures is separate from what the system should do.
@@ -820,7 +826,7 @@ public class SlackNotificationStrategy implements NotificationStrategy {
 }
 ```
 
-Cut through to the actual behaviour. The spec does not need strategy patterns, dependency injection or abstract factories. Just: `ensures: Notification.sent(channel: slack, ...)`
+Cut through to the actual behaviour. The spec does not need strategy patterns, dependency injection or abstract factories. Just: `ensures: Notification.created(channel: slack, ...)`
 
 ## Checklist: Have you abstracted enough?
 

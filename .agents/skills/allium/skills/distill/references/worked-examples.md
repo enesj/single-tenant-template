@@ -159,7 +159,7 @@ def cleanup_expired_tokens():
 **Extraction process:**
 
 1. **Identify entities from models:**
-   - `User` - has email, password_hash, status, failed_attempts, locked_until
+   - `User` - has email, password_hash, status, failed_login_attempts, locked_until
    - `PasswordResetToken` - has user, token, created_at, expires_at, used
 
 2. **Identify states from status fields and booleans:**
@@ -173,13 +173,13 @@ def cleanup_expired_tokens():
 
 4. **Extract preconditions from validation:**
    - `if not user` becomes `requires: exists user`
-   - `len(new_password) < 12` becomes `requires: password.length >= 12`
+   - `len(new_password) < 12` becomes `requires: length(password) >= 12`
    - `token.is_valid()` becomes `requires: token.is_valid`
 
 5. **Extract postconditions from mutations:**
    - `token.used = True` becomes `ensures: token.status = used`
    - `user.set_password(...)` becomes `ensures: user.password_hash = hash(password)`
-   - `mail.send(msg)` becomes `ensures: Email.sent(...)`
+   - `mail.send(msg)` becomes `ensures: Email.created(...)`
 
 6. **Strip implementation details:**
    - Remove: `secrets.token_urlsafe(32)`, `generate_password_hash`, `db.session`
@@ -198,14 +198,14 @@ config {
 }
 
 entity User {
-    email: Email
+    email: String
     password_hash: String
     status: active | locked | deactivated
-    failed_attempts: Integer
+    failed_login_attempts: Integer
     locked_until: Timestamp?
 
-    reset_tokens: PasswordResetToken for this user
-    sessions: Session for this user
+    reset_tokens: PasswordResetToken with user = this
+    sessions: Session with user = this
 
     active_sessions: sessions with status = active
     pending_reset_tokens: reset_tokens with status = pending
@@ -226,9 +226,11 @@ rule RequestPasswordReset {
     let user = User{email}
 
     requires: exists user
-    requires: user.status in [active, locked]
+    requires: user.status in {active, locked}
 
-    ensures: user.pending_reset_tokens.each(t => t.status = used)
+    ensures:
+        for t in user.pending_reset_tokens:
+            t.status = expired
     ensures:
         let token = PasswordResetToken.created(
             user: user,
@@ -236,7 +238,7 @@ rule RequestPasswordReset {
             expires_at: now + config.reset_token_expiry,
             status: pending
         )
-        Email.sent(
+        Email.created(
             to: user.email,
             template: password_reset,
             data: { token: token }
@@ -247,17 +249,19 @@ rule CompletePasswordReset {
     when: UserResetsPassword(token, new_password)
 
     requires: token.is_valid
-    requires: new_password.length >= config.min_password_length
+    requires: length(new_password) >= config.min_password_length
 
     let user = token.user
 
     ensures: token.status = used
     ensures: user.password_hash = hash(new_password)
     ensures: user.status = active
-    ensures: user.failed_attempts = 0
+    ensures: user.failed_login_attempts = 0
     ensures: user.locked_until = null
-    ensures: user.active_sessions.each(s => s.status = revoked)
-    ensures: Email.sent(to: user.email, template: password_changed)
+    ensures:
+        for s in user.active_sessions:
+            s.status = revoked
+    ensures: Email.created(to: user.email, template: password_changed)
 }
 
 rule ResetTokenExpires {
@@ -531,7 +535,7 @@ export async function changePlan(req: Request, res: Response) {
 1. **Identify entities from types/models:**
    - `Plan` - configuration entity with limits
    - `Workspace` - has owner, plan
-   - `WorkspaceMember` - join entity (user + workspace)
+   - `WorkspaceMembership` - join entity (user + workspace)
    - `Project`, `File` - resources that count against limits
    - `UsageEvent` - audit/tracking
 
@@ -563,7 +567,7 @@ entity Plan {
     max_storage_mb: Integer
     max_team_members: Integer
     monthly_price: Decimal
-    features: Set<Feature>
+    features: Set<Feature>          -- domain type; define in your spec
 
     has_unlimited_projects: max_projects = -1
     has_unlimited_storage: max_storage_mb = -1
@@ -575,8 +579,8 @@ entity Workspace {
     owner: User
     plan: Plan
 
-    members: WorkspaceMember for this workspace
-    all_projects: Project for this workspace
+    members: WorkspaceMembership with workspace = this
+    all_projects: Project with workspace = this
 
     -- Projections
     projects: all_projects with deleted_at = null
@@ -602,7 +606,7 @@ entity Workspace {
     can_use_feature(f): f in plan.features
 }
 
-entity WorkspaceMember {
+entity WorkspaceMembership {
     workspace: Workspace
     user: User
 }
@@ -610,7 +614,7 @@ entity WorkspaceMember {
 rule CreateProject {
     when: CreateProject(user, workspace, name)
 
-    let membership = WorkspaceMember{workspace, user}
+    let membership = WorkspaceMembership{workspace, user}
 
     requires: exists membership
     requires: workspace.can_add_project
@@ -629,7 +633,7 @@ rule CreateProject {
 rule CreateProjectLimitReached {
     when: CreateProject(user, workspace, name)
 
-    let membership = WorkspaceMember{workspace, user}
+    let membership = WorkspaceMembership{workspace, user}
 
     requires: exists membership
     requires: not workspace.can_add_project
@@ -637,7 +641,7 @@ rule CreateProjectLimitReached {
     ensures: UserInformed(
         user: user,
         about: limit_reached,
-        with: {
+        data: {
             limit_type: projects,
             current: workspace.project_count,
             max: workspace.plan.max_projects
@@ -664,7 +668,7 @@ rule ChangePlan {
                   or new_plan.has_unlimited_members)
 
     ensures: workspace.plan = new_plan
-    ensures: Email.sent(
+    ensures: Email.created(
         to: workspace.owner.email,
         template: if is_downgrade: plan_downgraded else: plan_upgraded,
         data: { old_plan: old_plan, new_plan: new_plan }
@@ -682,7 +686,7 @@ rule DowngradeBlocked {
     ensures: UserInformed(
         user: user,
         about: downgrade_blocked,
-        with: {
+        data: {
             reason: projects,
             current: workspace.project_count,
             limit: new_plan.max_projects
@@ -927,7 +931,7 @@ entity Document {
 }
 
 entity Workspace {
-    all_documents: Document for this workspace
+    all_documents: Document with workspace = this
 
     documents: all_documents with status = active
     deleted_documents: all_documents with status = deleted
@@ -937,7 +941,7 @@ entity Workspace {
 rule DeleteDocument {
     when: DeleteDocument(actor, document)
 
-    let membership = WorkspaceMember{document.workspace, actor}
+    let membership = WorkspaceMembership{workspace: document.workspace, user: actor}
 
     requires: document.status = active
     requires: actor = document.created_by or membership.can_admin
@@ -950,7 +954,7 @@ rule DeleteDocument {
 rule RestoreDocument {
     when: RestoreDocument(actor, document)
 
-    let membership = WorkspaceMember{document.workspace, actor}
+    let membership = WorkspaceMembership{workspace: document.workspace, user: actor}
 
     requires: document.can_restore
     requires: actor = document.deleted_by or membership.can_admin
@@ -963,7 +967,7 @@ rule RestoreDocument {
 rule PermanentlyDelete {
     when: PermanentlyDelete(actor, document)
 
-    let membership = WorkspaceMember{document.workspace, actor}
+    let membership = WorkspaceMembership{workspace: document.workspace, user: actor}
 
     requires: document.status = deleted
     requires: membership.can_admin
@@ -974,7 +978,7 @@ rule PermanentlyDelete {
 rule EmptyTrash {
     when: EmptyTrash(actor, workspace)
 
-    let membership = WorkspaceMember{workspace, actor}
+    let membership = WorkspaceMembership{workspace: workspace, user: actor}
 
     requires: membership.can_admin
 

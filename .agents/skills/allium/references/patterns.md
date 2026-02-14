@@ -2,6 +2,8 @@
 
 This library contains reusable patterns for common SaaS scenarios. Each pattern demonstrates specific Allium language features and can be adapted to your domain.
 
+Patterns elide common cross-cutting entities (`Email`, `Notification`, `AuditLog`, etc.) for brevity. In a real specification, declare these as external entities or define them in a shared module.
+
 | Pattern | Key Features Demonstrated |
 |---------|---------------------------|
 | Password Auth with Reset | Temporal triggers, token lifecycle, defaults, surfaces |
@@ -37,19 +39,19 @@ config {
 ------------------------------------------------------------
 
 entity User {
-    email: Email
+    email: String
     password_hash: String          -- stored, never exposed
-    status: pending | active | locked | deactivated
+    status: active | locked | deactivated
     failed_login_attempts: Integer
     locked_until: Timestamp?
 
     -- Relationships
-    sessions: Session for this user
-    reset_tokens: PasswordResetToken for this user
+    sessions: Session with user = this
+    reset_tokens: PasswordResetToken with user = this
 
     -- Projections
-    active_sessions: sessions with status = active
-    pending_reset_tokens: reset_tokens with status = pending
+    active_sessions: sessions where status = active
+    pending_reset_tokens: reset_tokens where status = pending
 
     -- Derived
     is_locked: status = locked and locked_until > now
@@ -83,7 +85,7 @@ rule Register {
     when: UserRegisters(email, password)
 
     requires: not exists User{email: email}
-    requires: password.length >= config.min_password_length
+    requires: length(password) >= config.min_password_length
 
     ensures: User.created(
         email: email,
@@ -91,7 +93,7 @@ rule Register {
         status: active,
         failed_login_attempts: 0
     )
-    ensures: Email.sent(
+    ensures: Email.created(
         to: email,
         template: welcome
     )
@@ -133,7 +135,7 @@ rule LoginFailure {
         if user.failed_login_attempts >= config.max_login_attempts:
             user.status = locked
             user.locked_until = now + config.lockout_duration
-            Email.sent(to: user.email, template: account_locked)
+            Email.created(to: user.email, template: account_locked)
 }
 
 rule LoginAttemptWhileLocked {
@@ -141,12 +143,13 @@ rule LoginAttemptWhileLocked {
 
     let user = User{email}
 
+    requires: exists user
     requires: user.is_locked
 
     ensures: UserInformed(
         user: user,
         about: account_locked,
-        with: { unlocks_at: user.locked_until }
+        data: { unlocks_at: user.locked_until }
     )
 }
 
@@ -190,10 +193,12 @@ rule RequestPasswordReset {
     let user = User{email}
 
     requires: exists user
-    requires: user.status in [active, locked]
+    requires: user.status in {active, locked}
 
     -- Invalidate any existing tokens
-    ensures: user.pending_reset_tokens.each(t => t.status = expired)
+    ensures:
+        for t in user.pending_reset_tokens:
+            t.status = expired
 
     ensures:
         let token = PasswordResetToken.created(
@@ -202,7 +207,7 @@ rule RequestPasswordReset {
             expires_at: now + config.reset_token_expiry,
             status: pending
         )
-        Email.sent(
+        Email.created(
             to: email,
             template: password_reset,
             data: { token: token }
@@ -213,7 +218,7 @@ rule CompletePasswordReset {
     when: UserResetsPassword(token, new_password)
 
     requires: token.is_valid
-    requires: new_password.length >= config.min_password_length
+    requires: length(new_password) >= config.min_password_length
 
     let user = token.user
 
@@ -224,9 +229,11 @@ rule CompletePasswordReset {
     ensures: user.locked_until = null
 
     -- Invalidate all existing sessions
-    ensures: user.active_sessions.each(s => s.status = revoked)
+    ensures:
+        for s in user.active_sessions:
+            s.status = revoked
 
-    ensures: Email.sent(
+    ensures: Email.created(
         to: user.email,
         template: password_changed
     )
@@ -245,7 +252,7 @@ rule ResetTokenExpires {
 ------------------------------------------------------------
 
 actor AuthenticatedUser {
-    identified_by: Session.user with Session.is_valid
+    identified_by: User where active_sessions.count > 0
 }
 
 ------------------------------------------------------------
@@ -253,18 +260,14 @@ actor AuthenticatedUser {
 ------------------------------------------------------------
 
 surface Authentication {
-    for visitor: User
-
-    requires:
-        email
-        password
+    facing visitor: User
 
     provides:
         UserLogsIn(email, password)
         UserRegisters(email, password)
         UserRequestsPasswordReset(email)
 
-    invariant: NoSessionRequired
+    guarantee: NoSessionRequired
         -- Accessible without an existing session.
 
     guidance:
@@ -273,7 +276,7 @@ surface Authentication {
 }
 
 surface PasswordReset {
-    for visitor: User
+    facing visitor: User
 
     context token: PasswordResetToken
 
@@ -281,19 +284,16 @@ surface PasswordReset {
         token.is_valid
         token.expires_at
 
-    requires:
-        new_password when token.is_valid
-
     provides:
         UserResetsPassword(token, new_password)
             when token.is_valid
 
-    invariant: NoSessionRequired
+    guarantee: NoSessionRequired
         -- Accessible without an existing session.
 }
 
 surface AccountManagement {
-    for user: AuthenticatedUser
+    facing user: AuthenticatedUser
 
     exposes:
         user.email
@@ -313,10 +313,10 @@ surface AccountManagement {
 - Multiple rules for same trigger with different `requires` (login success vs failure)
 - Temporal triggers with guards (`when: token: PasswordResetToken.expires_at <= now` with `requires: status = pending`)
 - Projections for filtered collections (`pending_reset_tokens`)
-- Bulk updates (`user.active_sessions.each(...)`)
+- Bulk updates with `for` iteration
 - Explicit `let` binding for created entities
 - Black box functions (`hash()`, `verify()`)
-- Surfaces with `for` iteration in `provides`
+- Surfaces with `facing` declaration and `for` iteration in `provides`
 
 ---
 
@@ -333,14 +333,9 @@ This pattern implements hierarchical roles where higher roles inherit permission
 -- Entities
 ------------------------------------------------------------
 
-entity Permission {
-    name: String                    -- e.g., "documents.read", "documents.write"
-    description: String
-}
-
 entity Role {
     name: String                    -- e.g., "viewer", "editor", "admin"
-    permissions: Set<Permission>
+    permissions: Set<String>        -- e.g., { "documents.read", "documents.write" }
     inherits_from: Role?            -- optional parent role
 
     -- Derived: all permissions including inherited
@@ -349,7 +344,7 @@ entity Role {
 }
 
 entity User {
-    email: Email
+    email: String
     name: String
 }
 
@@ -358,11 +353,25 @@ entity Workspace {
     owner: User
 
     -- Relationships
-    memberships: WorkspaceMembership for this workspace
+    memberships: WorkspaceMembership with workspace = this
+    documents: Document with workspace = this
 
     -- Projections
     members: memberships -> user
-    admins: memberships with role.name = "admin" -> user
+    admins: memberships where role.name = "admin" -> user
+}
+
+entity Document {
+    workspace: Workspace
+    created_by: User
+    title: String
+    content: String
+}
+
+entity DocumentView {
+    user: User
+    document: Document
+    at: Timestamp
 }
 
 -- Join entity connecting User, Workspace, and Role
@@ -423,10 +432,10 @@ rule CreateWorkspace {
 rule AddMember {
     when: AddMemberToWorkspace(actor, workspace, new_user, role)
 
-    let actor_membership = WorkspaceMembership{actor, workspace}
+    let actor_membership = WorkspaceMembership{user: actor, workspace: workspace}
 
     requires: actor_membership.can_admin
-    requires: not exists WorkspaceMembership{new_user, workspace}
+    requires: not exists WorkspaceMembership{user: new_user, workspace: workspace}
 
     ensures: WorkspaceMembership.created(
         user: new_user,
@@ -434,18 +443,18 @@ rule AddMember {
         role: role,
         joined_at: now
     )
-    ensures: Email.sent(
+    ensures: Email.created(
         to: new_user.email,
         template: added_to_workspace,
-        data: { workspace, role }
+        data: { workspace: workspace, role: role }
     )
 }
 
 rule ChangeMemberRole {
     when: ChangeMemberRole(actor, workspace, target_user, new_role)
 
-    let actor_membership = WorkspaceMembership{actor, workspace}
-    let target_membership = WorkspaceMembership{target_user, workspace}
+    let actor_membership = WorkspaceMembership{user: actor, workspace: workspace}
+    let target_membership = WorkspaceMembership{user: target_user, workspace: workspace}
 
     requires: actor_membership.can_admin
     requires: exists target_membership
@@ -457,8 +466,8 @@ rule ChangeMemberRole {
 rule RemoveMember {
     when: RemoveMemberFromWorkspace(actor, workspace, target_user)
 
-    let actor_membership = WorkspaceMembership{actor, workspace}
-    let target_membership = WorkspaceMembership{target_user, workspace}
+    let actor_membership = WorkspaceMembership{user: actor, workspace: workspace}
+    let target_membership = WorkspaceMembership{user: target_user, workspace: workspace}
 
     requires: actor_membership.can_admin
     requires: exists target_membership
@@ -476,6 +485,32 @@ rule LeaveWorkspace {
     requires: user != workspace.owner    -- owner can't leave
 
     ensures: not exists membership
+}
+
+------------------------------------------------------------
+-- Managing permissions on roles
+------------------------------------------------------------
+
+rule GrantPermission {
+    when: GrantPermission(actor, workspace, role, permission)
+
+    let actor_membership = WorkspaceMembership{user: actor, workspace: workspace}
+
+    requires: actor_membership.can_admin
+    requires: permission not in role.effective_permissions
+
+    ensures: role.permissions.add(permission)
+}
+
+rule RevokePermission {
+    when: RevokePermission(actor, workspace, role, permission)
+
+    let actor_membership = WorkspaceMembership{user: actor, workspace: workspace}
+
+    requires: actor_membership.can_admin
+    requires: permission in role.permissions    -- only direct, not inherited
+
+    ensures: role.permissions.remove(permission)
 }
 
 ------------------------------------------------------------
@@ -500,11 +535,11 @@ rule CreateDocument {
 rule ViewDocument {
     when: ViewDocument(user, document)
 
-    let membership = WorkspaceMembership{user, document.workspace}
+    let membership = WorkspaceMembership{user: user, workspace: document.workspace}
 
     requires: membership.can_read
 
-    ensures: DocumentView.recorded(user: user, document: document, at: now)
+    ensures: DocumentView.created(user: user, document: document, at: now)
 }
 
 ------------------------------------------------------------
@@ -512,15 +547,18 @@ rule ViewDocument {
 ------------------------------------------------------------
 
 actor WorkspaceAdmin {
-    identified_by: User with WorkspaceMembership{user, workspace}.can_admin
+    within: Workspace
+    identified_by: User where WorkspaceMembership{user: this, workspace: within}.can_admin = true
 }
 
 actor WorkspaceEditor {
-    identified_by: User with WorkspaceMembership{user, workspace}.can_write
+    within: Workspace
+    identified_by: User where WorkspaceMembership{user: this, workspace: within}.can_write = true
 }
 
 actor WorkspaceViewer {
-    identified_by: User with WorkspaceMembership{user, workspace}.can_read
+    within: Workspace
+    identified_by: User where WorkspaceMembership{user: this, workspace: within}.can_read = true
 }
 
 ------------------------------------------------------------
@@ -528,7 +566,7 @@ actor WorkspaceViewer {
 ------------------------------------------------------------
 
 surface WorkspaceMemberManagement {
-    for admin: WorkspaceAdmin
+    facing admin: WorkspaceAdmin
 
     context workspace: Workspace
 
@@ -544,16 +582,16 @@ surface WorkspaceMemberManagement {
         RemoveMemberFromWorkspace(admin, workspace, target_user)
             when target_user != workspace.owner
 
-    invariant: OwnerProtection
+    guarantee: OwnerProtection
         -- The workspace owner's role cannot be changed or removed.
 }
 
 surface WorkspaceDocuments {
-    for member: User
+    facing member: User
 
     context workspace: Workspace
 
-    let membership = WorkspaceMembership{member, workspace}
+    let membership = WorkspaceMembership{user: member, workspace: workspace}
 
     exposes:
         workspace.name
@@ -575,9 +613,10 @@ surface WorkspaceDocuments {
 **Key language features shown:**
 - Recursive derived values (`effective_permissions` includes inherited)
 - Null-safe navigation (`inherits_from?.effective_permissions ?? {}`)
-- Join entity lookup (`WorkspaceMembership{user, workspace}`)
+- Join entity lookup (`WorkspaceMembership{user: actor, workspace: workspace}`)
 - Permission checks in `requires` clauses
-- Membership with `in` operator for set membership
+- String set membership with `in` operator
+- `.add()` and `.remove()` for set mutation in ensures clauses
 - `not exists` as an outcome (removes the entity)
 - Surfaces with role-based actors and permission-gated actions
 - `related` clause for cross-surface navigation
@@ -606,12 +645,12 @@ entity Resource {
     owner: User
 
     -- Relationships
-    shares: ResourceShare for this resource
-    invitations: ResourceInvitation for this resource
+    shares: ResourceShare with resource = this
+    invitations: ResourceInvitation with resource = this
 
     -- Projections
-    active_shares: shares with status = active
-    pending_invitations: invitations with status = pending
+    active_shares: shares where status = active
+    pending_invitations: invitations where status = pending
 }
 
 entity ResourceShare {
@@ -622,15 +661,15 @@ entity ResourceShare {
     created_at: Timestamp
 
     -- Derived
-    can_view: permission in [view, edit, admin]
-    can_edit: permission in [edit, admin]
+    can_view: permission in {view, edit, admin}
+    can_edit: permission in {edit, admin}
     can_admin: permission = admin
-    can_invite: permission in [edit, admin]    -- editors and admins can invite
+    can_invite: permission in {edit, admin}    -- editors and admins can invite
 }
 
 entity ResourceInvitation {
     resource: Resource
-    email: Email
+    email: String
     permission: view | edit | admin
     invited_by: User
     created_at: Timestamp
@@ -648,13 +687,14 @@ entity ResourceInvitation {
 rule InviteToResource {
     when: InviteToResource(inviter, resource, email, permission)
 
-    let inviter_share = ResourceShare{resource, inviter}
+    let inviter_share = ResourceShare{resource: resource, user: inviter}
+    let existing_invitation = ResourceInvitation{resource: resource, email: email}
 
     requires: inviter = resource.owner or inviter_share.can_invite
-    requires: permission in [view, edit]    -- can't invite as admin unless owner
+    requires: permission in {view, edit}    -- can't invite as admin unless owner
               or (permission = admin and inviter = resource.owner)
-    requires: not exists ResourceShare{resource, User{email}}    -- not already shared
-    requires: not ResourceInvitation{resource, email}.is_valid   -- no pending invite
+    requires: not exists ResourceShare{resource: resource, user: User{email: email}}
+    requires: not exists existing_invitation or not existing_invitation.is_valid
 
     ensures: ResourceInvitation.created(
         resource: resource,
@@ -665,7 +705,7 @@ rule InviteToResource {
         expires_at: now + config.invitation_expiry,
         status: pending
     )
-    ensures: Email.sent(
+    ensures: Email.created(
         to: email,
         template: resource_invitation,
         data: {
@@ -681,7 +721,7 @@ rule InviteToResource {
 ------------------------------------------------------------
 
 rule AcceptInvitationExistingUser {
-    when: AcceptInvitation(invitation, user)
+    when: ExistingUserAcceptsInvitation(invitation, user)
 
     requires: invitation.is_valid
     requires: user.email = invitation.email
@@ -694,7 +734,7 @@ rule AcceptInvitationExistingUser {
         status: active,
         created_at: now
     )
-    ensures: Notification.sent(
+    ensures: Notification.created(
         to: invitation.invited_by,
         template: invitation_accepted,
         data: { resource: invitation.resource, user: user }
@@ -706,7 +746,7 @@ rule AcceptInvitationExistingUser {
 ------------------------------------------------------------
 
 rule AcceptInvitationNewUser {
-    when: AcceptInvitation(invitation, email, name, password)
+    when: NewUserAcceptsInvitation(invitation, email, name, password)
 
     requires: invitation.is_valid
     requires: email = invitation.email
@@ -727,7 +767,7 @@ rule AcceptInvitationNewUser {
             status: active,
             created_at: now
         )
-        Notification.sent(
+        Notification.created(
             to: invitation.invited_by,
             template: invitation_accepted,
             data: { resource: invitation.resource, user: user }
@@ -757,7 +797,7 @@ rule InvitationExpires {
 rule RevokeInvitation {
     when: RevokeInvitation(actor, invitation)
 
-    let actor_share = ResourceShare{invitation.resource, actor}
+    let actor_share = ResourceShare{resource: invitation.resource, user: actor}
 
     requires: invitation.status = pending
     requires: actor = invitation.resource.owner or actor_share.can_admin
@@ -772,7 +812,7 @@ rule RevokeInvitation {
 rule ChangeSharePermission {
     when: ChangeSharePermission(actor, share, new_permission)
 
-    let actor_share = ResourceShare{share.resource, actor}
+    let actor_share = ResourceShare{resource: share.resource, user: actor}
 
     requires: actor = share.resource.owner or actor_share.can_admin
     requires: share.user != share.resource.owner    -- can't change owner
@@ -784,14 +824,14 @@ rule ChangeSharePermission {
 rule RevokeShare {
     when: RevokeShare(actor, share)
 
-    let actor_share = ResourceShare{share.resource, actor}
+    let actor_share = ResourceShare{resource: share.resource, user: actor}
 
     requires: actor = share.resource.owner or actor_share.can_admin
     requires: share.user != share.resource.owner
     requires: share.status = active
 
     ensures: share.status = revoked
-    ensures: Notification.sent(
+    ensures: Notification.created(
         to: share.user,
         template: access_revoked,
         data: { resource: share.resource }
@@ -803,11 +843,11 @@ rule RevokeShare {
 ------------------------------------------------------------
 
 surface ResourceSharing {
-    for sharer: User
+    facing sharer: User
 
     context resource: Resource
 
-    let share = ResourceShare{resource, sharer}
+    let share = ResourceShare{resource: resource, user: sharer}
 
     exposes:
         resource.active_shares
@@ -825,14 +865,14 @@ surface ResourceSharing {
             RevokeShare(sharer, s)
                 when sharer = resource.owner or share.can_admin
 
-    invariant: OwnerCannotBeRevoked
+    guarantee: OwnerCannotBeRevoked
         -- The resource owner's access cannot be revoked or downgraded.
 }
 
 surface InvitationResponse {
-    for recipient: User
+    facing recipient: User
 
-    context invitation: ResourceInvitation with email = recipient.email
+    context invitation: ResourceInvitation where email = recipient.email
 
     exposes:
         invitation.resource.name
@@ -842,7 +882,7 @@ surface InvitationResponse {
         invitation.is_valid
 
     provides:
-        AcceptInvitation(invitation, recipient)
+        ExistingUserAcceptsInvitation(invitation, recipient)
             when invitation.is_valid
         DeclineInvitation(invitation)
             when invitation.is_valid
@@ -851,7 +891,7 @@ surface InvitationResponse {
 
 **Key language features shown:**
 - Complex permission logic in `requires`
-- Multiple rules for same trigger with different shapes (existing vs new user)
+- Distinct trigger names for different parameter shapes (`ExistingUserAcceptsInvitation` vs `NewUserAcceptsInvitation`)
 - Invitation lifecycle (pending → accepted/declined/expired/revoked)
 - Checking existence with `exists` keyword
 - Permission escalation prevention (`can't invite as admin unless owner`)
@@ -898,12 +938,12 @@ entity Workspace {
     name: String
 
     -- Relationships
-    all_documents: Document for this workspace
+    all_documents: Document with workspace = this
 
     -- Projections (what users typically see)
-    documents: all_documents with status = active
-    deleted_documents: all_documents with status = deleted
-    restorable_documents: all_documents with can_restore = true
+    documents: all_documents where status = active
+    deleted_documents: all_documents where status = deleted
+    restorable_documents: all_documents where can_restore = true
 }
 
 ------------------------------------------------------------
@@ -913,7 +953,7 @@ entity Workspace {
 rule DeleteDocument {
     when: DeleteDocument(actor, document)
 
-    let membership = WorkspaceMembership{actor, document.workspace}
+    let membership = WorkspaceMembership{user: actor, workspace: document.workspace}
 
     requires: document.status = active
     requires: actor = document.created_by or membership.can_admin
@@ -926,7 +966,7 @@ rule DeleteDocument {
 rule RestoreDocument {
     when: RestoreDocument(actor, document)
 
-    let membership = WorkspaceMembership{actor, document.workspace}
+    let membership = WorkspaceMembership{user: actor, workspace: document.workspace}
 
     requires: document.can_restore
     requires: actor = document.deleted_by or membership.can_admin
@@ -939,7 +979,7 @@ rule RestoreDocument {
 rule PermanentlyDelete {
     when: PermanentlyDelete(actor, document)
 
-    let membership = WorkspaceMembership{actor, document.workspace}
+    let membership = WorkspaceMembership{user: actor, workspace: document.workspace}
 
     requires: document.status = deleted
     requires: membership.can_admin
@@ -962,7 +1002,7 @@ rule RetentionExpires {
 rule EmptyTrash {
     when: EmptyTrash(actor, workspace)
 
-    let membership = WorkspaceMembership{actor, workspace}
+    let membership = WorkspaceMembership{user: actor, workspace: workspace}
 
     requires: membership.can_admin
 
@@ -974,26 +1014,26 @@ rule EmptyTrash {
 rule RestoreAll {
     when: RestoreAllDeleted(actor, workspace)
 
-    let membership = WorkspaceMembership{actor, workspace}
+    let membership = WorkspaceMembership{user: actor, workspace: workspace}
 
     requires: membership.can_admin
 
-    ensures: workspace.restorable_documents.each(d =>
-        d.status = active,
-        d.deleted_at = null,
-        d.deleted_by = null
-    )
+    ensures:
+        for d in workspace.restorable_documents:
+            d.status = active
+            d.deleted_at = null
+            d.deleted_by = null
 }
 ```
 
 **Key language features shown:**
 - `status` field with clear lifecycle
 - Nullable timestamps (`deleted_at: Timestamp?`)
-- Projections filtering by status (`documents: all_documents with status = active`)
+- Projections filtering by status (`documents: all_documents where status = active`)
 - Derived values using config (`retention_expires_at: deleted_at + config.retention_period`)
 - Temporal trigger for automatic cleanup (`when: document: Document.retention_expires_at <= now`)
 - `not exists` for permanent removal, as distinct from soft delete
-- Bulk operations with `.each()`
+- Bulk operations with `for` iteration
 
 ---
 
@@ -1006,27 +1046,23 @@ This pattern handles in-app notifications with user-controlled email preferences
 ```
 -- notifications.allium
 
-config {
-    max_batch_size: Integer = 50
-}
-
 ------------------------------------------------------------
 -- Entities
 ------------------------------------------------------------
 
 entity User {
-    email: Email
+    email: String
     name: String
     next_digest_at: Timestamp?
 
     -- Relationships
-    notification_settings: NotificationSetting for this user
-    notifications: Notification for this user
+    notification_setting: NotificationSetting with user = this
+    notifications: Notification with user = this
 
     -- Projections
-    unread_notifications: notifications with status = unread
-    pending_email_notifications: notifications with email_status = pending
-    recent_pending_notifications: notifications with email_status = pending and created_at >= now - 24.hours
+    unread_notifications: notifications where status = unread
+    pending_email_notifications: notifications where email_status = pending
+    recent_pending_notifications: notifications where email_status = pending and created_at >= now - 24.hours
 }
 
 entity NotificationSetting {
@@ -1040,7 +1076,7 @@ entity NotificationSetting {
 
     -- Global settings
     digest_enabled: Boolean
-    digest_day_of_week: Set<DayOfWeek>    -- e.g., { monday, wednesday, friday }
+    digest_day_of_week: Set<DayOfWeek>    -- domain type; define as enum in your spec
 }
 
 ------------------------------------------------------------
@@ -1090,7 +1126,7 @@ variant AssignmentNotification : Notification {
 variant SystemNotification : Notification {
     title: String
     body: String
-    link: URL?
+    link: String?
 }
 
 ------------------------------------------------------------
@@ -1112,7 +1148,7 @@ entity DigestBatch {
 rule CreateMentionNotification {
     when: UserMentioned(user, comment, mentioned_by)
 
-    let settings = user.notification_settings
+    let settings = user.notification_setting
 
     requires: user != mentioned_by    -- don't notify self
 
@@ -1129,7 +1165,7 @@ rule CreateMentionNotification {
 rule CreateReplyNotification {
     when: CommentReplied(original_author, reply, original_comment)
 
-    let settings = original_author.notification_settings
+    let settings = original_author.notification_setting
 
     requires: original_author != reply.author    -- don't notify self
 
@@ -1147,7 +1183,7 @@ rule CreateReplyNotification {
 rule CreateShareNotification {
     when: ResourceShared(user, resource, shared_by, permission)
 
-    let settings = user.notification_settings
+    let settings = user.notification_setting
 
     requires: user != shared_by    -- don't notify self
 
@@ -1165,7 +1201,7 @@ rule CreateShareNotification {
 rule CreateAssignmentNotification {
     when: TaskAssigned(user, task, assigned_by)
 
-    let settings = user.notification_settings
+    let settings = user.notification_setting
 
     requires: user != assigned_by    -- don't notify self
 
@@ -1200,7 +1236,7 @@ rule CreateSystemNotification {
 rule SendImmediateEmail {
     when: notification: Notification.created
 
-    let settings = notification.user.notification_settings
+    let settings = notification.user.notification_setting
     let preference =
         if notification.kind = MentionNotification: settings.email_on_mention
         else if notification.kind = ReplyNotification: settings.email_on_comment
@@ -1211,7 +1247,7 @@ rule SendImmediateEmail {
     requires: notification.email_status = pending
     requires: preference = immediately
 
-    ensures: Email.sent(
+    ensures: Email.created(
         to: notification.user.email,
         template: notification_immediate,
         data: { notification: notification }
@@ -1235,7 +1271,9 @@ rule MarkAsRead {
 rule MarkAllAsRead {
     when: MarkAllNotificationsRead(user)
 
-    ensures: user.unread_notifications.each(n => n.status = read)
+    ensures:
+        for n in user.unread_notifications:
+            n.status = read
 }
 
 rule ArchiveNotification {
@@ -1253,9 +1291,9 @@ rule ArchiveNotification {
 rule CreateDailyDigest {
     when: user: User.next_digest_at <= now
 
-    requires: user.notification_settings.digest_enabled
+    requires: user.notification_setting.digest_enabled
 
-    let pending = user.recent_pending_notifications.take(config.max_batch_size)
+    let pending = user.recent_pending_notifications
 
     requires: pending.count > 0
 
@@ -1265,8 +1303,10 @@ rule CreateDailyDigest {
         created_at: now,
         status: pending
     )
-    ensures: pending.each(n => n.email_status = digested)
-    ensures: user.next_digest_at = next_digest_time(user)    -- black box
+    ensures:
+        for n in pending:
+            n.email_status = digested
+    ensures: user.next_digest_at = next_digest_time(user)    -- black box; uses digest_day_of_week
 }
 
 rule SendDigest {
@@ -1275,7 +1315,7 @@ rule SendDigest {
     requires: batch.status = pending
     requires: batch.notifications.count > 0
 
-    ensures: Email.sent(
+    ensures: Email.created(
         to: batch.user.email,
         template: daily_digest,
         data: {
@@ -1294,7 +1334,7 @@ rule SendDigest {
 rule UpdateNotificationPreferences {
     when: UpdatePreferences(user, preferences)
 
-    let settings = user.notification_settings
+    let settings = user.notification_setting
 
     ensures: settings.email_on_mention = preferences.mention
     ensures: settings.email_on_comment = preferences.comment
@@ -1309,7 +1349,7 @@ rule UpdateNotificationPreferences {
 ------------------------------------------------------------
 
 surface NotificationCentre {
-    for user: User
+    facing user: User
 
     exposes:
         user.unread_notifications
@@ -1329,9 +1369,9 @@ surface NotificationCentre {
 }
 
 surface NotificationPreferences {
-    for user: User
+    facing user: User
 
-    context settings: NotificationSetting with user = user
+    context settings: NotificationSetting where user = user
 
     exposes:
         settings.email_on_mention
@@ -1353,7 +1393,7 @@ surface NotificationPreferences {
 - **Exhaustive kind checking**: `SendImmediateEmail` handles all variants explicitly
 - User preferences stored as entity
 - Temporal trigger for per-user digest scheduling (`when: user: User.next_digest_at <= now`)
-- Batching and limiting (`.take(config.max_batch_size)`)
+- Digest batching with temporal trigger
 - Surfaces with `related` clause linking notification centre to preferences
 
 **Why sum types here?**
@@ -1400,33 +1440,35 @@ This pattern handles SaaS usage limits: different plans have different quotas, a
 entity Plan {
     name: String                    -- e.g., "free", "pro", "enterprise"
 
-    -- Limits (-1 = unlimited)
-    max_documents: Integer
-    max_storage_bytes: Integer
-    max_team_members: Integer
-    max_api_requests_per_day: Integer
+    -- Limits (null = unlimited)
+    max_documents: Integer?
+    max_storage_bytes: Integer?
+    max_team_members: Integer?
+    max_api_requests_per_day: Integer?
 
     -- Features
-    features: Set<Feature>
+    features: Set<Feature>          -- domain type; define in your spec
 
     -- Derived
-    has_unlimited_documents: max_documents = -1
-    has_unlimited_storage: max_storage_bytes = -1
-    has_unlimited_members: max_team_members = -1
+    has_unlimited_documents: max_documents = null
+    has_unlimited_storage: max_storage_bytes = null
+    has_unlimited_members: max_team_members = null
 }
 
 entity Workspace {
     name: String
+    owner: User
     plan: Plan
+    api_key: String?
 
     -- Relationships
-    documents: Document for this workspace
-    members: WorkspaceMembership for this workspace
-    usage: WorkspaceUsage for this workspace
+    documents: Document with workspace = this
+    memberships: WorkspaceMembership with workspace = this
+    usage: WorkspaceUsage with workspace = this
 
     -- Derived checks
     can_add_document: plan.has_unlimited_documents or documents.count < plan.max_documents
-    can_add_member: plan.has_unlimited_members or members.count < plan.max_team_members
+    can_add_member: plan.has_unlimited_members or memberships.count < plan.max_team_members
     can_use_feature(f): f in plan.features
 }
 
@@ -1436,9 +1478,11 @@ entity WorkspaceUsage {
     api_requests_today: Integer
     next_reset_at: Timestamp
 
-    -- Derived
+    -- Derived (null when plan has no limit)
     api_requests_remaining:
         workspace.plan.max_api_requests_per_day - api_requests_today
+    has_api_quota: workspace.plan.max_api_requests_per_day != null
+    is_over_api_quota: has_api_quota and api_requests_remaining <= 0
 }
 
 entity UsageEvent {
@@ -1473,12 +1517,10 @@ default Plan pro = {
 
 default Plan enterprise = {
     name: "enterprise",
-    max_documents: -1,                  -- unlimited
-    max_storage_bytes: -1,              -- unlimited
-    max_team_members: -1,               -- unlimited
-    max_api_requests_per_day: -1,       -- unlimited
     features: { basic_editing, advanced_editing, api_access, integrations,
                 sso, audit_log, custom_branding }
+    -- max_documents, max_storage_bytes, max_team_members,
+    -- max_api_requests_per_day all null (unlimited)
 }
 
 ------------------------------------------------------------
@@ -1507,7 +1549,7 @@ rule CreateDocumentLimitReached {
     ensures: UserInformed(
         user: user,
         about: limit_reached,
-        with: {
+        data: {
             limit_type: documents,
             current: workspace.documents.count,
             max: workspace.plan.max_documents,
@@ -1520,7 +1562,7 @@ rule AddTeamMember {
     when: AddMember(actor, workspace, new_member, role)
 
     requires: workspace.can_add_member
-    requires: WorkspaceMembership{actor, workspace}.can_admin
+    requires: WorkspaceMembership{user: actor, workspace: workspace}.can_admin
 
     ensures: WorkspaceMembership.created(...)
     ensures: UsageEvent.created(
@@ -1547,7 +1589,7 @@ rule UseFeatureNotAvailable {
     ensures: UserInformed(
         user: user,
         about: feature_not_available,
-        with: {
+        data: {
             feature: feature,
             available_on: plans_with_feature(feature)
         }
@@ -1563,7 +1605,7 @@ rule RecordApiRequest {
 
     let usage = workspace.usage
 
-    requires: usage.api_requests_remaining > 0
+    requires: not usage.is_over_api_quota
 
     ensures: usage.api_requests_today = usage.api_requests_today + 1
     ensures: UsageEvent.created(
@@ -1579,21 +1621,19 @@ rule ApiRateLimitExceeded {
 
     let usage = workspace.usage
 
-    requires: usage.api_requests_remaining <= 0
+    requires: usage.is_over_api_quota
 
-    ensures: ApiResponse.returned(
+    ensures: ApiResponse.created(
         status: 429,
         body: {
             error: "rate_limit_exceeded",
-            resets_at: tomorrow_midnight
+            resets_at: usage.next_reset_at
         }
     )
 }
 
 rule ResetDailyApiUsage {
     when: usage: WorkspaceUsage.next_reset_at <= now
-
-    requires: usage.api_requests_today > 0
 
     ensures: usage.api_requests_today = 0
     ensures: usage.next_reset_at = usage.next_reset_at + 1.day
@@ -1612,7 +1652,7 @@ rule UpgradePlan {
               or new_plan.has_unlimited_documents
 
     ensures: workspace.plan = new_plan
-    ensures: Email.sent(
+    ensures: Email.created(
         to: workspace.owner.email,
         template: plan_upgraded,
         data: { old_plan: old_plan, new_plan: new_plan }
@@ -1627,12 +1667,13 @@ rule DowngradePlan {
     -- Can only downgrade if under new plan's limits
     requires: workspace.documents.count <= new_plan.max_documents
               or new_plan.has_unlimited_documents
-    requires: workspace.members.count <= new_plan.max_team_members
+    requires: workspace.memberships.count <= new_plan.max_team_members
+              or new_plan.has_unlimited_members
     requires: workspace.usage.storage_bytes_used <= new_plan.max_storage_bytes
               or new_plan.has_unlimited_storage
 
     ensures: workspace.plan = new_plan
-    ensures: Email.sent(
+    ensures: Email.created(
         to: workspace.owner.email,
         template: plan_downgraded,
         data: { old_plan: old_plan, new_plan: new_plan }
@@ -1642,17 +1683,25 @@ rule DowngradePlan {
 rule DowngradeBlocked {
     when: DowngradePlan(workspace, new_plan)
 
-    requires: workspace.documents.count > new_plan.max_documents
-              and not new_plan.has_unlimited_documents
+    let over_documents =
+        workspace.documents.count > new_plan.max_documents
+        and not new_plan.has_unlimited_documents
+    let over_members =
+        workspace.memberships.count > new_plan.max_team_members
+        and not new_plan.has_unlimited_members
+    let over_storage =
+        workspace.usage.storage_bytes_used > new_plan.max_storage_bytes
+        and not new_plan.has_unlimited_storage
+
+    requires: over_documents or over_members or over_storage
 
     ensures: UserInformed(
         user: workspace.owner,
         about: downgrade_blocked,
-        with: {
-            reason: documents,
-            current: workspace.documents.count,
-            new_limit: new_plan.max_documents,
-            must_delete: workspace.documents.count - new_plan.max_documents
+        data: {
+            over_documents: over_documents,
+            over_members: over_members,
+            over_storage: over_storage
         }
     )
 }
@@ -1662,11 +1711,8 @@ rule DowngradeBlocked {
 ------------------------------------------------------------
 
 actor WorkspaceOwner {
-    identified_by: workspace.owner
-}
-
-actor APIConsumer {
-    identified_by: workspace with valid api_key
+    within: Workspace
+    identified_by: User where this = within.owner
 }
 
 ------------------------------------------------------------
@@ -1674,7 +1720,7 @@ actor APIConsumer {
 ------------------------------------------------------------
 
 surface UsageDashboard {
-    for owner: WorkspaceOwner
+    facing owner: WorkspaceOwner
 
     context workspace: Workspace
 
@@ -1682,7 +1728,7 @@ surface UsageDashboard {
         workspace.plan
         workspace.documents.count
         workspace.plan.max_documents
-        workspace.members.count
+        workspace.memberships.count
         workspace.plan.max_team_members
         workspace.usage.storage_bytes_used
         workspace.plan.max_storage_bytes
@@ -1699,22 +1745,17 @@ surface UsageDashboard {
 }
 
 surface APIAccess {
-    for consumer: APIConsumer
-
-    context workspace: Workspace
+    facing consumer: Workspace
 
     exposes:
-        workspace.usage.api_requests_remaining
-        workspace.plan.max_api_requests_per_day
-
-    requires:
-        api_key
+        consumer.usage.api_requests_remaining
+        consumer.plan.max_api_requests_per_day
 
     provides:
-        ApiRequestReceived(workspace, endpoint)
-            when workspace.usage.api_requests_remaining > 0
+        ApiRequestReceived(consumer, endpoint)
+            when not consumer.usage.is_over_api_quota
 
-    invariant: RateLimitEnforcement
+    guarantee: RateLimitEnforcement
         -- Requests beyond the daily limit receive HTTP 429 with
         -- reset time.
 }
@@ -1729,7 +1770,7 @@ surface APIAccess {
 - Temporal trigger for daily reset (`when: usage: WorkspaceUsage.next_reset_at <= now`)
 - Plan upgrade/downgrade logic with `let` binding to capture pre-mutation state
 - Feature flags (`can_use_feature(f)`)
-- Interaction surface for usage dashboard and API surface with rate limit invariant
+- Interaction surface for usage dashboard and API surface with rate limit guarantee
 
 ---
 
@@ -1746,9 +1787,13 @@ This pattern implements comments with @mentions, including mention parsing and n
 -- Entities
 ------------------------------------------------------------
 
-entity Commentable {
-    -- Abstract: could be Document, Task, Project, etc.
-    -- Defined by consuming spec
+external entity User {
+    name: String
+    is_admin: Boolean
+}
+
+external entity Commentable {
+    -- Defined by the consuming spec (e.g., Document, Task, Project)
 }
 
 entity Comment {
@@ -1761,12 +1806,12 @@ entity Comment {
     status: active | deleted
 
     -- Relationships
-    mentions: CommentMention for this comment
+    mentions: CommentMention with comment = this
     replies: Comment with reply_to = this
-    reactions: CommentReaction for this comment
+    reactions: CommentReaction with comment = this
 
     -- Projections
-    active_replies: replies with status = active
+    active_replies: replies where status = active
 
     -- Derived
     is_reply: reply_to != null
@@ -1948,6 +1993,7 @@ rule RemoveReaction {
 
     let reaction = CommentReaction{comment, user, emoji}
 
+    requires: comment.status = active
     requires: exists reaction
 
     ensures: not exists reaction
@@ -1957,6 +2003,8 @@ rule ToggleReaction {
     when: ToggleReaction(user, comment, emoji)
 
     let existing = CommentReaction{comment, user, emoji}
+
+    requires: comment.status = active
 
     ensures:
         if exists existing:
@@ -1975,11 +2023,11 @@ rule ToggleReaction {
 ------------------------------------------------------------
 
 surface CommentThread {
-    for viewer: User
+    facing viewer: User
 
     context parent: Commentable
 
-    let comments = Comment for parent with status = active
+    let comments = Comments where parent = parent and status = active
 
     exposes:
         for comment in comments:
@@ -2001,7 +2049,7 @@ surface CommentThread {
                 when viewer = comment.author or viewer.is_admin
             AddReaction(viewer, comment, emoji)
             RemoveReaction(viewer, comment, emoji)
-                when exists CommentReaction{comment, viewer, emoji}
+                when exists CommentReaction{comment: comment, user: viewer, emoji: emoji}
 
     guidance:
         -- Show "edited" indicator when comment.is_edited.
@@ -2060,19 +2108,19 @@ oauth/config {
 
 -- Our application's User entity, linked to OAuth identities
 entity User {
-    email: Email
+    email: String
     name: String
-    avatar_url: URL?
+    avatar_url: String?
     status: active | suspended | deactivated
     created_at: Timestamp
     last_login_at: Timestamp?
 
     -- Relationship to OAuth sessions (from external spec)
-    sessions: oauth/Session for this user
-    identities: oauth/Identity for this user
+    sessions: oauth/Session with user = this
+    identities: oauth/Identity with user = this
 
     -- Projections
-    active_sessions: sessions with status = active
+    active_sessions: sessions where status = active
 
     -- Derived
     is_authenticated: active_sessions.count > 0
@@ -2116,7 +2164,7 @@ rule CreateUserOnFirstLogin {
             timezone: identity.timezone ?? "UTC",
             locale: identity.locale ?? "en"
         )
-        Email.sent(
+        Email.created(
             to: user.email,
             template: welcome,
             data: { user: user, provider: identity.provider }
@@ -2149,22 +2197,21 @@ rule BlockSuspendedUserLogin {
     ensures: UserInformed(
         user: user,
         about: account_suspended,
-        with: { contact: "support@example.com" }
+        data: { contact: "support@example.com" }
     )
 }
 
 -- When OAuth session expires, we might want to notify
 rule NotifySessionExpiring {
-    when: session: oauth/Session.status becomes expiring
+    when: session: oauth/Session.status transitions_to expiring
 
     let user = session.user
 
     requires: user != null
 
-    ensures: Notification.created(
+    ensures: UserInformed(
         user: user,
-        type: system,
-        title: "Session expiring soon",
+        about: session_expiring,
         data: { time_remaining: session.time_remaining }
     )
 }
@@ -2182,7 +2229,7 @@ rule AuditLogout {
         event: logout,
         reason: reason,
         timestamp: now,
-        metadata: { provider: session.provider, session_id: session.id }
+        metadata: { provider: session.provider, session_start: session.created_at }
     )
 }
 
@@ -2250,13 +2297,14 @@ stripe/config {
 entity Organisation {
     name: String
     owner: User
+    billing_portal_url: String?
 
     -- Link to Stripe customer (from external spec)
     stripe_customer: stripe/Customer?
 
     -- Relationships
-    subscription: Subscription for this organisation
-    invoices: stripe/Invoice for this stripe_customer
+    subscription: Subscription with organisation = this
+    invoices: stripe/Invoice with stripe_customer = this
 
     -- Derived
     is_paying: subscription?.status = active
@@ -2293,11 +2341,11 @@ rule ActivateOnPaymentSuccess {
     let sub = org.subscription
 
     requires: exists org
-    requires: sub.status in [trialing, past_due]
+    requires: sub.status in {trialing, past_due}
 
     ensures: sub.status = active
     ensures: sub.current_period_ends_at = invoice.period_end
-    ensures: Email.sent(
+    ensures: Email.created(
         to: org.owner.email,
         template: payment_confirmed,
         data: { amount: invoice.amount, next_billing: invoice.period_end }
@@ -2315,7 +2363,7 @@ rule HandlePaymentFailure {
     requires: exists org
 
     ensures: sub.status = past_due
-    ensures: Email.sent(
+    ensures: Email.created(
         to: org.owner.email,
         template: payment_failed,
         data: {
@@ -2324,11 +2372,10 @@ rule HandlePaymentFailure {
             update_payment_url: org.billing_portal_url
         }
     )
-    ensures: Notification.created(
+    ensures: UserInformed(
         user: org.owner,
-        type: billing,
-        title: "Payment failed",
-        body: "We couldn't process your payment. Please update your payment method."
+        about: payment_failed,
+        data: { reason: failure_reason }
     )
 }
 
@@ -2342,7 +2389,7 @@ rule TrialEndingReminder {
     let org = sub.organisation
 
     ensures: sub.trial_reminder_sent = true
-    ensures: Email.sent(
+    ensures: Email.created(
         to: org.owner.email,
         template: trial_ending,
         data: {
@@ -2363,7 +2410,7 @@ rule HandleSubscriptionCancelled {
     requires: exists sub
 
     ensures: sub.status = cancelled
-    ensures: Email.sent(
+    ensures: Email.created(
         to: org.owner.email,
         template: subscription_cancelled,
         data: { reason: reason, access_until: sub.current_period_ends_at }
@@ -2383,7 +2430,7 @@ rule HandleSubscriptionCancelled {
 rule StartSubscription {
     when: StartSubscription(org, plan)
 
-    requires: org.subscription = null or org.subscription.status in [cancelled, expired]
+    requires: org.subscription = null or org.subscription.status in {cancelled, expired}
     requires: org.stripe_customer != null
     requires: org.has_payment_method
 
@@ -2414,7 +2461,7 @@ rule CancelSubscription {
 
     let sub = org.subscription
 
-    requires: sub.status in [active, trialing]
+    requires: sub.status in {active, trialing}
 
     ensures: stripe/CancelSubscription(
         subscription: sub.stripe_subscription,
@@ -2433,7 +2480,8 @@ rule CancelSubscription {
 - External spec references with immutable coordinates (`use "github.com/.../abc123" as alias`)
 - Configuration blocks for external specs (`oauth/config { ... }`)
 - Responding to external triggers (`when: oauth/AuthenticationSucceeded(...)`)
-- Responding to external state transitions (`when: stripe/Subscription.status becomes cancelled`)
+- Trigger emissions for cross-pattern notification (`UserInformed(...)`)
+- Responding to external state transitions (`when: session: oauth/Session.status transitions_to expiring`)
 - Using external entities (`oauth/Session`, `stripe/Customer`)
 - Linking application entities to external entities (`stripe_customer: stripe/Customer?`)
 - Triggering external actions (`ensures: stripe/CreateSubscription(...)`)
@@ -2472,7 +2520,7 @@ entity Document {
     deleted_by: User?
 
     -- From comments pattern
-    comments: comments/Comment for this document
+    comments: comments/Comment with document = this
 
     -- From soft-delete pattern
     retention_expires_at: deleted_at + trash/config.retention_period
@@ -2484,7 +2532,7 @@ entity Document {
 rule EditDocument {
     when: EditDocument(user, document, content)
 
-    let share = rbac/ResourceShare{document, user}
+    let share = rbac/ResourceShare{resource: document, user: user}
 
     requires: share.can_edit
     ...
