@@ -174,6 +174,12 @@
                                           :route :expense-categories
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-categories})})
+                               (nav-item {:id "user-sidebar-expense-categories"
+                                          :label "Expense Categories"
+                                          :href "/expense-categories"
+                                          :route :expense-categories-catalog
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-categories-catalog})})
                                (nav-item {:id "user-sidebar-subcategories"
                                           :label "Subcategories"
                                           :href "/subcategories"

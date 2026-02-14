@@ -210,6 +210,58 @@
                                     on-success]))
          :button-text "Save Category"}))))
 
+(def ^:private expense-category-form-spec
+  [{:id :name
+    :type :text
+    :label "Name"
+    :required true
+    :placeholder "e.g. Utilities"}])
+
+(defui user-expense-category-add-form-modal
+  [{:keys [on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "expense-categories"
+         :entity-spec expense-category-form-spec
+         :editing false
+         :initial-values {}
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/create-expense-category-modal values on-success]))
+         :button-text "Save Expense Category"}))))
+
+(defui user-expense-category-edit-form-modal
+  [{:keys [item on-success on-cancel]}]
+  (let [form-error (use-subscribe [:user-expenses/form-error])
+        dynamic-spec (use-subscribe [:form-entity-specs/by-name :expense-categories true])
+        item (normalization/convert-db-keys->app-keys item)
+        expense-category-id (id-utils/extract-entity-id item)
+        initial-values (-> {}
+                         (assoc :name (or (:name item) ""))
+                         (assoc :id (or (:id item) "")))]
+    ($ :div {:class "space-y-4"}
+      (when form-error
+        ($ :div {:class "ds-alert ds-alert-error"}
+          ($ :span form-error)))
+
+      ($ form
+        {:entity-name "expense-categories"
+         :entity-spec (when-not (seq dynamic-spec) expense-category-form-spec)
+         :editing true
+         :initial-values initial-values
+         :on-cancel on-cancel
+         :on-submit (fn [{:keys [values]}]
+                      (rf/dispatch [:user-expenses/update-expense-category-modal
+                                    (some-> expense-category-id str)
+                                    values
+                                    on-success]))
+         :button-text "Save Expense Category"}))))
+
 (def ^:private city-form-spec
   [{:id :name
     :type :text

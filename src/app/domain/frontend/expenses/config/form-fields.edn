@@ -38,6 +38,7 @@
   ["purchased_at"
    "supplier_id"
    "payer_id"
+   "expense_category_id"
    "currency"
    "total_amount"
    "notes"
@@ -46,6 +47,7 @@
   ["purchased_at"
    "supplier_id"
    "payer_id"
+   "expense_category_id"
    "currency"
    "total_amount"
    "notes"
@@ -58,6 +60,10 @@
     :options ["suppliers" "display_name"]},
    :payer_id
    {:type "select", :label "Payer", :options ["payers" "label"]},
+   :expense_category_id
+   {:type "select",
+    :label "Expense Category",
+    :options ["expense-categories" "name"]},
    :currency
    {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]},
    :total_amount {:type "number", :step 0.01},
@@ -89,6 +95,10 @@
   :field-config
   {:name {:type "text", :label "Name"},
    :description {:type "textarea", :label "Description"}}}
+ :expense-categories
+ {:create-fields ["name"],
+  :edit-fields ["name"],
+  :field-config {:name {:type "text", :label "Name"}}}
  :cities
  {:create-fields ["name"],
   :edit-fields ["name"],

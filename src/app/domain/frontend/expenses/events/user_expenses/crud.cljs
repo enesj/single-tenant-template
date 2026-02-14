@@ -149,6 +149,24 @@
             :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
 
 (crud-bridges/register-crud-bridge!
+  {:entity-key :expense-categories
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:fetch
+    {:request
+     (fn [{:keys [db]} entity-type default-effect]
+       (assoc default-effect
+         :db (assoc-in db (paths/entity-loading? entity-type) true)
+         :http-xhrio
+         (http/api-request
+           {:method :get
+            :uri (lookup-uri endpoints/expense-categories-endpoint)
+            :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
+            :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]})))}}})
+
+(crud-bridges/register-crud-bridge!
   {:entity-key :subcategories
    :bridge-id :expenses-user-lookups
    :priority 90
@@ -480,6 +498,25 @@
            :http-xhrio (http/api-request
                          {:method :delete
                           :uri (str endpoints/suppliers-endpoint "/batch")
+                          :params {:ids ids*}
+                          :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
+                          :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]}))))}}})
+
+(crud-bridges/register-crud-bridge!
+  {:entity-key :expense-categories
+   :bridge-id :expenses-user-lookups
+   :priority 90
+   :context-pred user-ui-context?
+   :operations
+   {:batch-delete
+    {:request
+     (fn [{:keys [db]} entity-type ids default-effect]
+       (let [ids* (normalize-id-list ids)]
+         (assoc default-effect
+           :db (assoc-in db (paths/entity-loading? entity-type) true)
+           :http-xhrio (http/api-request
+                         {:method :delete
+                          :uri (str endpoints/expense-categories-endpoint "/batch")
                           :params {:ids ids*}
                           :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
                           :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]}))))}}})

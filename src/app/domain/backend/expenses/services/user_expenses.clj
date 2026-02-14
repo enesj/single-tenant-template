@@ -123,7 +123,7 @@
   - any updatable expense columns (snake_case keys)
 
   Only the following keys are applied:
-  :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id
+  :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id
 
   Returns:
   {:updated n
@@ -131,7 +131,7 @@
    :errors  [{:id <uuid-or-raw> :error <msg>} ...]}"
   [db user-id items]
   (let [user-id (ensure-uuid user-id)
-        allowed-keys #{:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id}
+        allowed-keys #{:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id}
         items (vec (or items []))
         try-uuid type-conv/try-parse-uuid]
     (when-not user-id
@@ -183,10 +183,12 @@
                                           [:s.display_name :supplier_display_name]
                                           [:s.normalized_key :supplier_normalized_key]
                                           [:p.label :payer_label]
-                                          [:p.payer_type_id :payer_type_id]]
+                                          [:p.payer_type_id :payer_type_id]
+                                          [:ec.name :expense_category_name]]
                                  :from [[:expenses :e]]
                                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                                             [:payers :p] [:= :p.id :e.payer_id]]
+                                             [:payers :p] [:= :p.id :e.payer_id]
+                                             [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                                  :where [:and
                                          [:= :e.id expense-id]
                                          [:= :e.user_id user-id]]})
@@ -226,11 +228,13 @@
                           [:s.display_name :supplier_display_name]
                           [:s.normalized_key :supplier_normalized_key]
                           [:p.label :payer_label]
-                          [:pt.label :payer_type]]
+                          [:pt.label :payer_type]
+                          [:ec.name :expense_category_name]]
                  :from [[:expenses :e]]
                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                              [:payers :p] [:= :p.id :e.payer_id]
-                             [:payer_types :pt] [:= :pt.id :p.payer_type_id]]
+                             [:payer_types :pt] [:= :pt.id :p.payer_type_id]
+                             [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                  :where base-where
                  :order-by [[:e.purchased_at order-dir]]
                  :limit limit

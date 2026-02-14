@@ -68,6 +68,12 @@
    :log-prefix "[expenses] Syncing categories to template:"})
 
 (entity-utils/register-sync-event!
+  {:event-id ::sync-expense-categories
+   :entity-key :expense-categories
+   :normalize-fn normalize/expense-category->template-entity
+   :log-prefix "[expenses] Syncing expense categories to template:"})
+
+(entity-utils/register-sync-event!
   {:event-id ::sync-cities
    :entity-key :cities
    :normalize-fn normalize/city->template-entity
@@ -148,6 +154,8 @@
   {:sync-event-id ::sync-manufacturers})
 (entity-sync/register-sync-handler! :categories
   {:sync-event-id ::sync-categories})
+(entity-sync/register-sync-handler! :expense-categories
+  {:sync-event-id ::sync-expense-categories})
 (entity-sync/register-sync-handler! :cities
   {:sync-event-id ::sync-cities})
 (entity-sync/register-sync-handler! :countries
@@ -177,6 +185,7 @@
 (form-interceptors/register-bridge-entity! :suppliers)
 (form-interceptors/register-bridge-entity! :manufacturers)
 (form-interceptors/register-bridge-entity! :categories)
+(form-interceptors/register-bridge-entity! :expense-categories)
 (form-interceptors/register-bridge-entity! :cities)
 (form-interceptors/register-bridge-entity! :countries)
 (form-interceptors/register-bridge-entity! :subcategories)

@@ -30,6 +30,21 @@
    :custom-count-params (fn [qp]
                           {:search (:search qp)})})
 
+(def expense-category-config
+  {:entity-key :expense-category
+   :entity-plural :expense-categories
+   :route-segment "expense-categories"
+   :service 'app.domain.backend.expenses.services.expense-categories
+   :default-limit 100
+   :default-order-by "name"
+   :required-fields [:name]
+   :has-count? true
+   :has-search? true
+   :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
+                          {:search (:search qp)})})
+
 (def subcategory-config
   {:entity-key :subcategory
    :entity-plural :subcategories
@@ -307,6 +322,7 @@
 (def entity-configs
   "Map of all entity configurations for easy lookup."
   {:categories category-config
+   :expense-categories expense-category-config
    :subcategories subcategory-config
    :suppliers supplier-config
    :stores store-config

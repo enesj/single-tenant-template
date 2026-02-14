@@ -67,7 +67,7 @@
         forbidden
         (try
           (let [body (or (:body-params request) (json/parse-string (slurp (:body request)) true))
-                expense-data (select-keys body [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
+                expense-data (select-keys body [:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
                 items (or (:items body) [])]
             (log/debug "Creating user expense" {:user-id user-id :expense-data expense-data})
             (let [expense (user-expenses/create-user-expense! db user-id expense-data items)]
@@ -92,7 +92,7 @@
           (if expense-id
             (try
               (let [body (h/read-body-params request)
-                    updates (select-keys body [:supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted :items])]
+                    updates (select-keys body [:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :items])]
                 (if-let [expense (user-expenses/update-user-expense! db user-id expense-id updates)]
                   (h/json-response {:data expense})
                   (h/not-found-response "Expense not found or access denied")))
@@ -124,8 +124,8 @@
               (if-let [_expense (user-expenses/delete-user-expense! db user-id expense-id)]
                 (do
                   (log/info "User deleted expense" {:user-id user-id
-                                                     :expense-id expense-id
-                                                     :timestamp (java.time.Instant/now)})
+                                                    :expense-id expense-id
+                                                    :timestamp (java.time.Instant/now)})
                   {:status 204})
                 (h/not-found-response "Expense not found or access denied"))
               (catch Exception e

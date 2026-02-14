@@ -41,6 +41,7 @@
     "/expense-items"
     "/articles"
     "/manufacturers"
+    "/expense-categories"
     "/article-aliases"
     "/supplier-aliases"
     "/stores"

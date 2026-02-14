@@ -4,6 +4,7 @@
     [app.domain.frontend.expenses.events.article-alias-bulk]
     [app.domain.frontend.expenses.events.article-aliases]
     [app.domain.frontend.expenses.events.articles]
+    [app.domain.frontend.expenses.events.expense-categories]
     [app.domain.frontend.expenses.events.expenses]
     [app.domain.frontend.expenses.events.payers]
     [app.domain.frontend.expenses.events.price-observations]

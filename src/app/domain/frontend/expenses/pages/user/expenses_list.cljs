@@ -131,6 +131,7 @@
         ;; Reference data for FK columns in the list-view (supplier & payer)
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
         js/undefined)
       [refresh-list])
 

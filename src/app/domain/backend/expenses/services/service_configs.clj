@@ -416,6 +416,24 @@
    :has-search? true
    :has-count? true})
 
+(def expense-category-config
+  {:table-name "expense_categories"
+   :primary-key :id
+   :required-fields [:name]
+   :allowed-order-by {:name :name
+                      :created-at :created_at
+                      :updated-at :updated_at}
+   :default-order-by :name
+   :search-fields [:name]
+   :before-insert (fn [data]
+                    (-> data
+                      (assoc :id (UUID/randomUUID))))
+   :before-update (fn [_id updates]
+                    (-> updates
+                      (assoc :updated_at [:now])))
+   :has-search? true
+   :has-count? true})
+
 (def city-config
   {:table-name "cities"
    :primary-key :id
@@ -692,6 +710,7 @@
    :store store-config
    :manufacturer manufacturer-config
    :category category-config
+   :expense-category expense-category-config
    :city city-config
    :subcategory subcategory-config
    :payer-type payer-type-config

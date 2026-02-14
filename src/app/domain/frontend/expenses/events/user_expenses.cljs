@@ -8,6 +8,7 @@
     app.domain.frontend.expenses.events.user-expenses.by-month
     app.domain.frontend.expenses.events.user-expenses.by-supplier
     app.domain.frontend.expenses.events.user-expenses.categories
+    app.domain.frontend.expenses.events.user-expenses.expense-categories
     app.domain.frontend.expenses.events.user-expenses.cities
     app.domain.frontend.expenses.events.user-expenses.crud
     app.domain.frontend.expenses.events.user-expenses.dashboard

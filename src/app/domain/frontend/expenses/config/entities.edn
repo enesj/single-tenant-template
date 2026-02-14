@@ -8,6 +8,7 @@
  :price-observations {:title "Price Observations"},
  :payers {:title "Payers"},
  :categories {:title "Categories"}
+ :expense-categories {:title "Expense Categories"}
  :cities {:title "Cities"},
  :supplier-aliases {:title "Supplier Aliases"},
  :receipts {:title "Receipts"},

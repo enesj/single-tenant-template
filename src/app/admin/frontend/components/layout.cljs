@@ -62,6 +62,7 @@
                          :href "/admin/categories"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-categories)}
+
                         {:id "admin-sidebar-expenses-subcategories"
                          :label "Subcategories"
                          :href "/admin/subcategories"

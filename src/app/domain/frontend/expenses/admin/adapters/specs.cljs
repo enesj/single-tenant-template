@@ -12,6 +12,7 @@
             {:id :supplier-normalized-key :label "Supplier key" :type :text}
             {:id :payer-label :label "Payer" :type :text}
             {:id :payer-type :label "Payer type" :type :text}
+            {:id :expense-category-name :label "Expense Category" :type :text}
             {:id :total-amount :label "Total" :type :number}
             {:id :currency :label "Currency" :type :text}
             {:id :purchased-at :label "Purchased at" :type :datetime}
@@ -43,6 +44,12 @@
             {:id :normalized-key :label "Normalized key" :type :text}
             {:id :address :label "Address" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
+
+(def expense-categories-entity-spec
+  {:id :expense-categories
+   :fields [{:id :name :label "Name" :type :text}
+            {:id :created-at :label "Created at" :type :datetime}
+            {:id :updated-at :label "Updated at" :type :datetime}]})
 
 (def manufacturers-entity-spec
   {:id :manufacturers
@@ -148,6 +155,10 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :suppliers
    :value-fn (fn [spec _] (or spec suppliers-entity-spec))})
+
+(entity-utils/register-entity-spec-sub!
+  {:entity-key :expense-categories
+   :value-fn (fn [spec _] (or spec expense-categories-entity-spec))})
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :manufacturers

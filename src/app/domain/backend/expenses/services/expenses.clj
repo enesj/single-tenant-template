@@ -204,6 +204,7 @@
     (update-if-present :user_id #(parse-uuid! :user_id %))
     (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
     (update-if-present :store_id #(parse-uuid! :store_id %))
+    (update-if-present :expense_category_id #(parse-uuid! :expense_category_id %))
     (update-if-present :purchased_at #(parse-instant! :purchased_at %))
     (update-if-present :total_amount #(parse-bigdec! :total_amount %))
     (update-if-present :currency #(some-> % str str/trim blank->nil))
@@ -270,11 +271,13 @@
                                         [:s.display_name :supplier_display_name]
                                         [:s.normalized_key :supplier_normalized_key]
                                         [:p.label :payer_label]
-                                        [:pt.label :payer_type]]
+                                        [:pt.label :payer_type]
+                                        [:ec.name :expense_category_name]]
                                :from [[:expenses :e]]
                                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                                            [:payers :p] [:= :p.id :e.payer_id]
-                                           [:payer_types :pt] [:= :pt.id :p.payer_type_id]]
+                                           [:payer_types :pt] [:= :pt.id :p.payer_type_id]
+                                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                                :where [:= :e.id id]})
                   {:builder-fn rs/as-unqualified-lower-maps})
         items (jdbc/execute!
@@ -312,11 +315,13 @@
                         [:s.display_name :supplier_display_name]
                         [:s.normalized_key :supplier_normalized_key]
                         [:p.label :payer_label]
-                        [:pt.label :payer_type]]
+                        [:pt.label :payer_type]
+                        [:ec.name :expense_category_name]]
                :from [[:expenses :e]]
                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                            [:payers :p] [:= :p.id :e.payer_id]
-                           [:payer_types :pt] [:= :pt.id :p.payer_type_id]]
+                           [:payer_types :pt] [:= :pt.id :p.payer_type_id]
+                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                :where base-where
                :order-by [[:e.purchased_at order-dir]]
                :limit limit
@@ -376,6 +381,7 @@
                            (select-keys [:store_id
                                          :supplier_id
                                          :payer_id
+                                         :expense_category_id
                                          :user_id
                                          :receipt_id
                                          :purchased_at
@@ -446,7 +452,7 @@
         updates* (-> body
                    (dissoc :items)
                    normalize-expense-data
-                   (select-keys [:store_id :supplier_id :payer_id :purchased_at :total_amount :currency :notes :is_posted])
+                   (select-keys [:store_id :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted])
                    (update-if-present :currency #(when % [:cast % :currency]))
                    (assoc :updated_at [:now]))]
     (jdbc/with-transaction [tx db]

@@ -124,6 +124,7 @@
  {:available-columns
   ["purchased_at"
    "supplier_display_name"
+   "expense_category_name"
    "payer_label"
    "currency"
    "total_amount"
@@ -136,14 +137,17 @@
    "updated_at"
    "user_id"
    "supplier_id"
+   "expense_category_id"
    "payer_id"
    "store_id"],
   :computed-fields
-  {:supplier_display_name {:type "string", :label "Supplier"},
+  {:supplier_display_name {:type "string", :label "Supplier"}
+   :expense_category_name {:type "string", :label "Expense Category"}
    :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
+   "expense_category_name"
    "payer_label"
    "currency"
    "total_amount"
@@ -151,6 +155,7 @@
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
+   "expense_category_name"
    "payer_label"
    "currency"
    "total_amount"
@@ -160,6 +165,7 @@
   :sortable-columns
   ["purchased_at"
    "supplier_display_name"
+   "expense_category_name"
    "payer_label"
    "currency"
    "total_amount"
@@ -232,6 +238,13 @@
   ["name" "description" "created_at" "updated_at" "id"],
   :default-visible-columns ["name" "description" "created_at"],
   :filterable-columns ["name" "description" "created_at"],
+  :sortable-columns ["name" "created_at" "updated_at"],
+  :always-visible ["name"]}
+ :expense-categories
+ {:available-columns
+  ["name" "created_at" "updated_at" "id"],
+  :default-visible-columns ["name" "created_at"],
+  :filterable-columns ["name" "created_at"],
   :sortable-columns ["name" "created_at" "updated_at"],
   :always-visible ["name"]}
  :cities

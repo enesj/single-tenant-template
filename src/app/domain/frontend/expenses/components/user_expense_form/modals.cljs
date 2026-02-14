@@ -49,6 +49,7 @@
         (set-requested! true)
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
         js/undefined)
       [])
 
@@ -99,11 +100,12 @@
         detail-error (use-subscribe [:user-expenses/current-expense-error])
         suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
+        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
 
         ;; Memoize entity-spec
         entity-spec (use-memo
-                      #(specs/get-expense-form-spec suppliers payers)
-                      [suppliers payers])
+                      #(specs/get-expense-form-spec suppliers payers {:expense-categories expense-categories})
+                      [suppliers payers expense-categories])
 
         ;; Default values for expense form
         ;; Memoized to keep identity stable across renders (prevents fork resets).
@@ -119,6 +121,7 @@
       (fn []
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
         js/undefined)
       [])
 

@@ -53,7 +53,7 @@
   Optional opts support the receipt-approval UX."
   ([suppliers payers]
    (get-expense-form-spec suppliers payers nil))
-  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items?]}]
+  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories]}]
    (let [receipt-id* (or receipt-id (:id receipt))
          receipt-id-str (some-> receipt-id* str)
          receipt-supplier-guess (some-> (or (:supplier-guess receipt) supplier-guess)
@@ -88,6 +88,15 @@
                                      (when (:type p)
                                        (str " (" (:type p) ")")))})
                       payers)}
+          {:id :expense_category_id
+           :type :select
+           :label "Expense Category"
+           :required false
+           :placeholder "Optional"
+           :options (map (fn [c]
+                           {:value (:id c)
+                            :label (:name c)})
+                      (or expense-categories []))}
           {:id :purchased_at
            :type :datetime-local
            :label "Purchased at"

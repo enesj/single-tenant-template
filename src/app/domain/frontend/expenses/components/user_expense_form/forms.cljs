@@ -24,6 +24,7 @@
   [{:keys [mode initial-data on-submit on-cancel receipt-approval? supplier-guess]}]
   (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
+        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
         form-error (use-subscribe [:user-expenses/form-error])
         [validation-error set-validation-error!] (use-state nil)
 
@@ -34,8 +35,9 @@
                          {:receipt-approval? receipt-approval?
                           :supplier-guess supplier-guess
                           :receipt nil
-                          :receipt-id nil})
-                      [suppliers payers receipt-approval? supplier-guess])
+                          :receipt-id nil
+                          :expense-categories expense-categories})
+                      [suppliers payers expense-categories receipt-approval? supplier-guess])
 
         ;; Memoize initial values so fork/form doesn't reset on every render.
         ;; Use initial-data identity as the dependency (it's passed from parent).
@@ -96,6 +98,7 @@
            split-layout?]}]
   (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
+        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
         form-error (use-subscribe [:user-expenses/form-error])
         [validation-error set-validation-error!] (use-state nil)
 
@@ -105,8 +108,9 @@
                               {:receipt-approval? true
                                :supplier-guess (some-> receipt :supplier-guess)
                                :receipt receipt
-                               :receipt-id receipt-id})
-                           [suppliers payers receipt receipt-id])
+                               :receipt-id receipt-id
+                               :expense-categories expense-categories})
+                           [suppliers payers expense-categories receipt receipt-id])
 
         ;; Spec without line items for split layout
         fields-only-spec (use-memo
@@ -115,8 +119,9 @@
                                :supplier-guess (some-> receipt :supplier-guess)
                                :receipt receipt
                                :receipt-id receipt-id
+                               :expense-categories expense-categories
                                :exclude-line-items? true})
-                           [suppliers payers receipt receipt-id])
+                           [suppliers payers expense-categories receipt receipt-id])
 
         ;; Line items spec
         line-items-spec (use-memo
@@ -133,14 +138,15 @@
 
         rid-str (or (some-> receipt-id str) "unknown")
         clear-errors! (fn [e]
-            (.preventDefault e)
-            (set-validation-error! nil)
-            (rf/dispatch [:user-expenses/clear-form-error]))]
+                        (.preventDefault e)
+                        (set-validation-error! nil)
+                        (rf/dispatch [:user-expenses/clear-form-error]))]
 
     (use-effect
       (fn []
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
         js/undefined)
       [])
 

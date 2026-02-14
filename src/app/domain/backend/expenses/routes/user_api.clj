@@ -8,6 +8,7 @@
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-categories :as user-categories]
     [app.domain.backend.expenses.handlers.user-cities :as user-cities]
+    [app.domain.backend.expenses.handlers.user-expense-categories :as user-expense-categories]
     [app.domain.backend.expenses.handlers.user-expenses.article-aliases :as user-expenses-article-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.batch :as user-expenses-batch]
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
@@ -175,6 +176,15 @@
     ["/batch" {:delete {:handler (user-categories/batch-delete-categories-handler db)}}]
 
     ["/:id" {:put {:handler (user-categories/update-category-handler db)}}]]
+
+   ;; Expense Categories (admin/owner only)
+   ["/expense-categories"
+    ["" {:get {:handler (user-expense-categories/list-expense-categories-handler db)}
+         :post {:handler (user-expense-categories/create-expense-category-handler db)}}]
+
+    ["/batch" {:delete {:handler (user-expense-categories/batch-delete-expense-categories-handler db)}}]
+
+    ["/:id" {:put {:handler (user-expense-categories/update-expense-category-handler db)}}]]
 
    ;; Subcategories (admin/owner only)
    ["/subcategories"

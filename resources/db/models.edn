@@ -121,6 +121,9 @@
     :uuid
     {:foreign-key :suppliers/id, :null false, :on-delete :restrict}]
    [:payer_id :uuid {:foreign-key :payers/id, :null false}]
+   [:expense_category_id
+    :uuid
+    {:foreign-key :expense_categories/id, :on-delete :set-null}]
    [:purchased_at :timestamptz {:null false}]
    [:total_amount [:decimal 12 2] {:null false}]
    [:currency [:enum :currency] {:null false, :default "BAM"}]
@@ -135,6 +138,9 @@
    [:idx_expenses_store :btree {:fields [:store_id]}]
    [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
    [:idx_expenses_payer :btree {:fields [:payer_id]}]
+   [:idx_expenses_expense_category
+    :btree
+    {:fields [:expense_category_id]}]
    [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]
    [:idx_expenses_is_posted :btree {:fields [:is_posted]}]]},
  :password_reset_tokens
@@ -330,6 +336,16 @@
    [:idx_expense_items_article :btree {:fields [:article_id]}]
    [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]
    [:idx_expense_items_alias :btree {:fields [:alias_id]}]]},
+ :expense_categories
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:name [:varchar 255] {:null false}]
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
+  :indexes
+  [[:idx_expense_categories_name
+    :btree
+    {:fields [:name], :unique true}]]},
  :receipts
  {:fields
   [[:id :uuid {:primary-key true}]

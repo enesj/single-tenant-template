@@ -106,13 +106,13 @@
                    :else "BAM")
 
         supplier (or (:supplier-guess-supplier receipt)
-             (:receipts/supplier-guess-supplier receipt))
+                   (:receipts/supplier-guess-supplier receipt))
         supplier-id (when (map? supplier) (:id supplier))
 
         payer-id (or (:payer-id receipt)
-             (:payer_id receipt)
-             (:receipts/payer-id receipt)
-             (:receipts/payer_id receipt))
+                   (:payer_id receipt)
+                   (:receipts/payer-id receipt)
+                   (:receipts/payer_id receipt))
 
         normalize-item (fn [item]
                          (let [id (random-uuid)
@@ -133,7 +133,8 @@
                    (:storage-key receipt)
                    "(unknown)")]
     {:supplier_id supplier-id
-      :payer_id payer-id
+     :payer_id payer-id
+     :expense_category_id nil
      :purchased_at (datetime-local purchased-at true)
      :total_amount (if (number? total-amount) (format-decimal total-amount) "")
      :currency currency
@@ -198,6 +199,7 @@
                  :line_total_auto? auto?}))]
       (let [supplier-id (or (:supplier-id expense) (:expenses/supplier-id expense))
             payer-id (or (:payer-id expense) (:expenses/payer-id expense))
+            expense-category-id (or (:expense-category-id expense) (:expenses/expense-category-id expense))
             purchased-at (or (:purchased-at expense) (:expenses/purchased-at expense))
             total-amount (or (:total-amount expense) (:expenses/total-amount expense))
             currency (or (:currency expense) "BAM")
@@ -208,6 +210,7 @@
                                [(new-line-item)])]
         {:supplier_id supplier-id
          :payer_id payer-id
+         :expense_category_id expense-category-id
          :purchased_at (datetime-local purchased-at true)
          :total_amount total-amount
          :currency currency
@@ -294,6 +297,7 @@
         effective-total (or parsed-total (when (pos? computed-total) computed-total))]
     {:supplier_id (:supplier_id values)
      :payer_id (:payer_id values)
+     :expense_category_id (:expense_category_id values)
      :purchased_at (:purchased_at values)
      :currency (:currency values)
      :notes (:notes values)
