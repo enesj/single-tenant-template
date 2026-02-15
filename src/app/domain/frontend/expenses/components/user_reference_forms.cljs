@@ -72,7 +72,7 @@
         ;; Build initial values from data, covering all possible fields.
         ;; The dynamic form spec uses kebab-case IDs, but our entities may be snake_case.
         initial-values (-> (norm/convert-db-keys->app-keys (or initial-data {}))
-                         (select-keys [:display-name :address :id :normalized-key :archived-at]))]
+                         (select-keys [:display-name :address :id :normalized-key]))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -142,9 +142,9 @@
         ;; Dynamic form spec uses kebab-case IDs (e.g. :payer-type-id, :is-default).
         ;; The entity data often uses snake_case keys.
         initial-values (-> (norm/convert-db-keys->app-keys (or initial-data {}))
-             (select-keys [:label :payer-type-id :is-default :id :last4])
-             (update :payer-type-id #(or (when % (str %)) default-type-id))
-             (update :is-default boolean))]
+                         (select-keys [:label :payer-type-id :is-default :id])
+                         (update :payer-type-id #(or (when % (str %)) default-type-id))
+                         (update :is-default boolean))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}

@@ -7,9 +7,9 @@ Canonical schema is materialized in `resources/db/models.edn`, generated from th
 ## Tables & Types
 
 ### `users`
-- **Fields**: `id` (uuid, pk), `email` (varchar 255, unique, validated), `full_name`, `password_hash` (text, required), `role` (`user-role`, default `member`), `status` (`user-status`, default `active`), `last_login_at` (timestamptz), `avatar_url`, `auth_provider` (text, default `"password"`), `provider_user_id`, `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).
-- **Enums**: `user-role` = `admin | member | viewer`; `user-status` = `active | inactive | suspended`.
-- **Indexes**: `idx_users_email` (unique), `idx_users_status`, `idx_users_created_at`, `idx_users_auth_provider_provider_user_id_external` (unique where auth_provider <> password).
+- **Fields**: `id` (uuid, pk), `email` (varchar 255, unique, validated), `full_name`, `password_hash` (text, required), `role` (`user-role`, default `unassigned`), `status` (`user-status`, default `active`), `email_verified` (boolean, default `false`), `last_login_at` (timestamptz), `avatar_url`, `auth_provider` (text, default `"password"`), `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).
+- **Enums**: `user-role` = `admin | member | viewer | unassigned`; `user-status` = `active | inactive | suspended`.
+- **Indexes**: `idx_users_email` (unique), `idx_users_status`, `idx_users_email_verified`, `idx_users_created_at`.
 
 ### `admins`
 - **Fields**: `id` (uuid, pk), `email` (varchar 255, unique, validated), `full_name`, `password_hash` (text, required), `role` (`admin-role`, default `admin`), `status` (`admin-status`, default `active`), `last_login_at` (timestamptz), `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).

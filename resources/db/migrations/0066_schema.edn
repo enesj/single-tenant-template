@@ -1,0 +1,4 @@
+({:action :drop-index,
+  :index-name :idx-stores-place-id,
+  :model-name :stores}
+ {:action :drop-column, :field-name :place-id, :model-name :stores})

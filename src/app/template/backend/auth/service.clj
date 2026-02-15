@@ -33,12 +33,10 @@
   (case provider
     :google {:email (:email oauth-data)
              :full-name (:name oauth-data)
-             :avatar-url (:picture oauth-data)
-             :provider-user-id (:sub oauth-data)}
+             :avatar-url (:picture oauth-data)}
     :github {:email (:email oauth-data)
              :full-name (:name oauth-data)
-             :avatar-url (:avatar_url oauth-data)
-             :provider-user-id (str (:id oauth-data))}
+             :avatar-url (:avatar_url oauth-data)}
     {}))
 
 ;; ============================================================================
@@ -174,8 +172,8 @@
 
     ;; 0a) Validate email format before hitting the database so we never
     ;; rely on the users_email_check constraint for user-visible errors.
-  (when-not (or (email-patterns/valid-email? email)
-        (email-patterns/valid-email-simple? email))
+    (when-not (or (email-patterns/valid-email? email)
+                (email-patterns/valid-email-simple? email))
       (throw (ex-info "Invalid email format"
                {:type :validation-error
                 :errors {:email ["Please enter a valid email address"]}})))
@@ -203,7 +201,7 @@
                          :role shared-auth/role-member
                          :status "active"
                          :auth_provider "password"
-                         :provider_user_id nil
+
                          :created_at now
                          :updated_at now})
           user-plain (db-user->plain user-record)
@@ -239,7 +237,7 @@
                 :errors {:email ["Invalid email or password"]}})))
 
     ;; Verify password - handle both namespaced and non-namespaced keys
-        (let [user (db-user->plain user-record)
+    (let [user (db-user->plain user-record)
           password-hash (:password_hash user)
           user-status (:status user)]
 
@@ -320,7 +318,7 @@
                                 update-data {:full_name (:full-name normalized)
                                              :avatar_url (:avatar-url normalized)
                                              :auth_provider (name provider)
-                                             :provider_user_id (:provider-user-id normalized)
+
                                              :updated_at now}]
                             (db-protocols/update-record db metadata :users user-id update-data)
                             (db-protocols/find-by-id db :users user-id))
@@ -334,7 +332,7 @@
                                              :role shared-auth/role-admin    ;; highest available user role in this starter
                                              :status "active"
                                              :auth_provider (name provider)
-                                             :provider_user_id (:provider-user-id normalized)
+
                                              :created_at now
                                              :updated_at now}]
                             (db-protocols/create db metadata :users create-data)))

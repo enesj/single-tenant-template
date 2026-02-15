@@ -59,7 +59,7 @@
 
 (defn create-user!
   "Create a new user (single-tenant)."
-  [db {:keys [email full_name role status auth_provider provider_user_id]} _admin-id _ip-address _user-agent]
+  [db {:keys [email full_name role status auth_provider]} _admin-id _ip-address _user-agent]
   (let [user-id (UUID/randomUUID)
         now (time/instant)]
     (jdbc/with-transaction [tx db]
@@ -71,7 +71,6 @@
                                 :role (tc/cast-for-database :user-role (or role "member"))
                                 :status (tc/cast-for-database :user-status (or status "active"))
                                 :auth_provider (tc/cast-for-database :text (or auth_provider "email"))
-                                :provider_user_id provider_user_id
                                 :created_at now
                                 :updated_at now}]}))
       (first (jdbc/execute! tx

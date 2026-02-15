@@ -20,7 +20,6 @@
    [:display_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
-   [:archived_at :timestamptz]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :indexes
@@ -90,7 +89,6 @@
   [[:id :uuid {:primary-key true}]
    [:canonical_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
-   [:category [:varchar 100]]
    [:subcategory_id
     :uuid
     {:foreign-key :subcategories/id, :on-delete :set-null}]
@@ -104,7 +102,6 @@
   [[:idx_articles_normalized_key
     :btree
     {:fields [:normalized_key], :unique true}]
-   [:idx_articles_category :btree {:fields [:category]}]
    [:idx_articles_subcategory_id :btree {:fields [:subcategory_id]}]
    [:idx_articles_manufacturer_id
     :btree
@@ -129,7 +126,6 @@
    [:currency [:enum :currency] {:null false, :default "BAM"}]
    [:notes :text]
    [:is_posted :boolean {:default true, :null false}]
-   [:deleted_at :timestamptz]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]],
@@ -250,7 +246,6 @@
     :uuid
     {:foreign-key :payer_types/id, :on-delete :set-null}]
    [:label [:varchar 255] {:null false}]
-   [:last4 [:varchar 4]]
    [:is_default :boolean {:default false}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
@@ -321,7 +316,6 @@
    [:expense_id
     :uuid
     {:foreign-key :expenses/id, :null false, :on-delete :cascade}]
-   [:raw_label_id :uuid {:foreign-key :raw_labels/id}]
    [:alias_id :uuid {:foreign-key :article_aliases/id}]
    [:article_id
     :uuid
@@ -329,12 +323,10 @@
    [:qty [:decimal 10 3]]
    [:unit_price [:decimal 12 2]]
    [:line_total [:decimal 12 2] {:null false}]
-   [:deleted_at :timestamptz]
    [:created_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
    [:idx_expense_items_article :btree {:fields [:article_id]}]
-   [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]
    [:idx_expense_items_alias :btree {:fields [:alias_id]}]]},
  :expense_categories
  {:fields
@@ -357,7 +349,6 @@
    [:content_type [:varchar 100]]
    [:file_size :integer]
    [:status [:enum :receipt-status] {:null false, :default "uploaded"}]
-   [:raw_parse_json :jsonb]
    [:raw_extract_json :jsonb]
    [:parsed_markdown :text]
    [:supplier_guess [:varchar 255]]
@@ -411,8 +402,6 @@
    [:normalized_key [:varchar 255] {:null false}]
    [:address :text]
    [:city_id :uuid {:foreign-key :cities/id, :on-delete :set-null}]
-   [:place_id :text]
-   [:archived_at :timestamptz]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :indexes
@@ -420,7 +409,6 @@
    [:idx_stores_supplier_normalized_key
     :btree
     {:fields [:supplier_id :normalized_key], :unique true}]
-   [:idx_stores_place_id :btree {:fields [:place_id]}]
    [:idx_stores_city_id :btree {:fields [:city_id]}]]},
  :supplier_aliases
  {:fields
@@ -511,7 +499,6 @@
    [:last_login_at :timestamptz]
    [:avatar_url :text]
    [:auth_provider :text {:default "password"}]
-   [:provider_user_id :text]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :types
@@ -525,9 +512,4 @@
   [[:idx_users_email :btree {:fields [:email], :unique true}]
    [:idx_users_status :btree {:fields [:status]}]
    [:idx_users_email_verified :btree {:fields [:email_verified]}]
-   [:idx_users_created_at :btree {:fields [:created_at]}]
-   [:idx_users_auth_provider_provider_user_id_external
-    :btree
-    {:fields [:auth_provider :provider_user_id],
-     :unique true,
-     :where [:<> :auth_provider "password"]}]]}}
+   [:idx_users_created_at :btree {:fields [:created_at]}]]}}

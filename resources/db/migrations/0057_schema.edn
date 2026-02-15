@@ -1,0 +1,3 @@
+({:action :drop-column,
+  :field-name :deleted-at,
+  :model-name :expense_items})

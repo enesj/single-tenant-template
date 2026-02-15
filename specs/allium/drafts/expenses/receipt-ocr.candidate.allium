@@ -44,7 +44,7 @@ entity Receipt {
     status: uploaded | parsing | parsed | extracting | extracted | review_required | approved | posted | failed
     retry_count: Integer
 
-    raw_parse_payload: String?
+    raw_extract_json: String?
     parsed_markdown: String?
     extraction: Extraction?
 
@@ -135,7 +135,7 @@ rule QueueSingleReceiptForOCR {
     ensures: receipt.status = uploaded
     ensures: receipt.retry_count = receipt.retry_count + 1
 
-    ensures: receipt.raw_parse_payload = null
+    ensures: receipt.raw_extract_json = null
     ensures: receipt.parsed_markdown = null
     ensures: receipt.extraction = null
 
@@ -176,6 +176,7 @@ rule HandleOCRExtractionSuccess {
     let extraction = normalize_and_reconcile_extraction(provider_extraction, parsed_markdown)
     let guesses = derive_receipt_guesses(extraction, config.default_currency)
 
+    ensures: receipt.raw_extract_json = provider_extraction
     ensures: receipt.extraction = extraction
     ensures: receipt.parsed_markdown = parsed_markdown
 

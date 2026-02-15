@@ -32,7 +32,6 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /admin/api/expenses/payers` – list (optional `type`).
 - `POST /admin/api/expenses/payers` – create; requires `type`, `label`.
 - `GET /admin/api/expenses/payers/count` – total (optional `type`).
-- `GET /admin/api/expenses/payers/suggest` – suggest from `method`/`card_last4`.
 - `GET /admin/api/expenses/payers/default/:type` – fetch default for type.
 - `POST /admin/api/expenses/payers/:id/default` – set default for payer’s type.
 - `GET /admin/api/expenses/payers/:id` – fetch; `PUT` update; `DELETE` remove.

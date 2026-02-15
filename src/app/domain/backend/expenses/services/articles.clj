@@ -38,14 +38,14 @@
 
 (defn create-article!
   "Create a canonical article."
-  [db {:keys [canonical_name category link manufacturer_id subcategory_id] :as data}]
+  [db {:keys [canonical_name link manufacturer_id subcategory_id] :as data}]
   (when-not canonical_name
     (throw (ex-info "canonical_name is required" {:data data})))
   (let [normalized (normalize-article-key canonical_name)
         row (cond-> {:id (UUID/randomUUID)
                      :canonical_name canonical_name
                      :normalized_key normalized}
-              (contains? data :category) (assoc :category category)
+
               (contains? data :subcategory_id) (assoc :subcategory_id subcategory_id)
               (contains? data :link) (assoc :link link)
               (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id))
@@ -125,11 +125,11 @@
 
 (defn update-article!
   "Update a canonical article. Recomputes normalized_key when canonical_name is provided."
-  [db id {:keys [canonical_name category subcategory_id link manufacturer_id] :as data}]
+  [db id {:keys [canonical_name subcategory_id link manufacturer_id] :as data}]
   (let [update-map (cond-> {}
                      canonical_name (assoc :canonical_name canonical_name
                                       :normalized_key (normalize-article-key canonical_name))
-                     (contains? data :category) (assoc :category category)
+
                      (contains? data :subcategory_id) (assoc :subcategory_id subcategory_id)
                      (contains? data :link) (assoc :link link)
                      (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id)
@@ -357,7 +357,7 @@
                                    [:st.display_name :display_name]
                                    [:st.normalized_key :normalized_key]
                                    [:st.address :address]
-                                   [:st.place_id :place_id]
+
                                    [:st.created_at :created_at]
                                    [:s.display_name :supplier_display_name]]
                  :from [[:expense_items :ei]]
@@ -379,7 +379,7 @@
                                    [:st.display_name :display_name]
                                    [:st.normalized_key :normalized_key]
                                    [:st.address :address]
-                                   [:st.place_id :place_id]
+
                                    [:st.created_at :created_at]
                                    [:s.display_name :supplier_display_name]]
                  :from [[:stores :st]]

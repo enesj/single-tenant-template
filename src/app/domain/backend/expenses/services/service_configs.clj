@@ -339,7 +339,7 @@
                       :created-at :st/created_at
                       :updated-at :st/updated_at}
    :default-order-by :st/display_name
-   :search-fields [:st/display_name :st/normalized_key :st/address :st/place_id :c/name]
+   :search-fields [:st/display_name :st/normalized_key :st/address :c/name]
    :joins [[:cities :c] [:= :c.id :st/city_id]]
    :select-fields [[:st.*]
                    [:c/name :city_fk_name]]

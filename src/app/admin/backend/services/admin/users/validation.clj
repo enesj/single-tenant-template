@@ -25,7 +25,7 @@
 (defn validate-user-updates
   "Validate user update data against business rules and constraints"
   [updates]
-  (let [allowed-keys #{:email :full_name :avatar_url :auth_provider :provider_user_id
+  (let [allowed-keys #{:email :full_name :avatar_url :auth_provider
                        :role :status :last_login_at}
         models @models-data-cache
         role-enum-set (if-let [choices (and models (field-meta/get-enum-choices models :users :role))]

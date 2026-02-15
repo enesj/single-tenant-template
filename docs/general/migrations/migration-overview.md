@@ -223,7 +223,7 @@ Database view definitions:
 CREATE VIEW v_properties_summary AS
 SELECT id, name, created_at
 FROM properties
-WHERE archived_at IS NULL;
+WHERE created_at IS NOT NULL;
 ```
 
 ## 🔧 Development Workflow

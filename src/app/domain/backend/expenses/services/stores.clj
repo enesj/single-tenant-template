@@ -402,24 +402,24 @@
                  :limit 1})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
+(defn- place-id->normalized-key
+  [place-id]
+  (when-let [place-id* (some-> place-id str str/trim not-empty)]
+    (configs/normalize-store-key (str "place " place-id*))))
+
 (defn find-by-supplier-and-place-id
   [db supplier-id place-id]
-  (let [place-id* (some-> place-id str str/trim not-empty)]
-    (when place-id*
-      (jdbc/execute-one!
-        db
-        (sql/format {:select [:*]
-                     :from [:stores]
-                     :where [:and
-                             [:= :supplier_id supplier-id]
-                             [:= :place_id place-id*]]
-                     :limit 1})
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+  (when-let [normalized-key (place-id->normalized-key place-id)]
+    (find-by-supplier-and-normalized-key db supplier-id normalized-key)))
 
 (defn update-store!
   "Patch a store row and return the updated store.
 
-  Accepts snake_case or kebab-case keys: display_name/display-name, address, place_id/place-id.
+  Accepts snake_case or kebab-case keys:
+  - display_name/display-name
+  - address
+  - normalized_key/normalized-key
+  - place_id/place-id (translated to a stable normalized key)
 
   City resolution for `city_id` is ZIP-based:
   - when address is provided, resolve via cities service
@@ -427,10 +427,15 @@
   - when Places opts are present, resolver may confirm and create/resolve city rows"
   ([db store-id patch]
    (update-store! db store-id patch nil))
-  ([db store-id {:keys [display_name display-name address place_id place-id]} opts]
+  ([db store-id {:keys [display_name display-name
+                        address
+                        normalized_key normalized-key
+                        place_id place-id]} opts]
    (let [display-name* (some-> (or display_name display-name) str str/trim not-empty)
          address* (some-> address str str/trim not-empty)
-         place-id* (some-> (or place_id place-id) str str/trim not-empty)
+         explicit-normalized* (some-> (or normalized_key normalized-key) str str/trim not-empty)
+         place-normalized* (place-id->normalized-key (or place_id place-id))
+         normalized* (or explicit-normalized* place-normalized*)
          city-source-text (some->> [display-name* address*]
                             (remove str/blank?)
                             (str/join "\n")
@@ -440,7 +445,7 @@
          set-map (cond-> {:updated_at [:now]}
                    (some? display-name*) (assoc :display_name display-name*)
                    (some? address*) (assoc :address address*)
-                   (some? place-id*) (assoc :place_id place-id*)
+                   (some? normalized*) (assoc :normalized_key normalized*)
                    (some? address*) (assoc :city_id city-id))]
      (jdbc/execute-one!
        db
@@ -453,19 +458,21 @@
 (defn- merge-duplicate-stores-by-place-id!
   "Merge stores for a supplier that resolve to the same Places `place_id`.
 
+  Uses place-id-derived `normalized_key` as the canonical merge key.
+
   Keeps `keep-store-id`, rewires foreign keys, and deletes duplicates.
 
   This is safe to run during OCR ingestion."
   [db supplier-id place-id keep-store-id]
-  (let [place-id* (some-> place-id str str/trim not-empty)]
-    (when (and supplier-id (seq place-id*) keep-store-id)
+  (when-let [normalized-key (place-id->normalized-key place-id)]
+    (when (and supplier-id (seq normalized-key) keep-store-id)
       (let [rows (jdbc/execute!
                    db
                    (sql/format {:select [:id]
                                 :from [:stores]
                                 :where [:and
                                         [:= :supplier_id supplier-id]
-                                        [:= :place_id place-id*]]})
+                                        [:= :normalized_key normalized-key]]})
                    {:builder-fn rs/as-unqualified-lower-maps})
             ids (->> rows (map :id) (remove nil?) distinct vec)
             keep-id keep-store-id
@@ -497,9 +504,9 @@
   Keys accepted (snake or kebab):
   - supplier_id / supplier-id (required)
   - display_name / display-name (required)
-  - normalized_key / normalized-key (optional, used when :place_id is not present)
+  - normalized_key / normalized-key (optional)
   - address (optional)
-  - place_id / place-id (optional)
+  - place_id / place-id (optional, translated to normalized key)
 
   City handling is ZIP-based:
   - resolve city from address text
@@ -518,15 +525,15 @@
    (let [supplier-id* (try-uuid (or supplier_id supplier-id))
          display-name* (some-> (or display_name display-name) str str/trim not-empty)
          address* (some-> address str str/trim not-empty)
-         place-id* (some-> (or place_id place-id) str str/trim not-empty)
+         place-key (place-id->normalized-key (or place_id place-id))
          normalized* (some-> (or normalized_key normalized-key) str str/trim not-empty)]
      (when-not supplier-id*
        (throw (ex-info "supplier_id is required" {:status 400 :field :supplier_id})))
      (when-not display-name*
        (throw (ex-info "display_name is required" {:status 400 :field :display_name})))
      (let [normalized (cond
-                        place-id*
-                        (configs/normalize-store-key (str "place " place-id*))
+                        place-key
+                        place-key
 
                         normalized*
                         (configs/normalize-store-key normalized*)
@@ -544,7 +551,6 @@
                 :display_name display-name*
                 :normalized_key normalized
                 :address address*
-                :place_id place-id*
                 :city_id city-id
                 :created_at [:now]
                 :updated_at [:now]}
@@ -554,8 +560,7 @@
                     :do-update-set (cond-> {:display_name :excluded/display_name
                                             :updated_at [:now]}
                                      (some? address*) (assoc :address :excluded/address
-                                                        :city_id :excluded/city_id)
-                                     (some? place-id*) (assoc :place_id :excluded/place_id))
+                                                        :city_id :excluded/city_id))
                     :returning [:*]}]
        (jdbc/execute-one!
          db
@@ -571,7 +576,6 @@
                           [:s.normalized_key :normalized_key]
                           [:s.display_name :display_name]
                           [:s.address :address]
-                          [:s.place_id :place_id]
                           [:c.name :city]]
                  :from [[:stores :s]]
                  :left-join [[:cities :c] [:= :c.id :s.city_id]]
@@ -579,9 +583,8 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- store-match-key
-  [{:keys [normalized_key display_name address place_id] :as _store}]
+  [{:keys [normalized_key display_name address] :as _store}]
   (let [normalized* (some-> normalized_key str str/trim not-empty)
-        place-id* (some-> place_id str str/trim not-empty)
         address* (some-> address str str/trim not-empty)
         address-key (some-> address* configs/normalize-store-key)
         pj-or-places-key? (and (seq normalized*)
@@ -606,7 +609,7 @@
       (seq address-key)
       address-key
 
-      (and (seq place-id*) (seq derived))
+      (seq derived)
       derived
 
       :else
@@ -627,9 +630,9 @@
   - :store_name (branch label)
   - :address (store disambiguator)
 
-  If Places is configured, we try to canonicalize stores by `place_id` so that
-  multiple OCR variants (store_name/address noise) can converge on the same
-  store row.
+  If Places is configured, we try to canonicalize stores by a place-derived
+  normalized key so that multiple OCR variants (store_name/address noise) can
+  converge on the same store row.
 
   Additionally:
   - when `:receipt-markdown` is present in opts, we try to derive a stable store
@@ -676,6 +679,7 @@
          place (when (seq places-query)
                  (first (:places (places-api/search-text! places-cfg places-query places-opts))))
          place-id (some-> place :raw :id str str/trim not-empty)
+         place-key (place-id->normalized-key place-id)
          place-name (some-> place :name str str/trim not-empty)
          place-address (some-> place :raw :formattedAddress str str/trim not-empty)
          effective-alias-label (or address* place-address store-name*)
@@ -685,21 +689,25 @@
        (let [store (cond
                      (seq place-id)
                      (or
-                       (when-let [existing (find-by-supplier-and-place-id db supplier-id* place-id)]
+                       (when-let [existing (and (seq place-key)
+                                             (find-by-supplier-and-normalized-key
+                                               db
+                                               supplier-id*
+                                               place-key))]
                          (update-store! db (:id existing)
                            {:display_name effective-display
                             :address effective-address
-                            :place_id place-id}
+                            :normalized_key place-key}
                            opts))
 
                        ;; If we already created a store without Places (script-style
-                       ;; or PJ-key), attach place_id now.
+                       ;; or PJ-key), upgrade it to a place-derived normalized key.
                        (when-let [existing (and (seq store-key)
                                              (find-by-supplier-and-normalized-key db supplier-id* store-key))]
                          (update-store! db (:id existing)
                            {:display_name effective-display
                             :address effective-address
-                            :place_id place-id}
+                            :normalized_key (or place-key store-key)}
                            opts))
 
                        ;; Legacy key format (before script-style normalized_key).
@@ -710,7 +718,7 @@
                          (update-store! db (:id legacy)
                            {:display_name effective-display
                             :address effective-address
-                            :place_id place-id}
+                            :normalized_key (or place-key store-key)}
                            opts))
 
                        (find-or-create-store!
@@ -718,7 +726,7 @@
                          {:supplier_id supplier-id*
                           :display_name effective-display
                           :address effective-address
-                          :place_id place-id}
+                          :normalized_key (or place-key store-key)}
                          opts))
 
                      :else
@@ -751,14 +759,14 @@
                           :address address*
                           :normalized_key store-key}
                          opts)))
-             _ (when (and (seq place-id) (:id store))
+             _ (when (and (seq place-key) (:id store))
                  (merge-duplicate-stores-by-place-id! db supplier-id* place-id (:id store)))]
          {:store store
           :store-id (:id store)
           :store-alias-label effective-alias-label})))))
 
 (defn backfill-store-place-ids!
-  "Backfill `stores.place_id` using Google Places, and merge duplicates by place_id.
+  "Backfill store normalized keys using Google Places place IDs.
 
   Intended for REPL/admin maintenance after enabling Places store canonicalization.
 
@@ -782,7 +790,9 @@
                                :from [[:stores :st]]
                                :join [[:suppliers :sp] [:= :sp.id :st.supplier_id]]
                                :where [:and
-                                       [:is :st.place_id nil]
+                                       [:or
+                                        [:is :st.normalized_key nil]
+                                        [:not [:like :st.normalized_key "place-%"]]]
                                        [:is-not :st.address nil]
                                        [:<> :st.address ""]]
                                :limit limit})
@@ -802,13 +812,14 @@
                    place (when (seq query)
                            (first (:places (places-api/search-text! places-cfg query search-opts))))
                    place-id (some-> place :raw :id str str/trim not-empty)
+                   normalized-key (place-id->normalized-key place-id)
                    place-address (some-> place :raw :formattedAddress str str/trim not-empty)]
-               (if (seq place-id)
+               (if (seq normalized-key)
                  (do
                    (update-store!
                      db
                      store_id
-                     {:place_id place-id
+                     {:normalized_key normalized-key
                       :address (or place-address store_address)
                       :display_name store_display_name}
                      {:places-cfg places-cfg

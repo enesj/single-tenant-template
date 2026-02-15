@@ -15,14 +15,14 @@
   (testing "Admin form-fields config delivered via JSON (string field ids + string :type) still produces select + boolean specs"
     (reset-db!
       {:admin {:config {:form-fields
-                        {:payers {:create-fields ["type" "label" "last4" "is-default"]
-                                  :edit-fields ["type" "label" "last4" "is-default"]
+                        {:payers {:create-fields ["type" "label" "is-default"]
+                                  :edit-fields ["type" "label" "is-default"]
                                   :required-fields ["type" "label"]
                                   ;; Simulate JSON keywordization off: map keys as strings.
                                   :field-config {"type" {"type" "select"
                                                          "options" ["cash" "card" "account" "person"]}
                                                  "label" {"type" "text"}
-                                                 "last4" {"type" "text"}
+
                                                  "is-default" {"type" "boolean"}}}}}}})
 
     (let [spec @(rf/subscribe [:form-entity-specs/by-name :payers])

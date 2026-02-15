@@ -2,9 +2,10 @@
 
 ## File structure
 
-An Allium specification file (`.allium`) contains these sections in order:
+An Allium specification file (`.allium`) begins with a language version marker, followed by these sections in order:
 
 ```
+-- allium: 1
 -- Comments use double-dash
 -- use declarations (optional)
 
@@ -298,7 +299,26 @@ enum DayOfWeek { monday | tuesday | wednesday | thursday | friday | saturday | s
 
 Named enumerations define a reusable set of values. Declare them in the Enumerations section of the file. Reference them as field types: `recommendation: Recommendation`. Inline enums (`status: pending | active`) are equivalent but anonymous; use named enums when the same set of values appears in multiple fields or entities.
 
-Inline enums are anonymous: they have no type identity. Two inline enum fields cannot be compared with each other, whether on the same entity or across entities, because non-shared values silently evaluate to false rather than producing a type error. Use a named enum when values need to be compared across fields. Named enums are distinct types: a field typed `Recommendation` cannot be compared with a field typed `DayOfWeek`, even if they happen to share a literal.
+Inline enums are anonymous: they have no type identity. Two inline enum fields cannot be compared with each other, whether on the same entity or across entities; the checker reports an error. Use a named enum when values need to be compared across fields. Named enums are distinct types: a field typed `Recommendation` cannot be compared with a field typed `DayOfWeek`, even if they happen to share a literal.
+
+This catches a common mistake when tracking previous state:
+
+```
+-- Error: cannot compare two inline enum fields
+entity Order {
+    status: pending | shipped | delivered
+    previous_status: pending | shipped | delivered
+}
+requires: order.status != order.previous_status    -- checker error
+
+-- Fix: extract a named enum
+enum OrderStatus { pending | shipped | delivered }
+entity Order {
+    status: OrderStatus
+    previous_status: OrderStatus
+}
+requires: order.status != order.previous_status    -- valid
+```
 
 **Entity references:**
 ```
@@ -415,7 +435,7 @@ rule ProcessDigests {
 
 The `where` keyword filters the collection, consistent with projection syntax. The indented body contains the rule's `let`, `requires` and `ensures` clauses scoped to each element.
 
-This is the same `for x in collection:` construct used in ensures blocks and surfaces. The only difference is scope: at rule level it wraps the entire rule body.
+This is the same `for x in collection:` construct used in ensures blocks and surfaces. The body inherits the constraints of its enclosing context: at rule level it wraps `let`, `requires` and `ensures` clauses; inside an ensures block it wraps postconditions (state changes, entity creation, trigger emissions, removal assertions); inside a surface it wraps the items permitted by the enclosing clause (`exposes`, `provides` or `related`).
 
 ### Multiple rules for the same trigger
 
@@ -548,6 +568,19 @@ ensures:
 ```
 
 The assignment reads 100 (the pre-rule value). The `if` guard reads 150 (the resulting state after the assignment).
+
+Common mistake: assuming `if` guards in ensures read pre-rule values. Suppose `order.status` is `pending` before the rule fires.
+
+```
+ensures: order.status = shipped
+ensures:
+    if order.status = pending:                             -- WRONG: reads resulting state (shipped), so this is false
+        Notification.created(to: order.customer, template: order_pending_reminder)
+    if order.status = shipped:                             -- reads resulting state (shipped), so this is true
+        Notification.created(to: order.customer, template: order_shipped)
+```
+
+The author likely meant "if the order was pending before we changed it". But the `if` guard inside ensures reads the resulting state, not the pre-rule state. To test pre-rule values, use a `let` binding or `requires` clause before the ensures block.
 
 Ensures clauses have four forms:
 
@@ -794,7 +827,7 @@ let preference =
 
 Each `else if` adds a branch. The final `else` provides a fallback.
 
-`exists` can also be used as a condition in `if` expressions, not just in `requires`:
+`exists` can also be used as a condition in `if` expressions, not just in `requires`. When `exists x` is used as an `if` condition, `x` is guaranteed non-null within the `if` body and can be accessed safely:
 
 ```
 ensures:
@@ -833,6 +866,8 @@ ensures:
     for d in workspace.deleted_documents:
         not exists d
 ```
+
+If the entity is already absent, the postcondition is trivially satisfied (no error, no operation). This follows from declarative semantics: `not exists x` asserts a property of the resulting state, not an imperative command.
 
 This is distinct from soft delete, which changes a field rather than removing the entity:
 
@@ -874,18 +909,24 @@ Black box functions are pure (no side effects) and deterministic for the same in
 
 ### The `with` and `where` keywords
 
-Both keywords apply a predicate to select a subset. They differ in what they operate on:
+`with` declares how entities are connected. `where` selects from those connections.
 
-- **`with`** appears in relationship declarations. The input is the universe of all instances of an entity type and the predicate defines the structural link. A `with` clause must reference `this`.
-- **`where`** appears in projections, iteration, surface context, actor identification and surface `let` bindings. The input is an existing collection or entity type and the predicate filters it. A `where` clause must not reference `this`.
+A relationship declaration says "these are the InterviewSlots that belong to this Candidacy". A projection says "of those slots, show me the confirmed ones":
 
 ```
--- Relationships (with)
+-- Relationship: declares which InterviewSlots belong to this Candidacy
 slots: InterviewSlot with candidacy = this
 
--- Projections (where)
-slots where status = confirmed
+-- Projection: of those slots, keep the confirmed ones
+confirmed_slots: slots where status = confirmed
+```
 
+Because `with` defines a relationship from the universe of all instances, it needs `this` as an anchor — the predicate must reference the enclosing entity to establish the link. Because `where` filters an already-scoped collection, `this` would be meaningless and must not appear.
+
+- **`with`** appears in relationship declarations. The predicate defines the structural link and must reference `this`.
+- **`where`** appears in projections, iteration, surface context, actor identification and surface `let` bindings. The predicate filters an existing collection and must not reference `this`.
+
+```
 -- Surface context (where)
 context assignment: SlotConfirmation where interviewer = viewer
 
@@ -1351,6 +1392,7 @@ The checker should warn (but not error) on:
 - Temporal triggers on optional fields (trigger will not fire when the field is null)
 - Surfaces that use a raw entity type in `facing` when actor declarations exist for that entity type (may indicate a missing access restriction)
 - `transitions_to` triggers on values that entities can be created with (the rule will not fire on creation; consider `becomes` if the rule should also fire on creation)
+- Multiple fields on the same entity with identical inline enum literals (suggests extraction to a named enum; will error if the fields are later compared)
 
 ---
 
@@ -1474,8 +1516,8 @@ ensures: deadline = now + config.confirmation_deadline
 
 | Term | Definition |
 |------|------------|
-| **Given (module)** | Entity instances a module operates on, declared with `given { ... }`; inherited by all rules in the module |
-| **Context (surface)** | Parametric scope binding for a boundary contract, declared with `context` inside a surface |
+| **Given (module)** | Entity instances a module operates on, declared with `given { ... }`; inherited by all rules in the module. Binds singleton instances at module scope. Contrast with **Context**, which is parametric |
+| **Context (surface)** | Parametric scope binding for a boundary contract, declared with `context` inside a surface. Creates one surface instance per matching entity. Contrast with **Given**, which binds singleton instances at module scope |
 | **Entity** | A domain concept with identity and lifecycle |
 | **Value** | Structured data without identity, compared by structure |
 | **Sum Type** | Entity constrained to exactly one of several variants via a discriminator field |
@@ -1502,7 +1544,7 @@ ensures: deadline = now + config.confirmation_deadline
 | **Exists** | Keyword for checking entity existence (`exists x`) or asserting removal (`not exists x`) |
 | **`within`** | Clause in actor declarations that names the required context type; also a keyword in `identified_by` expressions that resolves to the surface's context entity |
 | **`this`** | The instance of the enclosing type; valid in entity declarations and actor `identified_by` expressions |
-| **Enum** | A named set of values, reusable across fields and entities |
+| **Enum** | A set of values. **Named enums** (`enum Recommendation { ... }`) have type identity and are reusable across fields and entities. **Inline enums** (`status: pending \| active`) are anonymous, scoped to a single field, and cannot be compared across fields |
 | **Discard Binding** | `_` used where a binding is syntactically required but the value is not needed |
 | **Actor** | An entity type that can interact with surfaces, declared with explicit identity mapping |
 | **`facing`** | Surface clause naming the external party on the other side of the boundary |

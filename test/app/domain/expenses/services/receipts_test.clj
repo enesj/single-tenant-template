@@ -47,7 +47,7 @@
   (when-let [db fixtures/*test-db*]
     (let [supplier-result (suppliers/find-or-create-supplier! db "Konzum" {})
           supplier (:supplier supplier-result)
-          payer (th/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
+          payer (th/create-payer! db {:type "card" :label "Visa"})
           upload (receipt-storage/upload-receipt! db {:storage_key "s3://bucket/r1.jpg"
                                                       :bytes (.getBytes "hello world")})
           receipt-id (:id (:receipt upload))
@@ -131,7 +131,7 @@
       (try
         (Files/write (.toPath src-file) bytes (into-array java.nio.file.OpenOption []))
         (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Konzum" {}))
-              payer (th/create-payer! db {:type "card" :label "Visa" :last4 "1234"})
+              payer (th/create-payer! db {:type "card" :label "Visa"})
               upload (receipt-storage/upload-receipt! db {:storage_key storage-key
                                                           :bytes bytes})
               receipt-id (:id (:receipt upload))

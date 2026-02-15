@@ -346,8 +346,7 @@
                 parse-result (mistral-ocr/ocr-parse! ocr-cfg {:bytes bytes*
                                                               :filename (:original_filename receipt)
                                                               :content-type content-type*})]
-            (receipt-status/store-extraction-results! db receipt-id {:raw_parse_json (:raw parse-result)
-                                                                     :parsed_markdown (:parsed-markdown parse-result)})
+            (receipt-status/store-extraction-results! db receipt-id {:parsed_markdown (:parsed-markdown parse-result)})
             (receipt-status/update-status! db receipt-id "parsed" {:error_message nil :error_details nil})
             {:receipt-id receipt-id :stage :parse :result :ok})
           (catch Exception e

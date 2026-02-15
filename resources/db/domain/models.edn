@@ -12,7 +12,6 @@
                       [:display_name [:varchar 255] {:null false}]
                       [:normalized_key [:varchar 255] {:null false}]
                       [:address :text]
-                      [:archived_at :timestamptz]
                       [:created_at :timestamptz {:default [:now]}]
                       [:updated_at :timestamptz {:default [:now]}]]
              :indexes [[:idx_suppliers_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
@@ -51,15 +50,14 @@
                    [:normalized_key [:varchar 255] {:null false}]
                    [:address :text]
                    [:city_id :uuid {:foreign-key :cities/id :on-delete :set-null}]
-                   [:place_id :text]
-                   [:archived_at :timestamptz]
+
                    [:created_at :timestamptz {:default [:now]}]
                    [:updated_at :timestamptz {:default [:now]}]]
           :indexes [[:idx_stores_supplier :btree {:fields [:supplier_id]}]
                     [:idx_stores_supplier_normalized_key
                      :btree
                      {:fields [:supplier_id :normalized_key] :unique true}]
-                    [:idx_stores_place_id :btree {:fields [:place_id]}]
+
                     [:idx_stores_city_id :btree {:fields [:city_id]}]]}
 
  ;; ----------------------------------------------------------------------------
@@ -111,7 +109,7 @@
  :payers {:fields [[:id :uuid {:primary-key true}]
                    [:payer_type_id :uuid {:foreign-key :payer_types/id :on-delete :set-null}]
                    [:label [:varchar 255] {:null false}]
-                   [:last4 [:varchar 4]]
+
                    [:is_default :boolean {:default false}]
                    [:created_at :timestamptz {:default [:now]}]
                    [:updated_at :timestamptz {:default [:now]}]]
@@ -144,7 +142,7 @@
                      [:content_type [:varchar 100]]
                      [:file_size :integer]
                      [:status [:enum :receipt-status] {:null false :default "uploaded"}]
-                     [:raw_parse_json :jsonb]
+
                      [:raw_extract_json :jsonb]
                      [:parsed_markdown :text]
                      [:supplier_guess [:varchar 255]]
@@ -192,7 +190,6 @@
                      [:currency [:enum :currency] {:null false :default "BAM"}]
                      [:notes :text]
                      [:is_posted :boolean {:default true :null false}]
-                     [:deleted_at :timestamptz]
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
             :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]
@@ -237,21 +234,15 @@
 
  :expense_items {:fields [[:id :uuid {:primary-key true}]
                           [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}]
-                          ;; Canonical raw label reference (deduped). Use joins to render raw_labels.raw_label.
-                          ;; NOTE (Phase 1): this becomes optional once we switch to alias-based labeling.
-                          ;; We keep the column for backward-compat & later cleanup, but allow NULL for new writes.
-                          [:raw_label_id :uuid {:foreign-key :raw_labels/id}]
-                          ;; NEW (Phase 1): canonical alias reference (eventually replaces raw_label_id + article_id)
+                          ;; Canonical alias reference for receipt line item labels.
                           [:alias_id :uuid {:foreign-key :article_aliases/id}]
                           [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
                           [:qty [:decimal 10 3]]
                           [:unit_price [:decimal 12 2]]
                           [:line_total [:decimal 12 2] {:null false}]
-                          [:deleted_at :timestamptz]
                           [:created_at :timestamptz {:default [:now]}]]
                  :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
                            [:idx_expense_items_article :btree {:fields [:article_id]}]
-                           [:idx_expense_items_raw_label_id :btree {:fields [:raw_label_id]}]
                            [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
 
  ;; ----------------------------------------------------------------------------
@@ -304,8 +295,9 @@
                      [:canonical_name [:varchar 255] {:null false}]
                      [:normalized_key [:varchar 255] {:null false}]
                      ;; Legacy free-text category (kept for Phase 1 backfill).
-                     [:category [:varchar 100]]
+
                      ;; New FK-driven categorization.
+
                      [:subcategory_id :uuid {:foreign-key :subcategories/id :on-delete :set-null}]
                      [:link :text]
                      ;; Canonical manufacturer reference.
@@ -313,7 +305,7 @@
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
             :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]
-                      [:idx_articles_category :btree {:fields [:category]}]
+
                       [:idx_articles_subcategory_id :btree {:fields [:subcategory_id]}]
                       [:idx_articles_manufacturer_id :btree {:fields [:manufacturer_id]}]]}
 

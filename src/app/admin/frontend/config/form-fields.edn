@@ -136,11 +136,10 @@
     :label "Article",
     :options ["articles" "canonical_name"]}}},
  :stores
- {:edit-fields ["display_name" "address" "place_id"],
+ {:edit-fields ["display_name" "address"],
   :field-config
   {:display_name {:type "text", :label "Display name"},
-   :address {:type "textarea", :label "Address"},
-   :place_id {:type "text", :label "Place ID"}}},
+   :address {:type "textarea", :label "Address"}}},
  :store-aliases
  {:edit-fields
   ["raw_label" "raw_label_normalized" "store_id" "confidence"],

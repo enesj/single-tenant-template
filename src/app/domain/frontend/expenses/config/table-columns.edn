@@ -45,7 +45,6 @@
   ["display_name"
    "normalized_key"
    "address"
-   "archived_at"
    "created_at"
    "id"
    "updated_at"],
@@ -85,7 +84,6 @@
  :articles
  {:available-columns
   ["canonical_name"
-   "category"
    "category_name"
    "subcategory_id"
    "subcategory_name"
@@ -232,13 +230,7 @@
   {:article_canonical_name {}, :supplier_display_name {}}},
  :payers
  {:available-columns
-  ["label"
-   "payer_type_id"
-   "is_default"
-   "last4"
-   "created_at"
-   "updated_at"
-   "id"],
+  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
@@ -286,7 +278,6 @@
    "updated-at"
    "id"
    "file-size"
-   "raw-parse-json"
    "raw-extract-json"
    "parsed-markdown"
    "total-amount-guess"
@@ -332,8 +323,6 @@
    "normalized_key"
    "address"
    "city_id"
-   "place_id"
-   "archived_at"
    "created_at"
    "updated_at"
    "id"],
@@ -342,15 +331,12 @@
    "normalized_key"
    "address"
    "city_id"
-   "place_id"
    "created_at"],
   :filterable-columns
   ["display_name"
    "normalized_key"
    "address"
    "city_id"
-   "place_id"
-   "archived_at"
    "created_at"],
   :sortable-columns
   ["display_name"

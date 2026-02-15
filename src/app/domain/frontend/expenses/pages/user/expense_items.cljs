@@ -19,7 +19,7 @@
 (defn- spec-field-keys
   "Return the set of field keys (as keywords) described by a form spec.
 
-  Handles either a seq of {:id ...} maps or a map keyed by field id." 
+  Handles either a seq of {:id ...} maps or a map keyed by field id."
   [spec]
   (->> (cond
          (map? spec) (vals spec)
@@ -35,7 +35,7 @@
   - enhanced/dynamic specs (kebab-case keys like :raw-label)
   - fallback hardcoded specs (snake_case keys like :raw_label)
 
-  by merging app keys plus their db-key equivalents." 
+  by merging app keys plus their db-key equivalents."
   [app-values]
   (merge (model-naming/app-map-keys->db app-values) app-values))
 
@@ -76,7 +76,7 @@
         initial-values (initial-values-for
                          (-> (normalization/convert-db-keys->app-keys (or initial-data {}))
                            (select-keys [:raw-label :article-id :qty :unit-price :line-total
-                                         :id :expense-id :raw-label-id :alias-id])))]
+                                         :id :expense-id :alias-id])))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}

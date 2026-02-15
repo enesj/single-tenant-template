@@ -20,7 +20,6 @@
                   [:last_login_at :timestamptz]
                   [:avatar_url :text]
                   [:auth_provider :text {:default "password"}]
-                  [:provider_user_id :text]
                   [:created_at :timestamptz {:default [:now]}]
                   [:updated_at :timestamptz {:default [:now]}]]
          :types [[:user-role :enum {:choices ["admin" "member" "viewer" "unassigned"]}]
@@ -30,12 +29,7 @@
          :indexes [[:idx_users_email :btree {:fields [:email] :unique true}]
                    [:idx_users_status :btree {:fields [:status]}]
                    [:idx_users_email_verified :btree {:fields [:email_verified]}]
-                   [:idx_users_created_at :btree {:fields [:created_at]}]
-                   [:idx_users_auth_provider_provider_user_id_external
-                    :btree
-                    {:fields [:auth_provider :provider_user_id]
-                     :unique true
-                     :where [:<> :auth_provider "password"]}]]}
+                   [:idx_users_created_at :btree {:fields [:created_at]}]]}
 
  ;; Admin users (system administrators)
  :admins {:fields [[:id :uuid {:primary-key true}]

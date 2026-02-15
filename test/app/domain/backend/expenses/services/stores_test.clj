@@ -95,6 +95,7 @@
     (let [supplier-id (UUID/randomUUID)
           existing-store-id (UUID/randomUUID)
           passed-opts (atom nil)
+          called-key (atom nil)
           merchant {:name "Bingo"
                     :store_name "Bingo Store"
                     :address "Vrbanja 1, 71000 Sarajevo"}
@@ -105,14 +106,20 @@
                                               {:places [{:name "Bingo Store"
                                                          :raw {:id "place-123"
                                                                :formattedAddress "Vrbanja 1, 71000 Sarajevo"}}]})
-                    stores/find-by-supplier-and-place-id (fn [_db _supplier-id _place-id]
-                                                           {:id existing-store-id})
-                    stores/update-store! (fn [_db store-id _patch resolver-opts]
+                    stores/find-by-supplier-and-normalized-key
+                    (fn [_db _supplier-id normalized-key]
+                      (reset! called-key normalized-key)
+                      {:id existing-store-id})
+                    stores/update-store! (fn [_db store-id patch resolver-opts]
                                            (is (= existing-store-id store-id))
+                                           (is (= "Vrbanja 1, 71000 Sarajevo" (:address patch)))
+                                           (is (string? (:normalized_key patch)))
                                            (reset! passed-opts resolver-opts)
                                            {:id existing-store-id
                                             :supplier_id supplier-id})
                     stores/merge-duplicate-stores-by-place-id! (fn [& _] {:kept existing-store-id :merged 0})]
         (let [res (stores/resolve-store-from-merchant :db supplier-id merchant opts)]
           (is (= existing-store-id (:store-id res)))
-          (is (= opts @passed-opts)))))))
+          (is (= opts @passed-opts))
+          (is (string? @called-key))
+          (is (str/includes? @called-key "place")))))))

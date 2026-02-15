@@ -109,7 +109,7 @@
             {:id :display-name :label "Name" :type :text}
             {:id :normalized-key :label "Normalized key" :type :text}
             {:id :address :label "Address" :type :text}
-            {:id :place-id :label "Place ID" :type :text}
+
             {:id :created-at :label "Created at" :type :datetime}
             {:id :updated-at :label "Updated at" :type :datetime}]})
 

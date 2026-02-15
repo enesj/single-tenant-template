@@ -239,7 +239,6 @@ Key services in `src/app/domain/backend/expenses/services/`:
  :content_type :string?
  :file_size :int?
  :status :enum
- :raw_parse_json :json?
  :raw_extract_json :json?
  :parsed_markdown :string?
  :supplier_guess :string?
@@ -264,7 +263,6 @@ Key services in `src/app/domain/backend/expenses/services/`:
  :currency :enum
  :notes :string?
  :is_posted :boolean
- :deleted_at :timestamp?
  :created_at :timestamp
  :updated_at :timestamp}
 
@@ -283,7 +281,6 @@ Note: line item quantity supports **3-decimal precision** (e.g. weights/volumes)
 {:id :uuid
  :canonical_name :string
  :normalized_key :string
- :category :string?
  :created_at :timestamp
  :updated_at :timestamp}
 
@@ -390,15 +387,15 @@ The user UI config uses these EDN file types:
                                :per-page 50}}}
 
 ;; table-columns.edn
-{:articles {:available-columns [:canonical-name :category :normalized-key :created-at :updated-at :id]
-            :default-visible-columns [:canonical-name :category :created-at]
-            :filterable-columns [:canonical-name :category :normalized-key :created-at :updated-at]
-            :sortable-columns [:canonical-name :category :normalized-key :created-at :updated-at]
+{:articles {:available-columns [:canonical-name :normalized-key :created-at :updated-at :id]
+            :default-visible-columns [:canonical-name :created-at]
+            :filterable-columns [:canonical-name :normalized-key :created-at :updated-at]
+            :sortable-columns [:canonical-name :normalized-key :created-at :updated-at]
             :always-visible [:canonical-name]}}
 
 ;; form-fields.edn
-{:articles {:create-fields [:canonical-name :category]
-            :edit-fields [:canonical-name :category]
+{:articles {:create-fields [:canonical-name]
+            :edit-fields [:canonical-name]
             :required-fields [:canonical-name]}}
 ```
 

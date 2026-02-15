@@ -4,7 +4,7 @@
   These events call /api/v1/expenses/stores and /api/v1/expenses/store-aliases and
   sync results into the shared template entity store so list-view can render them."
   (:require
-    [ajax.core :as ajax]
+
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
@@ -112,13 +112,12 @@
   common-interceptors
   (fn [{:keys [db]} [store-id form-data on-success]]
     (let [store-id-str (->id-str store-id)
-          {:keys [display_name display-name address place_id place-id]} (or form-data {})
+          {:keys [display_name display-name address]} (or form-data {})
           payload (cond-> {}
                     (some? display-name) (assoc :display-name display-name)
                     (some? display_name) (assoc :display-name display_name)
-                    (some? address) (assoc :address address)
-                    (some? place-id) (assoc :place-id place-id)
-                    (some? place_id) (assoc :place-id place_id))]
+                    (some? address) (assoc :address address))]
+
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] true)
              (assoc-in [:user-expenses :form :error] nil))

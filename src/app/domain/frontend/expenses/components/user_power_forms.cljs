@@ -489,11 +489,6 @@
     :type :textarea
     :label "Address"
     :required false
-    :placeholder "Optional"}
-   {:id :place_id
-    :type :text
-    :label "Place ID"
-    :required false
     :placeholder "Optional"}])
 
 (defui user-store-add-form-modal
@@ -524,11 +519,6 @@
     :type :textarea
     :label "Address"
     :required false
-    :placeholder "Optional"}
-   {:id :place_id
-    :type :text
-    :label "Place ID"
-    :required false
     :placeholder "Optional"}])
 
 (defui user-store-edit-form-modal
@@ -540,7 +530,7 @@
         initial-values (-> {}
                          (assoc :display_name (or (:display-name item) (:displayName item) ""))
                          (assoc :address (or (:address item) ""))
-                         (assoc :place_id (or (:place-id item) (:placeId item) ""))
+
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error

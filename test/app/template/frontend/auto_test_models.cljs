@@ -21,7 +21,7 @@
    :payers {:fields [[:id :uuid {:primary-key true :default [:gen_random_uuid]}]
                      [:type [:enum :payer-type] {:null false}]
                      [:label [:varchar 255] {:null false}]
-                     [:last4 [:varchar 4]]
+
                      [:is_default :boolean {:default false}]
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
@@ -34,7 +34,7 @@
                        [:status [:enum :receipt-status] {:null false :default "uploaded"}]
                        [:created_at :timestamptz {:default [:now]}]
                        [:updated_at :timestamptz {:default [:now]}]]
-             :types [[:receipt-status :enum {:choices ["uploaded" "parsing" "parsed" "extracting" "extracted" "review_required" "approved" "posted" "failed"]}]]}
+              :types [[:receipt-status :enum {:choices ["uploaded" "parsing" "parsed" "extracting" "extracted" "review_required" "approved" "posted" "failed"]}]]}
 
    :expenses {:fields [[:id :uuid {:primary-key true :default [:gen_random_uuid]}]
                        [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]
@@ -47,4 +47,4 @@
                        [:is_posted :boolean {:default true :null false}]
                        [:created_at :timestamptz {:default [:now]}]
                        [:updated_at :timestamptz {:default [:now]}]]
-            :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]}})
+              :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]}})

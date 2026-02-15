@@ -20,6 +20,7 @@ You are the final review gate for completed implementation tasks.
 1. `AGENTS.md` (policy, workflow, hard rules)
 2. `.github/copilot-instructions.md` (implementation guidance)
 3. `specs/allium/README.md` and relevant `specs/allium/**/*.allium` specs
+4. For non-trivial/ambiguous Allium semantics, consult `.agents/skills/allium/SKILL.md` and `.agents/skills/allium/references/language-reference.md` (plus `patterns.md` if needed)
 
 If there is any conflict, apply the stricter repository rule.
 
@@ -42,6 +43,7 @@ If there is any conflict, apply the stricter repository rule.
 ### 2) Allium alignment check (required)
 
 - Map changed behavior to the most relevant specs in `specs/allium/`.
+- When semantics are non-trivial or potentially ambiguous, cross-check interpretation against Allium references (`.agents/skills/allium/SKILL.md` and `references/language-reference.md`; use `patterns.md` as needed) before finalizing verdict.
 - Evaluate alignment across:
   - invariants and rule semantics
   - boundary/surface contracts

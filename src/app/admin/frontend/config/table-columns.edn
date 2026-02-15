@@ -3,14 +3,13 @@
   ["expense_purchased_at"
    "article_canonical_name"
    "raw_label"
-   "raw_label_id"
+
    "alias_id"
    "qty"
    "unit_price"
    "line_total"
    "article_id"
    "created_at"
-   "deleted_at"
    "expense_id"
    "id"],
   :default-visible-columns
@@ -49,7 +48,6 @@
   ["display_name"
    "normalized_key"
    "address"
-   "archived_at"
    "created_at"
    "id"
    "updated_at"],
@@ -96,7 +94,6 @@
  :articles
  {:available-columns
   ["canonical_name"
-   "category"
    "category_name"
    "subcategory_id"
    "subcategory_name"
@@ -146,7 +143,7 @@
   :always-visible ["label"]},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "deleted_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id"],
+  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :payer_label {:type "string", :label "Payer"}},
@@ -225,13 +222,7 @@
   {:article_canonical_name {}, :supplier_display_name {}}},
  :payers
  {:available-columns
-  ["label"
-   "payer_type_id"
-   "is_default"
-   "last4"
-   "created_at"
-   "updated_at"
-   "id"],
+  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
@@ -306,7 +297,7 @@
    :admin-name {:width "140px"}}},
  :receipts
  {:available-columns
-  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-parse-json" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id"],
+  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id"],
   :default-visible-columns
   ["original-filename"
    "status"
@@ -400,20 +391,16 @@
    "normalized_key"
    "address"
    "city_id"
-   "place_id"
-   "archived_at"
    "created_at"
    "updated_at"
    "id"]
   :default-visible-columns
-  ["display_name" "normalized_key" "address" "city_id" "place_id" "created_at"]
+  ["display_name" "normalized_key" "address" "city_id" "created_at"]
   :filterable-columns
   ["display_name"
    "normalized_key"
    "address"
    "city_id"
-   "place_id"
-   "archived_at"
    "created_at"]
   :sortable-columns
   ["display_name" "normalized_key" "address" "city_id" "created_at" "updated_at"]
@@ -522,8 +509,7 @@
    "password-hash"
    "email-verified"
    "avatar-url"
-   "auth-provider"
-   "provider-user-id"],
+   "auth-provider"],
   :default-visible-columns ["id" "status" "role" "created-at"],
   :filterable-columns
   ["status" "role" "last-login-at" "created-at" "updated-at"],

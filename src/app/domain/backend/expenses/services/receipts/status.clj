@@ -79,7 +79,7 @@
   receipt can be cleanly re-parsed/extracted. Use when the user explicitly
   requests a fresh OCR pass.
 
-  Clears: error_message, error_details, raw_parse_json, raw_extract_json,
+  Clears: error_message, error_details, raw_extract_json,
           parsed_markdown, supplier_guess, total_amount_guess, currency_guess,
           purchased_at_guess
 
@@ -93,7 +93,6 @@
                  :set {:status (storage/receipt-status-cast "uploaded")
                        :error_message nil
                        :error_details nil
-                       :raw_parse_json nil
                        :raw_extract_json nil
                        :parsed_markdown nil
                        :supplier_guess nil
@@ -114,13 +113,12 @@
 
   Updates only fields present in the input map (so callers can PATCH-like update
   without wiping other columns)."
-  [db receipt-id {:keys [raw_parse_json raw_extract_json parsed_markdown
+  [db receipt-id {:keys [raw_extract_json parsed_markdown
                          supplier_guess supplier_alias_id
                          store_guess store_alias_id
                          total_amount_guess currency_guess purchased_at_guess]
                   :as data}]
   (let [set-map (cond-> {:updated_at [:now]}
-                  (contains? data :raw_parse_json) (assoc :raw_parse_json (storage/jsonb-value raw_parse_json))
                   (contains? data :raw_extract_json) (assoc :raw_extract_json (storage/jsonb-value raw_extract_json))
                   (contains? data :parsed_markdown) (assoc :parsed_markdown parsed_markdown)
                   (contains? data :supplier_guess) (assoc :supplier_guess supplier_guess)

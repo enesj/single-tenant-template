@@ -277,7 +277,7 @@
                   :city_id [:city-id]
                   :display_name [:display-name]
                   :normalized_key [:normalized-key]
-                  :place_id [:place-id]
+
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 
