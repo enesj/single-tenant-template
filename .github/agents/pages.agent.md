@@ -19,7 +19,7 @@ You implement canonical **admin** and **user** pages for this repository, wiring
 
 - **No Python scripting** in this repo.
 - **Clojure/EDN edits** (`.clj`, `.cljs`, `.cljc`, `.edn`) must use `clojure-mcp` structural tools.
-- **REPL-first checks** via `clj-nrepl-eval` for focused iteration/verification.
+- **REPL-first checks** via the **Clojure MCP eval** capability available in your client (preferred) for focused iteration/verification.
 - **DB inspection/querying** must use `postgres-mcp` only (no direct `psql`).
 - **Schema changes** are migrations-only; never ad-hoc schema edits.
 - **Temporary artifacts** must be under project-local `tmp/`.
@@ -41,6 +41,7 @@ Creating a new page without implementing its frontend route in the same task is 
 2. **Register route**
    - Add route entry in user routing layer.
    - Ensure route path, route key, and page key naming are consistent.
+   - Sanity-check **final composed paths** (avoid accidental double prefixes when mounting nested routers).
 
 3. **Update page mapping/aggregator**
    - Wire page component into the relevant page registry/aggregator.
@@ -72,6 +73,7 @@ Creating a new page without implementing its frontend route in the same task is 
 2. **Register admin route**
    - Wire route in admin route composition.
    - Verify route ownership stays under admin boundaries.
+   - Sanity-check **final composed paths** (avoid accidental double prefixes when mounting nested routers).
 
 3. **Update admin page registry/aggregator**
    - Add page map entry and ensure route→page resolution is deterministic.
@@ -93,6 +95,21 @@ Creating a new page without implementing its frontend route in the same task is 
    - Keep route scope under `/admin/api` and avoid unnecessary surface area.
 
 ## Session lessons / common pitfalls
+
+- **Route composition can double-prefix segments**
+   - If a FE call “looks right” but returns SPA HTML or 404/405/401, verify the *effective* API path after route composition (e.g., avoid `/entities/entities/...`).
+
+- **Refresh hydration requires a real route-enter fetch dispatch**
+   - Ensure your route controller dispatches at least one initial fetch event on enter (guarded if needed). A guarded wrapper with an empty event list is a silent no-op.
+
+- **Postgres enums + prepared params often require explicit placeholder casts**
+   - For enum columns, prefer `?::your_enum_type` in `INSERT`/`UPDATE` templates to avoid SQLSTATE 42804 (text vs enum).
+
+- **Form defaults depend on the exact config key the form system reads**
+   - Confirm whether the form builder expects `:default` vs `:default-value` and use the correct one. Defaults should also exist in DB + backend as defense-in-depth.
+
+- **Normalize key shapes before merging fetched rows with updates**
+   - Fetched DB rows and incoming JSON payloads may have different key shapes (qualified vs unqualified). Normalize both sides before `merge` to prevent subtle update bugs.
 
 - **List-view batch delete in user context often needs CRUD bridge overrides**
   - If batch delete fails silently or no-op behavior appears, verify the user-side entity CRUD bridge (and fetch bridge where needed) is explicitly wired for that entity context.
@@ -159,7 +176,10 @@ After creating a new page/entity, update hardcoded defaults and settings wiring 
 For behavior changes/non-trivial page work, run at least one REPL check and one focused frontend compile/test check.
 
 - **REPL validation (required)**
-  - Reload touched namespaces using `clj-nrepl-eval` and evaluate the smallest meaningful assertion for route/event/page wiring.
+   - Reload touched namespaces using your client’s **Clojure MCP eval** and evaluate the smallest meaningful assertion for route/event/page wiring.
+   - Confirm the route-enter/controller logic triggers at least one init fetch event (especially important for refresh behavior).
+   - Confirm the **final composed HTTP paths** match what the frontend is calling (watch for accidental double prefixes when mounting routers).
+   - If the page introduces/edits enum-backed fields, confirm create + update succeed (and add placeholder casts in SQL when needed).
   - Validate happy path plus at least one boundary case (e.g., missing params, empty results, invalid key).
 
 - **Focused frontend compile/test validation (required suggestion)**

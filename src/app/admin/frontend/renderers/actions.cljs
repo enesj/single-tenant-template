@@ -34,6 +34,7 @@
                           :show-edit? show-edit?
                           :show-delete? show-delete?
                           :constraints-enabled? constraints-enabled?
+                          :on-edit-click (:on-edit-click entity-item)
                           :custom-actions custom-render})))
 
 (defn create-actions-renderer

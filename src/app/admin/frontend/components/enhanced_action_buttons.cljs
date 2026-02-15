@@ -18,7 +18,7 @@
 
 (defui enhanced-action-buttons
   "Action buttons with only local protections (no remote deletion constraints)."
-  [{:keys [entity-name item show-edit? show-delete? custom-actions]
+  [{:keys [entity-name item show-edit? show-delete? custom-actions on-edit-click]
     :or {show-edit? true show-delete? true}}]
   (let [edit-icon-el ($ edit-icon)
         delete-icon-el ($ delete-icon)
@@ -63,7 +63,9 @@
                             (when entity-name-kw
                               (rf/dispatch [::crud-events/clear-error entity-name-kw])
                               (rf/dispatch [::form-events/clear-form-errors entity-name-kw]))
-                            (rf/dispatch [:app.template.frontend.events.config/set-editing item-id]))]
+                            (if on-edit-click
+                              (on-edit-click item)
+                              (rf/dispatch [:app.template.frontend.events.config/set-editing item-id])))]
     ($ action-buttons
       {:item item
        :custom-actions custom-actions
