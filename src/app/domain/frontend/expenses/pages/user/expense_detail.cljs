@@ -2,6 +2,7 @@
   "User-facing expense detail view."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
@@ -25,14 +26,10 @@
               (str (or currency "$") " " (.toFixed (js/Number amount) 2))))))
 
 (defn format-date [date-str]
-  (when date-str
-    (.toLocaleDateString (js/Date. date-str) "en-US"
-      #js {:year "numeric" :month "long" :day "numeric" :hour "2-digit" :minute "2-digit"})))
+  (timestamp/format-timestamp-string date-str))
 
 (defn format-short-date [date-str]
-  (when date-str
-    (.toLocaleDateString (js/Date. date-str) "en-US"
-      #js {:year "numeric" :month "short" :day "numeric"})))
+  (timestamp/format-timestamp-string date-str))
 
 ;; ========================================================================
 ;; Components
@@ -59,10 +56,10 @@
             ($ :th {:class "text-right"} "Total")))
         ($ :tbody
           (for [{:keys [id
-                       raw_label raw-label
-                       qty
-                       unit_price unit-price
-                       line_total line-total]} items]
+                        raw_label raw-label
+                        qty
+                        unit_price unit-price
+                        line_total line-total]} items]
             (let [raw-label* (or raw-label raw_label)
                   unit-price* (or unit-price unit_price)
                   line-total* (or line-total line_total)]

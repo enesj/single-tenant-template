@@ -43,3 +43,14 @@
           body (parse-json-body resp)]
       (is (= 403 (:status resp)))
       (is (= "Role assignment required" (:error body))))))
+
+(deftest user-receipts-batch-ocr-empty-selection-is-safe
+  (testing "batch OCR returns 400 when no receipt ids are provided"
+    (let [handler (user-receipts/ocr-batch-receipts-handler nil nil)]
+      (doseq [selection [nil []]]
+        (let [resp (handler {:identity {:id (UUID/randomUUID)
+                                        :role "member"}
+                             :body-params {:receipt_ids selection}})
+              body (parse-json-body resp)]
+          (is (= 400 (:status resp)))
+          (is (= "No receipt ids provided" (:error body))))))))

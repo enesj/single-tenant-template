@@ -29,6 +29,46 @@
     kw/ensure-keyword
     model-naming/db-keyword->app))
 
+(defn- column-key-candidates
+  [column-key]
+  (let [app-kw (some-> column-key model-naming/ensure-app-keyword)
+        app-name (some-> app-kw name)
+        db-kw (some-> app-kw app-col->db-col)
+        db-name (some-> db-kw name)]
+    (->> [column-key
+          (when (keyword? column-key) (name column-key))
+          (when (string? column-key) (keyword column-key))
+          app-kw
+          app-name
+          db-kw
+          db-name]
+      (remove nil?)
+      distinct
+      vec)))
+
+(defn- lookup-column-entry
+  [m column-key]
+  (let [sentinel ::not-found]
+    (some (fn [k]
+            (let [v (get m k sentinel)]
+              (when-not (= v sentinel) v)))
+      (column-key-candidates column-key))))
+
+(defn- resolve-column-label-override
+  [table-config column-key]
+  (let [label (some-> (lookup-column-entry (:column-metadata table-config) column-key)
+                :label
+                str
+                str/trim)]
+    (when (seq label)
+      label)))
+
+(defn- apply-column-label-override
+  [table-config column-key field-spec]
+  (if-let [label (resolve-column-label-override table-config column-key)]
+    (assoc field-spec :label label)
+    field-spec))
+
 ;; Event handler for initializing entity specs
 (rf/reg-event-db
   ::initialize-entity-specs
@@ -79,15 +119,13 @@
                                  [k f])))
                        base-fields)
           computed-meta-for (fn [col-kw]
-                              (let [db-col (app-col->db-col col-kw)]
-                                (or (get-in table-config [:computed-fields col-kw])
-                                  (get-in table-config [:computed-fields (name col-kw)])
-                                  (when db-col
-                                    (or (get-in table-config [:computed-fields db-col])
-                                      (get-in table-config [:computed-fields (name db-col)]))))))
+                              (lookup-column-entry (:computed-fields table-config) col-kw))
+          column-config-for (fn [col-kw]
+                              (lookup-column-entry (:column-config table-config) col-kw))
           computed-field-spec (fn [col-kw]
                                 (let [m (computed-meta-for col-kw)
-                                      label (or (:label m)
+                                      label (or (resolve-column-label-override table-config col-kw)
+                                              (:label m)
                                               (labels/field-name->label col-kw))]
                                   {:id (name col-kw)
                                    :label label
@@ -108,21 +146,22 @@
         (mapv (fn [k]
                 (let [field-spec (or (get merged-by-id k)
                                    (computed-field-spec k))
-                      db-col (app-col->db-col k)
-                      column-config (or (get-in table-config [:column-config k])
-                                      (get-in table-config [:column-config (name k)])
-                                      (when db-col
-                                        (or (get-in table-config [:column-config db-col])
-                                          (get-in table-config [:column-config (name db-col)]))))]
-                  (if (map? column-config)
-                    (merge field-spec column-config)
-                    field-spec)))
+                      column-config (column-config-for k)
+                      field-spec* (if (map? column-config)
+                                    (merge field-spec column-config)
+                                    field-spec)]
+                  (apply-column-label-override table-config k field-spec*)))
           available-cols)
         ;; Fallback: preserve backend/models-derived field order, and append any
         ;; computed fields not already present.
         (let [base-ids (set (keep field-id->kw base-fields))
+              base-fields* (mapv (fn [field]
+                                   (if-let [field-id (field-id->kw field)]
+                                     (apply-column-label-override table-config field-id field)
+                                     field))
+                             base-fields)
               missing-computed (remove base-ids computed-cols)]
-          (vec (concat base-fields (map computed-field-spec missing-computed))))))))
+          (vec (concat base-fields* (map computed-field-spec missing-computed))))))))
 
 (rf/reg-sub
   :form-entity-specs

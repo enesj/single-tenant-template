@@ -42,7 +42,7 @@
   :always-visible ["raw_label"],
   :computed-fields
   {:raw_label {},
-   :expense_purchased_at {},
+   :expense_purchased_at {:type "timestamp"},
    :article_canonical_name {}}},
  :suppliers
  {:available-columns

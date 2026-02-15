@@ -2,11 +2,12 @@
   "User-facing expense dashboard page.
    Shows personal expense summary, recent expenses, and quick actions for expense management."
   (:require
+    [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.utils.timestamp :as timestamp]
+    app.domain.frontend.expenses.subs.user-expenses ;; side-effect load for subscriptions
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]]
-    [app.template.frontend.components.button :refer [button]]
-    app.domain.frontend.expenses.subs.user-expenses)) ;; side-effect load for subscriptions
+    [uix.re-frame :refer [use-subscribe]])) ;; side-effect load for subscriptions
 
 ;; ========================================================================
 ;; Formatting helpers
@@ -27,11 +28,9 @@
               (str (or currency "$") " " (.toFixed (js/Number amount) 2))))))
 
 (defn format-date
-  "Short human-friendly date for purchased_at timestamps."
+  "Canonical Created-style date formatting for purchased_at timestamps."
   [date-str]
-  (when date-str
-    (.toLocaleDateString (js/Date. date-str) "en-US"
-      #js {:month "short" :day "numeric"})))
+  (timestamp/format-timestamp-string date-str))
 
 (defn status-label [expense]
   (if (:is_posted expense) "posted" "pending"))

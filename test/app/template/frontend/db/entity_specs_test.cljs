@@ -46,7 +46,9 @@
     "id"]
    :computed-fields
    {"supplier_display_name" {}
-    "article_canonical_name" {}}})
+    "article_canonical_name" {}}
+   :column-metadata
+   {"article_canonical_name" {:label "Article"}}})
 
 (deftest entity-specs-by-name-normalizes-entity-key
   (testing ":entity-specs/by-name resolves the same spec for snake_case and kebab-case entity identifiers"
@@ -83,10 +85,15 @@
     (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
 
     (let [spec @(rf/subscribe [:entity-specs/by-name :article-aliases])
-          ids (mapv :id spec)]
+          ids (mapv :id spec)
+          article-field (some (fn [field]
+                                (when (= "article-canonical-name" (:id field))
+                                  field))
+                          spec)]
       ;; Computed fields should exist (data provides these keys even though models metadata doesn't).
       (is (some #{"supplier-display-name"} ids))
       (is (some #{"article-canonical-name"} ids))
+      (is (= "Article" (:label article-field)))
       ;; Base foreign-key fields should be filtered out because they're not in :available-columns.
       (is (not (some #{"supplier-id"} ids)))
       (is (not (some #{"article-id"} ids)))
@@ -98,3 +105,19 @@
               "created-at"
               "id"]
             ids)))))
+
+(deftest entity-specs-by-name-blank-column-metadata-label-falls-back
+  (testing "blank :column-metadata labels fall back to default naming"
+    (reset-db!
+      {:models-data article-aliases-models-data
+       :domain {:config {:table-columns
+                         {:article-aliases (assoc article-aliases-table-columns
+                                             :column-metadata {"article_canonical_name" {:label "   "}})}}}})
+    (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
+
+    (let [spec @(rf/subscribe [:entity-specs/by-name :article-aliases])
+          article-field (some (fn [field]
+                                (when (= "article-canonical-name" (:id field))
+                                  field))
+                          spec)]
+      (is (= "Article canonical name" (:label article-field))))))

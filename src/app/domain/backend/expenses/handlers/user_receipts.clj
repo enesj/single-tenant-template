@@ -7,7 +7,7 @@
   - list receipts belonging to the current user
   - fetch a receipt detail
   - approve an extracted receipt and create an expense (receipt status → posted)
-  - trigger OCR for receipts (single)"
+  - trigger OCR for receipts (single and batch)"
   (:require
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
@@ -467,3 +467,74 @@
               (h/json-response {:error "Invalid id"} 400))))
         (h/unauthorized-response)))
     "Failed to trigger OCR"))
+
+(defn ocr-batch-receipts-handler
+  "POST /api/v1/expenses/receipts/ocr
+
+  Trigger OCR for multiple receipts. Admin users can OCR any receipts;
+  regular users can only OCR their own receipts.
+
+  Expects JSON body:
+  {:receipt_ids [<uuid> ...]}
+
+  Returns:
+  {:data {:queued true :receipt_ids [<uuid-string> ...]}}"
+  [db app-config]
+  (with-error-handling
+    (fn [request]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
+          forbidden
+          (let [role (h/get-user-role request)
+                body (h/read-body-params request)
+                raw-ids (or (:receipt_ids body)
+                          (:receipt-ids body)
+                          (:receiptIds body)
+                          (:ids body)
+                          [])
+                ids (->> raw-ids
+                      (map try-parse-uuid)
+                      (filter some?)
+                      distinct
+                      vec)]
+            (cond
+              (empty? raw-ids)
+              (h/json-response {:error "No receipt ids provided"} 400)
+
+              (empty? ids)
+              (h/json-response {:error "One or more receipt ids are invalid"} 400)
+
+              :else
+              (let [accessible-ids (->> ids
+                                     (filter (fn [id]
+                                               (some? (if (= "admin" role)
+                                                        (receipt-queries/get-receipt db id)
+                                                        (receipt-queries/get-user-receipt db user-id id)))))
+                                     vec)
+                    accessible-id-set (set accessible-ids)
+                    skipped-ids (->> ids
+                                  (remove accessible-id-set)
+                                  (map str)
+                                  vec)]
+                (if (empty? accessible-ids)
+                  (h/json-response {:error "No accessible receipts found"} 404)
+                  (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
+                    (cond
+                      (not enabled?)
+                      (h/json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
+                        409)
+
+                      (not (seq api-key))
+                      (h/json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
+                        409)
+
+                      :else
+                      (do
+                        (receipt-ocr/queue-ui-ocr! db app-config accessible-ids {:source :user-ui :user-id user-id})
+                        (h/json-response
+                          {:data (cond-> {:queued true
+                                          :receipt_ids (mapv str accessible-ids)}
+                                   (seq skipped-ids) (assoc :skipped_receipt_ids skipped-ids))}
+                          202)))))))))
+        (h/unauthorized-response)))
+    "Failed to trigger batch OCR"))

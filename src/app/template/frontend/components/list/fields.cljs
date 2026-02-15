@@ -1,36 +1,15 @@
 (ns app.template.frontend.components.list.fields
   (:require
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- format-timestamp
-  "Format a timestamp value for display, matching Created/Updated column formatting.
-
-   When `:show-seconds?` is true, renders seconds (highlighted) to make rapid changes
-   easier to spot in list views."
-  ([value]
-   (format-timestamp value {:show-seconds? false}))
-  ([value {:keys [show-seconds?]}]
-   (when (and value (not= value "") (not= value "—"))
-     (try
-       (let [date (js/Date. value)]
-         (when-not (js/isNaN (.getTime date))
-           (let [month (.toLocaleString date "en-US" #js {:month "short"})
-                 day (.getDate date)
-                 hours (.getHours date)
-                 minutes (.getMinutes date)
-                 seconds (.getSeconds date)
-                 hh (str (when (< hours 10) "0") hours)
-                 mm (str (when (< minutes 10) "0") minutes)
-                 ss (str (when (< seconds 10) "0") seconds)]
-             ($ :span {:class "whitespace-nowrap"}
-               ($ :span (str month " " day))
-               ($ :span {:class "ml-1"} (str hh ":" mm))
-               (when show-seconds?
-                 ($ :span {:class "text-warning"} (str ":" ss)))))))
-       (catch js/Error _
-         ($ :span (str value)))))))
+  "Format a timestamp value for display using canonical Created-style rendering."
+  [value]
+  (timestamp/render-timestamp value {:show-seconds? true
+                                     :highlight-seconds? true}))
 
 (defui select-field-value [{:keys [field value]}]
   (let [raw-options (:options field)
@@ -154,7 +133,7 @@
          value)
      ($ select-field-value {:field field :value value})
      (let [field-id (:id field)
-           normalized-field-id (normalize-field-key field-id)
+           _normalized-field-id (normalize-field-key field-id)
            display-source-field (:display-source-field field)
            display-value (or (lookup-item-value item display-source-field) value)
            input-type (:input-type field)
@@ -177,7 +156,7 @@
                                 (= field-type "datetime-local")
                                 (= input-type "datetime-local")
                                 (= input-type :datetime-local))
-           show-seconds? (contains? #{"created-at" "updated-at"} normalized-field-id)
+           _show-seconds? true
            should-truncate? (or
                               (= input-type "url")
                               (= input-type "email")
@@ -207,8 +186,7 @@
            (titleize-status status-str))
 
          is-datetime-field?
-         ($ :span {:class "whitespace-nowrap"}
-           (format-timestamp display-value {:show-seconds? show-seconds?}))
+         (format-timestamp display-value)
 
          should-truncate?
          ($ truncated-text-value {:text text-value

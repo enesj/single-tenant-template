@@ -1,6 +1,6 @@
 (ns app.template.frontend.components.list.rows
   "Row rendering components for list views.
-   
+
    This module uses reactive cell components from the cells module for selection
    and actions."
   (:require
@@ -13,6 +13,7 @@
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
     [app.template.frontend.utils.column-config :as column-config]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [re-frame.core :as rf]
     [uix.core :as uix :refer [$]]))
 
@@ -120,21 +121,8 @@
                                                                                    (kw/ensure-name legacy))))))]
                                          (or direct legacy-val)))
                          render-timestamp (fn [value]
-                                            ($ :span {:class "whitespace-nowrap"}
-                                              (when value
-                                                (let [date (js/Date. value)
-                                                      month (.toLocaleString date "en-US" #js {:month "short"})
-                                                      day (.getDate date)
-                                                      hours (.getHours date)
-                                                      minutes (.getMinutes date)
-                                                      seconds (.getSeconds date)
-                                                      hh (str (when (< hours 10) "0") hours)
-                                                      mm (str (when (< minutes 10) "0") minutes)
-                                                      ss (str (when (< seconds 10) "0") seconds)]
-                                                  ($ :div
-                                                    ($ :span (str month " " day))
-                                                    ($ :span {:class "ml-1"} (str hh ":" mm))
-                                                    ($ :span {:class "text-warning"} (str ":" ss)))))))
+                                            (timestamp/render-timestamp value {:show-seconds? true
+                                                                               :highlight-seconds? true}))
                          has-created? (contains? timestamp-field-ids created-key)
                          has-updated? (contains? timestamp-field-ids updated-key)]
                      [(when (and has-created? (column-visible? created-key))

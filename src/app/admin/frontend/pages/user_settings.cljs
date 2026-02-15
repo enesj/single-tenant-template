@@ -8,6 +8,7 @@
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.events.user-settings :as user-settings-events]
     [app.template.frontend.settings.resolver :as resolver]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
@@ -279,7 +280,7 @@
 
           (when last-saved
             ($ :div {:class "ml-auto text-xs text-base-content/60 self-center"}
-              (str "Saved " (js/Date. last-saved)))))
+              (str "Saved " (timestamp/format-timestamp-string last-saved {:nil-text "?"})))))
 
         (when loading?
           ($ :div {:class "ds-alert ds-alert-info mb-6"}

@@ -190,10 +190,17 @@
        fallback)
 
      :cljs
-     (if (and date (instance? js/Date date) (not (js/isNaN (.getTime date))))
-       (try
-         (.toLocaleDateString date)
-         (catch :default e
-           (log/warn "Failed to format date for display:" e)
-           fallback))
-       fallback)))
+     (let [date-value (ensure-date date)]
+       (if (valid-date? date-value)
+         (try
+           (let [month (.toLocaleString date-value "en-US" #js {:month "short"})
+                 day (.getDate date-value)
+                 hours (.getHours date-value)
+                 minutes (.getMinutes date-value)
+                 seconds (.getSeconds date-value)]
+             (str month " " day " "
+               (pad-zero hours) ":" (pad-zero minutes) ":" (pad-zero seconds)))
+           (catch :default e
+             (log/warn "Failed to format date for display:" e)
+             fallback))
+         fallback))))

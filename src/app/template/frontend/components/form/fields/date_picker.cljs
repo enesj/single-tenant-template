@@ -1,11 +1,12 @@
 (ns app.template.frontend.components.form.fields.date-picker
   "Date picker component using React Day Picker"
   (:require
-   ["react-day-picker" :refer [DayPicker]]
-   [app.shared.date :as date-utils]
-   [app.template.frontend.components.button :refer [button]]
-   [app.template.frontend.components.common :as common]
-   [uix.core :refer [$ defui]]))
+    ["react-day-picker" :refer [DayPicker]]
+    [app.shared.date :as date-utils]
+    [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.common :as common]
+    [app.template.frontend.utils.timestamp :as timestamp]
+    [uix.core :refer [$ defui]]))
 
 ;; parse-date-string function moved to utils.date namespace
 
@@ -45,25 +46,14 @@
                               (cond
                                 ;; Range mode with from and to dates
                                 (and is-range-mode? date-value)
-                                (let [^js date-value date-value]
-                                  (if (and (.-from date-value) (.-to date-value))
-                                    (let [from-str (try (.toLocaleDateString (.-from date-value))
-                                                     (catch :default _e "?"))
-                                          to-str (try (.toLocaleDateString (.-to date-value))
-                                                   (catch :default _e "?"))]
-                                      (str from-str " - " to-str))
-
-                                    ;; Range mode with only from date
-                                    (when (.-from date-value)
-                                      (try (.toLocaleDateString (.-from date-value))
-                                        (catch :default _e "Invalid date")))))
-
-                                ;; This condition is now handled in the first range mode case above
+                                (let [^js date-value date-value
+                                      from-str (timestamp/format-timestamp-string (.-from date-value) {:nil-text "?"})
+                                      to-str (timestamp/format-timestamp-string (.-to date-value) {:nil-text "?"})]
+                                  (str from-str " - " to-str))
 
                                 ;; Single date mode
                                 date-value
-                                (try (.toLocaleDateString date-value)
-                                  (catch :default _e "Invalid date"))
+                                (timestamp/format-timestamp-string date-value {:nil-text "?"})
 
                                 :else
                                 (if is-range-mode? "Select date range" "Select a date")))]

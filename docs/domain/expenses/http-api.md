@@ -158,6 +158,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /api/v1/expenses/receipts/:id` – delete receipt.
 - `POST /api/v1/expenses/receipts/:id/review` – save reviewed fields/items without approving.
 - `POST /api/v1/expenses/receipts/:id/approve` – approve receipt and create expense.
+- `POST /api/v1/expenses/receipts/ocr` – trigger async OCR for selected receipts (`receipt_ids` array; inaccessible ids are skipped; requires `MISTRAL_API_KEY`).
 - `POST /api/v1/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires `MISTRAL_API_KEY`).
 
 ### Articles + Auto-matching (admin/owner only)

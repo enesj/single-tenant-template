@@ -47,9 +47,9 @@
       (is (= {:expenses {:title "My Expenses"}}
             (get-in db [:domain :config :entities])))
       (is (= {:expenses {:display-defaults {:show-edit? true}
-             :display-locks {:show-delete? false}
-             :column-defaults {:notes false}
-             :column-locks {:purchased_at true}}}
+                         :display-locks {:show-delete? false}
+                         :column-defaults {:notes false}
+                         :column-locks {:purchased_at true}}}
             (get-in db [:domain :config :view-options])))
       (is (= {:expenses {:available-columns [:purchased_at :notes]
                          :default-visible-columns [:purchased_at]}}
@@ -99,7 +99,7 @@
                        :notes
                        {:kind :lock :value false}])
     (is (= false (get-in @rf-db/app-db
-                    [:admin :user-settings :draft :view-options :expenses :column-locks :notes])))
+                   [:admin :user-settings :draft :view-options :expenses :column-locks :notes])))
 
     ;; inherit means remove from both defaults and locks
     (rf/dispatch-sync [::user-settings/set-column-visibility-setting-draft
@@ -121,12 +121,12 @@
 
     ;; Hide :purchased_at too
     (rf/dispatch-sync [::user-settings/toggle-column-visibility-draft :expenses :purchased_at])
-        (is (= []
+    (is (= []
           (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-visible-columns])))
 
     ;; Unhide :notes
     (rf/dispatch-sync [::user-settings/toggle-column-visibility-draft :expenses :notes])
-        (is (= [:notes]
+    (is (= [:notes]
           (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :default-visible-columns])))))
 
 (deftest removing-available-column-prunes-dependent-lists-and-maps
@@ -145,7 +145,9 @@
                      :always-visible [:purchased_at]
                      :computed-fields {:supplier_display_name {:type "join"}}
                      :column-config {:supplier_display_name {:width "100px"}
-                                    :notes {:width "80px"}}}}}))
+                                     :notes {:width "80px"}}
+                     :column-metadata {:supplier_display_name {:label "Supplier"}
+                                       :notes {:label "Notes"}}}}}))
 
     ;; Remove supplier_display_name from :available-columns
     (rf/dispatch-sync [::user-settings/toggle-table-column-in-list-draft
@@ -158,7 +160,8 @@
       (is (= [] (:sortable-columns cfg)))
       (is (= ["purchased_at"] (:always-visible cfg)))
       (is (= {} (:computed-fields cfg)))
-      (is (= {:notes {:width "80px"}} (:column-config cfg))))))
+      (is (= {:notes {:width "80px"}} (:column-config cfg)))
+      (is (= {:notes {:label "Notes"}} (:column-metadata cfg))))))
 
 (deftest setting-available-columns-prunes-dependent-lists-and-maps
   (testing "::set-table-column-list-draft cleans up when list-type is :available-columns"
@@ -176,7 +179,9 @@
                      :always-visible [:purchased_at]
                      :computed-fields {:notes {:type "noop"}}
                      :column-config {:notes {:width "80px"}
-                                    :purchased_at {:width "120px"}}}}}))
+                                     :purchased_at {:width "120px"}}
+                     :column-metadata {:notes {:label "Notes"}
+                                       :purchased_at {:label "Purchased"}}}}}))
 
     (rf/dispatch-sync [::user-settings/set-table-column-list-draft
                        :expenses :available-columns [:notes]])
@@ -188,7 +193,39 @@
       (is (= [] (:sortable-columns cfg)))
       (is (= [] (:always-visible cfg)))
       (is (= {:notes {:type "noop"}} (:computed-fields cfg)))
-      (is (= {:notes {:width "80px"}} (:column-config cfg))))))
+      (is (= {:notes {:width "80px"}} (:column-config cfg)))
+      (is (= {:notes {:label "Notes"}} (:column-metadata cfg))))))
+
+(deftest table-column-label-draft-set-and-clear
+  (testing "::set-table-column-label-draft updates and clears :column-metadata labels"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+
+    (rf/dispatch-sync [::user-settings/init])
+    (setup/respond-success! (example-response))
+
+    (rf/dispatch-sync [::user-settings/set-table-column-label-draft
+                       :expenses
+                       :purchased_at
+                       "Purchased"])
+    (is (= {:label "Purchased"}
+          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata "purchased_at"])))
+
+    (rf/dispatch-sync [::user-settings/set-table-column-label-draft
+                       :expenses
+                       :purchased_at
+                       "   "])
+    (is (nil? (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata])))
+
+    (rf/dispatch-sync [::user-settings/set-table-column-label-draft
+                       :expenses
+                       :purchased_at
+                       "Purchased"])
+    (rf/dispatch-sync [::user-settings/set-table-column-label-draft
+                       :expenses
+                       :purchased_at
+                       nil])
+    (is (nil? (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata])))))
 
 (deftest save-sends-put-and-updates-state-on-success
   (testing "::save sends PUT and syncs state on success"

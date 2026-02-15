@@ -1,6 +1,7 @@
 (ns app.admin.frontend.events.user-settings.table-columns
   (:require
     [app.admin.frontend.events.user-settings.utils :as u]
+    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (defn- col->str [c]
@@ -13,17 +14,17 @@
 (defn- prune-cols-to-available
   "Keep only columns whose string form is present in avail-set.
 
-  Returns a distinct vector of strings, preserving input order." 
+  Returns a distinct vector of strings, preserving input order."
   [avail-set xs]
   (->> (or xs [])
-       (map col->str)
-       (filter avail-set)
-       distinct
-       vec))
+    (map col->str)
+    (filter avail-set)
+    distinct
+    vec))
 
 (defn- prune-map-to-available
   "Prune a map keyed by column identifiers (keywords/strings), keeping entries
-  whose key string form is present in avail-set." 
+  whose key string form is present in avail-set."
   [avail-set m]
   (reduce-kv
     (fn [acc k v]
@@ -35,17 +36,18 @@
 
 (defn- cleanup-entity-table-columns
   "Ensure the entity table-columns config stays valid when :available-columns
-  changes by pruning dependent lists/maps to be subsets of :available-columns." 
+  changes by pruning dependent lists/maps to be subsets of :available-columns."
   [entity-config]
   (let [avail-set (set (map col->str (or (:available-columns entity-config) [])))]
     (-> entity-config
-        (update :available-columns #(->> (or % []) (map col->str) (remove nil?) distinct vec))
-        (update :always-visible #(prune-cols-to-available avail-set %))
-        (update :default-visible-columns #(prune-cols-to-available avail-set %))
-        (update :filterable-columns #(prune-cols-to-available avail-set %))
-        (update :sortable-columns #(prune-cols-to-available avail-set %))
-        (update :computed-fields #(prune-map-to-available avail-set %))
-        (update :column-config #(prune-map-to-available avail-set %)))))
+      (update :available-columns #(->> (or % []) (map col->str) (remove nil?) distinct vec))
+      (update :always-visible #(prune-cols-to-available avail-set %))
+      (update :default-visible-columns #(prune-cols-to-available avail-set %))
+      (update :filterable-columns #(prune-cols-to-available avail-set %))
+      (update :sortable-columns #(prune-cols-to-available avail-set %))
+      (update :computed-fields #(prune-map-to-available avail-set %))
+      (update :column-config #(prune-map-to-available avail-set %))
+      (update :column-metadata #(prune-map-to-available avail-set %)))))
 
 ;; =============================================================================
 ;; Draft editing: table-columns defaults
@@ -61,8 +63,8 @@
           always-visible-set (into #{} (u/normalize-cols (:always-visible entity-config)))
           has-default-visible? (contains? entity-config :default-visible-columns)
           default-visible (u/normalize-cols (if has-default-visible?
-                                             (:default-visible-columns entity-config)
-                                             available))
+                                              (:default-visible-columns entity-config)
+                                              available))
           visible-set (into #{} default-visible)
           visible-set (into visible-set always-visible-set)]
       (cond
@@ -82,11 +84,11 @@
                                 (conj visible-set column-kw))
               ;; Preserve ordering based on available-columns
               new-visible (->> available
-                               (filter new-visible-set)
-                               vec)]
+                            (filter new-visible-set)
+                            vec)]
           (assoc-in db
-                    [:admin :user-settings :draft :table-columns entity-kw :default-visible-columns]
-                    new-visible))))))
+            [:admin :user-settings :draft :table-columns entity-kw :default-visible-columns]
+            new-visible))))))
 
 (rf/reg-event-db
   :app.admin.frontend.events.user-settings/reset-columns-draft
@@ -100,6 +102,52 @@
 ;; =============================================================================
 ;; Draft editing: table-columns config (structural, not policy)
 ;; =============================================================================
+
+(defn- col-key-variants
+  [column-name]
+  (let [col (col->str column-name)
+        kebab (some-> col (str/replace "_" "-"))
+        snake (some-> col (str/replace "-" "_"))]
+    (->> [col
+          kebab
+          snake
+          (some-> col keyword)
+          (some-> kebab keyword)
+          (some-> snake keyword)]
+      (remove nil?)
+      distinct
+      vec)))
+
+(defn- remove-column-metadata-entry
+  [metadata column-name]
+  (let [metadata (or metadata {})
+        keys-to-remove (col-key-variants column-name)]
+    (reduce dissoc metadata keys-to-remove)))
+
+(defn- normalize-label
+  [label]
+  (let [label-str (some-> label str str/trim)]
+    (when-not (str/blank? (or label-str ""))
+      label-str)))
+
+(rf/reg-event-db
+  :app.admin.frontend.events.user-settings/set-table-column-label-draft
+  (fn [db [_ entity column-name label]]
+    (let [entity-kw (u/normalize-kw entity)
+          col-str (col->str column-name)
+          metadata-path [:admin :user-settings :draft :table-columns entity-kw :column-metadata]
+          entity-path [:admin :user-settings :draft :table-columns entity-kw]
+          label' (normalize-label label)]
+      (if (or (nil? entity-kw) (str/blank? (or col-str "")))
+        db
+        (if label'
+          (let [cleaned (remove-column-metadata-entry (get-in db metadata-path) col-str)]
+            (assoc-in db metadata-path (assoc cleaned col-str {:label label'})))
+          (let [db' (update-in db metadata-path remove-column-metadata-entry col-str)
+                metadata' (get-in db' metadata-path)]
+            (if (seq metadata')
+              db'
+              (update-in db' entity-path dissoc :column-metadata))))))))
 
 (rf/reg-event-db
   :app.admin.frontend.events.user-settings/set-table-column-list-draft

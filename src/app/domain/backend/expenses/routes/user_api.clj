@@ -153,6 +153,7 @@
    ["/receipts/:id/download" {:get {:handler (user-receipts/download-receipt-handler db)}}]
    ["/receipts/batch" {:delete {:handler (user-receipts/batch-delete-receipts-handler db)}}]
 
+   ["/receipts/ocr" {:post {:handler (user-receipts/ocr-batch-receipts-handler db app-config)}}]
    ["/receipts/:id"
     {:get {:handler (user-receipts/get-receipt-handler db)}}]
    ["/receipts/:id/approve" {:post {:handler (user-receipts/approve-receipt-handler db)}}]

@@ -18,6 +18,7 @@ The single source of truth for display-toggle resolution is `src/app/template/fr
 
 1. **Structural config** (`table-columns.edn`)
    - Defines what columns exist and what they *can* do (available/filterable/sortable/always-visible).
+   - Supports optional `:column-metadata` for per-column display labels (e.g. `{"supplier_display_name" {:label "Supplier"}}`).
    - `:always-visible` is **enforced** (cannot be overridden by policy or user prefs).
 
 2. **Policy** (`view-options.edn`)
@@ -99,6 +100,14 @@ Column buttons remain visible, but they become non-interactive when:
 - The column is locked via `view-options.edn` `:column-locks`
 
 In those cases the button is disabled and explains why via a tooltip/title.
+
+### Column display labels (admin + user settings)
+
+In the **Table Columns** editor (`/admin/admin-settings` and `/admin/user-settings`), each column has a **Display Label** input.
+
+- Saving a non-blank value writes `:column-metadata <column> {:label "..."}` in `table-columns.edn`.
+- Clearing the input removes that `:column-metadata` label override.
+- Label overrides are resolved during entity-spec generation (`:entity-specs/by-name`) so list headers render the override label.
 
 ## Implementation pointers
 

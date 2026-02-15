@@ -4,6 +4,7 @@
     [app.template.frontend.components.action-components :as shared-actions]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.dropdown.action :as dropdown]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui]]
@@ -53,7 +54,7 @@
                      {:message (str "Are you sure you want to delete this audit log entry?\n\n"
                                  "Admin: " admin-email "\n"
                                  "Action: " action "\n"
-                                 "Date: " (when created-at (.toLocaleString (js/Date. created-at))) "\n\n"
+                                 "Date: " (when created-at (timestamp/format-timestamp-string created-at)) "\n\n"
                                  "This action cannot be undone and may affect compliance requirements.")
                       :title "Confirm Delete Audit Log"
                       :confirm-text "Delete"

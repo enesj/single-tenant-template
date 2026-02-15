@@ -1,8 +1,9 @@
 (ns app.template.frontend.components.advanced-fields
   "Shared advanced field components with template integration and DaisyUI styling"
   (:require
-    [clojure.string :as str]
     [app.template.frontend.utils.formatting :as formatting]
+    [app.template.frontend.utils.timestamp :as timestamp]
+    [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
 ;; ========================================================================
@@ -108,7 +109,7 @@
         target-date (js/Date. date)
         diff-days (.floor js/Math (/ (- target-date now) (* 1000 60 60 24)))]
     ($ :div {:class "flex flex-col"}
-      ($ :span {:class "text-sm"} (.toLocaleDateString target-date))
+      ($ :span {:class "text-sm"} (timestamp/format-timestamp-string target-date))
       ($ :span {:class (str "text-xs "
                          (cond
                            (< diff-days 0) "text-red-500"

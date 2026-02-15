@@ -34,7 +34,7 @@ For shared HTTP shapes, auth expectations, and generic entity CRUD, see [Templat
 - `GET /admin/api/settings/table-columns` – return merged table-columns config from:
 	- system file: `src/app/admin/frontend/config/table-columns.edn`
 	- domain admin additions: `src/app/domain/**/admin/config/table-columns.edn` (currently Expenses)
-- `PATCH /admin/api/settings/table-columns/entity` – update entity table configuration (default-hidden, always-visible, column widths).
+- `PATCH /admin/api/settings/table-columns/entity` – update entity table configuration (available/default/filter/sort/always-visible lists, `:column-config`, and optional `:column-metadata` label overrides).
 
 ### Users (protected)
 - `GET /admin/api/users` – list users (supports pagination/filtering via query params in `admin-utils/extract-pagination-params`).

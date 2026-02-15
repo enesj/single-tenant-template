@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.filter.utils
   (:require
     [app.shared.date :as date-utils]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]))
 
 ;; Filter value formatting utilities
@@ -25,13 +26,15 @@
   [filter-value]
   (cond
     (and (map? filter-value) (:from filter-value) (:to filter-value))
-    (str (.toLocaleDateString (:from filter-value)) " - " (.toLocaleDateString (:to filter-value)))
+    (str (timestamp/format-timestamp-string (:from filter-value))
+      " - "
+      (timestamp/format-timestamp-string (:to filter-value)))
 
     (and (map? filter-value) (:from filter-value))
-    (str "From " (.toLocaleDateString (:from filter-value)))
+    (str "From " (timestamp/format-timestamp-string (:from filter-value)))
 
     (and (map? filter-value) (:to filter-value))
-    (str "Until " (.toLocaleDateString (:to filter-value)))
+    (str "Until " (timestamp/format-timestamp-string (:to filter-value)))
 
     :else (str filter-value)))
 

@@ -1,8 +1,9 @@
 (ns app.admin.frontend.components.user-activity-modal
   (:require
-    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
-    [app.template.frontend.components.button :refer [button]]
     [app.admin.frontend.components.tabs :as tabs]
+    [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [re-frame.core :refer [dispatch]]
     [uix.core :refer [$ defui use-state use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -23,14 +24,14 @@
       ($ :div {:class "ds-stat-title"} "Last Activity")
       ($ :div {:class "ds-stat-desc"}
         (if (:last-activity summary)
-          (.toLocaleDateString (js/Date. (:last-activity summary)))
+          (timestamp/format-timestamp-string (:last-activity summary))
           "Never")))
 
     ($ :div {:class "ds-stat"}
       ($ :div {:class "ds-stat-title"} "Last Login")
       ($ :div {:class "ds-stat-desc"}
         (if (:last-login summary)
-          (.toLocaleDateString (js/Date. (:last-login summary)))
+          (timestamp/format-timestamp-string (:last-login summary))
           "Never")))))
 
 (defui audit-log-entry
@@ -40,7 +41,7 @@
     ($ :td
       ($ :div {:class "text-sm font-medium"} (:action entry))
       ($ :div {:class "text-xs text-gray-500"}
-        (.toLocaleString (js/Date. (:created-at entry)))))
+        (timestamp/format-timestamp-string (:created-at entry))))
 
     ($ :td
       ($ :div {:class "text-sm"} (or (:admin-email entry) "System"))
@@ -65,7 +66,7 @@
   [{:keys [entry]}]
   ($ :tr
     ($ :td
-      (.toLocaleString (js/Date. (:created-at entry))))
+      (timestamp/format-timestamp-string (:created-at entry)))
 
     ($ :td
       (when (:ip-address entry)

@@ -9,7 +9,7 @@
     [app.template.frontend.utils.column-config :as column-config]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; =============================================================================
@@ -85,13 +85,14 @@
 
 (defui table-columns-editor
   "Editor for table-columns.edn - structural column configuration."
-  [{:keys [entity-kw table-columns-config on-toggle on-reset on-set-list]}]
+  [{:keys [entity-kw table-columns-config on-toggle on-reset on-set-list on-set-label]}]
   (let [entity-config (get table-columns-config entity-kw {})
         available (or (:available-columns entity-config) [])
         always-visible (set (or (:always-visible entity-config) []))
         default-visible (set (or (:default-visible-columns entity-config) []))
         filterable (set (or (:filterable-columns entity-config) []))
         sortable (set (or (:sortable-columns entity-config) []))
+        column-metadata (or (:column-metadata entity-config) {})
 
         ;; Build a stable, complete set of columns to show:
         ;; - DB-backed fields from models metadata (via :entity-specs)
@@ -113,7 +114,8 @@
                            (or (:sortable-columns entity-config) [])
                            (or (:always-visible entity-config) [])
                            (keys (or (:computed-fields entity-config) {}))
-                           (keys (or (:column-config entity-config) {})))
+                           (keys (or (:column-config entity-config) {}))
+                           (keys (or (:column-metadata entity-config) {})))
                       (keep identity)
                       vec)
 
@@ -161,7 +163,51 @@
         all-cols (vec (concat available* rest-spec rest-config))
 
         [dragging-col set-dragging-col!] (use-state nil)
+        [label-edits set-label-edits!] (use-state {})
         can-reorder? (and (fn? on-set-list) (seq available*))
+
+        col-key-variants (fn [col]
+                           (let [base (to-style col)
+                                 kebab (some-> base (str/replace "_" "-"))
+                                 snake (some-> base (str/replace "-" "_"))]
+                             (->> [base
+                                   kebab
+                                   snake
+                                   (some-> base keyword)
+                                   (some-> kebab keyword)
+                                   (some-> snake keyword)]
+                               (remove nil?)
+                               distinct
+                               vec)))
+        lookup-column-entry (fn [m col]
+                              (let [sentinel ::not-found]
+                                (some (fn [k]
+                                        (let [v (get m k sentinel)]
+                                          (when-not (= v sentinel) v)))
+                                  (col-key-variants col))))
+        default-column-label (fn [col]
+                               (-> col
+                                 (str/replace "_" " ")
+                                 (str/replace "-" " ")
+                                 str/capitalize))
+        normalize-label (fn [label]
+                          (let [trimmed (some-> label str str/trim)]
+                            (when-not (str/blank? (or trimmed ""))
+                              trimmed)))
+        effective-label-value (fn [col]
+                                (if (contains? label-edits col)
+                                  (get label-edits col)
+                                  (or (some-> (lookup-column-entry column-metadata col)
+                                        :label
+                                        str
+                                        str/trim)
+                                    "")))
+        commit-label! (fn [col raw-value]
+                        (let [trimmed (normalize-label raw-value)]
+                          (set-label-edits! dissoc col)
+                          (when (fn? on-set-label)
+                            (on-set-label entity-kw col (or trimmed "")))))
+
         reorder-available! (fn [from-col to-col]
                              (when can-reorder?
                                (let [from-index (.indexOf available* from-col)
@@ -182,6 +228,13 @@
         all-default-visible? (and (seq available*) (every? #(contains? default-visible %) available*))
         all-filterable? (and (seq available*) (every? #(contains? filterable %) available*))
         all-sortable? (and (seq available*) (every? #(contains? sortable %) available*))]
+
+    (use-effect
+      (fn []
+        (set-label-edits! {})
+        js/undefined)
+      [entity-kw entity-config])
+
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -206,6 +259,7 @@
               ($ :thead
                 ($ :tr
                   ($ :th {:class "whitespace-nowrap"} "Column")
+                  ($ :th {:class "whitespace-nowrap"} "Display Label")
 
                   ($ :th {:class "text-center whitespace-nowrap"}
                     ($ :div {:class "ds-tooltip ds-tooltip-bottom"
@@ -235,6 +289,7 @@
                 (when (and (seq all-cols) (fn? on-set-list))
                   ($ :tr {:class "bg-base-200"}
                     ($ :th {:class "font-medium text-sm italic"} "Toggle All")
+                    ($ :th {:class "text-center text-xs text-base-content/60"} "—")
                     ($ :th {:class "text-center"}
                       ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
                                :data-tip (if in-table-all? "Remove all" "Add all")}
@@ -289,7 +344,8 @@
                 (for [col all-cols]
                   (let [in-table? (contains? available-set col)
                         enforced? (contains? always-visible col)
-                        row-id (str "table-columns-row-" (name entity-kw) "-" col)]
+                        row-id (str "table-columns-row-" (name entity-kw) "-" col)
+                        label-value (effective-label-value col)]
                     ($ :tr {:key col
                             :id row-id
                             :class (when (= dragging-col col) "opacity-70")
@@ -329,6 +385,19 @@
                           (when enforced?
                             ($ :span {:class "ds-badge ds-badge-xs ds-badge-warning"}
                               "Always visible"))))
+                      ($ :td {:class "align-middle"}
+                        ($ :input {:type "text"
+                                   :id (str "col-label-" (name entity-kw) "-" col)
+                                   :class "ds-input ds-input-xs w-full"
+                                   :placeholder (default-column-label col)
+                                   :value label-value
+                                   :on-change (fn [e]
+                                                (set-label-edits! assoc col (.. e -target -value)))
+                                   :on-blur (fn [e]
+                                              (commit-label! col (.. e -target -value)))
+                                   :on-key-down (fn [e]
+                                                  (when (= "Enter" (.-key e))
+                                                    (.blur (.-target e))))}))
                       ($ :td {:class "text-center"}
                         ($ :div {:class "ds-tooltip ds-tooltip-top inline-block"
                                  :data-tip (if in-table?

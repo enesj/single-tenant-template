@@ -10,6 +10,7 @@
     [app.admin.frontend.pages.unified-settings.view-mode :as view-mode]
     [app.admin.frontend.settings.definitions :as defs]
     [clojure.set :as set]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as timbre]
     [uix.core :refer [$ defui use-effect]]
@@ -60,7 +61,10 @@
                                       (rf/dispatch [::user-settings-events/toggle-table-column-in-list-draft
                                                     entity-kw list-type col-name]))
         on-user-table-columns-reset (fn [entity-kw]
-                                      (rf/dispatch [::user-settings-events/reset-columns-draft entity-kw]))]
+                                      (rf/dispatch [::user-settings-events/reset-columns-draft entity-kw]))
+        on-user-table-column-label-set (fn [entity-kw col-name label]
+                                         (rf/dispatch [::user-settings-events/set-table-column-label-draft
+                                                       entity-kw col-name label]))]
     (if-not selected-entity
       ($ :div {:class "ds-alert ds-alert-info"}
         ($ :span "Select an entity to edit its settings."))
@@ -109,11 +113,11 @@
                    :on-toggle (fn [entity-kw list-type col-name]
                                 ;; Admin table-columns use immediate save via PATCH
                                 (let [col->str (fn [c]
-                                                (cond
-                                                  (nil? c) nil
-                                                  (keyword? c) (name c)
-                                                  (string? c) c
-                                                  :else (str c)))
+                                                 (cond
+                                                   (nil? c) nil
+                                                   (keyword? c) (name c)
+                                                   (string? c) c
+                                                   :else (str c)))
                                       cleanup-available (fn [cfg]
                                                           (let [avail-set (set (map col->str (or (:available-columns cfg) [])))
                                                                 prune (fn [xs]
@@ -136,7 +140,8 @@
                                                               (update :filterable-columns prune)
                                                               (update :sortable-columns prune)
                                                               (update :computed-fields prune-map)
-                                                              (update :column-config prune-map))))
+                                                              (update :column-config prune-map)
+                                                              (update :column-metadata prune-map))))
                                       current-config (get table-columns-config entity-kw {})
                                       current-cols (vec (map col->str (or (get current-config list-type) [])))
                                       col-set (set current-cols)
@@ -150,34 +155,35 @@
                                                 entity-kw new-config])))
                    :on-set-list (fn [entity-kw list-type cols]
                                   (let [col->str (fn [c]
-                                                  (cond
-                                                    (nil? c) nil
-                                                    (keyword? c) (name c)
-                                                    (string? c) c
-                                                    :else (str c)))
+                                                   (cond
+                                                     (nil? c) nil
+                                                     (keyword? c) (name c)
+                                                     (string? c) c
+                                                     :else (str c)))
                                         cleanup-available (fn [cfg]
-                                                          (let [avail-set (set (map col->str (or (:available-columns cfg) [])))
-                                                                prune (fn [xs]
-                                                                        (->> (or xs [])
-                                                                          (map col->str)
-                                                                          (filter avail-set)
-                                                                          distinct
-                                                                          vec))
-                                                                prune-map (fn [m]
-                                                                            (reduce-kv
-                                                                              (fn [acc k v]
-                                                                                (if (contains? avail-set (col->str k))
-                                                                                  (assoc acc k v)
-                                                                                  acc))
-                                                                              {}
-                                                                              (or m {})))]
-                                                            (-> cfg
-                                                              (update :always-visible prune)
-                                                              (update :default-visible-columns prune)
-                                                              (update :filterable-columns prune)
-                                                              (update :sortable-columns prune)
-                                                              (update :computed-fields prune-map)
-                                                              (update :column-config prune-map))))
+                                                            (let [avail-set (set (map col->str (or (:available-columns cfg) [])))
+                                                                  prune (fn [xs]
+                                                                          (->> (or xs [])
+                                                                            (map col->str)
+                                                                            (filter avail-set)
+                                                                            distinct
+                                                                            vec))
+                                                                  prune-map (fn [m]
+                                                                              (reduce-kv
+                                                                                (fn [acc k v]
+                                                                                  (if (contains? avail-set (col->str k))
+                                                                                    (assoc acc k v)
+                                                                                    acc))
+                                                                                {}
+                                                                                (or m {})))]
+                                                              (-> cfg
+                                                                (update :always-visible prune)
+                                                                (update :default-visible-columns prune)
+                                                                (update :filterable-columns prune)
+                                                                (update :sortable-columns prune)
+                                                                (update :computed-fields prune-map)
+                                                                (update :column-config prune-map)
+                                                                (update :column-metadata prune-map))))
                                         current-config (get table-columns-config entity-kw {})
                                         cols' (->> (or cols [])
                                                 (map col->str)
@@ -186,7 +192,38 @@
                                         new-config (cond-> (assoc current-config list-type cols')
                                                      (= list-type :available-columns) cleanup-available)]
                                     (rf/dispatch [::admin-settings-events/update-table-columns-entity
-                                                  entity-kw new-config])))}))
+                                                  entity-kw new-config])))
+                   :on-set-label (fn [entity-kw col-name label]
+                                   (let [col->str (fn [c]
+                                                    (cond
+                                                      (nil? c) nil
+                                                      (keyword? c) (name c)
+                                                      (string? c) c
+                                                      :else (str c)))
+                                         col-key-variants (fn [column-name]
+                                                            (let [col (col->str column-name)
+                                                                  kebab (some-> col (str/replace "_" "-"))
+                                                                  snake (some-> col (str/replace "-" "_"))]
+                                                              (->> [col
+                                                                    kebab
+                                                                    snake
+                                                                    (some-> col keyword)
+                                                                    (some-> kebab keyword)
+                                                                    (some-> snake keyword)]
+                                                                (remove nil?)
+                                                                distinct
+                                                                vec)))
+                                         normalized-label (some-> label str str/trim)
+                                         current-config (get table-columns-config entity-kw {})
+                                         metadata (or (:column-metadata current-config) {})
+                                         cleaned-metadata (reduce dissoc metadata (col-key-variants col-name))
+                                         new-metadata (if (str/blank? (or normalized-label ""))
+                                                        cleaned-metadata
+                                                        (assoc cleaned-metadata (col->str col-name) {:label normalized-label}))
+                                         new-config (cond-> (assoc current-config :column-metadata new-metadata)
+                                                      (empty? new-metadata) (dissoc :column-metadata))]
+                                     (rf/dispatch [::admin-settings-events/update-table-columns-entity
+                                                   entity-kw new-config])))}))
 
               ;; default: view-options
               ($ editors/admin-entity-editor
@@ -236,7 +273,8 @@
                                                 (map (fn [c] (if (keyword? c) (name c) (str c))))
                                                 vec)]
                                     (rf/dispatch [::user-settings-events/set-table-column-list-draft
-                                                  entity-kw list-type cols'])))}))
+                                                  entity-kw list-type cols'])))
+                   :on-set-label on-user-table-column-label-set}))
 
               ;; default: view-options
               ($ editors/user-entity-editor

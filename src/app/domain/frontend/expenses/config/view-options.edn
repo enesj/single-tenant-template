@@ -13,6 +13,18 @@
    :per-page 50},
   :column-defaults {},
   :column-locks {}},
+ :cities
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
+  :column-defaults {},
+  :column-locks {}},
  :articles
  {:display-locks {},
   :display-defaults {:show-edit? false, :show-delete? false}},
@@ -39,30 +51,6 @@
   :column-defaults {},
   :column-locks {}},
  :categories
- {:display-locks {},
-  :display-defaults
-  {:show-add-button? true,
-   :show-delete? true,
-   :show-edit? true,
-   :show-filtering? true,
-   :show-highlights? true,
-   :show-pagination? true,
-   :per-page 50},
-  :column-defaults {},
-  :column-locks {}}
- :expense-categories
- {:display-locks {},
-  :display-defaults
-  {:show-add-button? true,
-   :show-delete? true,
-   :show-edit? true,
-   :show-filtering? true,
-   :show-highlights? true,
-   :show-pagination? true,
-   :per-page 50},
-  :column-defaults {},
-  :column-locks {}}
- :cities
  {:display-locks {},
   :display-defaults
   {:show-add-button? true,
@@ -109,4 +97,16 @@
    :show-edit? true},
   :display-locks {:show-add-button? false},
   :column-defaults {},
-  :column-locks {:id false}}}
+  :column-locks {:id false}},
+ :expense-categories
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
+  :column-defaults {},
+  :column-locks {}}}

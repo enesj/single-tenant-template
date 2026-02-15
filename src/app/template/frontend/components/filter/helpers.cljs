@@ -1,5 +1,6 @@
 (ns app.template.frontend.components.filter.helpers
   (:require
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]))
 
 (defn get-field-type-from-spec
@@ -186,7 +187,7 @@
     :date-range
     (let [format-date (fn [date]
                         (when date
-                          (.toLocaleDateString date)))]
+                          (timestamp/format-timestamp-string date)))]
       (str (when (:from filter-value) (str "from " (format-date (:from filter-value))))
         (when (and (:from filter-value) (:to filter-value)) " to ")
         (when (and (:to filter-value) (not (:from filter-value))) "to ")

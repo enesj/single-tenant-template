@@ -1,17 +1,17 @@
 {:expense-items {:title "Expense Items"},
  :suppliers {:title "Suppliers"},
  :subcategories {:title "Subcategories"},
+ :cities {:title "Cities"},
  :articles {:title "Articles"},
  :payer-types {:title "Payer Types"},
  :expenses {:title "My Expenses"},
  :manufacturers {:title "Manufacturers"},
  :price-observations {:title "Price Observations"},
  :payers {:title "Payers"},
- :categories {:title "Categories"}
- :expense-categories {:title "Expense Categories"}
- :cities {:title "Cities"},
+ :categories {:title "Categories"},
  :supplier-aliases {:title "Supplier Aliases"},
  :receipts {:title "Receipts"},
  :stores {:title "Stores"},
  :article-aliases {:title "Article Aliases"},
- :store-aliases {:title "Store Aliases"}}
+ :store-aliases {:title "Store Aliases"},
+ :expense-categories {:title "Expense Categories"}}

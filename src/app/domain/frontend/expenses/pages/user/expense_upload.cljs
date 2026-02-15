@@ -2,9 +2,10 @@
   "User-facing receipt upload page for expense tracking."
   (:require
     [app.domain.frontend.expenses.components.page-guard :as page-guard]
-    [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.auth-guard :refer [auth-guard]]
+    [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.file-drop-zone :refer [file-drop-zone]]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
@@ -34,7 +35,8 @@
                       created_at created-at
                       error_message error-message]} receipts]
           (let [name (or original-filename original_filename "Receipt")
-                created (or created-at created_at "")
+                created (timestamp/format-timestamp-string (or created-at created_at)
+                          {:nil-text ""})
                 err (or error-message error_message)
                 icon (case status
                        "uploaded" "📤"
@@ -73,8 +75,8 @@
         auth-loading? (boolean (:loading? auth-status))
         auth-error (:error auth-status)
 
-  payers (or (use-subscribe [:user-expenses/payers]) [])
-  selected-payer-id (use-subscribe [:user-expenses/upload-payer-id])
+        payers (or (use-subscribe [:user-expenses/payers]) [])
+        selected-payer-id (use-subscribe [:user-expenses/upload-payer-id])
 
         uploading? (boolean (use-subscribe [:user-expenses/upload-loading?]))
         upload-batch (use-subscribe [:user-expenses/upload-batch])

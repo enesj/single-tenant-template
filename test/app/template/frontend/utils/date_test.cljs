@@ -27,13 +27,15 @@
     (is (nil? (date/format-date-for-api nil)))))
 
 (deftest test-format-date-display
-  (testing "format-date-display formats dates for UI display"
-    (let [date-obj (js/Date. "2024-03-15")]
-      (is (re-matches #"\d{1,2}/\d{1,2}/\d{4}" (date/format-date-display date-obj)))))
+  (testing "format-date-display formats dates for UI display in Created-style shape"
+    (let [created-style-re #"^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}$"
+          date-obj (js/Date. "2024-03-15")]
+      (is (re-matches created-style-re (date/format-date-display date-obj)))))
 
   (testing "format-date-display handles various input formats"
-    (is (string? (date/format-date-display "2024-03-15")))
-    (is (string? (date/format-date-display "2024-03-15T10:30:00"))))
+    (let [created-style-re #"^[A-Z][a-z]{2} \d{1,2} \d{2}:\d{2}:\d{2}$"]
+      (is (re-matches created-style-re (date/format-date-display "2024-03-15")))
+      (is (re-matches created-style-re (date/format-date-display "2024-03-15T10:30:00")))))
 
   (testing "format-date-display handles nil"
     (is (= "Select a date" (date/format-date-display nil)))))

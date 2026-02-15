@@ -3,16 +3,10 @@
   ["expense_purchased_at"
    "article_canonical_name"
    "raw_label"
-   "raw_label_id"
-   "alias_id"
    "qty"
    "unit_price"
    "line_total"
-   "article_id"
-   "created_at"
-   "deleted_at"
-   "expense_id"
-   "id"],
+   "created_at"],
   :default-visible-columns
   ["expense_purchased_at"
    "article_canonical_name"
@@ -25,12 +19,10 @@
   ["expense_purchased_at"
    "article_canonical_name"
    "raw_label"
-   "alias_id"
    "qty"
    "unit_price"
    "line_total"
-   "created_at"
-   "expense_id"],
+   "created_at"],
   :sortable-columns
   ["expense_purchased_at"
    "article_canonical_name"
@@ -39,11 +31,15 @@
    "unit_price"
    "line_total"
    "created_at"],
-  :always-visible ["raw_label"],
+  :always-visible [],
   :computed-fields
   {:raw_label {},
-   :expense_purchased_at {},
-   :article_canonical_name {}}},
+   :expense_purchased_at {:type "timestamp"},
+   :article_canonical_name {}},
+  :column-config {},
+  :column-metadata
+  {:article_canonical_name {:label "Article"},
+   :expense_purchased_at {:label "Purchaded At"}}},
  :suppliers
  {:available-columns
   ["display_name"
@@ -59,7 +55,8 @@
   ["display_name" "normalized_key" "address" "created_at"],
   :sortable-columns
   ["display_name" "normalized_key" "address" "created_at"],
-  :always-visible ["display_name"]},
+  :always-visible ["display_name"],
+  :column-metadata {:display_name {:label "Name"}}},
  :subcategories
  {:available-columns
   ["category_id" "name" "description" "created_at" "updated_at" "id"],
@@ -68,6 +65,22 @@
   :filterable-columns
   ["name" "category_id" "description" "created_at"],
   :sortable-columns ["name" "category_id" "created_at" "updated_at"],
+  :always-visible ["name"]},
+ :cities
+ {:available-columns
+  ["name"
+   "normalized_key"
+   "zip"
+   "country"
+   "created_at"
+   "updated_at"
+   "id"],
+  :default-visible-columns
+  ["name" "country" "zip" "normalized_key" "created_at"],
+  :filterable-columns
+  ["name" "normalized_key" "zip" "country" "created_at"],
+  :sortable-columns
+  ["name" "normalized_key" "zip" "country" "created_at" "updated_at"],
   :always-visible ["name"]},
  :articles
  {:available-columns
@@ -109,8 +122,8 @@
    "updated_at"],
   :always-visible ["canonical_name"],
   :computed-fields
-  {:manufacturer_display_name {:type "string", :label "Manufacturer"}
-   :category_name {:type "string", :label "Category"}
+  {:manufacturer_display_name {:type "string", :label "Manufacturer"},
+   :category_name {:type "string", :label "Category"},
    :subcategory_name {:type "string", :label "Subcategory"}},
   :column-config {}},
  :payer-types
@@ -129,20 +142,12 @@
    "currency"
    "total_amount"
    "notes"
-   "is_posted"
    "id"
-   "receipt_id"
    "created_at"
-   "deleted_at"
-   "updated_at"
-   "user_id"
-   "supplier_id"
-   "expense_category_id"
-   "payer_id"
-   "store_id"],
+   "updated_at"],
   :computed-fields
-  {:supplier_display_name {:type "string", :label "Supplier"}
-   :expense_category_name {:type "string", :label "Expense Category"}
+  {:supplier_display_name {:type "string", :label "Supplier"},
+   :expense_category_name {:type "string", :label "Expense Category"},
    :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
@@ -150,8 +155,7 @@
    "expense_category_name"
    "payer_label"
    "currency"
-   "total_amount"
-   "is_posted"],
+   "total_amount"],
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
@@ -159,7 +163,6 @@
    "payer_label"
    "currency"
    "total_amount"
-   "is_posted"
    "created_at"
    "updated_at"],
   :sortable-columns
@@ -169,10 +172,10 @@
    "payer_label"
    "currency"
    "total_amount"
-   "is_posted"
    "created_at"
    "updated_at"],
-  :always-visible []},
+  :always-visible [],
+  :column-config {}},
  :manufacturers
  {:available-columns
   ["display_name" "normalized_key" "created_at" "updated_at" "id"],
@@ -181,6 +184,13 @@
   :filterable-columns ["display_name" "normalized_key" "created_at"],
   :sortable-columns ["display_name" "normalized_key" "created_at"],
   :always-visible ["display_name"]},
+ :countries
+ {:available-columns ["country" "code" "created_at" "updated_at" "id"],
+  :default-visible-columns ["country" "code"],
+  :filterable-columns ["country" "code"],
+  :sortable-columns ["country" "code" "created_at" "updated_at"],
+  :always-visible ["country"],
+  :computed-fields {:id {:type "string"}}},
  :price-observations
  {:available-columns
   ["article_canonical_name"
@@ -239,38 +249,7 @@
   :default-visible-columns ["name" "description" "created_at"],
   :filterable-columns ["name" "description" "created_at"],
   :sortable-columns ["name" "created_at" "updated_at"],
-  :always-visible ["name"]}
- :expense-categories
- {:available-columns
-  ["name" "created_at" "updated_at" "id"],
-  :default-visible-columns ["name" "created_at"],
-  :filterable-columns ["name" "created_at"],
-  :sortable-columns ["name" "created_at" "updated_at"],
-  :always-visible ["name"]}
- :cities
- {:available-columns
-  ["name" "normalized_key" "zip" "country" "created_at" "updated_at" "id"],
-  :default-visible-columns
-  ["name" "country" "zip" "normalized_key" "created_at"],
-  :filterable-columns
-  ["name" "normalized_key" "zip" "country" "created_at"],
-  :sortable-columns
-  ["name"
-   "normalized_key"
-   "zip"
-   "country"
-   "created_at"
-   "updated_at"],
-  :always-visible ["name"]}
-
- :countries
- {:available-columns
-  ["country" "code" "created_at" "updated_at" "id"],
-  :default-visible-columns ["country" "code"],
-  :filterable-columns ["country" "code"],
-  :sortable-columns ["country" "code" "created_at" "updated_at"],
-  :always-visible ["country"],
-  :computed-fields {:id {:type "string"}}},
+  :always-visible ["name"]},
  :supplier-aliases
  {:available-columns
   ["supplier_display_name"
@@ -357,9 +336,14 @@
    "archived_at"
    "created_at"
    "updated_at"
-   "id"]
+   "id"],
   :default-visible-columns
-  ["display_name" "normalized_key" "address" "city_id" "place_id" "created_at"]
+  ["display_name"
+   "normalized_key"
+   "address"
+   "city_id"
+   "place_id"
+   "created_at"],
   :filterable-columns
   ["display_name"
    "normalized_key"
@@ -367,11 +351,16 @@
    "city_id"
    "place_id"
    "archived_at"
-   "created_at"]
+   "created_at"],
   :sortable-columns
-  ["display_name" "normalized_key" "address" "city_id" "created_at" "updated_at"]
-  :always-visible ["display_name"]
-  :computed-fields {}
+  ["display_name"
+   "normalized_key"
+   "address"
+   "city_id"
+   "created_at"
+   "updated_at"],
+  :always-visible ["display_name"],
+  :computed-fields {},
   :column-config {}},
  :article-aliases
  {:available-columns
@@ -443,4 +432,10 @@
   {:supplier_display_name {},
    :store_display_name {},
    :store_address {}},
-  :column-config {}}}
+  :column-config {}},
+ :expense-categories
+ {:available-columns ["name" "created_at" "updated_at" "id"],
+  :default-visible-columns ["name" "created_at"],
+  :filterable-columns ["name" "created_at"],
+  :sortable-columns ["name" "created_at" "updated_at"],
+  :always-visible ["name"]}}

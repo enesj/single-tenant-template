@@ -24,21 +24,67 @@
   "Fields to exclude from admin form specs"
   #{:id :created-at :updated-at})
 
+(defn- app-col->db-col
+  [column-key]
+  (some-> column-key
+    model-naming/ensure-app-keyword
+    name
+    (str/replace "-" "_")
+    keyword))
+
+(defn- column-key-candidates
+  [column-key]
+  (let [app-kw (model-naming/ensure-app-keyword column-key)
+        app-name (some-> app-kw name)
+        db-kw (app-col->db-col column-key)
+        db-name (some-> db-kw name)]
+    (->> [column-key
+          (when (keyword? column-key) (name column-key))
+          (when (string? column-key) (keyword column-key))
+          app-kw
+          app-name
+          db-kw
+          db-name]
+      (remove nil?)
+      distinct
+      vec)))
+
+(defn- lookup-column-entry
+  [m column-key]
+  (let [sentinel ::not-found]
+    (some (fn [k]
+            (let [v (get m k sentinel)]
+              (when-not (= v sentinel) v)))
+      (column-key-candidates column-key))))
+
+(defn- resolve-column-label-override
+  [column-metadata column-key]
+  (let [label (some-> (lookup-column-entry column-metadata column-key)
+                :label
+                str
+                str/trim)]
+    (when (seq label)
+      label)))
+
 ;; Removed unused normalize-field-key function
 
 (defn- create-column-spec-from-config
   "Create a column spec from vector configuration"
-  [column-key column-config computed-fields]
-  (let [base-spec {:id column-key
-                   :label (str/replace (name column-key) #"-" " ")
+  [column-key column-config computed-fields column-metadata]
+  (let [computed-field (lookup-column-entry computed-fields column-key)
+        label-override (resolve-column-label-override column-metadata column-key)
+        base-spec {:id column-key
+                   :label (or label-override
+                            (-> (name column-key)
+                              (str/replace #"[_-]" " ")))
                    :type :text}
         width-config (when-let [width (:width column-config)]
                        {:width width})
         formatter-config (when-let [formatter (:formatter column-config)]
                            {:formatter formatter})
-        computed-config (when (contains? computed-fields column-key)
+        computed-config (when computed-field
                           {:computed true
-                           :dependencies (get-in computed-fields [column-key :dependencies])})
+                           :dependencies (:dependencies computed-field)})
         always-visible-config (when (:always-visible column-config)
                                 {:always-visible true})]
     (merge base-spec width-config formatter-config computed-config always-visible-config)))
@@ -49,14 +95,19 @@
   [db entity-keyword]
 
   (if-let [table-config (get-in db [:admin :config :table-columns entity-keyword])]
-    (let [{:keys [available-columns computed-fields column-config always-visible]} table-config
+    (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
+          always-visible-set (->> (or always-visible [])
+                               (keep model-naming/ensure-app-keyword)
+                               set)
           column-specs (mapv (fn [column-key]
-                               (let [specific-config (get column-config column-key {})
-                                     is-always-visible (contains? (set always-visible) column-key)]
+                               (let [normalized-column (model-naming/ensure-app-keyword column-key)
+                                     specific-config (or (lookup-column-entry column-config column-key) {})
+                                     is-always-visible (contains? always-visible-set normalized-column)]
                                  (create-column-spec-from-config
                                    column-key
                                    (assoc specific-config :always-visible is-always-visible)
-                                   computed-fields)))
+                                   computed-fields
+                                   column-metadata)))
                          available-columns)]
       {:id entity-keyword
        :fields column-specs
@@ -73,14 +124,19 @@
   [entity-keyword]
 
   (if-let [table-config (config-loader/get-table-config entity-keyword)]
-    (let [{:keys [available-columns computed-fields column-config always-visible]} table-config
+    (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
+          always-visible-set (->> (or always-visible [])
+                               (keep model-naming/ensure-app-keyword)
+                               set)
           column-specs (mapv (fn [column-key]
-                               (let [specific-config (get column-config column-key {})
-                                     is-always-visible (contains? (set always-visible) column-key)]
+                               (let [normalized-column (model-naming/ensure-app-keyword column-key)
+                                     specific-config (or (lookup-column-entry column-config column-key) {})
+                                     is-always-visible (contains? always-visible-set normalized-column)]
                                  (create-column-spec-from-config
                                    column-key
                                    (assoc specific-config :always-visible is-always-visible)
-                                   computed-fields)))
+                                   computed-fields
+                                   column-metadata)))
                          available-columns)]
       {:id entity-keyword
        :fields column-specs

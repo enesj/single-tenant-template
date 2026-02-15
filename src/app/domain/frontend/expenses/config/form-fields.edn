@@ -17,6 +17,10 @@
    {:type "select", :label "Category", :options ["categories" "name"]},
    :name {:type "text", :label "Name"},
    :description {:type "textarea", :label "Description"}}},
+ :cities
+ {:create-fields ["name"],
+  :edit-fields ["name"],
+  :field-config {:name {:type "text", :label "Name"}}},
  :articles
  {:edit-fields
   ["manufacturer_id"
@@ -94,15 +98,7 @@
   :edit-fields ["name" "description"],
   :field-config
   {:name {:type "text", :label "Name"},
-   :description {:type "textarea", :label "Description"}}}
- :expense-categories
- {:create-fields ["name"],
-  :edit-fields ["name"],
-  :field-config {:name {:type "text", :label "Name"}}}
- :cities
- {:create-fields ["name"],
-  :edit-fields ["name"],
-  :field-config {:name {:type "text", :label "Name"}}},
+   :description {:type "textarea", :label "Description"}}},
  :supplier-aliases
  {:edit-fields ["raw_label" "raw_label_normalized" "supplier_id"],
   :field-config
@@ -138,4 +134,8 @@
    {:type "select",
     :label "Store",
     :options ["stores" "display_name"]},
-   :confidence {:type "number", :step 1}}}}
+   :confidence {:type "number", :step 1}}},
+ :expense-categories
+ {:create-fields ["name"],
+  :edit-fields ["name"],
+  :field-config {:name {:type "text", :label "Name"}}}}

@@ -5,6 +5,7 @@
   code can share the same formatting behavior without depending on admin namespaces."
   (:require
     [app.shared.date :as date]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [goog.object :as gobj]))
 
@@ -41,30 +42,10 @@
      :else (str value))))
 
 (defn format-date
-  "Format an ISO date string to readable format.
-
-  Uses `app.shared.date/parse-date-string` when possible. Handles parsing errors
-  gracefully by returning the original string."
+  "Format an ISO date string to canonical Created-style display format."
   [date-str]
   (when (and date-str (not= date-str "N/A") (not= date-str "—"))
-    (try
-      (if-let [parsed-date (date/parse-date-string date-str)]
-        (date/format-display-date parsed-date)
-        ;; Manual parsing fallback
-        (let [date-parts (.split date-str "T")
-              date-part (first date-parts)
-              time-parts (when (> (count date-parts) 1) (.split (second date-parts) "."))
-              time-part (first time-parts)
-              year (.substring date-part 0 4)
-              month (.substring date-part 5 7)
-              day (.substring date-part 8 10)
-              hours (when time-part (.substring time-part 0 2))
-              minutes (when time-part (.substring time-part 3 5))
-              seconds (when time-part (.substring time-part 6 8))]
-          (str year "-" month "-" day " " (or hours "00") ":" (or minutes "00") ":" (or seconds "00"))))
-      (catch js/Error e
-        (js/console.log "Date parsing error for:" date-str e)
-        date-str))))
+    (timestamp/format-timestamp-string date-str)))
 
 (defn format-relative-time
   "Format a date as relative time (e.g., \"2 hours ago\", \"3 days ago\").

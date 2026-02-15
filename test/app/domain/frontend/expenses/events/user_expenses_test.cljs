@@ -58,6 +58,17 @@
   (let [fmt (or (:format req) (gobj/get req "format"))]
     (or (get fmt :content-type) (gobj/get fmt "content-type"))))
 
+(defn- valid-receipt
+  [id]
+  {:id id
+   :supplier-guess-supplier {:id "supplier-1"}
+   :payer-id "payer-1"
+   :raw-extract-json {:extraction {:purchased-at "2026-01-01T10:00:00Z"
+                                   :totals {:total-amount 5.25
+                                            :currency "BAM"}
+                                   :items [{:raw-label "Bread"
+                                            :line-total 5.25}]}}})
+
 (deftest modal-create-tracks-recently-created
   (testing "create-expense-modal-success tracks :expenses in :ui :recently-created"
     (reset-db!)
@@ -332,6 +343,90 @@
     (let [req (last-http-request)]
       (is (= :get (req-method req)))
       (is (= "/api/v1/expenses/receipts?limit=500&offset=0" (req-uri req))))))
+
+(deftest ocr-selected-sends-batch-request
+  (testing "ocr-selected posts normalized receipt ids to /api/v1/expenses/receipts/ocr"
+    (reset-db!)
+
+    (rf/dispatch-sync [:user-expenses/ocr-selected ["rec-1" nil " rec-2 " "rec-1" ""]])
+
+    (let [req (last-http-request)]
+      (is (= :post (req-method req)))
+      (is (= "/api/v1/expenses/receipts/ocr" (req-uri req)))
+      (is (= {:receipt_ids ["rec-1" "rec-2"]}
+            (req-params req))))))
+
+(deftest ocr-selected-empty-selection-is-safe
+  (testing "ocr-selected with nil or empty selection does not send a request"
+    (doseq [selection [nil []]]
+      (reset-db!)
+      (rf/dispatch-sync [:user-expenses/ocr-selected selection])
+      (is (= 0 (count @captured-http-requests)))
+      (is (= "Select at least one receipt to parse."
+            (get-in @rf-db/app-db [:user-expenses :receipts :error])))
+      (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?]))))))
+
+(deftest post-selected-starts-with-first-fetch
+  (testing "post-selected starts by loading the first selected receipt"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/post-selected ["rec-1" "rec-2"]])
+    (let [req (last-http-request)]
+      (is (= :get (req-method req)))
+      (is (= "/api/v1/expenses/receipts/rec-1" (req-uri req)))
+      (is (true? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?]))))))
+
+(deftest post-selected-empty-selection-is-safe
+  (testing "post-selected with nil or empty selection does not send a request"
+    (doseq [selection [nil []]]
+      (reset-db!)
+      (rf/dispatch-sync [:user-expenses/post-selected selection])
+      (is (= 0 (count @captured-http-requests)))
+      (is (= "Select at least one receipt to post."
+            (get-in @rf-db/app-db [:user-expenses :receipts :error])))
+      (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?]))))))
+
+(deftest post-selected-approves-and-continues-sequentially
+  (testing "post-selected posts one receipt then continues with the next one"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/post-selected ["rec-1" "rec-2"]])
+
+    (rf/dispatch-sync [:user-expenses/post-selected-receipt-loaded
+                       "rec-1"
+                       ["rec-2"]
+                       []
+                       []
+                       {:data (valid-receipt "rec-1")}])
+
+    (let [approve-req (last-http-request)]
+      (is (= :post (req-method approve-req)))
+      (is (= "/api/v1/expenses/receipts/rec-1/approve" (req-uri approve-req))))
+
+    (rf/dispatch-sync [:user-expenses/post-selected-approve-success
+                       "rec-1"
+                       ["rec-2"]
+                       []
+                       []
+                       {:data {:expense {:id "exp-1"}
+                               :receipt {:id "rec-1" :status "posted"}}}])
+
+    (let [next-req (last-http-request)]
+      (is (= :get (req-method next-req)))
+      (is (= "/api/v1/expenses/receipts/rec-2" (req-uri next-req))))))
+
+(deftest post-selected-validation-failure-is-reported
+  (testing "invalid receipt data is reported and batch finishes safely"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/post-selected ["rec-1"]])
+    (rf/dispatch-sync [:user-expenses/post-selected-receipt-loaded
+                       "rec-1"
+                       []
+                       []
+                       []
+                       {:data {:id "rec-1"}}])
+    (is (= 1 (count @captured-http-requests)))
+    (is (= "Failed to post selected receipt. Supplier, payer, and date are required."
+          (get-in @rf-db/app-db [:user-expenses :receipts :error])))
+    (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?])))))
 
 (deftest upload-receipt-sends-file-in-formdata
   (testing "upload-receipt sends multipart file (guards against trim-v arg loss)"

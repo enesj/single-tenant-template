@@ -6,6 +6,7 @@
     [app.template.frontend.components.action-components :refer [view-details-icon]]
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
@@ -127,6 +128,9 @@
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
+        selected-receipt-ids (or (use-subscribe [::list-subs/selected-ids :receipts]) #{})
+        selected-count (count selected-receipt-ids)
+        action-loading? (true? (use-subscribe [:user-expenses/receipt-action-loading?]))
         can-ocr? (boolean (use-subscribe [:expenses/can-write?]))
         processing-count (->> receipts
                            (filter (fn [receipt]
@@ -145,7 +149,17 @@
                      (rf/dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}])
                      (set-last-checked! (js/Date.)))
                    [])
-        display-settings {:show-select? false
+        parse-selected! (use-callback
+                          (fn [e]
+                            (.preventDefault e)
+                            (rf/dispatch [:user-expenses/ocr-selected (vec selected-receipt-ids)]))
+                          [selected-receipt-ids])
+        post-selected! (use-callback
+                         (fn [e]
+                           (.preventDefault e)
+                           (rf/dispatch [:user-expenses/post-selected (vec selected-receipt-ids)]))
+                         [selected-receipt-ids])
+        display-settings {:show-select? can-ocr?
                           :show-edit? false
                           :show-delete? false
                           :show-filtering? true
@@ -211,7 +225,7 @@
                                           (rf/dispatch [:user-expenses/clear-form-error]))}
                     "✕"))))
 
-            ;; Top bar: live processing indicator
+            ;; Top bar: live processing indicator + batch actions
             ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "
                               (if processing? "justify-between" "justify-end"))}
               (when processing?
@@ -229,7 +243,33 @@
                               :on-click (fn [e]
                                           (.preventDefault e)
                                           (refresh!))}
-                    "Refresh"))))
+                    "Refresh")))
+
+              ($ :div {:class "flex items-center gap-2"}
+                ($ :button {:id "btn-batch-parse-user-receipts"
+                            :class "ds-btn ds-btn-outline ds-btn-sm"
+                            :type "button"
+                            :title (cond
+                                     (not can-ocr?) "Only members, admins, and owners can run OCR"
+                                     (pos? selected-count) "Run OCR for selected receipts"
+                                     :else "Select at least one receipt to parse")
+                            :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
+                            :on-click parse-selected!}
+                  (str "Parse Selected (OCR)"
+                    (when (pos? selected-count)
+                      (str " (" selected-count ")"))))
+                ($ :button {:id "btn-batch-post-user-receipts"
+                            :class "ds-btn ds-btn-primary ds-btn-sm"
+                            :type "button"
+                            :title (cond
+                                     (not can-ocr?) "Only members, admins, and owners can post receipts"
+                                     (pos? selected-count) "Post selected receipts to expenses"
+                                     :else "Select at least one receipt to post")
+                            :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
+                            :on-click post-selected!}
+                  (str "Post Selected (to Expense)"
+                    (when (pos? selected-count)
+                      (str " (" selected-count ")"))))))
 
             ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
               ($ list-view
