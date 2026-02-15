@@ -74,9 +74,7 @@
                                    :full_name full_name
                                    :role (tc/cast-for-database :admin-role (or role "admin"))
                                    :status (tc/cast-for-database :admin-status "active")
-                                   :created_at now
-                                   :updated_at now}]}))))
-
+                                   :created_at now}]}))))
 
 ;; ============================================================================
 ;; Authentication
@@ -132,10 +130,10 @@
                                 :from [:admin_sessions]
                                 :where [:and
                                         [:= :token token]
-                  [:> :expires_at now]]})
-        {:builder-fn rs/as-unqualified-lower-maps})]
+                                        [:> :expires_at now]]})
+                  {:builder-fn rs/as-unqualified-lower-maps})]
     (when session
-    (find-admin-by-id db (:admin_id session)))))
+      (find-admin-by-id db (:admin_id session)))))
 
 (defn update-session-activity!
   "Update last activity timestamp for a session"

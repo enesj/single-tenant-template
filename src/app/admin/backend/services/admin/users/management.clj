@@ -21,8 +21,7 @@
         (when-not old-user
           (throw (ex-info (str "User not found with ID: " user-id)
                    {:status 404 :user-id user-id})))
-        (let [base-updates (-> validated-updates
-                             (assoc :updated_at (time/instant)))
+        (let [base-updates validated-updates
               set-map (reduce-kv
                         (fn [m k v]
                           (assoc m k
@@ -53,8 +52,7 @@
                  {:status 404 :user-id user-id})))
       (jdbc/execute-one! tx
         (hsql/format {:update :users
-                      :set {:role (tc/cast-for-database :user-role new-role)
-                            :updated_at (time/instant)}
+                      :set {:role (tc/cast-for-database :user-role new-role)}
                       :where [:= :id user-id]})))))
 
 (defn create-user!
@@ -71,8 +69,7 @@
                                 :role (tc/cast-for-database :user-role (or role "member"))
                                 :status (tc/cast-for-database :user-status (or status "active"))
                                 :auth_provider (tc/cast-for-database :text (or auth_provider "email"))
-                                :created_at now
-                                :updated_at now}]}))
+                                :created_at now}]}))
       (first (jdbc/execute! tx
                (hsql/format {:select [:*]
                              :from [:users]

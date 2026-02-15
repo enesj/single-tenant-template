@@ -31,25 +31,25 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [supplier-uuid (parsing/try-parse-uuid supplier_id)
-        get-supplier (:get suppliers/service)
-        supplier (when supplier-uuid (get-supplier tx supplier-uuid))
+            get-supplier (:get suppliers/service)
+            supplier (when supplier-uuid (get-supplier tx supplier-uuid))
             supplier-guess (or (some-> supplier :display_name str/trim not-empty)
                              (:supplier_guess review-data)
                              (:supplier-guess review-data))
-             supplier-alias-id (try
-                                 (when-not (str/blank? (some-> supplier-guess str))
-                                   (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
-                                 (catch Exception _
-                                   nil))
-             _ (when (and supplier-alias-id supplier-uuid)
+            supplier-alias-id (try
+                                (when-not (str/blank? (some-> supplier-guess str))
+                                  (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
+                                (catch Exception _
+                                  nil))
+            _ (when (and supplier-alias-id supplier-uuid)
                  ;; User selected a canonical supplier during review: this is a strong
                  ;; signal that the raw supplier label should map to that supplier.
                  ;; We intentionally overwrite mappings here (user intent), unlike
                  ;; automated OCR flows which only map when unmapped.
-                 (try
-                   (supplier-aliases/map-alias-to-supplier! tx supplier-alias-id supplier-uuid 100)
-                   (catch Exception _
-                     nil)))
+                (try
+                  (supplier-aliases/map-alias-to-supplier! tx supplier-alias-id supplier-uuid 100)
+                  (catch Exception _
+                    nil)))
             purchased-at* (parsing/parse-instant! :purchased_at purchased_at)
             currency* (parsing/normalize-currency! currency)
             total* (parsing/parse-money total_amount)
@@ -82,11 +82,10 @@
                     (storage/jsonb-value items)
                     true]
                    :supplier_guess supplier-guess
-                     :supplier_alias_id supplier-alias-id
+                   :supplier_alias_id supplier-alias-id
                    :currency_guess (when currency* [:cast currency* :currency])
                    :purchased_at_guess purchased-at*
-                   :status (storage/receipt-status-cast new-status)
-                   :updated_at [:now]}
+                   :status (storage/receipt-status-cast new-status)}
              :where [:= :id receipt-id]
              :returning [:*]})
           {:builder-fn rs/as-unqualified-lower-maps})))))

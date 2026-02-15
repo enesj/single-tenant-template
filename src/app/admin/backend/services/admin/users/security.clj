@@ -19,8 +19,7 @@
     (jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
     (let [result (sql/update! tx :users
                    {:email_verified true
-                    :email_verified_at (time/instant)
-                    :updated_at (time/instant)}
+                    :email_verified_at (time/instant)}
                    {:id user-id})]
       ;; Log the action
       (audit/log-audit! tx {:admin_id admin-id
@@ -72,8 +71,7 @@
                                  :from [:users]
                                  :where [:= :id user-id]}))
         result (sql/update! db :users
-                 {:status (tc/cast-for-database :user-status "suspended")
-                  :updated_at (time/instant)}
+                 {:status (tc/cast-for-database :user-status "suspended")}
                  {:id user-id})]
     ;; Log the action
     (audit/log-audit! db {:admin_id admin-id
@@ -95,8 +93,7 @@
                                  :from [:users]
                                  :where [:= :id user-id]}))
         result (sql/update! db :users
-                 {:status (tc/cast-for-database :user-status "active")
-                  :updated_at (time/instant)}
+                 {:status (tc/cast-for-database :user-status "active")}
                  {:id user-id})]
     ;; Log the action
     (audit/log-audit! db {:admin_id admin-id

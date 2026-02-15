@@ -38,13 +38,11 @@
              :raw_label_normalized normalized
              :store_id nil
              :confidence 0
-             :created_at [:now]
-             :updated_at [:now]}
+             :created_at [:now]}
         sql-map {:insert-into :store_aliases
                  :values [row]
                  :on-conflict [:raw_label_normalized]
-                 :do-update-set {:raw_label :excluded/raw_label
-                                 :updated_at [:now]}
+                 :do-update-set {:raw_label :excluded/raw_label}
                  :returning [:*]}]
     (when (or (str/blank? normalized)
             (< (count normalized) min-alias-normalized-length))
@@ -131,8 +129,7 @@
      db
      (sql/format {:update :store_aliases
                   :set {:store_id store-id
-                        :confidence (or confidence 100)
-                        :updated_at [:now]}
+                        :confidence (or confidence 100)}
                   :where [:= :id alias-id]
                   :returning [:*]})
      {:builder-fn rs/as-unqualified-lower-maps})))
@@ -151,8 +148,7 @@
      db
      (sql/format {:update :store_aliases
                   :set {:store_id store-id
-                        :confidence (or confidence 25)
-                        :updated_at [:now]}
+                        :confidence (or confidence 25)}
                   :where [:and
                           [:= :id alias-id]
                           [:is :store_id nil]]
@@ -166,8 +162,7 @@
     db
     (sql/format {:update :store_aliases
                  :set {:store_id nil
-                       :confidence 0
-                       :updated_at [:now]}
+                       :confidence 0}
                  :where [:= :id alias-id]
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))

@@ -75,7 +75,7 @@
   
   Algorithm:
   1. Normalize city-name to compute normalized_key
-  2. INSERT with ON CONFLICT (normalized_key) DO UPDATE SET updated_at = now()
+  2. INSERT with ON CONFLICT (normalized_key) DO UPDATE SET name = EXCLUDED.name
   3. Return city id
   
   Examples:
@@ -95,10 +95,9 @@
                 (sql/format {:insert-into :cities
                              :values [{:name name*
                                        :normalized_key normalized
-                                       :created_at [:now]
-                                       :updated_at [:now]}]
+                                       :created_at [:now]}]
                              :on-conflict [:normalized_key]
-                             :do-update-set {:updated_at [:now]}
+                             :do-update-set {:name :excluded/name}
                              :returning [:id]})
                 {:builder-fn rs/as-unqualified-lower-maps})]
       (:id row))))
@@ -651,8 +650,7 @@
                         db
                         (sql/format {:update :cities
                                      :set {:country country*
-                                           :zip zip*
-                                           :updated_at [:now]}
+                                           :zip zip*}
                                      :where [:= :id id]
                                      :returning [:id]})
                         {:builder-fn rs/as-unqualified-lower-maps})
@@ -664,8 +662,7 @@
                                          :normalized_key normalized*
                                          :country country*
                                          :zip zip*
-                                         :created_at [:now]
-                                         :updated_at [:now]}]
+                                         :created_at [:now]}]
                                :returning [:id]})
                   {:builder-fn rs/as-unqualified-lower-maps})
           :id)))))
@@ -776,8 +773,7 @@
                                (jdbc/execute-one!
                                  db
                                  (sql/format {:update :stores
-                                              :set {:city_id city-id
-                                                    :updated_at [:now]}
+                                              :set {:city_id city-id}
                                               :where [:= :id id]})))
                              (when dry-run?
                                (println (format "[%s] Store %s: would set city_id=%s (zip=%s)"
@@ -872,8 +868,7 @@
                                (jdbc/execute-one!
                                  db
                                  (sql/format {:update :stores
-                                              :set {:city_id city-id
-                                                    :updated_at [:now]}
+                                              :set {:city_id city-id}
                                               :where [:= :id id]})))
                              (when dry-run?
                                (println (format "[OK] Store %s: would set city_id=%s" id city-id)))

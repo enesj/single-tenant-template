@@ -161,8 +161,7 @@
                               :full_name full_name
                               :role (tc/cast-for-database :admin-role (or role "admin"))
                               :status (tc/cast-for-database :admin-status "active")
-                              :created_at now
-                              :updated_at now}]
+                              :created_at now}]
                     :returning [:*]}))]
 
     ;; Log the creation
@@ -208,10 +207,9 @@
                     :field :email
                     :reason :duplicate-email})))))
 
-    (let [now (time/instant)
-          result (jdbc/execute-one! db
+    (let [result (jdbc/execute-one! db
                    (hsql/format {:update :admins
-                                 :set (assoc clean-updates :updated_at now)
+                                 :set clean-updates
                                  :where [:= :id admin-id]
                                  :returning [:*]}))]
 
@@ -240,11 +238,9 @@
     (when (and (= (str current-role) "owner") (not= (str new-role) "owner"))
       (validate-not-last-owner! db admin-id "change role of")))
 
-  (let [now (time/instant)
-        result (jdbc/execute-one! db
+  (let [result (jdbc/execute-one! db
                  (hsql/format {:update :admins
-                               :set {:role (tc/cast-for-database :admin-role new-role)
-                                     :updated_at now}
+                               :set {:role (tc/cast-for-database :admin-role new-role)}
                                :where [:= :id admin-id]
                                :returning [:*]}))]
 
@@ -273,11 +269,9 @@
       (when (= (str (:role current-admin)) "owner")
         (validate-not-last-owner! db admin-id "suspend"))))
 
-  (let [now (time/instant)
-        result (jdbc/execute-one! db
+  (let [result (jdbc/execute-one! db
                  (hsql/format {:update :admins
-                               :set {:status (tc/cast-for-database :admin-status new-status)
-                                     :updated_at now}
+                               :set {:status (tc/cast-for-database :admin-status new-status)}
                                :where [:= :id admin-id]
                                :returning [:*]}))]
 

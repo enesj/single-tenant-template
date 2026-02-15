@@ -231,8 +231,7 @@
                          ;; If the receipt was posted, revert it to an approvable state.
                          ;; If it was already reverted/reset to a different status, keep it
                          ;; but still clear the now-invalid expense link.
-                         :status [:raw "CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END"]
-                         :updated_at [:now]}
+                         :status [:raw "CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END"]}
                    :where [:and
                            [:= :id receipt_id]
                            [:= :expense_id id]]
@@ -453,16 +452,23 @@
                    (dissoc :items)
                    normalize-expense-data
                    (select-keys [:store_id :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted])
-                   (update-if-present :currency #(when % [:cast % :currency]))
-                   (assoc :updated_at [:now]))]
+                   (update-if-present :currency #(when % [:cast % :currency])))]
     (jdbc/with-transaction [tx db]
-      (when-let [expense (jdbc/execute-one!
-                           tx
-                           (sql/format {:update :expenses
-                                        :set updates*
-                                        :where [:= :id id*]
-                                        :returning [:*]})
-                           {:builder-fn rs/as-unqualified-lower-maps})]
+      (when-let [expense (if (seq updates*)
+                           (jdbc/execute-one!
+                             tx
+                             (sql/format {:update :expenses
+                                          :set updates*
+                                          :where [:= :id id*]
+                                          :returning [:*]})
+                             {:builder-fn rs/as-unqualified-lower-maps})
+                           (jdbc/execute-one!
+                             tx
+                             (sql/format {:select [:*]
+                                          :from [:expenses]
+                                          :where [:= :id id*]
+                                          :limit 1})
+                             {:builder-fn rs/as-unqualified-lower-maps}))]
 
         (when (contains? body :items)
           (let [existing-ids (->> (jdbc/execute!

@@ -57,9 +57,10 @@
 
   - Cast fields using the canonical type conversion pipeline.
   - Drop nils to avoid SQL issues.
-  - Preserve the historic 'include-nils? true' behavior from the legacy helper." 
+  - Preserve the historic 'include-nils? true' behavior from the legacy helper."
   [models table data]
-  (let [cast-data (type-conv/prepare-data-for-db models table data {:include-nils? true})
+  (let [cast-data (-> (type-conv/prepare-data-for-db models table data {:include-nils? true})
+                    (dissoc :updated_at :updated-at))
         filtered-data (->> cast-data
                         (filter (fn [[_k v]] (some? v)))
                         (into {}))]
@@ -71,12 +72,10 @@
   "Legacy-compatible update preparation.
 
   - Cast fields using the canonical type conversion pipeline.
-  - Drop nils and immutable fields.
-  - Always sets updated_at." 
+  - Drop nils and immutable fields."
   [models table data]
   (-> (type-conv/prepare-data-for-db models table data {:include-nils? true})
-    (dissoc :tenant :owner)
-    (assoc :updated_at [:cast (java.time.LocalDateTime/now) :timestamptz])
+    (dissoc :tenant :owner :updated_at :updated-at)
     (->> (filter (fn [[_k v]] (some? v)))
       (into {}))))
 

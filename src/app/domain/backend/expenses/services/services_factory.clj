@@ -13,7 +13,7 @@
 
   Some configs use hook arities without `db` (legacy), others need `db` to
   perform lookups/side effects. We support both by trying the db-aware arity
-  first and falling back." 
+  first and falling back."
   [hook primary-args fallback-args]
   (when hook
     (try
@@ -158,15 +158,16 @@
           final-data (assoc transformed-data
                        :id (or (:id transformed-data) (UUID/randomUUID)))
 
-              ;; Apply before-insert hook (db-aware when supported)
-              processed-data (or (apply-hook before-insert
-                   [db final-data]
-                   [final-data])
-                 final-data)]
+          ;; Apply before-insert hook (db-aware when supported)
+          processed-data (or (apply-hook before-insert
+                               [db final-data]
+                               [final-data])
+                           final-data)
+          create-data (dissoc processed-data :updated_at :updated-at)]
 
       (jdbc/execute-one! db
         (sql/format {:insert-into (keyword table-name)
-                     :values [processed-data]
+                     :values [create-data]
                      :returning [:*]})
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
@@ -185,16 +186,17 @@
                                 updates
                                 updates)
 
-              ;; Apply before-update hook (db-aware when supported)
-              processed-updates (or (apply-hook before-update
-                   [db id transformed-updates]
-                   [id transformed-updates])
-                 transformed-updates)]
+          ;; Apply before-update hook (db-aware when supported)
+          processed-updates (or (apply-hook before-update
+                                  [db id transformed-updates]
+                                  [id transformed-updates])
+                              transformed-updates)
+          update-data (dissoc processed-updates :updated_at :updated-at)]
 
-      (when (seq processed-updates)
+      (when (seq update-data)
         (jdbc/execute-one! db
           (sql/format {:update (keyword table-name)
-                       :set processed-updates
+                       :set update-data
                        :where [:= :id id]
                        :returning [:*]})
           {:builder-fn rs/as-unqualified-lower-maps})))))

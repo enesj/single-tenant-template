@@ -1,13 +1,195 @@
-{:users-updated-at-trigger
- {:up "CREATE TRIGGER users_updated_at
-       BEFORE UPDATE ON users
+{:admin-sessions-updated-at-trigger
+ {:up "CREATE TRIGGER admin_sessions_updated_at
+       BEFORE UPDATE ON admin_sessions
        FOR EACH ROW
        EXECUTE FUNCTION update_updated_at_column();"
-  :down "DROP TRIGGER IF EXISTS users_updated_at ON users;"}
+  :down "DROP TRIGGER IF EXISTS admin_sessions_updated_at ON admin_sessions;"}
 
  :admins-updated-at-trigger
  {:up "CREATE TRIGGER admins_updated_at
        BEFORE UPDATE ON admins
        FOR EACH ROW
        EXECUTE FUNCTION update_updated_at_column();"
-  :down "DROP TRIGGER IF EXISTS admins_updated_at ON admins;"}}
+  :down "DROP TRIGGER IF EXISTS admins_updated_at ON admins;"}
+
+ :article-aliases-updated-at-trigger
+ {:up "CREATE TRIGGER article_aliases_updated_at
+       BEFORE UPDATE ON article_aliases
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS article_aliases_updated_at ON article_aliases;"}
+
+ :articles-updated-at-trigger
+ {:up "CREATE TRIGGER articles_updated_at
+       BEFORE UPDATE ON articles
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS articles_updated_at ON articles;"}
+
+ :audit-logs-updated-at-trigger
+ {:up "CREATE TRIGGER audit_logs_updated_at
+       BEFORE UPDATE ON audit_logs
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS audit_logs_updated_at ON audit_logs;"}
+
+ :backlog-updated-at-trigger
+ {:up "CREATE TRIGGER backlog_updated_at
+       BEFORE UPDATE ON backlog
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS backlog_updated_at ON backlog;"}
+
+ :categories-updated-at-trigger
+ {:up "CREATE TRIGGER categories_updated_at
+       BEFORE UPDATE ON categories
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS categories_updated_at ON categories;"}
+
+ :cities-updated-at-trigger
+ {:up "CREATE TRIGGER cities_updated_at
+       BEFORE UPDATE ON cities
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS cities_updated_at ON cities;"}
+
+ :countries-updated-at-trigger
+ {:up "CREATE TRIGGER countries_updated_at
+       BEFORE UPDATE ON countries
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS countries_updated_at ON countries;"}
+
+ :email-verification-tokens-updated-at-trigger
+ {:up "CREATE TRIGGER email_verification_tokens_updated_at
+       BEFORE UPDATE ON email_verification_tokens
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS email_verification_tokens_updated_at ON email_verification_tokens;"}
+
+ :expense-categories-updated-at-trigger
+ {:up "CREATE TRIGGER expense_categories_updated_at
+       BEFORE UPDATE ON expense_categories
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS expense_categories_updated_at ON expense_categories;"}
+
+ :expense-items-updated-at-trigger
+ {:up "CREATE TRIGGER expense_items_updated_at
+       BEFORE UPDATE ON expense_items
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS expense_items_updated_at ON expense_items;"}
+
+ :expenses-updated-at-trigger
+ {:up "CREATE TRIGGER expenses_updated_at
+       BEFORE UPDATE ON expenses
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS expenses_updated_at ON expenses;"}
+
+ :login-events-updated-at-trigger
+ {:up "CREATE TRIGGER login_events_updated_at
+       BEFORE UPDATE ON login_events
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS login_events_updated_at ON login_events;"}
+
+ :manufacturers-updated-at-trigger
+ {:up "CREATE TRIGGER manufacturers_updated_at
+       BEFORE UPDATE ON manufacturers
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS manufacturers_updated_at ON manufacturers;"}
+
+ :password-reset-tokens-updated-at-trigger
+ {:up "CREATE TRIGGER password_reset_tokens_updated_at
+       BEFORE UPDATE ON password_reset_tokens
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS password_reset_tokens_updated_at ON password_reset_tokens;"}
+
+ :payer-types-updated-at-trigger
+ {:up "CREATE TRIGGER payer_types_updated_at
+       BEFORE UPDATE ON payer_types
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS payer_types_updated_at ON payer_types;"}
+
+ :payers-updated-at-trigger
+ {:up "CREATE TRIGGER payers_updated_at
+       BEFORE UPDATE ON payers
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS payers_updated_at ON payers;"}
+
+ :price-observations-updated-at-trigger
+ {:up "CREATE TRIGGER price_observations_updated_at
+       BEFORE UPDATE ON price_observations
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS price_observations_updated_at ON price_observations;"}
+
+ :raw-labels-updated-at-trigger
+ {:up "CREATE TRIGGER raw_labels_updated_at
+       BEFORE UPDATE ON raw_labels
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS raw_labels_updated_at ON raw_labels;"}
+
+ :receipts-updated-at-trigger
+ {:up "CREATE TRIGGER receipts_updated_at
+       BEFORE UPDATE ON receipts
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS receipts_updated_at ON receipts;"}
+
+ :store-aliases-updated-at-trigger
+ {:up "CREATE TRIGGER store_aliases_updated_at
+       BEFORE UPDATE ON store_aliases
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS store_aliases_updated_at ON store_aliases;"}
+
+ :stores-updated-at-trigger
+ {:up "CREATE TRIGGER stores_updated_at
+       BEFORE UPDATE ON stores
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS stores_updated_at ON stores;"}
+
+ :subcategories-updated-at-trigger
+ {:up "CREATE TRIGGER subcategories_updated_at
+       BEFORE UPDATE ON subcategories
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS subcategories_updated_at ON subcategories;"}
+
+ :supplier-aliases-updated-at-trigger
+ {:up "CREATE TRIGGER supplier_aliases_updated_at
+       BEFORE UPDATE ON supplier_aliases
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS supplier_aliases_updated_at ON supplier_aliases;"}
+
+ :suppliers-updated-at-trigger
+ {:up "CREATE TRIGGER suppliers_updated_at
+       BEFORE UPDATE ON suppliers
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS suppliers_updated_at ON suppliers;"}
+
+ :user-expense-settings-updated-at-trigger
+ {:up "CREATE TRIGGER user_expense_settings_updated_at
+       BEFORE UPDATE ON user_expense_settings
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS user_expense_settings_updated_at ON user_expense_settings;"}
+
+ :users-updated-at-trigger
+ {:up "CREATE TRIGGER users_updated_at
+       BEFORE UPDATE ON users
+       FOR EACH ROW
+       EXECUTE FUNCTION update_updated_at_column();"
+  :down "DROP TRIGGER IF EXISTS users_updated_at ON users;"}}

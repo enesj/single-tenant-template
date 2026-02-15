@@ -10,16 +10,17 @@
 
   (cast-for-insert [_ entity-key data]
     (let [entity (ms/entity-definition* models entity-key)]
-      (reduce-kv
-        (fn [acc field-name value]
-          (let [app-field (or (ms/app-field-key entity field-name) (keyword field-name))
-                field-type (field-meta/get-field-type models (or (:app/entity entity) entity-key) app-field)
-                casted-value (if field-type
-                               (type-conv/cast-field-value field-type value)
-                               value)]
-            (assoc acc app-field casted-value)))
-        {}
-        data)))
+      (-> (reduce-kv
+            (fn [acc field-name value]
+              (let [app-field (or (ms/app-field-key entity field-name) (keyword field-name))
+                    field-type (field-meta/get-field-type models (or (:app/entity entity) entity-key) app-field)
+                    casted-value (if field-type
+                                   (type-conv/cast-field-value field-type value)
+                                   value)]
+                (assoc acc app-field casted-value)))
+            {}
+            data)
+        (dissoc :updated-at :updated_at))))
 
   (cast-for-update [_ entity-key data]
     (let [entity (ms/entity-definition* models entity-key)
@@ -34,8 +35,7 @@
                       {}
                       data)]
       (-> cast-data
-        (dissoc :tenant-id :owner-id :tenant_id :owner_id)
-        (assoc :updated-at [:cast (java.time.LocalDateTime/now) :timestamptz]))))
+        (dissoc :tenant-id :owner-id :tenant_id :owner_id :updated-at :updated_at))))
 
   (cast-field-value [_ entity-key field-name value]
     (let [entity (ms/entity-definition* models entity-key)

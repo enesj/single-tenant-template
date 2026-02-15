@@ -33,8 +33,8 @@
         bytes (byte-array reset-token-length)]
     (.nextBytes random bytes)
     (-> (Base64/getUrlEncoder)
-        (.withoutPadding)
-        (.encodeToString bytes))))
+      (.withoutPadding)
+      (.encodeToString bytes))))
 
 ;; ============================================================================
 ;; Password Hashing
@@ -72,8 +72,8 @@
 
     (instance? java.time.LocalDateTime ts)
     (-> ^java.time.LocalDateTime ts
-        (.atZone (java.time.ZoneId/systemDefault))
-        (.toInstant))
+      (.atZone (java.time.ZoneId/systemDefault))
+      (.toInstant))
 
     (instance? java.util.Date ts)
     (.toInstant ^java.util.Date ts)
@@ -113,7 +113,7 @@
         expires-at (time/plus (time/instant) (time/hours reset-token-expiry-hours))
         token-id (UUID/randomUUID)
         principal-type-str (name principal-type)]
-    
+
     ;; Invalidate any existing unused tokens for this principal
     (db-protocols/execute! db
       "DELETE FROM password_reset_tokens 
@@ -121,19 +121,19 @@
          AND principal_id = ? 
          AND used_at IS NULL"
       [principal-type-str principal-id])
-    
+
     ;; Create new token
     (db-protocols/execute! db
       "INSERT INTO password_reset_tokens 
        (id, principal_type, principal_id, token, expires_at, created_at)
        VALUES (?, ?::login_principal_type, ?, ?, ?, NOW())"
       [token-id principal-type-str principal-id token expires-at])
-    
-    (log/info "Created password reset token" 
-              {:principal-type principal-type 
-               :principal-id principal-id
-               :expires-at expires-at})
-    
+
+    (log/info "Created password reset token"
+      {:principal-type principal-type
+       :principal-id principal-id
+       :expires-at expires-at})
+
     {:token token :expires-at expires-at}))
 
 (defn find-reset-token
@@ -160,17 +160,17 @@
         ;; Token already used
         (some? used-at)
         {:valid? false :error "This reset link has already been used"}
-        
+
         ;; Token expired
         (token-expired? expires-at)
         {:valid? false :error "This reset link has expired"}
-        
+
         ;; Token valid
         :else
         {:valid? true
          :principal-type (keyword principal-type)
          :principal-id principal-id}))
-    
+
     ;; Token not found
     {:valid? false :error "Invalid or expired reset link"}))
 
@@ -216,10 +216,10 @@
    Returns: {:success boolean :message string}"
   [db email principal-type send-email-fn base-url]
   (let [principal (find-principal-by-email db principal-type email)
-      principal-id (:id principal)
-      principal-email (:email principal)
-      full-name (:full_name principal)]
-    
+        principal-id (:id principal)
+        principal-email (:email principal)
+        full-name (:full_name principal)]
+
     ;; Always return success to prevent email enumeration
     (if principal-id
       (let [{:keys [token]} (create-reset-token! db principal-type principal-id)
@@ -227,7 +227,7 @@
                          "/admin/reset-password"
                          "/reset-password")
             reset-url (str base-url reset-path "?token=" token)]
-        
+
         ;; Send reset email
         (when send-email-fn
           (try
@@ -235,14 +235,14 @@
             (log/info "Password reset email sent" {:email email :type principal-type})
             (catch Exception e
               (log/error e "Failed to send reset email" {:email email}))))
-        
-        {:success true 
+
+        {:success true
          :message "If an account exists with this email, you will receive password reset instructions."})
-      
+
       ;; No account found - return same message to prevent enumeration
       (do
         (log/warn "Password reset requested for unknown email" {:email email :type principal-type})
-        {:success true 
+        {:success true
          :message "If an account exists with this email, you will receive password reset instructions."}))))
 
 (defn reset-password!
@@ -260,29 +260,29 @@
       ;; Token invalid
       (not (:valid? verification))
       {:success false :error (:error verification)}
-      
+
       ;; Password too short
       (< (count (or new-password "")) min-password-length)
       {:success false :error (str "Password must be at least " min-password-length " characters")}
-      
+
       ;; Process reset
       :else
       (let [{:keys [principal-type principal-id]} verification
             table (if (= principal-type :admin) "admins" "users")
             password-hash (hash-password new-password)]
-        
+
         ;; Update password
         (db-protocols/execute! db
-          (str "UPDATE " table " SET password_hash = ?, updated_at = NOW() WHERE id = ?")
+          (str "UPDATE " table " SET password_hash = ? WHERE id = ?")
           [password-hash principal-id])
-        
+
         ;; Mark token as used
         (mark-token-used! db token)
-        
-        (log/info "Password reset successful" 
-                  {:principal-type principal-type 
-                   :principal-id principal-id})
-        
+
+        (log/info "Password reset successful"
+          {:principal-type principal-type
+           :principal-id principal-id})
+
         {:success true
          :principal-type principal-type
          :principal-id principal-id}))))
@@ -304,37 +304,37 @@
    Returns: {:success boolean :error string (if failed)}"
   [db principal-type principal-id current-password new-password]
   (let [principal (find-principal-by-id db principal-type principal-id)
-      password-hash (:password_hash principal)]
+        password-hash (:password_hash principal)]
     (cond
       ;; Principal not found
       (nil? principal)
       {:success false :error "Account not found"}
-      
+
       ;; Current password incorrect
       (not (verify-password current-password password-hash))
       {:success false :error "Current password is incorrect"}
-      
+
       ;; New password same as current
       (verify-password new-password password-hash)
       {:success false :error "New password must be different from current password"}
-      
+
       ;; New password too short
       (< (count (or new-password "")) min-password-length)
       {:success false :error (str "Password must be at least " min-password-length " characters")}
-      
+
       ;; Process change
       :else
       (let [table (if (= principal-type :admin) "admins" "users")
             new-hash (hash-password new-password)]
-        
+
         (db-protocols/execute! db
-          (str "UPDATE " table " SET password_hash = ?, updated_at = NOW() WHERE id = ?")
+          (str "UPDATE " table " SET password_hash = ? WHERE id = ?")
           [new-hash principal-id])
-        
-        (log/info "Password changed successfully" 
-                  {:principal-type principal-type 
-                   :principal-id principal-id})
-        
+
+        (log/info "Password changed successfully"
+          {:principal-type principal-type
+           :principal-id principal-id})
+
         {:success true}))))
 
 ;; ============================================================================

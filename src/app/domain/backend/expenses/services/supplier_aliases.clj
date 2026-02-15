@@ -47,13 +47,11 @@
              :raw_label_normalized normalized
              :supplier_id nil
              :confidence 0
-             :created_at [:now]
-             :updated_at [:now]}
+             :created_at [:now]}
         sql-map {:insert-into :supplier_aliases
                  :values [row]
                  :on-conflict [:raw_label_normalized]
-                 :do-update-set {:raw_label :excluded/raw_label
-                                 :updated_at [:now]}
+                 :do-update-set {:raw_label :excluded/raw_label}
                  :returning [:*]}]
     (when (or (str/blank? normalized)
             (< (count normalized) min-alias-normalized-length))
@@ -140,8 +138,7 @@
      db
      (sql/format {:update :supplier_aliases
                   :set {:supplier_id supplier-id
-                        :confidence (or confidence 100)
-                        :updated_at [:now]}
+                        :confidence (or confidence 100)}
                   :where [:= :id alias-id]
                   :returning [:*]})
      {:builder-fn rs/as-unqualified-lower-maps})))
@@ -152,7 +149,7 @@
   This is safe to run during automated ingestion (OCR) because it will NOT
   overwrite an existing manual mapping.
 
-  Returns the updated alias row when an update happened, otherwise nil." 
+  Returns the updated alias row when an update happened, otherwise nil."
   ([db alias-id supplier-id]
    (map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
   ([db alias-id supplier-id confidence]
@@ -160,16 +157,15 @@
      db
      (sql/format {:update :supplier_aliases
                   :set {:supplier_id supplier-id
-                        :confidence (or confidence 25)
-                        :updated_at [:now]}
+                        :confidence (or confidence 25)}
                   :where [:and
                           [:= :id alias-id]
                           [:is :supplier_id nil]]
                   :returning [:*]})
      {:builder-fn rs/as-unqualified-lower-maps})))
 
-  (defn backfill-unmapped-alias-links!
-    "Backfill supplier_aliases.supplier_id for aliases that already have a matching
+(defn backfill-unmapped-alias-links!
+  "Backfill supplier_aliases.supplier_id for aliases that already have a matching
     supplier row.
 
     This links by matching:
@@ -177,23 +173,22 @@
 
     Returns the updated alias rows (may be empty).
 
-    Intended for one-off repair after enabling OCR-created supplier_aliases." 
-    ([db]
-     (backfill-unmapped-alias-links! db {:confidence 25}))
-    ([db {:keys [confidence]
-      :or {confidence 25}}]
-     (jdbc/execute!
-       db
-       (sql/format {:update [[:supplier_aliases :sa]]
-        :set {:supplier_id :s/id
-          :confidence confidence
-          :updated_at [:now]}
-        :from [[:suppliers :s]]
-        :where [:and
-            [:is :sa/supplier_id nil]
-            [:= :sa/raw_label_normalized :s/normalized_key]]
-        :returning [:sa/id :sa/supplier_id :sa/raw_label_normalized]})
-       {:builder-fn rs/as-unqualified-lower-maps})))
+    Intended for one-off repair after enabling OCR-created supplier_aliases."
+  ([db]
+   (backfill-unmapped-alias-links! db {:confidence 25}))
+  ([db {:keys [confidence]
+        :or {confidence 25}}]
+   (jdbc/execute!
+     db
+     (sql/format {:update [[:supplier_aliases :sa]]
+                  :set {:supplier_id :s/id
+                        :confidence confidence}
+                  :from [[:suppliers :s]]
+                  :where [:and
+                          [:is :sa/supplier_id nil]
+                          [:= :sa/raw_label_normalized :s/normalized_key]]
+                  :returning [:sa/id :sa/supplier_id :sa/raw_label_normalized]})
+     {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn unmap-alias!
   "Remove supplier mapping from an alias (set supplier_id to NULL)."
@@ -202,8 +197,7 @@
     db
     (sql/format {:update :supplier_aliases
                  :set {:supplier_id nil
-                       :confidence 0
-                       :updated_at [:now]}
+                       :confidence 0}
                  :where [:= :id alias-id]
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
@@ -240,8 +234,7 @@
              :raw_label_normalized raw-label-normalized
              :supplier_id supplier-id
              :confidence (or confidence 100)
-             :created_at [:now]
-             :updated_at [:now]}]
+             :created_at [:now]}]
     (jdbc/execute-one!
       db
       (sql/format {:insert-into :supplier_aliases
@@ -254,8 +247,7 @@
   (jdbc/execute-one!
     db
     (sql/format {:update :supplier_aliases
-                 :set (cond-> {:supplier_id supplier-id
-                               :updated_at [:now]}
+                 :set (cond-> {:supplier_id supplier-id}
                         (some? raw-label) (assoc :raw_label raw-label)
                         (some? confidence) (assoc :confidence confidence))
                  :where [:= :id alias-id]

@@ -323,9 +323,8 @@
                       (let [display-name (unescape-html-entities (:display_name updates))]
                         (assoc updates
                           :display_name display-name
-                          :normalized_key (normalize-supplier-key display-name)
-                          :updated_at [:now]))
-                      (assoc updates :updated_at [:now])))
+                          :normalized_key (normalize-supplier-key display-name)))
+                      updates))
    :has-search? true
    :has-count? true})
 
@@ -358,7 +357,7 @@
                                          (unescape-html-entities (:display_name updates)))
                           address (when (contains? updates :address)
                                     (unescape-html-entities (:address updates)))
-                          updates (cond-> (assoc updates :updated_at [:now])
+                          updates (cond-> updates
                                     (contains? updates :display_name)
                                     (assoc :display_name display-name)
                                     (contains? updates :address)
@@ -392,9 +391,8 @@
                       (let [display-name (unescape-html-entities (:display_name updates))]
                         (assoc updates
                           :display_name display-name
-                          :normalized_key (normalize-manufacturer-key display-name)
-                          :updated_at [:now]))
-                      (assoc updates :updated_at [:now])))
+                          :normalized_key (normalize-manufacturer-key display-name)))
+                      updates))
    :has-search? true
    :has-count? true})
 
@@ -411,8 +409,7 @@
                     (-> data
                       (assoc :id (UUID/randomUUID))))
    :before-update (fn [_id updates]
-                    (-> updates
-                      (assoc :updated_at [:now])))
+                    updates)
    :has-search? true
    :has-count? true})
 
@@ -429,8 +426,7 @@
                     (-> data
                       (assoc :id (UUID/randomUUID))))
    :before-update (fn [_id updates]
-                    (-> updates
-                      (assoc :updated_at [:now])))
+                    updates)
    :has-search? true
    :has-count? true})
 
@@ -459,9 +455,8 @@
                           (throw (ex-info "name is required" {:status 400 :field :name})))
                         (assoc updates
                           :name name
-                          :normalized_key (normalize-city-key name)
-                          :updated_at [:now]))
-                      (assoc updates :updated_at [:now])))
+                          :normalized_key (normalize-city-key name)))
+                      updates))
    :has-search? true
    :has-count? true})
 
@@ -481,8 +476,7 @@
                     (-> data
                       (assoc :id (UUID/randomUUID))))
    :before-update (fn [_id updates]
-                    (-> updates
-                      (assoc :updated_at [:now])))
+                    updates)
    :has-search? true
    :has-count? true})
 
@@ -507,8 +501,7 @@
                       (assoc :id (UUID/randomUUID))
                       (update :is_default #(boolean %))))
    :before-update (fn [_id updates]
-                    (-> updates
-                      (assoc :updated_at [:now])))
+                    updates)
    :has-search? true
    :has-count? true})
 
@@ -526,7 +519,7 @@
                       (assoc :id (UUID/randomUUID))
                       (update :is_default #(boolean %))))
    :before-update (fn [_id updates]
-                    (-> updates (assoc :updated_at [:now])))
+                    updates)
    :has-search? true
    :has-count? true})
 
@@ -549,8 +542,7 @@
    :before-update (fn [_id updates]
                     (cond-> updates
                       (:canonical_name updates)
-                      (assoc :normalized_key (articles/normalize-article-key (:canonical_name updates)))
-                      true (assoc :updated_at [:now])))
+                      (assoc :normalized_key (articles/normalize-article-key (:canonical_name updates)))))
    :has-search? true
    :has-count? true})
 
@@ -579,8 +571,7 @@
                       (update :is_posted #(if (nil? %) true (boolean %)))))
    :before-update (fn [_id updates]
                     (-> updates
-                      (update :currency #(when % [:cast % :currency]))
-                      (assoc :updated_at [:now])))
+                      (update :currency #(when % [:cast % :currency]))))
    :has-count? true})
 
 (def expense-item-config

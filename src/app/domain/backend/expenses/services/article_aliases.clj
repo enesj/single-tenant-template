@@ -57,8 +57,7 @@
                                  :display_name "Unknown Supplier"
                                  :normalized_key unknown-supplier-normalized-key}]
                        :on-conflict [:normalized_key]
-                       :do-update-set {:display_name :excluded/display_name
-                                       :updated_at [:now]}
+                       :do-update-set {:display_name :excluded/display_name}
                        :returning [:id]})
           {:builder-fn rs/as-unqualified-lower-maps})
         new-id))))
@@ -150,7 +149,7 @@
         query (cond-> base-query
                 supplier-uuid
                 (update :where conj [:= :aa.supplier_id supplier-uuid]))]
-       (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn map-alias-to-article!
   "Map an alias to an article.

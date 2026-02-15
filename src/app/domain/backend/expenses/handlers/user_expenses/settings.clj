@@ -239,8 +239,7 @@
                   tx
                   ["UPDATE receipts
                     SET expense_id = NULL,
-                        status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END,
-                        updated_at = NOW()
+                        status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
                     WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
                    user-id])
                 (let [result (jdbc/execute-one! tx

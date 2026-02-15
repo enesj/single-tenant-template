@@ -1,0 +1,40 @@
+({:action :add-column,
+  :field-name :updated-at,
+  :model-name :admin_sessions,
+  :options {:null false, :default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :expense_items,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :password_reset_tokens,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :price_observations,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :login_events,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :article_aliases,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :created-at,
+  :model-name :backlog,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :email_verification_tokens,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :backlog,
+  :options {:default [:now], :type :timestamptz}}
+ {:action :add-column,
+  :field-name :updated-at,
+  :model-name :audit_logs,
+  :options {:default [:now], :type :timestamptz}})

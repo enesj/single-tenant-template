@@ -13,8 +13,7 @@
   (jdbc/execute-one!
     db
     (sql/format {:update :receipts
-                 :set (merge {:status [:cast new-status :receipt_status]
-                              :updated_at [:now]}
+                 :set (merge {:status [:cast new-status :receipt_status]}
                         extra)
                  :where [:= :id receipt-id]
                  :returning [:*]})
@@ -37,8 +36,7 @@
        db
        (sql/format
          {:update :receipts
-          :set {:status to*
-                :updated_at [:now]}
+          :set {:status to*}
           :where [:and
                   [:= :id receipt-id]
                   [:or
@@ -102,8 +100,7 @@
                        :total_amount_guess nil
                        :currency_guess nil
                        :purchased_at_guess nil
-                       :retry_count [:+ :retry_count 1]
-                       :updated_at [:now]}
+                       :retry_count [:+ :retry_count 1]}
                  :where [:= :id receipt-id]
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
@@ -118,7 +115,7 @@
                          store_guess store_alias_id
                          total_amount_guess currency_guess purchased_at_guess]
                   :as data}]
-  (let [set-map (cond-> {:updated_at [:now]}
+  (let [set-map (cond-> {}
                   (contains? data :raw_extract_json) (assoc :raw_extract_json (storage/jsonb-value raw_extract_json))
                   (contains? data :parsed_markdown) (assoc :parsed_markdown parsed_markdown)
                   (contains? data :supplier_guess) (assoc :supplier_guess supplier_guess)
@@ -128,13 +125,21 @@
                   (contains? data :total_amount_guess) (assoc :total_amount_guess total_amount_guess)
                   (contains? data :currency_guess) (assoc :currency_guess (when currency_guess [:cast currency_guess :currency]))
                   (contains? data :purchased_at_guess) (assoc :purchased_at_guess purchased_at_guess))]
-    (jdbc/execute-one!
-      db
-      (sql/format {:update :receipts
-                   :set set-map
-                   :where [:= :id receipt-id]
-                   :returning [:*]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+    (if (seq set-map)
+      (jdbc/execute-one!
+        db
+        (sql/format {:update :receipts
+                     :set set-map
+                     :where [:= :id receipt-id]
+                     :returning [:*]})
+        {:builder-fn rs/as-unqualified-lower-maps})
+      (jdbc/execute-one!
+        db
+        (sql/format {:select [:*]
+                     :from [:receipts]
+                     :where [:= :id receipt-id]
+                     :limit 1})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn store-receipt-refine-context!
   "Persist receipt refine context into `receipts.raw_extract_json` under key `receipt_refine/context`.
@@ -150,8 +155,7 @@
          "set raw_extract_json = jsonb_set("
          "coalesce(raw_extract_json, '{}'::jsonb), "
          "'{receipt_refine/context}', "
-         "?::jsonb, true), "
-         "updated_at = now() "
+         "?::jsonb, true) "
          "where id = ? "
          "returning id")
        (json/generate-string context)
@@ -172,8 +176,7 @@
     db
     (sql/format
       {:update :receipts
-       :set {:raw_extract_json [:raw "jsonb_set(coalesce(raw_extract_json, '{}'::jsonb), '{refine_pending}', 'false'::jsonb, true)"]
-             :updated_at [:now]}
+       :set {:raw_extract_json [:raw "jsonb_set(coalesce(raw_extract_json, '{}'::jsonb), '{refine_pending}', 'false'::jsonb, true)"]}
        :where [:= :id receipt-id]
        :returning [:id]})
     {:builder-fn rs/as-unqualified-lower-maps}))

@@ -76,8 +76,7 @@
   (jdbc/execute-one!
     tx
     (sql/format {:update :payers
-                 :set {:is_default true
-                       :updated_at [:now]}
+                 :set {:is_default true}
                  :where [:= :id payer-id]
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))

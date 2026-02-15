@@ -34,8 +34,7 @@
             _result (when (seq user-ids)
                       (jdbc/execute! tx
                         (hsql/format {:update :users
-                                      :set {:status (tc/cast-for-database :user-status new-status)
-                                            :updated_at (time/instant)}
+                                      :set {:status (tc/cast-for-database :user-status new-status)}
                                       :where [:in :id user-ids]})))]
 
         ;; Log audit entries for each user
@@ -73,8 +72,7 @@
             _result (when (seq user-ids)
                       (jdbc/execute! tx
                         (hsql/format {:update :users
-                                      :set {:role (tc/cast-for-database :user-role new-role)
-                                            :updated_at (time/instant)}
+                                      :set {:role (tc/cast-for-database :user-role new-role)}
                                       :where [:in :id user-ids]})))]
 
         ;; Log audit entries for each user

@@ -132,9 +132,7 @@
 
                      (contains? data :subcategory_id) (assoc :subcategory_id subcategory_id)
                      (contains? data :link) (assoc :link link)
-                     (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id)
-
-                     true (assoc :updated_at [:now]))]
+                     (contains? data :manufacturer_id) (assoc :manufacturer_id manufacturer_id))]
     (when (seq update-map)
       (jdbc/execute-one!
         db

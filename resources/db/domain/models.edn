@@ -232,18 +232,7 @@
                        [:updated_at :timestamptz {:default [:now]}]]
               :indexes [[:idx_raw_labels_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
 
- :expense_items {:fields [[:id :uuid {:primary-key true}]
-                          [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}]
-                          ;; Canonical alias reference for receipt line item labels.
-                          [:alias_id :uuid {:foreign-key :article_aliases/id}]
-                          [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
-                          [:qty [:decimal 10 3]]
-                          [:unit_price [:decimal 12 2]]
-                          [:line_total [:decimal 12 2] {:null false}]
-                          [:created_at :timestamptz {:default [:now]}]]
-                 :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
-                           [:idx_expense_items_article :btree {:fields [:article_id]}]
-                           [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
+ :expense_items {:fields [[:id :uuid {:primary-key true}] [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}] [:alias_id :uuid {:foreign-key :article_aliases/id}] [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}] [:qty [:decimal 10 3]] [:unit_price [:decimal 12 2]] [:line_total [:decimal 12 2] {:null false}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}] [:idx_expense_items_article :btree {:fields [:article_id]}] [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
 
  ;; ----------------------------------------------------------------------------
  ;; Manufacturers (canonical brands)
@@ -313,31 +302,10 @@
  ;; Article Aliases (mapping raw labels → canonical articles)
  ;; ----------------------------------------------------------------------------
 
- :article_aliases {:fields [[:id :uuid {:primary-key true}]
-                            [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}]
-                            ;; NEW (Phase 1): representative latest-seen raw label text
-                            [:raw_label :text]
-                            [:raw_label_normalized [:varchar 255] {:null false}]
-                            ;; CHANGED (Phase 1): allow NULL = unmapped
-                            [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
-                            [:confidence :integer {:default 100}]
-                            [:created_at :timestamptz {:default [:now]}]]
-                   :indexes [[:idx_article_aliases_supplier_label :btree
-                              {:fields [:supplier_id :raw_label_normalized] :unique true}]
-                             [:idx_article_aliases_article :btree {:fields [:article_id]}]]}
+ :article_aliases {:fields [[:id :uuid {:primary-key true}] [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}] [:raw_label :text] [:raw_label_normalized [:varchar 255] {:null false}] [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}] [:confidence :integer {:default 100}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_article_aliases_supplier_label :btree {:fields [:supplier_id :raw_label_normalized] :unique true}] [:idx_article_aliases_article :btree {:fields [:article_id]}]]}
 
  ;; ----------------------------------------------------------------------------
  ;; Price Observations (track prices over time)
  ;; ----------------------------------------------------------------------------
 
- :price_observations {:fields [[:id :uuid {:primary-key true}]
-                               [:article_id :uuid {:foreign-key :articles/id :null false :on-delete :cascade}]
-                               [:supplier_id :uuid {:foreign-key :suppliers/id :null false :on-delete :cascade}]
-                               [:expense_item_id :uuid {:foreign-key :expense_items/id :on-delete :set-null}]
-                               [:observed_at :timestamptz {:null false}]
-                               [:unit_price [:decimal 12 2]]
-                               [:currency [:enum :currency] {:default "BAM"}]
-                               [:created_at :timestamptz {:default [:now]}]]
-                      :indexes [[:idx_price_obs_article :btree {:fields [:article_id]}]
-                                [:idx_price_obs_supplier :btree {:fields [:supplier_id]}]
-                                [:idx_price_obs_observed_at :btree {:fields [:observed_at]}]]}}
+ :price_observations {:fields [[:id :uuid {:primary-key true}] [:article_id :uuid {:foreign-key :articles/id :null false :on-delete :cascade}] [:supplier_id :uuid {:foreign-key :suppliers/id :null false :on-delete :cascade}] [:expense_item_id :uuid {:foreign-key :expense_items/id :on-delete :set-null}] [:observed_at :timestamptz {:null false}] [:unit_price [:decimal 12 2]] [:currency [:enum :currency] {:default "BAM"}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_price_obs_article :btree {:fields [:article_id]}] [:idx_price_obs_supplier :btree {:fields [:supplier_id]}] [:idx_price_obs_observed_at :btree {:fields [:observed_at]}]]}}

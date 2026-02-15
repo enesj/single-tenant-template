@@ -7,7 +7,7 @@ This repo is a **single-tenant admin app**. Multi-tenant/RLS material from the h
 ## System Context
 - **Backend**: Ring + Reitit on Clojure. Admin-only routes under `/admin/api` (port 8085), secured by admin auth + security middleware.
 - **Frontend**: Shadow CLJS + Re-frame/UIx. Admin SPA (`app.admin.frontend.core`) plus an optional public/app shell (`app.template.frontend.core`), both served from the backend.
-- **Database**: PostgreSQL, single schema from `resources/db/models.edn` (admins, users, audit_events, login_events, supporting tables). No RLS/tenant switching.
+- **Database**: PostgreSQL, single schema from `resources/db/models.edn` (admins, users, audit_logs, login_events, supporting tables). No RLS/tenant switching.
 - **Domains**: Concrete features live under `src/app/domain/**` and are enabled via registries (template/admin remain domain-agnostic).
 - **Shared libs**: Template/shared components and validation/HTTP helpers reused on both sides.
 

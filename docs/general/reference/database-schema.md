@@ -17,22 +17,29 @@ Canonical schema is materialized in `resources/db/models.edn`, generated from th
 - **Indexes**: `idx_admins_email` (unique), `idx_admins_status`.
 
 ### `email_verification_tokens`
-- **Fields**: `id` (uuid, pk), `user_id` (fk → `users.id`, cascade delete), `token` (varchar 255, unique, required), `expires_at` (timestamptz, required), `attempts` (int, default 0), `last_attempted_at` (timestamptz), `used_at` (timestamptz), `created_at` (timestamptz, default `NOW()`).
+
+- **Fields**: `id` (uuid, pk), `user_id` (fk → `users.id`, cascade delete), `token` (varchar 255, unique, required), `expires_at` (timestamptz, required), `attempts` (int, default 0), `last_attempted_at` (timestamptz), `used_at` (timestamptz), `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).
 - **Indexes**: `idx_email_tokens_user`, `idx_email_tokens_token` (unique), `idx_email_tokens_expires`.
 
 ### `audit_logs`
-- **Fields**: `id` (uuid, pk), `actor_type` (`audit-actor-type`), `actor_id` (uuid), `action` (text, required), `target_type` (text), `target_id` (uuid), `metadata` (jsonb), `ip` (text), `user_agent` (text), `created_at` (timestamptz, default `NOW()`).
+
+- **Fields**: `id` (uuid, pk), `actor_type` (`audit-actor-type`), `actor_id` (uuid), `action` (text, required), `target_type` (text), `target_id` (uuid), `metadata` (jsonb), `ip` (text), `user_agent` (text), `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).
 - **Enums**: `audit-actor-type` = `user | admin`.
 - **Indexes**: `idx_audit_logs_created_at` (created_at), `idx_audit_logs_actor` (actor_type, actor_id).
 - **Usage**: Populated by admin actions (update/create/delete/login/logout, impersonation, verification, etc.) and exposed via `/admin/api/audit` and `/admin/api/user-management/activity/:id`.
 
 ### `login_events`
-- **Fields**: `id` (uuid, pk), `principal_type` (`login-principal-type`), `principal_id` (uuid), `success` (boolean), `reason` (text), `ip` (text), `user_agent` (text), `created_at` (timestamptz, default `NOW()`).
+
+- **Fields**: `id` (uuid, pk), `principal_type` (`login-principal-type`), `principal_id` (uuid), `success` (boolean), `reason` (text), `ip` (text), `user_agent` (text), `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).
 - **Enums**: `login-principal-type` = `user | admin`.
 - **Indexes**: `idx_login_events_created_at` (created_at), `idx_login_events_principal` (principal_type, principal_id).
 - **Usage**: Records successful and failed logins for admins and users. Surface via `/admin/api/login-events` and per-user activity modal.
 
 ## Notes
+
 - Schema is single-database, single-tenant; no `tenant_id` columns or RLS policies are present.
+- All user/application tables in `resources/db/models.edn` include both `created_at` and `updated_at`; `automigrate_migrations` is the exception.
+- `updated_at` is maintained by DB triggers using `update_updated_at_column()` with per-table `<table>_updated_at` trigger names defined in `resources/db/template/triggers.edn`.
+- Application update code should not manually set `updated_at`.
 - Always edit canonical model sources in `resources/db/{template,shared,domain}/**` then regenerate migrations; do not hand-edit `resources/db/models.edn` or `resources/db/migrations/*`.
 - For monitoring data (audit/login events), frontend expects epoch millis for `created_at`; backend services normalize PG timestamps accordingly.

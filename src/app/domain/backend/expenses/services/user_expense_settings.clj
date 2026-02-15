@@ -38,11 +38,11 @@
     (throw (ex-info "user-id must be a UUID" {:user-id user-id})))
   (-> (jdbc/execute-one!
         db
-      (sql/format {:select [:default_currency :default_payer_id :notifications_enabled :auto_post_after_upload_enabled :receipt_refine_enabled]
-                    :from [:user_expense_settings]
-                    :where [:= :user_id user-id]})
+        (sql/format {:select [:default_currency :default_payer_id :notifications_enabled :auto_post_after_upload_enabled :receipt_refine_enabled]
+                     :from [:user_expense_settings]
+                     :where [:= :user_id user-id]})
         {:builder-fn rs/as-unqualified-lower-maps})
-      db-adapter/to-app))
+    db-adapter/to-app))
 
 (defn upsert-user-expense-settings!
   "Insert/update settings for `user-id`.
@@ -73,15 +73,14 @@
         db
         [(str
            "INSERT INTO user_expense_settings "
-           "(user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled, created_at, updated_at) "
-           "VALUES (?, ?::currency, ?, ?, ?, ?, NOW(), NOW()) "
+           "(user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled) "
+           "VALUES (?, ?::currency, ?, ?, ?, ?) "
            "ON CONFLICT (user_id) DO UPDATE SET "
            "default_currency = EXCLUDED.default_currency, "
            "default_payer_id = EXCLUDED.default_payer_id, "
            "notifications_enabled = EXCLUDED.notifications_enabled, "
            "auto_post_after_upload_enabled = EXCLUDED.auto_post_after_upload_enabled, "
-           "receipt_refine_enabled = EXCLUDED.receipt_refine_enabled, "
-           "updated_at = NOW() "
+           "receipt_refine_enabled = EXCLUDED.receipt_refine_enabled "
            "RETURNING default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled")
          user-id
          default-currency
@@ -90,7 +89,7 @@
          auto-post-after-upload-enabled
          receipt-refine-enabled]
         {:builder-fn rs/as-unqualified-lower-maps})
-      db-adapter/to-app))
+    db-adapter/to-app))
 
 (defn effective-settings
   "Merge persisted settings over defaults."

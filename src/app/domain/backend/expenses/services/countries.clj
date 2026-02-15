@@ -98,8 +98,7 @@
         q {:insert-into :countries
            :values [{:country country
                      :code code
-                     :created_at [:now]
-                     :updated_at [:now]}]
+                     :created_at [:now]}]
            :returning [:country :code :created_at :updated_at]}
         row (jdbc/execute-one! db (sql/format q) jdbc-opts)]
     (with-id row)))
@@ -111,18 +110,20 @@
   Returns updated row with computed :id."
   [db id updates]
   (let [country-id (validate-country! id)
-        set-map (cond-> {:updated_at [:now]}
+        set-map (cond-> {}
                   (contains? updates :country)
                   (assoc :country (validate-country! (:country updates)))
 
                   (contains? updates :code)
-                  (assoc :code (validate-code! (:code updates))))
-        q {:update :countries
-           :set set-map
-           :where [:= :country country-id]
-           :returning [:country :code :created_at :updated_at]}
-        row (jdbc/execute-one! db (sql/format q) jdbc-opts)]
-    (with-id row)))
+                  (assoc :code (validate-code! (:code updates))))]
+    (when (empty? set-map)
+      (bad-request! "No valid fields to update" {:field :updates}))
+    (let [q {:update :countries
+             :set set-map
+             :where [:= :country country-id]
+             :returning [:country :code :created_at :updated_at]}
+          row (jdbc/execute-one! db (sql/format q) jdbc-opts)]
+      (with-id row))))
 
 (defn delete-country!
   "Delete a country by country name (string PK). Returns boolean."

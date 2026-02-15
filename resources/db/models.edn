@@ -9,7 +9,8 @@
    [:attempts :integer {:default 0}]
    [:last_attempted_at :timestamptz]
    [:used_at :timestamptz]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_email_tokens_user :btree {:fields [:user_id]}]
    [:idx_email_tokens_token :btree {:fields [:token], :unique true}]
@@ -147,7 +148,8 @@
    [:token [:varchar 255] {:null false, :unique true}]
    [:expires_at :timestamptz {:null false}]
    [:used_at :timestamptz]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_password_reset_tokens_token
     :btree
@@ -195,7 +197,8 @@
    [:reason :text]
    [:ip :text]
    [:user_agent :text]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_login_events_created_at :btree {:fields [:created_at]}]
    [:idx_login_events_principal
@@ -231,6 +234,7 @@
     {:foreign-key :admins/id, :null false, :on-delete :cascade}]
    [:token [:varchar 255] {:null false, :unique true}]
    [:created_at :timestamptz {:null false, :default [:now]}]
+   [:updated_at :timestamptz {:null false, :default [:now]}]
    [:last_activity :timestamptz {:null false}]
    [:expires_at :timestamptz {:null false}]
    [:ip_address :text]
@@ -275,7 +279,8 @@
    [:observed_at :timestamptz {:null false}]
    [:unit_price [:decimal 12 2]]
    [:currency [:enum :currency] {:default "BAM"}]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_price_obs_article :btree {:fields [:article_id]}]
    [:idx_price_obs_supplier :btree {:fields [:supplier_id]}]
@@ -306,7 +311,8 @@
    [:metadata :jsonb]
    [:ip :text]
    [:user_agent :text]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_audit_logs_created_at :btree {:fields [:created_at]}]
    [:idx_audit_logs_actor :btree {:fields [:actor_type :actor_id]}]]},
@@ -323,7 +329,8 @@
    [:qty [:decimal 10 3]]
    [:unit_price [:decimal 12 2]]
    [:line_total [:decimal 12 2] {:null false}]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_expense_items_expense :btree {:fields [:expense_id]}]
    [:idx_expense_items_article :btree {:fields [:article_id]}]
@@ -438,7 +445,9 @@
     :integer
     {:null false,
      :default 5,
-     :check [:raw "priority BETWEEN 1 AND 5"]}]],
+     :check [:raw "priority BETWEEN 1 AND 5"]}]
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :types
   [[:backlog-status
     :enum
@@ -469,7 +478,8 @@
     :uuid
     {:foreign-key :articles/id, :on-delete :set-null}]
    [:confidence :integer {:default 100}]
-   [:created_at :timestamptz {:default [:now]}]],
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_article_aliases_supplier_label
     :btree

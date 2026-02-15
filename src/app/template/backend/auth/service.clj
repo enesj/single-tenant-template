@@ -201,9 +201,7 @@
                          :role shared-auth/role-member
                          :status "active"
                          :auth_provider "password"
-
-                         :created_at now
-                         :updated_at now})
+                         :created_at now})
           user-plain (db-user->plain user-record)
           verification-token (email-verification/create-verification-token!
                                db
@@ -317,9 +315,7 @@
                           (let [user-id (:id existing-user-plain)
                                 update-data {:full_name (:full-name normalized)
                                              :avatar_url (:avatar-url normalized)
-                                             :auth_provider (name provider)
-
-                                             :updated_at now}]
+                                             :auth_provider (name provider)}]
                             (db-protocols/update-record db metadata :users user-id update-data)
                             (db-protocols/find-by-id db :users user-id))
                           ;; Create new OAuth user
@@ -332,9 +328,7 @@
                                              :role shared-auth/role-admin    ;; highest available user role in this starter
                                              :status "active"
                                              :auth_provider (name provider)
-
-                                             :created_at now
-                                             :updated_at now}]
+                                             :created_at now}]
                             (db-protocols/create db metadata :users create-data)))
             ;; Convert any namespaced keys (e.g. :users/email) to plain keys
             user-plain (into {}

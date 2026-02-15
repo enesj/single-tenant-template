@@ -59,10 +59,9 @@
                    :values [{:id city-id
                              :name name-str
                              :normalized_key normalized
-                             :created_at [:now]
-                             :updated_at [:now]}]
+                             :created_at [:now]}]
                    :on-conflict [:normalized_key]
-                   :do-update-set {:updated_at [:now]}
+                   :do-update-set {:name :excluded/name}
                    :returning [:id]}]
       (:id (jdbc/execute-one!
              db
@@ -442,18 +441,20 @@
                             (not-empty))
          city-id (when address*
                    (cities/resolve-city-id-from-text! db (or city-source-text address*) opts))
-         set-map (cond-> {:updated_at [:now]}
+         set-map (cond-> {}
                    (some? display-name*) (assoc :display_name display-name*)
                    (some? address*) (assoc :address address*)
                    (some? normalized*) (assoc :normalized_key normalized*)
                    (some? address*) (assoc :city_id city-id))]
-     (jdbc/execute-one!
-       db
-       (sql/format {:update :stores
-                    :set set-map
-                    :where [:= :id store-id]
-                    :returning [:*]})
-       {:builder-fn rs/as-unqualified-lower-maps}))))
+     (if (seq set-map)
+       (jdbc/execute-one!
+         db
+         (sql/format {:update :stores
+                      :set set-map
+                      :where [:= :id store-id]
+                      :returning [:*]})
+         {:builder-fn rs/as-unqualified-lower-maps})
+       (get-store db store-id)))))
 
 (defn- merge-duplicate-stores-by-place-id!
   "Merge stores for a supplier that resolve to the same Places `place_id`.
@@ -487,8 +488,7 @@
           (jdbc/execute!
             db
             (sql/format {:update :store_aliases
-                         :set {:store_id keep-id
-                               :updated_at [:now]}
+                         :set {:store_id keep-id}
                          :where [:in :store_id drop-ids]}))
           ;; Finally remove duplicates.
           (jdbc/execute!
@@ -552,13 +552,11 @@
                 :normalized_key normalized
                 :address address*
                 :city_id city-id
-                :created_at [:now]
-                :updated_at [:now]}
+                :created_at [:now]}
            sql-map {:insert-into :stores
                     :values [row]
                     :on-conflict [:supplier_id :normalized_key]
-                    :do-update-set (cond-> {:display_name :excluded/display_name
-                                            :updated_at [:now]}
+                    :do-update-set (cond-> {:display_name :excluded/display_name}
                                      (some? address*) (assoc :address :excluded/address
                                                         :city_id :excluded/city_id))
                     :returning [:*]}]
