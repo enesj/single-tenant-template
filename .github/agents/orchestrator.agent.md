@@ -29,6 +29,11 @@ You can call only:
 
 ## Required orchestration workflow
 
+### -1) First response protocol (always)
+- First, briefly restate your understanding of the user's task in 1-3 concise bullets.
+- Then wait for 20 seconds.
+- After the 20-second wait, continue the orchestration workflow automatically (do not require extra user confirmation unless blocked or ambiguous).
+
 ### 0) Route bug reports to Debugg first
 - If the user is reporting a bug, app issue, or troubleshooting request, delegate first to **Debugg**.
 - Require Debugg to return: intake summary, scope decision (frontend/backend/both), reproduction steps, evidence packet (logs/REPL/browser/DB as applicable), and a recommended next owner.

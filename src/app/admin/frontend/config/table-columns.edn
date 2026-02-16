@@ -494,4 +494,7 @@
   :sortable-columns ["number" "status" "type" "priority"],
   :always-visible ["number"],
   :computed-fields {},
-  :column-config {}}}
+  :column-config
+  {:status {:width "120px", :formatter "backlog-status-badge"}
+   :type {:width "130px", :formatter "backlog-type-badge"}
+   :priority {:width "100px", :formatter "backlog-priority-badge"}}}}

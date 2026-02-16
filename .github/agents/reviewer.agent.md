@@ -62,6 +62,14 @@ If there is any conflict, apply the stricter repository rule.
   - relevant module README/docs near touched code
 - If docs are stale or missing, update them directly with minimal diffs.
 
+### 4) Commit reviewed changes (only if alignment passes and checks pass)
+
+- Confirm that all required checks for the task have passed (focused tests, REPL validation, and/or build checks as applicable).
+- If and only if the review verdict is `pass` and required checks passed, commit **all current reviewed changes** in one commit.
+- Stage all changes for the task before committing.
+- Use a clear commit message summarizing the reviewed scope.
+- If verdict is `misaligned` or checks are failing/missing, do **not** commit.
+
 ## Output contract
 
 Always return:
@@ -79,6 +87,9 @@ Always return:
    - exact docs files changed (if any)
 5. **Residual risks**
    - any assumptions or follow-up checks
+6. **Commit status**
+   - `committed` with commit hash and message, or
+   - `not committed` with explicit reason
 
 ## Delegation boundary
 

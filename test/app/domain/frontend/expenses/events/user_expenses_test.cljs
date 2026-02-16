@@ -792,3 +792,55 @@
         (is (= "/api/v1/expenses/settings" (req-uri req)))
         (is (= settings (req-params req)))
         (is (nil? (req-body req)))))))
+
+(deftest reports-init-fetches-expanded-report-endpoints
+  (testing "expanded report fetch events hit /api/v1/expenses/reports/* endpoints"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+    (reset! captured-http-requests [])
+
+    (rf/dispatch-sync [:user-expenses/fetch-report-day-of-week])
+    (rf/dispatch-sync [:user-expenses/fetch-report-top-items])
+    (rf/dispatch-sync [:user-expenses/fetch-report-monthly-comparison])
+    (rf/dispatch-sync [:user-expenses/fetch-report-size-distribution])
+    (rf/dispatch-sync [:user-expenses/fetch-report-daily-heatmap])
+    (rf/dispatch-sync [:user-expenses/fetch-report-category-allocation])
+
+    (let [uris (set (map req-uri @captured-http-requests))]
+      (is (contains? uris "/api/v1/expenses/reports/day-of-week"))
+      (is (contains? uris "/api/v1/expenses/reports/top-items"))
+      (is (contains? uris "/api/v1/expenses/reports/monthly-comparison"))
+      (is (contains? uris "/api/v1/expenses/reports/size-distribution"))
+      (is (contains? uris "/api/v1/expenses/reports/daily-heatmap"))
+      (is (contains? uris "/api/v1/expenses/reports/category-allocation")))))
+
+(deftest reports-set-filter-refreshes-and-passes-supplier-param
+  (testing "supplier deep-dive and monthly comparison forward supplier_id and required params"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+
+    ;; no supplier selected -> deep-dive does not issue HTTP request
+    (reset! captured-http-requests [])
+    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-deep-dive])
+    (is (= 0 (count @captured-http-requests)))
+
+    ;; with supplier selected -> deep-dive and monthly include supplier_id + range/month params
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :supplier-id "supplier-42"])
+
+    (reset! captured-http-requests [])
+    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-deep-dive])
+    (rf/dispatch-sync [:user-expenses/fetch-report-monthly-comparison])
+
+    (let [requests @captured-http-requests
+          deep-dive-req (first (filter #(= "/api/v1/expenses/reports/supplier-deep-dive" (req-uri %)) requests))
+          monthly-req (first (filter #(= "/api/v1/expenses/reports/monthly-comparison" (req-uri %)) requests))
+          deep-dive-params (req-params deep-dive-req)
+          monthly-params (req-params monthly-req)]
+      (is (some? deep-dive-req))
+      (is (= "supplier-42" (:supplier_id deep-dive-params)))
+      (is (string? (:from deep-dive-params)))
+      (is (string? (:to deep-dive-params)))
+      (is (some? monthly-req))
+      (is (= "supplier-42" (:supplier_id monthly-params)))
+      (is (string? (:month_a monthly-params)))
+      (is (string? (:month_b monthly-params))))))

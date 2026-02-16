@@ -183,9 +183,7 @@
     (if (unassigned? db)
       (redirect-to-waiting-room db)
       {:db (assoc-in db (paths/current-page) :expense-reports)
-       :dispatch-n [[:user-expenses/fetch-summary]
-                    [:user-expenses/fetch-by-month {:months-back 6}]
-                    [:user-expenses/fetch-by-supplier {:limit 10}]]})))
+       :dispatch [:user-expenses/init-reports]})))
 
 (rf/reg-event-fx
   :page/init-expense-settings

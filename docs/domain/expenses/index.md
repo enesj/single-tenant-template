@@ -134,7 +134,7 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 4. **Receipt Upload**: Multipart upload that creates a receipt for OCR processing (`expense_upload.cljs`)
 5. **Receipts Inbox**: Review receipts and approve into expenses (`receipts_list.cljs`, `receipt_detail.cljs`)
 6. **Reference Data**: Browse/manage suppliers and payers (`suppliers.cljs`, `payers.cljs`)
-7. **Reports**: Visual breakdown of expenses by category and supplier (`expense_reports.cljs`)
+7. **Reports**: Interactive analytics widgets (supplier deep-dive, day-of-week, top items, monthly comparison, size distribution, daily heatmap, category allocation) (`expense_reports.cljs`)
 8. **User Settings**: Persisted per-user settings (`expense_settings.cljs`) backed by `/api/v1/expenses/settings`
 
 ### Role/capability gating (user-facing)
@@ -223,6 +223,7 @@ Key services in `src/app/domain/backend/expenses/services/`:
 - **suppliers.clj** - Supplier management
 - **payers.clj** - Payment method management
 - **reports.clj** - Summary and breakdown reports
+- **user_expense_reports.clj** - User analytics report queries for `/api/v1/expenses/reports/*`
 
 ## Data Models
 

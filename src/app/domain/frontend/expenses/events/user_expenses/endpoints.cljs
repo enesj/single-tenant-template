@@ -9,6 +9,15 @@
 (def by-supplier-endpoint (api/versioned-endpoint "/expenses/by-supplier"))
 (def expense-detail-endpoint (api/versioned-endpoint "/expenses"))
 
+(def reports-endpoint (api/versioned-endpoint "/expenses/reports"))
+(def reports-supplier-deep-dive-endpoint (str reports-endpoint "/supplier-deep-dive"))
+(def reports-day-of-week-endpoint (str reports-endpoint "/day-of-week"))
+(def reports-top-items-endpoint (str reports-endpoint "/top-items"))
+(def reports-monthly-comparison-endpoint (str reports-endpoint "/monthly-comparison"))
+(def reports-size-distribution-endpoint (str reports-endpoint "/size-distribution"))
+(def reports-daily-heatmap-endpoint (str reports-endpoint "/daily-heatmap"))
+(def reports-category-allocation-endpoint (str reports-endpoint "/category-allocation"))
+
 (def suppliers-endpoint (api/versioned-endpoint "/expenses/suppliers"))
 
 (def stores-endpoint (api/versioned-endpoint "/expenses/stores"))

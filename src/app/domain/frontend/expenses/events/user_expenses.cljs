@@ -21,6 +21,7 @@
     app.domain.frontend.expenses.events.user-expenses.receipts
     app.domain.frontend.expenses.events.user-expenses.reference-crud
     app.domain.frontend.expenses.events.user-expenses.recent
+    app.domain.frontend.expenses.events.user-expenses.reports
     app.domain.frontend.expenses.events.user-expenses.settings
     app.domain.frontend.expenses.events.user-expenses.stores
     app.domain.frontend.expenses.events.user-expenses.subcategories

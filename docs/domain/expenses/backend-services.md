@@ -13,7 +13,8 @@ This document covers the service layer for the **Home Expenses** domain.
 - **Expense Items** (`app.domain.backend.expenses.services.expense-items`) — standalone CRUD for `expense_items` line items (list/count/search; joins to expense/supplier/payer/article for admin tables).
 - **Raw Labels** (`app.domain.backend.expenses.services.raw-labels`) — dedupe + normalization for line-item labels; `expense_items` stores a FK to `raw_labels`.
 - **Articles/Aliases/Price history** (`app.domain.backend.expenses.services.articles`, `price-history`) — canonical articles, alias mapping, price observation queries.
-- **Reports** (`app.domain.backend.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
+- **Reports (admin)** (`app.domain.backend.expenses.services.reports`) — summary, payer/supplier breakdowns, weekly/monthly totals, top suppliers.
+- **Reports (user analytics)** (`app.domain.backend.expenses.services.user-expense-reports`) — supplier deep-dive, day-of-week pattern, top-items, monthly comparison, size distribution, daily heatmap, category allocation.
 
 ## Routing Notes
 - Routes are mounted under `/admin/api/expenses` via the backend domain registry (`app.domain.backend.registry`).

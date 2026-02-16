@@ -14,6 +14,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
     [app.domain.backend.expenses.handlers.user-expenses.expense-items :as user-expenses-expense-items]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as user-expenses-reference-data]
+    [app.domain.backend.expenses.handlers.user-expenses.reports :as user-expenses-reports]
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-aliases :as user-expenses-supplier-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
@@ -38,6 +39,16 @@
    ["/summary" {:get {:handler (user-expenses-summary/expense-summary-handler db)}}]
    ["/by-month" {:get {:handler (user-expenses-summary/spending-by-month-handler db)}}]
    ["/by-supplier" {:get {:handler (user-expenses-summary/spending-by-supplier-handler db)}}]
+
+   ;; Expanded report endpoints
+   ["/reports"
+    ["/supplier-deep-dive" {:get {:handler (user-expenses-reports/supplier-deep-dive-handler db)}}]
+    ["/day-of-week" {:get {:handler (user-expenses-reports/day-of-week-spending-handler db)}}]
+    ["/top-items" {:get {:handler (user-expenses-reports/top-items-spending-handler db)}}]
+    ["/monthly-comparison" {:get {:handler (user-expenses-reports/monthly-comparison-handler db)}}]
+    ["/size-distribution" {:get {:handler (user-expenses-reports/expense-size-distribution-handler db)}}]
+    ["/daily-heatmap" {:get {:handler (user-expenses-reports/daily-heatmap-handler db)}}]
+    ["/category-allocation" {:get {:handler (user-expenses-reports/category-allocation-handler db)}}]]
 
    ;; Settings endpoints (must come before /:id routes)
    ["/settings"

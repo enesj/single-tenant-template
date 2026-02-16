@@ -123,6 +123,61 @@
                     v))
             item))))))
 
+(defn normalize-formatter-id
+  [formatter]
+  (normalize-field-key formatter))
+
+(defn resolve-backlog-badge
+  "Resolve backlog formatter value into a badge label+variant map.
+
+  Returns nil when the formatter is not one of the backlog badge formatters."
+  [formatter value]
+  (let [formatter-id (normalize-formatter-id formatter)
+        value-str (some-> value str str/trim)
+        value-lower (some-> value-str str/lower-case)
+        parse-priority (fn [v]
+                         (let [parsed (js/parseInt (str v) 10)]
+                           (when-not (js/isNaN parsed)
+                             parsed)))]
+    (case formatter-id
+      "backlog-status-badge"
+      {:label (if (seq value-str) (titleize-status value-str) "Unknown")
+       :variant (cond
+                  (contains? #{"waiting"} value-lower) "ds-badge-ghost"
+                  (contains? #{"in progres" "in progress" "in-progress"} value-lower) "ds-badge-info"
+                  (contains? #{"completed"} value-lower) "ds-badge-success"
+                  (contains? #{"need improvments" "need improvements" "needs improvement" "needs improvements"} value-lower) "ds-badge-warning"
+                  :else "ds-badge-outline")}
+
+      "backlog-type-badge"
+      {:label (if (seq value-str) (titleize-status value-str) "Unknown")
+       :variant (cond
+                  (contains? #{"issue"} value-lower) "ds-badge-error"
+                  (contains? #{"feature"} value-lower) "ds-badge-success"
+                  (contains? #{"refactoring"} value-lower) "ds-badge-warning"
+                  (contains? #{"review"} value-lower) "ds-badge-info"
+                  :else "ds-badge-outline")}
+
+      "backlog-priority-badge"
+      (let [priority (when (seq value-str)
+                       (parse-priority value-str))]
+        {:label (if (some? priority) (str priority) "Unknown")
+         :variant (case priority
+                    1 "ds-badge-error"
+                    2 "ds-badge-warning"
+                    3 "ds-badge-info"
+                    4 "ds-badge-primary"
+                    5 "ds-badge-ghost"
+                    "ds-badge-outline")})
+
+      nil)))
+
+(defn- render-badge
+  [{:keys [label variant]}]
+  ($ :span {:class (str "ds-badge uppercase tracking-wide text-xs px-3 py-1 rounded-full border shadow-sm "
+                     variant)}
+    label))
+
 (defn get-field-display-value
   "Gets the display value for a field, handling select fields specially and truncating long text content."
   ([field value]
@@ -141,6 +196,7 @@
            text-value (str (if (keyword? display-value)
                              (name display-value)
                              (or display-value "")))
+           formatter-badge (resolve-backlog-badge (:formatter field) display-value)
            status-field-id? (or (= field-id :status)
                               (= field-id "status")
                               (= (name field-id) "status"))
@@ -180,10 +236,12 @@
                         (= field-type "text") 50
                         :else 30)]
        (cond
+         formatter-badge
+         (render-badge formatter-badge)
+
          status-str
-         ($ :span {:class (str "ds-badge uppercase tracking-wide text-xs px-3 py-1 rounded-full border shadow-sm "
-                            (status->badge-variant status-lower))}
-           (titleize-status status-str))
+         (render-badge {:label (titleize-status status-str)
+                        :variant (status->badge-variant status-lower)})
 
          is-datetime-field?
          (format-timestamp display-value)

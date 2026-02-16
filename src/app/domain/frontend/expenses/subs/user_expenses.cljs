@@ -288,3 +288,170 @@
   :user-expenses/settings-saving?
   (fn [db _]
     (get-in db [:user-expenses :settings :saving?])))
+
+(defn- reports-data
+  [db report-key field]
+  (get-in db [:user-expenses :reports report-key field]))
+
+;; Reports filters
+(rf/reg-sub
+  :user-expenses/reports-filters
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-months-back
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :months-back])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-supplier-id
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :supplier-id])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-day-of-week
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :day-of-week])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-category-key
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :category-key])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-amount-bucket
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :amount-bucket])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-selected-day
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :selected-day])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-month-a
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :month-a])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-month-b
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :month-b])))
+
+(rf/reg-sub
+  :user-expenses/reports-filter-show-uncategorized?
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :show-uncategorized?])))
+
+;; Supplier deep-dive report
+(rf/reg-sub
+  :user-expenses/report-supplier-deep-dive
+  (fn [db _]
+    (reports-data db :supplier-deep-dive :data)))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-deep-dive-loading?
+  (fn [db _]
+    (boolean (reports-data db :supplier-deep-dive :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-deep-dive-error
+  (fn [db _]
+    (reports-data db :supplier-deep-dive :error)))
+
+;; Day-of-week report
+(rf/reg-sub
+  :user-expenses/report-day-of-week
+  (fn [db _]
+    (or (reports-data db :day-of-week :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-day-of-week-loading?
+  (fn [db _]
+    (boolean (reports-data db :day-of-week :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-day-of-week-error
+  (fn [db _]
+    (reports-data db :day-of-week :error)))
+
+;; Top-items report
+(rf/reg-sub
+  :user-expenses/report-top-items
+  (fn [db _]
+    (or (reports-data db :top-items :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-top-items-loading?
+  (fn [db _]
+    (boolean (reports-data db :top-items :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-top-items-error
+  (fn [db _]
+    (reports-data db :top-items :error)))
+
+;; Monthly comparison report
+(rf/reg-sub
+  :user-expenses/report-monthly-comparison
+  (fn [db _]
+    (reports-data db :monthly-comparison :data)))
+
+(rf/reg-sub
+  :user-expenses/report-monthly-comparison-loading?
+  (fn [db _]
+    (boolean (reports-data db :monthly-comparison :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-monthly-comparison-error
+  (fn [db _]
+    (reports-data db :monthly-comparison :error)))
+
+;; Size distribution report
+(rf/reg-sub
+  :user-expenses/report-size-distribution
+  (fn [db _]
+    (or (reports-data db :size-distribution :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-size-distribution-loading?
+  (fn [db _]
+    (boolean (reports-data db :size-distribution :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-size-distribution-error
+  (fn [db _]
+    (reports-data db :size-distribution :error)))
+
+;; Daily heatmap report
+(rf/reg-sub
+  :user-expenses/report-daily-heatmap
+  (fn [db _]
+    (or (reports-data db :daily-heatmap :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-daily-heatmap-loading?
+  (fn [db _]
+    (boolean (reports-data db :daily-heatmap :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-daily-heatmap-error
+  (fn [db _]
+    (reports-data db :daily-heatmap :error)))
+
+;; Category allocation report
+(rf/reg-sub
+  :user-expenses/report-category-allocation
+  (fn [db _]
+    (or (reports-data db :category-allocation :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-category-allocation-loading?
+  (fn [db _]
+    (boolean (reports-data db :category-allocation :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-category-allocation-error
+  (fn [db _]
+    (reports-data db :category-allocation :error)))
