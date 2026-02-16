@@ -14,14 +14,7 @@
     {:entity-key :article-aliases
      :field-key :article-id
      :component selects/article-select-input})
-  (form-components/register-form-field-component!
-    {:entity-key :price-observations
-     :field-key :supplier-id
-     :component selects/supplier-select-input})
-  (form-components/register-form-field-component!
-    {:entity-key :price-observations
-     :field-key :article-id
-     :component selects/article-select-input})
+
   (form-components/register-form-field-component!
     {:entity-key :expense-items
      :field-key :expense-id

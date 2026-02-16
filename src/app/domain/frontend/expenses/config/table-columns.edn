@@ -189,48 +189,14 @@
   :sortable-columns ["country" "code" "created_at" "updated_at"],
   :always-visible ["country"],
   :computed-fields {:id {:type "string"}}},
- :price-observations
- {:available-columns
-  ["article_canonical_name"
-   "supplier_display_name"
-   "observed_at"
-   "unit_price"
-   "currency"
-   "expense_item_id"
-   "id"
-   "article_id"
-   "supplier_id"
-   "created_at"],
-  :default-visible-columns
-  ["article_canonical_name"
-   "supplier_display_name"
-   "observed_at"
-   "unit_price"
-   "currency"],
-  :filterable-columns
-  ["article_canonical_name"
-   "supplier_display_name"
-   "observed_at"
-   "unit_price"
-   "currency"
-   "expense_item_id"],
-  :sortable-columns
-  ["article_canonical_name"
-   "supplier_display_name"
-   "observed_at"
-   "unit_price"
-   "currency"
-   "expense_item_id"],
-  :always-visible
-  ["article_canonical_name"
-   "supplier_display_name"
-   "observed_at"
-   "unit_price"],
-  :computed-fields
-  {:article_canonical_name {}, :supplier_display_name {}}},
  :payers
  {:available-columns
-  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id"],
+  ["label"
+   "payer_type_id"
+   "is_default"
+   "created_at"
+   "updated_at"
+   "id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
@@ -327,17 +293,9 @@
    "updated_at"
    "id"],
   :default-visible-columns
-  ["display_name"
-   "normalized_key"
-   "address"
-   "city_id"
-   "created_at"],
+  ["display_name" "normalized_key" "address" "city_id" "created_at"],
   :filterable-columns
-  ["display_name"
-   "normalized_key"
-   "address"
-   "city_id"
-   "created_at"],
+  ["display_name" "normalized_key" "address" "city_id" "created_at"],
   :sortable-columns
   ["display_name"
    "normalized_key"

@@ -72,6 +72,57 @@
       (str "Posted " success-count " receipt" (when (not= 1 success-count) "s")
         "; " failure-count " failed. First error: " first-error))))
 
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- normalize-status-filter
+  [status-filter]
+  (letfn [(->status [value]
+            (cond
+              (map? value) (recur (or (:value value) (get value "value")))
+              (keyword? value) (name value)
+              (string? value) (some-> value str/trim not-empty)
+              :else (some-> value str str/trim not-empty)))]
+    (cond
+      (vector? status-filter)
+      (let [statuses (->> status-filter
+                       (map ->status)
+                       (remove nil?)
+                       vec)]
+        (when (seq statuses)
+          statuses))
+
+      :else
+      (->status status-filter))))
+
+(defn- current-receipts-page-params
+  [db]
+  (let [entity-key :receipts
+        per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
+                   10)
+        current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
+                       1)
+        active-filters (or (get-in db (paths/list-filters entity-key)) {})
+        status (normalize-status-filter (:status active-filters))
+        sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))]
+    (cond-> {:limit per-page
+             :offset (* (max 0 (dec current-page)) per-page)}
+      (some? status) (assoc :status status)
+      (some? order-dir) (assoc :order-dir order-dir))))
+
 ;; -----------------------------------------------------------------------------
 ;; Template CRUD bridge overrides
 ;;
@@ -110,7 +161,7 @@
                      :db (-> db
                            (assoc-in (paths/entity-loading? entity-type) false)
                            (assoc-in (paths/entity-error entity-type) nil))
-                     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}
+                     :dispatch [:user-expenses/refresh-receipts-list]))}
 
     :batch-delete
     {:request (fn [{:keys [db]} entity-type ids default-effect]
@@ -129,17 +180,23 @@
                      :db (-> db
                            (assoc-in (paths/entity-loading? entity-type) false)
                            (assoc-in (paths/entity-error entity-type) nil))
-                     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]))}}})
+                     :dispatch [:user-expenses/refresh-receipts-list]))}}})
 
 ;; ---------------------------------------------------------------------------
 ;; List receipts
 ;; ---------------------------------------------------------------------------
 
 (rf/reg-event-fx
+  :user-expenses/refresh-receipts-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-receipts (current-receipts-page-params db)]}))
+
+(rf/reg-event-fx
   :user-expenses/fetch-receipts
   common-interceptors
   (fn [{:keys [db]} [payload]]
-    (let [{:keys [limit offset status]} (or payload {})
+    (let [{:keys [limit offset status order-dir]} (or payload {})
           limit* (or limit 50)
           offset* (or offset 0)]
       {:db (-> db
@@ -154,7 +211,8 @@
                       :uri endpoints/receipts-endpoint
 
                       :params (cond-> {:limit limit* :offset offset*}
-                                (some? status) (assoc :status status))
+                                (some? status) (assoc :status status)
+                                (some? order-dir) (assoc :order-dir order-dir))
                       :on-success [:user-expenses/fetch-receipts-success]
                       :on-failure [:user-expenses/fetch-receipts-failure]})})))
 
@@ -163,6 +221,7 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [rows (or (:data response) [])
+          total (or (:total response) (count rows))
           limit (or (:limit response) (get-in db (conj base-path :limit)))
           offset (or (:offset response) (get-in db (conj base-path :offset)))]
       {:db (-> db
@@ -171,8 +230,10 @@
              (assoc-in (conj base-path :loading?) false)
              (assoc-in (conj base-path :error) nil)
              (assoc-in (conj base-path :items) (vec rows))
+             (assoc-in (conj base-path :total) total)
              (assoc-in (conj base-path :limit) limit)
-             (assoc-in (conj base-path :offset) offset))
+             (assoc-in (conj base-path :offset) offset)
+             (assoc-in (paths/list-total-items :receipts) total))
        :dispatch [::expenses-sync/sync-receipts rows]})))
 
 (rf/reg-event-db
@@ -340,7 +401,7 @@
                      (cond-> receipt
                        (assoc-in (conj base-path :by-id receipt-id) receipt)))
                :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
-                            [:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+                            [:user-expenses/refresh-receipts-list]
                             [:user-expenses/fetch-receipt receipt-id]
                             [:user-expenses/close-receipt-detail-modal]]
                :fx fx}
@@ -378,7 +439,7 @@
            (assoc-in (conj base-path :action-loading?) false)
            (assoc-in (conj base-path :error) (batch-post-summary-message succeeded failed)))
      :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
-                  [:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+                  [:user-expenses/refresh-receipts-list]
                   [:app.template.frontend.events.list/clear-selection :receipts]]}))
 
 (rf/reg-event-fx
@@ -496,7 +557,7 @@
              (assoc-in (conj base-path :error) nil)
              (cond-> receipt
                (assoc-in (conj base-path :by-id receipt-id) receipt)))
-       :dispatch-n [[:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+       :dispatch-n [[:user-expenses/refresh-receipts-list]
                     [:user-expenses/fetch-receipt receipt-id]]
        :fx fx})))
 
@@ -537,7 +598,7 @@
            (assoc-in (conj base-path :action-loading?) false)
            (assoc-in (conj base-path :error) nil))
      ;; Refresh the receipts list to show updated status
-     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]}))
+     :dispatch [:user-expenses/refresh-receipts-list]}))
 
 (rf/reg-event-db
   :user-expenses/ocr-receipt-failure
@@ -576,7 +637,7 @@
            (assoc-in (conj base-path :action-loading?) false)
            (assoc-in (conj base-path :error) nil))
      ;; Refresh the receipts list and clear selection
-     :dispatch-n [[:user-expenses/fetch-receipts {:limit 50 :offset 0}]
+     :dispatch-n [[:user-expenses/refresh-receipts-list]
                   [:app.template.frontend.events.list/clear-selection :receipts]]}))
 
 (rf/reg-event-db

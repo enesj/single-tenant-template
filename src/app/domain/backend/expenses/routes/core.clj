@@ -13,7 +13,7 @@
     [app.domain.backend.expenses.routes.manufacturers :as manufacturers]
     [app.domain.backend.expenses.routes.payer-types :as payer-types]
     [app.domain.backend.expenses.routes.payers :as payers]
-    [app.domain.backend.expenses.routes.price-observations :as price-observations]
+
     [app.domain.backend.expenses.routes.receipts :as receipts]
     [app.domain.backend.expenses.routes.reports :as reports]
     [app.domain.backend.expenses.routes.store-aliases :as store-aliases]
@@ -43,7 +43,7 @@
    (article-aliases/routes db)
    (supplier-aliases/routes db)
    (store-aliases/routes db)
-   (price-observations/routes db)
+
    (expenses/routes db)
    (expense-items/routes db)
    (articles/routes db)

@@ -222,22 +222,6 @@
    :transform-request (fn [body]
                         (update body :status #(when % (name %))))})
 
-(def price-observation-config
-  {:entity-key :price-observation
-   :entity-plural :price-observations
-   :route-segment "price-observations"
-   :service 'app.domain.backend.expenses.services.price-observations
-   :default-limit 100
-   :default-order-by "observed_at"
-   :required-fields []
-   :has-count? false
-   :has-search? false
-   :custom-query-params (fn [qp]
-                          {:article-id (utils/parse-uuid-custom (:article-id qp))
-                           :supplier-id (utils/parse-uuid-custom (:supplier-id qp))
-                           :from (:from qp)
-                           :to (:to qp)})})
-
 (def article-alias-config
   {:entity-key :article-alias
    :entity-plural :article-aliases
@@ -334,7 +318,7 @@
    :expenses expense-config
    :expense-items expense-item-config
    :receipts receipt-config
-   :price-observations price-observation-config
+
    :article-aliases article-alias-config
    :supplier-aliases supplier-alias-config
    :store-aliases store-alias-config})

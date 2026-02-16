@@ -26,9 +26,38 @@
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
 
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- current-expense-categories-page-params
+  [db]
+  (let [entity-key :expense-categories
+        per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
+                   10)
+        current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
+                       1)]
+    {:limit per-page
+     :offset (* (max 0 (dec current-page)) per-page)}))
+
 ;; ---------------------------------------------------------------------------
 ;; Expense Categories
 ;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/refresh-expense-categories-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-expense-categories (current-expense-categories-page-params db)]}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expense-categories
@@ -47,9 +76,11 @@
   :user-expenses/fetch-expense-categories-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [expense-categories (vec (or (:data response) []))]
+    (let [expense-categories (vec (or (:data response) []))
+          total (or (:total response) (count expense-categories))]
       {:db (-> db
              (finish-entity-load :expense-categories nil)
+             (assoc-in (paths/list-total-items :expense-categories) total)
              (assoc-in [:user-expenses :expense-categories :items] expense-categories)
              (assoc-in [:user-expenses :expense-categories :loading?] false)
              (assoc-in [:user-expenses :expense-categories :error] nil))
@@ -90,7 +121,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :expense-categories highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-expense-categories]]
+       :dispatch-n [[:user-expenses/refresh-expense-categories-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success expense-category]}])]})))
@@ -129,7 +160,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> (seq highlight-id)
                (crud-success/track-recently-updated :expense-categories highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-expense-categories]]
+       :dispatch-n [[:user-expenses/refresh-expense-categories-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -163,7 +194,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-expense-categories]}))
+     :dispatch [:user-expenses/refresh-expense-categories-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-expense-category-failure

@@ -66,6 +66,35 @@ Example (users):
                      ($ admin-user-actions {:user user}))})
 ```
 
+### Server-backed pagination contract (admin lists)
+
+For `:users`, `:audit-logs`, and `:login-events`, list state is now intentionally
+server-backed:
+
+- Set `:pagination-mode :server` in list UI state.
+- Set `:refresh-event` to the page-specific loader event (for example,
+  `[:admin/load-users]`).
+- Keep server totals in `paths/list-total-items` so `::list-subs/total-pages`
+  is computed from backend metadata, not current page row count.
+
+Canonical paths/events:
+
+- Paths:
+  - `paths/list-pagination-mode`
+  - `paths/list-refresh-event`
+  - `paths/list-current-page`
+  - `paths/list-per-page`
+  - `paths/list-total-items`
+- Events that auto-dispatch refresh in server mode:
+  - `::ui-events/set-current-page`
+  - `::ui-events/set-per-page`
+  - `::ui-events/set-sort-field`
+  - `::filter-events/apply-filter`
+  - `::filter-events/clear-filter`
+
+Admin load events should derive request pagination from template list state and
+send `:limit`/`:offset` params to backend endpoints.
+
 ### `button`
 
 Location: `src/app/template/frontend/components/button.cljs`
@@ -111,6 +140,8 @@ Adapters normalize backend data (namespaced keys → plain), register entity spe
 - Audit adapter formats action labels and timestamps; uses server pagination.  
 - Login events adapter normalizes principal name/email/id and success flag.  
 - Users adapter bridges CRUD and per-user activity modal data.
+- All three initialize `:pagination-mode :server` + `:refresh-event [...]` so
+  list UI events can trigger reloads without page-specific branching.
 
 ## Page Integration
 

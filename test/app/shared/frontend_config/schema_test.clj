@@ -39,7 +39,7 @@
 
     (write-edn! (p dir "domain/models.edn")
       {:direct_domain {:fields [[:id :uuid] [:direct_only :text]]}
-       :price_observations {:fields [[:id :uuid] [:created_at :timestamptz]]}})
+       :expense_items {:fields [[:id :uuid] [:created_at :timestamptz]]}})
 
     (write-edn! (p dir "domain/alpha/models.edn")
       {:alpha_domain {:fields [[:id :uuid] [:alpha_only :text]]}})
@@ -53,7 +53,7 @@
         (is (contains? (:entities idx) "things"))
         (is (contains? (:entities idx) "direct-domain"))
         (is (contains? (:entities idx) "alpha-domain"))
-        (is (contains? (:entities idx) "price-observations"))
+        (is (contains? (:entities idx) "expense-items"))
 
         ;; Merge order: shared wins on conflicts
         (is (= ["id" "shared_only"]
@@ -63,5 +63,5 @@
 
         ;; Field name normalization: created_at is canonicalized to created-at
         (is (contains?
-              (get-in idx [:entity->fields "price-observations" :canonical])
+              (get-in idx [:entity->fields "expense-items" :canonical])
               "created-at"))))))

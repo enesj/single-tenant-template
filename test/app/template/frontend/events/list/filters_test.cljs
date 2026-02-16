@@ -3,6 +3,7 @@
   (:require
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.list.filters :as filters-events]
+    [app.template.frontend.events.list.ui-state :as ui-state-events]
     [app.template.frontend.helpers-test :as helpers]
     [cljs.test :refer [deftest is testing]]
     [re-frame.core :as rf]
@@ -14,6 +15,10 @@
       ::test-initialize-db
       (fn [_ _]
         helpers/valid-test-db-state))
+    (rf/reg-event-db
+      ::test-refresh
+      (fn [db [_ marker]]
+        (assoc-in db [:test :last-refresh] marker)))
     true))
 
 (defn- filters-path [entity]
@@ -98,6 +103,53 @@
     (rf/dispatch-sync [::filters-events/clear-filter :items nil])
     (is (nil? (get-in @rf-db/app-db (filters-path :items)))
       "Clearing with nil field should remove filters key")))
+
+(deftest server-mode-filter-refresh-test
+  (testing "In server mode apply/clear filter resets page and dispatches refresh"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
+    (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :server])
+    (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :filters]])
+    (rf/dispatch-sync [::ui-state-events/set-current-page :items 5])
+
+    (let [refresh-dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! refresh-dispatches conj event)))
+      (try
+        (rf/dispatch-sync [::filters-events/apply-filter :items :description "server-side"])
+        (is (= 1 (get-in @rf-db/app-db (paths/list-current-page :items)))
+          "Applying filter in server mode should reset page to 1")
+        (is (= [[::test-refresh :filters]] @refresh-dispatches)
+          "Applying filter in server mode should dispatch refresh")
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))
+
+    (let [refresh-dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! refresh-dispatches conj event)))
+      (try
+        (rf/dispatch-sync [::filters-events/clear-filter :items :description])
+        (is (= 1 (get-in @rf-db/app-db (paths/list-current-page :items))))
+        (is (= [[::test-refresh :filters]] @refresh-dispatches)
+          "Clearing filter in server mode should dispatch refresh")
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch)))))
+
+  (testing "In client mode apply filter does not dispatch refresh"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
+    (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :client])
+    (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :client-filters]])
+
+    (let [refresh-dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! refresh-dispatches conj event)))
+      (try
+        (rf/dispatch-sync [::filters-events/apply-filter :items :description "client-side"])
+        (is (empty? @refresh-dispatches)
+          "Client mode should not dispatch refresh on filter apply")
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
 
 (deftest error-handling-test
   (testing "Missing entity or field should leave db unchanged"

@@ -78,14 +78,6 @@
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
-(def price-observations-config
-  {:entity-key :price-observations
-   :base-path [:admin :expenses :price-observations]
-   :api-endpoint "/admin/api/expenses/price-observations"
-   :detail-response-key :price-observation
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
-
 (def article-aliases-config
   {:entity-key :article-aliases
    :base-path [:admin :expenses :article-aliases]
@@ -177,7 +169,7 @@
    :receipts receipts-config
    :expenses expenses-config
    :expense-items expense-items-config
-   :price-observations price-observations-config
+
    :article-aliases article-aliases-config
    :supplier-aliases supplier-aliases-config
    :store-aliases store-aliases-config

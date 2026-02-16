@@ -11,6 +11,7 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -81,10 +82,12 @@
                          ;; Ensure suppliers are available for FK selects when adding a store.
                          (rf/dispatch [:user-expenses/fetch-suppliers])
                          (rf/dispatch [:user-expenses/fetch-cities])
-                         (rf/dispatch [:user-expenses/fetch-stores]))
+                         (rf/dispatch [:user-expenses/refresh-stores-list]))
                        [])]
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:user-expenses/refresh-stores-list]])
         (refresh-list)
         js/undefined)
       [refresh-list])

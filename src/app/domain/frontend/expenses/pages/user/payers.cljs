@@ -7,6 +7,7 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -41,18 +42,20 @@
                                                     (string? fid) fid
                                                     :else (str fid))]
                                      (if (#{"payer_type_id" "payer-type-id"}
-                                           fid-name)
+                                          fid-name)
                                        (assoc field :type "select" :options [:payer-types :label])
                                        field)))
                              (or entity-spec []))
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:user-expenses/fetch-payers])
+                         (rf/dispatch [:user-expenses/refresh-payers-list])
                          (rf/dispatch [:user-expenses/fetch-payer-types]))
                        [])]
 
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:user-expenses/refresh-payers-list]])
         (refresh-list)
         js/undefined)
       [refresh-list])

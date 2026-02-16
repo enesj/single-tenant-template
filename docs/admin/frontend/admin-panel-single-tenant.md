@@ -23,7 +23,6 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
     - `/admin/suppliers`
     - `/admin/supplier-aliases`
     - `/admin/manufacturers` (new 2026-01-29)
-    - `/admin/price-observations`
     - `/admin/unmapped-aliases`
 - **Guard**: `guarded-start` dispatches controller events only after admin auth is confirmed. Unauthed users are redirected to `/admin/login`.
 
@@ -39,7 +38,7 @@ Single-tenant admin console served at `http://localhost:8085/admin`. No tenant s
 
 All Expenses domain admin pages use the shared `list-view` component, entity specs, and the admin API under `/admin/api/expenses/*`. Typical features include dynamic columns, filters, pagination, selection, and inline/export actions.
 
-- Articles, Article Aliases, Suppliers, Supplier Aliases, Manufacturers (new 2026-01-29), Price Observations, Unmapped Aliases.
+- Articles, Article Aliases, Suppliers, Supplier Aliases, Manufacturers (new 2026-01-29), Unmapped Aliases.
 - `/admin/articles` includes a row action **Show related records** that opens a 3-step modal wizard (type → record → details) with Back navigation between steps; supported types are Expenses, Receipts, Providers, Stores, Manufacturers, and Subcategories.
 - Default edit flows may use modal forms; see Component Library for `:form-display :modal` and auto-close on success.
 
@@ -48,6 +47,12 @@ All Expenses domain admin pages use the shared `list-view` component, entity spe
 - **Audit Logs**: `/admin/audit` lists all audit events; uses template list components with server pagination and export.  
 - **Login Events**: `/admin/login-events` lists admin/user logins; normalized rows include principal name/email, IP, user-agent, success/failure.  
 - **Per-user modal**: mirrors the same data filtered by user.
+
+Server pagination behavior on these pages:
+
+- UI reads `current-page`/`per-page` from template list state and sends `limit`/`offset` to backend.
+- Backend responses include `total`, `limit`, and `offset`.
+- Frontend stores `total` under template `list-total-items` so pagination controls reflect server totals.
 
 ## Settings Page
 

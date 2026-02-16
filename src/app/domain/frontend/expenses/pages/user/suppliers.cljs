@@ -13,6 +13,7 @@
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.messages :refer [error-alert]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
@@ -49,8 +50,7 @@
         loading? (use-subscribe [:user-expenses/supplier-detail-loading?])
         error (use-subscribe [:user-expenses/supplier-detail-error])
         expenses (use-subscribe [:user-expenses/supplier-detail-expenses])
-        aliases (use-subscribe [:user-expenses/supplier-detail-article-aliases])
-        observations (use-subscribe [:user-expenses/supplier-detail-price-observations])]
+        aliases (use-subscribe [:user-expenses/supplier-detail-article-aliases])]
     (use-effect
       (fn []
         (when supplier-id
@@ -101,18 +101,7 @@
                :empty-label "No article aliases for this supplier."
                :view-all-href nil
                :view-all-id (when supplier-id
-                              (str "btn-view-article-aliases-supplier-" supplier-id))})
-            ($ detail-utils/related-table
-              {:title "Price Observations"
-               :rows observations
-               :columns [{:label "Observed" :value-fn #(shared/format-date (:observed-at %))}
-                         {:label "Article" :value-fn #(:article-canonical-name %)}
-                         {:label "Unit Price" :value-fn #(:unit-price %)}
-                         {:label "Currency" :value-fn #(or (:currency %) (:currency-code %))}]
-               :empty-label "No price observations for this supplier."
-               :view-all-href nil
-               :view-all-id (when supplier-id
-                              (str "btn-view-price-observations-supplier-" supplier-id))})))))))
+                              (str "btn-view-article-aliases-supplier-" supplier-id))})))))))
 
 (defui suppliers-page []
   (let [role (use-subscribe [:expenses/user-role])
@@ -127,7 +116,7 @@
         detail-supplier-record (use-subscribe [:user-expenses/supplier-detail detail-supplier-id])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:user-expenses/fetch-suppliers]))
+                         (rf/dispatch [:user-expenses/refresh-suppliers-list]))
                        [])]
 
     (use-effect
@@ -150,6 +139,8 @@
 
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:user-expenses/refresh-suppliers-list]])
         (refresh-list)
         js/undefined)
       [refresh-list])

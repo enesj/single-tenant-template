@@ -15,7 +15,7 @@
     [app.admin.frontend.pages.login :as login]
     [app.admin.frontend.pages.login-events :as login-events]
     [app.admin.frontend.pages.domain.expenses.manufacturers :as manufacturers]
-    [app.admin.frontend.pages.domain.expenses.price-observations :as price-observations]
+
     [app.admin.frontend.pages.reset-password :as reset-password]
     [app.admin.frontend.pages.domain.expenses.store-aliases :as store-aliases]
     [app.admin.frontend.pages.domain.expenses.stores :as stores]
@@ -142,11 +142,6 @@
          ["/manufacturers"
           {:name :admin-manufacturers
            :view manufacturers/admin-manufacturers-page
-           :controllers [(guarded-start nil)]}]
-
-         ["/price-observations"
-          {:name :admin-price-observations
-           :view price-observations/admin-price-observations-page
            :controllers [(guarded-start nil)]}]
 
          ["/unmapped-aliases"

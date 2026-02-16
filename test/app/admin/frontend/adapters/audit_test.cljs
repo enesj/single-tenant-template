@@ -17,7 +17,9 @@
       (is (nil? (get-in db (conj base :pagination :per-page)))
         "per-page should be left unset so list-view can seed it from configured defaults")
       (is (nil? (get-in db (conj base :per-page)))
-        "legacy top-level per-page should not be initialized here"))))
+        "legacy top-level per-page should not be initialized here")
+      (is (= :server (get-in db (paths/list-pagination-mode :audit-logs))))
+      (is (= [:admin/load-audit-logs] (get-in db (paths/list-refresh-event :audit-logs)))))))
 
 (deftest initialize-audit-ui-state-preserves-existing-pagination
   (testing "initialize event preserves any existing pagination (incl per-page)"

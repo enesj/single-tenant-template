@@ -35,25 +35,22 @@
                (assoc-loading :loading? true)
                (assoc-loading :expenses-loading? true)
                (assoc-loading :aliases-loading? true)
-               (assoc-loading :observations-loading? true)
+
                (assoc-value :error nil)
                (assoc-value :expenses [])
                (assoc-value :expenses-error nil)
                (assoc-value :aliases [])
-               (assoc-value :aliases-error nil)
-               (assoc-value :observations [])
-               (assoc-value :observations-error nil))
+               (assoc-value :aliases-error nil))
+
          :dispatch-n [[:user-expenses/fetch-supplier-detail supplier-id]
                       [:user-expenses/fetch-supplier-detail-expenses supplier-id]
-                      [:user-expenses/fetch-supplier-detail-article-aliases supplier-id]
-                      [:user-expenses/fetch-supplier-detail-price-observations supplier-id]]}
+                      [:user-expenses/fetch-supplier-detail-article-aliases supplier-id]]}
         {:db (-> db
                (assoc-value :current-id nil)
                (assoc-loading :loading? false)
                (assoc-value :error "Supplier id missing; cannot load supplier detail.")
                (assoc-value :expenses [])
-               (assoc-value :aliases [])
-               (assoc-value :observations []))}))))
+               (assoc-value :aliases []))}))))
 
 (rf/reg-event-db
   :user-expenses/clear-supplier-detail
@@ -186,44 +183,4 @@
         (assoc-value :aliases-error msg)
         (assoc-value :aliases [])))))
 
-(rf/reg-event-fx
-  :user-expenses/fetch-supplier-detail-price-observations
-  common-interceptors
-  (fn [{:keys [db]} [supplier-id]]
-    {:db (-> db
-           (assoc-loading :observations-loading? true)
-           (assoc-value :observations-error nil)
-           (assoc-value :observations []))
-     :http-xhrio (x/xhrio db
-                   {:method :get
-                    :uri endpoints/price-observations-endpoint
 
-                    :params {:supplier_id (str supplier-id)
-                             :limit 10
-                             :offset 0
-                             :order_dir "desc"}
-                    :on-success [:user-expenses/fetch-supplier-detail-price-observations-success]
-                    :on-failure [:user-expenses/fetch-supplier-detail-price-observations-failure]})}))
-
-(rf/reg-event-db
-  :user-expenses/fetch-supplier-detail-price-observations-success
-  common-interceptors
-  (fn [db [response]]
-    (let [rows (->> (or (:data response) [])
-                 (normalization/convert-db-keys->app-keys)
-                 vec)]
-      (-> db
-        (assoc-loading :observations-loading? false)
-        (assoc-value :observations-error nil)
-        (assoc-value :observations rows)))))
-
-(rf/reg-event-db
-  :user-expenses/fetch-supplier-detail-price-observations-failure
-  common-interceptors
-  (fn [db [error]]
-    (let [msg (http/extract-error-message error)]
-      (log/warn "Failed to fetch supplier detail price observations" {:error error})
-      (-> db
-        (assoc-loading :observations-loading? false)
-        (assoc-value :observations-error msg)
-        (assoc-value :observations [])))))

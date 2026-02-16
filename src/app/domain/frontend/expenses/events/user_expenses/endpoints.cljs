@@ -20,7 +20,7 @@
 (def expense-items-endpoint (api/versioned-endpoint "/expenses/expense-items"))
 (def article-aliases-endpoint (api/versioned-endpoint "/expenses/article-aliases"))
 (def supplier-aliases-endpoint (api/versioned-endpoint "/expenses/supplier-aliases"))
-(def price-observations-endpoint (api/versioned-endpoint "/expenses/price-observations"))
+
 (def settings-endpoint (api/versioned-endpoint "/expenses/settings"))
 (def upload-endpoint (api/versioned-endpoint "/expenses/upload"))
 

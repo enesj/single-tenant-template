@@ -24,6 +24,35 @@
       (is (= [:admin/fetch-entities-success :users] (take 2 (:on-success req))))
       (is (= [:admin/fetch-entities-failure :users] (take 2 (:on-failure req)))))))
 
+(deftest load-users-request-includes-limit-and-offset-from-list-ui-state
+  (testing ":admin/load-users derives limit/offset from template list UI state"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :users) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :users) 3)
+
+    (rf/dispatch-sync [:admin/load-users])
+
+    (let [req (setup/last-http-request)]
+      (is (= :get (:method req)))
+      (is (= "/admin/api/users" (:uri req)))
+      (is (= 25 (get-in req [:params :limit])))
+      (is (= 50 (get-in req [:params :offset])))
+      (is (nil? (get-in req [:params :pagination]))
+        "Request should not send nested :pagination map"))))
+
+(deftest load-users-success-stores-server-total-items
+  (testing "load-users success stores server :total into template list total-items"
+    (setup/reset-db!)
+    (rf/dispatch-sync [:admin/load-users-success {:users [{:id 1 :email "a@test.com"}
+                                                          {:id 2 :email "b@test.com"}]
+                                                  :total 77
+                                                  :limit 25
+                                                  :offset 0}])
+
+    (let [db @rf-db/app-db]
+      (is (= 77 (get-in db (paths/list-total-items :users)))))))
+
 (deftest fetch-entities-success-normalizes-into-template-state
   (testing "success handler normalizes and stores data"
     (setup/reset-db!)

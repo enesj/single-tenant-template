@@ -42,7 +42,7 @@
                     ;; Simulate an entity that *would* have vector-config available.
                     column-config/vector-config? (constantly true)
                     column-config/get-visible-columns (fn [_vector-mode? _entity-kw raw]
-                                                      (or raw {}))
+                                                        (or raw {}))
                     ;; Ensure the component doesn't depend on the real entity spec hook.
                     template-utils/use-entity-spec (fn [_ _] {:entity-spec nil})
                     ;; Stub use-subscribe to keep this test focused.
@@ -75,7 +75,7 @@
       (with-redefs [rf/dispatch (fn [evt] (reset! dispatched evt))
                     column-config/vector-config? (constantly true)
                     column-config/get-visible-columns (fn [_vector-mode? _entity-kw _raw]
-                                                      {:currency true})
+                                                        {:currency true})
                     template-utils/use-entity-spec (fn [_ _] {:entity-spec nil})
                     uix-rf/use-subscribe (fn [query]
                                            (cond
@@ -106,7 +106,7 @@
                     column-config/vector-config? (constantly true)
                     ;; Not used directly by this component, but keep stable.
                     column-config/get-visible-columns (fn [_vector-mode? _entity-kw raw]
-                                                      (or raw {}))
+                                                        (or raw {}))
                     template-utils/use-entity-spec (fn [_ _] {:entity-spec nil})
                     uix-rf/use-subscribe (fn [query]
                                            (cond
@@ -146,11 +146,11 @@
       (with-redefs [rf/dispatch noop-dispatch
                     column-config/vector-config? (constantly true)
                     column-config/visible-columns-source (fn [vector-mode? _entity-kw]
-                                                         (reset! seen-vector-mode vector-mode?)
+                                                           (reset! seen-vector-mode vector-mode?)
                                                          ;; return a subscription vector that our stubbed use-subscribe can handle
-                                                         [:app.template.frontend.subs.ui/visible-columns :expenses])
+                                                           [:app.template.frontend.subs.ui/visible-columns :expenses])
                     column-config/get-visible-columns (fn [_vector-mode? _entity-kw raw]
-                                                      (or raw {}))
+                                                        (or raw {}))
                     ;; Stub the heavy UI components away
                     list-table/make-table-headers (fn [_] [])
                     list-ui/header-section (fn [_] ($ :div))
@@ -304,4 +304,61 @@
             (is (not (some #(= [::ui-events/set-per-page :users 25] %)
                        @dispatched))
               "list-view must not overwrite an existing per-page")
+            (done)))))))
+
+(deftest list-view-applies-filters-and-sort-to-rows-override
+  (async done
+    (let [captured-rows (atom nil)]
+      (with-redefs [rf/dispatch (fn [_] nil)
+                    column-config/vector-config? (constantly false)
+                    list-table/make-table-headers (fn [_] [])
+                    list-ui/header-section (fn [_] ($ :div))
+                    table/table (fn [props]
+                                  (let [rows (or (:rows props)
+                                               (when (some? props)
+                                                 (aget props "rows")))]
+                                    (reset! captured-rows rows))
+                                  ($ :div))
+                    uix-rf/use-subscribe (fn [query]
+                                           (cond
+                                             (= query [:admin/config-loaded?]) false
+
+                                             (= (first query) :app.template.frontend.subs.entity/paginated-entities) []
+                                             (= (first query) :app.template.frontend.subs.entity/loading?) false
+                                             (= (first query) :app.template.frontend.subs.entity/error) nil
+                                             (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                             (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                             (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                             (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                             (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                             (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                             (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                             (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                             (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field :amount :direction :asc}
+                                             (= (first query) :app.template.frontend.subs.list/active-filters) {:description "alp"}
+                                             (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                             (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                             (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                             (= (first query) :form-entity-specs/by-name) {:fields []}
+                                             (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+
+                                             :else nil))]
+        (mount-component!
+          ($ list/list-view
+            {:entity-name :expenses
+             :entity-spec {:fields [{:id :description :input-type "text"}
+                                    {:id :amount :input-type "number"}]}
+             :title "Expenses"
+             :rows-override [{:id 1 :description "beta" :amount 30}
+                             {:id 2 :description "alpha" :amount 20}
+                             {:id 3 :description "alphabet" :amount 10}]})
+          (fn [_container]
+            (let [rows (or (some-> @captured-rows (js->clj :keywordize-keys true))
+                         @captured-rows
+                         [])]
+              (is (= [3 2] (mapv :id rows))
+                "rows-override should be filtered then sorted using current list UI state"))
             (done)))))))

@@ -122,12 +122,6 @@
    :log-prefix "[expenses] Syncing supplier aliases to template:"})
 
 (entity-utils/register-sync-event!
-  {:event-id ::sync-price-observations
-   :entity-key :price-observations
-   :normalize-fn normalize/price-observation->template-entity
-   :log-prefix "[expenses] Syncing price observations to template:"})
-
-(entity-utils/register-sync-event!
   {:event-id ::sync-unmapped-aliases
    :entity-key :unmapped-aliases
    :normalize-fn normalize/unmapped-alias->template-entity
@@ -172,8 +166,7 @@
   {:sync-event-id ::sync-article-aliases})
 (entity-sync/register-sync-handler! :supplier-aliases
   {:sync-event-id ::sync-supplier-aliases})
-(entity-sync/register-sync-handler! :price-observations
-  {:sync-event-id ::sync-price-observations})
+
 (entity-sync/register-sync-handler! :unmapped-aliases
   {:sync-event-id ::sync-unmapped-aliases})
 
@@ -197,7 +190,6 @@
 (form-interceptors/register-bridge-entity! :articles)
 (form-interceptors/register-bridge-entity! :article-aliases)
 (form-interceptors/register-bridge-entity! :supplier-aliases)
-(form-interceptors/register-bridge-entity! :price-observations)
 
 (comment
   ;; Loading this namespace registers `:countries` with the generic sync dispatcher

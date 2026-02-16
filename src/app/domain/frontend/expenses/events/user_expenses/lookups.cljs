@@ -6,9 +6,85 @@
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
+    [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
+
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- normalize-filter-value
+  [value]
+  (cond
+    (map? value) (or (normalize-filter-value (:value value))
+                   (normalize-filter-value (get value "value")))
+    (keyword? value) (name value)
+    (string? value) (some-> value str/trim not-empty)
+    (vector? value) (let [items (->> value
+                                  (map normalize-filter-value)
+                                  (remove nil?)
+                                  vec)]
+                      (when (seq items)
+                        items))
+    (sequential? value) (let [items (->> value
+                                      (map normalize-filter-value)
+                                      (remove nil?)
+                                      vec)]
+                          (when (seq items)
+                            items))
+    :else value))
+
+(defn- normalize-filter-params
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (let [normalized (normalize-filter-value v)]
+        (if (nil? normalized)
+          acc
+          (assoc acc k normalized))))
+    {}
+    (or filters {})))
+
+(defn- current-list-page-params
+  [db entity-key default-limit]
+  (let [per-page (or (parse-pos-int (get-in db [:ui :lists entity-key :per-page]))
+                   default-limit)
+        current-page (or (parse-pos-int (get-in db [:ui :lists entity-key :current-page]))
+                       1)
+        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))
+        filters (normalize-filter-params (get-in db [:ui :lists entity-key :filters]))]
+    (cond-> (merge {:limit per-page
+                    :offset (* (max 0 (dec current-page)) per-page)}
+              filters)
+      (some? order-dir) (assoc :order-dir order-dir))))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-suppliers-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-suppliers (current-list-page-params db :suppliers 200)]}))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-payers-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-payers (current-list-page-params db :payers 200)]}))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-payer-types-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-payer-types (current-list-page-params db :payer-types 200)]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Suppliers
@@ -34,12 +110,14 @@
   :user-expenses/fetch-suppliers-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [suppliers (:data response)]
+    (let [suppliers (vec (or (:data response) []))
+          total (or (:total response) (count suppliers))]
       {:db (-> db
              (assoc-in [:user-expenses :suppliers :data] suppliers)
              (assoc-in [:user-expenses :suppliers :items] suppliers)
              (assoc-in [:user-expenses :suppliers :loading?] false)
-             (assoc-in [:user-expenses :suppliers :error] nil))
+             (assoc-in [:user-expenses :suppliers :error] nil)
+             (assoc-in (paths/list-total-items :suppliers) total))
        :dispatch [::expenses-sync/sync-suppliers suppliers]})))
 
 (rf/reg-event-db
@@ -74,12 +152,14 @@
   :user-expenses/fetch-payers-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [payers (:data response)]
+    (let [payers (vec (or (:data response) []))
+          total (or (:total response) (count payers))]
       {:db (-> db
              (assoc-in [:user-expenses :payers :data] payers)
              (assoc-in [:user-expenses :payers :items] payers)
              (assoc-in [:user-expenses :payers :loading?] false)
-             (assoc-in [:user-expenses :payers :error] nil))
+             (assoc-in [:user-expenses :payers :error] nil)
+             (assoc-in (paths/list-total-items :payers) total))
        :dispatch [::expenses-sync/sync-payers payers]})))
 
 (rf/reg-event-db
@@ -114,12 +194,14 @@
   :user-expenses/fetch-payer-types-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [payer-types (:data response)]
+    (let [payer-types (vec (or (:data response) []))
+          total (or (:total response) (count payer-types))]
       {:db (-> db
              (assoc-in [:user-expenses :payer-types :data] payer-types)
              (assoc-in [:user-expenses :payer-types :items] payer-types)
              (assoc-in [:user-expenses :payer-types :loading?] false)
-             (assoc-in [:user-expenses :payer-types :error] nil))
+             (assoc-in [:user-expenses :payer-types :error] nil)
+             (assoc-in (paths/list-total-items :payer-types) total))
        :dispatch [::expenses-sync/sync-payer-types payer-types]})))
 
 (rf/reg-event-db

@@ -11,7 +11,7 @@
                                                     audit-icon
                                                     dashboard-icon
                                                     login-events-icon
-                                                    price-observations-icon
+
                                                     settings-icon
                                                     suppliers-icon
                                                     unmapped-items-icon
@@ -33,16 +33,16 @@
                                      :href "/admin/dashboard"
                                      :icon ($ dashboard-icon {:class "w-6 h-6"})
                                      :active? (contains? #{:admin-dashboard :admin-dashboard-alt} route-name)}
-                                    {:id "admin-sidebar-users"
-                                     :label "Users"
-                                     :href "/admin/users"
-                                     :icon ($ users-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-users)}
                                     {:id "admin-sidebar-backlog"
                                      :label "Backlog"
                                      :href "/admin/backlog"
                                      :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-backlog)}]
+                                     :active? (= route-name :admin-backlog)}
+                                    {:id "admin-sidebar-users"
+                                     :label "Users"
+                                     :href "/admin/users"
+                                     :icon ($ users-icon {:class "w-6 h-6"})
+                                     :active? (= route-name :admin-users)}]
                              is-owner?
                              (conj {:label "Admins"
                                     :href "/admin/admins"
@@ -64,22 +64,21 @@
                          :href "/admin/articles"
                          :icon ($ articles-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-articles)}
+                        {:id "admin-sidebar-expenses-manufacturers"
+                         :label "Manufacturers"
+                         :href "/admin/manufacturers"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-manufacturers)}
                         {:id "admin-sidebar-expenses-categories"
                          :label "Categories"
                          :href "/admin/categories"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-categories)}
-
                         {:id "admin-sidebar-expenses-subcategories"
                          :label "Subcategories"
                          :href "/admin/subcategories"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-subcategories)}
-                        {:id "admin-sidebar-expenses-article-aliases"
-                         :label "Article Aliases"
-                         :href "/admin/article-aliases"
-                         :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-article-aliases)}
                         {:id "admin-sidebar-expenses-suppliers"
                          :label "Suppliers"
                          :href "/admin/suppliers"
@@ -90,16 +89,27 @@
                          :href "/admin/stores"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-stores)}
-                        {:id "admin-sidebar-expenses-cities"
-                         :label "Cities"
-                         :href "/admin/cities"
-                         :icon ($ suppliers-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-cities)}
                         {:id "admin-sidebar-expenses-countries"
                          :label "Countries"
                          :href "/admin/countries"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-countries)}
+                        {:id "admin-sidebar-expenses-cities"
+                         :label "Cities"
+                         :href "/admin/cities"
+                         :icon ($ suppliers-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-cities)}
+
+                        {:id "admin-sidebar-expenses-unmapped-aliases"
+                         :label "Unmapped Aliases"
+                         :href "/admin/unmapped-aliases"
+                         :icon ($ unmapped-items-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-unmapped-aliases)}
+                        {:id "admin-sidebar-expenses-article-aliases"
+                         :label "Article Aliases"
+                         :href "/admin/article-aliases"
+                         :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-article-aliases)}
                         {:id "admin-sidebar-expenses-supplier-aliases"
                          :label "Supplier Aliases"
                          :href "/admin/supplier-aliases"
@@ -109,22 +119,7 @@
                          :label "Store Aliases"
                          :href "/admin/store-aliases"
                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-store-aliases)}
-                        {:id "admin-sidebar-expenses-manufacturers"
-                         :label "Manufacturers"
-                         :href "/admin/manufacturers"
-                         :icon ($ suppliers-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-manufacturers)}
-                        {:id "admin-sidebar-expenses-price-observations"
-                         :label "Price observations"
-                         :href "/admin/price-observations"
-                         :icon ($ price-observations-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-price-observations)}
-                        {:id "admin-sidebar-expenses-unmapped-aliases"
-                         :label "Unmapped Aliases"
-                         :href "/admin/unmapped-aliases"
-                         :icon ($ unmapped-items-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-unmapped-aliases)}]
+                         :active? (= route-name :admin-store-aliases)}]
 
         sections [{:title "System Administration" :items system-admin-items}
                   {:title "Domain"

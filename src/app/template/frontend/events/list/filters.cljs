@@ -3,21 +3,36 @@
   (:require
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.events.list.ui-state :as ui-state-events]
     [re-frame.core :as rf]))
 
 ;;; -------------------------
 ;;; Filter Management
 ;;; -------------------------
 
-(rf/reg-event-db
+(defn- server-pagination?
+  [db entity-type]
+  (let [mode (or (get-in db (paths/list-pagination-mode entity-type))
+               (get-in db (conj (paths/list-ui-state entity-type) :pagination :mode)))]
+    (or (= mode :server)
+      (= mode "server"))))
+
+(defn- sync-current-page
+  [db entity-type page]
+  (-> db
+    (assoc-in (paths/list-current-page entity-type) page)
+    (assoc-in (conj (paths/list-ui-state entity-type) :current-page) page)
+    (assoc-in (conj (paths/list-ui-state entity-type) :pagination :current-page) page)))
+
+(rf/reg-event-fx
   ::apply-filter
   common-interceptors
-  (fn [db [entity-type field-id value & [keep-modal-open?]]]
+  (fn [{:keys [db]} [entity-type field-id value & [keep-modal-open?]]]
     (if (or (nil? entity-type) (nil? field-id))
       (do
         (js/console.error "Filter error: missing" (if entity-type "field-id" "entity-type"))
         ;; Return unchanged database when missing required params
-        db)
+        {:db db})
       (let [should-keep-open? (or (boolean keep-modal-open?)
                                 (when (and (boolean? value) (nil? keep-modal-open?))
                                   (boolean value)))
@@ -116,30 +131,45 @@
 
             updated-db (if (identical? updated-filters current-filters)
                          db
-                         (assoc-in db (paths/list-filters entity-type) updated-filters))]
-        ;; Only close modal if explicitly NOT keeping it open
-        (if should-keep-open?
-          updated-db
-          (assoc-in updated-db [:ui :filter-modal] {:open? false}))))))
+                         (assoc-in db (paths/list-filters entity-type) updated-filters))
+            server-mode? (server-pagination? updated-db entity-type)
+            paged-db (if server-mode?
+                       (sync-current-page updated-db entity-type 1)
+                       updated-db)
+            ;; Only close modal if explicitly NOT keeping it open
+            final-db (if should-keep-open?
+                       paged-db
+                       (assoc-in paged-db [:ui :filter-modal] {:open? false}))
+            refresh-dispatch (when server-mode?
+                               (ui-state-events/list-refresh-dispatch final-db entity-type))]
+        (cond-> {:db final-db}
+          refresh-dispatch (assoc :dispatch refresh-dispatch))))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::clear-filter
   common-interceptors
-  (fn [db [entity-type field-id]]
+  (fn [{:keys [db]} [entity-type field-id]]
     ;; Check if we have the proper parameters
     (if (nil? entity-type)
-      db
-      (if field-id
-        ;; Clear specific field filter
-        (let [field-key (if (keyword? field-id) field-id (keyword field-id))
-              current-filters (get-in db (paths/list-filters entity-type) {})
-              updated-filters (dissoc current-filters field-key)]
-          (assoc-in db (paths/list-filters entity-type) updated-filters))
-        ;; Clear all filters - when field-id is nil
-        (let [updated-db (update-in db
+      {:db db}
+      (let [updated-db (if field-id
+                         ;; Clear specific field filter
+                         (let [field-key (if (keyword? field-id) field-id (keyword field-id))
+                               current-filters (get-in db (paths/list-filters entity-type) {})
+                               updated-filters (dissoc current-filters field-key)]
+                           (assoc-in db (paths/list-filters entity-type) updated-filters))
+                         ;; Clear all filters - when field-id is nil
+                         (update-in db
                            (paths/list-ui-state entity-type)
-                           dissoc :filters)]
-          updated-db)))))
+                           dissoc :filters))
+            server-mode? (server-pagination? updated-db entity-type)
+            paged-db (if server-mode?
+                       (sync-current-page updated-db entity-type 1)
+                       updated-db)
+            refresh-dispatch (when server-mode?
+                               (ui-state-events/list-refresh-dispatch paged-db entity-type))]
+        (cond-> {:db paged-db}
+          refresh-dispatch (assoc :dispatch refresh-dispatch))))))
 
 (rf/reg-event-db
   ::set-current-entity-type

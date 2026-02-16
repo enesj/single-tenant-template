@@ -4,7 +4,7 @@
   These events call the user-scoped expenses endpoints (\"/api/v1/expenses/*\")
   and refresh the shared entity store via the existing lookup fetch events."
   (:require
-    [ajax.core :as ajax]
+
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
@@ -51,7 +51,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :suppliers highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-suppliers]]
+       :dispatch-n [[:user-expenses/refresh-suppliers-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success supplier]}])]})))
@@ -90,7 +90,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :suppliers highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-suppliers]]
+       :dispatch-n [[:user-expenses/refresh-suppliers-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -123,7 +123,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-suppliers]}))
+     :dispatch [:user-expenses/refresh-suppliers-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-supplier-failure
@@ -165,7 +165,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :payers highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-payers]]
+       :dispatch-n [[:user-expenses/refresh-payers-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -204,7 +204,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :payers highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-payers]]
+       :dispatch-n [[:user-expenses/refresh-payers-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -237,7 +237,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-payers]}))
+     :dispatch [:user-expenses/refresh-payers-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-payer-failure
@@ -278,7 +278,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :payer-types highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-payer-types]]
+       :dispatch-n [[:user-expenses/refresh-payer-types-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -317,7 +317,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :payer-types highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-payer-types]]
+       :dispatch-n [[:user-expenses/refresh-payer-types-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -350,7 +350,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-payer-types]}))
+     :dispatch [:user-expenses/refresh-payer-types-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-payer-type-failure

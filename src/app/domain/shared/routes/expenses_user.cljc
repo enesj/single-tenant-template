@@ -33,7 +33,7 @@
    {:id :expense-payer-types :path "/payer-types" :spa-fallback? true}
    {:id :expense-article-aliases :path "/article-aliases" :spa-fallback? true}
    {:id :expense-supplier-aliases :path "/supplier-aliases" :spa-fallback? true}
-   {:id :expense-price-observations :path "/price-observations" :spa-fallback? true}
+
    ;; Keep parameterized route after literals to avoid accidental catches.
    {:id :expense-detail :path "/expenses/:expense-id" :spa-fallback? true}])
 

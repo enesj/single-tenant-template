@@ -7,6 +7,8 @@
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
     [app.template.backend.utils.adapters.persistence :as persist]
+    [honey.sql :as hsql]
+    [next.jdbc :as jdbc]
     [taoensso.timbre :as log]))
 
 (def ^:private user-config
@@ -27,32 +29,61 @@
     shared-db/convert-pg-objects
     (norm/normalize-admin-result user-config)))
 
+(defn- build-user-list-filter-clauses
+  [{:keys [search status email-verified]}]
+  (cond-> []
+    search (conj [:or
+                  [:ilike :u/email (str "%" search "%")]
+                  [:ilike :u/full_name (str "%" search "%")]])
+    status (conj [:= :u/status status])
+    (some? email-verified) (conj [:= :u/email_verified email-verified])))
+
+(defn- build-user-list-where-clause
+  [filters]
+  (let [clauses (build-user-list-filter-clauses filters)]
+    (when (seq clauses)
+      (into [:and] clauses))))
+
+(defn- build-users-list-query
+  [{:keys [limit offset] :as filters}]
+  (let [where-clause (build-user-list-where-clause filters)]
+    (cond-> {:select [:u.*]
+             :from [[:users :u]]
+             :order-by [[:created_at :desc]]}
+      where-clause (assoc :where where-clause)
+      limit (assoc :limit limit)
+      offset (assoc :offset offset))))
+
 ;; ============================================================================
 ;; User Listing and Search (Core API)
 ;; ============================================================================
 
 (defn list-all-users
   "List all users (single-tenant)"
-  [db {:keys [search status email-verified limit offset]}]
-  (let [base-query {:select [:u.*]
-                    :from [[:users :u]]
-                    :order-by [[:created_at :desc]]}
-        query (cond-> base-query
-                search (update :where (fn [w]
-                                        (let [clause [:or
-                                                      [:ilike :u/email (str "%" search "%")]
-                                                      [:ilike :u/full_name (str "%" search "%")]]]
-                                          (if w [:and w clause] clause))))
-                status (update :where (fn [w]
-                                        (let [clause [:= :u/status status]]
-                                          (if w [:and w clause] clause))))
-                (some? email-verified) (update :where (fn [w]
-                                                        (let [clause [:= :u/email_verified email-verified]]
-                                                          (if w [:and w clause] clause))))
-                limit (assoc-in [:limit] limit)
-                offset (assoc-in [:offset] offset))]
-    (persist/execute-admin-query db query normalize-user-result
-      {:audit-context {:action "list-users"}})))
+  [db opts]
+  (persist/execute-admin-query db (build-users-list-query opts) normalize-user-result
+    {:audit-context {:action "list-users"}}))
+
+(defn count-all-users
+  "Count all users using the same filters as `list-all-users`."
+  [db opts]
+  (let [where-clause (build-user-list-where-clause opts)
+        query (cond-> {:select [[[:count :*] :total]]
+                       :from [[:users :u]]}
+                where-clause (assoc :where where-clause))
+        row (jdbc/execute-one! db (hsql/format query))
+        total (or (:total row) (some-> row vals first) 0)]
+    (long total)))
+
+(defn list-all-users-page
+  "List users and include pagination metadata for server-backed pagination."
+  [db {:keys [limit offset] :as opts}]
+  (let [users (list-all-users db opts)
+        total (count-all-users db opts)]
+    {:users users
+     :total total
+     :limit limit
+     :offset offset}))
 
 (defn search-users-advanced
   "Advanced user search with multiple criteria (single-tenant)"

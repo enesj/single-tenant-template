@@ -153,12 +153,14 @@
                       :limit (parse-long-param qp :limit 50)
                       :offset (parse-long-param qp :offset 0)
                       :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))}
-                rows (if (= "admin" role)
-                       (receipt-queries/list-receipts db opts)
-                       (receipt-queries/list-user-receipts db user-id opts))]
+                {:keys [rows total limit offset]}
+                (if (= "admin" role)
+                  (receipt-queries/list-receipts-page db opts)
+                  (receipt-queries/list-user-receipts-page db user-id opts))]
             (h/json-response {:data (to-app rows)
-                              :limit (:limit opts)
-                              :offset (:offset opts)}
+                              :total total
+                              :limit limit
+                              :offset offset}
               200)))
         (h/unauthorized-response)))
     "Failed to list receipts"))

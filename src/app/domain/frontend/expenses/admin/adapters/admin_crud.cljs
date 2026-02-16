@@ -3,8 +3,7 @@
 
    These bridges customize how template CRUD operations work for
    expenses-related entities (suppliers, expenses, receipts, payers,
-   articles, article-aliases, supplier-aliases, manufacturers,
-   price-observations)."
+   articles, article-aliases, supplier-aliases, manufacturers)."
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
     [app.admin.frontend.utils.http :as admin-http]
@@ -497,75 +496,6 @@
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
                              :dispatch [:app.domain.frontend.expenses.events.article-aliases/load-list {}]))}}})
-
-(defn- price-observations-request
-  "Create HTTP request config for price observations admin API."
-  [{:keys [method id ids params on-success on-failure]}]
-  (let [base-uri "/admin/api/expenses/price-observations"
-        uri (cond
-              (seq ids) (str base-uri "/batch")
-              id (str base-uri "/" id)
-              :else base-uri)
-        params (if (seq ids) {:ids (mapv str ids)} params)]
-    (log/info "📈 price-observations-request:" {:method method :uri uri :params params})
-    (admin-http/admin-request {:method method
-                               :uri uri
-                               :params params
-                               :on-success on-success
-                               :on-failure on-failure})))
-
-(adapters.core/register-admin-crud-bridge!
-  {:entity-key :price-observations
-
-   :operations
-   {:fetch {:request (fn [{:keys [db]} entity-type default-effect]
-                       (if (adapters.core/admin-token db)
-                         (assoc default-effect
-                           :http-xhrio (price-observations-request
-                                         {:method :get
-                                          :params lookup-params
-                                          :on-success [:app.template.frontend.events.list.crud/fetch-success entity-type]
-                                          :on-failure [:app.template.frontend.events.list.crud/fetch-failure entity-type]}))
-                         {:dispatch [:admin/redirect-to-login]}))}
-
-    :batch-delete {:request (fn [{:keys [db]} entity-type ids default-effect]
-                              (if (adapters.core/admin-token db)
-                                (let [ids* (mapv str ids)]
-                                  (assoc default-effect
-                                    :http-xhrio (price-observations-request
-                                                  {:method :delete
-                                                   :ids ids*
-                                                   :on-success [:app.template.frontend.events.list.crud/batch-delete-success entity-type ids*]
-                                                   :on-failure [:app.template.frontend.events.list.crud/batch-delete-failure entity-type ids*]})))
-                                {:dispatch [:admin/redirect-to-login]}))
-                   :on-success (fn [_ _ _ default-effect]
-                                 (assoc default-effect
-                                   :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}
-    :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (price-observations-request
-                                          {:method :post
-                                           :params form-data
-                                           :on-success [:app.template.frontend.events.list.crud/create-success entity-type]
-                                           :on-failure [:app.template.frontend.events.list.crud/create-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}
-    :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
-                        (if (adapters.core/admin-token db)
-                          (assoc default-effect
-                            :http-xhrio (price-observations-request
-                                          {:method :put
-                                           :id id
-                                           :params form-data
-                                           :on-success [:app.template.frontend.events.list.crud/update-success entity-type id]
-                                           :on-failure [:app.template.frontend.events.list.crud/update-failure entity-type]}))
-                          {:dispatch [:admin/redirect-to-login]}))
-             :on-success (fn [_ _ _ _ default-effect]
-                           (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.price-observations/load-list {}]))}}})
 
 (defn- supplier-aliases-request
   "Create HTTP request config for supplier aliases admin API."

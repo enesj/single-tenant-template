@@ -76,7 +76,7 @@ Key configs: deps.edn, shadow-cljs.edn, resources/db/models.edn
 - Admin settings pages:
   - `/admin/admin-settings` (admin UI config)
   - `/admin/user-settings` (domain-owned user UI config)
-- Admin domain pages (Expenses) are available under: `/admin/articles`, `/admin/article-aliases`, `/admin/suppliers`, `/admin/supplier-aliases`, `/admin/manufacturers`, `/admin/price-observations`, `/admin/unmapped-aliases`.
+- Admin domain pages (Expenses) are available under: `/admin/articles`, `/admin/article-aliases`, `/admin/suppliers`, `/admin/supplier-aliases`, `/admin/manufacturers`, `/admin/unmapped-aliases`.
 - Sessions are isolated: user logout preserves `:admin-token`; admin logout preserves user `:auth-session`.
 - Dev stderr is suppressed by default; set `DEV_SUPPRESS_STDERR=false` (or `0`/`no`) to keep stderr visible.
 - Dev watchers ignore runtime-edited UI config EDNs under `src/app/admin/frontend/config/*.edn` and `src/app/domain/frontend/**/config/*.edn`.

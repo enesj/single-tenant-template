@@ -41,6 +41,21 @@
            db)
     :id))
 
+(def ^:private max-page-limit
+  500)
+
+(defn- parse-page-limit
+  [params default-limit]
+  (-> (or (some-> (h/get-param params :limit) parse-long)
+        default-limit)
+    long
+    (max 1)
+    (min max-page-limit)))
+
+(defn- parse-page-offset
+  [params]
+  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
+
 (defn list-suppliers-handler
   "Handler factory for listing suppliers available to users."
   [db]
@@ -50,12 +65,20 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (or (some-> (:limit params) parse-long) 100)
-                offset (or (some-> (:offset params) parse-long) 0)
+                limit (parse-page-limit params 100)
+                offset (parse-page-offset params)
+                search (h/get-param params :search)
+                opts (cond-> {:limit limit
+                              :offset offset}
+                       (some? search) (assoc :search search))
                 suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
-                suppliers (vec (suppliers-svc db {:limit limit
-                                                  :offset offset}))]
-            (h/json-response {:data suppliers}))
+                count-suppliers (requiring-resolve 'app.domain.backend.expenses.services.suppliers/count-suppliers)
+                suppliers (vec (suppliers-svc db opts))
+                total (long (or (count-suppliers db {:search search}) 0))]
+            (h/json-response {:data suppliers
+                              :total total
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Error listing suppliers")
             (h/json-response {:error "Failed to list suppliers"} 500))))
@@ -97,14 +120,25 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (or (some-> (:limit params) parse-long) 100)
-                offset (or (some-> (:offset params) parse-long) 0)
+                limit (parse-page-limit params 100)
+                offset (parse-page-offset params)
+                search (h/get-param params :search)
+                opts (cond-> {:limit limit
+                              :offset offset}
+                       (some? search) (assoc :search search))
                 payers-svc (resolve-service-op-fn
                              'app.domain.backend.expenses.services.payers
                              :list
                              'list-payers)
-                payers (payers-svc db {:limit limit :offset offset})]
-            (h/json-response {:data payers}))
+                count-payers (resolve-service-op-fn
+                               'app.domain.backend.expenses.services.payers
+                               :count)
+                payers (vec (payers-svc db opts))
+                total (long (or (count-payers db {:search search}) 0))]
+            (h/json-response {:data payers
+                              :total total
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Error listing payers")
             (h/json-response {:error "Failed to list payers"} 500))))
@@ -460,13 +494,24 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (or (some-> (:limit params) parse-long) 100)
-                offset (or (some-> (:offset params) parse-long) 0)
+                limit (parse-page-limit params 100)
+                offset (parse-page-offset params)
+                search (h/get-param params :search)
+                opts (cond-> {:limit limit
+                              :offset offset}
+                       (some? search) (assoc :search search))
                 list-payer-types (resolve-service-op-fn
                                    'app.domain.backend.expenses.services.payer-types
                                    :list)
-                payer-types (vec (list-payer-types db {:limit limit :offset offset}))]
-            (h/json-response {:data payer-types}))
+                count-payer-types (resolve-service-op-fn
+                                    'app.domain.backend.expenses.services.payer-types
+                                    :count)
+                payer-types (vec (list-payer-types db opts))
+                total (long (or (count-payer-types db {:search search}) 0))]
+            (h/json-response {:data payer-types
+                              :total total
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Error listing payer types")
             (h/json-response {:error "Failed to list payer types"} 500))))

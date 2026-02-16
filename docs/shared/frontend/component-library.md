@@ -115,6 +115,17 @@ Backed by template list adapters; used for audit logs, login events, and domain 
 
 Features: dynamic columns, filtering, pagination, sorting, selection, batch actions. Use `:entity-spec` that matches rendered fields (e.g., `:principal_email`, `:action`).
 
+Server-backed pagination mode:
+
+- Configure list UI state with `:pagination-mode :server` and `:refresh-event`.
+- In server mode, list UI events (`set-current-page`, `set-per-page`, `set-sort-field`, filter apply/clear) dispatch the configured refresh event.
+- Persist backend totals in `paths/list-total-items` so pagination reflects total rows, not only current page rows.
+
+Override props for domain pages:
+
+- `:rows-override` lets a page render externally-fetched rows through `list-view` while still applying active filters/sort state.
+- `:pagination-override` accepts `:current-page`, `:total-pages`, `:on-page-change`, and `:on-per-page-change` for page-owned pagination orchestration.
+
 #### Modal Editing (new defaults)
 
 `list-view` supports modal-based forms so the table remains visible while editing:

@@ -148,24 +148,24 @@
 (deftest visible-columns-normalizes-snake-case-entity-id-test
   (testing "visible-columns normalizes snake_case entity identifiers to kebab-case"
     (reset-db!
-      {:domain {:config {:table-columns {:price-observations {:available-columns [:a :b]
-                                                              :default-visible-columns [:a]}}}}
+      {:domain {:config {:table-columns {:expense-items {:available-columns [:a :b]
+                                                         :default-visible-columns [:a]}}}}
        :ui {}})
-    (let [kebab @(rf/subscribe [::ui-subs/visible-columns :price-observations])
-          snake-kw @(rf/subscribe [::ui-subs/visible-columns :price_observations])
-          snake-str @(rf/subscribe [::ui-subs/visible-columns "price_observations"])]
+    (let [kebab @(rf/subscribe [::ui-subs/visible-columns :expense-items])
+          snake-kw @(rf/subscribe [::ui-subs/visible-columns :expense_items])
+          snake-str @(rf/subscribe [::ui-subs/visible-columns "expense_items"])]
       (is (= kebab snake-kw))
       (is (= kebab snake-str)))))
 
 (deftest entity-display-settings-normalizes-snake-case-entity-id-test
   (testing "entity-display-settings normalizes snake_case entity identifiers to kebab-case"
     (reset-db!
-      {:domain {:config {:entities {:price-observations {:display-settings {:show-edit? false}}}
+      {:domain {:config {:entities {:expense-items {:display-settings {:show-edit? false}}}
                          :view-options {}}}
        :ui {}})
-    (let [kebab @(rf/subscribe [::ui-subs/entity-display-settings :price-observations])
-          snake-kw @(rf/subscribe [::ui-subs/entity-display-settings :price_observations])
-          snake-str @(rf/subscribe [::ui-subs/entity-display-settings "price_observations"])]
+    (let [kebab @(rf/subscribe [::ui-subs/entity-display-settings :expense-items])
+          snake-kw @(rf/subscribe [::ui-subs/entity-display-settings :expense_items])
+          snake-str @(rf/subscribe [::ui-subs/entity-display-settings "expense_items"])]
       (is (= kebab snake-kw))
       (is (= kebab snake-str))
       (is (= false (:show-edit? kebab))))))

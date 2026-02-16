@@ -35,6 +35,52 @@
   (fn [db _]
     (get-in db [:user-expenses :recent :error])))
 
+(rf/reg-sub
+  :user-expenses/recent-limit
+  (fn [db _]
+    (get-in db [:user-expenses :recent :limit])))
+
+(rf/reg-sub
+  :user-expenses/recent-offset
+  (fn [db _]
+    (get-in db [:user-expenses :recent :offset])))
+
+(rf/reg-sub
+  :user-expenses/recent-page
+  (fn [db _]
+    (or (get-in db [:user-expenses :recent :page]) 1)))
+
+(rf/reg-sub
+  :user-expenses/recent-total
+  (fn [db _]
+    (get-in db [:user-expenses :recent :total])))
+
+(rf/reg-sub
+  :user-expenses/recent-total-pages
+  (fn [db _]
+    (let [limit (get-in db [:user-expenses :recent :limit])
+          limit* (if (and (number? limit)
+                       (not (js/isNaN limit))
+                       (pos? limit))
+                   limit
+                   25)
+          total (get-in db [:user-expenses :recent :total])
+          total* (when (and (number? total)
+                         (not (js/isNaN total))
+                         (>= total 0))
+                   total)
+          page (get-in db [:user-expenses :recent :page])
+          page* (if (and (number? page)
+                      (not (js/isNaN page))
+                      (pos? page))
+                  (int page)
+                  1)
+          items (get-in db [:user-expenses :recent :items])
+          from-total (when (some? total*)
+                       (max 1 (int (js/Math.ceil (/ total* limit*)))))
+          fallback (if (seq items) page* 1)]
+      (apply max (remove nil? [1 page* from-total fallback])))))
+
 ;; Aggregations
 (rf/reg-sub
   :user-expenses/by-month
@@ -134,21 +180,6 @@
   :user-expenses/supplier-detail-article-aliases-error
   (fn [db _]
     (get-in db [:user-expenses :suppliers :detail :aliases-error])))
-
-(rf/reg-sub
-  :user-expenses/supplier-detail-price-observations
-  (fn [db _]
-    (get-in db [:user-expenses :suppliers :detail :observations])))
-
-(rf/reg-sub
-  :user-expenses/supplier-detail-price-observations-loading?
-  (fn [db _]
-    (true? (get-in db [:user-expenses :suppliers :detail :observations-loading?]))))
-
-(rf/reg-sub
-  :user-expenses/supplier-detail-price-observations-error
-  (fn [db _]
-    (get-in db [:user-expenses :suppliers :detail :observations-error])))
 
 (rf/reg-sub
   :user-expenses/payers

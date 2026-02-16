@@ -144,16 +144,6 @@
             {:id :raw-label-normalized :label "Alias" :type :text}
             {:id :occurrence-count :label "Occurrences" :type :number}]})
 
-(def price-observations-entity-spec
-  {:id :price-observations
-   :fields [{:id :article-canonical-name :label "Article" :type :text}
-            {:id :supplier-display-name :label "Supplier" :type :text}
-            {:id :observed-at :label "Observed at" :type :datetime}
-            {:id :unit-price :label "Unit price" :type :number}
-            {:id :line-total :label "Line total" :type :number}
-            {:id :currency :label "Currency" :type :text}
-            {:id :qty :label "Qty" :type :number}]})
-
 ;; Register entity spec subscriptions with fallback values
 (entity-utils/register-entity-spec-sub!
   {:entity-key :expenses
@@ -222,10 +212,6 @@
 (entity-utils/register-entity-spec-sub!
   {:entity-key :unmapped-aliases
    :value-fn (fn [spec _] (or spec unmapped-aliases-entity-spec))})
-
-(entity-utils/register-entity-spec-sub!
-  {:entity-key :price-observations
-   :value-fn (fn [spec _] (or spec price-observations-entity-spec))})
 
 ;; Fallback spec for payer-types entity (admin/owner managed)
 

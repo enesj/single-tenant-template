@@ -188,8 +188,8 @@ Returns the summary payload used by the admin shell (counts/overview for users a
 ## Admin Users (`/admin/api`, protected)
 
 ### GET /admin/api/users
-Query params: `search`, `status`, `email-verified`, `page`, `per-page`  
-Response: `{:users [...]}` where each user includes normalized keys (e.g., `:id`, `:email`, `:full-name`, `:role`, `:status`, `:last-login-at`).
+Query params: `search`, `status`, `email-verified`, `limit`, `offset`  
+Response: `{:users [...], :total n, :limit n, :offset n}` where each user includes normalized keys (e.g., `:id`, `:email`, `:full-name`, `:role`, `:status`, `:last-login-at`).
 
 ### GET /admin/api/users/:id
 Response: `{:user {...}}`
@@ -236,7 +236,7 @@ Response: updated user map (top-level keys, not wrapped).
 
 ### GET /admin/api/audit
 Filters: `admin-id`, `entity-type`, `entity-id`, `action`, `limit`, `offset`  
-Response: `{:logs [...]}` where each log includes normalized keys such as `:id`, `:actor-type`, `:actor-id`, `:action`, `:target-type`, `:target-id`, `:entity-name` (when resolvable), `:changes`, `:ip-address`, `:created-at` (epoch millis).
+Response: `{:logs [...], :total n, :limit n, :offset n}` where each log includes normalized keys such as `:id`, `:actor-type`, `:actor-id`, `:action`, `:target-type`, `:target-id`, `:entity-name` (when resolvable), `:changes`, `:ip-address`, `:created-at` (epoch millis).
 
 ### DELETE /admin/api/audit/:id
 Deletes an audit row (admin-only; mainly for local cleanup). Returns `{:success true :message "Audit log deleted successfully"}` or 404.
@@ -247,7 +247,7 @@ Deletes an audit row (admin-only; mainly for local cleanup). Returns `{:success 
 
 ### GET /admin/api/login-events
 Filters: `principal-type` (`admin|user`), `success` (`true|false`), `limit` (default 100), `offset`.  
-Response: `{:events [...]}` with fields:
+Response: `{:events [...], :total n, :limit n, :offset n}` with fields:
 - `:id`, `:principal-id`, `:principal-type`
 - `:principal-name`, `:principal-email` (when resolved)
 - `:success`, `:reason`

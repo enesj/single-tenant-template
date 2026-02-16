@@ -6,7 +6,7 @@
 
 This repository is the **single-tenant template** extracted from the Hosting multi-tenant app. It keeps the shared/template/admin infrastructure (Clojure/ClojureScript, PostgreSQL, Shadow-CLJS, Babashka tooling) but ships **without Hosting/Financial/Integration business domains or tenant-aware RLS**. Hosting-specific docs remain as reference when you want examples of full domains.
 
-**New (2025-12-08):** Home Expenses Tracker domain is included and exposed under `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles, article aliases, price observations, reports). See `../domain/expenses/http-api.md` and `../domain/expenses/index.md` for details.
+**New (2025-12-08):** Home Expenses Tracker domain is included and exposed under `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles, article aliases, internal price-history endpoints, reports). See `../domain/expenses/http-api.md` and `../domain/expenses/index.md` for details.
 
 **New (2025-12-10):** Admin Settings UI expansion with comprehensive configuration management for view options, form fields, and table columns. See `../admin/frontend/admin-settings.md` for the complete guide.
 
@@ -60,7 +60,8 @@ Common tasks:
 - `./migrations/migration-overview.md` — models/migrations workflow
 
 **Domains**
-- `../domain/expenses/index.md` — complete expenses domain guide with new entities (articles, aliases, price observations)
+
+- `../domain/expenses/index.md` — complete expenses domain guide with new entities (articles, aliases, internal price history)
 
 **Reference / Hosting examples (not present in this repo)**
 - Backend domains: `./reference/hosting/hosting-domain.md`, `./reference/hosting/financial-domain.md`, `./reference/hosting/integration-domain.md`

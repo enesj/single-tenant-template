@@ -9,6 +9,7 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -78,10 +79,12 @@
                        (fn []
                          ;; Ensure categories are available for FK selects
                          (rf/dispatch [:user-expenses/fetch-categories])
-                         (rf/dispatch [:user-expenses/fetch-subcategories]))
+                         (rf/dispatch [:user-expenses/refresh-subcategories-list]))
                        [])]
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:user-expenses/refresh-subcategories-list]])
         (refresh-list)
         js/undefined)
       [refresh-list])

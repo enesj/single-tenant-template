@@ -5,7 +5,7 @@
     [app.domain.frontend.expenses.admin.components.detail-views.utils :as utils]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.expenses :as expenses-events]
-    [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
+
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
     app.domain.frontend.expenses.subs.suppliers
     [app.template.frontend.components.button :refer [button]]
@@ -18,19 +18,18 @@
   [{:keys [supplier-id]}]
   (let [supplier (use-subscribe [:expenses/supplier supplier-id])
         loading? (use-subscribe [:expenses/supplier-detail-loading?])
-          error (use-subscribe [:expenses/suppliers-error])
+        error (use-subscribe [:expenses/suppliers-error])
         deleting? (use-subscribe [:expenses/supplier-delete-loading?])
         expenses (use-subscribe [:expenses/entries])
         aliases (use-subscribe [:expenses/article-aliases])
-    observations (use-subscribe [:expenses/price-observations])
-    supplier-id-str (some-> supplier-id str)]
+
+        supplier-id-str (some-> supplier-id str)]
     (use-effect
       (fn []
         (when supplier-id
           (rf/dispatch [::suppliers-events/load-detail supplier-id])
           (rf/dispatch [::expenses-events/load-list {:supplier_id supplier-id :limit 10 :offset 0}])
-          (rf/dispatch [::aliases-events/load-list {:supplier_id supplier-id :limit 10 :offset 0}])
-          (rf/dispatch [::price-obs-events/load-list {:supplier_id supplier-id :limit 10 :offset 0}]))
+          (rf/dispatch [::aliases-events/load-list {:supplier_id supplier-id :limit 10 :offset 0}]))
         js/undefined)
       [supplier-id])
 
@@ -92,16 +91,4 @@
                :view-all-href (when supplier-id
                                 (str "/admin/article-aliases?supplier_id=" supplier-id))
                :view-all-id (when supplier-id
-                              (str "btn-view-article-aliases-supplier-" supplier-id))})
-            ($ utils/related-table
-              {:title "Price Observations"
-               :rows observations
-               :columns [{:label "Observed" :value-fn #(shared/format-date (:observed-at %))}
-                         {:label "Article" :value-fn #(:article-canonical-name %)}
-                         {:label "Unit Price" :value-fn #(:unit-price %)}
-                         {:label "Currency" :value-fn #(:currency %)}]
-               :empty-label "No price observations for this supplier."
-               :view-all-href (when supplier-id
-                                (str "/admin/price-observations?supplier_id=" supplier-id))
-               :view-all-id (when supplier-id
-                              (str "btn-view-price-observations-supplier-" supplier-id))})))))))
+                              (str "btn-view-article-aliases-supplier-" supplier-id))})))))))

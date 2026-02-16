@@ -28,6 +28,21 @@
   [request]
   (h/ensure-role request allowed-roles "Only admins and owners can access this page."))
 
+(def ^:private max-page-limit
+  500)
+
+(defn- parse-page-limit
+  [params default-limit]
+  (-> (or (some-> (h/get-param params :limit) parse-long)
+        default-limit)
+    long
+    (max 1)
+    (min max-page-limit)))
+
+(defn- parse-page-offset
+  [params]
+  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
+
 ;; -----------------------------------------------------------------------------
 ;; Handlers
 ;; -----------------------------------------------------------------------------
@@ -41,13 +56,17 @@
         forbidden
         (try
           (let [qp (:query-params request)
-                limit (or (some-> (h/get-param qp :limit) parse-long) 200)
-                offset (or (some-> (h/get-param qp :offset) parse-long) 0)
+                limit (parse-page-limit qp 200)
+                offset (parse-page-offset qp)
                 search (h/get-param qp :search)
                 rows (to-app (articles/list-articles db {:limit limit
                                                          :offset offset
-                                                         :search search}))]
-            (h/json-response {:data rows :limit limit :offset offset}))
+                                                         :search search}))
+                total (long (or (articles/count-articles db search) 0))]
+            (h/json-response {:data rows
+                              :total total
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Failed to list articles" {:message (.getMessage e)})
             (h/json-response {:error "Failed to list articles"} 500)))))))
@@ -252,11 +271,16 @@
         (try
           (let [qp (:query-params request)
                 supplier-id (h/try-parse-uuid (h/get-param qp :supplier_id))
-                limit (or (some-> (h/get-param qp :limit) parse-long) 50)
-                offset (or (some-> (h/get-param qp :offset) parse-long) 0)
-                rows (to-app (aliases/list-unmapped-aliases db (cond-> {:limit limit :offset offset}
-                                                                 supplier-id (assoc :supplier-id supplier-id))))]
-            (h/json-response {:data rows :limit limit :offset offset}))
+                limit (parse-page-limit qp 50)
+                offset (parse-page-offset qp)
+                opts (cond-> {:limit limit :offset offset}
+                       supplier-id (assoc :supplier-id supplier-id))
+                rows (to-app (aliases/list-unmapped-aliases db opts))
+                total (long (or (aliases/count-unmapped-aliases db opts) 0))]
+            (h/json-response {:data rows
+                              :total total
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Failed to list unmapped aliases" {:message (.getMessage e)})
             (h/json-response {:error "Failed to list unmapped aliases"} 500)))))))

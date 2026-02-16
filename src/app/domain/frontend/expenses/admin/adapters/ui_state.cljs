@@ -24,7 +24,6 @@
                                      (:pagination (get-in db ui-state-path)))}]
        [selected-path #{}]])))
 
-
 (rf/reg-event-db
   ::initialize-entity
   (fn [db [_ entity-key opts]]
@@ -41,8 +40,8 @@
    :payers {:sort-field :label :sort-direction :asc}
    :articles {:sort-field :created-at :sort-direction :desc}
    :article-aliases {:sort-field :created-at :sort-direction :desc}
-  :supplier-aliases {:sort-field :created-at :sort-direction :desc}
-   :price-observations {:sort-field :observed-at :sort-direction :desc}
+   :supplier-aliases {:sort-field :created-at :sort-direction :desc}
+
    :expense-items {:sort-field :created-at :sort-direction :desc}})
 
 (defn init-entity-adapter!
@@ -69,7 +68,7 @@
       (keys default-init-opts))))
 
 (defn init-all-adapters!
-  "Initialize list UI state for all expenses domain entities." 
+  "Initialize list UI state for all expenses domain entities."
   []
   (doseq [[_ init-fn] entity-init-fns]
     (when (fn? init-fn)
@@ -83,5 +82,5 @@
 (def init-articles-adapter! (get entity-init-fns :articles))
 (def init-article-aliases-adapter! (get entity-init-fns :article-aliases))
 (def init-supplier-aliases-adapter! (get entity-init-fns :supplier-aliases))
-(def init-price-observations-adapter! (get entity-init-fns :price-observations))
+
 (def init-expense-items-adapter! (get entity-init-fns :expense-items))

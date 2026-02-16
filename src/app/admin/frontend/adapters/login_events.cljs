@@ -73,8 +73,11 @@
                 [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :created-at :direction :desc}
-                                 :pagination (merge {:current-page 1}
-                                               (:pagination (get-in db ui-state-path)))}]
+                                 :pagination-mode :server
+                                 :refresh-event [:admin/load-login-events]
+                                 :pagination (-> (merge {:current-page 1}
+                                                   (:pagination (get-in db ui-state-path)))
+                                               (assoc :mode :server))}]
                  [selected-ids-path #{}]])
           fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}

@@ -43,8 +43,6 @@
   :column-locks
   {:receipt_id false, :is_posted false, :created_at true},
   :column-defaults {:purchased_at false}},
- :price-observations
- {:display-locks {:show-edit? true}, :display-defaults {}},
  :payers
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},

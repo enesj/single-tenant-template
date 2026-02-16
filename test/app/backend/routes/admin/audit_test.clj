@@ -1,15 +1,19 @@
 (ns app.backend.routes.admin.audit-test
   "Tests for admin audit log services.
-   
+
    Tests audit log structure, filtering, and retrieval."
   (:require
     [app.admin.backend.services.admin.audit :as audit]
+    [app.backend.test-helpers :as h]
     [app.shared.adapters.database :as shared-db]
-    [clojure.test :refer [deftest is testing]]))
+    [app.template.backend.routes.admin.audit :as audit-routes]
+    [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================================
 ;; Audit Log Structure Tests
 ;; ============================================================================
+
+(use-fixtures :each h/with-clean-test-state)
 
 (deftest audit-log-structure-test
   (testing "audit log entry has expected fields"
@@ -82,11 +86,66 @@
         (is (empty? result)))))
 
   (testing "get-audit-logs with filters returns mocked data"
-    (with-redefs [audit/get-audit-logs 
-                  (fn [_ {:keys [limit]}] 
+    (with-redefs [audit/get-audit-logs
+                  (fn [_ {:keys [limit]}]
                     (vec (repeat (or limit 10) {:id (random-uuid)})))]
       (let [result (audit/get-audit-logs nil {:limit 5})]
         (is (= 5 (count result)))))))
+
+(deftest get-audit-logs-handler-pagination-metadata-test
+  (testing "audit handler returns logs, total, limit, and offset with filter-aware total"
+    (let [db (h/mock-db)
+          handler (audit-routes/get-audit-logs-handler db)
+          admin-id (random-uuid)
+          entity-id (random-uuid)
+          request (h/mock-admin-request :get "/admin/api/audit" {:id admin-id}
+                    {:params {:admin-id (str admin-id)
+                              :entity-type "user"
+                              :entity-id (str entity-id)
+                              :action "create_user"
+                              :limit "5"
+                              :offset "10"}})
+          sample-logs [{:id (random-uuid)
+                        :actor-id admin-id
+                        :target-type "user"
+                        :target-id entity-id
+                        :action "create_user"}
+                       {:id (random-uuid)
+                        :actor-id admin-id
+                        :target-type "user"
+                        :target-id entity-id
+                        :action "delete_user"}
+                       {:id (random-uuid)
+                        :actor-id (random-uuid)
+                        :target-type "admin"
+                        :target-id (random-uuid)
+                        :action "create_user"}]]
+      (with-redefs [audit/get-audit-logs-page
+                    (fn [_db opts]
+                      (is (= admin-id (:admin-id opts)))
+                      (is (= "user" (:entity-type opts)))
+                      (is (= entity-id (:entity-id opts)))
+                      (is (= "create_user" (:action opts)))
+                      (is (= 5 (:limit opts)))
+                      (is (= 10 (:offset opts)))
+                      (let [matches? (fn [log]
+                                       (and (= (:admin-id opts) (:actor-id log))
+                                         (= (:entity-type opts) (:target-type log))
+                                         (= (:entity-id opts) (:target-id log))
+                                         (= (:action opts) (:action log))))
+                            filtered (vec (filter matches? sample-logs))]
+                        {:logs filtered
+                         :total (count filtered)
+                         :limit (:limit opts)
+                         :offset (:offset opts)}))]
+        (let [response (handler request)
+              body (h/parse-response-body response)]
+          (is (= 200 (:status response)))
+          (is (vector? (:logs body)))
+          (is (= 1 (:total body)))
+          (is (= 5 (:limit body)))
+          (is (= 10 (:offset body)))
+          (is (= 1 (count (:logs body)))))))))
 
 ;; ============================================================================
 ;; Audit Log Pagination Tests

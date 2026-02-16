@@ -20,7 +20,7 @@ The expenses domain consists of several interconnected entities:
 5. **Payers** (`payers`) - Payment method management
 6. **Articles** (`articles`) - Product/item catalog with pricing
 7. **Article Aliases** (`article_aliases`) - Alternative names for articles
-8. **Price Observations** (`price_observations`) - Historical price tracking
+8. **Price Observations** (`price_observations`) - Internal historical price tracking derived from expense items
 
 ### Entity Relationships
 
@@ -59,7 +59,6 @@ The expenses domain contributes the following user-facing routes under `/` (see 
 - `/expense-items` - Expense items (admin/owner only)
 - `/articles` - Articles (admin/owner only)
 - `/article-aliases` - Article aliases (admin/owner only)
-- `/price-observations` - Price observations (admin/owner only)
 - `/expenses/:expense-id` - Expense detail
 
 ### Components and Features
@@ -219,7 +218,7 @@ Key services in `src/app/domain/backend/expenses/services/`:
 - **expenses.clj** - Expense CRUD and detail fetch (includes line items)
 - **expense_items.clj** - Expense item CRUD (standalone admin page + API)
 - **price_history.clj** - Price observation queries/helpers
-- **price_observations.clj** - Price observations CRUD (and linking to expense items)
+- **price_observations.clj** - Internal price observation persistence/helpers (used by price-history endpoints)
 - **receipts.clj** - Receipt upload/status workflow and approval → expense creation
 - **suppliers.clj** - Supplier management
 - **payers.clj** - Payment method management

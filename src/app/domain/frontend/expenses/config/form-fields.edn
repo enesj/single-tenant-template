@@ -77,22 +77,6 @@
  {:create-fields ["display_name"],
   :edit-fields ["display_name"],
   :field-config {:display_name {:type "text", :label "Display name"}}},
- :price-observations
- {:edit-fields
-  ["observed_at" "article_id" "supplier_id" "unit_price" "currency"],
-  :field-config
-  {:observed_at {:type "datetime-local"},
-   :article_id
-   {:type "select",
-    :label "Article",
-    :options ["articles" "canonical_name"]},
-   :supplier_id
-   {:type "select",
-    :label "Supplier",
-    :options ["suppliers" "display_name"]},
-   :unit_price {:type "number", :step 0.01},
-   :currency
-   {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]}}},
  :categories
  {:create-fields ["name" "description"],
   :edit-fields ["name" "description"],

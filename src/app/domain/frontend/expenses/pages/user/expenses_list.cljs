@@ -11,6 +11,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon view-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.utils.id :as id-utils]
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [re-frame.core :as rf]
@@ -112,14 +113,31 @@
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
+        recent-items (or (use-subscribe [:user-expenses/recent]) [])
+        recent-page (or (use-subscribe [:user-expenses/recent-page]) 1)
+        recent-total-pages (or (use-subscribe [:user-expenses/recent-total-pages]) 1)
+        recent-limit (or (use-subscribe [:user-expenses/recent-limit]) 25)
         error (use-subscribe [:user-expenses/recent-error])
         can-write? (use-subscribe [:expenses/can-write?])
         ;; Subscribe to current expense being viewed in modal
         current-expense (use-subscribe [:user-expenses/current-expense])
+        go-to-page (use-callback
+                     (fn [page]
+                       (rf/dispatch [:user-expenses/recent-go-to-page
+                                     {:page page}]))
+                     [])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]))
-                       [])]
+                         (rf/dispatch [:user-expenses/recent-go-to-page
+                                       {:page 1}]))
+                       [])
+        handle-per-page-change (use-callback
+                                 (fn [new-limit]
+                                   (rf/dispatch [::ui-events/set-per-page :expenses new-limit])
+                                   (rf/dispatch [:user-expenses/recent-go-to-page
+                                                 {:page 1
+                                                  :limit new-limit}]))
+                                 [])]
 
     ;; Ensure we kick off a user-scoped fetch so that the shared
     ;; template entity store for :expenses and its FK references is
@@ -161,6 +179,12 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Expense"
+           :per-page recent-limit
+           :rows-override recent-items
+           :pagination-override {:current-page recent-page
+                                 :total-pages recent-total-pages
+                                 :on-page-change go-to-page
+                                 :on-per-page-change handle-per-page-change}
            :form-display :modal
            :disallowed-action-mode :disable
            :allow-add? can-write?

@@ -69,7 +69,7 @@
 (defn form-field
   "Returns [:forms entity-type :values field] path vector for a single form field.
 
-  Compatibility alias for older code that used `:data` under forms." 
+  Compatibility alias for older code that used `:data` under forms."
   [entity-type field]
   (conj (form-data entity-type) field))
 
@@ -148,6 +148,21 @@
   "Returns [:ui :lists entity-type :per-page] path vector for items per page setting of a list for a specific entity type."
   [entity-type]
   [:ui :lists entity-type :per-page])
+
+(defn list-pagination-mode
+  "Returns [:ui :lists entity-type :pagination-mode] path vector for pagination mode of a list.
+
+  Supported modes:
+  - :client (default)
+  - :server (opt-in)"
+  [entity-type]
+  [:ui :lists entity-type :pagination-mode])
+
+(defn list-refresh-event
+  "Returns [:ui :lists entity-type :refresh-event] path vector for optional per-entity
+  refresh dispatch configuration used by server-backed list pagination flows."
+  [entity-type]
+  [:ui :lists entity-type :refresh-event])
 
 (defn entity-selected-ids
   "Returns [:ui :lists entity-type :selected-ids] path vector for the set of selected IDs in a list for a specific entity type."

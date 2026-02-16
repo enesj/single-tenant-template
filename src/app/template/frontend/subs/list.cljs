@@ -39,6 +39,19 @@
   (fn [db [_ entity-type]]
     (get-in db (paths/list-ui-state entity-type))))
 
+(defn- pagination-mode
+  [ui-state]
+  (let [mode (or (:pagination-mode ui-state)
+               (get-in ui-state [:pagination :mode]))]
+    (if (or (= mode :server)
+          (= mode "server"))
+      :server
+      :client)))
+
+(defn- server-pagination?
+  [ui-state]
+  (= :server (pagination-mode ui-state)))
+
 (rf/reg-sub
   ::sort-config
   (fn [[_ entity-type]]
@@ -66,20 +79,22 @@
     [(rf/subscribe [::filtered-items entity-type])
      (rf/subscribe [::entity-ui-state entity-type])])
   (fn [[filtered-items ui-state] [_ _]]
-    (let [sort-config (:sort ui-state)
-          sort-field (when sort-config (keyword (:field sort-config)))
-          sort-dir (:direction sort-config :asc)
-          per-page (or (:per-page ui-state)
-                     (get-in ui-state [:pagination :per-page])
-                     pagination/default-page-size)
-          current-page (or (get-in ui-state [:pagination :current-page]) (:current-page ui-state) pagination/default-page-number)
-
-          pagination-state (pagination/create-pagination-state
-                             {:page-number current-page
-                              :page-size per-page
-                              :total-items (count filtered-items)})]
-
-      (pagination/paginate-with-sort filtered-items sort-field sort-dir pagination-state))))
+    (if (server-pagination? ui-state)
+      filtered-items
+      (let [sort-config (:sort ui-state)
+            sort-field (when sort-config (keyword (:field sort-config)))
+            sort-dir (:direction sort-config :asc)
+            per-page (or (:per-page ui-state)
+                       (get-in ui-state [:pagination :per-page])
+                       pagination/default-page-size)
+            current-page (or (get-in ui-state [:pagination :current-page])
+                           (:current-page ui-state)
+                           pagination/default-page-number)
+            pagination-state (pagination/create-pagination-state
+                               {:page-number current-page
+                                :page-size per-page
+                                :total-items (count filtered-items)})]
+        (pagination/paginate-with-sort filtered-items sort-field sort-dir pagination-state)))))
 
 (rf/reg-sub
   ::total-pages
@@ -87,8 +102,14 @@
     [(rf/subscribe [::filtered-items entity-type])
      (rf/subscribe [::entity-ui-state entity-type])])
   (fn [[items ui-state] _]
-    (let [per-page (or (:per-page ui-state) pagination/default-page-size)
-          total-items (count items)]
+    (let [per-page (or (:per-page ui-state)
+                     (get-in ui-state [:pagination :per-page])
+                     pagination/default-page-size)
+          total-items (if (server-pagination? ui-state)
+                        (or (:total-items ui-state)
+                          (:total ui-state)
+                          (count items))
+                        (count items))]
       (pagination/calculate-total-pages total-items per-page))))
 
 ;; Theme subscription
@@ -119,9 +140,11 @@
   ::filtered-items
   (fn [[_ entity-type] _]
     [(rf/subscribe [::items entity-type])
-     (rf/subscribe [::active-filters entity-type])])
-  (fn [[items filters] [_ _]]
-    (if (empty? filters)
+     (rf/subscribe [::active-filters entity-type])
+     (rf/subscribe [::entity-ui-state entity-type])])
+  (fn [[items filters ui-state] [_ _]]
+    (if (or (server-pagination? ui-state)
+          (empty? filters))
       items
       (let [filtered (filter (fn [item]
                                (every? (fn [[field-id filter-value]]

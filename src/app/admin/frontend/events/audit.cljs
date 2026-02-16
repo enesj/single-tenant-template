@@ -28,19 +28,34 @@
   :admin/load-audit-logs
   (fn [{:keys [db]} [_ {:keys [filters pagination sort] :as _params}]]
     (let [entity-key :audit-logs
+          parse-pos-int (fn [v]
+                          (cond
+                            (number? v) (when (pos? v) (long v))
+                            (string? v) (let [n (js/parseInt v 10)]
+                                          (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                                            (long n)))
+                            :else nil))
+          parse-non-neg-int (fn [v]
+                              (cond
+                                (number? v) (when (>= v 0) (long v))
+                                (string? v) (let [n (js/parseInt v 10)]
+                                              (when (and (number? n) (not (js/isNaN n)) (>= n 0))
+                                                (long n)))
+                                :else nil))
           ;; Read template system pagination first to avoid divergence
-          template-per-page (or (get-in db (paths/list-per-page entity-key))
-                              (get-in db (conj (paths/list-ui-state entity-key) :per-page))
-                              (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page))
+          template-per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
                               20)
-          template-page (or (get-in db (paths/list-current-page entity-key))
-                          (get-in db (conj (paths/list-ui-state entity-key) :current-page))
-                          (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page))
+          template-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
                           1)
 
-          current-filters (get-in db [:admin :audit :filters] {})
+          current-filters (merge (get-in db [:admin :audit :filters] {})
+                            (get-in db (paths/list-filters entity-key) {}))
           ;; Keep admin path but prefer template values when present
-          admin-pagination (get-in db [:admin :audit :pagination] {:page 1 :per-page template-per-page})
+          admin-pagination (get-in db [:admin :audit :pagination] {})
           current-pagination (merge {:page template-page :per-page template-per-page} admin-pagination)
           ;; Align default sort with adapter default (:timestamp)
           current-sort (get-in db [:admin :audit :sort] {:field :timestamp :direction :desc})
@@ -50,27 +65,38 @@
           final-pagination (merge current-pagination pagination)
           final-sort (merge current-sort sort)
 
-          params-to-send (cond-> {}
-                           (seq final-filters) (assoc :filters final-filters)
-                           final-pagination (assoc :pagination final-pagination)
-                           final-sort (assoc :sort final-sort))]
+          limit (or (parse-pos-int (:limit final-pagination))
+                  (parse-pos-int (:per-page final-pagination))
+                  template-per-page)
+          page (or (parse-pos-int (:page final-pagination))
+                 (parse-pos-int (:current-page final-pagination))
+                 template-page)
+          offset (or (parse-non-neg-int (:offset final-pagination))
+                   (* (dec page) limit))
+          resolved-pagination (assoc final-pagination
+                                :page page
+                                :per-page limit
+                                :limit limit
+                                :offset offset)
+          request-params (cond-> {:limit limit
+                                  :offset offset}
+                           (seq final-filters) (merge final-filters))]
 
-      (log/info "AUDIT LOAD → template per-page:" template-per-page
-        "template page:" template-page
-        "admin current pagination:" admin-pagination)
-      (log/info "AUDIT LOAD → final pagination to send:" final-pagination)
+      (log/info "AUDIT LOAD →" {:pagination resolved-pagination
+                                :filters final-filters
+                                :request-params request-params})
 
       (if (adapters.core/admin-token db)
         {:db (-> db
                (assoc-in [:admin :audit :loading?] true)
                (assoc-in [:admin :audit :error] nil)
                (assoc-in [:admin :audit :filters] final-filters)
-               (assoc-in [:admin :audit :pagination] final-pagination)
+               (assoc-in [:admin :audit :pagination] resolved-pagination)
                (assoc-in [:admin :audit :sort] final-sort)
                (assoc-in (conj (paths/entity-metadata :audit-logs) :loading?) true))
          :http-xhrio (admin-http/admin-get
                        {:uri "/admin/api/audit"
-                        :params params-to-send
+                        :params request-params
                         :on-success [::audit-logs-loaded]
                         :on-failure [::audit-logs-load-failed]})}
         {:db (-> db
@@ -83,11 +109,15 @@
 (rf/reg-event-fx
   ::audit-logs-loaded
   (fn [{:keys [db]} [_ response]]
-    (let [raw-logs (get response :logs [])
+    (let [response* (if (object? response) (js->clj response :keywordize-keys true) response)
+          raw-logs (get response* :logs [])
+          total-items (or (:total response*)
+                        (count raw-logs))
           metadata-path (paths/entity-metadata :audit-logs)]
       {:db (-> db
              (assoc-in (conj metadata-path :loading?) false)
-             (assoc-in (conj metadata-path :error) nil))
+             (assoc-in (conj metadata-path :error) nil)
+             (assoc-in (paths/list-total-items :audit-logs) total-items))
        :dispatch-n [[::audit-adapter/sync-audit-logs-to-template raw-logs]
                     [:admin/audit-logs-loaded]]})))
 

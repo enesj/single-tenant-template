@@ -25,39 +25,67 @@
   :admin/load-login-events
   (fn [{:keys [db]} [_ {:keys [filters pagination sort] :as _params}]]
     (let [entity-key :login-events
-          template-per-page (or (get-in db (paths/list-per-page entity-key))
-                              (get-in db (conj (paths/list-ui-state entity-key) :per-page))
-                              (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page))
+          parse-pos-int (fn [v]
+                          (cond
+                            (number? v) (when (pos? v) (long v))
+                            (string? v) (let [n (js/parseInt v 10)]
+                                          (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                                            (long n)))
+                            :else nil))
+          parse-non-neg-int (fn [v]
+                              (cond
+                                (number? v) (when (>= v 0) (long v))
+                                (string? v) (let [n (js/parseInt v 10)]
+                                              (when (and (number? n) (not (js/isNaN n)) (>= n 0))
+                                                (long n)))
+                                :else nil))
+          template-per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
                               20)
-          template-page (or (get-in db (paths/list-current-page entity-key))
-                          (get-in db (conj (paths/list-ui-state entity-key) :current-page))
-                          (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page))
+          template-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
                           1)
-          current-filters (get-in db [:admin :login-events :filters] {})
-          current-pagination (get-in db [:admin :login-events :pagination]
-                               {:page template-page :per-page template-per-page})
+          current-filters (merge (get-in db [:admin :login-events :filters] {})
+                            (get-in db (paths/list-filters entity-key) {}))
+          current-pagination (merge {:page template-page :per-page template-per-page}
+                               (get-in db [:admin :login-events :pagination] {}))
           current-sort (get-in db [:admin :login-events :sort]
                          {:field :created-at :direction :desc})
           final-filters (merge current-filters filters)
           final-pagination (merge current-pagination pagination)
           final-sort (merge current-sort sort)
-          params-to-send (cond-> {}
-                           (seq final-filters) (assoc :filters final-filters)
-                           final-pagination (assoc :pagination final-pagination)
-                           final-sort (assoc :sort final-sort))]
-      (log/info "LOGIN EVENTS LOAD →" {:pagination final-pagination
-                                       :filters final-filters})
+          limit (or (parse-pos-int (:limit final-pagination))
+                  (parse-pos-int (:per-page final-pagination))
+                  template-per-page)
+          page (or (parse-pos-int (:page final-pagination))
+                 (parse-pos-int (:current-page final-pagination))
+                 template-page)
+          offset (or (parse-non-neg-int (:offset final-pagination))
+                   (* (dec page) limit))
+          resolved-pagination (assoc final-pagination
+                                :page page
+                                :per-page limit
+                                :limit limit
+                                :offset offset)
+          request-params (cond-> {:limit limit
+                                  :offset offset}
+                           (seq final-filters) (merge final-filters))]
+      (log/info "LOGIN EVENTS LOAD →" {:pagination resolved-pagination
+                                       :filters final-filters
+                                       :request-params request-params})
       (if (adapters.core/admin-token db)
         {:db (-> db
                (assoc-in [:admin :login-events :loading?] true)
                (assoc-in [:admin :login-events :error] nil)
                (assoc-in [:admin :login-events :filters] final-filters)
-               (assoc-in [:admin :login-events :pagination] final-pagination)
+               (assoc-in [:admin :login-events :pagination] resolved-pagination)
                (assoc-in [:admin :login-events :sort] final-sort)
                (assoc-in (conj (paths/entity-metadata :login-events) :loading?) true))
          :http-xhrio (admin-http/admin-get
                        {:uri "/admin/api/login-events"
-                        :params params-to-send
+                        :params request-params
                         :on-success [::login-events-loaded]
                         :on-failure [::login-events-load-failed]})}
         {:db (-> db
@@ -70,11 +98,15 @@
 (rf/reg-event-fx
   ::login-events-loaded
   (fn [{:keys [db]} [_ response]]
-    (let [events (get response :events [])
+    (let [response* (if (object? response) (js->clj response :keywordize-keys true) response)
+          events (get response* :events [])
+          total-items (or (:total response*)
+                        (count events))
           metadata-path (paths/entity-metadata :login-events)]
       {:db (-> db
              (assoc-in (conj metadata-path :loading?) false)
-             (assoc-in (conj metadata-path :error) nil))
+             (assoc-in (conj metadata-path :error) nil)
+             (assoc-in (paths/list-total-items :login-events) total-items))
        :dispatch-n [[::login-events-adapter/sync-login-events-to-template events]
                     [:admin/login-events-loaded]]})))
 

@@ -316,14 +316,6 @@
       {:db (assoc-in db (paths/current-page) :expense-supplier-aliases)})))
 
 (rf/reg-event-fx
-  :page/init-expense-price-observations
-  common-interceptors
-  (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-price-observations)})))
-
-(rf/reg-event-fx
   :page/init-unmapped-items
   common-interceptors
   (fn [{:keys [db]} _]

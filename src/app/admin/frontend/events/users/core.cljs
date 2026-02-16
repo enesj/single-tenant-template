@@ -16,26 +16,77 @@
 (rf/reg-event-fx
   :admin/load-users
   (fn [{:keys [db]} [_ params]]
-    (utils/log-user-operation "Loading users with params" params)
-    {:db (state-utils/start-api-request db {:loading-key :admin/users-loading?
-                                            :error-key :admin/users-error
-                                            :entity-type :users})
-     :http-xhrio (admin-http/admin-get
-                   {:uri "/admin/api/users"
-                    :params (or params {})
-                    :on-success [:admin/load-users-success]
-                    :on-failure [:admin/load-users-failure]})}))
+    (let [entity-key :users
+          params* (or params {})
+          pagination* (:pagination params*)
+          parse-pos-int (fn [v]
+                          (cond
+                            (number? v) (when (pos? v) (long v))
+                            (string? v) (let [n (js/parseInt v 10)]
+                                          (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                                            (long n)))
+                            :else nil))
+          parse-non-neg-int (fn [v]
+                              (cond
+                                (number? v) (when (>= v 0) (long v))
+                                (string? v) (let [n (js/parseInt v 10)]
+                                              (when (and (number? n) (not (js/isNaN n)) (>= n 0))
+                                                (long n)))
+                                :else nil))
+          template-per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
+                              25)
+          template-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
+                          1)
+          limit (or (parse-pos-int (:limit params*))
+                  (parse-pos-int (:limit pagination*))
+                  (parse-pos-int (:per-page params*))
+                  (parse-pos-int (:per-page pagination*))
+                  template-per-page)
+          page (or (parse-pos-int (:page params*))
+                 (parse-pos-int (:current-page params*))
+                 (parse-pos-int (:page pagination*))
+                 template-page)
+          offset (or (parse-non-neg-int (:offset params*))
+                   (parse-non-neg-int (:offset pagination*))
+                   (* (dec page) limit))
+          ui-filters (get-in db (paths/list-filters entity-key) {})
+          param-filters (if (map? (:filters params*))
+                          (:filters params*)
+                          {})
+          request-params (-> (merge ui-filters
+                               param-filters
+                               (dissoc params* :filters :pagination :page :per-page :current-page))
+                           (assoc :limit limit
+                             :offset offset))]
+      (utils/log-user-operation "Loading users with params" request-params)
+      {:db (state-utils/start-api-request db {:loading-key :admin/users-loading?
+                                              :error-key :admin/users-error
+                                              :entity-type :users})
+       :http-xhrio (admin-http/admin-get
+                     {:uri "/admin/api/users"
+                      :params request-params
+                      :on-success [:admin/load-users-success]
+                      :on-failure [:admin/load-users-failure]})})))
 
 (rf/reg-event-fx
   :admin/load-users-success
   (fn [{:keys [db]} [_ response]]
-    (state-utils/handle-entity-api-success
-      db
-      :users
-      response
-      {:loading-key :admin/users-loading?
-       :admin-key :admin/users
-       :sync-event [:app.admin.frontend.adapters.users/sync-users-to-template]})))
+    (let [response* (state-utils/safe-js->clj response)
+          total-items (or (:total response*)
+                        (count (or (:users response*) [])))
+          effect (state-utils/handle-entity-api-success
+                   db
+                   :users
+                   response
+                   {:loading-key :admin/users-loading?
+                    :admin-key :admin/users
+                    :sync-event [:app.admin.frontend.adapters.users/sync-users-to-template]})]
+      (update effect :db
+        #(assoc-in % (paths/list-total-items :users) total-items)))))
 
 (rf/reg-event-db
   :admin/load-users-failure

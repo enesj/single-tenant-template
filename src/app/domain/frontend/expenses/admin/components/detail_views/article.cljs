@@ -6,7 +6,7 @@
     [app.domain.frontend.expenses.events.article-alias-bulk :as alias-bulk-events]
     [app.domain.frontend.expenses.events.article-aliases :as aliases-events]
     [app.domain.frontend.expenses.events.articles :as articles-events]
-    [app.domain.frontend.expenses.events.price-observations :as price-obs-events]
+
     [app.domain.frontend.expenses.subs.article-alias-bulk :as alias-bulk-subs]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
@@ -112,14 +112,12 @@
   (let [article (use-subscribe [:expenses/article article-id])
         loading? (use-subscribe [:expenses/article-detail-loading?])
         error (use-subscribe [:expenses/articles-error])
-        aliases (use-subscribe [:expenses/article-aliases])
-        observations (use-subscribe [:expenses/price-observations])]
+        aliases (use-subscribe [:expenses/article-aliases])]
     (use-effect
       (fn []
         (when article-id
           (rf/dispatch [::articles-events/load-detail article-id])
-          (rf/dispatch [::aliases-events/load-list {:article_id article-id :limit 10 :offset 0}])
-          (rf/dispatch [::price-obs-events/load-list {:article_id article-id :limit 10 :offset 0}]))
+          (rf/dispatch [::aliases-events/load-list {:article_id article-id :limit 10 :offset 0}]))
         js/undefined)
       [article-id])
 
@@ -155,25 +153,13 @@
                          {:label "Supplier" :value-fn #(:supplier-display-name %)}]
                :empty-label "No aliases mapped to this article."
                :header-actions ($ button
-                                {:id (when article-id (str "btn-add-aliases-article-" article-id))
-                                 :btn-type :ghost
-                                 :class "ds-btn-xs"
-                                 :on-click (fn []
-                                             (rf/dispatch [::alias-bulk-events/open article-id]))}
-                                "Add aliases")
+                                 {:id (when article-id (str "btn-add-aliases-article-" article-id))
+                                  :btn-type :ghost
+                                  :class "ds-btn-xs"
+                                  :on-click (fn []
+                                              (rf/dispatch [::alias-bulk-events/open article-id]))}
+                                 "Add aliases")
                :view-all-href (when article-id
                                 (str "/admin/article-aliases?article_id=" article-id))
                :view-all-id (when article-id
-                              (str "btn-view-article-aliases-article-" article-id))})
-            ($ utils/related-table
-              {:title "Price Observations"
-               :rows observations
-               :columns [{:label "Observed" :value-fn #(shared/format-date (:observed-at %))}
-                         {:label "Supplier" :value-fn #(:supplier-display-name %)}
-                         {:label "Unit Price" :value-fn #(:unit-price %)}
-                         {:label "Currency" :value-fn #(:currency %)}]
-               :empty-label "No price observations for this article."
-               :view-all-href (when article-id
-                                (str "/admin/price-observations?article_id=" article-id))
-               :view-all-id (when article-id
-                              (str "btn-view-price-observations-article-" article-id))})))))))
+                              (str "btn-view-article-aliases-article-" article-id))})))))))

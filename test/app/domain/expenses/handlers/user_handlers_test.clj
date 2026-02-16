@@ -7,6 +7,7 @@
   (:require
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]])
   (:import
@@ -43,6 +44,37 @@
           body (parse-json-body resp)]
       (is (= 403 (:status resp)))
       (is (= "Role assignment required" (:error body))))))
+
+(deftest user-receipts-list-includes-pagination-metadata
+  (testing "list receipts returns data with total/limit/offset"
+    (let [handler (user-receipts/list-receipts-handler :mock-db)
+          user-id (UUID/randomUUID)
+          request {:identity {:id user-id
+                              :role "member"}
+                   :query-params {:status "uploaded"
+                                  :limit "2"
+                                  :offset "1"}}
+          sample-row {:id (UUID/randomUUID)
+                      :status "uploaded"
+                      :original_filename "receipt-1.jpg"}]
+      (with-redefs [receipt-queries/list-user-receipts-page
+                    (fn [_db actual-user-id opts]
+                      (is (= user-id actual-user-id))
+                      (is (= "uploaded" (:status opts)))
+                      (is (= 2 (:limit opts)))
+                      (is (= 1 (:offset opts)))
+                      {:rows [sample-row]
+                       :total 3
+                       :limit (:limit opts)
+                       :offset (:offset opts)})]
+        (let [resp (handler request)
+              body (parse-json-body resp)]
+          (is (= 200 (:status resp)))
+          (is (vector? (:data body)))
+          (is (= 1 (count (:data body))))
+          (is (= 3 (:total body)))
+          (is (= 2 (:limit body)))
+          (is (= 1 (:offset body))))))))
 
 (deftest user-receipts-batch-ocr-empty-selection-is-safe
   (testing "batch OCR returns 400 when no receipt ids are provided"

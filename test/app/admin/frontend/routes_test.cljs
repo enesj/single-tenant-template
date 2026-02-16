@@ -34,7 +34,7 @@
                      :admin-suppliers
                      :admin-supplier-aliases
                      :admin-manufacturers
-                     :admin-price-observations
+
                      :admin-unmapped-aliases}]
       (is (set/subset? expected names)))))
 

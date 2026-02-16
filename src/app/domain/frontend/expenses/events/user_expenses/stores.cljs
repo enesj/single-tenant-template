@@ -4,7 +4,6 @@
   These events call /api/v1/expenses/stores and /api/v1/expenses/store-aliases and
   sync results into the shared template entity store so list-view can render them."
   (:require
-
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
@@ -12,6 +11,7 @@
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.crud.success :as crud-success]
+    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (defn- begin-entity-load
@@ -37,6 +37,75 @@
     (remove nil?)
     vec))
 
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- normalize-filter-value
+  [value]
+  (cond
+    (map? value) (or (normalize-filter-value (:value value))
+                   (normalize-filter-value (get value "value")))
+    (keyword? value) (name value)
+    (string? value) (some-> value str/trim not-empty)
+    (vector? value) (let [items (->> value
+                                  (map normalize-filter-value)
+                                  (remove nil?)
+                                  vec)]
+                      (when (seq items)
+                        items))
+    (sequential? value) (let [items (->> value
+                                      (map normalize-filter-value)
+                                      (remove nil?)
+                                      vec)]
+                          (when (seq items)
+                            items))
+    :else value))
+
+(defn- normalize-filter-params
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (let [normalized (normalize-filter-value v)]
+        (if (nil? normalized)
+          acc
+          (assoc acc k normalized))))
+    {}
+    (or filters {})))
+
+(defn- current-list-page-params
+  [db entity-key default-limit]
+  (let [per-page (or (parse-pos-int (get-in db [:ui :lists entity-key :per-page]))
+                   default-limit)
+        current-page (or (parse-pos-int (get-in db [:ui :lists entity-key :current-page]))
+                       1)
+        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))
+        filters (normalize-filter-params (get-in db [:ui :lists entity-key :filters]))]
+    (cond-> (merge {:limit per-page
+                    :offset (* (max 0 (dec current-page)) per-page)}
+              filters)
+      (some? order-dir) (assoc :order-dir order-dir))))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-stores-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-stores (current-list-page-params db :stores 200)]}))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-store-aliases-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-store-aliases (current-list-page-params db :store-aliases 200)]}))
+
 ;; ---------------------------------------------------------------------------
 ;; Stores
 ;; ---------------------------------------------------------------------------
@@ -58,8 +127,10 @@
   :user-expenses/fetch-stores-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [stores (vec (or (:data response) []))]
-      {:db (finish-entity-load db :stores nil)
+    (let [stores (vec (or (:data response) []))
+          total (or (:total response) (count stores))]
+      {:db (-> (finish-entity-load db :stores nil)
+             (assoc-in (paths/list-total-items :stores) total))
        :dispatch [::expenses-sync/sync-stores stores]})))
 
 (rf/reg-event-db
@@ -94,7 +165,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :stores highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-stores]]
+       :dispatch-n [[:user-expenses/refresh-stores-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success store]}])]})))
@@ -138,7 +209,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> (seq highlight-id)
                (crud-success/track-recently-updated :stores highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-stores]]
+       :dispatch-n [[:user-expenses/refresh-stores-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -186,7 +257,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-stores]}))
+     :dispatch [:user-expenses/refresh-stores-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-store-failure
@@ -217,8 +288,10 @@
   :user-expenses/fetch-store-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) []))]
-      {:db (finish-entity-load db :store-aliases nil)
+    (let [aliases (vec (or (:data response) []))
+          total (or (:total response) (count aliases))]
+      {:db (-> (finish-entity-load db :store-aliases nil)
+             (assoc-in (paths/list-total-items :store-aliases) total))
        :dispatch [::expenses-sync/sync-store-aliases aliases]})))
 
 (rf/reg-event-db
@@ -264,7 +337,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> (seq highlight-id)
                (crud-success/track-recently-updated :store-aliases highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-store-aliases]]
+       :dispatch-n [[:user-expenses/refresh-store-aliases-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -312,7 +385,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-store-aliases]}))
+     :dispatch [:user-expenses/refresh-store-aliases-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-store-alias-failure

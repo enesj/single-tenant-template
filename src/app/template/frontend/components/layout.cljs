@@ -9,7 +9,7 @@
                                                     expense-items-icon
                                                     expenses-icon
                                                     logout-icon
-                                                    price-observations-icon
+
                                                     payers-icon
                                                     receipts-icon
                                                     suppliers-icon
@@ -130,27 +130,7 @@
                                         :icon ($ payers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-payers})})]
                             (when power-user?
-                              [(nav-item {:id "user-sidebar-stores"
-                                          :label "Stores"
-                                          :href "/stores"
-                                          :route :expense-stores
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-stores})})
-                               (nav-item {:id "user-sidebar-cities"
-                                          :label "Cities"
-                                          :href "/cities"
-                                          :route :expense-cities
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-cities})})
-
-                               (nav-item {:id "user-sidebar-store-aliases"
-                                          :label "Store Aliases"
-                                          :href "/store-aliases"
-                                          :route :expense-store-aliases
-                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-store-aliases})})
-
-                               (nav-item {:id "user-sidebar-payer-types"
+                              [(nav-item {:id "user-sidebar-payer-types"
                                           :label "Payer Types"
                                           :href "/payer-types"
                                           :route :expense-payer-types
@@ -186,6 +166,19 @@
                                           :route :expense-subcategories
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-subcategories})})
+                               (nav-item {:id "user-sidebar-stores"
+                                          :label "Stores"
+                                          :href "/stores"
+                                          :route :expense-stores
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-stores})})
+                               (nav-item {:id "user-sidebar-cities"
+                                          :label "Cities"
+                                          :href "/cities"
+                                          :route :expense-cities
+                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-cities})})
+
                                (nav-item {:id "user-sidebar-article-aliases"
                                           :label "Article Aliases"
                                           :href "/article-aliases"
@@ -198,12 +191,12 @@
                                           :route :expense-supplier-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-supplier-aliases})})
-                               (nav-item {:id "user-sidebar-price-observations"
-                                          :label "Price Observations"
-                                          :href "/price-observations"
-                                          :route :expense-price-observations
-                                          :icon ($ price-observations-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-price-observations})})])))
+                               (nav-item {:id "user-sidebar-store-aliases"
+                                          :label "Store Aliases"
+                                          :href "/store-aliases"
+                                          :route :expense-store-aliases
+                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:expense-store-aliases})})])))
 
         sections [{:title "Expenses" :items expense-items}
                   {:title "Operations" :items operations-items}

@@ -2,6 +2,7 @@
   (:require
     [app.domain.frontend.expenses.events.unmapped-items :as unmapped-events]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-memo use-state]]
@@ -206,29 +207,32 @@
   - :title - optional title string (default: Unmapped Aliases)"
   [{:keys [breadcrumbs title]
     :or {title "Unmapped Aliases"}}]
-  (let [items (use-subscribe [:expenses/unmapped-items])
+  (let [entity-name :unmapped-items
+        items (use-subscribe [:expenses/unmapped-items])
         loading? (use-subscribe [:expenses/unmapped-items-loading?])
         err (use-subscribe [:expenses/unmapped-items-error])
         suppliers (use-subscribe [:expenses/unmapped-items-lookups-suppliers])
         supplier-filter (use-subscribe [:expenses/unmapped-items-supplier-filter])
-        selected-ids (use-subscribe [:expenses/unmapped-items-selected-ids])]
+        selected-ids (use-subscribe [:expenses/unmapped-items-selected-ids])
+        current-page (use-subscribe [:expenses/unmapped-items-current-page])
+        per-page (use-subscribe [:expenses/unmapped-items-per-page])
+        total-items (use-subscribe [:expenses/unmapped-items-total-items])
+        per-page* (if (and (number? per-page) (pos? per-page)) per-page 50)
+        current-page* (if (and (number? current-page) (pos? current-page)) current-page 1)
+        total-items* (if (and (number? total-items) (not (neg? total-items)))
+                       total-items
+                       (count (or items [])))
+        total-pages (max 1 (js/Math.ceil (/ total-items* per-page*)))]
 
     (use-effect
       (fn []
-        ;; Make sure lookup lists exist for the modal.
+        ;; Make sure lookup lists exist for the modal and enable server-backed pagination wiring.
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [::unmapped-events/refresh-unmapped-items-list]])
         (rf/dispatch [::unmapped-events/load-lookups])
+        (rf/dispatch [::unmapped-events/refresh-unmapped-items-list])
         js/undefined)
       [])
-
-    (use-effect
-      (fn []
-        ;; Load items when supplier filter changes.
-        (rf/dispatch [::unmapped-events/load-unmapped-items
-                      {:limit 50
-                       :offset 0
-                       :supplier-id supplier-filter}])
-        js/undefined)
-      [supplier-filter])
 
     ($ :div {:class "p-6 space-y-6"}
       ($ :div {:class "flex items-center justify-between"}
@@ -245,10 +249,7 @@
         ($ :div {:class "flex items-center gap-2"}
           ($ :button {:id "btn-refresh-unmapped-items"
                       :class "ds-btn ds-btn-outline ds-btn-sm"
-                      :on-click #(rf/dispatch [::unmapped-events/load-unmapped-items
-                                               {:limit 50
-                                                :offset 0
-                                                :supplier-id supplier-filter}])}
+                      :on-click #(rf/dispatch [::unmapped-events/refresh-unmapped-items-list])}
             "Refresh")
           ($ :button {:id "btn-map-unmapped-items"
                       :class "ds-btn ds-btn-primary ds-btn-sm"
@@ -262,7 +263,7 @@
 
       ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
         ($ :div {:class "ds-card-body space-y-3"}
-          ($ :div {:class "flex flex-wrap items-center gap-3"}
+          ($ :div {:class "flex flex-wrap items-end gap-3"}
             ($ :div {:class "ds-form-control"}
               ($ :label {:class "label"}
                 ($ :span {:class "label-text"} "Supplier"))
@@ -272,15 +273,57 @@
                           :on-change (fn [e]
                                        (let [v (.. e -target -value)
                                              sid (when (seq v) v)]
-                                         (rf/dispatch [::unmapped-events/set-supplier-filter sid])))}
+                                         (rf/dispatch [::unmapped-events/set-supplier-filter sid])
+                                         (rf/dispatch [::list-ui-state-events/set-current-page entity-name 1])))}
                 ($ :option {:value ""} "All")
                 (for [s (or suppliers [])
                       :let [sid (:id s)
                             label (supplier-option-label s)]]
                   ($ :option {:key (str sid) :value (str sid)} label))))
 
-            ($ :div {:class "text-sm text-base-content/70"}
-              (str "Showing " (count (or items [])) " unmapped alias(es).")))
+            ($ :div {:class "ds-form-control"}
+              ($ :label {:class "label"}
+                ($ :span {:class "label-text"} "Per page"))
+              ($ :select {:id "select-unmapped-items-per-page"
+                          :class "ds-select ds-select-bordered ds-select-sm"
+                          :value (str per-page*)
+                          :on-change (fn [e]
+                                       (let [raw (.. e -target -value)
+                                             parsed (js/parseInt raw 10)
+                                             next-per-page (if (and (number? parsed)
+                                                                 (not (js/isNaN parsed))
+                                                                 (pos? parsed))
+                                                             parsed
+                                                             per-page*)]
+                                         (rf/dispatch [::list-ui-state-events/set-per-page entity-name next-per-page])))}
+                (for [page-size [10 25 50 100]]
+                  ($ :option {:key (str "unmapped-items-per-page-" page-size)
+                              :value (str page-size)}
+                    (str page-size)))))
+
+            ($ :div {:class "flex items-center gap-2 pb-1"}
+              ($ :button {:id "btn-unmapped-items-page-prev"
+                          :class "ds-btn ds-btn-outline ds-btn-sm"
+                          :disabled (or loading? (<= current-page* 1))
+                          :on-click #(rf/dispatch [::list-ui-state-events/set-current-page
+                                                   entity-name
+                                                   (max 1 (dec current-page*))])}
+                "Prev")
+              ($ :span {:id "label-unmapped-items-page"
+                        :class "text-sm text-base-content/70"}
+                (str "Page " current-page* " / " total-pages))
+              ($ :button {:id "btn-unmapped-items-page-next"
+                          :class "ds-btn ds-btn-outline ds-btn-sm"
+                          :disabled (or loading? (>= current-page* total-pages))
+                          :on-click #(rf/dispatch [::list-ui-state-events/set-current-page
+                                                   entity-name
+                                                   (min total-pages (inc current-page*))])}
+                "Next"))
+
+            ($ :div {:class "text-sm text-base-content/70 pb-1"}
+              (str "Showing " (count (or items []))
+                " of " total-items*
+                " unmapped alias(es).")))
 
           (cond
             loading?

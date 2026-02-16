@@ -17,7 +17,7 @@
 (def ^:private models-data
   ;; Minimal models metadata keyed in snake_case, as it often arrives from the DB layer.
   ;; We want subscriptions to tolerate callers using snake_case entity identifiers.
-  {:price_observations
+  {:expense_items
    {:fields
     [[:id :serial {:null false}]
      [:created_at :timestamptz {:null false}]
@@ -55,9 +55,9 @@
     (reset-db! {:models-data models-data})
     (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
 
-    (let [spec-kebab @(rf/subscribe [:entity-specs/by-name :price-observations])
-          spec-snake @(rf/subscribe [:entity-specs/by-name :price_observations])
-          spec-str @(rf/subscribe [:entity-specs/by-name "price_observations"])]
+    (let [spec-kebab @(rf/subscribe [:entity-specs/by-name :expense-items])
+          spec-snake @(rf/subscribe [:entity-specs/by-name :expense_items])
+          spec-str @(rf/subscribe [:entity-specs/by-name "expense_items"])]
       (is (seq spec-kebab) "Sanity: spec should not be empty")
       (is (= spec-kebab spec-snake) "snake_case keyword should resolve to the same spec")
       (is (= spec-kebab spec-str) "snake_case string should resolve to the same spec")
@@ -68,9 +68,9 @@
   (testing ":form-entity-specs/by-name resolves the same spec for snake_case and kebab-case entity identifiers"
     (reset-db! {:models-data models-data})
 
-    (let [spec-kebab @(rf/subscribe [:form-entity-specs/by-name :price-observations])
-          spec-snake @(rf/subscribe [:form-entity-specs/by-name :price_observations])
-          spec-str @(rf/subscribe [:form-entity-specs/by-name "price_observations"])]
+    (let [spec-kebab @(rf/subscribe [:form-entity-specs/by-name :expense-items])
+          spec-snake @(rf/subscribe [:form-entity-specs/by-name :expense_items])
+          spec-str @(rf/subscribe [:form-entity-specs/by-name "expense_items"])]
       (is (seq spec-kebab) "Sanity: form spec should not be empty")
       (is (= spec-kebab spec-snake) "snake_case keyword should resolve to the same form spec")
       (is (= spec-kebab spec-str) "snake_case string should resolve to the same form spec")

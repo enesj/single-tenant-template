@@ -91,13 +91,6 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `PUT /admin/api/expenses/article-aliases/:id` – update alias.
 - `DELETE /admin/api/expenses/article-aliases/:id` – delete alias.
 
-### Price Observations
-- `GET /admin/api/expenses/price-observations` – list price observations with filters.
-- `POST /admin/api/expenses/price-observations` – create new price observation.
-- `GET /admin/api/expenses/price-observations/:id` – fetch price observation.
-- `PUT /admin/api/expenses/price-observations/:id` – update price observation.
-- `DELETE /admin/api/expenses/price-observations/:id` – delete price observation.
-
 ### Reports
 - `GET /admin/api/expenses/reports/summary` – totals for range.
 - `GET /admin/api/expenses/reports/payers` – breakdown by payer.
@@ -137,7 +130,6 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 **Supplier detail lists (used by supplier detail UI)**
 - `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier).
-- `GET /api/v1/expenses/price-observations` – list price observations (typically filtered by supplier).
 
 - `GET /api/v1/expenses/payers` – list payers.
 - `POST /api/v1/expenses/payers` – create payer (role-gated to `member|admin`).
@@ -151,7 +143,10 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 
 ### Receipts
 - `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
-- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit/offset`, `order_dir`). Response now includes each receipt’s `payer_id` so caller sees the upload-selected payer without fetching the detail again.
+- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit`, `offset`, `order-dir`).
+  - `status` accepts a single value or multiple values (comma-separated or repeated params).
+  - Response includes pagination metadata: `{:data [...], :total n, :limit n, :offset n}`.
+  - Each receipt row includes `payer_id` so callers see upload-selected payer without fetching detail again.
 - `GET /api/v1/expenses/receipts/:id/download` – download/inline view the original file (`?download=true` forces attachment).
 - `GET /api/v1/expenses/receipts/:id` – fetch receipt.
 - `DELETE /api/v1/expenses/receipts/:id` – delete receipt.

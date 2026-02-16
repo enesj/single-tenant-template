@@ -14,6 +14,10 @@
       ::test-initialize-db
       (fn [_ _]
         helpers/valid-test-db-state))
+    (rf/reg-event-db
+      ::test-refresh
+      (fn [db [_ marker]]
+        (assoc-in db [:test :last-refresh] marker)))
     true))
 
 (defn- current-page-path [entity]
@@ -31,6 +35,32 @@
       (is (= 3 (get-in db (current-page-path :items))) "Should update compact current-page path")
       (is (= 3 (get-in pagination [:current-page])) "Should sync legacy :current-page")
       (is (= 3 (get-in pagination [:pagination :current-page])) "Should sync :pagination map"))
+
+    (testing "Server mode dispatches configured refresh event"
+      (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :server])
+      (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :current-page]])
+      (let [refresh-dispatches (atom [])]
+        (rf/reg-fx :dispatch (fn [event]
+                               (swap! refresh-dispatches conj event)))
+        (try
+          (rf/dispatch-sync [::ui-state-events/set-current-page :items 2])
+          (is (= [[::test-refresh :current-page]] @refresh-dispatches)
+            "Server mode should dispatch configured refresh event")
+          (finally
+            (rf/reg-fx :dispatch rf/dispatch)))))
+
+    (testing "Client mode does not dispatch refresh event"
+      (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :client])
+      (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :client]])
+      (let [refresh-dispatches (atom [])]
+        (rf/reg-fx :dispatch (fn [event]
+                               (swap! refresh-dispatches conj event)))
+        (try
+          (rf/dispatch-sync [::ui-state-events/set-current-page :items 4])
+          (is (empty? @refresh-dispatches)
+            "Client mode should not dispatch refresh event")
+          (finally
+            (rf/reg-fx :dispatch rf/dispatch)))))
 
     (testing "Page number is clamped to >= 1"
       (rf/dispatch-sync [::ui-state-events/set-current-page :items 0])
@@ -56,6 +86,32 @@
       (is (= 25 (get-in pagination [:pagination :per-page])) "Should sync pagination map")
       (is (= 1 (get-in db (current-page-path :items))) "Setting per-page resets current page to 1"))
 
+    (testing "Server mode dispatches configured refresh event"
+      (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :server])
+      (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :per-page]])
+      (let [refresh-dispatches (atom [])]
+        (rf/reg-fx :dispatch (fn [event]
+                               (swap! refresh-dispatches conj event)))
+        (try
+          (rf/dispatch-sync [::ui-state-events/set-per-page :items 30])
+          (is (= [[::test-refresh :per-page]] @refresh-dispatches)
+            "Server mode should dispatch configured refresh event")
+          (finally
+            (rf/reg-fx :dispatch rf/dispatch)))))
+
+    (testing "Client mode does not dispatch refresh event"
+      (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :client])
+      (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :client-per-page]])
+      (let [refresh-dispatches (atom [])]
+        (rf/reg-fx :dispatch (fn [event]
+                               (swap! refresh-dispatches conj event)))
+        (try
+          (rf/dispatch-sync [::ui-state-events/set-per-page :items 15])
+          (is (empty? @refresh-dispatches)
+            "Client mode should not dispatch refresh event")
+          (finally
+            (rf/reg-fx :dispatch rf/dispatch)))))
+
     (testing "Non-numeric per-page falls back to default"
       (rf/dispatch-sync [::ui-state-events/set-per-page :items "bad-value"])
       (is (= 10 (get-in @rf-db/app-db (paths/list-per-page :items))) "Should fall back to 10 when parse fails"))
@@ -64,6 +120,33 @@
       (let [before @rf-db/app-db]
         (rf/dispatch-sync [::ui-state-events/set-per-page nil 20])
         (is (= before @rf-db/app-db) "Nil entity should not mutate state")))))
+
+(deftest pagination-mode-and-refresh-event-infra-test
+  (testing "Pagination mode defaults/coercion and refresh-event storage"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
+
+    (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :server])
+    (is (= :server (get-in @rf-db/app-db (paths/list-pagination-mode :items)))
+      "Should store explicit :server mode")
+
+    (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :unexpected])
+    (is (= :client (get-in @rf-db/app-db (paths/list-pagination-mode :items)))
+      "Unknown mode should normalize to :client")
+
+    (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [:expenses/fetch-page]])
+    (is (= [:expenses/fetch-page]
+          (get-in @rf-db/app-db (paths/list-refresh-event :items)))
+      "Should store vector refresh event")
+
+    (is (= [:expenses/fetch-page]
+          (ui-state-events/list-refresh-dispatch @rf-db/app-db :items))
+      "Helper should return stored vector dispatch")
+
+    (rf/dispatch-sync [::ui-state-events/set-refresh-event :items :expenses/fetch-page])
+    (is (= [:expenses/fetch-page]
+          (ui-state-events/list-refresh-dispatch @rf-db/app-db :items))
+      "Helper should wrap keyword event ids as dispatch vectors")))
 
 (deftest sort-config-test
   (testing "Setting sort field toggles direction correctly"

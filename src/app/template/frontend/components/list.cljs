@@ -1,15 +1,16 @@
 (ns app.template.frontend.components.list
   (:require
-    [app.template.frontend.utils.id :as id-utils]
     [app.shared.keywords :as kw]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
     [app.template.frontend.components.filter :refer [filter-form]]
+    [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.components.filter.ui :refer [compact-active-filters]]
+    [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.components.list.rows :refer [render-row]]
     [app.template.frontend.components.list.table :refer [make-table-headers]]
     [app.template.frontend.components.list.ui :refer [add-item-section
                                                       header-section]]
-    [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.components.messages :refer [error-alert]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.pagination :refer [pagination]]
@@ -23,14 +24,125 @@
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.subs.entity :as entity-subs]
-    [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.subs.form :as form-subs]
+    [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.subs.ui :as ui-subs]
     [app.template.frontend.utils.column-config :as column-config]
+    [app.template.frontend.utils.id :as id-utils]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :as uix :refer [$ defui use-effect use-state]]
     [uix.dom]
     [uix.re-frame :refer [use-subscribe]]))
+
+(defn- entity-spec-fields
+  [entity-spec]
+  (cond
+    (and (map? entity-spec) (sequential? (:fields entity-spec)))
+    (:fields entity-spec)
+
+    (sequential? entity-spec)
+    entity-spec
+
+    :else
+    []))
+
+(defn- resolve-row-field
+  [item entity-name fld]
+  (let [direct (get item fld)]
+    (if (some? direct)
+      direct
+      (let [by-db (when (keyword? fld)
+                    (get item (model-naming/app-keyword->db fld)))]
+        (if (some? by-db)
+          by-db
+          (let [ns-key (when (and entity-name fld)
+                         (keyword (name entity-name) (name fld)))
+                by-ns (when ns-key (get item ns-key))]
+            (if (some? by-ns)
+              by-ns
+              (some (fn [[k v]]
+                      (when (and (keyword? k)
+                              (= (name k) (name fld)))
+                        v))
+                item))))))))
+
+(defn- infer-filter-type
+  [filter-value]
+  (cond
+    (vector? filter-value)
+    :select
+
+    (and (map? filter-value)
+      (or (contains? filter-value :min)
+        (contains? filter-value :max)))
+    :number-range
+
+    (and (map? filter-value)
+      (or (contains? filter-value :from)
+        (contains? filter-value :to)))
+    :date-range
+
+    :else
+    :text))
+
+(defn- apply-override-filters
+  [rows active-filters]
+  (if (empty? active-filters)
+    rows
+    (vec
+      (filter (fn [item]
+                (every? (fn [[field-id filter-value]]
+                          (filter-helpers/matches-filter? {:item item
+                                                           :field-id field-id
+                                                           :filter-value filter-value
+                                                           :filter-type (infer-filter-type filter-value)}))
+                  active-filters))
+        rows))))
+
+(defn- sort-override-rows
+  [rows {:keys [sort-config entity-name entity-spec]}]
+  (let [{:keys [field direction]} sort-config
+        field (some-> field model-naming/ensure-app-keyword)
+        field-spec (some (fn [spec]
+                           (when (= (some-> (:id spec) model-naming/ensure-app-keyword name)
+                                   (some-> field name))
+                             spec))
+                     (entity-spec-fields entity-spec))
+        date-field? (contains? #{"datetime-local" "date" "time"}
+                      (some-> field-spec :input-type kw/ensure-name))
+        normalize (fn [v]
+                    (cond
+                      (nil? v) nil
+                      (string? v)
+                      (if date-field?
+                        (let [d (try (js/Date. v) (catch :default _ nil))]
+                          (if (and d (not (js/isNaN (.getTime d))))
+                            (.getTime d)
+                            (str/lower-case v)))
+                        (str/lower-case v))
+                      (boolean? v) (if v 1 0)
+                      (instance? js/Date v) (.getTime v)
+                      :else v))]
+    (if (and field direction)
+      (let [sorted (sort-by (fn [item]
+                              (let [v (normalize (resolve-row-field item entity-name field))
+                                    nil-key (if (some? v) 1 0)]
+                                [nil-key v]))
+                     rows)]
+        (if (= direction :desc)
+          (reverse sorted)
+          sorted))
+      rows)))
+
+(defn- apply-rows-override-transforms
+  [{:keys [rows active-filters sort-config entity-name entity-spec]}]
+  (-> rows
+    (apply-override-filters active-filters)
+    (sort-override-rows {:sort-config sort-config
+                         :entity-name entity-name
+                         :entity-spec entity-spec})
+    vec))
 
 (defui list-view
   "Renders a list of items with pagination, add form, and error handling.
@@ -52,10 +164,21 @@
    Modal callbacks:
    - :on-add-success - Called after successful add (closes modal, can trigger refresh)
    - :on-edit-success - Called after successful edit (closes modal, can trigger refresh)"
-  [{:keys [entity-name entity-spec title display-settings filterable-columns per-page
-           allow-add? disallowed-action-mode
-           ;; New props for custom forms and modal support
-           render-add-form render-edit-form form-display on-add-success on-edit-success]
+  [{:keys [entity-name
+           entity-spec
+           title
+           display-settings
+           filterable-columns
+           per-page
+           rows-override
+           pagination-override
+           allow-add?
+           disallowed-action-mode
+           render-add-form
+           render-edit-form
+           form-display
+           on-add-success
+           on-edit-success]
     :as props}]
   (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
         items (use-subscribe [::entity-subs/paginated-entities entity-name])
@@ -121,8 +244,30 @@
         effective-per-page (or existing-per-page
                              (when configured-per-page-usable? configured-per-page)
                              10)
+        raw-items (vec (or (if (some? rows-override)
+                             rows-override
+                             items)
+                         []))
+        effective-items (if (some? rows-override)
+                          (apply-rows-override-transforms
+                            {:rows raw-items
+                             :active-filters active-filters
+                             :sort-config sort-config
+                             :entity-name entity-kw
+                             :entity-spec entity-spec})
+                          raw-items)
+        pagination-current-page (or (:current-page pagination-override)
+                                  current-page
+                                  1)
+        pagination-total-pages (max 1
+                                 (or (:total-pages pagination-override)
+                                   total-pages
+                                   1))
+        on-page-change (or (:on-page-change pagination-override)
+                         #(rf/dispatch [::ui-events/set-current-page entity-name %]))
+        on-per-page-change (or (:on-per-page-change pagination-override)
+                             #(rf/dispatch [::ui-events/set-per-page entity-name %]))
         {:keys [show-highlights?]} merged-display-settings
-        ;; Subscribe to table width configuration for header alignment
         table-width (use-subscribe [::settings-events/table-width (some-> entity-name keyword)])
 
         ;; Column order preferences (drag-and-drop settings)
@@ -241,7 +386,7 @@
 
           ;; Handle select all / deselect all
           handle-select-all (fn [select-all?]
-                              (rf/dispatch [::selection-events/select-all entity-name items select-all?]))
+                              (rf/dispatch [::selection-events/select-all entity-name effective-items select-all?]))
 
           ;; Handle inline filter click
           handle-inline-filter-click (fn [field-id field-spec]
@@ -358,7 +503,7 @@
                           (render-row base-props {:item item}))
 
           table-headers (make-table-headers (assoc base-props
-                                              :all-items items
+                                              :all-items effective-items
                                               :on-select-all handle-select-all
                                               :active-filters active-filters
 
@@ -521,7 +666,7 @@
                 ;; If show-add-form? is true (inline mode), display the add item section
                 ($ add-item-section base-props)
                 ;; Otherwise, display the table with pagination in same container
-                (let [items-vec (vec (or items []))
+                (let [items-vec effective-items
                       disallowed-mode (or disallowed-action-mode :hide)
                       disable-mode? (= disallowed-mode :disable)
                       policy-show-add-button? (not (false? (:show-add-button? merged-display-settings)))
@@ -560,18 +705,18 @@
                        :page-display-settings hardcoded-view-options
                          ;; Pass rows per page props to table for settings panel
                        :per-page effective-per-page
-                       :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])
+                       :on-per-page-change on-per-page-change
                        :rows-per-page-options [5 10 20 25 50 100]})
                       ;; Display pagination controls within same container as table
                       ;; Check both pagination display setting and whether there are multiple pages
                     (when (and (get merged-display-settings :show-pagination? true)
-                            (> total-pages 1))
+                            (> pagination-total-pages 1))
                       ($ pagination
-                        {:current-page current-page
-                         :total-pages total-pages
-                         :on-page-change #(rf/dispatch [::ui-events/set-current-page entity-name %])
-                           ;; Pass rows per page data and options
+                        {:current-page pagination-current-page
+                         :total-pages pagination-total-pages
+                         :on-page-change on-page-change
+                         ;; Pass rows per page data and options
                          :per-page effective-per-page
-                         :on-per-page-change #(rf/dispatch [::ui-events/set-per-page entity-name %])
+                         :on-per-page-change on-per-page-change
                          :rows-per-page-options [5 10 20 25 50 100]
                          :entity-name entity-name}))))))))))))

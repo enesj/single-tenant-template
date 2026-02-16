@@ -19,9 +19,12 @@
             options (merge pagination
                       {:principal-type principal-type
                        :success? success})
-            events (login-monitoring/list-login-events db options)]
-        (log/info "ADMIN LOGIN EVENTS: fetched events" {:count (count events)})
-        (utils/json-response {:events events})))
+            {:keys [events total limit offset]} (login-monitoring/list-login-events-page db options)]
+        (log/info "ADMIN LOGIN EVENTS: fetched events" {:count (count events) :total total})
+        (utils/json-response {:events events
+                              :total total
+                              :limit limit
+                              :offset offset})))
     "Failed to retrieve login events"))
 
 (defn delete-login-event-handler

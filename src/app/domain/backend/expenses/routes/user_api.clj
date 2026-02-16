@@ -19,7 +19,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
     [app.domain.backend.expenses.handlers.user-manufacturers :as user-manufacturers]
-    [app.domain.backend.expenses.handlers.user-price-observations :as user-price-observations]
+
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]
     [app.domain.backend.expenses.handlers.user-store-aliases :as user-store-aliases]
     [app.domain.backend.expenses.handlers.user-stores :as user-stores]
@@ -106,14 +106,6 @@
     {:delete {:handler (user-store-aliases/batch-delete-store-aliases-handler db)}}]
 
    ["/store-aliases/:id" {:put {:handler (user-store-aliases/update-store-alias-handler db)}}]
-
-   ["/price-observations"
-    ["" {:get {:handler (supplier-detail/list-price-observations-handler db)}}]
-
-    ["/batch" {:delete {:handler (user-price-observations/batch-delete-price-observations-handler db)}}]
-
-    ["/:id"
-     {:put {:handler (user-price-observations/update-price-observation-handler db)}}]]
 
    ["/payers"
     {:get {:handler (user-expenses-reference-data/list-payers-handler db)}

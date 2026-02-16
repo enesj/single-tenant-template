@@ -6,6 +6,7 @@
     [app.template.frontend.components.action-components :refer [view-details-icon]]
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
@@ -146,7 +147,7 @@
         [last-checked set-last-checked!] (use-state nil)
         refresh! (use-callback
                    (fn []
-                     (rf/dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}])
+                     (rf/dispatch [:user-expenses/refresh-receipts-list])
                      (set-last-checked! (js/Date.)))
                    [])
         parse-selected! (use-callback
@@ -173,6 +174,8 @@
     ;; Initial load
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode :receipts :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event :receipts [:user-expenses/refresh-receipts-list]])
         (refresh!)
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-settings])

@@ -26,9 +26,38 @@
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
 
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- current-cities-page-params
+  [db]
+  (let [entity-key :cities
+        per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
+                   10)
+        current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
+                       1)]
+    {:limit per-page
+     :offset (* (max 0 (dec current-page)) per-page)}))
+
 ;; ---------------------------------------------------------------------------
 ;; Cities
 ;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/refresh-cities-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-cities (current-cities-page-params db)]}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-cities
@@ -47,8 +76,10 @@
   :user-expenses/fetch-cities-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [cities (vec (or (:data response) []))]
-      {:db (finish-entity-load db :cities nil)
+    (let [cities (vec (or (:data response) []))
+          total (or (:total response) (count cities))]
+      {:db (-> (finish-entity-load db :cities nil)
+             (assoc-in (paths/list-total-items :cities) total))
        :dispatch [::expenses-sync/sync-cities cities]})))
 
 (rf/reg-event-db
@@ -83,7 +114,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :cities highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-cities]]
+       :dispatch-n [[:user-expenses/refresh-cities-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success city]}])]})))
@@ -122,7 +153,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> (seq highlight-id)
                (crud-success/track-recently-updated :cities highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-cities]]
+       :dispatch-n [[:user-expenses/refresh-cities-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -156,7 +187,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-cities]}))
+     :dispatch [:user-expenses/refresh-cities-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-city-failure

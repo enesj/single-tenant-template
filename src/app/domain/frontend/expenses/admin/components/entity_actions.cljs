@@ -98,11 +98,6 @@
   (when article-aliases
     (render-actions-dropdown "article-aliases" article-aliases)))
 
-(defui admin-price-observations-actions
-  [{:keys [price-observations]}]
-  (when price-observations
-    (render-actions-dropdown "price-observations" price-observations)))
-
 (defui admin-expense-items-actions
   [{:keys [expense-items]}]
   (when expense-items

@@ -4,7 +4,7 @@
   These pages are rendered in the app build (not the admin panel) and are
   role-gated in the UI + backend."
   (:require
-    [ajax.core :as ajax]
+
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
@@ -12,6 +12,7 @@
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.crud.success :as crud-success]
+    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (defn- begin-entity-load
@@ -25,6 +26,87 @@
   (-> db
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
+
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- normalize-filter-value
+  [value]
+  (cond
+    (map? value) (or (normalize-filter-value (:value value))
+                   (normalize-filter-value (get value "value")))
+    (keyword? value) (name value)
+    (string? value) (some-> value str/trim not-empty)
+    (vector? value) (let [items (->> value
+                                  (map normalize-filter-value)
+                                  (remove nil?)
+                                  vec)]
+                      (when (seq items)
+                        items))
+    (sequential? value) (let [items (->> value
+                                      (map normalize-filter-value)
+                                      (remove nil?)
+                                      vec)]
+                          (when (seq items)
+                            items))
+    :else value))
+
+(defn- normalize-filter-params
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (let [normalized (normalize-filter-value v)]
+        (if (nil? normalized)
+          acc
+          (assoc acc k normalized))))
+    {}
+    (or filters {})))
+
+(defn- current-list-page-params
+  [db entity-key default-limit]
+  (let [per-page (or (parse-pos-int (get-in db [:ui :lists entity-key :per-page]))
+                   default-limit)
+        current-page (or (parse-pos-int (get-in db [:ui :lists entity-key :current-page]))
+                       1)
+        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))
+        filters (normalize-filter-params (get-in db [:ui :lists entity-key :filters]))]
+    (cond-> (merge {:limit per-page
+                    :offset (* (max 0 (dec current-page)) per-page)}
+              filters)
+      (some? order-dir) (assoc :order-dir order-dir))))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-articles-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-articles (current-list-page-params db :articles 200)]}))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-expense-items-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-expense-items (current-list-page-params db :expense-items 200)]}))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-article-aliases-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-article-aliases (current-list-page-params db :article-aliases 200)]}))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-supplier-aliases-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-supplier-aliases (current-list-page-params db :supplier-aliases 200)]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Articles (power-user only)
@@ -48,8 +130,10 @@
   :user-expenses/fetch-articles-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [articles (vec (or (:data response) []))]
-      {:db (finish-entity-load db :articles nil)
+    (let [articles (vec (or (:data response) []))
+          total (or (:total response) (count articles))]
+      {:db (-> (finish-entity-load db :articles nil)
+             (assoc-in (paths/list-total-items :articles) total))
        :dispatch [::expenses-sync/sync-articles articles]})))
 
 (rf/reg-event-db
@@ -80,7 +164,7 @@
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil))
-       :dispatch-n [[:user-expenses/fetch-articles]]
+       :dispatch-n [[:user-expenses/refresh-articles-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success article]}])]})))
@@ -118,7 +202,7 @@
            (assoc-in [:user-expenses :form :error] nil)
            (cond-> (seq article-id)
              (crud-success/track-recently-updated :articles article-id)))
-     :dispatch-n [[:user-expenses/fetch-articles]]
+     :dispatch-n [[:user-expenses/refresh-articles-list]]
      :fx [(when on-success
             [:dispatch-later {:ms 100
                               :dispatch [:user-expenses/call-modal-callback on-success]}])]}))
@@ -151,7 +235,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-articles]}))
+     :dispatch [:user-expenses/refresh-articles-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-article-failure
@@ -183,8 +267,10 @@
   :user-expenses/fetch-expense-items-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [items (vec (or (:data response) []))]
-      {:db (finish-entity-load db :expense-items nil)
+    (let [items (vec (or (:data response) []))
+          total (or (:total response) (count items))]
+      {:db (-> (finish-entity-load db :expense-items nil)
+             (assoc-in (paths/list-total-items :expense-items) total))
        :dispatch [::expenses-sync/sync-expense-items items]})))
 
 (rf/reg-event-db
@@ -218,7 +304,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :expense-items highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-expense-items]]
+       :dispatch-n [[:user-expenses/refresh-expense-items-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -250,7 +336,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-expense-items]}))
+     :dispatch [:user-expenses/refresh-expense-items-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-expense-item-failure
@@ -282,8 +368,10 @@
   :user-expenses/fetch-article-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) []))]
-      {:db (finish-entity-load db :article-aliases nil)
+    (let [aliases (vec (or (:data response) []))
+          total (or (:total response) (count aliases))]
+      {:db (-> (finish-entity-load db :article-aliases nil)
+             (assoc-in (paths/list-total-items :article-aliases) total))
        :dispatch [::expenses-sync/sync-article-aliases aliases]})))
 
 (rf/reg-event-db
@@ -323,7 +411,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :article-aliases highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-article-aliases]]
+       :dispatch-n [[:user-expenses/refresh-article-aliases-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -356,7 +444,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-article-aliases]}))
+     :dispatch [:user-expenses/refresh-article-aliases-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-article-alias-failure
@@ -388,8 +476,10 @@
   :user-expenses/fetch-supplier-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) []))]
-      {:db (finish-entity-load db :supplier-aliases nil)
+    (let [aliases (vec (or (:data response) []))
+          total (or (:total response) (count aliases))]
+      {:db (-> (finish-entity-load db :supplier-aliases nil)
+             (assoc-in (paths/list-total-items :supplier-aliases) total))
        :dispatch [::expenses-sync/sync-supplier-aliases aliases]})))
 
 (rf/reg-event-db
@@ -428,7 +518,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :supplier-aliases highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-supplier-aliases]]
+       :dispatch-n [[:user-expenses/refresh-supplier-aliases-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -461,7 +551,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-supplier-aliases]}))
+     :dispatch [:user-expenses/refresh-supplier-aliases-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-supplier-alias-failure
@@ -471,102 +561,6 @@
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 
-;; Price observations (read-only list for now; supplier detail also uses the same endpoint)
-;; ---------------------------------------------------------------------------
 
-(rf/reg-event-fx
-  :user-expenses/fetch-price-observations
-  common-interceptors
-  (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :price-observations)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/price-observations-endpoint
 
-                      :params request-params
-                      :on-success [:user-expenses/fetch-price-observations-success]
-                      :on-failure [:user-expenses/fetch-price-observations-failure]})})))
-
-(rf/reg-event-fx
-  :user-expenses/fetch-price-observations-success
-  common-interceptors
-  (fn [{:keys [db]} [response]]
-    (let [observations (vec (or (:data response) []))]
-      {:db (finish-entity-load db :price-observations nil)
-       :dispatch [::expenses-sync/sync-price-observations observations]})))
-
-(rf/reg-event-db
-  :user-expenses/fetch-price-observations-failure
-  common-interceptors
-  (fn [db [error]]
-    (finish-entity-load db :price-observations error)))
-
-(rf/reg-event-fx
-  :user-expenses/update-price-observation-modal
-  common-interceptors
-  (fn [{:keys [db]} [price-observation-id form-data on-success]]
-    (let [price-observation-id-str (some-> price-observation-id str)]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] true)
-             (assoc-in [:user-expenses :form :error] nil))
-       :http-xhrio (x/xhrio db
-                     {:method :put
-                      :uri (str endpoints/price-observations-endpoint "/" price-observation-id-str)
-
-                      :params (or form-data {})
-                      :on-success [:user-expenses/update-price-observation-modal-success price-observation-id-str on-success]
-                      :on-failure [:user-expenses/update-price-observation-modal-failure]})})))
-
-(rf/reg-event-fx
-  :user-expenses/update-price-observation-modal-success
-  common-interceptors
-  (fn [{:keys [db]} [price-observation-id on-success _response]]
-    {:db (-> db
-           (assoc-in [:user-expenses :form :loading?] false)
-           (assoc-in [:user-expenses :form :error] nil)
-           (cond-> (seq price-observation-id)
-             (crud-success/track-recently-updated :price-observations price-observation-id)))
-     :dispatch-n [[:user-expenses/fetch-price-observations]]
-     :fx [(when on-success
-            [:dispatch-later {:ms 100
-                              :dispatch [:user-expenses/call-modal-callback on-success]}])]}))
-
-(rf/reg-event-db
-  :user-expenses/update-price-observation-modal-failure
-  common-interceptors
-  (fn [db [error]]
-    (-> db
-      (assoc-in [:user-expenses :form :loading?] false)
-      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
-
-(rf/reg-event-fx
-  :user-expenses/delete-price-observation
-  common-interceptors
-  (fn [{:keys [db]} [price-observation-id]]
-    (let [price-observation-id-str (some-> price-observation-id str)]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] true)
-             (assoc-in [:user-expenses :form :error] nil))
-       :http-xhrio (x/xhrio db
-                     {:method :delete
-                      :uri (str endpoints/price-observations-endpoint "/batch")
-                      :params {:ids [price-observation-id-str]}
-                      :on-success [:user-expenses/delete-price-observation-success]
-                      :on-failure [:user-expenses/delete-price-observation-failure]})})))
-
-(rf/reg-event-fx
-  :user-expenses/delete-price-observation-success
-  common-interceptors
-  (fn [{:keys [db]} [_response]]
-    {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-price-observations]}))
-
-(rf/reg-event-db
-  :user-expenses/delete-price-observation-failure
-  common-interceptors
-  (fn [db [error]]
-    (-> db
-      (assoc-in [:user-expenses :form :loading?] false)
-      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 

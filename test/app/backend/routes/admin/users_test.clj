@@ -1,15 +1,20 @@
 (ns app.backend.routes.admin.users-test
   "Tests for admin user management services.
-   
+
    Tests user listing, search, and data normalization."
   (:require
     [app.admin.backend.services.admin.users :as users]
+    [app.backend.test-helpers :as h]
     [app.shared.adapters.normalization :as norm]
-    [clojure.test :refer [deftest is testing]]))
+    [app.template.backend.routes.admin.users :as users-routes]
+    [clojure.string :as str]
+    [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================================
 ;; User Data Normalization Tests
 ;; ============================================================================
+
+(use-fixtures :each h/with-clean-test-state)
 
 (deftest user-data-normalization-test
   (testing "normalize-admin-result handles basic user data"
@@ -20,7 +25,7 @@
                    :users/email "test@example.com"
                    :users/full_name "Test User"
                    :users/status "active"}
-            normalized (norm/normalize-admin-result db-user config)]
+          normalized (norm/normalize-admin-result db-user config)]
       (is (map? normalized))
       (is (= "test@example.com" (:email normalized)))
       (is (= "Test User" (:full-name normalized)))))
@@ -29,7 +34,7 @@
     (let [config {:prefixes [] :namespaces #{} :id-fields #{:id}}
           simple-user {:id #uuid "123e4567-e89b-12d3-a456-426614174000"
                        :email "test@example.com"}
-            normalized (norm/normalize-admin-result simple-user config)]
+          normalized (norm/normalize-admin-result simple-user config)]
       (is (= "test@example.com" (:email normalized)))))
 
   (testing "normalize-admin-result handles nil gracefully"
@@ -51,6 +56,67 @@
     (with-redefs [users/search-users-advanced (fn [_ _] [])]
       (let [result (users/search-users-advanced nil {:search "test"})]
         (is (empty? result))))))
+
+(deftest list-users-handler-pagination-metadata-test
+  (testing "list-users handler returns users, total, limit, and offset with filter-aware total"
+    (let [db (h/mock-db)
+          handler (users-routes/list-users-handler db)
+          request (h/mock-admin-request :get "/admin/api/users" {:id (random-uuid)}
+                    {:params {:search "ali"
+                              :status "active"
+                              :email-verified "true"
+                              :limit "2"
+                              :offset "0"}})
+          sample-users [{:id (random-uuid)
+                         :email "alice@example.com"
+                         :full_name "Alice Doe"
+                         :status "active"
+                         :email_verified true}
+                        {:id (random-uuid)
+                         :email "alex@example.com"
+                         :full_name "Alex Active"
+                         :status "active"
+                         :email_verified true}
+                        {:id (random-uuid)
+                         :email "bob@example.com"
+                         :full_name "Bob Inactive"
+                         :status "inactive"
+                         :email_verified true}
+                        {:id (random-uuid)
+                         :email "charlie@example.com"
+                         :full_name "Charlie Pending"
+                         :status "active"
+                         :email_verified false}]]
+      (with-redefs [users/list-all-users-page
+                    (fn [_db opts]
+                      (is (= "ali" (:search opts)))
+                      (is (= "active" (:status opts)))
+                      (is (true? (:email-verified opts)))
+                      (is (= 2 (:limit opts)))
+                      (is (= 0 (:offset opts)))
+                      (let [needle (str/lower-case (:search opts))
+                            matches? (fn [user]
+                                       (and (= (:status opts) (:status user))
+                                         (= (:email-verified opts) (:email_verified user))
+                                         (or (str/includes? (str/lower-case (:email user)) needle)
+                                           (str/includes? (str/lower-case (:full_name user)) needle))))
+                            filtered (vec (filter matches? sample-users))
+                            paged (->> filtered
+                                    (drop (:offset opts))
+                                    (take (:limit opts))
+                                    vec)]
+                        {:users paged
+                         :total (count filtered)
+                         :limit (:limit opts)
+                         :offset (:offset opts)}))]
+        (let [response (handler request)
+              body (h/parse-response-body response)]
+          (is (= 200 (:status response)))
+          (is (vector? (:users body)))
+          (is (= 1 (:total body)))
+          (is (= 2 (:limit body)))
+          (is (= 0 (:offset body)))
+          (is (= 1 (count (:users body)))))))))
 
 ;; ============================================================================
 ;; User Filter Logic Tests

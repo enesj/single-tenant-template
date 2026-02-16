@@ -20,21 +20,21 @@
     (.setItem js/localStorage
       "ui-entity-prefs"
       (pr-str
-        {:price_observations {:columns {:visible {:id false}}
-                              :filters {:fields {:created_at true}}}}))
+        {:expense_items {:columns {:visible {:id false}}
+                         :filters {:fields {:created_at true}}}}))
 
     ;; Existing in-memory prefs under the canonical kebab-case key.
     (swap! rf-db/app-db assoc-in
-      [:ui :entity-prefs :price-observations :display]
+      [:ui :entity-prefs :expense-items :display]
       {:show-edit? true})
 
     (rf/dispatch-sync [::persistence/load-stored-prefs])
 
     (let [prefs (get-in @rf-db/app-db [:ui :entity-prefs])]
-      (is (contains? prefs :price-observations) "Prefs should exist under canonical kebab-case key")
-      (is (not (contains? prefs :price_observations)) "Snake_case key should not remain after normalization")
+      (is (contains? prefs :expense-items) "Prefs should exist under canonical kebab-case key")
+      (is (not (contains? prefs :expense_items)) "Snake_case key should not remain after normalization")
 
       ;; Deep merge should preserve both existing in-memory prefs and stored prefs.
-      (is (= true (get-in prefs [:price-observations :display :show-edit?])))
-      (is (= false (get-in prefs [:price-observations :columns :visible :id])))
-      (is (= true (get-in prefs [:price-observations :filters :fields :created-at]))))))
+      (is (= true (get-in prefs [:expense-items :display :show-edit?])))
+      (is (= false (get-in prefs [:expense-items :columns :visible :id])))
+      (is (= true (get-in prefs [:expense-items :filters :fields :created-at]))))))

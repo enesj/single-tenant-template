@@ -21,9 +21,13 @@
                      :entity-id (when (:entity-id params)
                                   (utils/parse-uuid-custom (:entity-id params)))
                      :action (:action params)}
-            logs (audit-service/get-audit-logs db (merge filters pagination))]
+            {:keys [logs total limit offset]}
+            (audit-service/get-audit-logs-page db (merge filters pagination))]
         ;; Convert any remaining PostgreSQL objects for JSON serialization
-        (utils/json-response {:logs (shared-db/convert-pg-objects logs)})))
+        (utils/json-response {:logs (shared-db/convert-pg-objects logs)
+                              :total total
+                              :limit limit
+                              :offset offset})))
     "Failed to retrieve audit logs"))
 
 (defn delete-audit-log-handler

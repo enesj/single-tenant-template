@@ -13,7 +13,7 @@
    :admin-domain-groups
    {:expenses
     {:title "Expenses Management"
-     :description "Manage articles, suppliers, manufacturers, and price observations"
+     :description "Manage articles, suppliers, and manufacturers"
      :icon "💰"
      :entities #{:articles
                  :article-aliases
@@ -24,7 +24,7 @@
                  :subcategories
                  :stores
                  :store-aliases
-                 :price-observations
+
                  :unmapped-aliases}
      :color "accent"
      :scope :admin}}
@@ -43,8 +43,7 @@
                  :articles
                  :categories
                  :subcategories
-                 :article-aliases
-                 :price-observations}
+                 :article-aliases}
      :color "accent"
      :scope :user}}})
 

@@ -8,6 +8,21 @@
 (def ^:private power-user-roles
   #{"admin" "owner"})
 
+(def ^:private max-page-limit
+  500)
+
+(defn- parse-page-limit
+  [params default-limit]
+  (-> (or (some-> (h/get-param params :limit) parse-long)
+        default-limit)
+    long
+    (max 1)
+    (min max-page-limit)))
+
+(defn- parse-page-offset
+  [params]
+  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
+
 (defn list-supplier-aliases-handler
   "List supplier aliases for power users.
 
@@ -25,8 +40,8 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (or (some-> (h/get-param params :limit) parse-long) 50)
-                offset (or (some-> (h/get-param params :offset) parse-long) 0)
+                limit (parse-page-limit params 50)
+                offset (parse-page-offset params)
                 search (h/get-param params :search)
                 supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                 unmapped-only (h/parse-boolean-param params :unmapped-only)
@@ -34,8 +49,10 @@
                        (some? search) (assoc :search search)
                        supplier-id (assoc :supplier_id supplier-id)
                        (some? unmapped-only) (assoc :unmapped-only unmapped-only))
-                rows (vec (supplier-aliases/list-supplier-aliases db opts))]
+                rows (vec (supplier-aliases/list-supplier-aliases db opts))
+                total (long (or (supplier-aliases/count-supplier-aliases db opts) 0))]
             (h/json-response {:data rows
+                              :total total
                               :limit limit
                               :offset offset}))
           (catch Exception e

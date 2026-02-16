@@ -47,4 +47,6 @@
           base (paths/list-ui-state :users)]
       (is (= 1 (get-in db (conj base :pagination :current-page))))
       (is (nil? (get-in db (conj base :pagination :per-page)))
-        "per-page should be left unset so list-view can seed it from configured defaults"))))
+        "per-page should be left unset so list-view can seed it from configured defaults")
+      (is (= :server (get-in db (paths/list-pagination-mode :users))))
+      (is (= [:admin/load-users] (get-in db (paths/list-refresh-event :users)))))))

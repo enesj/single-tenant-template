@@ -36,7 +36,7 @@ app.admin.frontend.*
 | System Monitoring | Basic health/status | Admin | `/admin/dashboard` |
 | Admin Settings | Configure admin UI + entity settings | Admin | `/admin/admin-settings` |
 | User UI Config | Configure user-facing defaults/locks | Admin | `/admin/user-settings` |
-| Expenses Domain | Admin CRUD pages for expenses entities | Admin | `/admin/articles`, `/admin/article-aliases`, `/admin/suppliers`, `/admin/supplier-aliases`, `/admin/manufacturers`, `/admin/price-observations`, `/admin/unmapped-aliases` |
+| Expenses Domain | Admin CRUD pages for expenses entities | Admin | `/admin/articles`, `/admin/article-aliases`, `/admin/suppliers`, `/admin/supplier-aliases`, `/admin/manufacturers`, `/admin/unmapped-aliases` |
 
 ## Activity & Login Monitoring
 

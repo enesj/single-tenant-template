@@ -5,6 +5,7 @@
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
+    [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -23,6 +24,31 @@
 
 (defn- selected-item-ids [db]
   (or (get-in db (conj base-path :selection :item-ids)) #{}))
+
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- current-unmapped-page-params
+  [db]
+  (let [entity-key :unmapped-items
+        per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
+                   50)
+        current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
+                       1)
+        supplier-id (get-in db (conj base-path :filters :supplier-id))]
+    (cond-> {:limit per-page
+             :offset (* (max 0 (dec current-page)) per-page)}
+      supplier-id (assoc :supplier-id supplier-id))))
 
 ;; -----------------------------------------------------------------------------
 ;; Lookups (suppliers + articles) for the map modal
@@ -98,6 +124,11 @@
 ;; -----------------------------------------------------------------------------
 
 (rf/reg-event-fx
+  ::refresh-unmapped-items-list
+  (fn [{:keys [db]} _]
+    {:dispatch [::load-unmapped-items (current-unmapped-page-params db)]}))
+
+(rf/reg-event-fx
   ::load-unmapped-items
   (fn [{:keys [db]} [_ {:keys [limit offset supplier-id]}]]
     (let [qp (cond-> {:limit (or limit 50)
@@ -116,10 +147,13 @@
 (rf/reg-event-db
   ::unmapped-items-loaded
   (fn [db [_ response]]
-    (-> db
-      (finish-load nil)
-      (assoc-in (conj base-path :items) (vec (or (:data response) [])))
-      (assoc-in (conj base-path :selection :item-ids) #{}))))
+    (let [items (vec (or (:data response) []))
+          total (or (:total response) (count items))]
+      (-> db
+        (finish-load nil)
+        (assoc-in (conj base-path :items) items)
+        (assoc-in (paths/list-total-items :unmapped-items) total)
+        (assoc-in (conj base-path :selection :item-ids) #{})))))
 
 (rf/reg-event-db
   ::unmapped-items-load-failed
@@ -285,8 +319,7 @@
           db** (maybe-finish db*)
           reload? (false? (get-in db** (conj base-path :map-modal :working?)))]
       (cond-> {:db db**}
-        reload? (assoc :dispatch [::load-unmapped-items {:limit 50 :offset 0
-                                                         :supplier-id (get-in db** (conj base-path :filters :supplier-id))}])))))
+        reload? (assoc :dispatch [::refresh-unmapped-items-list])))))
 
 (rf/reg-event-fx
   ::map-item-failed
@@ -299,5 +332,4 @@
           db** (maybe-finish db*)
           reload? (false? (get-in db** (conj base-path :map-modal :working?)))]
       (cond-> {:db db**}
-        reload? (assoc :dispatch [::load-unmapped-items {:limit 50 :offset 0
-                                                         :supplier-id (get-in db** (conj base-path :filters :supplier-id))}])))))
+        reload? (assoc :dispatch [::refresh-unmapped-items-list])))))

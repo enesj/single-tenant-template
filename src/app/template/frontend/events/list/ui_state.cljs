@@ -36,49 +36,114 @@
     (assoc-in (conj (paths/list-ui-state entity-key) :current-page) page)
     (assoc-in (conj (paths/list-ui-state entity-key) :pagination :current-page) page)))
 
+(defn- normalize-pagination-mode
+  [mode]
+  (if (or (= mode :server)
+        (= mode "server"))
+    :server
+    :client))
+
+(defn list-refresh-dispatch
+  "Returns the configured refresh event vector for an entity, if any.
+
+  Accepts either:
+  - a vector event form (returned as-is)
+  - a keyword event id (wrapped to a single-element vector)
+
+  Returns nil when no valid refresh event is configured."
+  [db entity-type]
+  (when-let [entity-key (->entity-key entity-type)]
+    (let [configured (get-in db (paths/list-refresh-event entity-key))]
+      (cond
+        (vector? configured) configured
+        (keyword? configured) [configured]
+        :else nil))))
+
+(defn- current-pagination-mode
+  [db entity-key]
+  (normalize-pagination-mode
+    (or (get-in db (paths/list-pagination-mode entity-key))
+      (get-in db (conj (paths/list-ui-state entity-key) :pagination :mode)))))
+
+(defn- refresh-dispatch-for-server-mode
+  [db entity-key]
+  (when (= :server (current-pagination-mode db entity-key))
+    (list-refresh-dispatch db entity-key)))
+
 ;;; -------------------------
 ;;; Pagination
 ;;; -------------------------
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::set-current-page
   common-interceptors
-  (fn [db [entity-type page]]
+  (fn [{:keys [db]} [entity-type page]]
     (if-let [entity-key (->entity-key entity-type)]
       (let [safe-page (max 1 (or page 1))
-            per-page (current-per-page db entity-key)]
-        (-> db
-          (sync-current-page entity-key safe-page)
-          (sync-per-page entity-key per-page)))
-      db)))
+            per-page (current-per-page db entity-key)
+            db* (-> db
+                  (sync-current-page entity-key safe-page)
+                  (sync-per-page entity-key per-page))
+            refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
+        (cond-> {:db db*}
+          refresh-dispatch (assoc :dispatch refresh-dispatch)))
+      {:db db})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::set-per-page
   [common-interceptors persistence/persist-entity-prefs]
-  (fn [db [entity-type per-page]]
+  (fn [{:keys [db]} [entity-type per-page]]
     (if-let [entity-key (->entity-key entity-type)]
       (let [parsed (cond
                      (number? per-page) per-page
                      (string? per-page) (js/parseInt per-page 10)
                      :else per-page)
-            clamped (if (and parsed (pos? parsed)) parsed 10)]
+            clamped (if (and parsed (pos? parsed)) parsed 10)
+            db* (-> db
+                  (sync-per-page entity-key clamped)
+                  (sync-current-page entity-key 1)
+                  ;; Persist as a display preference so it survives refresh.
+                  ;; This also makes it available to the unified resolver via [:ui :entity-prefs].
+                  (assoc-in (conj (paths/entity-prefs-display entity-key) :per-page) clamped)
+                  ((fn [db**] (log/info "LIST SET-PER-PAGE →" (name entity-key) "to" clamped) db**)))
+            refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
+        (cond-> {:db db*}
+          refresh-dispatch (assoc :dispatch refresh-dispatch)))
+      {:db db})))
+
+(rf/reg-event-db
+  ::set-pagination-mode
+  common-interceptors
+  (fn [db [entity-type mode]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (let [normalized-mode (normalize-pagination-mode mode)]
         (-> db
-          (sync-per-page entity-key clamped)
-          (sync-current-page entity-key 1)
-          ;; Persist as a display preference so it survives refresh.
-          ;; This also makes it available to the unified resolver via [:ui :entity-prefs].
-          (assoc-in (conj (paths/entity-prefs-display entity-key) :per-page) clamped)
-          ((fn [db*] (log/info "LIST SET-PER-PAGE →" (name entity-key) "to" clamped) db*))))
+          (assoc-in (paths/list-pagination-mode entity-key) normalized-mode)
+          (assoc-in (conj (paths/list-ui-state entity-key) :pagination :mode) normalized-mode)))
+      db)))
+
+(rf/reg-event-db
+  ::set-refresh-event
+  common-interceptors
+  (fn [db [entity-type refresh-event]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (cond
+        (or (nil? refresh-event)
+          (vector? refresh-event)
+          (keyword? refresh-event))
+        (assoc-in db (paths/list-refresh-event entity-key) refresh-event)
+
+        :else db)
       db)))
 
 ;;; -------------------------
 ;;; Sorting
 ;;; -------------------------
 
-(rf/reg-event-db
+(rf/reg-event-fx
   ::set-sort-field
   common-interceptors
-  (fn [db [entity-type field]]
+  (fn [{:keys [db]} [entity-type field]]
     (if-let [entity-key (->entity-key entity-type)]
       (let [sort-config (get-in db (paths/list-sort-config entity-key))
             current-direction (:direction sort-config)
@@ -86,12 +151,15 @@
             new-direction (if (and (= field current-field)
                                 (= current-direction :asc))
                             :desc
-                            :asc)]
-        (-> db
-          (assoc-in (conj (paths/list-sort-config entity-key) :field) field)
-          (assoc-in (conj (paths/list-sort-config entity-key) :direction) new-direction)
-          (sync-current-page entity-key 1)))
-      db)))
+                            :asc)
+            db* (-> db
+                  (assoc-in (conj (paths/list-sort-config entity-key) :field) field)
+                  (assoc-in (conj (paths/list-sort-config entity-key) :direction) new-direction)
+                  (sync-current-page entity-key 1))
+            refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
+        (cond-> {:db db*}
+          refresh-dispatch (assoc :dispatch refresh-dispatch)))
+      {:db db})))
 
 ;;; -------------------------
 ;;; Toggle States

@@ -68,13 +68,4 @@
   (fn [db _]
     (get-in db [:admin :article-aliases :error])))
 
-;; Price observations
-(rf/reg-sub
-  :admin/price-observations-loading?
-  (fn [db _]
-    (get-in db [:admin :price-observations :loading?] false)))
 
-(rf/reg-sub
-  :admin/price-observations-error
-  (fn [db _]
-    (get-in db [:admin :price-observations :error])))

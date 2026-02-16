@@ -139,6 +139,24 @@
 
     :else nil))
 
+(defn- build-receipts-where-clause
+  "Build WHERE clause for receipt list/count queries.
+
+  When `user-id` is provided, visibility is scoped to:
+  - receipts owned by the user, or
+  - receipts with no owner (`user_id` is nil)."
+  [status user-id helpers]
+  (let [status-clause (build-status-clause status helpers)
+        visibility-clause (when user-id
+                            [:or
+                             [:= :user_id user-id]
+                             [:is :user_id nil]])]
+    (cond
+      (and visibility-clause status-clause) [:and visibility-clause status-clause]
+      visibility-clause visibility-clause
+      status-clause status-clause
+      :else nil)))
+
 (defn list-receipts
   "List receipts with optional status filter.
 
@@ -148,8 +166,7 @@
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
-        status-clause (build-status-clause status helpers)
-
+        where-clause (build-receipts-where-clause status nil helpers)
         query (cond-> {:select [:id
                                 :original_filename
                                 [[:raw effective-status-sql] :status]
@@ -165,7 +182,7 @@
                        :order-by [[:created_at order-dir]]
                        :limit limit
                        :offset offset}
-                status-clause (assoc :where status-clause))]
+                where-clause (assoc :where where-clause))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn list-user-receipts
@@ -183,18 +200,9 @@
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
-  (let [visibility-clause [:or
-                           [:= :user_id user-id]
-                           [:is :user_id nil]]
-
-        helpers (build-status-query-helpers)
+  (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
-        status-clause (build-status-clause status helpers)
-
-        where-clause (cond
-                       status-clause [:and visibility-clause status-clause]
-                       :else visibility-clause)
-
+        where-clause (build-receipts-where-clause status user-id helpers)
         query {:select [:id
                         :original_filename
                         [[:raw effective-status-sql] :status]
@@ -212,6 +220,52 @@
                :limit limit
                :offset offset}]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-receipts
+  "Count receipts using the same status filter semantics as `list-receipts`."
+  [db {:keys [status]}]
+  (let [helpers (build-status-query-helpers)
+        where-clause (build-receipts-where-clause status nil helpers)
+        query (cond-> {:select [[[:count :*] :total]]
+                       :from [:receipts]}
+                where-clause (assoc :where where-clause))
+        row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
+    (long (or (:total row) 0))))
+
+(defn count-user-receipts
+  "Count receipts visible to `user-id` using the same filters as `list-user-receipts`."
+  [db user-id {:keys [status]}]
+  (when-not user-id
+    (throw (ex-info "user-id is required" {:status 400})))
+  (let [helpers (build-status-query-helpers)
+        where-clause (build-receipts-where-clause status user-id helpers)
+        query {:select [[[:count :*] :total]]
+               :from [:receipts]
+               :where where-clause}
+        row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
+    (long (or (:total row) 0))))
+
+(defn list-receipts-page
+  "List receipts with pagination metadata for server-backed pagination."
+  [db opts]
+  (let [opts* (merge {:limit 50 :offset 0} opts)
+        rows (list-receipts db opts*)
+        total (count-receipts db opts*)]
+    {:rows rows
+     :total total
+     :limit (:limit opts*)
+     :offset (:offset opts*)}))
+
+(defn list-user-receipts-page
+  "List user-visible receipts with pagination metadata."
+  [db user-id opts]
+  (let [opts* (merge {:limit 50 :offset 0} opts)
+        rows (list-user-receipts db user-id opts*)
+        total (count-user-receipts db user-id opts*)]
+    {:rows rows
+     :total total
+     :limit (:limit opts*)
+     :offset (:offset opts*)}))
 
 (defn get-user-receipt
   "Fetch a single receipt visible to `user-id`.

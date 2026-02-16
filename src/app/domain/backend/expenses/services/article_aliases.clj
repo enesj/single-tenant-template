@@ -126,6 +126,30 @@
       (jdbc/execute! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})
       ((:list service) db opts))))
 
+(defn count-article-aliases
+  "Count article aliases with optional filters.
+
+   Supports:
+   - :supplier-id / :supplier_id
+   - :article-id / :article_id
+   - :unmapped-only (boolean, filters to article_id IS NULL)"
+  [db {:keys [search supplier-id supplier_id article-id article_id unmapped-only] :as _opts}]
+  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
+        article-uuid (try-uuid (or article-id article_id))
+        base-filters (cond-> (vec (or (:base-filters config) []))
+                       supplier-uuid (conj [:= :aa/supplier_id supplier-uuid])
+                       article-uuid (conj [:= :aa/article_id article-uuid])
+                       unmapped-only (conj [:is :aa/article_id nil]))
+        config* (assoc config :base-filters base-filters)]
+    (if (or supplier-uuid article-uuid unmapped-only)
+      (let [base-query (factory/build-base-query config*)
+            count-query (-> base-query
+                          (dissoc :order-by :limit :offset)
+                          (assoc :select [[[:count :*] :total]]))
+            final-query (factory/apply-search-filter count-query (:search-fields config*) search)]
+        (:total (jdbc/execute-one! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})))
+      ((:count service) db {:search search}))))
+
 (defn list-unmapped-aliases
   "List unmapped article aliases (article_id IS NULL) with occurrence counts."
   [db {:keys [limit offset supplier-id]
@@ -150,6 +174,18 @@
                 supplier-uuid
                 (update :where conj [:= :aa.supplier_id supplier-uuid]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-unmapped-aliases
+  "Count unmapped article aliases (article_id IS NULL), optionally by supplier."
+  [db {:keys [supplier-id supplier_id]}]
+  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
+        query (cond-> {:select [[[:count :aa.id] :total]]
+                       :from [[:article_aliases :aa]]
+                       :where [:is :aa.article_id nil]}
+                supplier-uuid (assoc :where [:and
+                                             [:is :aa.article_id nil]
+                                             [:= :aa.supplier_id supplier-uuid]]))]
+    (:total (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn map-alias-to-article!
   "Map an alias to an article.

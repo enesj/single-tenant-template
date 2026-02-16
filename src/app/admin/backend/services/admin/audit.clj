@@ -174,6 +174,47 @@
         (log/warn "🔍 AUDIT BACKEND: Unknown entity type:" entity-type)
         nil))))
 
+(defn- build-audit-filters-map
+  [{:keys [admin-id entity-type entity-id action from-date to-date]}]
+  (cond-> {}
+    admin-id (assoc :actor-id {:type :equal :value admin-id :table-alias :al}
+               :actor-type {:type :equal :value "admin" :table-alias :al})
+    entity-type (assoc :target-type {:type :equal :value entity-type :table-alias :al})
+    entity-id (assoc :target-id {:type :equal :value entity-id :table-alias :al})
+    action (assoc :action {:type :equal :value action :table-alias :al})
+    (or from-date to-date) (assoc :created-at {:type :date-range
+                                               :value {:from from-date :to to-date}
+                                               :table-alias :al})))
+
+(defn- build-audit-list-query
+  [{:keys [limit offset] :as opts}]
+  (let [join-clause [[:admins :a] [:= :al.actor_id :a.id]]
+        base-query {:select [:al.*
+                             [:a.email :admin_email]
+                             [:a.full_name :admin_name]]
+                    :from [[:audit_logs :al]]
+                    :left-join join-clause}
+        options {:filters (build-audit-filters-map opts)
+                 :sort {:by :created-at :order :desc :table-alias :al}
+                 :pagination {:limit limit :offset offset}}]
+    (qb/compose-admin-query base-query options)))
+
+(defn- build-audit-count-query
+  [opts]
+  (qb/compose-admin-query
+    {:select [[[:count :*] :total]]
+     :from [[:audit_logs :al]]}
+    {:filters (build-audit-filters-map opts)}))
+
+(defn count-audit-logs
+  "Count audit logs using the same filters as `get-audit-logs`."
+  [db opts]
+  (let [row (-> (build-audit-count-query opts)
+              hsql/format
+              (jdbc/execute-one! db))
+        total (or (:total row) (some-> row vals first) 0)]
+    (long total)))
+
 (defn get-audit-logs
   "Get audit logs with optional filters.
 
@@ -186,50 +227,38 @@
    - :to-date     end timestamp (inclusive)
    - :limit       pagination limit
    - :offset      pagination offset"
-  [db {:keys [admin-id entity-type entity-id action limit offset from-date to-date]}]
-  (let [build-query (fn []
-                      (let [join-clause [[:admins :a] [:= :al.actor_id :a.id]]
-                            filters-map (cond-> {}
-                                          admin-id (assoc :actor-id {:type :equal :value admin-id :table-alias :al}
-                                                     :actor-type {:type :equal :value "admin" :table-alias :al})
-                                          entity-type (assoc :target-type {:type :equal :value entity-type :table-alias :al})
-                                          entity-id (assoc :target-id {:type :equal :value entity-id :table-alias :al})
-                                          action (assoc :action {:type :equal :value action :table-alias :al})
-                                          (or from-date to-date) (assoc :created-at {:type :date-range
-                                                                                     :value {:from from-date :to to-date}
-                                                                                     :table-alias :al}))
-                            options {:filters filters-map
-                                     :sort {:by :created-at :order :desc :table-alias :al}
-                                     :pagination {:limit limit :offset offset}}
-                            base-query {:select [:al.*
-                                                 [:a.email :admin_email]
-                                                 [:a.full_name :admin_name]]
-                                        :from [[:audit_logs :al]]
-                                        :left-join join-clause}]
-                        (log/info "📋 AUDIT SERVICE: Query built successfully")
-                        (qb/compose-admin-query base-query options)))
-        execute-query (fn [sql-map]
-                        (try
-                          (let [raw-logs (->> sql-map
-                                           hsql/format
-                                           (jdbc/execute! db))]
-                            (log/info "📊 AUDIT SERVICE: Query executed successfully, found" (count raw-logs) "logs")
-                            ;; Resolve names for each audit log using normalized data
-                            (mapv (fn [log]
-                                    (try
-                                      (let [normalized (db-audit-log->app log)
-                                            entity-type-str (some-> (:target-type normalized) str)
-                                            entity-id* (:target-id normalized)
-                                            entity-name (when (and entity-type-str entity-id*)
-                                                          (resolve-entity-name db entity-type-str entity-id*))]
-                                        (cond-> normalized
-                                          entity-name (assoc :entity-name entity-name)))
-                                      (catch Exception e
-                                        (log/error "❌ AUDIT BACKEND: Error processing log:" (.getMessage e))
-                                        ;; Return the log without computed fields
-                                        (db-audit-log->app log))))
-                              raw-logs))
-                          (catch Exception e
-                            (log/error "❌ AUDIT SERVICE: Error executing query:" (.getMessage e))
-                            (throw e))))]
-    (execute-query (build-query))))
+  [db opts]
+  (let [sql-map (build-audit-list-query opts)]
+    (try
+      (let [raw-logs (->> sql-map
+                       hsql/format
+                       (jdbc/execute! db))]
+        (log/info "📊 AUDIT SERVICE: Query executed successfully, found" (count raw-logs) "logs")
+        ;; Resolve names for each audit log using normalized data
+        (mapv (fn [log]
+                (try
+                  (let [normalized (db-audit-log->app log)
+                        entity-type-str (some-> (:target-type normalized) str)
+                        entity-id* (:target-id normalized)
+                        entity-name (when (and entity-type-str entity-id*)
+                                      (resolve-entity-name db entity-type-str entity-id*))]
+                    (cond-> normalized
+                      entity-name (assoc :entity-name entity-name)))
+                  (catch Exception e
+                    (log/error "❌ AUDIT BACKEND: Error processing log:" (.getMessage e))
+                    ;; Return the log without computed fields
+                    (db-audit-log->app log))))
+          raw-logs))
+      (catch Exception e
+        (log/error "❌ AUDIT SERVICE: Error executing query:" (.getMessage e))
+        (throw e)))))
+
+(defn get-audit-logs-page
+  "Get audit logs with server-backed pagination metadata."
+  [db {:keys [limit offset] :as opts}]
+  (let [logs (get-audit-logs db opts)
+        total (count-audit-logs db opts)]
+    {:logs logs
+     :total total
+     :limit limit
+     :offset offset}))

@@ -7,7 +7,7 @@
     [app.domain.frontend.expenses.events.expense-categories]
     [app.domain.frontend.expenses.events.expenses]
     [app.domain.frontend.expenses.events.payers]
-    [app.domain.frontend.expenses.events.price-observations]
+
     [app.domain.frontend.expenses.events.receipts]
     [app.domain.frontend.expenses.events.suppliers]
     [app.domain.frontend.expenses.events.unmapped-items]
@@ -17,7 +17,7 @@
     [app.domain.frontend.expenses.subs.articles]
     [app.domain.frontend.expenses.subs.expenses]
     [app.domain.frontend.expenses.subs.payers]
-    [app.domain.frontend.expenses.subs.price-observations]
+
     [app.domain.frontend.expenses.subs.receipts]
     [app.domain.frontend.expenses.subs.suppliers]
     [app.domain.frontend.expenses.subs.unmapped-items]

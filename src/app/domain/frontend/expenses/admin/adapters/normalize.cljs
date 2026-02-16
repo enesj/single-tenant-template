@@ -298,22 +298,6 @@
                   :created_at [:created-at]
                   :updated_at [:updated-at]}}))
 
-(defn price-observation->template-entity
-  [obs]
-  (entity-utils/normalize-entity
-    obs
-    {:entity-ns :price-observations
-     :id-keys [:id]
-     :stringify-keys [:supplier_id :article_id :expense_item_id]
-     :alias-keys {:article_canonical_name [:article-canonical-name]
-                  :supplier_display_name [:supplier-display-name]
-                  :observed_at [:observed-at]
-                  :unit_price [:unit-price]
-                  :line_total [:line-total]
-                  :qty [:qty]
-                  :currency [:currency]
-                  :created_at [:created-at]}}))
-
 (defn unmapped-alias->template-entity
   [alias]
   (entity-utils/normalize-entity

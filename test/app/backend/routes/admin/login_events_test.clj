@@ -76,55 +76,63 @@
 ;; ============================================================================
 
 (deftest get-login-events-handler-test
-  (testing "get-login-events returns events list"
+  (testing "get-login-events returns events list with pagination metadata"
     (let [db (h/mock-db)
           handler (login-events/get-login-events-handler db)
           request (h/mock-admin-request :get "/admin/api/login-events" mock-admin {})]
-      (with-redefs [login-monitoring/list-login-events (constantly mock-login-events)]
+      (with-redefs [login-monitoring/list-login-events-page
+                    (fn [_db _opts]
+                      {:events mock-login-events
+                       :total 2
+                       :limit 100
+                       :offset 0})]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (vector? (:events body)))
-          (is (= 2 (count (:events body))))))))
+          (is (= 2 (count (:events body))))
+          (is (= 2 (:total body)))
+          (is (= 100 (:limit body)))
+          (is (= 0 (:offset body)))))))
 
-  (testing "get-login-events filters by principal-type"
+  (testing "get-login-events filters by principal-type and success with filter-aware total"
     (let [db (h/mock-db)
           handler (login-events/get-login-events-handler db)
           request (h/mock-admin-request :get "/admin/api/login-events" mock-admin
-                    {:params {:principal-type "user"}})]
-      (with-redefs [login-monitoring/list-login-events
+                    {:params {:principal-type "user"
+                              :success "true"
+                              :limit "10"
+                              :offset "0"}})
+          sample-events [{:id (java.util.UUID/randomUUID)
+                          :principal-type :user
+                          :success true}
+                         {:id (java.util.UUID/randomUUID)
+                          :principal-type :user
+                          :success false}
+                         {:id (java.util.UUID/randomUUID)
+                          :principal-type :admin
+                          :success true}]]
+      (with-redefs [login-monitoring/list-login-events-page
                     (fn [_db opts]
                       (is (= :user (:principal-type opts)))
-                      [mock-login-event])]
+                      (is (true? (:success? opts)))
+                      (is (= 10 (:limit opts)))
+                      (is (= 0 (:offset opts)))
+                      (let [matches? (fn [event]
+                                       (and (= (:principal-type opts) (:principal-type event))
+                                         (= (:success? opts) (:success event))))
+                            filtered (vec (filter matches? sample-events))]
+                        {:events filtered
+                         :total (count filtered)
+                         :limit (:limit opts)
+                         :offset (:offset opts)}))]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
-          (is (= 1 (count (:events body))))))))
-
-  (testing "get-login-events filters by success status"
-    (let [db (h/mock-db)
-          handler (login-events/get-login-events-handler db)
-          request (h/mock-admin-request :get "/admin/api/login-events" mock-admin
-                    {:params {:success "true"}})]
-      (with-redefs [login-monitoring/list-login-events
-                    (fn [_db opts]
-                      (is (true? (:success? opts)))
-                      mock-login-events)]
-        (let [response (handler request)]
-          (is (= 200 (:status response)))))))
-
-  (testing "get-login-events respects pagination"
-    (let [db (h/mock-db)
-          handler (login-events/get-login-events-handler db)
-          request (h/mock-admin-request :get "/admin/api/login-events" mock-admin
-                    {:params {:limit "50" :offset "10"}})]
-      (with-redefs [login-monitoring/list-login-events
-                    (fn [_db opts]
-                      (is (= 50 (:limit opts)))
-                      (is (= 10 (:offset opts)))
-                      [])]
-        (let [response (handler request)]
-          (is (= 200 (:status response))))))))
+          (is (= 1 (count (:events body))))
+          (is (= 1 (:total body)))
+          (is (= 10 (:limit body)))
+          (is (= 0 (:offset body))))))))
 
 ;; ============================================================================
 ;; Service Function Tests (can be tested without mocking JDBC)
@@ -133,6 +141,12 @@
 (deftest login-monitoring-service-test
   (testing "list-login-events function exists"
     (is (fn? login-monitoring/list-login-events)))
+
+  (testing "list-login-events-page function exists"
+    (is (fn? login-monitoring/list-login-events-page)))
+
+  (testing "count-login-events function exists"
+    (is (fn? login-monitoring/count-login-events)))
 
   (testing "record-login-event! function exists"
     (is (fn? login-monitoring/record-login-event!)))

@@ -90,9 +90,21 @@
                        :order-by [[:ei.created_at :desc]]
                        :limit limit
                        :offset offset}
+                count-query {:select [[[:count :ei.id] :total]]
+                             :from [[:expense_items :ei]]
+                             :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                         [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                         [:articles :a] [:= :a.id :aa.article_id]]
+                             :where where}
                 items (jdbc/execute! db (sql/format query)
-                        {:builder-fn rs/as-unqualified-lower-maps})]
-            (h/json-response {:data (vec items)}))
+                        {:builder-fn rs/as-unqualified-lower-maps})
+                total (or (:total (jdbc/execute-one! db (sql/format count-query)
+                                    {:builder-fn rs/as-unqualified-lower-maps}))
+                        0)]
+            (h/json-response {:data (vec items)
+                              :total (long total)
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Error listing expense items" {:user-id user-id})
             (h/json-response {:error "Failed to list expense items"} 500))))

@@ -6,7 +6,6 @@
  :payer-types {:title "Payer Types"},
  :expenses {:title "My Expenses"},
  :manufacturers {:title "Manufacturers"},
- :price-observations {:title "Price Observations"},
  :payers {:title "Payers"},
  :categories {:title "Categories"},
  :supplier-aliases {:title "Supplier Aliases"},

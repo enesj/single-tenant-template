@@ -11,6 +11,7 @@
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.crud.success :as crud-success]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -25,6 +26,69 @@
   (-> db
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
+
+(defn- parse-pos-int
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn- normalize-filter-value
+  [value]
+  (cond
+    (map? value) (or (normalize-filter-value (:value value))
+                   (normalize-filter-value (get value "value")))
+    (keyword? value) (name value)
+    (string? value) (some-> value str/trim not-empty)
+    (vector? value) (let [items (->> value
+                                  (map normalize-filter-value)
+                                  (remove nil?)
+                                  vec)]
+                      (when (seq items)
+                        items))
+    (sequential? value) (let [items (->> value
+                                      (map normalize-filter-value)
+                                      (remove nil?)
+                                      vec)]
+                          (when (seq items)
+                            items))
+    :else value))
+
+(defn- normalize-filter-params
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (let [normalized (normalize-filter-value v)]
+        (if (nil? normalized)
+          acc
+          (assoc acc k normalized))))
+    {}
+    (or filters {})))
+
+(defn- current-list-page-params
+  [db entity-key default-limit]
+  (let [per-page (or (parse-pos-int (get-in db [:ui :lists entity-key :per-page]))
+                   default-limit)
+        current-page (or (parse-pos-int (get-in db [:ui :lists entity-key :current-page]))
+                       1)
+        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))
+        filters (normalize-filter-params (get-in db [:ui :lists entity-key :filters]))]
+    (cond-> (merge {:limit per-page
+                    :offset (* (max 0 (dec current-page)) per-page)}
+              filters)
+      (some? order-dir) (assoc :order-dir order-dir))))
+
+(rf/reg-event-fx
+  :user-expenses/refresh-categories-list
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:dispatch [:user-expenses/fetch-categories (current-list-page-params db :categories 500)]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Categories
@@ -47,8 +111,10 @@
   :user-expenses/fetch-categories-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [categories (vec (or (:data response) []))]
-      {:db (finish-entity-load db :categories nil)
+    (let [categories (vec (or (:data response) []))
+          total (or (:total response) (count categories))]
+      {:db (-> (finish-entity-load db :categories nil)
+             (assoc-in (paths/list-total-items :categories) total))
        :dispatch [::expenses-sync/sync-categories categories]})))
 
 (rf/reg-event-db
@@ -83,7 +149,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> highlight-id
                (crud-success/track-recently-created :categories highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-categories]]
+       :dispatch-n [[:user-expenses/refresh-categories-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success category]}])]})))
@@ -122,7 +188,7 @@
              (assoc-in [:user-expenses :form :error] nil)
              (cond-> (seq highlight-id)
                (crud-success/track-recently-updated :categories highlight-id)))
-       :dispatch-n [[:user-expenses/fetch-categories]]
+       :dispatch-n [[:user-expenses/refresh-categories-list]]
        :fx [(when on-success
               [:dispatch-later {:ms 100
                                 :dispatch [:user-expenses/call-modal-callback on-success]}])]})))
@@ -156,7 +222,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-categories]}))
+     :dispatch [:user-expenses/refresh-categories-list]}))
 
 (rf/reg-event-db
   :user-expenses/delete-category-failure

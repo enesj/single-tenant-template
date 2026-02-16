@@ -55,12 +55,6 @@
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
- :price-observations
- {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 50},
-  :display-locks {:show-add-button? false},
-  :column-defaults {},
-  :column-locks {}},
  :payers
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},

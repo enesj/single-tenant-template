@@ -120,6 +120,54 @@
     (instance? java.time.OffsetDateTime v) (.toEpochMilli (.toInstant ^java.time.OffsetDateTime v))
     :else v))
 
+(defn- build-login-events-conditions
+  [{:keys [principal-type success?]}]
+  (let [principal-type-db (principal-type->db principal-type)]
+    (cond-> []
+      principal-type-db (conj [:= :login_events.principal_type principal-type-db])
+      (some? success?) (conj [:= :login_events.success success?]))))
+
+(defn- build-login-events-list-query
+  [{:keys [limit offset] :as opts}]
+  (let [limit (or limit 100)
+        offset (or offset 0)
+        conditions (build-login-events-conditions opts)]
+    (cond-> {:select [[:login_events.id :id]
+                      :login_events.principal_type
+                      :login_events.principal_id
+                      :login_events.success
+                      :login_events.reason
+                      :login_events.ip
+                      :login_events.user_agent
+                      :login_events.created_at
+                      [:admins.email :admin_email]
+                      [:admins.full_name :admin_name]
+                      [:users.email :user_email]
+                      [:users.full_name :user_name]]
+             :from [[:login_events]]
+             :left-join [[:admins :admins] [:= :admins.id :login_events.principal_id]
+                         [:users :users] [:= :users.id :login_events.principal_id]]
+             :order-by [[:login_events.created_at :desc]]
+             :limit limit
+             :offset offset}
+      (seq conditions) (assoc :where (into [:and] conditions)))))
+
+(defn- build-login-events-count-query
+  [opts]
+  (let [conditions (build-login-events-conditions opts)]
+    (cond-> {:select [[[:count :*] :total]]
+             :from [[:login_events]]}
+      (seq conditions) (assoc :where (into [:and] conditions)))))
+
+(defn count-login-events
+  "Count login events using the same filters as `list-login-events`."
+  [db opts]
+  (let [row (-> (build-login-events-count-query opts)
+              hsql/format
+              (jdbc/execute-one! db))
+        total (or (:total row) (some-> row vals first) 0)]
+    (long total)))
+
 (defn list-login-events
   "List login events for admins and users for global admin monitoring.
 
@@ -128,34 +176,10 @@
    - :success?       boolean to filter by success flag
    - :limit          integer, default 100
    - :offset         integer, default 0"
-  [db {:keys [principal-type success? limit offset]}]
+  [db {:keys [principal-type success? limit offset] :as opts}]
   (let [limit (or limit 100)
         offset (or offset 0)
-        principal-type-db (principal-type->db principal-type)
-        base {:select [[:login_events.id :id]
-                       :login_events.principal_type
-                       :login_events.principal_id
-                       :login_events.success
-                       :login_events.reason
-                       :login_events.ip
-                       :login_events.user_agent
-                       :login_events.created_at
-                       [:admins.email :admin_email]
-                       [:admins.full_name :admin_name]
-                       [:users.email :user_email]
-                       [:users.full_name :user_name]]
-              :from [[:login_events]]
-              :left-join [[:admins :admins] [:= :admins.id :login_events.principal_id]
-                          [:users :users] [:= :users.id :login_events.principal_id]]
-              :order-by [[:login_events.created_at :desc]]
-              :limit limit
-              :offset offset}
-        conditions (cond-> []
-                     principal-type-db (conj [:= :login_events.principal_type principal-type-db])
-                     (some? success?) (conj [:= :login_events.success success?]))
-        sql-map (cond-> base
-                  (seq conditions) (assoc :where (into [:and] conditions)))
-        rows (jdbc/execute! db (hsql/format sql-map))]
+        rows (jdbc/execute! db (hsql/format (build-login-events-list-query opts)))]
     (log/info "LOGIN-MONITOR: listed login events"
       {:principal-type principal-type
        :success? success?
@@ -165,9 +189,9 @@
     (mapv (fn [row]
             (let [converted (shared-db/to-app row)
                   id-val (or (:id converted)
-                             (:login-events/id converted))
+                           (:login-events/id converted))
                   principal-id-val (or (:principal-id converted)
-                                       (:login-events/principal-id converted))
+                                     (:login-events/principal-id converted))
                   ;; Support both plain and namespaced keys from the DB adapter
                   created-at (or (:created-at converted)
                                (:login-events/created-at converted))
@@ -211,3 +235,15 @@
                   :login-events/created-at :login-events/principal-type
                   :login-events/success :login-events/reason))))
       rows)))
+
+(defn list-login-events-page
+  "List login events and include pagination metadata for server-backed pagination."
+  [db {:keys [limit offset] :as opts}]
+  (let [limit* (or limit 100)
+        offset* (or offset 0)
+        events (list-login-events db (assoc opts :limit limit* :offset offset*))
+        total (count-login-events db opts)]
+    {:events events
+     :total total
+     :limit limit*
+     :offset offset*}))

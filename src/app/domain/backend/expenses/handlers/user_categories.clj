@@ -26,6 +26,21 @@
   [request]
   (h/ensure-role request allowed-roles "Only admins and owners can access this page."))
 
+(def ^:private max-page-limit
+  500)
+
+(defn- parse-page-limit
+  [params default-limit]
+  (-> (or (some-> (h/get-param params :limit) parse-long)
+        default-limit)
+    long
+    (max 1)
+    (min max-page-limit)))
+
+(defn- parse-page-offset
+  [params]
+  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
+
 ;; -----------------------------------------------------------------------------
 ;; Handlers
 ;; -----------------------------------------------------------------------------
@@ -39,14 +54,19 @@
         forbidden
         (try
           (let [qp (:query-params request)
-                limit (or (some-> (h/get-param qp :limit) parse-long) 200)
-                offset (or (some-> (h/get-param qp :offset) parse-long) 0)
+                limit (parse-page-limit qp 200)
+                offset (parse-page-offset qp)
                 search (h/get-param qp :search)
-                rows (to-app ((:list categories/service) db {:limit limit
-                                                             :offset offset
-                                                             :search search}))
-                rows (cond-> rows (sequential? rows) vec)]
-            (h/json-response {:data rows :limit limit :offset offset}))
+                opts {:limit limit
+                      :offset offset
+                      :search search}
+                rows (to-app ((:list categories/service) db opts))
+                rows (cond-> rows (sequential? rows) vec)
+                total (long (or ((:count categories/service) db {:search search}) 0))]
+            (h/json-response {:data rows
+                              :total total
+                              :limit limit
+                              :offset offset}))
           (catch Exception e
             (log/error e "Failed to list categories" {:message (.getMessage e)})
             (h/json-response {:error "Failed to list categories"} 500)))))))
