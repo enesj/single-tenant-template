@@ -4,7 +4,7 @@
     [app.template.frontend.components.button :refer [button]]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]
+    [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; ========================================================================
@@ -35,6 +35,18 @@
                :maximumFractionDigits 2})
         (catch :default _
           (str currency* " " (.toFixed (js/Number amount*) 2)))))))
+
+(defn format-amount-only
+  [amount]
+  (let [amount* (->number amount)]
+    (if (nil? amount*)
+      "—"
+      (try
+        (.toLocaleString (js/Number amount*) "en-US"
+          #js {:minimumFractionDigits 2
+               :maximumFractionDigits 2})
+        (catch :default _
+          (.toFixed (js/Number amount*) 2))))))
 
 (defn format-percent
   [value]
@@ -215,31 +227,98 @@
     (pos? ratio) "bg-primary/20 text-base-content"
     :else "bg-base-200 text-base-content/60"))
 
-(defui stat-card [{:keys [title value subtitle icon loading?]}]
-  ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-5"}
-    ($ :div {:class "flex items-start justify-between"}
-      ($ :div
-        ($ :p {:class "text-sm font-medium text-base-content/60"} title)
-        (if loading?
-          ($ :div {:class "h-7 w-24 bg-base-200 rounded animate-pulse mt-1"})
-          ($ :p {:class "text-2xl font-bold mt-1"} value))
-        (when subtitle
-          ($ :p {:class "text-xs text-base-content/50 mt-1"} subtitle)))
-      (when icon
-        ($ :div {:class "p-2 bg-base-200 rounded-lg"}
-          ($ :span {:class "text-xl"} icon))))))
+(defn default-sort-direction
+  [sort-type]
+  (if (= sort-type :number) :desc :asc))
 
-(defui section-shell [{:keys [title loading? error children]}]
-  ($ :section {:class "bg-white rounded-xl shadow-sm border border-base-200 p-5"}
-    ($ :div {:class "flex items-center justify-between gap-2 mb-4"}
-      ($ :h3 {:class "font-semibold"} title)
-      (when loading?
-        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})))
-    (if (seq error)
-      ($ :div {:class "ds-alert ds-alert-error text-sm"}
-        ($ :span (str error)))
-      ($ :div {:class "space-y-3"}
-        children))))
+(defn toggle-sort-config
+  [current-sort column sort-type]
+  (if (= column (:column current-sort))
+    (update current-sort :direction #(if (= % :asc) :desc :asc))
+    {:column column
+     :direction (default-sort-direction sort-type)
+     :type sort-type}))
+
+(defn blank-sort-value?
+  [value]
+  (or (nil? value)
+    (and (string? value) (str/blank? value))))
+
+(defn compare-sort-values
+  [left right sort-type]
+  (cond
+    (and (blank-sort-value? left) (blank-sort-value? right)) 0
+    (blank-sort-value? left) 1
+    (blank-sort-value? right) -1
+    (= sort-type :number)
+    (let [left-num (->number left)
+          right-num (->number right)]
+      (cond
+        (and (nil? left-num) (nil? right-num)) 0
+        (nil? left-num) 1
+        (nil? right-num) -1
+        :else (compare left-num right-num)))
+    :else
+    (compare (-> left str str/lower-case)
+      (-> right str str/lower-case))))
+
+(defn sort-rows-by-config
+  [rows {:keys [column direction type]}]
+  (let [direction-multiplier (if (= direction :desc) -1 1)]
+    (->> (or rows [])
+      (map-indexed (fn [idx row] {:idx idx :row row}))
+      (sort (fn [a b]
+              (let [cmp (compare-sort-values
+                          (get (:row a) column)
+                          (get (:row b) column)
+                          type)]
+                (if (zero? cmp)
+                  (compare (:idx a) (:idx b))
+                  (* direction-multiplier cmp)))))
+      (mapv :row))))
+
+(defn sortable-column-label
+  [label sort-config column]
+  (let [active? (= column (:column sort-config))
+        indicator (if (= :asc (:direction sort-config)) "↑" "↓")]
+    (if active?
+      (str label " " indicator)
+      label)))
+
+(defui stat-card [{:keys [title value subtitle icon loading?]}]
+  ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6 flex flex-col justify-between h-full transition-all hover:shadow-md"}
+    ($ :div {:class "flex items-start justify-between mb-2"}
+      ($ :div
+        ($ :p {:class "text-sm font-medium text-base-content/60 tracking-wide uppercase"} title)
+        (if loading?
+          ($ :div {:class "h-8 w-32 bg-base-200 rounded animate-pulse mt-2"})
+          ($ :p {:class "text-3xl font-bold mt-1 tracking-tight text-base-content"} value)))
+      (when icon
+        ($ :div {:class "p-3 bg-base-100 rounded-xl text-primary/80"}
+          ($ :span {:class "text-2xl"} icon))))
+    (when subtitle
+      ($ :div {:class "mt-4 pt-4 border-t border-base-100"}
+        ($ :p {:class "text-xs font-medium text-base-content/50 flex items-center gap-1"}
+          ($ :span {:class "w-1.5 h-1.5 rounded-full bg-primary/40"})
+          subtitle)))))
+
+(defui section-shell [{:keys [title subtitle loading? error children header-actions]}]
+  ($ :section {:class "bg-white rounded-xl shadow-sm border border-base-200 overflow-hidden flex flex-col h-full"}
+    ($ :div {:class "px-6 py-4 border-b border-base-100 flex items-center justify-between bg-base-50/50"}
+      ($ :div
+        ($ :h3 {:class "font-bold text-lg text-base-content/90"} title)
+        (when subtitle
+          ($ :p {:class "text-xs text-base-content/60 mt-0.5"} subtitle)))
+      ($ :div {:class "flex items-center gap-3"}
+        header-actions
+        (when loading?
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm text-primary"}))))
+    ($ :div {:class "p-6 flex-1"}
+      (if (seq error)
+        ($ :div {:class "ds-alert ds-alert-error text-sm rounded-lg"}
+          ($ :span (str error)))
+        ($ :div {:class "space-y-4 h-full"}
+          children)))))
 
 (defui expense-reports-page []
   (let [summary (or (use-subscribe [:user-expenses/summary]) {})
@@ -269,6 +348,19 @@
         month-a (:month-a reports-filters)
         month-b (:month-b reports-filters)
         show-uncategorized? (not= false (:show-uncategorized? reports-filters))
+
+        [trend-sort set-trend-sort!] (use-state {:column :total_amount
+                                                 :direction :desc
+                                                 :type :number})
+        [alias-sort set-alias-sort!] (use-state {:column :total_amount
+                                                 :direction :desc
+                                                 :type :number})
+        [top-items-sort set-top-items-sort!] (use-state {:column :total_amount
+                                                         :direction :desc
+                                                         :type :number})
+        [monthly-currency-sort set-monthly-currency-sort!] (use-state {:column :delta_amount
+                                                                       :direction :desc
+                                                                       :type :number})
 
         supplier-deep-dive (use-subscribe [:user-expenses/report-supplier-deep-dive])
         supplier-deep-dive-loading? (boolean (use-subscribe [:user-expenses/report-supplier-deep-dive-loading?]))
@@ -345,11 +437,11 @@
         day-pattern (aggregate-day-pattern day-of-week-data)
         day-pattern-max (apply max (cons 0 (map #(or (->number (:total_amount %)) 0) day-pattern)))
 
-        top-items-visible (-> top-items-data
-                            (filter-top-items-by-bucket selected-bucket-key)
-                            (subvec 0 (min 20 (count (filter-top-items-by-bucket top-items-data selected-bucket-key)))))
+        top-items-filtered (filter-top-items-by-bucket top-items-data selected-bucket-key)
+        top-items-visible (vec (take 20 (sort-rows-by-config top-items-filtered top-items-sort)))
 
-        monthly-by-currency (or (:by_currency monthly-comparison) [])
+        monthly-by-currency-rows (or (:by_currency monthly-comparison) [])
+        monthly-by-currency (sort-rows-by-config monthly-by-currency-rows monthly-currency-sort)
         monthly-by-supplier (or (:by_supplier monthly-comparison) [])
 
         size-buckets (aggregate-size-buckets size-distribution-data)
@@ -375,8 +467,10 @@
         category-max (apply max (cons 0 (map #(or (->number (:total_amount %)) 0) category-rows)))
 
         deep-dive-summary (or (:summary supplier-deep-dive) [])
-        deep-dive-trend (or (:trend supplier-deep-dive) [])
-        deep-dive-top-aliases (or (:top-aliases supplier-deep-dive) [])
+        deep-dive-trend-rows (or (:trend supplier-deep-dive) [])
+        deep-dive-trend (sort-rows-by-config deep-dive-trend-rows trend-sort)
+        deep-dive-top-aliases-rows (or (:top-aliases supplier-deep-dive) [])
+        deep-dive-top-aliases (sort-rows-by-config deep-dive-top-aliases-rows alias-sort)
 
         currency-totals (or (:currency-totals summary) {})
         primary-currency-key (or
@@ -389,28 +483,47 @@
         total-expenses (or (->number (:total-expenses summary)) 0)
         average-spend (when (pos? total-expenses) (/ total-sum total-expenses))]
 
-    ($ :div {:class "min-h-screen bg-base-100"}
-      ($ :header {:class "bg-white border-b border-base-200"}
-        ($ :div {:class "max-w-7xl mx-auto px-4 py-4 sm:py-6"}
-          ($ :div {:class "flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4"}
-            ($ :div
-              ($ :div {:class "text-sm ds-breadcrumbs"}
-                ($ :ul
-                  ($ :li ($ :a {:href "/expenses"} "Expenses"))
-                  ($ :li "Reports")))
-              ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Expense Reports")
-              ($ :p {:class "text-sm text-base-content/70 mt-1"}
-                "Explore spending behavior with interactive report widgets."))
+    ($ :div {:class "min-h-screen bg-base-50/50 pb-12"}
+      ($ :header {:class "bg-white border-b border-base-200 sticky top-0 z-10 shadow-sm/50"}
+        ($ :div {:class "max-w-7xl mx-auto px-4 sm:px-6 py-4"}
+          ($ :div {:class "flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6"}
+            ($ :div {:class "flex-shrink-0 space-y-1"}
+              ($ :div {:class "text-xs font-medium text-primary uppercase tracking-wider mb-1"} "Analytics Dashboard")
+              ($ :h1 {:class "text-2xl sm:text-3xl font-extrabold text-base-content tracking-tight"} "Expense Reports")
+              ($ :p {:class "text-sm text-base-content/60 max-w-md"}
+                "Start by selecting a time range and filters below to analyze spending patterns."))
 
-            ($ :div {:class "w-full rounded-xl border border-base-200 bg-base-100 p-3 sm:p-4 space-y-3"}
-              ($ :p {:class "text-xs text-base-content/70"}
-                "These dropdowns set the shared API scope for widgets #1-#7. Widget click-filters stay local until cleared.")
+            ($ :div {:class "w-full rounded-xl border border-base-200 bg-base-100 p-4 sm:p-6 space-y-4"}
+              ($ :div {:class "flex items-center justify-between mb-3"}
+                ($ :div {:class "flex items-center gap-2"}
+                  ($ :span {:class "text-xs font-bold uppercase text-base-content/40 tracking-wider"} "Global Filters")
+                  (when (or selected-supplier-id selected-category-id selected-subcategory-id
+                          selected-expense-category-id selected-manufacturer-id)
+                    ($ :span {:class "ds-badge ds-badge-primary ds-badge-xs"} "Active")))
 
-              ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"}
-                ($ :div {:class "space-y-1"}
-                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-months-back"} "Range")
+                ($ :div {:class "flex items-center gap-2"}
+                  ($ button {:id "btn-reports-refresh"
+                             :btn-type :ghost
+                             :size :sm
+                             :class "text-base-content/60 hover:text-base-content"
+                             :on-click #(rf/dispatch [:user-expenses/reports-refresh])}
+                    "Refresh Data")
+
+                  (when (or selected-supplier-id selected-category-id selected-subcategory-id
+                          selected-expense-category-id selected-manufacturer-id)
+                    ($ button {:id "btn-reports-clear-local-filters"
+                               :btn-type :ghost
+                               :size :sm
+                               :class "text-error/70 hover:text-error hover:bg-error/10"
+                               :on-click #(rf/dispatch [:user-expenses/reports-clear-local-filters])}
+                      "Clear All filters"))))
+
+              ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3"}
+                ;; Range - Prominent first
+                ($ :div {:class "space-y-1.5 col-span-1 sm:col-span-2 lg:col-span-1 xl:col-span-1"}
+                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-months-back"} "Time Range")
                   ($ :select {:id "reports-filter-months-back"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white font-medium focus:border-primary focus:ring-1 focus:ring-primary"
                               :value months-back
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :months-back
@@ -420,10 +533,10 @@
                     ($ :option {:value 12} "Last 12 months")
                     ($ :option {:value 24} "Last 24 months")))
 
-                ($ :div {:class "space-y-1"}
-                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-supplier"} "Supplier")
+                ($ :div {:class "space-y-1.5"}
+                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-supplier"} "Supplier")
                   ($ :select {:id "reports-filter-supplier"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
                               :value (or selected-supplier-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :supplier-id
@@ -434,10 +547,10 @@
                             ($ :option {:key id :value id} name))
                       suppliers*)))
 
-                ($ :div {:class "space-y-1"}
-                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-category"} "Category")
+                ($ :div {:class "space-y-1.5"}
+                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-category"} "Category")
                   ($ :select {:id "reports-filter-category"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
                               :value (or selected-category-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :category-id
@@ -448,10 +561,10 @@
                             ($ :option {:key id :value id} name))
                       categories*)))
 
-                ($ :div {:class "space-y-1"}
-                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-subcategory"} "Subcategory")
+                ($ :div {:class "space-y-1.5"}
+                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-subcategory"} "Subcategory")
                   ($ :select {:id "reports-filter-subcategory"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
                               :value (or selected-subcategory-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :subcategory-id
@@ -462,24 +575,24 @@
                             ($ :option {:key id :value id} name))
                       subcategories*)))
 
-                ($ :div {:class "space-y-1"}
-                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-expense-category"} "Expense category")
+                ($ :div {:class "space-y-1.5"}
+                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-expense-category"} "Expense Type")
                   ($ :select {:id "reports-filter-expense-category"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
                               :value (or selected-expense-category-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :expense-category-id
                                                         (let [v (.. % -target -value)]
                                                           (when (seq (str/trim v)) v))])}
-                    ($ :option {:value ""} "All expense categories")
+                    ($ :option {:value ""} "All expense types")
                     (mapv (fn [{:keys [id name]}]
                             ($ :option {:key id :value id} name))
                       expense-categories*)))
 
-                ($ :div {:class "space-y-1"}
-                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-manufacturer"} "Manufacturer")
+                ($ :div {:class "space-y-1.5"}
+                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-manufacturer"} "Manufacturer")
                   ($ :select {:id "reports-filter-manufacturer"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
                               :value (or selected-manufacturer-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :manufacturer-id
@@ -488,396 +601,479 @@
                     ($ :option {:value ""} "All manufacturers")
                     (mapv (fn [{:keys [id name]}]
                             ($ :option {:key id :value id} name))
-                      manufacturers*))))
+                      manufacturers*))))))))
 
-              ($ :div {:class "flex flex-wrap items-center gap-2"}
-                ($ button {:id "btn-reports-refresh"
-                           :btn-type :outline
-                           :size :sm
-                           :on-click #(rf/dispatch [:user-expenses/reports-refresh])}
-                  "Refresh")
-
-                ($ button {:id "btn-reports-clear-local-filters"
-                           :btn-type :ghost
-                           :size :sm
-                           :on-click #(rf/dispatch [:user-expenses/reports-clear-local-filters])}
-                  "Clear local filters")
-
-                ($ button {:id "btn-reports-back-dashboard"
-                           :btn-type :ghost
-                           :size :sm
-                           :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                  "Dashboard"))))))
-
-      ($ :main {:class "max-w-7xl mx-auto px-4 py-6 space-y-6"}
-        ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"}
+      ($ :main {:class "max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8"}
+        ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"}
           ($ stat-card {:title "Total Spent"
                         :value (format-money total-sum primary-currency)
-                        :subtitle "summary endpoint"
+                        :subtitle "In selected period"
                         :icon "💰"
                         :loading? summary-loading?})
-          ($ stat-card {:title "Expenses"
+          ($ stat-card {:title "Transaction Volume"
                         :value (format-int total-expenses)
-                        :subtitle "posted entries"
+                        :subtitle "Recorded expenses"
                         :icon "📋"
                         :loading? summary-loading?})
           ($ stat-card {:title "Average Expense"
                         :value (if average-spend (format-money average-spend primary-currency) "—")
-                        :subtitle "per expense"
+                        :subtitle "Per transaction"
                         :icon "📊"
                         :loading? summary-loading?})
-          ($ stat-card {:title "Active Supplier Filter"
+          ($ stat-card {:title "Active Scope"
                         :value selected-supplier-name
-                        :subtitle "cross-widget"
+                        :subtitle "Supplier filter context"
                         :icon "🏪"
                         :loading? false}))
 
-        ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
+        ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-8"}
           ;; 1) Supplier deep-dive
-          ($ section-shell {:title "1) Supplier deep-dive (selected supplier scope)"
+          ($ section-shell {:title "Supplier Deep Dive"
+                            :subtitle "Detailed breakdown for the selected supplier scope"
                             :loading? supplier-deep-dive-loading?
-                            :error supplier-deep-dive-error}
+                            :error supplier-deep-dive-error
+                            :header-actions (when (str/blank? (str (or selected-supplier-id "")))
+                                              ($ :span {:class "ds-badge ds-badge-warning ds-badge-sm"} "Select a supplier"))}
             (if (str/blank? (str (or selected-supplier-id "")))
-              ($ :p {:class "text-sm text-base-content/70"}
-                "Choose a supplier to load supplier-scoped details and alias patterns. For cross-supplier context, use widget #3 below.")
-              ($ :div {:class "space-y-3"}
-                ($ :p {:class "text-sm text-base-content/70"}
-                  (str "Supplier-scoped view for: " selected-supplier-name " (widget #3 remains your broader context table)."))
+              ($ :div {:class "flex flex-col items-center justify-center h-64 text-center p-8 bg-base-50 rounded-xl border border-dashed border-base-300"}
+                ($ :div {:class "text-4xl mb-4"} "🏪")
+                ($ :h4 {:class "font-bold text-lg mb-2"} "Select a supplier first")
+                ($ :p {:class "text-base-content/60 max-w-sm"}
+                  "Choose a specific supplier from the filters above to see detailed breakdown, trends, and alias patterns."))
 
+              ($ :div {:class "space-y-6"}
                 (if (seq deep-dive-summary)
-                  ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-2"}
+                  ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-4"}
                     (mapv
                       (fn [row]
                         (let [currency (:currency row)
                               total-amount (:total_amount row)
                               expense-count (:expense_count row)]
                           ($ :div {:key (str "supplier-summary-" currency)
-                                   :class "rounded-lg border border-base-200 p-3"}
-                            ($ :p {:class "text-xs text-base-content/60"} (str "Currency: " currency))
-                            ($ :p {:class "font-semibold"} (format-money total-amount currency))
-                            ($ :p {:class "text-xs text-base-content/60"}
-                              (str (format-int expense-count) " expenses")))))
+                                   :class "rounded-xl bg-base-50 p-4 border border-base-200"}
+                            ($ :div {:class "flex justify-between items-start mb-2"}
+                              ($ :span {:class "ds-badge ds-badge-sm ds-badge-outline font-mono"} currency)
+                              ($ :span {:class "text-xs font-medium text-base-content/50 uppercase"} "Total"))
+                            ($ :p {:class "text-2xl font-bold tracking-tight"} (format-amount-only total-amount))
+                            ($ :p {:class "text-xs text-base-content/60 mt-1"}
+                              (str (format-int expense-count) " transactions")))))
                       deep-dive-summary))
-                  ($ :p {:class "text-sm text-base-content/60"}
-                    "No supplier summary data."))
+                  ($ :div {:class "alert alert-info"}
+                    ($ :span "No summary data available for this supplier.")))
 
-                ($ :div {:class "rounded-lg border border-base-200 p-3"}
-                  ($ :p {:class "text-sm font-medium mb-2"} "Trend by month")
+                ($ :div {:class "space-y-3"}
+                  ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 pl-1"} "Monthly Trend")
                   (if (seq deep-dive-trend)
-                    ($ :div {:class "overflow-x-auto"}
-                      ($ :table {:class "table table-sm"}
-                        ($ :thead
+                    ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm"}
+                      ($ :table {:class "table table-sm table-zebra w-full"}
+                        ($ :thead {:class "bg-base-100"}
                           ($ :tr
-                            ($ :th "Month")
-                            ($ :th "Currency")
-                            ($ :th {:class "text-right"} "Total")
-                            ($ :th {:class "text-right"} "Count")))
+                            ($ :th
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition flex items-center gap-1"
+                                          :on-click #(set-trend-sort! (fn [current]
+                                                                        (toggle-sort-config current :month :text)))}
+                                (sortable-column-label "Month" trend-sort :month)))
+                            ($ :th
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition flex items-center gap-1"
+                                          :on-click #(set-trend-sort! (fn [current]
+                                                                        (toggle-sort-config current :currency :text)))}
+                                (sortable-column-label "Currency" trend-sort :currency)))
+                            ($ :th {:class "text-right"}
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                          :on-click #(set-trend-sort! (fn [current]
+                                                                        (toggle-sort-config current :total_amount :number)))}
+                                (sortable-column-label "Total" trend-sort :total_amount)))
+                            ($ :th {:class "text-right"}
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                          :on-click #(set-trend-sort! (fn [current]
+                                                                        (toggle-sort-config current :expense_count :number)))}
+                                (sortable-column-label "Count" trend-sort :expense_count)))))
                         ($ :tbody
                           (mapv
                             (fn [row]
-                              ($ :tr {:key (str "trend-" (:month row) "-" (:currency row))}
-                                ($ :td (month-label (:month row)))
-                                ($ :td (str (:currency row)))
-                                ($ :td {:class "text-right font-mono"}
-                                  (format-money (:total_amount row) (:currency row)))
-                                ($ :td {:class "text-right"}
+                              ($ :tr {:key (str "trend-" (:month row) "-" (:currency row)) :class "hover"}
+                                ($ :td {:class "font-medium"} (month-label (:month row)))
+                                ($ :td {:class "text-xs text-base-content/70"} (str (:currency row)))
+                                ($ :td {:class "text-right font-mono font-medium"}
+                                  (format-amount-only (:total_amount row)))
+                                ($ :td {:class "text-right text-base-content/70"}
                                   (format-int (:expense_count row)))))
                             deep-dive-trend))))
-                    ($ :p {:class "text-sm text-base-content/60"}
-                      "No trend data for the selected filters.")))
+                    ($ :p {:class "text-sm text-base-content/60 italic p-4 bg-base-50 rounded-lg text-center"}
+                      "No trend data found.")))
 
-                ($ :div {:class "rounded-lg border border-base-200 p-3"}
-                  ($ :p {:class "text-sm font-medium mb-2"} "Supplier alias table (selected supplier only)")
+                ($ :div {:class "space-y-3"}
+                  ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 pl-1"} "Active Aliases")
                   (if (seq deep-dive-top-aliases)
-                    ($ :div {:class "overflow-x-auto"}
-                      ($ :table {:class "table table-sm"}
-                        ($ :thead
+                    ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm max-h-96"}
+                      ($ :table {:class "table table-sm table-pin-rows w-full"}
+                        ($ :thead {:class "bg-base-100"}
                           ($ :tr
-                            ($ :th "Alias label")
-                            ($ :th "Canonical item")
-                            ($ :th "Currency")
-                            ($ :th {:class "text-right"} "Total")
-                            ($ :th {:class "text-right"} "Lines")))
+                            ($ :th
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition text-left"
+                                          :on-click #(set-alias-sort! (fn [current]
+                                                                        (toggle-sort-config current :article_canonical_name :text)))}
+                                (sortable-column-label "Article" alias-sort :article_canonical_name)))
+                            ($ :th
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition text-left"
+                                          :on-click #(set-alias-sort! (fn [current]
+                                                                        (toggle-sort-config current :currency :text)))}
+                                (sortable-column-label "Curr" alias-sort :currency)))
+                            ($ :th {:class "text-right"}
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition w-full text-right"
+                                          :on-click #(set-alias-sort! (fn [current]
+                                                                        (toggle-sort-config current :total_amount :number)))}
+                                (sortable-column-label "Total" alias-sort :total_amount)))
+                            ($ :th {:class "text-right"}
+                              ($ :button {:type "button"
+                                          :class "font-bold hover:text-primary transition w-full text-right"
+                                          :on-click #(set-alias-sort! (fn [current]
+                                                                        (toggle-sort-config current :line_count :number)))}
+                                (sortable-column-label "Lines" alias-sort :line_count)))))
                         ($ :tbody
                           (mapv
                             (fn [row]
-                              ($ :tr {:key (str "alias-" (or (:alias_id row) (:alias_label row)) "-" (:currency row))}
-                                ($ :td (or (:alias_label row) "Unmapped item"))
-                                ($ :td (or (:article_canonical_name row) "—"))
-                                ($ :td (str (:currency row)))
-                                ($ :td {:class "text-right font-mono"}
-                                  (format-money (:total_amount row) (:currency row)))
-                                ($ :td {:class "text-right"}
+                              ($ :tr {:key (str "alias-" (or (:alias_id row) (:alias_label row)) "-" (:currency row)) :class "hover group"}
+                                ($ :td {:class "text-xs text-base-content/70 group-hover:text-primary transition-colors"}
+                                  (or (:article_canonical_name row) "—"))
+                                ($ :td {:class "text-xs"} (str (:currency row)))
+                                ($ :td {:class "text-right font-mono text-sm"}
+                                  (format-amount-only (:total_amount row)))
+                                ($ :td {:class "text-right text-xs text-base-content/60"}
                                   (format-int (:line_count row)))))
                             deep-dive-top-aliases))))
-                    ($ :p {:class "text-sm text-base-content/60"}
-                      "No alias-level details available."))))))
+                    ($ :p {:class "text-sm text-base-content/60 italic p-4 bg-base-50 rounded-lg text-center"}
+                      "No alias details found."))))))
 
           ;; 2) Day-of-week pattern
-          ($ section-shell {:title "2) Day-of-week pattern"
+          ($ section-shell {:title "Spending by Day"
+                            :subtitle "Weekly distribution analysis"
                             :loading? day-of-week-loading?
                             :error day-of-week-error}
             (if (seq day-pattern)
-              ($ :div {:class "space-y-2"}
-                ($ :p {:class "text-sm text-base-content/70"}
-                  "Click a day to toggle day-of-week filtering (applies to this widget and heatmap).")
-                (mapv
-                  (fn [row]
-                    (let [iso-day (:iso_day_of_week row)
-                          selected? (= selected-day-of-week iso-day)
-                          total (or (->number (:total_amount row)) 0)
-                          ratio (if (pos? day-pattern-max) (/ total day-pattern-max) 0)]
-                      ($ :button {:id (str "btn-day-filter-" (:day_key row))
-                                  :key (str "dow-" iso-day)
-                                  :class (str "w-full text-left rounded-lg border p-2 transition "
-                                           (if selected?
-                                             "border-primary bg-primary/10"
-                                             "border-base-200 hover:border-primary/40"))
-                                  :on-click #(rf/dispatch [:user-expenses/reports-toggle-day-of-week iso-day])}
-                        ($ :div {:class "flex items-center justify-between gap-2"}
-                          ($ :div
-                            ($ :p {:class "font-medium"} (:day_label row))
-                            ($ :p {:class "text-xs text-base-content/60"}
-                              (str (format-int (:expense_count row)) " expenses")))
-                          ($ :p {:class "font-mono text-sm"}
-                            (format-money total primary-currency)))
-                        ($ :div {:class "mt-2 h-2 bg-base-200 rounded overflow-hidden"}
-                          ($ :div {:class "h-full bg-primary"
-                                   :style {:width (str (* 100 ratio) "%")}})))))
-                  day-pattern))
-              ($ :p {:class "text-sm text-base-content/60"}
-                "No day-of-week data in the selected range."))))
+              ($ :div {:class "space-y-4"}
+                ($ :p {:class "text-xs text-base-content/60 bg-base-50 p-3 rounded-lg flex items-center gap-2"}
+                  ($ :span "ℹ️")
+                  "Click any row to filter the heatmap (Widget #6) by that day of the week.")
 
-        ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
+                ($ :div {:class "space-y-3"}
+                  (mapv
+                    (fn [row]
+                      (let [iso-day (:iso_day_of_week row)
+                            selected? (= selected-day-of-week iso-day)
+                            total (or (->number (:total_amount row)) 0)
+                            ratio (if (pos? day-pattern-max) (/ total day-pattern-max) 0)]
+                        ($ :button {:id (str "btn-day-filter-" (:day_key row))
+                                    :key (str "dow-" iso-day)
+                                    :class (str "w-full text-left group transition-all duration-200")
+                                    :on-click #(rf/dispatch [:user-expenses/reports-toggle-day-of-week iso-day])}
+                          ($ :div {:class "flex items-end justify-between gap-2 mb-1"}
+                            ($ :div {:class "flex items-baseline gap-2"}
+                              ($ :span {:class (str "font-bold text-sm " (if selected? "text-primary" "text-base-content/80"))} (:day_label row))
+                              ($ :span {:class "text-xs text-base-content/50"}
+                                (str (format-int (:expense_count row)) " txs")))
+                            ($ :span {:class "font-mono text-sm font-medium"}
+                              (format-money total primary-currency)))
+
+                          ($ :div {:class (str "h-3 rounded-full overflow-hidden "
+                                            (if selected? "bg-primary/10 ring-2 ring-primary ring-offset-1" "bg-base-100"))}
+                            ($ :div {:class (str "h-full rounded-full transition-all duration-500 "
+                                              (if selected? "bg-primary" "bg-base-content/20 group-hover:bg-primary/60"))
+                                     :style {:width (str (* 100 ratio) "%")}})))))
+                    day-pattern)))
+              ($ :div {:class "flex flex-col items-center justify-center h-48 text-center p-8 bg-base-50 rounded-xl border border-dashed border-base-300"}
+                ($ :p {:class "text-base-content/60"} "No weekly pattern data available.")))))
+
+        ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-8"}
           ;; 3) Top items table/report
-          ($ section-shell {:title "3) Global top items (cross-supplier context)"
+          ($ section-shell {:title "Top Global Items"
+                            :subtitle "Highest spending by article across all suppliers"
                             :loading? top-items-loading?
                             :error top-items-error}
-            ($ :div {:class "space-y-1"}
-              ($ :p {:class "text-xs text-base-content/70"}
-                "This is the global context table for top items across suppliers in the current date/filter scope. Widget #1 is supplier-only.")
+            ($ :div {:class "space-y-4"}
               (if (seq selected-bucket-key)
-                ($ :p {:class "text-xs text-base-content/70"}
-                  (str "Filtered by amount bucket: " selected-bucket-key))
-                ($ :p {:class "text-xs text-base-content/70"}
-                  "Click a size bucket in widget #5 to cross-filter this global table.")))
+                ($ :div {:class "bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-center justify-between text-sm"}
+                  ($ :div {:class "flex items-center gap-2"}
+                    ($ :span "🔍")
+                    ($ :span "Filtered by size bucket: "
+                      ($ :span {:class "font-bold text-primary"} selected-bucket-key)))
+                  ($ button {:btn-type :ghost :size :xs :class "text-primary"
+                             :on-click #(rf/dispatch [:user-expenses/reports-toggle-amount-bucket nil])}
+                    "Clear"))
+                ($ :p {:class "text-xs text-base-content/50 px-1"}
+                  "Tip: Use the 'Size Distribution' widget below to filter this list by expense amount."))
 
-            (if (seq top-items-visible)
-              ($ :div {:class "overflow-x-auto"}
-                ($ :table {:id "table-top-items"
-                           :class "table table-sm"}
-                  ($ :thead
-                    ($ :tr
-                      ($ :th "Canonical item / alias")
-                      ($ :th "Currency")
-                      ($ :th {:class "text-right"} "Total")
-                      ($ :th {:class "text-right"} "Qty")
-                      ($ :th {:class "text-right"} "Lines")))
-                  ($ :tbody
-                    (mapv
-                      (fn [row]
-                        ($ :tr {:key (str "top-item-" (or (:alias_id row) (:alias_label row)) "-" (:currency row))}
-                          ($ :td
-                            ($ :div {:class "leading-tight"}
-                              ($ :p {:class "font-medium"} (or (:article_canonical_name row) "—"))
-                              ($ :p {:class "text-xs text-base-content/60"}
-                                (str "Alias: " (or (:alias_label row) "Unmapped item")))))
-                          ($ :td (str (:currency row)))
-                          ($ :td {:class "text-right font-mono"}
-                            (format-money (:total_amount row) (:currency row)))
-                          ($ :td {:class "text-right"}
-                            (format-int (:qty_total row)))
-                          ($ :td {:class "text-right"}
-                            (format-int (:line_count row)))))
-                      top-items-visible))))
-              ($ :p {:class "text-sm text-base-content/60"}
-                "No top-item-alias rows match the active filters.")))
+              (if (seq top-items-visible)
+                ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm"}
+                  ($ :table {:id "table-top-items"
+                             :class "table table-sm table-zebra w-full"}
+                    ($ :thead {:class "bg-base-100"}
+                      ($ :tr
+                        ($ :th
+                          ($ :button {:type "button"
+                                      :class "font-bold hover:text-primary transition flex items-center gap-1"
+                                      :on-click #(set-top-items-sort! (fn [current]
+                                                                        (toggle-sort-config current :article_canonical_name :text)))}
+                            (sortable-column-label "Article" top-items-sort :article_canonical_name)))
+                        ($ :th
+                          ($ :button {:type "button"
+                                      :class "font-bold hover:text-primary transition flex items-center gap-1"
+                                      :on-click #(set-top-items-sort! (fn [current]
+                                                                        (toggle-sort-config current :currency :text)))}
+                            (sortable-column-label "Curr" top-items-sort :currency)))
+                        ($ :th {:class "text-right"}
+                          ($ :button {:type "button"
+                                      :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                      :on-click #(set-top-items-sort! (fn [current]
+                                                                        (toggle-sort-config current :total_amount :number)))}
+                            (sortable-column-label "Total Expenses" top-items-sort :total_amount)))
+                        ($ :th {:class "text-right hidden sm:table-cell"}
+                          ($ :button {:type "button"
+                                      :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                      :on-click #(set-top-items-sort! (fn [current]
+                                                                        (toggle-sort-config current :qty_total :number)))}
+                            (sortable-column-label "Qty" top-items-sort :qty_total)))
+                        ($ :th {:class "text-right"}
+                          ($ :button {:type "button"
+                                      :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                      :on-click #(set-top-items-sort! (fn [current]
+                                                                        (toggle-sort-config current :line_count :number)))}
+                            (sortable-column-label "Lines" top-items-sort :line_count)))))
+                    ($ :tbody
+                      (mapv
+                        (fn [row]
+                          ($ :tr {:key (str "top-item-" (or (:alias_id row) (:alias_label row)) "-" (:currency row)) :class "hover"}
+                            ($ :td {:class "font-medium"}
+                              (or (some-> (:article_canonical_name row) str str/trim not-empty)
+                                "—"))
+                            ($ :td {:class "text-xs text-base-content/60"} (str (:currency row)))
+                            ($ :td {:class "text-right font-mono font-medium"}
+                              (format-amount-only (:total_amount row)))
+                            ($ :td {:class "text-right hidden sm:table-cell text-base-content/70"}
+                              (format-int (:qty_total row)))
+                            ($ :td {:class "text-right text-base-content/60"}
+                              (format-int (:line_count row)))))
+                        top-items-visible))))
+                ($ :div {:class "flex flex-col items-center justify-center p-8 bg-base-50 rounded-xl text-center"}
+                  ($ :p {:class "text-base-content/60"} "No items found matching the current filters.")))))
 
           ;; 4) Monthly comparison selector + deltas
-          ($ section-shell {:title "4) Monthly comparison"
+          ($ section-shell {:title "Monthly Comparison"
+                            :subtitle "Compare spending between two specific months"
                             :loading? monthly-comparison-loading?
                             :error monthly-comparison-error}
-            ($ :div {:class "flex flex-wrap gap-2 items-end"}
-              ($ :div
-                ($ :label {:class "text-xs text-base-content/60"
-                           :for "reports-month-a-select"}
-                  "Month A")
-                ($ :select {:id "reports-month-a-select"
-                            :class "ds-select ds-select-sm ds-select-bordered"
-                            :value (or month-a "")
-                            :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                      :month-a
-                                                      (.. % -target -value)])}
-                  (mapv
-                    (fn [month]
-                      ($ :option {:key (str "month-a-" month) :value month}
-                        (month-label month)))
-                    month-options*)))
+            ($ :div {:class "space-y-6"}
+              ($ :div {:class "bg-base-50 p-4 rounded-xl border border-base-200 flex flex-wrap gap-4 items-end"}
+                ($ :div {:class "flex-1 min-w-[200px]"}
+                  ($ :label {:class "text-xs font-bold uppercase text-base-content/50 mb-1.5 block"
+                             :for "reports-month-a-select"}
+                    "Base Month (A)")
+                  ($ :select {:id "reports-month-a-select"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white"
+                              :value (or month-a "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :month-a
+                                                        (.. % -target -value)])}
+                    (mapv
+                      (fn [month]
+                        ($ :option {:key (str "month-a-" month) :value month}
+                          (month-label month)))
+                      month-options*)))
 
-              ($ :div
-                ($ :label {:class "text-xs text-base-content/60"
-                           :for "reports-month-b-select"}
-                  "Month B")
-                ($ :select {:id "reports-month-b-select"
-                            :class "ds-select ds-select-sm ds-select-bordered"
-                            :value (or month-b "")
-                            :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                      :month-b
-                                                      (.. % -target -value)])}
-                  (mapv
-                    (fn [month]
-                      ($ :option {:key (str "month-b-" month) :value month}
-                        (month-label month)))
-                    month-options*))))
+                ($ :div {:class "flex items-center justify-center pb-1 text-base-content/30"}
+                  ($ :span {:class "text-xl"} "VS"))
+
+                ($ :div {:class "flex-1 min-w-[200px]"}
+                  ($ :label {:class "text-xs font-bold uppercase text-base-content/50 mb-1.5 block"
+                             :for "reports-month-b-select"}
+                    "Comparison Month (B)")
+                  ($ :select {:id "reports-month-b-select"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white"
+                              :value (or month-b "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :month-b
+                                                        (.. % -target -value)])}
+                    (mapv
+                      (fn [month]
+                        ($ :option {:key (str "month-b-" month) :value month}
+                          (month-label month)))
+                      month-options*)))))
 
             (if (seq monthly-by-currency)
-              ($ :div {:class "overflow-x-auto"}
-                ($ :table {:class "table table-sm"}
-                  ($ :thead
+              ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm"}
+                ($ :table {:class "table table-sm w-full"}
+                  ($ :thead {:class "bg-base-100"}
                     ($ :tr
-                      ($ :th "Currency")
-                      ($ :th {:class "text-right"} (str "A (" (month-label month-a) ")"))
-                      ($ :th {:class "text-right"} (str "B (" (month-label month-b) ")"))
-                      ($ :th {:class "text-right"} "Δ Amount")
-                      ($ :th {:class "text-right"} "Δ %")
-                      ($ :th {:class "text-right"} "Δ Count")))
+                      ($ :th {:class "whitespace-nowrap font-bold"} "Currency")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} (str "Month A (" (month-label month-a) ")"))
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} (str "Month B (" (month-label month-b) ")"))
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Diff (Cash)")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Diff (%)")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Tx Count")))
                   ($ :tbody
                     (mapv
                       (fn [row]
                         (let [delta (or (->number (:delta_amount row)) 0)
                               positive? (>= delta 0)]
                           ($ :tr {:key (str "monthly-currency-" (:currency row))}
-                            ($ :td (str (:currency row)))
-                            ($ :td {:class "text-right font-mono"}
-                              (format-money (:month_a_total row) (:currency row)))
-                            ($ :td {:class "text-right font-mono"}
-                              (format-money (:month_b_total row) (:currency row)))
-                            ($ :td {:class (str "text-right font-mono " (if positive? "text-success" "text-error"))}
-                              (format-money delta (:currency row)))
-                            ($ :td {:class "text-right"}
+                            ($ :td {:class "font-bold text-xs"} (str (:currency row)))
+                            ($ :td {:class "text-right font-mono text-base-content/70"}
+                              (format-amount-only (:month_a_total row)))
+                            ($ :td {:class "text-right font-mono text-base-content/70"}
+                              (format-amount-only (:month_b_total row)))
+                            ($ :td {:class (str "text-right font-mono font-bold " (if positive? "text-error" "text-success"))}
+                              (str (if positive? "+" "") (format-amount-only delta)))
+                            ($ :td {:class (str "text-right font-medium " (if positive? "text-error" "text-success"))}
                               (format-percent (:delta_percent row)))
-                            ($ :td {:class "text-right"}
+                            ($ :td {:class "text-right text-xs"}
                               (format-int (:delta_count row))))))
                       monthly-by-currency))))
-              ($ :p {:class "text-sm text-base-content/60"}
-                "No monthly comparison rows for the selected months."))
+              ($ :p {:class "text-center p-4 bg-base-50 rounded-lg text-base-content/60 text-sm"}
+                "Select two different months to compare."))
 
             (when (seq monthly-by-supplier)
-              ($ :div {:class "rounded-lg border border-base-200 p-3"}
-                ($ :p {:class "text-sm font-medium mb-2"} "Largest supplier deltas")
-                ($ :div {:class "space-y-2"}
+              ($ :div {:class "mt-6 pt-6 border-t border-base-100"}
+                ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 mb-3 pl-1"} "Largest Changes by Vendor")
+                ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-2"}
                   (mapv
                     (fn [row]
                       (let [delta (or (->number (:delta_amount row)) 0)
                             positive? (>= delta 0)]
                         ($ :div {:key (str "supplier-delta-" (or (:supplier_id row) (:supplier_name row)) "-" (:currency row))
-                                 :class "flex items-center justify-between gap-3 text-sm"}
-                          ($ :span (or (:supplier_name row) "Unknown supplier"))
-                          ($ :span {:class (str "font-mono " (if positive? "text-success" "text-error"))}
-                            (format-money delta (:currency row))))))
+                                 :class "flex items-center justify-between gap-3 p-3 bg-base-50 rounded-lg border border-base-100 hover:bg-base-100 transition shadow-sm"}
+                          ($ :span {:class "text-sm font-medium truncate"} (or (:supplier_name row) "Unknown supplier"))
+                          ($ :span {:class (str "font-mono font-bold text-sm " (if positive? "text-error" "text-success"))}
+                            (str (if positive? "+" "") (format-money delta (:currency row)))))))
                     (take 6 monthly-by-supplier)))))))
 
-        ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
-          ;; 5) Size distribution chart with clickable buckets
-          ($ section-shell {:title "5) Expense size distribution"
+        ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-8"}
+          ;; 5) Size distribution chart
+          ($ section-shell {:title "Expense Sizes"
+                            :subtitle "Distribution by transaction amount"
                             :loading? size-distribution-loading?
                             :error size-distribution-error}
-            ($ :p {:class "text-sm text-base-content/70"}
-              "Click a bucket to filter the top-items report.")
-            (if (seq size-buckets)
-              ($ :div {:class "space-y-2"}
-                (mapv
-                  (fn [row]
-                    (let [bucket-key (:bucket_key row)
-                          selected? (= selected-bucket-key bucket-key)
-                          total (or (->number (:total_amount row)) 0)
-                          ratio (if (pos? size-buckets-max) (/ total size-buckets-max) 0)]
-                      ($ :button {:id (str "btn-size-bucket-" bucket-key)
-                                  :key (str "bucket-" bucket-key)
-                                  :class (str "w-full text-left rounded-lg border p-2 transition "
-                                           (if selected?
-                                             "border-primary bg-primary/10"
-                                             "border-base-200 hover:border-primary/40"))
-                                  :on-click #(rf/dispatch [:user-expenses/reports-toggle-amount-bucket bucket-key])}
-                        ($ :div {:class "flex items-center justify-between gap-2"}
-                          ($ :div
-                            ($ :p {:class "font-medium"} (:bucket_label row))
-                            ($ :p {:class "text-xs text-base-content/60"}
-                              (str (format-int (:expense_count row)) " expenses")))
-                          ($ :p {:class "font-mono text-sm"}
-                            (format-money total primary-currency)))
-                        ($ :div {:class "mt-2 h-2 bg-base-200 rounded overflow-hidden"}
-                          ($ :div {:class "h-full bg-primary"
-                                   :style {:width (str (* 100 ratio) "%")}})))))
-                  size-buckets))
-              ($ :p {:class "text-sm text-base-content/60"}
-                "No size-distribution buckets found.")))
+            ($ :div {:class "space-y-4"}
+              ($ :p {:class "text-xs text-base-content/60 bg-base-50 p-3 rounded-lg flex items-center gap-2"}
+                ($ :span "ℹ️")
+                "Click any bucket to filter the Global Items list (Widget #3) by amount.")
 
-          ;; 6) Daily heatmap/calendar aggregation with day selection
-          ($ section-shell {:title "6) Daily heatmap"
-                            :loading? daily-heatmap-loading?
-                            :error daily-heatmap-error}
-            ($ :p {:class "text-sm text-base-content/70"}
-              "Click a day cell to select/unselect it. Day-of-week filter applies here too.")
-            (if (seq heatmap-visible)
-              ($ :div {:class "space-y-3"}
-                ($ :div {:class "grid grid-cols-7 gap-1"}
+              (if (seq size-buckets)
+                ($ :div {:class "space-y-3"}
                   (mapv
                     (fn [row]
-                      (let [total (or (->number (:total_amount row)) 0)
-                            ratio (if (pos? heatmap-max) (/ total heatmap-max) 0)
-                            selected? (= selected-day (:day row))]
-                        ($ :button {:id (str "btn-heatmap-day-" (:day row))
-                                    :key (str "heat-" (:day row))
-                                    :class (str "h-10 rounded text-[11px] font-medium border transition "
-                                             (heat-intensity-class ratio)
-                                             " "
-                                             (if selected? "border-primary ring-1 ring-primary" "border-base-300"))
-                                    :title (str (:day row) " · " (format-money total primary-currency)
-                                             " · " (format-int (:expense_count row)) " expenses")
-                                    :on-click #(rf/dispatch [:user-expenses/reports-toggle-selected-day (:day row)])}
-                          ($ :span (subs (:day row) 8 10)))))
-                    heatmap-visible))
+                      (let [bucket-key (:bucket_key row)
+                            selected? (= selected-bucket-key bucket-key)
+                            total (or (->number (:total_amount row)) 0)
+                            ratio (if (pos? size-buckets-max) (/ total size-buckets-max) 0)]
+                        ($ :button {:id (str "btn-size-bucket-" bucket-key)
+                                    :key (str "bucket-" bucket-key)
+                                    :class "w-full text-left group transition-all duration-200"
+                                    :on-click #(rf/dispatch [:user-expenses/reports-toggle-amount-bucket bucket-key])}
+                          ($ :div {:class "flex items-end justify-between gap-2 mb-1"}
+                            ($ :div {:class "flex items-baseline gap-2"}
+                              ($ :span {:class (str "font-bold text-sm " (if selected? "text-primary" "text-base-content/80"))} (:bucket_label row))
+                              ($ :span {:class "text-xs text-base-content/50"}
+                                (str (format-int (:expense_count row)) " txs")))
+                            ($ :span {:class "font-mono text-sm font-medium"}
+                              (format-money total primary-currency)))
 
-                (when selected-heatmap-day
-                  ($ :div {:class "rounded-lg border border-primary/40 bg-primary/5 p-3"}
-                    ($ :p {:class "text-sm font-medium"}
-                      (str "Selected day: " (:day selected-heatmap-day)))
-                    ($ :p {:class "text-sm"}
-                      (str "Total: "
-                        (format-money (:total_amount selected-heatmap-day) primary-currency)
-                        " · Expenses: "
-                        (format-int (:expense_count selected-heatmap-day))))
-                    ($ button {:id "btn-heatmap-clear-selected-day"
-                               :btn-type :ghost
-                               :size :xs
-                               :on-click #(rf/dispatch [:user-expenses/reports-toggle-selected-day (:day selected-heatmap-day)])}
-                      "Clear selection"))))
-              ($ :p {:class "text-sm text-base-content/60"}
-                "No heatmap data in selected range/filter."))))
+                          ($ :div {:class (str "h-4 rounded-md overflow-hidden "
+                                            (if selected? "bg-primary/10 ring-2 ring-primary ring-offset-1" "bg-base-100"))}
+                            ($ :div {:class (str "h-full rounded-md transition-all duration-500 "
+                                              (if selected? "bg-primary" "bg-base-content/20 group-hover:bg-primary/60"))
+                                     :style {:width (str (* 100 ratio) "%")}})))))
+                    size-buckets))
+                ($ :p {:class "text-center p-8 text-base-content/60"}
+                  "No size distribution data available."))))
 
-        ($ :div {:class "grid grid-cols-1"}
-          ;; 7) Category allocation with uncategorized visibility
-          ($ section-shell {:title "7) Category allocation"
+          ;; 6) Daily heatmap
+          ($ section-shell {:title "Calendar Heatmap"
+                            :subtitle "Daily spending intensity"
+                            :loading? daily-heatmap-loading?
+                            :error daily-heatmap-error}
+            ($ :div {:class "space-y-4"}
+              (if (seq heatmap-visible)
+                ($ :div {:class "space-y-4"}
+                  ($ :div {:class "flex gap-2 flex-wrap text-xs text-base-content/50 mb-2"}
+                    ($ :div {:class "flex items-center gap-1"}
+                      ($ :div {:class "w-3 h-3 bg-base-200 rounded-sm"}) "None")
+                    ($ :div {:class "flex items-center gap-1"}
+                      ($ :div {:class "w-3 h-3 bg-primary/20 rounded-sm"}) "Low")
+                    ($ :div {:class "flex items-center gap-1"}
+                      ($ :div {:class "w-3 h-3 bg-primary/40 rounded-sm"}) "Medium")
+                    ($ :div {:class "flex items-center gap-1"}
+                      ($ :div {:class "w-3 h-3 bg-primary/70 rounded-sm"}) "High")
+                    ($ :div {:class "flex items-center gap-1"}
+                      ($ :div {:class "w-3 h-3 bg-primary rounded-sm"}) "Max"))
+
+                  ($ :div {:class "grid grid-cols-7 gap-1.5"}
+                    ;; Do headers for days of week? Maybe simplistic "Mon Tue..." etc.
+                    ;; For now just the cells
+                    (mapv
+                      (fn [row]
+                        (let [total (or (->number (:total_amount row)) 0)
+                              ratio (if (pos? heatmap-max) (/ total heatmap-max) 0)
+                              selected? (= selected-day (:day row))]
+                          ($ :button {:id (str "btn-heatmap-day-" (:day row))
+                                      :key (str "heat-" (:day row))
+                                      :class (str "aspect-square rounded md:rounded-lg text-[10px] md:text-xs font-bold transition-all duration-200 relative group "
+                                               (heat-intensity-class ratio)
+                                               " "
+                                               (if selected? "ring-2 ring-offset-2 ring-primary z-10 scale-110 shadow-lg" "hover:scale-105"))
+                                      :title (str (:day row) " · " (format-money total primary-currency)
+                                               " · " (format-int (:expense_count row)) " expenses")
+                                      :on-click #(rf/dispatch [:user-expenses/reports-toggle-selected-day (:day row)])}
+                            ($ :span {:class "opacity-70 group-hover:opacity-100"} (subs (:day row) 8 10)))))
+                      heatmap-visible))
+
+                  (when selected-heatmap-day
+                    ($ :div {:class "mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200"}
+                      ($ :div
+                        ($ :p {:class "text-xs font-bold text-primary uppercase tracking-wider mb-0.5"} "Selected Day")
+                        ($ :p {:class "text-lg font-bold"} (str (:day selected-heatmap-day)))
+                        ($ :div {:class "text-sm text-base-content/70 mt-1 flex gap-3"}
+                          ($ :span (str "Spent: " ($ :span {:class "font-mono font-bold text-base-content"} (format-money (:total_amount selected-heatmap-day) primary-currency))))
+                          ($ :span (str "Tx count: " ($ :span {:class "font-mono font-bold text-base-content"} (format-int (:expense_count selected-heatmap-day)))))))
+                      ($ button {:id "btn-heatmap-clear-selected-day"
+                                 :btn-type :ghost
+                                 :size :sm
+                                 :class "text-base-content/60 hover:text-base-content"
+                                 :on-click #(rf/dispatch [:user-expenses/reports-toggle-selected-day (:day selected-heatmap-day)])}
+                        "Clear"))))
+                ($ :div {:class "flex items-center justify-center p-8 bg-base-50 rounded-xl border border-dashed border-base-300"}
+                  ($ :p {:class "text-base-content/60"} "No activity data in this range."))))))
+
+        ($ :div {:class "grid grid-cols-1 mb-12"}
+          ;; 7) Category allocation
+          ($ section-shell {:title "Category Allocation"
+                            :subtitle "Spending breakdown by category"
                             :loading? category-allocation-loading?
-                            :error category-allocation-error}
-            ($ :div {:class "flex flex-wrap items-center gap-3"}
-              ($ :label {:class "inline-flex items-center gap-2 text-sm"
-                         :for "toggle-category-uncategorized-visibility"}
-                ($ :input {:id "toggle-category-uncategorized-visibility"
-                           :type "checkbox"
-                           :class "ds-checkbox ds-checkbox-sm"
-                           :checked show-uncategorized?
-                           :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                     :show-uncategorized?
-                                                     (.. % -target -checked)])})
-                ($ :span "Show uncategorized"))
-              (when (seq selected-category-key)
-                ($ :span {:class "text-xs text-base-content/70"}
-                  (str "Selected category filter: " selected-category-key))))
-
+                            :error category-allocation-error
+                            :header-actions ($ :label {:class "cursor-pointer label p-0 gap-2 hover:opacity-80 transition"}
+                                              ($ :span {:class "label-text text-xs font-medium text-base-content/70"} "Show Uncategorized")
+                                              ($ :input {:id "toggle-category-uncategorized-visibility"
+                                                         :type "checkbox"
+                                                         :class "ds-toggle ds-toggle-primary ds-toggle-xs"
+                                                         :checked show-uncategorized?
+                                                         :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                                                   :show-uncategorized?
+                                                                                   (.. % -target -checked)])}))}
             (if (seq category-rows)
-              ($ :div {:class "space-y-2"}
+              ($ :div {:class "space-y-3"}
+                (when (seq selected-category-key)
+                  ($ :div {:class "bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-center justify-between text-sm mb-2"}
+                    ($ :span (str "Filtering report by: " selected-category-key))
+                    ($ button {:btn-type :ghost :size :xs :class "text-primary"
+                               :on-click #(rf/dispatch [:user-expenses/reports-toggle-category nil])}
+                      "Clear selection")))
+
                 (mapv
                   (fn [row]
                     (let [category-key (:category_key row)
@@ -886,22 +1082,23 @@
                           ratio (if (pos? category-max) (/ total category-max) 0)]
                       ($ :button {:id (str "btn-category-filter-" category-key)
                                   :key (str "category-" category-key)
-                                  :class (str "w-full text-left rounded-lg border p-2 transition "
-                                           (if selected?
-                                             "border-primary bg-primary/10"
-                                             "border-base-200 hover:border-primary/40"))
+                                  :class "w-full text-left group transition-all duration-200"
                                   :on-click #(rf/dispatch [:user-expenses/reports-toggle-category category-key])}
-                        ($ :div {:class "flex items-center justify-between gap-2"}
-                          ($ :div
-                            ($ :p {:class "font-medium"} (or (:category_name row) "Uncategorized"))
-                            ($ :p {:class "text-xs text-base-content/60"}
-                              (str (format-int (:line_count row)) " lines · "
-                                (format-percent (:allocation_pct row)))))
-                          ($ :p {:class "font-mono text-sm"}
+                        ($ :div {:class "flex items-end justify-between gap-2 mb-1"}
+                          ($ :div {:class "flex items-baseline gap-2"}
+                            ($ :div {:class "flex items-center gap-2"}
+                              ($ :div {:class "w-2 h-2 rounded-full bg-primary/50"})
+                              ($ :span {:class (str "font-bold text-sm " (if selected? "text-primary" "text-base-content/80"))}
+                                (or (:category_name row) "Uncategorized")))
+                            ($ :span {:class "text-xs text-base-content/50"}
+                              (str (format-int (:line_count row)) " lines · " (format-percent (:allocation_pct row)))))
+                          ($ :span {:class "font-mono text-sm font-medium"}
                             (format-money total primary-currency)))
-                        ($ :div {:class "mt-2 h-2 bg-base-200 rounded overflow-hidden"}
-                          ($ :div {:class "h-full bg-primary"
+
+                        ($ :div {:class "h-2 bg-base-100 rounded-full overflow-hidden relative"}
+                          ($ :div {:class (str "h-full rounded-full transition-all duration-500 absolute top-0 left-0 "
+                                            (if selected? "bg-primary" "bg-base-content/20 group-hover:bg-primary/60"))
                                    :style {:width (str (* 100 ratio) "%")}})))))
                   category-rows))
-              ($ :p {:class "text-sm text-base-content/60"}
-                "No category allocation rows found."))))))))
+              ($ :p {:class "text-center p-8 bg-base-50 rounded-xl text-base-content/60"}
+                "No category data available."))))))))
