@@ -246,10 +246,22 @@
         summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
         by-month (or (use-subscribe [:user-expenses/by-month]) [])
         by-supplier (or (use-subscribe [:user-expenses/by-supplier]) [])
+        categories-data (or (use-subscribe [:user-expenses/categories]) [])
+        subcategories-data (or (use-subscribe [:user-expenses/subcategories]) [])
+        expense-categories-data (or (use-subscribe [:user-expenses/expense-categories]) [])
+        manufacturers-data (or (use-subscribe [:user-expenses/manufacturers]) [])
+        template-categories (or (use-subscribe [:app.template.frontend.subs.entity/entities :categories]) [])
+        template-subcategories (or (use-subscribe [:app.template.frontend.subs.entity/entities :subcategories]) [])
+        template-expense-categories (or (use-subscribe [:app.template.frontend.subs.entity/entities :expense-categories]) [])
+        template-manufacturers (or (use-subscribe [:app.template.frontend.subs.entity/entities :manufacturers]) [])
 
         reports-filters (or (use-subscribe [:user-expenses/reports-filters]) {})
         months-back (or (:months-back reports-filters) 6)
         selected-supplier-id (:supplier-id reports-filters)
+        selected-category-id (:category-id reports-filters)
+        selected-subcategory-id (:subcategory-id reports-filters)
+        selected-expense-category-id (:expense-category-id reports-filters)
+        selected-manufacturer-id (:manufacturer-id reports-filters)
         selected-day-of-week (:day-of-week reports-filters)
         selected-category-key (:category-key reports-filters)
         selected-bucket-key (:amount-bucket reports-filters)
@@ -287,6 +299,42 @@
         category-allocation-error (use-subscribe [:user-expenses/report-category-allocation-error])
 
         suppliers* (supplier-options by-supplier)
+        categories* (->> (if (seq categories-data) categories-data template-categories)
+                      (keep (fn [row]
+                              (let [id (some-> (:id row) str)
+                                    name* (some-> (:name row) str str/trim)]
+                                (when (and (seq id) (seq name*))
+                                  {:id id :name name*}))))
+                      (sort-by (comp str/lower-case :name))
+                      vec)
+        subcategories* (->> (if (seq subcategories-data) subcategories-data template-subcategories)
+                         (keep (fn [row]
+                                 (let [id (some-> (:id row) str)
+                                       name* (some-> (:name row) str str/trim)]
+                                   (when (and (seq id) (seq name*))
+                                     {:id id :name name*}))))
+                         (sort-by (comp str/lower-case :name))
+                         vec)
+        expense-categories* (->> (if (seq expense-categories-data) expense-categories-data template-expense-categories)
+                              (keep (fn [row]
+                                      (let [id (some-> (:id row) str)
+                                            name* (some-> (:name row) str str/trim)]
+                                        (when (and (seq id) (seq name*))
+                                          {:id id :name name*}))))
+                              (sort-by (comp str/lower-case :name))
+                              vec)
+        manufacturers* (->> (if (seq manufacturers-data) manufacturers-data template-manufacturers)
+                         (keep (fn [row]
+                                 (let [id (some-> (:id row) str)
+                                       name* (some-> (or (:display_name row)
+                                                       (:display-name row)
+                                                       (:name row))
+                                               str
+                                               str/trim)]
+                                   (when (and (seq id) (seq name*))
+                                     {:id id :name name*}))))
+                         (sort-by (comp str/lower-case :name))
+                         vec)
         supplier-name-by-id (into {} (map (juxt :id :name) suppliers*))
         selected-supplier-name (or (get supplier-name-by-id (some-> selected-supplier-id str))
                                  (:supplier-name supplier-deep-dive)
@@ -354,49 +402,112 @@
               ($ :p {:class "text-sm text-base-content/70 mt-1"}
                 "Explore spending behavior with interactive report widgets."))
 
-            ($ :div {:class "flex flex-wrap items-center gap-2"}
-              ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-months-back"} "Range")
-              ($ :select {:id "reports-filter-months-back"
-                          :class "ds-select ds-select-sm ds-select-bordered"
-                          :value months-back
-                          :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                    :months-back
-                                                    (js/parseInt (.. % -target -value) 10)])}
-                ($ :option {:value 3} "Last 3 months")
-                ($ :option {:value 6} "Last 6 months")
-                ($ :option {:value 12} "Last 12 months")
-                ($ :option {:value 24} "Last 24 months"))
+            ($ :div {:class "w-full rounded-xl border border-base-200 bg-base-100 p-3 sm:p-4 space-y-3"}
+              ($ :p {:class "text-xs text-base-content/70"}
+                "These dropdowns set the shared API scope for widgets #1-#7. Widget click-filters stay local until cleared.")
 
-              ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-supplier"} "Supplier")
-              ($ :select {:id "reports-filter-supplier"
-                          :class "ds-select ds-select-sm ds-select-bordered min-w-[14rem]"
-                          :value (or selected-supplier-id "")
-                          :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                    :supplier-id
-                                                    (let [v (.. % -target -value)]
-                                                      (when (seq (str/trim v)) v))])}
-                ($ :option {:value ""} "All suppliers")
-                (mapv (fn [{:keys [id name]}]
-                        ($ :option {:key id :value id} name))
-                  suppliers*))
+              ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"}
+                ($ :div {:class "space-y-1"}
+                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-months-back"} "Range")
+                  ($ :select {:id "reports-filter-months-back"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :value months-back
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :months-back
+                                                        (js/parseInt (.. % -target -value) 10)])}
+                    ($ :option {:value 3} "Last 3 months")
+                    ($ :option {:value 6} "Last 6 months")
+                    ($ :option {:value 12} "Last 12 months")
+                    ($ :option {:value 24} "Last 24 months")))
 
-              ($ button {:id "btn-reports-refresh"
-                         :btn-type :outline
-                         :size :sm
-                         :on-click #(rf/dispatch [:user-expenses/reports-refresh])}
-                "Refresh")
+                ($ :div {:class "space-y-1"}
+                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-supplier"} "Supplier")
+                  ($ :select {:id "reports-filter-supplier"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :value (or selected-supplier-id "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :supplier-id
+                                                        (let [v (.. % -target -value)]
+                                                          (when (seq (str/trim v)) v))])}
+                    ($ :option {:value ""} "All suppliers")
+                    (mapv (fn [{:keys [id name]}]
+                            ($ :option {:key id :value id} name))
+                      suppliers*)))
 
-              ($ button {:id "btn-reports-clear-local-filters"
-                         :btn-type :ghost
-                         :size :sm
-                         :on-click #(rf/dispatch [:user-expenses/reports-clear-local-filters])}
-                "Clear local filters")
+                ($ :div {:class "space-y-1"}
+                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-category"} "Category")
+                  ($ :select {:id "reports-filter-category"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :value (or selected-category-id "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :category-id
+                                                        (let [v (.. % -target -value)]
+                                                          (when (seq (str/trim v)) v))])}
+                    ($ :option {:value ""} "All categories")
+                    (mapv (fn [{:keys [id name]}]
+                            ($ :option {:key id :value id} name))
+                      categories*)))
 
-              ($ button {:id "btn-reports-back-dashboard"
-                         :btn-type :ghost
-                         :size :sm
-                         :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                "Dashboard")))))
+                ($ :div {:class "space-y-1"}
+                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-subcategory"} "Subcategory")
+                  ($ :select {:id "reports-filter-subcategory"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :value (or selected-subcategory-id "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :subcategory-id
+                                                        (let [v (.. % -target -value)]
+                                                          (when (seq (str/trim v)) v))])}
+                    ($ :option {:value ""} "All subcategories")
+                    (mapv (fn [{:keys [id name]}]
+                            ($ :option {:key id :value id} name))
+                      subcategories*)))
+
+                ($ :div {:class "space-y-1"}
+                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-expense-category"} "Expense category")
+                  ($ :select {:id "reports-filter-expense-category"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :value (or selected-expense-category-id "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :expense-category-id
+                                                        (let [v (.. % -target -value)]
+                                                          (when (seq (str/trim v)) v))])}
+                    ($ :option {:value ""} "All expense categories")
+                    (mapv (fn [{:keys [id name]}]
+                            ($ :option {:key id :value id} name))
+                      expense-categories*)))
+
+                ($ :div {:class "space-y-1"}
+                  ($ :label {:class "text-xs text-base-content/60" :for "reports-filter-manufacturer"} "Manufacturer")
+                  ($ :select {:id "reports-filter-manufacturer"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full"
+                              :value (or selected-manufacturer-id "")
+                              :on-change #(rf/dispatch [:user-expenses/reports-set-filter
+                                                        :manufacturer-id
+                                                        (let [v (.. % -target -value)]
+                                                          (when (seq (str/trim v)) v))])}
+                    ($ :option {:value ""} "All manufacturers")
+                    (mapv (fn [{:keys [id name]}]
+                            ($ :option {:key id :value id} name))
+                      manufacturers*))))
+
+              ($ :div {:class "flex flex-wrap items-center gap-2"}
+                ($ button {:id "btn-reports-refresh"
+                           :btn-type :outline
+                           :size :sm
+                           :on-click #(rf/dispatch [:user-expenses/reports-refresh])}
+                  "Refresh")
+
+                ($ button {:id "btn-reports-clear-local-filters"
+                           :btn-type :ghost
+                           :size :sm
+                           :on-click #(rf/dispatch [:user-expenses/reports-clear-local-filters])}
+                  "Clear local filters")
+
+                ($ button {:id "btn-reports-back-dashboard"
+                           :btn-type :ghost
+                           :size :sm
+                           :on-click #(rf/dispatch [:navigate-to "/expenses"])}
+                  "Dashboard"))))))
 
       ($ :main {:class "max-w-7xl mx-auto px-4 py-6 space-y-6"}
         ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"}
@@ -423,15 +534,15 @@
 
         ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
           ;; 1) Supplier deep-dive
-          ($ section-shell {:title "1) Supplier deep-dive"
+          ($ section-shell {:title "1) Supplier deep-dive (selected supplier scope)"
                             :loading? supplier-deep-dive-loading?
                             :error supplier-deep-dive-error}
             (if (str/blank? (str (or selected-supplier-id "")))
               ($ :p {:class "text-sm text-base-content/70"}
-                "Choose a supplier to load deep-dive details, trends, and top aliases.")
+                "Choose a supplier to load supplier-scoped details and alias patterns. For cross-supplier context, use widget #3 below.")
               ($ :div {:class "space-y-3"}
                 ($ :p {:class "text-sm text-base-content/70"}
-                  (str "Showing deep-dive for: " selected-supplier-name))
+                  (str "Supplier-scoped view for: " selected-supplier-name " (widget #3 remains your broader context table)."))
 
                 (if (seq deep-dive-summary)
                   ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-2"}
@@ -476,13 +587,14 @@
                       "No trend data for the selected filters.")))
 
                 ($ :div {:class "rounded-lg border border-base-200 p-3"}
-                  ($ :p {:class "text-sm font-medium mb-2"} "Top item aliases")
+                  ($ :p {:class "text-sm font-medium mb-2"} "Supplier alias table (selected supplier only)")
                   (if (seq deep-dive-top-aliases)
                     ($ :div {:class "overflow-x-auto"}
                       ($ :table {:class "table table-sm"}
                         ($ :thead
                           ($ :tr
-                            ($ :th "Alias")
+                            ($ :th "Alias label")
+                            ($ :th "Canonical item")
                             ($ :th "Currency")
                             ($ :th {:class "text-right"} "Total")
                             ($ :th {:class "text-right"} "Lines")))
@@ -491,6 +603,7 @@
                             (fn [row]
                               ($ :tr {:key (str "alias-" (or (:alias_id row) (:alias_label row)) "-" (:currency row))}
                                 ($ :td (or (:alias_label row) "Unmapped item"))
+                                ($ :td (or (:article_canonical_name row) "—"))
                                 ($ :td (str (:currency row)))
                                 ($ :td {:class "text-right font-mono"}
                                   (format-money (:total_amount row) (:currency row)))
@@ -537,14 +650,17 @@
 
         ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
           ;; 3) Top items table/report
-          ($ section-shell {:title "3) Top items"
+          ($ section-shell {:title "3) Global top items (cross-supplier context)"
                             :loading? top-items-loading?
                             :error top-items-error}
-            (if (seq selected-bucket-key)
+            ($ :div {:class "space-y-1"}
               ($ :p {:class "text-xs text-base-content/70"}
-                (str "Filtered by amount bucket: " selected-bucket-key))
-              ($ :p {:class "text-xs text-base-content/70"}
-                "Click a size bucket in widget #5 to cross-filter this table."))
+                "This is the global context table for top items across suppliers in the current date/filter scope. Widget #1 is supplier-only.")
+              (if (seq selected-bucket-key)
+                ($ :p {:class "text-xs text-base-content/70"}
+                  (str "Filtered by amount bucket: " selected-bucket-key))
+                ($ :p {:class "text-xs text-base-content/70"}
+                  "Click a size bucket in widget #5 to cross-filter this global table.")))
 
             (if (seq top-items-visible)
               ($ :div {:class "overflow-x-auto"}
@@ -552,7 +668,7 @@
                            :class "table table-sm"}
                   ($ :thead
                     ($ :tr
-                      ($ :th "Item")
+                      ($ :th "Canonical item / alias")
                       ($ :th "Currency")
                       ($ :th {:class "text-right"} "Total")
                       ($ :th {:class "text-right"} "Qty")
@@ -561,7 +677,11 @@
                     (mapv
                       (fn [row]
                         ($ :tr {:key (str "top-item-" (or (:alias_id row) (:alias_label row)) "-" (:currency row))}
-                          ($ :td (or (:alias_label row) "Unmapped item"))
+                          ($ :td
+                            ($ :div {:class "leading-tight"}
+                              ($ :p {:class "font-medium"} (or (:article_canonical_name row) "—"))
+                              ($ :p {:class "text-xs text-base-content/60"}
+                                (str "Alias: " (or (:alias_label row) "Unmapped item")))))
                           ($ :td (str (:currency row)))
                           ($ :td {:class "text-right font-mono"}
                             (format-money (:total_amount row) (:currency row)))
@@ -571,7 +691,7 @@
                             (format-int (:line_count row)))))
                       top-items-visible))))
               ($ :p {:class "text-sm text-base-content/60"}
-                "No top-item rows match the active filters.")))
+                "No top-item-alias rows match the active filters.")))
 
           ;; 4) Monthly comparison selector + deltas
           ($ section-shell {:title "4) Monthly comparison"

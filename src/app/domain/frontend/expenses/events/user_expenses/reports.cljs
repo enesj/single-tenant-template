@@ -12,7 +12,14 @@
 (def ^:private reports-path [:user-expenses :reports])
 
 (def ^:private refresh-filter-keys
-  #{:months-back :supplier-id :month-a :month-b})
+  #{:months-back
+    :supplier-id
+    :category-id
+    :subcategory-id
+    :expense-category-id
+    :manufacturer-id
+    :month-a
+    :month-b})
 
 (defn- ->positive-int
   [value fallback]
@@ -65,6 +72,10 @@
   (merge
     {:months-back 6
      :supplier-id nil
+     :category-id nil
+     :subcategory-id nil
+     :expense-category-id nil
+     :manufacturer-id nil
      :day-of-week nil
      :category-key nil
      :amount-bucket nil
@@ -86,11 +97,24 @@
 
 (defn- common-report-params
   [db]
-  (let [{:keys [months-back supplier-id]} (get-in db (conj reports-path :filters))
+  (let [{:keys [months-back
+                supplier-id
+                category-id
+                subcategory-id
+                expense-category-id
+                manufacturer-id]} (get-in db (conj reports-path :filters))
         range-params (report-range-params months-back)
-        supplier-id* (normalize-id supplier-id)]
+        supplier-id* (normalize-id supplier-id)
+        category-id* (normalize-id category-id)
+        subcategory-id* (normalize-id subcategory-id)
+        expense-category-id* (normalize-id expense-category-id)
+        manufacturer-id* (normalize-id manufacturer-id)]
     (cond-> range-params
-      supplier-id* (assoc :supplier_id supplier-id*))))
+      supplier-id* (assoc :supplier_id supplier-id*)
+      category-id* (assoc :category_id category-id*)
+      subcategory-id* (assoc :subcategory_id subcategory-id*)
+      expense-category-id* (assoc :expense_category_id expense-category-id*)
+      manufacturer-id* (assoc :manufacturer_id manufacturer-id*))))
 
 (defn- start-load
   [db report-key]
@@ -126,6 +150,10 @@
   (case k
     :months-back (->positive-int value 6)
     :supplier-id (normalize-id value)
+    :category-id (normalize-id value)
+    :subcategory-id (normalize-id value)
+    :expense-category-id (normalize-id value)
+    :manufacturer-id (normalize-id value)
     :month-a (normalize-month value)
     :month-b (normalize-month value)
     :day-of-week (some-> (->positive-int value nil) int)
@@ -143,7 +171,11 @@
           existing (or (get-in db (conj reports-path :filters)) {})
           filters (merge defaults (into {} (remove (comp nil? val) existing)))]
       {:db (assoc-in db (conj reports-path :filters) filters)
-       :dispatch [:user-expenses/reports-refresh]})))
+       :dispatch-n [[:user-expenses/fetch-categories]
+                    [:user-expenses/fetch-subcategories]
+                    [:user-expenses/fetch-expense-categories]
+                    [:user-expenses/fetch-manufacturers]
+                    [:user-expenses/reports-refresh]]})))
 
 (rf/reg-event-fx
   :user-expenses/reports-refresh

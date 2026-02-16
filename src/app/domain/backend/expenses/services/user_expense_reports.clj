@@ -60,7 +60,7 @@
   (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- base-where
-  [user-id {:keys [from to currency supplier-id payer-id]}]
+  [user-id {:keys [from to currency supplier-id payer-id expense-category-id]}]
   (cond-> [:and
            [:= :e.user_id user-id]
            [:= :e.is_posted true]]
@@ -68,7 +68,15 @@
     to (conj [:<= :e.purchased_at to])
     (seq currency) (conj [:= :e.currency [:cast currency :currency]])
     supplier-id (conj [:= :e.supplier_id supplier-id])
-    payer-id (conj [:= :e.payer_id payer-id])))
+    payer-id (conj [:= :e.payer_id payer-id])
+    expense-category-id (conj [:= :e.expense_category_id expense-category-id])))
+
+(defn- item-base-where
+  [user-id {:keys [category-id subcategory-id manufacturer-id] :as opts}]
+  (cond-> (base-where user-id opts)
+    category-id (conj [:= :c.id category-id])
+    subcategory-id (conj [:= :sc.id subcategory-id])
+    manufacturer-id (conj [:= :m.id manufacturer-id])))
 
 (defn- month->range
   [month]
@@ -234,8 +242,11 @@
                          :from [[:expense_items :ei]]
                          :join [[:expenses :e] [:= :e.id :ei.expense_id]]
                          :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                     [:articles :a] [:= :a.id :aa.article_id]]
-                         :where (base-where user-id opts*)
+                                     [:articles :a] [:= :a.id :aa.article_id]
+                                     [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                                     [:categories :c] [:= :c.id :sc.category_id]
+                                     [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                         :where (item-base-where user-id opts*)
                          :group-by [:aa.id
                                     [:raw "COALESCE(aa.raw_label, a.canonical_name, 'Unmapped item')"]
                                     :a.canonical_name
@@ -287,8 +298,11 @@
        :from [[:expense_items :ei]]
        :join [[:expenses :e] [:= :e.id :ei.expense_id]]
        :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                   [:articles :a] [:= :a.id :aa.article_id]]
-       :where (base-where user-id opts)
+                   [:articles :a] [:= :a.id :aa.article_id]
+                   [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                   [:categories :c] [:= :c.id :sc.category_id]
+                   [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+       :where (item-base-where user-id opts)
        :group-by [:aa.id
                   [:raw "COALESCE(aa.raw_label, a.canonical_name, 'Unmapped item')"]
                   :a.canonical_name
@@ -428,8 +442,9 @@
                   :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
                               [:articles :a] [:= :a.id :aa.article_id]
                               [:subcategories :sc] [:= :sc.id :a.subcategory_id]
-                              [:categories :c] [:= :c.id :sc.category_id]]
-                  :where (base-where user-id opts)
+                              [:categories :c] [:= :c.id :sc.category_id]
+                              [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                  :where (item-base-where user-id opts)
                   :group-by [[:raw "COALESCE(c.id::text, 'uncategorized')"]
                              [:raw "COALESCE(c.name, 'Uncategorized')"]
                              :e.currency]

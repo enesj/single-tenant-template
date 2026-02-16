@@ -75,6 +75,10 @@
         to (parse-instant-param (h/get-param params :to))
         supplier-id (parse-uuid-param params :supplier_id)
         payer-id (parse-uuid-param params :payer_id)
+        category-id (parse-uuid-param params :category_id)
+        subcategory-id (parse-uuid-param params :subcategory_id)
+        expense-category-id (parse-uuid-param params :expense_category_id)
+        manufacturer-id (parse-uuid-param params :manufacturer_id)
         month (parse-month-param params :month)
         currency-raw (some-> (h/get-param params :currency) str str/trim str/upper-case)
         currency (when-not (str/blank? currency-raw) currency-raw)]
@@ -83,6 +87,10 @@
       (= invalid to) {:error (h/json-response {:error "Invalid to date/time"} 400)}
       (= invalid supplier-id) {:error (h/json-response {:error "Invalid supplier_id"} 400)}
       (= invalid payer-id) {:error (h/json-response {:error "Invalid payer_id"} 400)}
+      (= invalid category-id) {:error (h/json-response {:error "Invalid category_id"} 400)}
+      (= invalid subcategory-id) {:error (h/json-response {:error "Invalid subcategory_id"} 400)}
+      (= invalid expense-category-id) {:error (h/json-response {:error "Invalid expense_category_id"} 400)}
+      (= invalid manufacturer-id) {:error (h/json-response {:error "Invalid manufacturer_id"} 400)}
       (= invalid month) {:error (h/json-response {:error "Invalid month format (expected YYYY-MM)"} 400)}
       (and month (= invalid (month->year-month month)))
       {:error (h/json-response {:error "Invalid month format (expected YYYY-MM)"} 400)}
@@ -93,6 +101,10 @@
                to (assoc :to to)
                supplier-id (assoc :supplier-id supplier-id)
                payer-id (assoc :payer-id payer-id)
+               category-id (assoc :category-id category-id)
+               subcategory-id (assoc :subcategory-id subcategory-id)
+               expense-category-id (assoc :expense-category-id expense-category-id)
+               manufacturer-id (assoc :manufacturer-id manufacturer-id)
                month (assoc :month month)
                currency (assoc :currency currency))})))
 

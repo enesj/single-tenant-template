@@ -135,6 +135,26 @@
   (fn [db _]
     (get-in db [:user-expenses :suppliers :items])))
 
+(rf/reg-sub
+  :user-expenses/categories
+  (fn [db _]
+    (get-in db [:user-expenses :categories :items])))
+
+(rf/reg-sub
+  :user-expenses/subcategories
+  (fn [db _]
+    (get-in db [:user-expenses :subcategories :items])))
+
+(rf/reg-sub
+  :user-expenses/expense-categories
+  (fn [db _]
+    (get-in db [:user-expenses :expense-categories :items])))
+
+(rf/reg-sub
+  :user-expenses/manufacturers
+  (fn [db _]
+    (get-in db [:user-expenses :manufacturers :items])))
+
 ;; Supplier detail (used by the user suppliers modal)
 (rf/reg-sub
   :user-expenses/supplier-detail

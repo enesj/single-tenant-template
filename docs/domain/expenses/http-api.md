@@ -107,15 +107,19 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /api/v1/expenses/by-supplier` – Supplier spending breakdown.
 
 ### Reports (user analytics)
-- `GET /api/v1/expenses/reports/supplier-deep-dive` – supplier-focused breakdown (requires `supplier_id`; optional `alias_limit`, default 10, max 100).
+- `GET /api/v1/expenses/reports/supplier-deep-dive` – supplier-focused breakdown (requires `supplier_id`; optional `alias_limit`, default 10, max 100). Includes summary/trend plus supplier alias rows containing `alias_label` and `article_canonical_name`.
 - `GET /api/v1/expenses/reports/day-of-week` – spending grouped by ISO day-of-week.
-- `GET /api/v1/expenses/reports/top-items` – top item/alias spending rows (optional `limit`, default 20, max 100).
+- `GET /api/v1/expenses/reports/top-items` – top item/alias spending rows (optional `limit`, default 20, max 100), including `alias_label` and `article_canonical_name`.
 - `GET /api/v1/expenses/reports/monthly-comparison` – month-over-month comparison (`month_a` and `month_b` required, `YYYY-MM`).
 - `GET /api/v1/expenses/reports/size-distribution` – deterministic spend buckets (`lt_10`, `10_25`, `25_50`, `50_100`, `100_200`, `gte_200`).
 - `GET /api/v1/expenses/reports/daily-heatmap` – daily spending aggregation (date + weekday + totals).
 - `GET /api/v1/expenses/reports/category-allocation` – category allocation totals with uncategorized support.
 
-Common optional query params supported by report endpoints (where applicable): `from`, `to`, `supplier_id`, `payer_id`, `currency`, `month`.
+Common optional query params supported by report endpoints (where applicable): `from`, `to`, `supplier_id`, `payer_id`, `currency`, `month`, `category_id`, `subcategory_id`, `expense_category_id`, `manufacturer_id`.
+
+Filter applicability note:
+- `expense_category_id` applies to expense-backed and item-backed report slices.
+- `category_id`, `subcategory_id`, and `manufacturer_id` apply to item-backed slices (`top-items`, `category-allocation`, and supplier deep-dive alias rows).
 
 All user report endpoints require an authenticated user with an expenses-read role (`viewer|member|admin|owner`).
 

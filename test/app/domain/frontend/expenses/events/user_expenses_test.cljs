@@ -815,7 +815,7 @@
       (is (contains? uris "/api/v1/expenses/reports/category-allocation")))))
 
 (deftest reports-set-filter-refreshes-and-passes-supplier-param
-  (testing "supplier deep-dive and monthly comparison forward supplier_id and required params"
+  (testing "report requests forward supplier and item filter params"
     (reset-db!)
     (rf/dispatch-sync [:user-expenses/init-reports])
 
@@ -824,23 +824,51 @@
     (rf/dispatch-sync [:user-expenses/fetch-report-supplier-deep-dive])
     (is (= 0 (count @captured-http-requests)))
 
-    ;; with supplier selected -> deep-dive and monthly include supplier_id + range/month params
+    ;; set all filters that should be propagated via common-report-params
     (rf/dispatch-sync [:user-expenses/reports-set-filter :supplier-id "supplier-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :category-id "category-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :subcategory-id "subcategory-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :expense-category-id "expense-category-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :manufacturer-id "manufacturer-42"])
 
     (reset! captured-http-requests [])
     (rf/dispatch-sync [:user-expenses/fetch-report-supplier-deep-dive])
+    (rf/dispatch-sync [:user-expenses/fetch-report-top-items])
+    (rf/dispatch-sync [:user-expenses/fetch-report-category-allocation])
     (rf/dispatch-sync [:user-expenses/fetch-report-monthly-comparison])
 
     (let [requests @captured-http-requests
           deep-dive-req (first (filter #(= "/api/v1/expenses/reports/supplier-deep-dive" (req-uri %)) requests))
+          top-items-req (first (filter #(= "/api/v1/expenses/reports/top-items" (req-uri %)) requests))
+          category-allocation-req (first (filter #(= "/api/v1/expenses/reports/category-allocation" (req-uri %)) requests))
           monthly-req (first (filter #(= "/api/v1/expenses/reports/monthly-comparison" (req-uri %)) requests))
           deep-dive-params (req-params deep-dive-req)
+          top-items-params (req-params top-items-req)
+          category-allocation-params (req-params category-allocation-req)
           monthly-params (req-params monthly-req)]
       (is (some? deep-dive-req))
       (is (= "supplier-42" (:supplier_id deep-dive-params)))
+      (is (= "category-42" (:category_id deep-dive-params)))
+      (is (= "subcategory-42" (:subcategory_id deep-dive-params)))
+      (is (= "expense-category-42" (:expense_category_id deep-dive-params)))
+      (is (= "manufacturer-42" (:manufacturer_id deep-dive-params)))
       (is (string? (:from deep-dive-params)))
       (is (string? (:to deep-dive-params)))
+
+      (is (some? top-items-req))
+      (is (= "supplier-42" (:supplier_id top-items-params)))
+      (is (= "category-42" (:category_id top-items-params)))
+      (is (= "subcategory-42" (:subcategory_id top-items-params)))
+      (is (= "expense-category-42" (:expense_category_id top-items-params)))
+      (is (= "manufacturer-42" (:manufacturer_id top-items-params)))
+
+      (is (some? category-allocation-req))
+      (is (= "category-42" (:category_id category-allocation-params)))
+      (is (= "subcategory-42" (:subcategory_id category-allocation-params)))
+      (is (= "manufacturer-42" (:manufacturer_id category-allocation-params)))
+
       (is (some? monthly-req))
       (is (= "supplier-42" (:supplier_id monthly-params)))
+      (is (= "expense-category-42" (:expense_category_id monthly-params)))
       (is (string? (:month_a monthly-params)))
       (is (string? (:month_b monthly-params))))))

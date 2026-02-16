@@ -38,6 +38,15 @@
     (is (= 400 (:status resp)))
     (is (= "Invalid month_a format (expected YYYY-MM)" (:error body)))))
 
+(deftest top-items-handler-validates-manufacturer-id
+  (let [handler (reports/top-items-spending-handler nil)
+        resp (handler (req {:user-id (UUID/randomUUID)
+                            :role "member"
+                            :query-params {:manufacturer_id "not-a-uuid"}}))
+        body (parse-body resp)]
+    (is (= 400 (:status resp)))
+    (is (= "Invalid manufacturer_id" (:error body)))))
+
 (deftest supplier-deep-dive-requires-supplier-id
   (let [handler (reports/supplier-deep-dive-handler nil)
         resp (handler (req {:user-id (UUID/randomUUID)
@@ -52,6 +61,10 @@
         user-id (UUID/randomUUID)
         supplier-id (UUID/randomUUID)
         payer-id (UUID/randomUUID)
+        category-id (UUID/randomUUID)
+        subcategory-id (UUID/randomUUID)
+        expense-category-id (UUID/randomUUID)
+        manufacturer-id (UUID/randomUUID)
         from "2026-01-01"
         to "2026-01-31T23:59:59Z"
         handler (reports/top-items-spending-handler nil)]
@@ -59,6 +72,7 @@
                   (fn [_db passed-user-id opts]
                     (reset! captured {:user-id passed-user-id :opts opts})
                     [{:alias_label "MILK"
+                      :article_canonical_name "Milk"
                       :currency "BAM"
                       :total_amount 10M
                       :line_count 1}])]
@@ -69,12 +83,17 @@
                                                :currency "bam"
                                                :supplier_id (str supplier-id)
                                                :payer_id (str payer-id)
+                                               :category_id (str category-id)
+                                               :subcategory_id (str subcategory-id)
+                                               :expense_category_id (str expense-category-id)
+                                               :manufacturer_id (str manufacturer-id)
                                                :limit "7"}}))
             body (parse-body resp)
             row (first (:data body))]
         (testing "response shape"
           (is (= 200 (:status resp)))
           (is (= "MILK" (:alias_label row)))
+          (is (= "Milk" (:article_canonical_name row)))
           (is (= "BAM" (:currency row))))
 
         (testing "parsed opts sent to service"
@@ -84,6 +103,10 @@
           (is (= "BAM" (get-in @captured [:opts :currency])))
           (is (= supplier-id (get-in @captured [:opts :supplier-id])))
           (is (= payer-id (get-in @captured [:opts :payer-id])))
+          (is (= category-id (get-in @captured [:opts :category-id])))
+          (is (= subcategory-id (get-in @captured [:opts :subcategory-id])))
+          (is (= expense-category-id (get-in @captured [:opts :expense-category-id])))
+          (is (= manufacturer-id (get-in @captured [:opts :manufacturer-id])))
           (is (= 7 (get-in @captured [:opts :limit]))))))))
 
 (deftest category-allocation-handler-returns-representative-shape
