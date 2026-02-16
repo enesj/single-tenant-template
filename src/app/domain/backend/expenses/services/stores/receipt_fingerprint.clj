@@ -9,6 +9,7 @@
   match is unambiguous."
   (:require
     [app.domain.backend.expenses.services.service-configs :as configs]
+    [app.shared.fuzzy :as fuzzy]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -64,39 +65,6 @@
                     str/trim)
           normalized (some-> no-city not-empty configs/normalize-store-key)]
       normalized)))
-
-(defn- levenshtein-distance
-  [^String a ^String b]
-  (cond
-    (= a b) 0
-    (zero? (.length a)) (.length b)
-    (zero? (.length b)) (.length a)
-    :else
-    (let [alen (.length a)
-          blen (.length b)
-          prev (int-array (inc blen))
-          curr (int-array (inc blen))]
-      (dotimes [j (inc blen)]
-        (aset-int prev j j))
-      (dotimes [i alen]
-        (aset-int curr 0 (inc i))
-        (dotimes [j blen]
-          (let [cost (if (= (.charAt a i) (.charAt b j)) 0 1)
-                deletion (inc (aget prev (inc j)))
-                insertion (inc (aget curr j))
-                substitution (+ (aget prev j) cost)]
-            (aset-int curr (inc j) (min deletion insertion substitution))))
-        (System/arraycopy curr 0 prev 0 (alength curr)))
-      (aget prev blen))))
-
-(defn- levenshtein-ratio
-  [a b]
-  (let [a (or a "")
-        b (or b "")
-        maxlen (max (.length ^String a) (.length ^String b))]
-    (if (zero? maxlen)
-      1.0
-      (- 1.0 (/ (double (levenshtein-distance a b)) (double maxlen))))))
 
 (defn- receipt->fp
   [parsed-markdown]
@@ -170,7 +138,7 @@
                          (map (fn [store-id]
                                 (let [{:keys [pj-names pj-counts]} (get fps store-id)
                                       score (apply max 0.0 (for [n (remove nil? (or pj-names #{}))]
-                                                             (double (levenshtein-ratio pj-name n))))
+                                                             (double (fuzzy/levenshtein-ratio pj-name n))))
                                       cnt (long (get pj-counts pj 0))]
                                   {:store-id store-id
                                    :score score
