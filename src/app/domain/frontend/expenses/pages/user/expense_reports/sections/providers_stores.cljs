@@ -62,7 +62,7 @@
               ($ :table {:class "ds-table ds-table-sm ds-table-zebra w-full"}
                 ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
                   ($ :tr
-                    ($ :th {:class "w-16 text-center font-bold"} "View")
+                    ($ :th {:class "w-16 text-center font-bold"} "Stores")
                     ($ :th {:class "text-center font-bold"} "#")
                     ($ :th
                       ($ :button {:type "button"

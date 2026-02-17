@@ -197,6 +197,7 @@
                 (id-utils/extract-entity-id receipt)))
         rid-str (if rid (str rid) "unknown")
         approve-allowed? (contains? #{"extracted" "review_required"} status)
+        approve-form-visible? (contains? #{"extracted" "review_required" "posted"} status)
 
         ;; Resize handlers
         handle-resize-start (use-callback
@@ -406,7 +407,7 @@
                 (when action-loading?
                   ($ :span {:class "text-xs text-base-content/60"} "Working...")))
 
-              (if (and can-approve? approve-allowed?)
+              (if (and can-approve? approve-form-visible?)
                 (when approve-form
                   ($ approve-form
                     {:receipt-id rid-str

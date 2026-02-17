@@ -137,6 +137,7 @@
                               [initial-data])
 
         rid-str (or (some-> receipt-id str) "unknown")
+        posted? (= "posted" (:status receipt))
         clear-errors! (fn [e]
                         (.preventDefault e)
                         (set-validation-error! nil)
@@ -210,7 +211,7 @@
                  ($ :button {:id (str "btn-save-receipt-" rid-str)
                              :type "button"
                              :class "ds-btn ds-btn-outline"
-                             :disabled (or submitting? (not can-save-receipt?))
+                             :disabled (or posted? submitting? (not can-save-receipt?))
                              :on-click (fn [e]
                                          (.preventDefault e)
                                          (.stopPropagation e)
@@ -228,7 +229,7 @@
                  ($ :button {:id (str "btn-save-expense-" rid-str)
                              :type "submit"
                              :class "ds-btn ds-btn-primary"
-                             :disabled (or submitting? (not expense-valid-now?))}
+                             :disabled (or posted? submitting? (not expense-valid-now?))}
                    "Save expense"))
 
                ;; Line items section for split layout (rendered after buttons, full width)

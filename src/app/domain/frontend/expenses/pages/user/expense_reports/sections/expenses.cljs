@@ -224,11 +224,22 @@
                   ($ :div {:class "w-3 h-3 bg-primary rounded-sm"}) "Max"))
 
               ($ :div {:class "grid grid-cols-7 gap-1.5"}
-                (mapv
-                  (fn [row]
+                (map-indexed
+                  (fn [idx row]
                     (let [total (or (->number (:total_amount row)) 0)
                           ratio (if (pos? heatmap-max) (/ total heatmap-max) 0)
-                          selected? (= selected-day (:day row))]
+                          selected? (= selected-day (:day row))
+                          month-key (subs (:day row) 0 7)
+                          prev-month-key (when (pos? idx)
+                                           (some-> (nth heatmap-visible (dec idx))
+                                             :day
+                                             (subs 0 7)))
+                          show-month? (or (zero? idx) (not= month-key prev-month-key))
+                          month-short (get {"01" "Jan" "02" "Feb" "03" "Mar" "04" "Apr"
+                                            "05" "May" "06" "Jun" "07" "Jul" "08" "Aug"
+                                            "09" "Sep" "10" "Oct" "11" "Nov" "12" "Dec"}
+                                        (subs month-key 5 7)
+                                        month-key)]
                       ($ :button {:id (str "btn-heatmap-day-" (:day row))
                                   :key (str "heat-" (:day row))
                                   :class (str "aspect-square rounded md:rounded-lg text-[10px] md:text-xs font-bold transition-all duration-200 relative group "
@@ -238,6 +249,9 @@
                                   :title (str (:day row) " · " (format-money total primary-currency)
                                            " · " (format-int (:expense_count row)) " expenses")
                                   :on-click #(rf/dispatch [:user-expenses/reports-toggle-selected-day (:day row)])}
+                        (when show-month?
+                          ($ :span {:class "absolute top-1 left-1 rounded bg-base-100/80 px-1 leading-tight text-[9px] md:text-[10px] font-semibold uppercase tracking-wide text-base-content/70 backdrop-blur-sm"}
+                            month-short))
                         ($ :span {:class "opacity-70 group-hover:opacity-100"} (subs (:day row) 8 10)))))
                   heatmap-visible))
 

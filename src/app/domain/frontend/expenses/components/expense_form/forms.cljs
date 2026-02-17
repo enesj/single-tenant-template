@@ -146,7 +146,8 @@
                                   (merge default-values initial-data)))
                               [initial-data])
 
-        rid-str (or (some-> receipt-id str) "unknown")]
+        rid-str (or (some-> receipt-id str) "unknown")
+        posted? (= "posted" (:status receipt))]
 
     (use-effect
       (fn []
@@ -210,7 +211,7 @@
                  ($ :button {:id (str "btn-save-receipt-" rid-str)
                              :type "button"
                              :class "ds-btn ds-btn-outline"
-                             :disabled (or submitting? (not can-save-receipt?))
+                             :disabled (or posted? submitting? (not can-save-receipt?))
                              :on-click (fn [e]
                                          (.preventDefault e)
                                          (.stopPropagation e)
@@ -224,14 +225,22 @@
                                                   (norm/prepare-expense-submit-values values)
                                                   on-review-saved]))
                                              (set-validation-error! (:error validation-result)))))
-                             :title (when (and (not submitting?) (not can-save-receipt?))
+                             :title (cond
+                                      posted?
+                                      "Receipt is already posted."
+
+                                      (and (not submitting?) (not can-save-receipt?))
                                       "Update receipt fields before saving")}
                    "Save receipt")
                  ($ :button {:id (str "btn-save-expense-" rid-str)
                              :type "submit"
                              :class "ds-btn ds-btn-primary"
-                             :disabled (or submitting? (not expense-valid-now?))
-                             :title (when (and (not submitting?) (not expense-valid-now?))
+                             :disabled (or posted? submitting? (not expense-valid-now?))
+                             :title (cond
+                                      posted?
+                                      "Receipt is already posted."
+
+                                      (and (not submitting?) (not expense-valid-now?))
                                       "Supplier, payer, date, line items, and totals must be valid")}
                    "Save expense"))
 
@@ -244,4 +253,4 @@
                         :editing false
                         :values values
                         :form-id form-id
-                        :entity-spec line-items-spec})))))))})))) 
+                        :entity-spec line-items-spec})))))))}))))

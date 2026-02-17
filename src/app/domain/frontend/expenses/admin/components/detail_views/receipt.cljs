@@ -105,7 +105,8 @@
         (let [rid (or receipt-id (id-utils/extract-entity-id receipt))
               rid-str (if rid (str rid) "unknown")
               status (:status receipt)
-              approve-allowed? (contains? #{"extracted" "review_required"} status)]
+              approve-allowed? (contains? #{"extracted" "review_required"} status)
+              approve-form-visible? (contains? #{"extracted" "review_required" "posted"} status)]
           ($ :div {:class "space-y-4"}
             ($ receipt-problem-alert {:receipt receipt})
 
@@ -131,7 +132,7 @@
                                      :show-summary? false})))
 
               :approve
-              (if approve-allowed?
+              (if approve-form-visible?
                 ($ :div {:class "ds-card ds-card-bordered bg-base-100"}
                   ($ :div {:class "ds-card-body"}
                     ($ :div {:class (str "grid gap-6 " (when preview-expanded? "lg:grid-cols-2"))}
