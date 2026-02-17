@@ -242,6 +242,47 @@
         (take limit*)
         vec))))
 
+(defn get-user-supplier-stores
+  "Store-level supplier breakdown grouped by currency."
+  [db user-id {:keys [supplier-id limit] :as opts}]
+  (let [user-id (ensure-uuid user-id)
+        supplier-id (ensure-uuid supplier-id)
+        limit* (-> (or limit 20) long (max 1) (min 100))]
+    (when-not user-id
+      (throw (ex-info "user-id is required" {:status 400})))
+    (when-not supplier-id
+      (throw (ex-info "supplier-id is required" {:status 400})))
+    (let [opts* (assoc opts :supplier-id supplier-id)
+          totals-by-currency (->> (summary-by-currency db user-id opts*)
+                               (map (juxt :currency (comp bd :total_amount)))
+                               (into {}))
+          store-name-sql [:raw "COALESCE(st.display_name, 'Unmapped store')"]
+          rows (query-many
+                 db
+                 {:select [:e.store_id
+                           [store-name-sql :store_name]
+                           [:ci.name :city_name]
+                           :e.currency
+                           [[:sum :e.total_amount] :total_amount]
+                           [[:count :*] :expense_count]]
+                  :from [[:expenses :e]]
+                  :left-join [[:stores :st] [:= :st.id :e.store_id]
+                              [:cities :ci] [:= :ci.id :st.city_id]]
+                  :where (base-where user-id opts*)
+                  :group-by [:e.store_id store-name-sql :ci.name :e.currency]
+                  :order-by [[[:sum :e.total_amount] :desc]
+                             [store-name-sql :asc]
+                             [:e.currency :asc]]
+                  :limit limit*})]
+      (->> rows
+        (mapv (fn [row]
+                (let [currency-total (get totals-by-currency (:currency row) 0M)
+                      row-total (bd (:total_amount row))
+                      share-pct (if (pos? (compare currency-total 0M))
+                                  (* 100.0 (/ (double row-total) (double currency-total)))
+                                  0.0)]
+                  (assoc row :share_pct share-pct))))))))
+
 (defn get-user-supplier-monthly-trends
   "Month-by-month supplier totals for the top suppliers in scope."
   [db user-id {:keys [limit] :as opts}]

@@ -8,10 +8,12 @@
                                                                            sortable-column-label
                                                                            toggle-sort-config]]
     [clojure.string :as str]
+    [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]))
 
 (defui providers-stores-tab
   [{:keys [selected-supplier-id
+           expanded-supplier-id
            supplier-deep-dive-loading?
            supplier-deep-dive-error
            deep-dive-summary
@@ -24,6 +26,9 @@
            top-suppliers-data
            top-suppliers-loading?
            top-suppliers-error
+           supplier-stores-data
+           supplier-stores-loading?
+           supplier-stores-error
            supplier-monthly-trends-data
            supplier-monthly-trends-loading?
            supplier-monthly-trends-error]}]
@@ -36,65 +41,155 @@
         top-suppliers-visible (sort-rows-by-config (or top-suppliers-data []) top-suppliers-sort)
         supplier-monthly-trends-visible (sort-rows-by-config
                                           (or supplier-monthly-trends-data [])
-                                          supplier-monthly-trends-sort)]
+                                          supplier-monthly-trends-sort)
+        supplier-stores-visible (or supplier-stores-data [])
+        expanded-supplier-id* (some-> expanded-supplier-id str str/trim not-empty)
+        expanded-supplier-row (some (fn [row]
+                                      (when (= expanded-supplier-id*
+                                              (some-> (:supplier_id row) str str/trim))
+                                        row))
+                                top-suppliers-visible)
+        expanded-supplier-name (or (:supplier_name expanded-supplier-row)
+                                 (when (seq expanded-supplier-id*) "Selected supplier"))]
     ($ :div {:class "space-y-6"}
       ($ section-shell {:title "Top Suppliers"
                         :subtitle "Ranked by total spending across the selected period"
                         :loading? top-suppliers-loading?
                         :error top-suppliers-error}
-        (if (seq top-suppliers-visible)
-          ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm"}
-            ($ :table {:class "ds-table ds-table-sm ds-table-zebra w-full"}
-              ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
-                ($ :tr
-                  ($ :th {:class "text-center font-bold"} "#")
-                  ($ :th
-                    ($ :button {:type "button"
-                                :class "font-bold hover:text-primary transition flex items-center gap-1"
-                                :on-click #(set-top-suppliers-sort! (fn [current]
-                                                                      (toggle-sort-config current :supplier_name :text)))}
-                      (sortable-column-label "Supplier Name" top-suppliers-sort :supplier_name)))
-                  ($ :th
-                    ($ :button {:type "button"
-                                :class "font-bold hover:text-primary transition flex items-center gap-1"
-                                :on-click #(set-top-suppliers-sort! (fn [current]
-                                                                      (toggle-sort-config current :currency :text)))}
-                      (sortable-column-label "Currency" top-suppliers-sort :currency)))
-                  ($ :th {:class "text-right"}
-                    ($ :button {:type "button"
-                                :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
-                                :on-click #(set-top-suppliers-sort! (fn [current]
-                                                                      (toggle-sort-config current :total_amount :number)))}
-                      (sortable-column-label "Total Amount" top-suppliers-sort :total_amount)))
-                  ($ :th {:class "text-right"}
-                    ($ :button {:type "button"
-                                :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
-                                :on-click #(set-top-suppliers-sort! (fn [current]
-                                                                      (toggle-sort-config current :expense_count :number)))}
-                      (sortable-column-label "Transactions" top-suppliers-sort :expense_count)))
-                  ($ :th {:class "text-right"}
-                    ($ :button {:type "button"
-                                :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
-                                :on-click #(set-top-suppliers-sort! (fn [current]
-                                                                      (toggle-sort-config current :share_pct :number)))}
-                      (sortable-column-label "Share %" top-suppliers-sort :share_pct)))))
-              ($ :tbody
-                (map-indexed
-                  (fn [idx row]
-                    ($ :tr {:key (str "top-supplier-" (or (:supplier_id row) idx) "-" (or (:currency row) "na"))
-                            :class "hover"}
-                      ($ :td {:class "text-center font-bold text-primary/70"} (inc idx))
-                      ($ :td {:class "font-medium"} (or (:supplier_name row) "—"))
-                      ($ :td {:class "text-xs text-base-content/60"} (str (or (:currency row) "—")))
-                      ($ :td {:class "text-right font-mono font-medium"}
-                        (format-amount-only (:total_amount row)))
-                      ($ :td {:class "text-right text-base-content/70"}
-                        (format-int (:expense_count row)))
-                      ($ :td {:class "text-right text-base-content/60"}
-                        (str (.toFixed (js/Number (or (:share_pct row) 0)) 1) "%"))))
-                  top-suppliers-visible))))
-          ($ :p {:class "text-sm text-base-content/60 italic p-4 bg-base-50 rounded-lg text-center"}
-            "No supplier data available for this period.")))
+        ($ :div {:class "space-y-4"}
+          (if (seq top-suppliers-visible)
+            ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm"}
+              ($ :table {:class "ds-table ds-table-sm ds-table-zebra w-full"}
+                ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
+                  ($ :tr
+                    ($ :th {:class "w-16 text-center font-bold"} "View")
+                    ($ :th {:class "text-center font-bold"} "#")
+                    ($ :th
+                      ($ :button {:type "button"
+                                  :class "font-bold hover:text-primary transition flex items-center gap-1"
+                                  :on-click #(set-top-suppliers-sort! (fn [current]
+                                                                        (toggle-sort-config current :supplier_name :text)))}
+                        (sortable-column-label "Supplier Name" top-suppliers-sort :supplier_name)))
+                    ($ :th
+                      ($ :button {:type "button"
+                                  :class "font-bold hover:text-primary transition flex items-center gap-1"
+                                  :on-click #(set-top-suppliers-sort! (fn [current]
+                                                                        (toggle-sort-config current :currency :text)))}
+                        (sortable-column-label "Currency" top-suppliers-sort :currency)))
+                    ($ :th {:class "text-right"}
+                      ($ :button {:type "button"
+                                  :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                  :on-click #(set-top-suppliers-sort! (fn [current]
+                                                                        (toggle-sort-config current :total_amount :number)))}
+                        (sortable-column-label "Total Amount" top-suppliers-sort :total_amount)))
+                    ($ :th {:class "text-right"}
+                      ($ :button {:type "button"
+                                  :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                  :on-click #(set-top-suppliers-sort! (fn [current]
+                                                                        (toggle-sort-config current :expense_count :number)))}
+                        (sortable-column-label "Transactions" top-suppliers-sort :expense_count)))
+                    ($ :th {:class "text-right"}
+                      ($ :button {:type "button"
+                                  :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
+                                  :on-click #(set-top-suppliers-sort! (fn [current]
+                                                                        (toggle-sort-config current :share_pct :number)))}
+                        (sortable-column-label "Share %" top-suppliers-sort :share_pct)))))
+                ($ :tbody
+                  (map-indexed
+                    (fn [idx row]
+                      (let [supplier-id* (some-> (:supplier_id row) str str/trim)
+                            currency-key (some-> (:currency row) str str/lower-case)
+                            row-key (str "top-supplier-" (or supplier-id* "unmapped") "-" (or currency-key "na"))
+                            button-id (str "btn-expand-supplier-"
+                                        (or supplier-id* (str "unmapped-" (or currency-key "na"))))
+                            selected? (and (seq supplier-id*)
+                                        (= expanded-supplier-id* supplier-id*))
+                            expandable? (seq supplier-id*)]
+                        ($ :tr {:key row-key
+                                :class (str "hover " (when selected? "bg-primary/10"))}
+                          ($ :td {:class "text-center"}
+                            ($ :button {:id button-id
+                                        :type "button"
+                                        :class (str "ds-btn ds-btn-xs "
+                                                 (if selected?
+                                                   "ds-btn-primary"
+                                                   "ds-btn-ghost"))
+                                        :disabled (not expandable?)
+                                        :on-click #(when expandable?
+                                                     (rf/dispatch [:user-expenses/reports-toggle-expanded-supplier supplier-id*]))}
+                              (if selected? "Hide" "Show")))
+                          ($ :td {:class "text-center font-bold text-primary/70"} (inc idx))
+                          ($ :td {:class "font-medium"} (or (:supplier_name row) "—"))
+                          ($ :td {:class "text-xs text-base-content/60"} (str (or (:currency row) "—")))
+                          ($ :td {:class "text-right font-mono font-medium"}
+                            (format-amount-only (:total_amount row)))
+                          ($ :td {:class "text-right text-base-content/70"}
+                            (format-int (:expense_count row)))
+                          ($ :td {:class "text-right text-base-content/60"}
+                            (str (.toFixed (js/Number (or (:share_pct row) 0)) 1) "%")))))
+                    top-suppliers-visible))))
+            ($ :p {:class "text-sm text-base-content/60 italic p-4 bg-base-50 rounded-lg text-center"}
+              "No supplier data available for this period."))
+
+          ($ :div {:class "rounded-lg border border-base-200/60 bg-base-50 p-4"}
+            ($ :div {:class "flex items-center justify-between gap-2 mb-3"}
+              ($ :h4 {:class "text-sm font-bold uppercase tracking-wide text-base-content/70"}
+                (str "Stores for " (or expanded-supplier-name "selected supplier")))
+              (when (seq expanded-supplier-id*)
+                ($ :button {:id "btn-clear-expanded-supplier"
+                            :type "button"
+                            :class "ds-btn ds-btn-xs ds-btn-ghost"
+                            :on-click #(rf/dispatch [:user-expenses/reports-toggle-expanded-supplier nil])}
+                  "Clear")))
+
+            (cond
+              (not (seq expanded-supplier-id*))
+              ($ :p {:class "text-sm text-base-content/60 italic"}
+                "Select a supplier row above to view store-level drilldown.")
+
+              supplier-stores-loading?
+              ($ :p {:class "text-sm text-base-content/60 italic"}
+                "Loading store-level breakdown...")
+
+              (seq (str supplier-stores-error))
+              ($ :div {:class "ds-alert ds-alert-error ds-alert-sm"}
+                ($ :span (or supplier-stores-error "Failed to load store-level breakdown.")))
+
+              (seq supplier-stores-visible)
+              ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 bg-base-100"}
+                ($ :table {:class "ds-table ds-table-sm ds-table-zebra w-full"}
+                  ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
+                    ($ :tr
+                      ($ :th {:class "font-bold"} "Store")
+                      ($ :th {:class "font-bold"} "City")
+                      ($ :th {:class "font-bold"} "Currency")
+                      ($ :th {:class "text-right font-bold"} "Total")
+                      ($ :th {:class "text-right font-bold"} "Transactions")
+                      ($ :th {:class "text-right font-bold"} "Share %")))
+                  ($ :tbody
+                    (map-indexed
+                      (fn [idx row]
+                        ($ :tr {:key (str "supplier-store-"
+                                       (or (:store_id row) "unmapped")
+                                       "-"
+                                       (or (:currency row) "na")
+                                       "-"
+                                       idx)
+                                :class "hover"}
+                          ($ :td {:class "font-medium"} (or (:store_name row) "Unmapped store"))
+                          ($ :td {:class "text-base-content/70"} (or (:city_name row) "—"))
+                          ($ :td {:class "text-xs text-base-content/60"} (str (or (:currency row) "—")))
+                          ($ :td {:class "text-right font-mono font-medium"}
+                            (format-amount-only (:total_amount row)))
+                          ($ :td {:class "text-right text-base-content/70"}
+                            (format-int (:expense_count row)))
+                          ($ :td {:class "text-right text-base-content/60"}
+                            (str (.toFixed (js/Number (or (:share_pct row) 0)) 1) "%"))))
+                      supplier-stores-visible))))
+
+              :else
+              ($ :p {:class "text-sm text-base-content/60 italic"}
+                "No store-level data available for the selected supplier and filters.")))))
 
       ($ section-shell {:title "Supplier Monthly Trends"
                         :subtitle "Month-by-month spending for top suppliers"

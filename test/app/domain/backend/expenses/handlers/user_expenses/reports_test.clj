@@ -56,6 +56,81 @@
     (is (= 400 (:status resp)))
     (is (= "supplier_id is required" (:error body)))))
 
+(deftest supplier-stores-handler-requires-supplier-id
+  (let [handler (reports/supplier-stores-handler nil)
+        resp (handler (req {:user-id (UUID/randomUUID)
+                            :role "member"
+                            :query-params {}}))
+        body (parse-body resp)]
+    (is (= 400 (:status resp)))
+    (is (= "supplier_id is required" (:error body)))))
+
+(deftest supplier-stores-handler-rejects-multi-supplier-id
+  (let [handler (reports/supplier-stores-handler nil)
+        supplier-id-a (UUID/randomUUID)
+        supplier-id-b (UUID/randomUUID)
+        resp (handler (req {:user-id (UUID/randomUUID)
+                            :role "member"
+                            :query-params {:supplier_id (str supplier-id-a "," supplier-id-b)}}))
+        body (parse-body resp)]
+    (is (= 400 (:status resp)))
+    (is (= "supplier_id must be a single UUID" (:error body)))))
+
+(deftest supplier-stores-handler-parses-shared-options
+  (let [captured (atom nil)
+        user-id (UUID/randomUUID)
+        supplier-id (UUID/randomUUID)
+        payer-id (UUID/randomUUID)
+        category-id (UUID/randomUUID)
+        subcategory-id (UUID/randomUUID)
+        expense-category-id (UUID/randomUUID)
+        manufacturer-id (UUID/randomUUID)
+        from "2026-01-01"
+        to "2026-01-31T23:59:59Z"
+        handler (reports/supplier-stores-handler nil)]
+    (with-redefs [report-services/get-user-supplier-stores
+                  (fn [_db passed-user-id opts]
+                    (reset! captured {:user-id passed-user-id :opts opts})
+                    [{:store_id nil
+                      :store_name "Unmapped store"
+                      :city_name nil
+                      :currency "BAM"
+                      :total_amount 10M
+                      :expense_count 1
+                      :share_pct 100.0}])]
+      (let [resp (handler (req {:user-id user-id
+                                :role "member"
+                                :query-params {:from from
+                                               :to to
+                                               :currency "bam"
+                                               :supplier_id (str supplier-id)
+                                               :payer_id (str payer-id)
+                                               :category_id (str category-id)
+                                               :subcategory_id (str subcategory-id)
+                                               :expense_category_id (str expense-category-id)
+                                               :manufacturer_id (str manufacturer-id)
+                                               :limit "9"}}))
+            body (parse-body resp)
+            row (first (:data body))]
+        (testing "response shape"
+          (is (= 200 (:status resp)))
+          (is (= "Unmapped store" (:store_name row)))
+          (is (= "BAM" (:currency row)))
+          (is (= 1 (:expense_count row))))
+
+        (testing "parsed opts sent to service"
+          (is (= user-id (:user-id @captured)))
+          (is (instance? Instant (get-in @captured [:opts :from])))
+          (is (instance? Instant (get-in @captured [:opts :to])))
+          (is (= "BAM" (get-in @captured [:opts :currency])))
+          (is (= supplier-id (get-in @captured [:opts :supplier-id])))
+          (is (= payer-id (get-in @captured [:opts :payer-id])))
+          (is (= category-id (get-in @captured [:opts :category-id])))
+          (is (= subcategory-id (get-in @captured [:opts :subcategory-id])))
+          (is (= expense-category-id (get-in @captured [:opts :expense-category-id])))
+          (is (= manufacturer-id (get-in @captured [:opts :manufacturer-id])))
+          (is (= 9 (get-in @captured [:opts :limit]))))))))
+
 (deftest top-items-handler-parses-shared-options
   (let [captured (atom nil)
         user-id (UUID/randomUUID)

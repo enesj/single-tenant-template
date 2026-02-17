@@ -100,7 +100,8 @@
      :amount-bucket nil
      :selected-day nil
      :top-items-limit 20
-     :show-uncategorized? true}
+     :show-uncategorized? true
+     :expanded-supplier-id nil}
     (default-month-range)))
 
 (defn- report-range-params
@@ -200,20 +201,23 @@
   :user-expenses/reports-refresh
   common-interceptors
   (fn [{:keys [db]} _]
-    (let [months-back (->positive-int (get-in db (conj reports-path :filters :months-back)) 6)]
-      {:dispatch-n [[:user-expenses/fetch-summary]
-                    [:user-expenses/fetch-by-month {:months-back months-back}]
-                    [:user-expenses/fetch-by-supplier {:limit 25}]
-                    [:user-expenses/fetch-report-filter-options]
-                    [:user-expenses/fetch-report-supplier-deep-dive]
-                    [:user-expenses/fetch-report-day-of-week]
-                    [:user-expenses/fetch-report-top-items]
-                    [:user-expenses/fetch-report-monthly-comparison]
-                    [:user-expenses/fetch-report-size-distribution]
-                    [:user-expenses/fetch-report-daily-heatmap]
-                    [:user-expenses/fetch-report-top-suppliers]
-                    [:user-expenses/fetch-report-supplier-monthly-trends]
-                    [:user-expenses/fetch-report-category-allocation]]})))
+    (let [months-back (->positive-int (get-in db (conj reports-path :filters :months-back)) 6)
+          expanded-supplier-id (-> (get-in db (conj reports-path :filters :expanded-supplier-id))
+                                 normalize-id)]
+      {:dispatch-n (cond-> [[:user-expenses/fetch-summary]
+                            [:user-expenses/fetch-by-month {:months-back months-back}]
+                            [:user-expenses/fetch-by-supplier {:limit 25}]
+                            [:user-expenses/fetch-report-filter-options]
+                            [:user-expenses/fetch-report-supplier-deep-dive]
+                            [:user-expenses/fetch-report-day-of-week]
+                            [:user-expenses/fetch-report-top-items]
+                            [:user-expenses/fetch-report-monthly-comparison]
+                            [:user-expenses/fetch-report-size-distribution]
+                            [:user-expenses/fetch-report-daily-heatmap]
+                            [:user-expenses/fetch-report-top-suppliers]
+                            [:user-expenses/fetch-report-supplier-monthly-trends]
+                            [:user-expenses/fetch-report-category-allocation]]
+                     expanded-supplier-id (conj [:user-expenses/fetch-report-supplier-stores]))})))
 
 (rf/reg-event-fx
   :user-expenses/reports-set-filter
@@ -251,6 +255,23 @@
           next-value (when-not (= current category*) category*)]
       (assoc-in db (conj reports-path :filters :category-key) next-value))))
 
+(rf/reg-event-fx
+  :user-expenses/reports-toggle-expanded-supplier
+  common-interceptors
+  (fn [{:keys [db]} [supplier-id]]
+    (let [supplier-id* (normalize-id supplier-id)
+          current (-> (get-in db (conj reports-path :filters :expanded-supplier-id))
+                    normalize-id)
+          next-value (when-not (= current supplier-id*) supplier-id*)
+          db* (assoc-in db (conj reports-path :filters :expanded-supplier-id) next-value)]
+      (if next-value
+        {:db db*
+         :dispatch [:user-expenses/fetch-report-supplier-stores]}
+        {:db (-> db*
+               (assoc-in (conj reports-path :supplier-stores :loading?) false)
+               (assoc-in (conj reports-path :supplier-stores :error) nil)
+               (assoc-in (conj reports-path :supplier-stores :data) []))}))))
+
 (rf/reg-event-db
   :user-expenses/reports-toggle-selected-day
   common-interceptors
@@ -273,7 +294,11 @@
            (assoc-in (conj reports-path :filters :day-of-week) nil)
            (assoc-in (conj reports-path :filters :category-key) nil)
            (assoc-in (conj reports-path :filters :amount-bucket) nil)
-           (assoc-in (conj reports-path :filters :selected-day) nil))
+           (assoc-in (conj reports-path :filters :selected-day) nil)
+           (assoc-in (conj reports-path :filters :expanded-supplier-id) nil)
+           (assoc-in (conj reports-path :supplier-stores :loading?) false)
+           (assoc-in (conj reports-path :supplier-stores :error) nil)
+           (assoc-in (conj reports-path :supplier-stores :data) []))
      :dispatch [:user-expenses/reports-refresh]}))
 
 (rf/reg-event-fx
@@ -507,6 +532,36 @@
   (fn [db [error]]
     (log/warn "Failed to fetch top-suppliers report" {:error error})
     (finish-failure db :top-suppliers error)))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-supplier-stores
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (let [expanded-supplier-id (-> (get-in db (conj reports-path :filters :expanded-supplier-id))
+                                 normalize-id)]
+      (if-not expanded-supplier-id
+        {:db (finish-success db :supplier-stores [])}
+        (fetch-fx db
+          :supplier-stores
+          endpoints/reports-supplier-stores-endpoint
+          (assoc (common-report-params db)
+            :supplier_id expanded-supplier-id
+            :limit 20)
+          [:user-expenses/fetch-report-supplier-stores-success]
+          [:user-expenses/fetch-report-supplier-stores-failure])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-supplier-stores-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db :supplier-stores (vec (or (:data response) [])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-supplier-stores-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch supplier-stores report" {:error error})
+    (finish-failure db :supplier-stores error)))
 
 (rf/reg-event-fx
   :user-expenses/fetch-report-supplier-monthly-trends

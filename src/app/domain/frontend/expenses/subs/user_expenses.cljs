@@ -330,6 +330,11 @@
     (get-in db [:user-expenses :reports :filters :supplier-id])))
 
 (rf/reg-sub
+  :user-expenses/reports-filter-expanded-supplier-id
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :expanded-supplier-id])))
+
+(rf/reg-sub
   :user-expenses/reports-filter-day-of-week
   (fn [db _]
     (get-in db [:user-expenses :reports :filters :day-of-week])))
@@ -410,6 +415,21 @@
   :user-expenses/report-top-suppliers-error
   (fn [db _]
     (reports-data db :top-suppliers :error)))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-stores
+  (fn [db _]
+    (or (reports-data db :supplier-stores :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-stores-loading?
+  (fn [db _]
+    (boolean (reports-data db :supplier-stores :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-stores-error
+  (fn [db _]
+    (reports-data db :supplier-stores :error)))
 
 ;; Supplier monthly trends report
 (rf/reg-sub

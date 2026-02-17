@@ -220,6 +220,31 @@
                :message (.getMessage e)})
             (h/json-response {:error "Failed to get top suppliers report"} 500)))))))
 
+(defn supplier-stores-handler
+  [db]
+  (fn [request]
+    (with-user-report-access
+      request
+      (fn [user-id]
+        (try
+          (let [params (:query-params request)
+                {:keys [error opts]} (parse-common-report-opts params)
+                limit (parse-int-param params :limit 20 1 100)]
+            (cond
+              error error
+              (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
+              (nil? (:supplier-id opts)) (h/json-response {:error "supplier_id is required"} 400)
+              (sequential? (:supplier-id opts)) (h/json-response {:error "supplier_id must be a single UUID"} 400)
+              :else
+              (h/json-response
+                {:data (reports/get-user-supplier-stores db user-id (assoc opts :limit limit))})))
+          (catch Exception e
+            (log/error e "Error getting supplier stores report"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get supplier stores report"} 500)))))))
+
 (defn supplier-monthly-trends-handler
   [db]
   (fn [request]

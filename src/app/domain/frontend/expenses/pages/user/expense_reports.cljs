@@ -83,6 +83,7 @@
         selected-expense-category-ids (normalize-selected-ids expense-category-filter)
         selected-manufacturer-ids (normalize-selected-ids manufacturer-filter)
         selected-supplier-id (first selected-supplier-ids)
+        expanded-supplier-id (use-subscribe [:user-expenses/reports-filter-expanded-supplier-id])
         selected-day-of-week (:day-of-week reports-filters)
         selected-category-key (:category-key reports-filters)
         selected-bucket-key (:amount-bucket reports-filters)
@@ -141,6 +142,10 @@
         top-suppliers-data (or (use-subscribe [:user-expenses/report-top-suppliers]) [])
         top-suppliers-loading? (boolean (use-subscribe [:user-expenses/report-top-suppliers-loading?]))
         top-suppliers-error (use-subscribe [:user-expenses/report-top-suppliers-error])
+
+        supplier-stores-data (or (use-subscribe [:user-expenses/report-supplier-stores]) [])
+        supplier-stores-loading? (boolean (use-subscribe [:user-expenses/report-supplier-stores-loading?]))
+        supplier-stores-error (use-subscribe [:user-expenses/report-supplier-stores-error])
 
         supplier-monthly-trends-data (or (use-subscribe [:user-expenses/report-supplier-monthly-trends]) [])
         supplier-monthly-trends-loading? (boolean (use-subscribe [:user-expenses/report-supplier-monthly-trends-loading?]))
@@ -450,6 +455,7 @@
                                      :set-top-items-sort! set-top-items-sort!})
 
           :providers-stores ($ providers-stores-tab {:selected-supplier-id selected-supplier-id
+                                                     :expanded-supplier-id expanded-supplier-id
                                                      :supplier-deep-dive-loading? supplier-deep-dive-loading?
                                                      :supplier-deep-dive-error supplier-deep-dive-error
                                                      :deep-dive-summary deep-dive-summary
@@ -462,6 +468,9 @@
                                                      :top-suppliers-data top-suppliers-data
                                                      :top-suppliers-loading? top-suppliers-loading?
                                                      :top-suppliers-error top-suppliers-error
+                                                     :supplier-stores-data supplier-stores-data
+                                                     :supplier-stores-loading? supplier-stores-loading?
+                                                     :supplier-stores-error supplier-stores-error
                                                      :supplier-monthly-trends-data supplier-monthly-trends-data
                                                      :supplier-monthly-trends-loading? supplier-monthly-trends-loading?
                                                      :supplier-monthly-trends-error supplier-monthly-trends-error})

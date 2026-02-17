@@ -872,3 +872,71 @@
       (is (= "expense-category-42" (:expense_category_id monthly-params)))
       (is (string? (:month_a monthly-params)))
       (is (string? (:month_b monthly-params))))))
+
+(deftest reports-toggle-expanded-supplier-fetches-and-clears-stores
+  (testing "expanding a supplier fetches /reports/supplier-stores, toggling same supplier clears drilldown state"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+
+    (reset! captured-http-requests [])
+    (rf/dispatch-sync [:user-expenses/reports-toggle-expanded-supplier "supplier-99"])
+    ;; Deterministic fetch assertion: dispatch the fetch event directly.
+    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-stores])
+
+    (let [req (last-http-request)
+          params (req-params req)]
+      (is (= :get (req-method req)))
+      (is (= "/api/v1/expenses/reports/supplier-stores" (req-uri req)))
+      (is (= "supplier-99" (:supplier_id params)))
+      (is (= 20 (:limit params)))
+      (is (string? (:from params)))
+      (is (string? (:to params))))
+
+    (is (= "supplier-99"
+          (get-in @rf-db/app-db [:user-expenses :reports :filters :expanded-supplier-id])))
+
+    ;; Toggling the same supplier collapses and clears the report slice without another HTTP request.
+    (swap! rf-db/app-db assoc-in [:user-expenses :reports :supplier-stores :data]
+      [{:store_name "Store A"}])
+    (let [request-count (count @captured-http-requests)]
+      (rf/dispatch-sync [:user-expenses/reports-toggle-expanded-supplier "supplier-99"])
+      (is (= request-count (count @captured-http-requests)))
+      (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :expanded-supplier-id])))
+      (is (= [] (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :data])))
+      (is (false? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :loading?])))
+      (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :error]))))))
+
+(deftest fetch-report-supplier-stores-without-expanded-supplier-is-safe
+  (testing "explicit supplier-stores fetch does not fire HTTP when no expanded supplier is selected"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+    (reset! captured-http-requests [])
+
+    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-stores])
+
+    (is (= 0 (count @captured-http-requests)))
+    (is (= [] (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :data])))
+    (is (false? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :loading?])))
+    (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :error])))))
+
+(deftest reports-refresh-requests-supplier-stores-only-when-expanded-supplier-exists
+  (testing "reports-refresh includes supplier-stores fetch only for expanded supplier state"
+    (reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+
+    (let [captured-dispatch-n (atom nil)]
+      (rf/reg-fx :dispatch-n (fn [events]
+                               (reset! captured-dispatch-n events)))
+      (try
+        (rf/dispatch-sync [:user-expenses/reports-refresh])
+        (is (not-any? #(= :user-expenses/fetch-report-supplier-stores (first %))
+              @captured-dispatch-n))
+
+        (rf/dispatch-sync [:user-expenses/reports-toggle-expanded-supplier "supplier-42"])
+        (rf/dispatch-sync [:user-expenses/reports-refresh])
+        (is (some #(= :user-expenses/fetch-report-supplier-stores (first %))
+              @captured-dispatch-n))
+        (finally
+          (rf/reg-fx :dispatch-n (fn [events]
+                                   (doseq [event events]
+                                     (rf/dispatch event)))))))))
