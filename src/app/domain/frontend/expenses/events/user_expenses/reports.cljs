@@ -101,7 +101,8 @@
      :selected-day nil
      :top-items-limit 20
      :show-uncategorized? true
-     :expanded-supplier-id nil}
+     :expanded-supplier-id nil
+     :expanded-top-item-alias-id nil}
     (default-month-range)))
 
 (defn- report-range-params
@@ -203,7 +204,9 @@
   (fn [{:keys [db]} _]
     (let [months-back (->positive-int (get-in db (conj reports-path :filters :months-back)) 6)
           expanded-supplier-id (-> (get-in db (conj reports-path :filters :expanded-supplier-id))
-                                 normalize-id)]
+                                 normalize-id)
+          expanded-top-item-alias-id (-> (get-in db (conj reports-path :filters :expanded-top-item-alias-id))
+                                       normalize-id)]
       {:dispatch-n (cond-> [[:user-expenses/fetch-summary]
                             [:user-expenses/fetch-by-month {:months-back months-back}]
                             [:user-expenses/fetch-by-supplier {:limit 25}]
@@ -217,7 +220,8 @@
                             [:user-expenses/fetch-report-top-suppliers]
                             [:user-expenses/fetch-report-supplier-monthly-trends]
                             [:user-expenses/fetch-report-category-allocation]]
-                     expanded-supplier-id (conj [:user-expenses/fetch-report-supplier-stores]))})))
+                     expanded-supplier-id (conj [:user-expenses/fetch-report-supplier-stores])
+                     expanded-top-item-alias-id (conj [:user-expenses/fetch-report-top-item-breakdown]))})))
 
 (rf/reg-event-fx
   :user-expenses/reports-set-filter
@@ -272,6 +276,26 @@
                (assoc-in (conj reports-path :supplier-stores :error) nil)
                (assoc-in (conj reports-path :supplier-stores :data) []))}))))
 
+(rf/reg-event-fx
+  :user-expenses/reports-toggle-expanded-top-item
+  common-interceptors
+  (fn [{:keys [db]} [alias-id]]
+    (let [alias-id* (normalize-id alias-id)
+          current (-> (get-in db (conj reports-path :filters :expanded-top-item-alias-id))
+                    normalize-id)
+          next-value (when-not (= current alias-id*) alias-id*)
+          db* (assoc-in db (conj reports-path :filters :expanded-top-item-alias-id) next-value)]
+      (if next-value
+        {:db (-> db*
+               (assoc-in (conj reports-path :top-item-breakdown :loading?) true)
+               (assoc-in (conj reports-path :top-item-breakdown :error) nil)
+               (assoc-in (conj reports-path :top-item-breakdown :data) nil))
+         :dispatch [:user-expenses/fetch-report-top-item-breakdown]}
+        {:db (-> db*
+               (assoc-in (conj reports-path :top-item-breakdown :loading?) false)
+               (assoc-in (conj reports-path :top-item-breakdown :error) nil)
+               (assoc-in (conj reports-path :top-item-breakdown :data) nil))}))))
+
 (rf/reg-event-db
   :user-expenses/reports-toggle-selected-day
   common-interceptors
@@ -296,9 +320,13 @@
            (assoc-in (conj reports-path :filters :amount-bucket) nil)
            (assoc-in (conj reports-path :filters :selected-day) nil)
            (assoc-in (conj reports-path :filters :expanded-supplier-id) nil)
+           (assoc-in (conj reports-path :filters :expanded-top-item-alias-id) nil)
            (assoc-in (conj reports-path :supplier-stores :loading?) false)
            (assoc-in (conj reports-path :supplier-stores :error) nil)
-           (assoc-in (conj reports-path :supplier-stores :data) []))
+           (assoc-in (conj reports-path :supplier-stores :data) [])
+           (assoc-in (conj reports-path :top-item-breakdown :loading?) false)
+           (assoc-in (conj reports-path :top-item-breakdown :error) nil)
+           (assoc-in (conj reports-path :top-item-breakdown :data) nil))
      :dispatch [:user-expenses/reports-refresh]}))
 
 (rf/reg-event-fx
@@ -402,6 +430,36 @@
   (fn [db [error]]
     (log/warn "Failed to fetch top-items report" {:error error})
     (finish-failure db :top-items error)))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-top-item-breakdown
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (let [expanded-top-item-alias-id (-> (get-in db (conj reports-path :filters :expanded-top-item-alias-id))
+                                       normalize-id)]
+      (if-not expanded-top-item-alias-id
+        {:db (finish-success db :top-item-breakdown {:suppliers [] :stores []})}
+        (fetch-fx db
+          :top-item-breakdown
+          (endpoints/reports-top-item-breakdown-endpoint expanded-top-item-alias-id)
+          (assoc (common-report-params db) :limit 50)
+          [:user-expenses/fetch-report-top-item-breakdown-success]
+          [:user-expenses/fetch-report-top-item-breakdown-failure])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-top-item-breakdown-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db
+      :top-item-breakdown
+      (or (:data response) {:suppliers [] :stores []}))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-top-item-breakdown-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch top-item-breakdown report" {:error error})
+    (finish-failure db :top-item-breakdown error)))
 
 (rf/reg-event-fx
   :user-expenses/fetch-report-monthly-comparison

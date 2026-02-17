@@ -45,6 +45,7 @@
     ["/supplier-deep-dive" {:get {:handler (user-expenses-reports/supplier-deep-dive-handler db)}}]
     ["/day-of-week" {:get {:handler (user-expenses-reports/day-of-week-spending-handler db)}}]
     ["/top-items" {:get {:handler (user-expenses-reports/top-items-spending-handler db)}}]
+    ["/top-items/:alias-id/breakdown" {:get {:handler (user-expenses-reports/top-item-breakdown-handler db)}}]
     ["/top-suppliers" {:get {:handler (user-expenses-reports/top-suppliers-handler db)}}]
     ["/supplier-stores" {:get {:handler (user-expenses-reports/supplier-stores-handler db)}}]
     ["/supplier-monthly-trends" {:get {:handler (user-expenses-reports/supplier-monthly-trends-handler db)}}]

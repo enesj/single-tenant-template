@@ -58,3 +58,19 @@
           (is (str/includes? @captured-sql "from expense_items"))
           (is (has-distinct-receipt-count? @captured-sql))
           (is (str/includes? @captured-sql "as line_count")))))))
+
+(deftest top-global-items-groups-by-article-test
+  (let [user-id (str (UUID/randomUUID))]
+    (testing "top global items groups by canonical article id (merges aliases)"
+      (let [captured-sql (atom nil)]
+        (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                      (reset! captured-sql (sql-text sql-params))
+                                      [])]
+          (service/get-user-top-item-spending :db user-id {:limit 20})
+          (is (string? @captured-sql))
+          ;; Regression guard: the grouping key should be the canonical article id when present.
+          (is (or (str/includes? @captured-sql "coalesce(aa.article_id, ei.alias_id)")
+                (str/includes? @captured-sql "coalesce(\"aa\".\"article_id\", \"ei\".\"alias_id\")")))
+          (is (str/includes? @captured-sql "as store_count"))
+          (is (str/includes? @captured-sql "as supplier_count")))))))
+

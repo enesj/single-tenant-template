@@ -431,37 +431,123 @@
       (enrich-with-all-weekdays rows (:currency opts)))))
 
 (defn get-user-top-item-spending
-  "Top product/item spending by alias label."
+  "Top product/item spending grouped by canonical article (merging aliases).
+
+  Notes:
+  - `:alias_id` is the *group key* for the row. For mapped items it is the
+    canonical `articles.id`. For unmapped items it falls back to the
+    `expense_items.alias_id` (so the UI still has a stable id to expand on).
+  - `:line_count` counts distinct posted receipts (`e.id`)."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (ensure-uuid user-id)
-        limit* (-> (or limit 20) long (max 1) (min 100))]
+        limit* (-> (or limit 20) long (max 1) (min 100))
+        resolved-store-id-sql [:raw "COALESCE(e.store_id, sa_receipt.store_id)"]
+        resolved-item-id-sql [:raw "COALESCE(aa.article_id, ei.alias_id)"]
+        item-label-sql [:raw "COALESCE(a.canonical_name, aa.raw_label, 'Unmapped item')"]]
     (when-not user-id
       (throw (ex-info "user-id is required" {:status 400})))
     (query-many
       db
-      {:select [[:aa.id :alias_id]
-                [[:raw "COALESCE(aa.raw_label, a.canonical_name, 'Unmapped item')"] :alias_label]
-                [:a.canonical_name :article_canonical_name]
+      {:select [[resolved-item-id-sql :alias_id]
+                [item-label-sql :alias_label]
+                [item-label-sql :article_canonical_name]
                 :e.currency
                 [[:sum :ei.line_total] :total_amount]
                 [[:sum :ei.qty] :qty_total]
                 ;; Keep :line_count for API compatibility; it now counts distinct posted receipts (e.id).
-                [[:count [:distinct :e.id]] :line_count]]
+                [[:count [:distinct :e.id]] :line_count]
+                [[:count [:distinct resolved-store-id-sql]] :store_count]
+                [[:count [:distinct :e.supplier_id]] :supplier_count]]
        :from [[:expense_items :ei]]
        :join [[:expenses :e] [:= :e.id :ei.expense_id]]
        :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
                    [:articles :a] [:= :a.id :aa.article_id]
                    [:subcategories :sc] [:= :sc.id :a.subcategory_id]
                    [:categories :c] [:= :c.id :sc.category_id]
-                   [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                   [:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                   [:receipts :r] [:= :r.id :e.receipt_id]
+                   [:store_aliases :sa_receipt] [:= :sa_receipt.id :r.store_alias_id]
+                   [:stores :st] [:= :st.id resolved-store-id-sql]]
        :where (item-base-where user-id opts)
-       :group-by [:aa.id
-                  [:raw "COALESCE(aa.raw_label, a.canonical_name, 'Unmapped item')"]
-                  :a.canonical_name
+       :group-by [resolved-item-id-sql
+                  item-label-sql
                   :e.currency]
        :order-by [[[:sum :ei.line_total] :desc]
-                  [[:raw "COALESCE(aa.raw_label, a.canonical_name, 'Unmapped item')"] :asc]]
+                  [item-label-sql :asc]]
        :limit limit*})))
+
+(defn get-user-top-item-breakdown
+  "Break down a top item (article alias) by suppliers and stores.
+
+  Returns:
+  {:suppliers [{:supplier_id .. :supplier_name .. :currency .. :total_amount .. :qty_total .. :line_count ..}]
+   :stores    [{:store_id .. :store_name .. :supplier_name .. :currency .. :total_amount .. :qty_total .. :line_count ..}]}"
+  [db user-id alias-id {:keys [limit] :as opts}]
+  (let [user-id (ensure-uuid user-id)
+        alias-id (ensure-uuid alias-id)
+        limit* (-> (or limit 50) long (max 1) (min 200))
+        resolved-store-id-sql [:raw "COALESCE(e.store_id, sa_receipt.store_id)"]
+        store-name-sql [:raw "COALESCE(st.display_name, 'Unmapped store')"]
+        where-clause (conj (item-base-where user-id opts)
+                       [:or
+                        [:= :aa.article_id alias-id]
+                        [:= :ei.alias_id alias-id]])]
+    (when-not user-id
+      (throw (ex-info "user-id is required" {:status 400})))
+    (when-not alias-id
+      (throw (ex-info "alias-id is required" {:status 400})))
+    {:suppliers
+     (query-many
+       db
+       {:select [:e.supplier_id
+                 [:s.display_name :supplier_name]
+                 :e.currency
+                 [[:sum :ei.line_total] :total_amount]
+                 [[:sum :ei.qty] :qty_total]
+                 [[:count [:distinct :e.id]] :line_count]]
+        :from [[:expense_items :ei]]
+        :join [[:expenses :e] [:= :e.id :ei.expense_id]
+               [:suppliers :s] [:= :s.id :e.supplier_id]]
+        :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                    [:articles :a] [:= :a.id :aa.article_id]
+                    [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                    [:categories :c] [:= :c.id :sc.category_id]
+                    [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+        :where where-clause
+        :group-by [:e.supplier_id :s.display_name :e.currency]
+        :order-by [[[:sum :ei.line_total] :desc]
+                   [:s.display_name :asc]
+                   [:e.currency :asc]]
+        :limit limit*})
+
+     :stores
+     (query-many
+       db
+       {:select [[resolved-store-id-sql :store_id]
+                 [store-name-sql :store_name]
+                 [:s.display_name :supplier_name]
+                 :e.currency
+                 [[:sum :ei.line_total] :total_amount]
+                 [[:sum :ei.qty] :qty_total]
+                 [[:count [:distinct :e.id]] :line_count]]
+        :from [[:expense_items :ei]]
+        :join [[:expenses :e] [:= :e.id :ei.expense_id]
+               [:suppliers :s] [:= :s.id :e.supplier_id]]
+        :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                    [:articles :a] [:= :a.id :aa.article_id]
+                    [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                    [:categories :c] [:= :c.id :sc.category_id]
+                    [:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                    [:receipts :r] [:= :r.id :e.receipt_id]
+                    [:store_aliases :sa_receipt] [:= :sa_receipt.id :r.store_alias_id]
+                    [:stores :st] [:= :st.id resolved-store-id-sql]]
+        :where where-clause
+        :group-by [resolved-store-id-sql store-name-sql :s.display_name :e.currency]
+        :order-by [[[:sum :ei.line_total] :desc]
+                   [store-name-sql :asc]
+                   [:s.display_name :asc]
+                   [:e.currency :asc]]
+        :limit limit*})}))
 
 (defn get-user-monthly-comparison
   "Compare two months and return deltas by currency and supplier."

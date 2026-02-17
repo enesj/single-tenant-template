@@ -198,6 +198,34 @@
                :message (.getMessage e)})
             (h/json-response {:error "Failed to get top items spending report"} 500)))))))
 
+(defn top-item-breakdown-handler
+  [db]
+  (fn [request]
+    (with-user-report-access
+      request
+      (fn [user-id]
+        (try
+          (let [params (:query-params request)
+                {:keys [error opts]} (parse-common-report-opts params)
+                alias-id (or (h/try-parse-uuid (get-in request [:path-params :alias-id]))
+                           (h/try-parse-uuid (get-in request [:parameters :path :alias-id])))
+                limit (parse-int-param params :limit 50 1 200)]
+            (cond
+              error error
+              (nil? alias-id) (h/json-response {:error "Invalid alias id"} 400)
+              (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
+              :else
+              (h/json-response
+                {:data (reports/get-user-top-item-breakdown db user-id alias-id (assoc opts :limit limit))})))
+          (catch Exception e
+            (log/error e "Error getting top item breakdown"
+              {:user-id user-id
+               :alias-id (or (get-in request [:path-params :alias-id])
+                           (get-in request [:parameters :path :alias-id]))
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get top item breakdown"} 500)))))))
+
 (defn top-suppliers-handler
   [db]
   (fn [request]

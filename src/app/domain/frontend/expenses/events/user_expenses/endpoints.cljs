@@ -13,6 +13,11 @@
 (def reports-supplier-deep-dive-endpoint (str reports-endpoint "/supplier-deep-dive"))
 (def reports-day-of-week-endpoint (str reports-endpoint "/day-of-week"))
 (def reports-top-items-endpoint (str reports-endpoint "/top-items"))
+
+(defn reports-top-item-breakdown-endpoint
+  [alias-id]
+  (str reports-top-items-endpoint "/" alias-id "/breakdown"))
+
 (def reports-monthly-comparison-endpoint (str reports-endpoint "/monthly-comparison"))
 (def reports-size-distribution-endpoint (str reports-endpoint "/size-distribution"))
 (def reports-daily-heatmap-endpoint (str reports-endpoint "/daily-heatmap"))

@@ -84,6 +84,7 @@
         selected-manufacturer-ids (normalize-selected-ids manufacturer-filter)
         selected-supplier-id (first selected-supplier-ids)
         expanded-supplier-id (use-subscribe [:user-expenses/reports-filter-expanded-supplier-id])
+        expanded-top-item-alias-id (use-subscribe [:user-expenses/reports-filter-expanded-top-item-alias-id])
         selected-day-of-week (:day-of-week reports-filters)
         selected-category-key (:category-key reports-filters)
         selected-bucket-key (:amount-bucket reports-filters)
@@ -122,6 +123,9 @@
         top-items-data (or (use-subscribe [:user-expenses/report-top-items]) [])
         top-items-loading? (boolean (use-subscribe [:user-expenses/report-top-items-loading?]))
         top-items-error (use-subscribe [:user-expenses/report-top-items-error])
+        top-item-breakdown (use-subscribe [:user-expenses/report-top-item-breakdown])
+        top-item-breakdown-loading? (boolean (use-subscribe [:user-expenses/report-top-item-breakdown-loading?]))
+        top-item-breakdown-error (use-subscribe [:user-expenses/report-top-item-breakdown-error])
 
         monthly-comparison (or (use-subscribe [:user-expenses/report-monthly-comparison]) {})
         monthly-comparison-loading? (boolean (use-subscribe [:user-expenses/report-monthly-comparison-loading?]))
@@ -452,7 +456,11 @@
                                      :top-items-error top-items-error
                                      :top-items-visible top-items-visible
                                      :top-items-sort top-items-sort
-                                     :set-top-items-sort! set-top-items-sort!})
+                                     :set-top-items-sort! set-top-items-sort!
+                                     :expanded-top-item-alias-id expanded-top-item-alias-id
+                                     :top-item-breakdown top-item-breakdown
+                                     :top-item-breakdown-loading? top-item-breakdown-loading?
+                                     :top-item-breakdown-error top-item-breakdown-error})
 
           :providers-stores ($ providers-stores-tab {:selected-supplier-id selected-supplier-id
                                                      :expanded-supplier-id expanded-supplier-id

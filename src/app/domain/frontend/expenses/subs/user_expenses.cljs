@@ -335,6 +335,11 @@
     (get-in db [:user-expenses :reports :filters :expanded-supplier-id])))
 
 (rf/reg-sub
+  :user-expenses/reports-filter-expanded-top-item-alias-id
+  (fn [db _]
+    (get-in db [:user-expenses :reports :filters :expanded-top-item-alias-id])))
+
+(rf/reg-sub
   :user-expenses/reports-filter-day-of-week
   (fn [db _]
     (get-in db [:user-expenses :reports :filters :day-of-week])))
@@ -479,7 +484,22 @@
   (fn [db _]
     (reports-data db :top-items :error)))
 
-;; Monthly comparison report
+;; Top-item breakdown report
+(rf/reg-sub
+  :user-expenses/report-top-item-breakdown
+  (fn [db _]
+    (or (reports-data db :top-item-breakdown :data) {:suppliers [] :stores []})))
+
+(rf/reg-sub
+  :user-expenses/report-top-item-breakdown-loading?
+  (fn [db _]
+    (boolean (reports-data db :top-item-breakdown :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-top-item-breakdown-error
+  (fn [db _]
+    (reports-data db :top-item-breakdown :error)))
+
 (rf/reg-sub
   :user-expenses/report-monthly-comparison
   (fn [db _]
