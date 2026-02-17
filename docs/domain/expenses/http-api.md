@@ -111,7 +111,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /api/v1/expenses/reports/day-of-week` – spending grouped by ISO day-of-week.
 - `GET /api/v1/expenses/reports/top-items` – top item/alias spending rows (optional `limit`, default 20, max 100), including `alias_label` and `article_canonical_name`.
 - `GET /api/v1/expenses/reports/top-suppliers` – supplier ranking by total spending with per-currency share percentage (optional `limit`, default 20, max 100).
-- `GET /api/v1/expenses/reports/supplier-stores` – store-level drilldown for a selected supplier (requires a single `supplier_id`; optional `limit`, default 20, max 100), including per-currency share percentage.
+- `GET /api/v1/expenses/reports/supplier-stores` – store-level drilldown for a selected supplier (requires a single `supplier_id`; optional `limit`, default 20, max 100), including per-currency share percentage. Store resolution uses `expense.store_id` first, then direct receipt alias mapping, then latest mapped alias fallback per expense; unresolved rows remain `Unmapped store`.
 - `GET /api/v1/expenses/reports/supplier-monthly-trends` – month-by-month spending for top suppliers in scope (optional `limit`, default 10, max 50).
 - `GET /api/v1/expenses/reports/monthly-comparison` – month-over-month comparison (`month_a` and `month_b` required, `YYYY-MM`).
 - `GET /api/v1/expenses/reports/size-distribution` – deterministic spend buckets (`lt_10`, `10_25`, `25_50`, `50_100`, `100_200`, `gte_200`).

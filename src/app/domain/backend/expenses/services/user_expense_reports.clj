@@ -256,20 +256,38 @@
           totals-by-currency (->> (summary-by-currency db user-id opts*)
                                (map (juxt :currency (comp bd :total_amount)))
                                (into {}))
+          resolved-store-id-sql
+          [:raw
+           "COALESCE(
+              e.store_id,
+              sa_direct.store_id,
+              (
+                SELECT sa_fallback.store_id
+                FROM receipts r_fallback
+                LEFT JOIN store_aliases sa_fallback ON sa_fallback.id = r_fallback.store_alias_id
+                WHERE r_fallback.expense_id = e.id
+                  AND sa_fallback.store_id IS NOT NULL
+                ORDER BY COALESCE(r_fallback.updated_at, r_fallback.created_at) DESC,
+                         r_fallback.id DESC
+                LIMIT 1
+              )
+            )"]
           store-name-sql [:raw "COALESCE(st.display_name, 'Unmapped store')"]
           rows (query-many
                  db
-                 {:select [:e.store_id
+                 {:select [[resolved-store-id-sql :store_id]
                            [store-name-sql :store_name]
                            [:ci.name :city_name]
                            :e.currency
                            [[:sum :e.total_amount] :total_amount]
                            [[:count :*] :expense_count]]
                   :from [[:expenses :e]]
-                  :left-join [[:stores :st] [:= :st.id :e.store_id]
+                  :left-join [[:receipts :r_direct] [:= :r_direct.id :e.receipt_id]
+                              [:store_aliases :sa_direct] [:= :sa_direct.id :r_direct.store_alias_id]
+                              [:stores :st] [:= :st.id resolved-store-id-sql]
                               [:cities :ci] [:= :ci.id :st.city_id]]
                   :where (base-where user-id opts*)
-                  :group-by [:e.store_id store-name-sql :ci.name :e.currency]
+                  :group-by [resolved-store-id-sql store-name-sql :ci.name :e.currency]
                   :order-by [[[:sum :e.total_amount] :desc]
                              [store-name-sql :asc]
                              [:e.currency :asc]]
