@@ -198,6 +198,50 @@
                :message (.getMessage e)})
             (h/json-response {:error "Failed to get top items spending report"} 500)))))))
 
+(defn top-suppliers-handler
+  [db]
+  (fn [request]
+    (with-user-report-access
+      request
+      (fn [user-id]
+        (try
+          (let [params (:query-params request)
+                {:keys [error opts]} (parse-common-report-opts params)
+                limit (parse-int-param params :limit 20 1 100)]
+            (cond
+              error error
+              (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
+              :else
+              (h/json-response {:data (reports/get-user-top-suppliers db user-id (assoc opts :limit limit))})))
+          (catch Exception e
+            (log/error e "Error getting top suppliers report"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get top suppliers report"} 500)))))))
+
+(defn supplier-monthly-trends-handler
+  [db]
+  (fn [request]
+    (with-user-report-access
+      request
+      (fn [user-id]
+        (try
+          (let [params (:query-params request)
+                {:keys [error opts]} (parse-common-report-opts params)
+                limit (parse-int-param params :limit 10 1 50)]
+            (cond
+              error error
+              (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
+              :else
+              (h/json-response {:data (reports/get-user-supplier-monthly-trends db user-id (assoc opts :limit limit))})))
+          (catch Exception e
+            (log/error e "Error getting supplier monthly trends report"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get supplier monthly trends report"} 500)))))))
+
 (defn monthly-comparison-handler
   [db]
   (fn [request]

@@ -211,6 +211,8 @@
                     [:user-expenses/fetch-report-monthly-comparison]
                     [:user-expenses/fetch-report-size-distribution]
                     [:user-expenses/fetch-report-daily-heatmap]
+                    [:user-expenses/fetch-report-top-suppliers]
+                    [:user-expenses/fetch-report-supplier-monthly-trends]
                     [:user-expenses/fetch-report-category-allocation]]})))
 
 (rf/reg-event-fx
@@ -481,3 +483,51 @@
   (fn [db [error]]
     (log/warn "Failed to fetch category-allocation report" {:error error})
     (finish-failure db :category-allocation error)))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-top-suppliers
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (fetch-fx db
+      :top-suppliers
+      endpoints/reports-top-suppliers-endpoint
+      (common-report-params db)
+      [:user-expenses/fetch-report-top-suppliers-success]
+      [:user-expenses/fetch-report-top-suppliers-failure])))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-top-suppliers-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db :top-suppliers (vec (or (:data response) [])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-top-suppliers-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch top-suppliers report" {:error error})
+    (finish-failure db :top-suppliers error)))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-supplier-monthly-trends
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (fetch-fx db
+      :supplier-monthly-trends
+      endpoints/reports-supplier-monthly-trends-endpoint
+      (common-report-params db)
+      [:user-expenses/fetch-report-supplier-monthly-trends-success]
+      [:user-expenses/fetch-report-supplier-monthly-trends-failure])))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-supplier-monthly-trends-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db :supplier-monthly-trends (vec (or (:data response) [])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-supplier-monthly-trends-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch supplier-monthly-trends report" {:error error})
+    (finish-failure db :supplier-monthly-trends error)))

@@ -18,6 +18,8 @@
 (def reports-daily-heatmap-endpoint (str reports-endpoint "/daily-heatmap"))
 (def reports-category-allocation-endpoint (str reports-endpoint "/category-allocation"))
 (def reports-filter-options-endpoint (str reports-endpoint "/filter-options"))
+(def reports-top-suppliers-endpoint (str reports-endpoint "/top-suppliers"))
+(def reports-supplier-monthly-trends-endpoint (str reports-endpoint "/supplier-monthly-trends"))
 
 (def suppliers-endpoint (api/versioned-endpoint "/expenses/suppliers"))
 

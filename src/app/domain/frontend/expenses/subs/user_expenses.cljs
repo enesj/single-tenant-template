@@ -395,6 +395,38 @@
   (fn [db _]
     (reports-data db :supplier-deep-dive :error)))
 
+;; Top suppliers report
+(rf/reg-sub
+  :user-expenses/report-top-suppliers
+  (fn [db _]
+    (or (reports-data db :top-suppliers :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-top-suppliers-loading?
+  (fn [db _]
+    (boolean (reports-data db :top-suppliers :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-top-suppliers-error
+  (fn [db _]
+    (reports-data db :top-suppliers :error)))
+
+;; Supplier monthly trends report
+(rf/reg-sub
+  :user-expenses/report-supplier-monthly-trends
+  (fn [db _]
+    (or (reports-data db :supplier-monthly-trends :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-monthly-trends-loading?
+  (fn [db _]
+    (boolean (reports-data db :supplier-monthly-trends :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-supplier-monthly-trends-error
+  (fn [db _]
+    (reports-data db :supplier-monthly-trends :error)))
+
 ;; Day-of-week report
 (rf/reg-sub
   :user-expenses/report-day-of-week

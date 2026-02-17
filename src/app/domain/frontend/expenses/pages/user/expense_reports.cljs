@@ -138,6 +138,14 @@
         category-allocation-loading? (boolean (use-subscribe [:user-expenses/report-category-allocation-loading?]))
         category-allocation-error (use-subscribe [:user-expenses/report-category-allocation-error])
 
+        top-suppliers-data (or (use-subscribe [:user-expenses/report-top-suppliers]) [])
+        top-suppliers-loading? (boolean (use-subscribe [:user-expenses/report-top-suppliers-loading?]))
+        top-suppliers-error (use-subscribe [:user-expenses/report-top-suppliers-error])
+
+        supplier-monthly-trends-data (or (use-subscribe [:user-expenses/report-supplier-monthly-trends]) [])
+        supplier-monthly-trends-loading? (boolean (use-subscribe [:user-expenses/report-supplier-monthly-trends-loading?]))
+        supplier-monthly-trends-error (use-subscribe [:user-expenses/report-supplier-monthly-trends-error])
+
         report-filter-options (use-subscribe [:user-expenses/report-filter-options])
         report-filter-options-loading? (boolean (use-subscribe [:user-expenses/report-filter-options-loading?]))
         filter-options-ready? (and (not report-filter-options-loading?) (some? report-filter-options))
@@ -450,7 +458,13 @@
                                                      :set-trend-sort! set-trend-sort!
                                                      :deep-dive-top-aliases deep-dive-top-aliases
                                                      :alias-sort alias-sort
-                                                     :set-alias-sort! set-alias-sort!})
+                                                     :set-alias-sort! set-alias-sort!
+                                                     :top-suppliers-data top-suppliers-data
+                                                     :top-suppliers-loading? top-suppliers-loading?
+                                                     :top-suppliers-error top-suppliers-error
+                                                     :supplier-monthly-trends-data supplier-monthly-trends-data
+                                                     :supplier-monthly-trends-loading? supplier-monthly-trends-loading?
+                                                     :supplier-monthly-trends-error supplier-monthly-trends-error})
 
           :categories ($ categories-tab {:category-allocation-loading? category-allocation-loading?
                                          :category-allocation-error category-allocation-error
