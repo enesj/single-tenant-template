@@ -38,6 +38,25 @@
   (let [v (some-> value str str/trim)]
     (when (seq v) v)))
 
+(defn- normalize-id-values
+  [value]
+  (let [values (cond
+                 (nil? value) []
+                 (sequential? value) value
+                 :else [value])]
+    (->> values
+      (keep normalize-id)
+      distinct
+      vec)))
+
+(defn- normalize-id-filter
+  [value]
+  (let [values (normalize-id-values value)]
+    (cond
+      (empty? values) nil
+      (= 1 (count values)) (first values)
+      :else values)))
+
 (defn- normalize-month
   [value]
   (let [v (some-> value str str/trim)]
@@ -104,11 +123,11 @@
                 expense-category-id
                 manufacturer-id]} (get-in db (conj reports-path :filters))
         range-params (report-range-params months-back)
-        supplier-id* (normalize-id supplier-id)
-        category-id* (normalize-id category-id)
-        subcategory-id* (normalize-id subcategory-id)
-        expense-category-id* (normalize-id expense-category-id)
-        manufacturer-id* (normalize-id manufacturer-id)]
+        supplier-id* (normalize-id-filter supplier-id)
+        category-id* (normalize-id-filter category-id)
+        subcategory-id* (normalize-id-filter subcategory-id)
+        expense-category-id* (normalize-id-filter expense-category-id)
+        manufacturer-id* (normalize-id-filter manufacturer-id)]
     (cond-> range-params
       supplier-id* (assoc :supplier_id supplier-id*)
       category-id* (assoc :category_id category-id*)
@@ -149,11 +168,11 @@
   [k value]
   (case k
     :months-back (->positive-int value 6)
-    :supplier-id (normalize-id value)
-    :category-id (normalize-id value)
-    :subcategory-id (normalize-id value)
-    :expense-category-id (normalize-id value)
-    :manufacturer-id (normalize-id value)
+    :supplier-id (normalize-id-filter value)
+    :category-id (normalize-id-filter value)
+    :subcategory-id (normalize-id-filter value)
+    :expense-category-id (normalize-id-filter value)
+    :manufacturer-id (normalize-id-filter value)
     :month-a (normalize-month value)
     :month-b (normalize-month value)
     :day-of-week (some-> (->positive-int value nil) int)
@@ -185,6 +204,7 @@
       {:dispatch-n [[:user-expenses/fetch-summary]
                     [:user-expenses/fetch-by-month {:months-back months-back}]
                     [:user-expenses/fetch-by-supplier {:limit 25}]
+                    [:user-expenses/fetch-report-filter-options]
                     [:user-expenses/fetch-report-supplier-deep-dive]
                     [:user-expenses/fetch-report-day-of-week]
                     [:user-expenses/fetch-report-top-items]
@@ -238,21 +258,53 @@
           next-value (when-not (= current day*) day*)]
       (assoc-in db (conj reports-path :filters :selected-day) next-value))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   :user-expenses/reports-clear-local-filters
   common-interceptors
-  (fn [db _]
-    (-> db
-      (assoc-in (conj reports-path :filters :day-of-week) nil)
-      (assoc-in (conj reports-path :filters :category-key) nil)
-      (assoc-in (conj reports-path :filters :amount-bucket) nil)
-      (assoc-in (conj reports-path :filters :selected-day) nil))))
+  (fn [{:keys [db]} _]
+    {:db (-> db
+           (assoc-in (conj reports-path :filters :supplier-id) nil)
+           (assoc-in (conj reports-path :filters :category-id) nil)
+           (assoc-in (conj reports-path :filters :subcategory-id) nil)
+           (assoc-in (conj reports-path :filters :expense-category-id) nil)
+           (assoc-in (conj reports-path :filters :manufacturer-id) nil)
+           (assoc-in (conj reports-path :filters :day-of-week) nil)
+           (assoc-in (conj reports-path :filters :category-key) nil)
+           (assoc-in (conj reports-path :filters :amount-bucket) nil)
+           (assoc-in (conj reports-path :filters :selected-day) nil))
+     :dispatch [:user-expenses/reports-refresh]}))
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-filter-options
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (fetch-fx db
+      :filter-options
+      endpoints/reports-filter-options-endpoint
+      (common-report-params db)
+      [:user-expenses/fetch-report-filter-options-success]
+      [:user-expenses/fetch-report-filter-options-failure])))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-filter-options-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db :filter-options (or (:data response) {}))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-filter-options-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch report filter options" {:error error})
+    (finish-failure db :filter-options error)))
 
 (rf/reg-event-fx
   :user-expenses/fetch-report-supplier-deep-dive
   common-interceptors
   (fn [{:keys [db]} _]
-    (let [supplier-id (normalize-id (get-in db (conj reports-path :filters :supplier-id)))]
+    (let [supplier-id (-> (get-in db (conj reports-path :filters :supplier-id))
+                        normalize-id-values
+                        first)]
       (if-not supplier-id
         {:db (finish-success db :supplier-deep-dive nil)}
         (fetch-fx db

@@ -50,10 +50,24 @@
 
 (defn- parse-uuid-param
   [params k]
-  (let [raw (h/get-param params k)]
-    (if (str/blank? (str (or raw "")))
+  (let [raw (h/get-param params k)
+        raw-values (cond
+                     (nil? raw) []
+                     (sequential? raw) raw
+                     (string? raw) (str/split raw #",")
+                     :else [raw])
+        normalized-values (->> raw-values
+                            (map #(some-> % str str/trim))
+                            (remove str/blank?)
+                            vec)]
+    (if (empty? normalized-values)
       nil
-      (or (h/try-parse-uuid raw) invalid))))
+      (let [parsed-values (mapv h/try-parse-uuid normalized-values)]
+        (if (some nil? parsed-values)
+          invalid
+          (if (= 1 (count parsed-values))
+            (first parsed-values)
+            parsed-values))))))
 
 (defn- parse-month-param
   [params k]
@@ -253,6 +267,25 @@
                :query-params (:query-params request)
                :message (.getMessage e)})
             (h/json-response {:error "Failed to get daily heatmap report"} 500)))))))
+
+(defn filter-options-handler
+  [db]
+  (fn [request]
+    (with-user-report-access
+      request
+      (fn [user-id]
+        (try
+          (let [params (:query-params request)
+                {:keys [error opts]} (parse-common-report-opts params)]
+            (if error
+              error
+              (h/json-response {:data (reports/get-user-report-filter-options db user-id opts)})))
+          (catch Exception e
+            (log/error e "Error getting report filter options"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get report filter options"} 500)))))))
 
 (defn category-allocation-handler
   [db]

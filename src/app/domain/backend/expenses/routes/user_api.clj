@@ -48,7 +48,8 @@
     ["/monthly-comparison" {:get {:handler (user-expenses-reports/monthly-comparison-handler db)}}]
     ["/size-distribution" {:get {:handler (user-expenses-reports/expense-size-distribution-handler db)}}]
     ["/daily-heatmap" {:get {:handler (user-expenses-reports/daily-heatmap-handler db)}}]
-    ["/category-allocation" {:get {:handler (user-expenses-reports/category-allocation-handler db)}}]]
+    ["/category-allocation" {:get {:handler (user-expenses-reports/category-allocation-handler db)}}]
+    ["/filter-options" {:get {:handler (user-expenses-reports/filter-options-handler db)}}]]
 
    ;; Settings endpoints (must come before /:id routes)
    ["/settings"

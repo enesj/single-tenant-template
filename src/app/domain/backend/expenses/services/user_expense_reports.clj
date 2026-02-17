@@ -59,24 +59,39 @@
   [db query]
   (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))
 
+(defn- id-filter-clause
+  [column value]
+  (cond
+    (nil? value) nil
+    (sequential? value) (let [values (vec (remove nil? value))]
+                          (when (seq values)
+                            [:in column values]))
+    :else [:= column value]))
+
 (defn- base-where
   [user-id {:keys [from to currency supplier-id payer-id expense-category-id]}]
-  (cond-> [:and
-           [:= :e.user_id user-id]
-           [:= :e.is_posted true]]
-    from (conj [:>= :e.purchased_at from])
-    to (conj [:<= :e.purchased_at to])
-    (seq currency) (conj [:= :e.currency [:cast currency :currency]])
-    supplier-id (conj [:= :e.supplier_id supplier-id])
-    payer-id (conj [:= :e.payer_id payer-id])
-    expense-category-id (conj [:= :e.expense_category_id expense-category-id])))
+  (let [supplier-clause (id-filter-clause :e.supplier_id supplier-id)
+        payer-clause (id-filter-clause :e.payer_id payer-id)
+        expense-category-clause (id-filter-clause :e.expense_category_id expense-category-id)]
+    (cond-> [:and
+             [:= :e.user_id user-id]
+             [:= :e.is_posted true]]
+      from (conj [:>= :e.purchased_at from])
+      to (conj [:<= :e.purchased_at to])
+      (seq currency) (conj [:= :e.currency [:cast currency :currency]])
+      supplier-clause (conj supplier-clause)
+      payer-clause (conj payer-clause)
+      expense-category-clause (conj expense-category-clause))))
 
 (defn- item-base-where
   [user-id {:keys [category-id subcategory-id manufacturer-id] :as opts}]
-  (cond-> (base-where user-id opts)
-    category-id (conj [:= :c.id category-id])
-    subcategory-id (conj [:= :sc.id subcategory-id])
-    manufacturer-id (conj [:= :m.id manufacturer-id])))
+  (let [category-clause (id-filter-clause :c.id category-id)
+        subcategory-clause (id-filter-clause :sc.id subcategory-id)
+        manufacturer-clause (id-filter-clause :m.id manufacturer-id)]
+    (cond-> (base-where user-id opts)
+      category-clause (conj category-clause)
+      subcategory-clause (conj subcategory-clause)
+      manufacturer-clause (conj manufacturer-clause))))
 
 (defn- month->range
   [month]
@@ -128,8 +143,11 @@
   [currency]
   {:category_key "uncategorized"
    :category_name "Uncategorized"
+   :subcategory_key "uncategorized"
+   :subcategory_name "Uncategorized"
    :currency currency
    :total_amount 0M
+   :subcategory_total_amount 0M
    :line_count 0})
 
 (defn- ensure-uncategorized
@@ -428,34 +446,183 @@
        :order-by [[[:raw "to_char(e.purchased_at, 'YYYY-MM-DD')"] :asc]
                   [:e.currency :asc]]})))
 
-(defn get-user-category-allocation
-  "Category allocation based on expense items with uncategorized bucket support."
+(defn- option-row
+  [row]
+  (let [id (:id row)
+        name (:name row)
+        category-id (:category_id row)]
+    (when (and id (some? name))
+      (cond-> {:id (str id)
+               :name (str name)}
+        category-id (assoc :category_id (str category-id))))))
+
+(defn- query-option-list
+  [db query]
+  (->> (query-many db query)
+    (keep option-row)
+    vec))
+
+(defn get-user-report-filter-options
+  "Filter options with available DB data for the current report scope.
+
+  Each option list ignores its own active filter, so users can keep adding values
+  in the same dropdown without options disappearing."
   [db user-id opts]
   (let [user-id (ensure-uuid user-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {:status 400})))
-    (let [rows (query-many
+    (let [item-joins [[:expenses :e] [:= :e.id :ei.expense_id]]
+          item-left-joins [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                           [:articles :a] [:= :a.id :aa.article_id]
+                           [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                           [:categories :c] [:= :c.id :sc.category_id]
+                           [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+          suppliers (query-option-list
+                      db
+                      {:select [[:e.supplier_id :id]
+                                [[:coalesce :s.display_name [:inline "Unknown supplier"]] :name]]
+                       :from [[:expenses :e]]
+                       :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
+                       :where (conj (base-where user-id (dissoc opts :supplier-id))
+                                [:is-not :e.supplier_id nil])
+                       :group-by [:e.supplier_id :s.display_name]
+                       :order-by [[:s.display_name :asc]]})
+          expense-categories (query-option-list
+                               db
+                               {:select [[:e.expense_category_id :id]
+                                         [[:coalesce :ec.name [:inline "Uncategorized"]] :name]]
+                                :from [[:expenses :e]]
+                                :left-join [[:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                                :where (conj (base-where user-id (dissoc opts :expense-category-id))
+                                         [:is-not :e.expense_category_id nil])
+                                :group-by [:e.expense_category_id :ec.name]
+                                :order-by [[:ec.name :asc]]})
+          categories (query-option-list
+                       db
+                       {:select [[:c.id :id]
+                                 [[:coalesce :c.name [:inline "Uncategorized"]] :name]]
+                        :from [[:expense_items :ei]]
+                        :join item-joins
+                        :left-join item-left-joins
+                        :where (conj (item-base-where user-id (dissoc opts :category-id))
+                                 [:is-not :c.id nil])
+                        :group-by [:c.id :c.name]
+                        :order-by [[:c.name :asc]]})
+          subcategories (query-option-list
+                          db
+                          {:select [[:sc.id :id]
+                                    [[:coalesce :sc.name [:inline "Uncategorized"]] :name]
+                                    [:sc.category_id :category_id]]
+                           :from [[:expense_items :ei]]
+                           :join item-joins
+                           :left-join item-left-joins
+                           :where (conj (item-base-where user-id (dissoc opts :subcategory-id))
+                                    [:is-not :sc.id nil])
+                           :group-by [:sc.id :sc.name :sc.category_id]
+                           :order-by [[:sc.name :asc]]})
+          manufacturers (query-option-list
+                          db
+                          {:select [[:m.id :id]
+                                    [[:coalesce :m.display_name [:inline "Unknown manufacturer"]] :name]]
+                           :from [[:expense_items :ei]]
+                           :join item-joins
+                           :left-join item-left-joins
+                           :where (conj (item-base-where user-id (dissoc opts :manufacturer-id))
+                                    [:is-not :m.id nil])
+                           :group-by [:m.id :m.display_name]
+                           :order-by [[:m.display_name :asc]]})]
+      {:suppliers suppliers
+       :categories categories
+       :subcategories subcategories
+       :expense-categories expense-categories
+       :manufacturers manufacturers})))
+
+(defn get-user-category-allocation
+  "Category allocation based on expense items with uncategorized bucket support.
+
+  Includes `:subcategory_name` + `:subcategory_total_amount` to support expanded
+  subcategory spend breakdown in the reports UI."
+  [db user-id opts]
+  (let [user-id (ensure-uuid user-id)]
+    (when-not user-id
+      (throw (ex-info "user-id is required" {:status 400})))
+    (let [category-key-sql [:raw "COALESCE(c.id::text, 'uncategorized')"]
+          category-name-sql [:raw "COALESCE(c.name, 'Uncategorized')"]
+          subcategory-key-sql [:raw "COALESCE(sc.id::text, 'uncategorized')"]
+          subcategory-name-sql [:raw "COALESCE(sc.name, 'Uncategorized')"]
+          joins [[:expenses :e] [:= :e.id :ei.expense_id]]
+          left-joins [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                      [:articles :a] [:= :a.id :aa.article_id]
+                      [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                      [:categories :c] [:= :c.id :sc.category_id]
+                      [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+          where-clause (item-base-where user-id opts)
+          category-totals-query {:select [[category-key-sql :category_key]
+                                          [category-name-sql :category_name]
+                                          :e.currency
+                                          [[:sum :ei.line_total] :total_amount]
+                                          ;; Keep :line_count for API compatibility; it counts distinct posted receipts (e.id).
+                                          [[:count [:distinct :e.id]] :line_count]]
+                                 :from [[:expense_items :ei]]
+                                 :join joins
+                                 :left-join left-joins
+                                 :where where-clause
+                                 :group-by [category-key-sql
+                                            category-name-sql
+                                            :e.currency]}
+          subcategory-totals-query {:select [[category-key-sql :category_key]
+                                             :e.currency
+                                             [subcategory-key-sql :subcategory_key]
+                                             [subcategory-name-sql :subcategory_name]
+                                             [[:sum :ei.line_total] :subcategory_total_amount]]
+                                    :from [[:expense_items :ei]]
+                                    :join joins
+                                    :left-join left-joins
+                                    :where where-clause
+                                    :group-by [category-key-sql
+                                               :e.currency
+                                               subcategory-key-sql
+                                               subcategory-name-sql]}
+          rows (query-many
                  db
-                 {:select [[[:raw "COALESCE(c.id::text, 'uncategorized')"] :category_key]
-                           [[:raw "COALESCE(c.name, 'Uncategorized')"] :category_name]
-                           :e.currency
-                           [[:sum :ei.line_total] :total_amount]
-                           ;; Keep :line_count for API compatibility; it now counts distinct posted receipts (e.id).
-                           [[:count [:distinct :e.id]] :line_count]]
-                  :from [[:expense_items :ei]]
-                  :join [[:expenses :e] [:= :e.id :ei.expense_id]]
-                  :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                              [:articles :a] [:= :a.id :aa.article_id]
-                              [:subcategories :sc] [:= :sc.id :a.subcategory_id]
-                              [:categories :c] [:= :c.id :sc.category_id]
-                              [:manufacturers :m] [:= :m.id :a.manufacturer_id]]
-                  :where (item-base-where user-id opts)
-                  :group-by [[:raw "COALESCE(c.id::text, 'uncategorized')"]
-                             [:raw "COALESCE(c.name, 'Uncategorized')"]
-                             :e.currency]
-                  :order-by [[[:sum :ei.line_total] :desc]
-                             [[:raw "COALESCE(c.name, 'Uncategorized')"] :asc]]})
-          rows* (-> rows
-                  (ensure-uncategorized (:currency opts))
-                  allocation-with-percentages)]
-      (vec rows*))))
+                 {:with [[:category_totals category-totals-query]
+                         [:subcategory_totals subcategory-totals-query]]
+                  :select [[:ct.category_key :category_key]
+                           [:ct.category_name :category_name]
+                           [:ct.currency :currency]
+                           [:ct.total_amount :total_amount]
+                           [:ct.line_count :line_count]
+                           [:st.subcategory_key :subcategory_key]
+                           [:st.subcategory_name :subcategory_name]
+                           [[:coalesce :st.subcategory_total_amount 0M] :subcategory_total_amount]]
+                  :from [[:category_totals :ct]]
+                  :left-join [[:subcategory_totals :st]
+                              [:and
+                               [:= :st.category_key :ct.category_key]
+                               [:= :st.currency :ct.currency]]]
+                  :order-by [[:ct.total_amount :desc]
+                             [:ct.category_name :asc]
+                             [:st.subcategory_total_amount :desc]
+                             [:st.subcategory_name :asc]]})
+          rows* (ensure-uncategorized rows (:currency opts))
+          category-rows (->> rows*
+                          (reduce (fn [acc row]
+                                    (assoc acc
+                                      [(:category_key row) (:currency row)]
+                                      {:category_key (:category_key row)
+                                       :currency (:currency row)
+                                       :total_amount (or (:total_amount row) 0M)}))
+                            {})
+                          vals
+                          allocation-with-percentages)
+          allocation-by-category (into {}
+                                   (map (fn [row]
+                                          [[(:category_key row) (:currency row)]
+                                           (:allocation_pct row)]))
+                                   category-rows)]
+      (->> rows*
+        (mapv (fn [row]
+                (assoc row
+                  :allocation_pct (or (get allocation-by-category
+                                        [(:category_key row) (:currency row)])
+                                    0.0))))))))

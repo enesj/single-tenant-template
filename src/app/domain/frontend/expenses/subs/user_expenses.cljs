@@ -364,6 +364,21 @@
   (fn [db _]
     (get-in db [:user-expenses :reports :filters :show-uncategorized?])))
 
+(rf/reg-sub
+  :user-expenses/report-filter-options
+  (fn [db _]
+    (reports-data db :filter-options :data)))
+
+(rf/reg-sub
+  :user-expenses/report-filter-options-loading?
+  (fn [db _]
+    (boolean (reports-data db :filter-options :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-filter-options-error
+  (fn [db _]
+    (reports-data db :filter-options :error)))
+
 ;; Supplier deep-dive report
 (rf/reg-sub
   :user-expenses/report-supplier-deep-dive
