@@ -179,7 +179,7 @@
                         :icon "💰"
                         :loading? (or summary-loading? by-month-loading?)
                         :subtitle "posted expenses"})
-          ($ stat-card {:title "Total Expenses"
+          ($ stat-card {:title "Total"
                         :value total-expenses
                         :icon "📋"
                         :loading? summary-loading?

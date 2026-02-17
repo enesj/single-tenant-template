@@ -238,7 +238,10 @@
                                   [:a.canonical_name :article_canonical_name]
                                   :e.currency
                                   [[:sum :ei.line_total] :total_amount]
-                                  [[:count :*] :line_count]]
+                                  ;; NOTE: `:line_count` is a legacy API field name kept for backward compatibility.
+                                  ;; It now counts distinct posted receipts (e.id), not individual item lines; do not rename without
+                                  ;; coordinating a breaking API change with all clients.
+                                  [[:count [:distinct :e.id]] :line_count]]
                          :from [[:expense_items :ei]]
                          :join [[:expenses :e] [:= :e.id :ei.expense_id]]
                          :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
@@ -294,7 +297,8 @@
                 :e.currency
                 [[:sum :ei.line_total] :total_amount]
                 [[:sum :ei.qty] :qty_total]
-                [[:count :*] :line_count]]
+                ;; Keep :line_count for API compatibility; it now counts distinct posted receipts (e.id).
+                [[:count [:distinct :e.id]] :line_count]]
        :from [[:expense_items :ei]]
        :join [[:expenses :e] [:= :e.id :ei.expense_id]]
        :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
@@ -436,7 +440,8 @@
                            [[:raw "COALESCE(c.name, 'Uncategorized')"] :category_name]
                            :e.currency
                            [[:sum :ei.line_total] :total_amount]
-                           [[:count :*] :line_count]]
+                           ;; Keep :line_count for API compatibility; it now counts distinct posted receipts (e.id).
+                           [[:count [:distinct :e.id]] :line_count]]
                   :from [[:expense_items :ei]]
                   :join [[:expenses :e] [:= :e.id :ei.expense_id]]
                   :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]

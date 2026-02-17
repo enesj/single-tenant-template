@@ -221,11 +221,11 @@
 (defn heat-intensity-class
   [ratio]
   (cond
-    (>= ratio 0.8) "bg-primary text-primary-content"
-    (>= ratio 0.55) "bg-primary/70 text-base-100"
-    (>= ratio 0.3) "bg-primary/40 text-base-content"
-    (pos? ratio) "bg-primary/20 text-base-content"
-    :else "bg-base-200 text-base-content/60"))
+    (>= ratio 0.8) "bg-primary text-primary-content shadow-sm scale-105 font-bold"
+    (>= ratio 0.55) "bg-primary/80 text-primary-content font-semibold"
+    (>= ratio 0.3) "bg-primary/40 text-base-content font-medium"
+    (pos? ratio) "bg-primary/10 text-base-content"
+    :else "bg-base-100 text-base-content/30 hover:bg-base-200 transition-colors"))
 
 (defn default-sort-direction
   [sort-type]
@@ -286,36 +286,38 @@
       label)))
 
 (defui stat-card [{:keys [title value subtitle icon loading?]}]
-  ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6 flex flex-col justify-between h-full transition-all hover:shadow-md"}
+  ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200/60 p-6 flex flex-col justify-between h-full transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-0.5"}
     ($ :div {:class "flex items-start justify-between mb-2"}
       ($ :div
-        ($ :p {:class "text-sm font-medium text-base-content/60 tracking-wide uppercase"} title)
+        ($ :p {:class "text-sm font-bold text-base-content/50 tracking-wider uppercase"} title)
         (if loading?
           ($ :div {:class "h-8 w-32 bg-base-200 rounded animate-pulse mt-2"})
-          ($ :p {:class "text-3xl font-bold mt-1 tracking-tight text-base-content"} value)))
+          ($ :p {:class "text-3xl font-extrabold mt-1 tracking-tight text-base-content bg-gradient-to-br from-base-content to-base-content/70 bg-clip-text"} value)))
       (when icon
-        ($ :div {:class "p-3 bg-base-100 rounded-xl text-primary/80"}
+        ($ :div {:class "p-3 bg-primary/5 rounded-2xl text-primary ring-1 ring-primary/10 shadow-sm"}
           ($ :span {:class "text-2xl"} icon))))
     (when subtitle
-      ($ :div {:class "mt-4 pt-4 border-t border-base-100"}
-        ($ :p {:class "text-xs font-medium text-base-content/50 flex items-center gap-1"}
-          ($ :span {:class "w-1.5 h-1.5 rounded-full bg-primary/40"})
+      ($ :div {:class "mt-4 pt-4 border-t border-base-100/60"}
+        ($ :p {:class "text-xs font-medium text-base-content/50 flex items-center gap-1.5"}
+          ($ :span {:class "w-1.5 h-1.5 rounded-full bg-primary/60 shadow-[0_0_8px_rgba(var(--p)/0.4)]"})
           subtitle)))))
 
 (defui section-shell [{:keys [title subtitle loading? error children header-actions]}]
-  ($ :section {:class "bg-white rounded-xl shadow-sm border border-base-200 overflow-hidden flex flex-col h-full"}
-    ($ :div {:class "px-6 py-4 border-b border-base-100 flex items-center justify-between bg-base-50/50"}
+  ($ :section {:class "bg-white rounded-2xl shadow-sm border border-base-200/80 overflow-hidden flex flex-col h-full transition-all hover:border-base-300"}
+    ($ :div {:class "px-6 py-4 border-b border-base-100 flex items-center justify-between bg-gradient-to-r from-base-50/80 via-base-50/40 to-white"}
       ($ :div
-        ($ :h3 {:class "font-bold text-lg text-base-content/90"} title)
+        ($ :h3 {:class "font-bold text-lg text-base-content/90 flex items-center gap-2"}
+          ($ :span {:class "w-1 h-5 bg-primary/40 rounded-full"})
+          title)
         (when subtitle
-          ($ :p {:class "text-xs text-base-content/60 mt-0.5"} subtitle)))
+          ($ :p {:class "text-xs text-base-content/50 mt-0.5 font-medium pl-3"} subtitle)))
       ($ :div {:class "flex items-center gap-3"}
         header-actions
         (when loading?
           ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm text-primary"}))))
     ($ :div {:class "p-6 flex-1"}
       (if (seq error)
-        ($ :div {:class "ds-alert ds-alert-error text-sm rounded-lg"}
+        ($ :div {:class "ds-alert ds-alert-error text-sm rounded-xl shadow-sm"}
           ($ :span (str error)))
         ($ :div {:class "space-y-4 h-full"}
           children)))))
@@ -483,29 +485,31 @@
         total-expenses (or (->number (:total-expenses summary)) 0)
         average-spend (when (pos? total-expenses) (/ total-sum total-expenses))]
 
-    ($ :div {:class "min-h-screen bg-base-50/50 pb-12"}
-      ($ :header {:class "bg-white border-b border-base-200 sticky top-0 z-10 shadow-sm/50"}
+    ($ :div {:class "min-h-screen bg-base-100 pb-12"}
+      ($ :header {:class "bg-white/80 backdrop-blur-xl border-b border-base-200 sticky top-0 z-30 shadow-sm transition-all"}
         ($ :div {:class "max-w-7xl mx-auto px-4 sm:px-6 py-4"}
           ($ :div {:class "flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6"}
             ($ :div {:class "flex-shrink-0 space-y-1"}
-              ($ :div {:class "text-xs font-medium text-primary uppercase tracking-wider mb-1"} "Analytics Dashboard")
-              ($ :h1 {:class "text-2xl sm:text-3xl font-extrabold text-base-content tracking-tight"} "Expense Reports")
-              ($ :p {:class "text-sm text-base-content/60 max-w-md"}
+              ($ :div {:class "flex items-center gap-2 mb-1"}
+                ($ :span {:class "w-2 h-2 rounded-full bg-primary animate-pulse"})
+                ($ :span {:class "text-xs font-bold text-primary uppercase tracking-widest"} "Analytics Dashboard"))
+              ($ :h1 {:class "text-2xl sm:text-3xl font-black text-base-content tracking-tight"} "Expense Reports")
+              ($ :p {:class "text-sm text-base-content/60 max-w-md font-medium"}
                 "Start by selecting a time range and filters below to analyze spending patterns."))
 
-            ($ :div {:class "w-full rounded-xl border border-base-200 bg-base-100 p-4 sm:p-6 space-y-4"}
+            ($ :div {:class "w-full rounded-2xl border border-base-200 bg-white/50 p-4 sm:p-6 space-y-4 shadow-sm backdrop-blur-sm"}
               ($ :div {:class "flex items-center justify-between mb-3"}
                 ($ :div {:class "flex items-center gap-2"}
-                  ($ :span {:class "text-xs font-bold uppercase text-base-content/40 tracking-wider"} "Global Filters")
+                  ($ :span {:class "text-xs font-extrabold uppercase text-base-content/40 tracking-wider"} "Global Filters")
                   (when (or selected-supplier-id selected-category-id selected-subcategory-id
                           selected-expense-category-id selected-manufacturer-id)
-                    ($ :span {:class "ds-badge ds-badge-primary ds-badge-xs"} "Active")))
+                    ($ :span {:class "ds-badge bg-primary/10 text-primary border-primary/20 font-bold ds-badge-xs uppercase tracking-wide"} "Active")))
 
                 ($ :div {:class "flex items-center gap-2"}
                   ($ button {:id "btn-reports-refresh"
                              :btn-type :ghost
                              :size :sm
-                             :class "text-base-content/60 hover:text-base-content"
+                             :class "text-base-content/60 hover:text-primary hover:bg-primary/5 font-medium transition-colors"
                              :on-click #(rf/dispatch [:user-expenses/reports-refresh])}
                     "Refresh Data")
 
@@ -514,16 +518,16 @@
                     ($ button {:id "btn-reports-clear-local-filters"
                                :btn-type :ghost
                                :size :sm
-                               :class "text-error/70 hover:text-error hover:bg-error/10"
+                               :class "text-error/70 hover:text-error hover:bg-error/10 font-medium transition-colors"
                                :on-click #(rf/dispatch [:user-expenses/reports-clear-local-filters])}
                       "Clear All filters"))))
 
               ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3"}
                 ;; Range - Prominent first
                 ($ :div {:class "space-y-1.5 col-span-1 sm:col-span-2 lg:col-span-1 xl:col-span-1"}
-                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-months-back"} "Time Range")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-months-back"} "Time Range")
                   ($ :select {:id "reports-filter-months-back"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white font-medium focus:border-primary focus:ring-1 focus:ring-primary"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white font-medium focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-lg text-xs shadow-sm"
                               :value months-back
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :months-back
@@ -534,9 +538,9 @@
                     ($ :option {:value 24} "Last 24 months")))
 
                 ($ :div {:class "space-y-1.5"}
-                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-supplier"} "Supplier")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-supplier"} "Supplier")
                   ($ :select {:id "reports-filter-supplier"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs rounded-lg focus:ring-2 focus:ring-primary/20"
                               :value (or selected-supplier-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :supplier-id
@@ -548,9 +552,9 @@
                       suppliers*)))
 
                 ($ :div {:class "space-y-1.5"}
-                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-category"} "Category")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-category"} "Category")
                   ($ :select {:id "reports-filter-category"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs rounded-lg focus:ring-2 focus:ring-primary/20"
                               :value (or selected-category-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :category-id
@@ -562,9 +566,9 @@
                       categories*)))
 
                 ($ :div {:class "space-y-1.5"}
-                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-subcategory"} "Subcategory")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-subcategory"} "Subcategory")
                   ($ :select {:id "reports-filter-subcategory"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs rounded-lg focus:ring-2 focus:ring-primary/20"
                               :value (or selected-subcategory-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :subcategory-id
@@ -576,9 +580,9 @@
                       subcategories*)))
 
                 ($ :div {:class "space-y-1.5"}
-                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-expense-category"} "Expense Type")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-expense-category"} "Expense Type")
                   ($ :select {:id "reports-filter-expense-category"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs rounded-lg focus:ring-2 focus:ring-primary/20"
                               :value (or selected-expense-category-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :expense-category-id
@@ -590,9 +594,9 @@
                       expense-categories*)))
 
                 ($ :div {:class "space-y-1.5"}
-                  ($ :label {:class "text-[11px] font-semibold text-base-content/70 uppercase tracking-wide" :for "reports-filter-manufacturer"} "Manufacturer")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-manufacturer"} "Manufacturer")
                   ($ :select {:id "reports-filter-manufacturer"
-                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs"
+                              :class "ds-select ds-select-sm ds-select-bordered w-full bg-white text-xs rounded-lg focus:ring-2 focus:ring-primary/20"
                               :value (or selected-manufacturer-id "")
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :manufacturer-id
@@ -658,15 +662,15 @@
                             ($ :p {:class "text-xs text-base-content/60 mt-1"}
                               (str (format-int expense-count) " transactions")))))
                       deep-dive-summary))
-                  ($ :div {:class "alert alert-info"}
+                  ($ :div {:class "ds-alert ds-alert-info"}
                     ($ :span "No summary data available for this supplier.")))
 
                 ($ :div {:class "space-y-3"}
                   ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 pl-1"} "Monthly Trend")
                   (if (seq deep-dive-trend)
-                    ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm"}
-                      ($ :table {:class "table table-sm table-zebra w-full"}
-                        ($ :thead {:class "bg-base-100"}
+                    ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm"}
+                      ($ :table {:class "ds-table ds-table-sm ds-table-zebra w-full"}
+                        ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
                           ($ :tr
                             ($ :th
                               ($ :button {:type "button"
@@ -697,7 +701,7 @@
                             (fn [row]
                               ($ :tr {:key (str "trend-" (:month row) "-" (:currency row)) :class "hover"}
                                 ($ :td {:class "font-medium"} (month-label (:month row)))
-                                ($ :td {:class "text-xs text-base-content/70"} (str (:currency row)))
+                                ($ :td {:class "text-xs text-base-content/60"} (str (:currency row)))
                                 ($ :td {:class "text-right font-mono font-medium"}
                                   (format-amount-only (:total_amount row)))
                                 ($ :td {:class "text-right text-base-content/70"}
@@ -707,11 +711,11 @@
                       "No trend data found.")))
 
                 ($ :div {:class "space-y-3"}
-                  ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 pl-1"} "Active Aliases")
+                  ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 pl-1"} "Active Articles")
                   (if (seq deep-dive-top-aliases)
-                    ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm max-h-96"}
-                      ($ :table {:class "table table-sm table-pin-rows w-full"}
-                        ($ :thead {:class "bg-base-100"}
+                    ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm max-h-96"}
+                      ($ :table {:class "ds-table ds-table-sm ds-table-pin-rows w-full"}
+                        ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
                           ($ :tr
                             ($ :th
                               ($ :button {:type "button"
@@ -736,14 +740,14 @@
                                           :class "font-bold hover:text-primary transition w-full text-right"
                                           :on-click #(set-alias-sort! (fn [current]
                                                                         (toggle-sort-config current :line_count :number)))}
-                                (sortable-column-label "Lines" alias-sort :line_count)))))
+                                (sortable-column-label "Receipts" alias-sort :line_count)))))
                         ($ :tbody
                           (mapv
                             (fn [row]
                               ($ :tr {:key (str "alias-" (or (:alias_id row) (:alias_label row)) "-" (:currency row)) :class "hover group"}
-                                ($ :td {:class "text-xs text-base-content/70 group-hover:text-primary transition-colors"}
+                                ($ :td {:class "text-xs text-base-content group-hover:text-primary transition-colors"}
                                   (or (:article_canonical_name row) "—"))
-                                ($ :td {:class "text-xs"} (str (:currency row)))
+                                ($ :td {:class "text-xs text-base-content/60"} (str (:currency row)))
                                 ($ :td {:class "text-right font-mono text-sm"}
                                   (format-amount-only (:total_amount row)))
                                 ($ :td {:class "text-right text-xs text-base-content/60"}
@@ -811,10 +815,10 @@
                   "Tip: Use the 'Size Distribution' widget below to filter this list by expense amount."))
 
               (if (seq top-items-visible)
-                ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm"}
+                ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm"}
                   ($ :table {:id "table-top-items"
-                             :class "table table-sm table-zebra w-full"}
-                    ($ :thead {:class "bg-base-100"}
+                             :class "ds-table ds-table-sm ds-table-zebra w-full"}
+                    ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
                       ($ :tr
                         ($ :th
                           ($ :button {:type "button"
@@ -833,7 +837,7 @@
                                       :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
                                       :on-click #(set-top-items-sort! (fn [current]
                                                                         (toggle-sort-config current :total_amount :number)))}
-                            (sortable-column-label "Total Expenses" top-items-sort :total_amount)))
+                            (sortable-column-label "Total" top-items-sort :total_amount)))
                         ($ :th {:class "text-right hidden sm:table-cell"}
                           ($ :button {:type "button"
                                       :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
@@ -845,7 +849,7 @@
                                       :class "font-bold hover:text-primary transition inline-flex items-center justify-end gap-1 w-full"
                                       :on-click #(set-top-items-sort! (fn [current]
                                                                         (toggle-sort-config current :line_count :number)))}
-                            (sortable-column-label "Lines" top-items-sort :line_count)))))
+                            (sortable-column-label "Receipts" top-items-sort :line_count)))))
                     ($ :tbody
                       (mapv
                         (fn [row]
@@ -907,23 +911,23 @@
                       month-options*)))))
 
             (if (seq monthly-by-currency)
-              ($ :div {:class "overflow-x-auto rounded-lg border border-base-200 shadow-sm"}
-                ($ :table {:class "table table-sm w-full"}
-                  ($ :thead {:class "bg-base-100"}
+              ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm"}
+                ($ :table {:class "ds-table ds-table-sm w-full"}
+                  ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
                     ($ :tr
                       ($ :th {:class "whitespace-nowrap font-bold"} "Currency")
-                      ($ :th {:class "text-right font-bold whitespace-nowrap"} (str "Month A (" (month-label month-a) ")"))
-                      ($ :th {:class "text-right font-bold whitespace-nowrap"} (str "Month B (" (month-label month-b) ")"))
-                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Diff (Cash)")
-                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Diff (%)")
-                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Tx Count")))
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "A")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "B")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Cash")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "%")
+                      ($ :th {:class "text-right font-bold whitespace-nowrap"} "Count")))
                   ($ :tbody
                     (mapv
                       (fn [row]
                         (let [delta (or (->number (:delta_amount row)) 0)
                               positive? (>= delta 0)]
                           ($ :tr {:key (str "monthly-currency-" (:currency row))}
-                            ($ :td {:class "font-bold text-xs"} (str (:currency row)))
+                            ($ :td {:class "text-xs text-base-content/60"} (str (:currency row)))
                             ($ :td {:class "text-right font-mono text-base-content/70"}
                               (format-amount-only (:month_a_total row)))
                             ($ :td {:class "text-right font-mono text-base-content/70"}
@@ -1056,8 +1060,8 @@
                             :subtitle "Spending breakdown by category"
                             :loading? category-allocation-loading?
                             :error category-allocation-error
-                            :header-actions ($ :label {:class "cursor-pointer label p-0 gap-2 hover:opacity-80 transition"}
-                                              ($ :span {:class "label-text text-xs font-medium text-base-content/70"} "Show Uncategorized")
+                            :header-actions ($ :label {:class "cursor-pointer ds-label p-0 gap-2 hover:opacity-80 transition"}
+                                              ($ :span {:class "text-xs font-medium text-base-content/70"} "Show Uncategorized")
                                               ($ :input {:id "toggle-category-uncategorized-visibility"
                                                          :type "checkbox"
                                                          :class "ds-toggle ds-toggle-primary ds-toggle-xs"
@@ -1091,7 +1095,7 @@
                               ($ :span {:class (str "font-bold text-sm " (if selected? "text-primary" "text-base-content/80"))}
                                 (or (:category_name row) "Uncategorized")))
                             ($ :span {:class "text-xs text-base-content/50"}
-                              (str (format-int (:line_count row)) " lines · " (format-percent (:allocation_pct row)))))
+                              (str (format-int (:line_count row)) " receipts · " (format-percent (:allocation_pct row)))))
                           ($ :span {:class "font-mono text-sm font-medium"}
                             (format-money total primary-currency)))
 
