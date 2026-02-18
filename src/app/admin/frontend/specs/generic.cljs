@@ -70,24 +70,46 @@
 
 (defn- create-column-spec-from-config
   "Create a column spec from vector configuration"
-  [column-key column-config computed-fields column-metadata]
+  [column-key column-config computed-fields column-metadata base-field-spec]
   (let [computed-field (lookup-column-entry computed-fields column-key)
         label-override (resolve-column-label-override column-metadata column-key)
+        resolved-type (or (:type column-config)
+                        (:type computed-field)
+                        (:type base-field-spec)
+                        :text)
+        resolved-input-type (or (:input-type column-config)
+                              (:input-type computed-field)
+                              (:input-type base-field-spec))
+        resolved-options (or (:options column-config)
+                           (:options computed-field)
+                           (:options base-field-spec))
         base-spec {:id column-key
                    :label (or label-override
+                            (:label computed-field)
+                            (:label base-field-spec)
                             (-> (name column-key)
                               (str/replace #"[_-]" " ")))
-                   :type :text}
+                   :type resolved-type}
         width-config (when-let [width (:width column-config)]
                        {:width width})
         formatter-config (when-let [formatter (:formatter column-config)]
                            {:formatter formatter})
+        input-type-config (when resolved-input-type
+                            {:input-type resolved-input-type})
+        options-config (when resolved-options
+                         {:options resolved-options})
         computed-config (when computed-field
                           {:computed true
                            :dependencies (:dependencies computed-field)})
         always-visible-config (when (:always-visible column-config)
                                 {:always-visible true})]
-    (merge base-spec width-config formatter-config computed-config always-visible-config)))
+    (merge base-spec
+      width-config
+      formatter-config
+      input-type-config
+      options-config
+      computed-config
+      always-visible-config)))
 
 ;; UPDATED: Read from Re-frame DB instead of config-loader cache
 (defn- generate-admin-entity-spec-from-db
@@ -96,18 +118,26 @@
 
   (if-let [table-config (get-in db [:admin :config :table-columns entity-keyword])]
     (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
+          model-fields (or (get-in db [:entities :specs (model-naming/ensure-app-keyword entity-keyword)])
+                         [])
+          fields-by-id (into {}
+                         (map (fn [field]
+                                [(:id field) field]))
+                         model-fields)
           always-visible-set (->> (or always-visible [])
                                (keep model-naming/ensure-app-keyword)
                                set)
           column-specs (mapv (fn [column-key]
                                (let [normalized-column (model-naming/ensure-app-keyword column-key)
                                      specific-config (or (lookup-column-entry column-config column-key) {})
+                                     base-field-spec (lookup-column-entry fields-by-id column-key)
                                      is-always-visible (contains? always-visible-set normalized-column)]
                                  (create-column-spec-from-config
                                    column-key
                                    (assoc specific-config :always-visible is-always-visible)
                                    computed-fields
-                                   column-metadata)))
+                                   column-metadata
+                                   base-field-spec)))
                          available-columns)]
       {:id entity-keyword
        :fields column-specs
@@ -136,7 +166,8 @@
                                    column-key
                                    (assoc specific-config :always-visible is-always-visible)
                                    computed-fields
-                                   column-metadata)))
+                                   column-metadata
+                                   nil)))
                          available-columns)]
       {:id entity-keyword
        :fields column-specs

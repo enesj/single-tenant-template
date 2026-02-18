@@ -16,7 +16,19 @@
 (def ^:private receipts-entity-spec
   {:id :receipts
    :fields [{:id :original-filename :label "original filename" :type :text}
-            {:id :status :label "status" :type :text}
+            {:id :status
+             :label "status"
+             :type :select
+             :input-type "select"
+             :options [{:value "uploaded" :label "Uploaded"}
+                       {:value "parsing" :label "Parsing"}
+                       {:value "parsed" :label "Parsed"}
+                       {:value "extracting" :label "Extracting"}
+                       {:value "extracted" :label "Extracted"}
+                       {:value "review_required" :label "Review required"}
+                       {:value "approved" :label "Approved"}
+                       {:value "posted" :label "Posted"}
+                       {:value "failed" :label "Failed"}]}
             {:id :supplier-guess :label "supplier guess" :type :text}
             ;; Single column: show total; include line total only when it differs.
             {:id :total-display :label "total" :type :text}

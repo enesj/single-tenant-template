@@ -5,7 +5,7 @@
     [app.template.frontend.components.filter.utils :as filter-utils]
     [app.template.frontend.events.list.filters :as filter-events]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui use-effect use-ref use-state]]
     [uix.re-frame :as uix.re-frame]))
 
 ;; UI Component for text field filtering
@@ -29,7 +29,7 @@
         {:filter-text filter-text})
 
       ;; Show match count when filtering is active
-      (when (and matching-count (>= (count filter-text) 3))
+      (when (and matching-count (pos? (count filter-text)))
         ($ :div {:class "text-sm text-gray-600 mt-1"}
           (str "Found " matching-count " matching "
             (if (= matching-count 1) "item" "items")))))))
@@ -201,6 +201,7 @@
   [{:keys [field-id field-label available-options selected-options set-selected-options matching-count entity-type]}]
   (let [;; State for dropdown open/closed
         [dropdown-open?, set-dropdown-open] (use-state false)
+        dropdown-root-ref (use-ref nil)
 
         ;; Handle option toggle
         handle-option-toggle (fn [option-value]
@@ -233,9 +234,28 @@
 
         selected-values (set (map :value selected-options))
         selected-count (count selected-options)
-        total-count (count available-options)]
+        total-count (count available-options)
+        close-dropdown! #(set-dropdown-open false)
+        _ (use-effect
+            (fn []
+              (when dropdown-open?
+                (let [handle-click-outside (fn [event]
+                                             (when-let [root-el @dropdown-root-ref]
+                                               (when (and root-el (not (.contains root-el (.-target event))))
+                                                 (close-dropdown!)))
+                                             nil)
+                      handle-keydown (fn [event]
+                                       (when (contains? #{"Enter" "Escape"} (.-key event))
+                                         (close-dropdown!))
+                                       nil)]
+                  (.addEventListener js/document "mousedown" handle-click-outside)
+                  (.addEventListener js/document "keydown" handle-keydown)
+                  (fn []
+                    (.removeEventListener js/document "mousedown" handle-click-outside)
+                    (.removeEventListener js/document "keydown" handle-keydown))))))]
 
-    ($ :div {:class "p-4 space-y-3"}
+    ($ :div {:class "p-4 space-y-3"
+             :ref dropdown-root-ref}
       ;; Multi-select dropdown
       ($ :div {:class "relative"}
         ;; Dropdown toggle

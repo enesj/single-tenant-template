@@ -1,8 +1,8 @@
 (ns app.template.frontend.subs.list
   (:require
     [app.shared.pagination :as pagination]
+    [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.db.paths :as paths]
-    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 ;; Entity-related subscriptions
@@ -51,6 +51,29 @@
 (defn- server-pagination?
   [ui-state]
   (= :server (pagination-mode ui-state)))
+
+(defn- infer-filter-type
+  [filter-value]
+  (cond
+    (vector? filter-value)
+    :select
+
+    (and (map? filter-value)
+      (or (contains? filter-value :min)
+        (contains? filter-value :max)))
+    :number-range
+
+    (and (map? filter-value)
+      (or (contains? filter-value :from)
+        (contains? filter-value :to)))
+    :date-range
+
+    (and (map? filter-value)
+      (contains? filter-value :value))
+    :select
+
+    :else
+    :text))
 
 (rf/reg-sub
   ::sort-config
@@ -143,64 +166,15 @@
      (rf/subscribe [::active-filters entity-type])
      (rf/subscribe [::entity-ui-state entity-type])])
   (fn [[items filters ui-state] [_ _]]
-    (if (or (server-pagination? ui-state)
-          (empty? filters))
+    (if (empty? filters)
       items
       (let [filtered (filter (fn [item]
                                (every? (fn [[field-id filter-value]]
-                                         (let [field-key (if (keyword? field-id) field-id (keyword field-id))
-                                               field-value (get item field-key)]
-                                           (cond
-                                             ;; Handle number range filter
-                                             (and (map? filter-value) (or (contains? filter-value :min) (contains? filter-value :max)))
-                                             (let [min-val (when (some? (:min filter-value)) (js/parseFloat (:min filter-value)))
-                                                   max-val (when (some? (:max filter-value)) (js/parseFloat (:max filter-value)))
-                                                   field-num (when field-value (js/parseFloat field-value))]
-                                               (and (or (nil? min-val) (and field-num (>= field-num min-val)))
-                                                 (or (nil? max-val) (and field-num (<= field-num max-val)))))
-
-                                             ;; Handle date range filter
-                                             (and (map? filter-value) (or (contains? filter-value :from) (contains? filter-value :to)))
-                                             (let [from-date (when (:from filter-value)
-                                                               (if (instance? js/Date (:from filter-value))
-                                                                 (:from filter-value)
-                                                                 (js/Date. (:from filter-value))))
-                                                   to-date (when (:to filter-value)
-                                                             (if (instance? js/Date (:to filter-value))
-                                                               (:to filter-value)
-                                                               (js/Date. (:to filter-value))))
-                                                   field-date (when field-value
-                                                                (if (instance? js/Date field-value)
-                                                                  field-value
-                                                                  (try (js/Date. field-value) (catch :default _ nil))))]
-                                               (and (or (nil? from-date) (and field-date (>= (.getTime field-date) (.getTime from-date))))
-                                                 (or (nil? to-date) (and field-date (<= (.getTime field-date) (.getTime to-date))))))
-
-                                             ;; Handle vector of values for select filter
-                                             (vector? filter-value)
-                                             (let [;; Extract actual values from the filter value objects if they have :value keys
-                                                   filter-values (into #{} (map #(if (map? %) (:value %) %)) filter-value)]
-                                               ;; Check if the field value matches any of the filter values
-                                               (if (empty? filter-values)
-                                                 true       ;; No values to filter by, consider it a match
-                                                 (if (coll? field-value)
-                                                   ;; For collection field values, check if any item matches
-                                                   (some filter-values field-value)
-                                                   ;; For single values, check direct membership
-                                                   (contains? filter-values field-value))))
-
-                                             ;; Handle map with value/label (from select fields)
-                                             (and (map? filter-value) (:value filter-value))
-                                             (= field-value (:value filter-value))
-
-                                             ;; Handle text filter (existing behavior)
-                                             (string? filter-value)
-                                             (let [field-str (str field-value)
-                                                   search-str (str/lower-case filter-value)]
-                                               (str/includes? (str/lower-case field-str) search-str))
-
-                                             ;; Default case - include if we don't know how to filter
-                                             :else true)))
+                                         (let [field-key (if (keyword? field-id) field-id (keyword field-id))]
+                                           (filter-helpers/matches-filter? {:item item
+                                                                            :field-id field-key
+                                                                            :filter-value filter-value
+                                                                            :filter-type (infer-filter-type filter-value)})))
                                  filters))
                        items)]
         filtered))))

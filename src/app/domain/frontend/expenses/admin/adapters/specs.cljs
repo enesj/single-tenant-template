@@ -6,6 +6,26 @@
 ;; Entity Specs (fallbacks when UI config not yet loaded)
 ;; =============================================================================
 
+(def ^:private currency-select-options
+  [{:value "BAM" :label "BAM"}
+   {:value "EUR" :label "EUR"}
+   {:value "USD" :label "USD"}])
+
+(def ^:private expense-status-select-options
+  [{:value "draft" :label "Draft"}
+   {:value "posted" :label "Posted"}])
+
+(def ^:private receipt-status-select-options
+  [{:value "uploaded" :label "Uploaded"}
+   {:value "parsing" :label "Parsing"}
+   {:value "parsed" :label "Parsed"}
+   {:value "extracting" :label "Extracting"}
+   {:value "extracted" :label "Extracted"}
+   {:value "review_required" :label "Review required"}
+   {:value "approved" :label "Approved"}
+   {:value "posted" :label "Posted"}
+   {:value "failed" :label "Failed"}])
+
 (def expenses-entity-spec
   {:id :expenses
    :fields [{:id :supplier-display-name :label "Supplier" :type :text}
@@ -14,9 +34,17 @@
             {:id :payer-type :label "Payer type" :type :text}
             {:id :expense-category-name :label "Expense Category" :type :text}
             {:id :total-amount :label "Total" :type :number}
-            {:id :currency :label "Currency" :type :text}
+            {:id :currency
+             :label "Currency"
+             :type :select
+             :input-type "select"
+             :options currency-select-options}
             {:id :purchased-at :label "Purchased at" :type :datetime}
-            {:id :status :label "Status" :type :text}]})
+            {:id :status
+             :label "Status"
+             :type :select
+             :input-type "select"
+             :options expense-status-select-options}]})
 
 (def expense-items-entity-spec
   {:id :expense-items
@@ -34,7 +62,11 @@
 (def receipts-entity-spec
   {:id :receipts
    :fields [{:id :original-filename :label "File" :type :text}
-            {:id :status :label "Status" :type :text}
+            {:id :status
+             :label "Status"
+             :type :select
+             :input-type "select"
+             :options receipt-status-select-options}
             {:id :supplier-guess :label "Supplier guess" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
@@ -214,4 +246,3 @@
    :value-fn (fn [spec _] (or spec unmapped-aliases-entity-spec))})
 
 ;; Fallback spec for payer-types entity (admin/owner managed)
-

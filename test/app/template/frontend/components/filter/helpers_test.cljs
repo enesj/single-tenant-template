@@ -148,11 +148,11 @@
                                   :filter-value "long desc"
                                   :filter-type :text}))
 
-    ;; Minimum 3 characters required
-    (is (not (helpers/matches-filter? {:item {:name "John"}
-                                       :field-id :name
-                                       :filter-value "Jo"
-                                       :filter-type :text})))
+    ;; Applies from the first entered character
+    (is (helpers/matches-filter? {:item {:name "John"}
+                                  :field-id :name
+                                  :filter-value "Jo"
+                                  :filter-type :text}))
 
     ;; No match
     (is (not (helpers/matches-filter? {:item {:name "John"}
@@ -240,6 +240,12 @@
                                                  {:value "expense" :label "Expense"}]
                                   :filter-type :select}))
 
+    ;; Single value/label map
+    (is (helpers/matches-filter? {:item {:type "income"}
+                                  :field-id :type
+                                  :filter-value {:value "income" :label "Income"}
+                                  :filter-type :select}))
+
     ;; Not in selection
     (is (not (helpers/matches-filter? {:item {:type "other"}
                                        :field-id :type
@@ -259,7 +265,7 @@
                  {:id 3 :name "Jack Johnson" :amount 150 :type "income"}
                  {:id 4 :name "Jill Anderson" :amount 50 :type "expense"}]]
 
-      ;; Text filter - needs 3+ characters
+      ;; Text filter - applies from first character
       ;; "Smith" matches both "John Smith" and "Jane Smith"
       (is (= 2 (helpers/count-matching-items {:items items
                                               :field-id :name

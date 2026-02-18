@@ -2,6 +2,7 @@
   (:require
     [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.events.list.crud :as crud-events]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [use-effect]]))
@@ -203,9 +204,13 @@
   [{:keys [filter-type filter-text entity-type field-id on-apply]}]
   (use-effect
     (fn []
-      (when (and (= filter-type :text) (>= (count filter-text) 3) on-apply)
-        ;; Return cleanup so the previous timer is cancelled on next render
-        (create-debounced-auto-apply entity-type field-id filter-text true on-apply 300)))
+      (when (and (= filter-type :text) on-apply)
+        ;; Apply after first entered character; clear when input becomes blank.
+        ;; Return cleanup so the previous timer is cancelled on next render.
+        (let [trimmed (some-> filter-text str)
+              normalized (when (and trimmed (not (str/blank? trimmed)))
+                           trimmed)]
+          (create-debounced-auto-apply entity-type field-id normalized true on-apply 250))))
     [filter-type filter-text entity-type field-id on-apply]))
 
 (defn use-number-range-auto-apply
@@ -244,8 +249,8 @@
   "Calculate matching count for all filter types"
   [{:keys [filter-type items field-id filter-text filter-min filter-max filter-from-date filter-to-date filter-selected-options]}]
   (cond
-    ;; Text filter with 3+ characters
-    (and (= filter-type :text) (>= (count filter-text) 3))
+    ;; Text filter with at least one non-whitespace character
+    (and (= filter-type :text) (not (str/blank? (or filter-text ""))))
     (filter-helpers/count-matching-items {:items items
                                           :field-id field-id
                                           :filter-value filter-text

@@ -3,6 +3,15 @@
     [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]))
 
+(defn- normalize-type-name
+  [value]
+  (some-> (cond
+            (keyword? value) (name value)
+            (string? value) value
+            (some? value) (str value)
+            :else nil)
+    str/lower-case))
+
 (defn get-field-type-from-spec
   "Extracts the base field type from a field spec"
   [{:keys [field-spec]}]
@@ -23,20 +32,22 @@
   "Determines the appropriate filter type based on field specification"
   [{:keys [field-spec]}]
 
-  (let [input-type (get-field-type-from-spec {:field-spec field-spec})
+  (let [input-type (normalize-type-name (get-field-type-from-spec {:field-spec field-spec}))
+        field-type (normalize-type-name (:type field-spec))
+        effective-type (or input-type field-type)
         has-options? (boolean (:options field-spec))]
 
     (cond
       ;; Select/enum fields - either has options or is explicitly a select
-      (or has-options? (= "select" input-type))
+      (or has-options? (= "select" effective-type) (= "multi-select" effective-type))
       :select
 
       ;; Number fields
-      (contains? #{"number" "decimal" "integer"} input-type)
+      (contains? #{"number" "decimal" "integer" "numeric"} effective-type)
       :number-range
 
       ;; Date/time fields
-      (contains? #{"date" "datetime" "datetime-local"} input-type)
+      (contains? #{"date" "datetime" "datetime-local" "timestamp" "timestamptz"} effective-type)
       :date-range
 
       ;; Text fields (default)
@@ -104,13 +115,13 @@
   [{:keys [item field-id filter-value filter-type]}]
   (let [field-val (resolve-field-value item field-id)]
     (case filter-type
-      ;; Text filter - require 3+ characters
+      ;; Text filter
       :text
       (when (and field-val
               (string? filter-value)
-              (>= (count filter-value) 3))
+              (not (str/blank? filter-value)))
         (let [field-str (str/lower-case (str field-val))
-              search-str (str/lower-case filter-value)]
+              search-str (-> filter-value str/trim str/lower-case)]
           (str/includes? field-str search-str)))
 
       ;; Number range filter
@@ -140,14 +151,28 @@
 
       ;; Select filter - check if field value is in selected options
       :select
-      (when (and field-val (vector? filter-value))
-        ;; Handle both simple values and {:value :label} objects
-        (let [selected-values (if (and (seq filter-value) (map? (first filter-value)))
-                                ;; Extract values from {:value :label} objects
-                                (mapv :value filter-value)
-                                ;; Use as-is if simple values
-                                filter-value)]
-          (some #(= (str field-val) (str %)) selected-values)))
+      (when field-val
+        (let [selected-values (cond
+                                (vector? filter-value)
+                                (if (and (seq filter-value) (map? (first filter-value)))
+                                  (mapv :value filter-value)
+                                  filter-value)
+
+                                (and (map? filter-value) (contains? filter-value :value))
+                                [(:value filter-value)]
+
+                                :else
+                                [])
+              selected-set (set (map str selected-values))]
+          (cond
+            (empty? selected-set)
+            true
+
+            (coll? field-val)
+            (some selected-set (map str field-val))
+
+            :else
+            (contains? selected-set (str field-val)))))
 
       ;; Default - no match
       false)))

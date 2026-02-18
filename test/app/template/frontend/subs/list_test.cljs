@@ -42,8 +42,8 @@
           (map :amount @(rf/subscribe [::list-subs/visible-items :items])))
       "Second page should contain remaining element")))
 
-(deftest visible-items-server-mode-bypass-test
-  (testing "visible-items bypasses client filter/sort/pagination in :server mode"
+(deftest visible-items-server-mode-filtering-test
+  (testing "visible-items applies active filters but skips local sort/pagination in :server mode"
     (reset-db! {:entities {:items {:data {1 {:id 1 :amount 200}
                                           2 {:id 2 :amount 100}
                                           3 {:id 3 :amount 150}}
@@ -53,9 +53,9 @@
                                      :filters {:id "1"}
                                      :per-page 1
                                      :pagination {:current-page 2 :per-page 1}}}}})
-    (is (= [1 2 3]
+    (is (= [1]
           (map :id @(rf/subscribe [::list-subs/visible-items :items])))
-      "Server mode should return loaded rows as-is, even on page > 1")))
+      "Server mode should still respect active filters, even on page > 1")))
 
 (deftest filtering-test
   (testing "Filtered items combine multiple filter types"

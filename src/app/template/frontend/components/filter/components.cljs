@@ -75,15 +75,8 @@
   [{:keys [filter-text]}]
   (let [char-count (count filter-text)]
     (cond
-      ;; Show character requirement when user has typed 1-2 characters
-      (and (pos? char-count) (< char-count 3))
-      ($ :div {:class "text-xs text-gray-500 mt-1"}
-        (str "Type " (- 3 char-count) " more character"
-          (when (= char-count 1) "s")
-          " to auto-filter"))
-
-      ;; Show auto-filtering when 3+ characters
-      (>= char-count 3)
+      ;; Show auto-filtering as soon as user starts typing
+      (pos? char-count)
       ($ :div {:class "text-xs text-success mt-1 flex items-center"}
         ($ :span {:class "mr-1"} "Auto-filtering")
         ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})))))

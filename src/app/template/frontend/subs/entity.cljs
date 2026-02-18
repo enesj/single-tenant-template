@@ -65,11 +65,9 @@
   (fn [[_ entity-type]]
     [(rf/subscribe [::entities entity-type])
      (rf/subscribe [::list-subs/active-filters entity-type])
-     (rf/subscribe [::entity-config entity-type])
-     (rf/subscribe [::list-subs/entity-ui-state entity-type])])
-  (fn [[entities active-filters entity-config ui-state] [_ _entity-type]]
-    (if (or (server-pagination? ui-state)
-          (empty? active-filters))
+     (rf/subscribe [::entity-config entity-type])])
+  (fn [[entities active-filters entity-config] [_ _entity-type]]
+    (if (empty? active-filters)
       entities
       (let [;; Create a map of field-id to field-spec for quick lookup
             fields-by-id (into {} (map (fn [field] [(keyword (:id field)) field])

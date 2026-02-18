@@ -302,14 +302,14 @@
   (testing "Filter matching logic edge cases"
     ;; Test matches-filter? function directly for various scenarios
 
-    ;; Text filter - minimum character requirement
-    (is (not (filter-helpers/matches-filter?
-               {:item {:description "test"} :field-id :description :filter-value "te" :filter-type :text}))
-      "Should not match text filter with less than 3 characters")
+    ;; Text filter - applies from the first entered character
+    (is (filter-helpers/matches-filter?
+          {:item {:description "test"} :field-id :description :filter-value "te" :filter-type :text})
+      "Should match text filter with 1+ characters")
 
     (is (filter-helpers/matches-filter?
           {:item {:description "test"} :field-id :description :filter-value "tes" :filter-type :text})
-      "Should match text filter with 3 or more characters")
+      "Should match text filter with 1+ characters")
 
     ;; Number range filter with string values
     (is (filter-helpers/matches-filter?
