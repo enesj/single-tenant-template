@@ -417,29 +417,28 @@
   (db/query1
     db
     (str
-      "SELECT id, canonical_name, normalized_key, category, subcategory_id, link, manufacturer_id\n"
+      "SELECT id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id\n"
       "FROM articles\n"
       "WHERE normalized_key = " (db/sql-literal normalized-key) "\n"
       "LIMIT 1")))
 
 (defn- create-article!
-  [db {:keys [canonical-name normalized-key legacy-category link manufacturer-id subcategory-id]}]
+  [db {:keys [canonical-name normalized-key link manufacturer-id subcategory-id]}]
   (let [id (db/uuid)]
     (db/query1
       db
       (str
-        "INSERT INTO articles (id, canonical_name, normalized_key, category, subcategory_id, link, manufacturer_id)\n"
+        "INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)\n"
         "VALUES ("
         (db/sql-literal id) ", "
         (db/sql-literal canonical-name) ", "
         (db/sql-literal normalized-key) ", "
-        (db/sql-literal legacy-category) ", "
         (db/sql-literal subcategory-id) ", "
         (db/sql-literal link) ", "
         (db/sql-literal manufacturer-id)
         ")\n"
         "ON CONFLICT (normalized_key) DO NOTHING\n"
-        "RETURNING id, canonical_name, normalized_key, category, subcategory_id, link, manufacturer_id"))))
+        "RETURNING id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id"))))
 
 (defn- process-article!
   [db caches opts]
@@ -472,7 +471,6 @@
         subcategory-id (:id subcategory)
         inserted (create-article! db {:canonical-name (:canonical-name opts)
                                       :normalized-key (:normalized-key opts)
-                                      :legacy-category (:legacy-category opts)
                                       :link (:link opts)
                                       :manufacturer-id manufacturer-id
                                       :subcategory-id subcategory-id})
