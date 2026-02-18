@@ -31,7 +31,9 @@
 	- offset (default 0)
 	- search (string, optional)
 	- supplier_id (uuid, optional)
-	- unmapped-only (boolean, optional)"
+	- unmapped-only (boolean, optional)
+	- order-by (snake/kebab/string/keyword, optional)
+	- order-dir (asc/desc, optional)"
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
@@ -45,10 +47,14 @@
                 search (h/get-param params :search)
                 supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                 unmapped-only (h/parse-boolean-param params :unmapped-only)
+                order-by (h/parse-order-by params)
+                order-dir (h/parse-order-dir params)
                 opts (cond-> {:limit limit :offset offset}
                        (some? search) (assoc :search search)
                        supplier-id (assoc :supplier_id supplier-id)
-                       (some? unmapped-only) (assoc :unmapped-only unmapped-only))
+                       (some? unmapped-only) (assoc :unmapped-only unmapped-only)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 rows (vec (supplier-aliases/list-supplier-aliases db opts))
                 total (long (or (supplier-aliases/count-supplier-aliases db opts) 0))]
             (h/json-response {:data rows

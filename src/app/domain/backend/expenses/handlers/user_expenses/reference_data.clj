@@ -68,9 +68,13 @@
                 limit (parse-page-limit params 100)
                 offset (parse-page-offset params)
                 search (h/get-param params :search)
+                order-by (h/parse-order-by params)
+                order-dir (h/parse-order-dir params)
                 opts (cond-> {:limit limit
                               :offset offset}
-                       (some? search) (assoc :search search))
+                       (some? search) (assoc :search search)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
                 count-suppliers (requiring-resolve 'app.domain.backend.expenses.services.suppliers/count-suppliers)
                 suppliers (vec (suppliers-svc db opts))
@@ -123,9 +127,13 @@
                 limit (parse-page-limit params 100)
                 offset (parse-page-offset params)
                 search (h/get-param params :search)
+                order-by (h/parse-order-by params)
+                order-dir (h/parse-order-dir params)
                 opts (cond-> {:limit limit
                               :offset offset}
-                       (some? search) (assoc :search search))
+                       (some? search) (assoc :search search)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 payers-svc (resolve-service-op-fn
                              'app.domain.backend.expenses.services.payers
                              :list
@@ -497,9 +505,13 @@
                 limit (parse-page-limit params 100)
                 offset (parse-page-offset params)
                 search (h/get-param params :search)
+                order-by (h/parse-order-by params)
+                order-dir (h/parse-order-dir params)
                 opts (cond-> {:limit limit
                               :offset offset}
-                       (some? search) (assoc :search search))
+                       (some? search) (assoc :search search)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 list-payer-types (resolve-service-op-fn
                                    'app.domain.backend.expenses.services.payer-types
                                    :list)

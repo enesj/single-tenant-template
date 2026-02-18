@@ -117,11 +117,13 @@
         sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
         order-dir (let [direction (:direction sort-config)]
                     (when (contains? #{:asc :desc "asc" "desc"} direction)
-                      (name (keyword direction))))]
+                      (name (keyword direction))))
+        order-field (when-let [f (:field sort-config)] (name f))]
     (cond-> {:limit per-page
              :offset (* (max 0 (dec current-page)) per-page)}
       (some? status) (assoc :status status)
-      (some? order-dir) (assoc :order-dir order-dir))))
+      (some? order-dir) (assoc :order-dir order-dir)
+      (some? order-field) (assoc :order-by order-field))))
 
 ;; -----------------------------------------------------------------------------
 ;; Template CRUD bridge overrides
@@ -196,7 +198,7 @@
   :user-expenses/fetch-receipts
   common-interceptors
   (fn [{:keys [db]} [payload]]
-    (let [{:keys [limit offset status order-dir]} (or payload {})
+    (let [{:keys [limit offset status order-dir order-by]} (or payload {})
           limit* (or limit 50)
           offset* (or offset 0)]
       {:db (-> db
@@ -212,7 +214,8 @@
 
                       :params (cond-> {:limit limit* :offset offset*}
                                 (some? status) (assoc :status status)
-                                (some? order-dir) (assoc :order-dir order-dir))
+                                (some? order-dir) (assoc :order-dir order-dir)
+                                (some? order-by) (assoc :order-by order-by))
                       :on-success [:user-expenses/fetch-receipts-success]
                       :on-failure [:user-expenses/fetch-receipts-failure]})})))
 

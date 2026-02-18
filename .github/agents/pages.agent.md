@@ -58,6 +58,7 @@ Creating a new page without implementing its frontend route in the same task is 
 6. **Shared entity-store wiring (for list views)**
    - Update entity specs/config/sync mapping when page reads from shared entity store.
    - Ensure kebab/snake normalization and aliases are correct.
+   - For server-sorted lists, ensure list sort state is forwarded as `order-by`/`order-dir` and the backend normalizes `order-by` to an app keyword before allowlist-based ORDER BY.
 
 7. **Endpoint/events wiring (if new APIs are needed)**
    - Add frontend events/effects and backend route/service wiring.

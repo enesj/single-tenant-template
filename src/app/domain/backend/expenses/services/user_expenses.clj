@@ -3,6 +3,8 @@
    These services enforce that users can only access their own expenses."
   (:require
     [app.domain.backend.expenses.services.expenses :as admin-expenses]
+    [app.shared.model-naming :as model-naming]
+    [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as type-conv]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -209,12 +211,37 @@
       (when expense
         (assoc expense :items items)))))
 
+(def ^:private allowed-user-expenses-order-by
+  "Allowlisted sort keys for `list-user-expenses`.
+
+  Keys are app keywords (kebab-case). Values are HoneySQL identifiers."
+  {:purchased-at :e.purchased_at
+   :expense-date :e.purchased_at
+   :created-at :e.created_at
+   :updated-at :e.updated_at
+   :total-amount :e.total_amount
+   :currency :e.currency
+   :supplier-display-name :s.display_name
+   :payer-label :p.label
+   :payer-type :pt.label
+   :expense-category-name :ec.name
+   :is-posted :e.is_posted})
+
 (defn list-user-expenses
   "List expenses for a specific user with common filters.
-   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :limit, :offset, :order-dir."
-  [db user-id {:keys [from to supplier-id payer-id is-posted? limit offset order-dir]
+
+  opts:
+  - :from, :to
+  - :supplier-id, :payer-id, :is-posted?
+  - :limit, :offset
+  - :order-by (app keyword)
+  - :order-dir (:asc/:desc)"
+  [db user-id {:keys [from to supplier-id payer-id is-posted? limit offset order-by order-dir]
                :or {limit 50 offset 0 order-dir :desc}}]
-  (let [user-id (ensure-uuid user-id)]
+  (let [user-id (ensure-uuid user-id)
+        order-by* (model-naming/ensure-app-keyword order-by)
+        order-col (get allowed-user-expenses-order-by order-by* :e.purchased_at)
+        order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})]
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
@@ -236,7 +263,8 @@
                              [:payer_types :pt] [:= :pt.id :p.payer_type_id]
                              [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                  :where base-where
-                 :order-by [[:e.purchased_at order-dir]]
+                 :order-by [[order-col order-dir*]
+                            [:e.id :asc]]
                  :limit limit
                  :offset offset}]
       (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))

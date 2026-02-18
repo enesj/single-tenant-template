@@ -12,7 +12,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ## Admin API (mounted at `/admin/api/expenses`)
 
 ### Suppliers
-- `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by).
+- `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by/order-dir).
 - `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
 - `GET /admin/api/expenses/suppliers/count` – total (optional `search`).
 - `GET /admin/api/expenses/suppliers/search?q=...` – autocomplete.
@@ -21,7 +21,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /admin/api/expenses/suppliers/:id` – delete supplier (hard delete; returns `409` if referenced by expenses).
 
 ### Manufacturers (new 2026-01-28)
-- `GET /admin/api/expenses/manufacturers` – list (search, pagination, order-by).
+- `GET /admin/api/expenses/manufacturers` – list (search, pagination, order-by/order-dir).
 - `POST /admin/api/expenses/manufacturers` – create; requires `display_name`.
 - `GET /admin/api/expenses/manufacturers/count` – total (optional `search`).
 - `GET /admin/api/expenses/manufacturers/:id` – fetch.
@@ -38,7 +38,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
   - Delete may return `409` when the record is referenced (foreign key violation).
 
 ### Receipts
-- `GET /admin/api/expenses/receipts` – list; filters `status`, `limit/offset`, `order-dir`.
+- `GET /admin/api/expenses/receipts` – list; filters `status`, `limit/offset`, `order-by`, `order-dir`.
 - `GET /admin/api/expenses/receipts/pending` – pending for processing.
 - `POST /admin/api/expenses/upload` – multipart upload (`file`); stores under `upload/stripes/` and creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
 - `POST /admin/api/expenses/receipts` – upload (programmatic); requires `storage_key` and `file_hash` or `bytes`.
@@ -149,7 +149,7 @@ All user report endpoints require an authenticated user with an expenses-read ro
 - `DELETE /api/v1/expenses/manufacturers/:id` – delete manufacturer.
 
 **Supplier detail lists (used by supplier detail UI)**
-- `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier).
+- `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier); supports optional `search`, pagination, `order-by`, `order-dir`.
 
 - `GET /api/v1/expenses/payers` – list payers.
 - `POST /api/v1/expenses/payers` – create payer (role-gated to `member|admin`).
@@ -157,13 +157,13 @@ All user report endpoints require an authenticated user with an expenses-read ro
 - `DELETE /api/v1/expenses/payers/:id` – delete payer (role-gated to `member|admin`; may return `409` on FK violations).
 
 ### Power-user Endpoints (admin/owner only)
-- `GET /api/v1/expenses/expense-items` – list expense items.
+- `GET /api/v1/expenses/expense-items` – list expense items (pagination, `order-by`, `order-dir`).
 - `PUT /api/v1/expenses/expense-items/:id` – update expense item.
 - `DELETE /api/v1/expenses/expense-items/:id` – delete expense item.
 
 ### Receipts
 - `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
-- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit`, `offset`, `order-dir`).
+- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit`, `offset`, `order-by`, `order-dir`).
   - `status` accepts a single value or multiple values (comma-separated or repeated params).
   - Response includes pagination metadata: `{:data [...], :total n, :limit n, :offset n}`.
   - Each receipt row includes `payer_id` so callers see upload-selected payer without fetching detail again.
@@ -183,7 +183,7 @@ All user report endpoints require an authenticated user with an expenses-read ro
 - `POST /api/v1/expenses/articles/:id/aliases` – batch create aliases (supplier/raw labels) for an article.
 
 ### CRUD Operations
-- `GET /api/v1/expenses` – List user expenses.
+- `GET /api/v1/expenses` – List user expenses (pagination, `order-by`, `order-dir`).
 - `POST /api/v1/expenses` – Create new expense.
 - `GET /api/v1/expenses/:id` – Fetch specific expense.
 - `PUT /api/v1/expenses/:id` – Update expense.

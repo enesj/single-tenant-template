@@ -1,0 +1,201 @@
+-- Filtering on canonical list pages (list-view component)
+--
+-- Distilled from the shared template list-view filtering flow and the canonical
+-- expenses list pages that mount list-view.
+--
+-- Covers:
+-- - Filter apply/clear semantics
+-- - Per-entity filter state and field-level filterability toggles
+-- - Client-mode (local) filtering behavior
+-- - Server-mode page reset + refresh dispatch behavior
+-- - Canonical page mode split (admin pages client-mode, user pages server-mode)
+--
+-- Does NOT cover:
+-- - Sorting semantics (see list-view-sort.candidate.allium)
+-- - Column visibility and table width controls
+-- - Domain-specific backend query implementation details
+
+entity CanonicalListPage {
+    entity_type: EntityType
+    route_scope: admin | user
+    list: ListViewFilterState with entity_type = this.entity_type
+
+    is_admin: route_scope = admin
+    is_user: route_scope = user
+}
+
+entity FieldFilterability {
+    entity_type: EntityType
+    field_id: ColumnId
+    allowed_by_config: Boolean
+    enabled_by_user: Boolean
+    locked: Boolean
+
+    interactive: allowed_by_config and enabled_by_user and not locked
+}
+
+entity ListViewFilterState {
+    entity_type: EntityType
+    pagination_mode: client | server
+    current_page: Integer
+    show_filtering: Boolean
+    active_filters: Set<ColumnFilter>
+    active_inline_field: ColumnId?
+    modal_open: Boolean
+    refresh_event_registered: Boolean
+
+    has_filters: active_filters.count > 0
+}
+
+entity ColumnFilter {
+    entity_type: EntityType
+    field_id: ColumnId
+    kind: TextFilter | NumberRangeFilter | DateRangeFilter | SelectFilter
+}
+
+variant TextFilter : ColumnFilter {
+    query: String
+}
+
+variant NumberRangeFilter : ColumnFilter {
+    min: Decimal?
+    max: Decimal?
+}
+
+variant DateRangeFilter : ColumnFilter {
+    from: Timestamp?
+    to: Timestamp?
+}
+
+variant SelectFilter : ColumnFilter {
+    selected_values: Set<String>
+    selected_labels: Set<String>
+}
+
+rule CanonicalPageFilterModeConfigured {
+    when: page: CanonicalListPage.created
+
+    ensures:
+        if page.is_admin:
+            page.list.pagination_mode = client
+    ensures:
+        if page.is_user:
+            page.list.pagination_mode = server
+    ensures:
+        if page.is_user:
+            page.list.refresh_event_registered = true
+}
+
+rule InlineFilterOpenedFromHeader {
+    when: UserClicksColumnFilterIcon(list, field)
+    requires: list.show_filtering
+    requires: field.interactive
+    requires: list.active_inline_field != field.field_id
+    ensures: list.active_inline_field = field.field_id
+}
+
+rule InlineFilterClosedWhenSameHeaderClicked {
+    when: UserClicksColumnFilterIcon(list, field)
+    requires: list.show_filtering
+    requires: field.interactive
+    requires: list.active_inline_field = field.field_id
+    ensures: list.active_inline_field = null
+}
+
+rule FilterApplied {
+    when: UserAppliesFilter(list, field_id, raw_value, keep_open)
+    requires: field_id != null
+
+    ensures: NormalizeAndStoreFilter(list, field_id, raw_value)
+
+    ensures:
+        if list.pagination_mode = server:
+            list.current_page = 1
+    ensures:
+        if list.pagination_mode = server and list.refresh_event_registered:
+            ServerFilterRefetch(list)
+
+    ensures:
+        if not keep_open:
+            list.modal_open = false
+}
+
+rule FilterCleared {
+    when: UserClearsFilter(list, field_id)
+
+    ensures:
+        if field_id != null:
+            RemoveFilter(list, field_id)
+    ensures:
+        if field_id = null:
+            ClearAllFilters(list)
+
+    ensures:
+        if list.pagination_mode = server:
+            list.current_page = 1
+    ensures:
+        if list.pagination_mode = server and list.refresh_event_registered:
+            ServerFilterRefetch(list)
+}
+
+rule FieldFilterabilityToggled {
+    when: UserTogglesFieldFiltering(list, field)
+    requires: not field.locked
+
+    ensures: field.enabled_by_user = not field.enabled_by_user
+}
+
+rule ClientFilteringEvaluatesInMemoryRows {
+    when: ListRowsRequested(list)
+    requires: list.pagination_mode = client
+
+    ensures: ClientRowsFiltered(list)
+}
+
+rule ServerFilteringDelegatesToEntityRefresh {
+    when: ListRowsRequested(list)
+    requires: list.pagination_mode = server
+    requires: list.refresh_event_registered
+
+    ensures: ServerFilterRefetch(list)
+}
+
+deferred NormalizeAndStoreFilter
+deferred RemoveFilter
+deferred ClearAllFilters
+deferred ClientRowsFiltered
+deferred ServerFilterRefetch
+
+surface CanonicalListFilterControls {
+    facing viewer: User
+
+    context list: ListViewFilterState
+
+    exposes:
+        list.show_filtering
+        list.active_inline_field
+        list.active_filters
+        list.current_page
+        list.pagination_mode
+
+    provides:
+        UserClicksColumnFilterIcon(list, field)
+        UserAppliesFilter(list, field_id, raw_value, keep_open)
+        UserClearsFilter(list, field_id)
+        UserTogglesFieldFiltering(list, field)
+
+    guarantee:
+        When `list.has_filters` and `list.active_inline_field = null`, compact active-filter chips are shown.
+
+    guarantee:
+        `list.pagination_mode = server` resets `list.current_page` to `1` on filter apply/clear before refresh dispatch.
+
+    guarantee:
+        Client mode evaluates filters locally with AND semantics across active filters.
+
+    guarantee:
+        Text filtering matches case-insensitive substrings; number/date ranges are inclusive; select filters match selected values.
+}
+
+open question "Should canonical admin pages move from fetch-many + client filtering to server filtering for very large datasets?"
+open question "Text filters currently auto-apply at 3+ chars in the inline UI, but direct state writes can still apply shorter strings. Should this be enforced uniformly?"

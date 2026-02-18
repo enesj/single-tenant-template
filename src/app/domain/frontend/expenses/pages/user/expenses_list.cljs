@@ -1,22 +1,27 @@
 (ns app.domain.frontend.expenses.pages.user.expenses-list
-  "User-facing expense list page with filtering and pagination.
+  "User-facing expense list page.
 
-   Implements admin-like UX (modal add/edit) while using user-scoped endpoints."
+   Uses template list-view UX but fetches data via user-scoped endpoints.
+
+   IMPORTANT: This page is configured for :server pagination mode so sorting is
+   always server-side across the full dataset (not just the currently loaded
+   page)."
   (:require
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal
                                                                        user-expense-edit-form-modal]]
+    [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon view-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
-    [app.template.frontend.events.list.ui-state :as ui-events]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.utils.id :as id-utils]
-    [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]
+
     ;; Ensure subs are registered
     app.domain.frontend.expenses.subs.user-expenses))
 
@@ -86,7 +91,8 @@
                            {:title "Delete expense"
                             :message "Do you want to delete this expense?"
                             :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
-                            :on-cancel nil})))}
+                            :on-cancel nil})))
+           :title (when delete-disabled? "Delete not available")}
           ($ delete-icon)))
 
       ($ dropdown/action-dropdown
@@ -98,7 +104,8 @@
            :items [{:id "view"
                     :icon ($ view-icon {:title "View"})
                     :label "View Details"
-                    :on-click (fn [_e]
+                    :on-click (fn [e]
+                                (.stopPropagation e)
                                 (if on-view
                                   (on-view item)
                                   (rf/dispatch [:navigate-to (str "/expenses/" expense-id)])))}]}]}))))
@@ -107,45 +114,28 @@
 ;; Main Page
 ;; =============================================================================
 
-(defui expenses-list-page []
+(defui expenses-list-page
+  []
   (let [entity-name :expenses
         [viewing-id set-viewing-id!] (use-state nil)
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
-        recent-items (or (use-subscribe [:user-expenses/recent]) [])
-        recent-page (or (use-subscribe [:user-expenses/recent-page]) 1)
-        recent-total-pages (or (use-subscribe [:user-expenses/recent-total-pages]) 1)
-        recent-limit (or (use-subscribe [:user-expenses/recent-limit]) 25)
-        error (use-subscribe [:user-expenses/recent-error])
         can-write? (use-subscribe [:expenses/can-write?])
         ;; Subscribe to current expense being viewed in modal
         current-expense (use-subscribe [:user-expenses/current-expense])
-        go-to-page (use-callback
-                     (fn [page]
-                       (rf/dispatch [:user-expenses/recent-go-to-page
-                                     {:page page}]))
-                     [])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:user-expenses/recent-go-to-page
-                                       {:page 1}]))
-                       [])
-        handle-per-page-change (use-callback
-                                 (fn [new-limit]
-                                   (rf/dispatch [::ui-events/set-per-page :expenses new-limit])
-                                   (rf/dispatch [:user-expenses/recent-go-to-page
-                                                 {:page 1
-                                                  :limit new-limit}]))
-                                 [])]
+                         (rf/dispatch [:user-expenses/refresh-expenses-list]))
+                       [])]
 
-    ;; Ensure we kick off a user-scoped fetch so that the shared
-    ;; template entity store for :expenses and its FK references is
-    ;; populated via the user-expenses pipeline and the expenses
-    ;; adapter sync events.
+    ;; Initial load + list-view wiring for server pagination/sorting
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode :expenses :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event :expenses [:user-expenses/refresh-expenses-list]])
         (refresh-list)
+
         ;; Reference data for FK columns in the list-view (supplier & payer)
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
@@ -167,24 +157,12 @@
                          :on-click #(rf/dispatch [:navigate-to "/expenses"])}
                 "Dashboard")))))
 
-      ;; Error banner (from user-expenses pipeline)
-      (when error
-        ($ :div {:class "w-full px-4 mt-4"}
-          ($ :div {:class "ds-alert ds-alert-error"}
-            ($ :span error))))
-
       ;; Main content: list-view backed by shared entity store
       ($ :main {:class "w-full px-4 py-6"}
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Expense"
-           :per-page recent-limit
-           :rows-override recent-items
-           :pagination-override {:current-page recent-page
-                                 :total-pages recent-total-pages
-                                 :on-page-change go-to-page
-                                 :on-per-page-change handle-per-page-change}
            :form-display :modal
            :disallowed-action-mode :disable
            :allow-add? can-write?

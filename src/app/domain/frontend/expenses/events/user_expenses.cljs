@@ -19,6 +19,7 @@
     app.domain.frontend.expenses.events.user-expenses.manufacturers
     app.domain.frontend.expenses.events.user-expenses.power-tools
     app.domain.frontend.expenses.events.user-expenses.receipts
+    app.domain.frontend.expenses.events.user-expenses.expenses
     app.domain.frontend.expenses.events.user-expenses.reference-crud
     app.domain.frontend.expenses.events.user-expenses.recent
     app.domain.frontend.expenses.events.user-expenses.reports

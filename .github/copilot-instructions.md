@@ -44,6 +44,11 @@
 
 ## Project-specific conventions (common footguns)
 - Naming boundary: DB is `snake_case`, app/runtime is kebab-case; normalize with `app.shared.model-naming/db-keyword->app` + `ensure-app-keyword`.
+- Sorting contract (server-side lists): treat `order-by`/`order-dir` as **boundary input**.
+  - Normalize `order-by` to an **app keyword** via `ensure-app-keyword`.
+  - Validate against allowlists keyed by **app keywords** (e.g. `:allowed-order-by` maps).
+  - Only after allowlisting, map to SQL identifiers/expressions; don’t convert `order-by` into a DB snake_case keyword before the allowlist check.
+  - Prefer stable tie-breaker ordering (e.g. primary key `:asc`) to keep pagination deterministic.
 - Generic CRUD: `/api/v1/entities/*` is **deny-by-default allowlisted**; domain entities usually need domain APIs + a CRUD bridge (see `docs/template/backend/generic-entity-crud.md`).
 - Frontend entity specs: `src/app/template/frontend/db/entity_specs.cljs` normalizes entity keys; if list pages show wrong columns, suspect snake↔kebab mismatch.
 - Re-frame interceptors include `re-frame/trim-v` via `app.template.frontend.db.interceptors/common-interceptors`; handlers should destructure like `[params]` (not `[_ params]`).

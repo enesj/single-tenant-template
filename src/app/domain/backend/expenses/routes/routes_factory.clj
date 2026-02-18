@@ -181,12 +181,11 @@
         v))
     (or data {})))
 
-(defn- order-by->db
-  "Normalize an order-by value (snake/kebab/string/keyword) into a DB keyword."
+(defn- order-by->app
+  "Normalize an order-by value (snake/kebab/string/keyword) into an app keyword."
   [order-by default-order-by]
   (let [v (or order-by default-order-by)]
-    (model-naming/app-keyword->db
-      (model-naming/ensure-app-keyword v))))
+    (model-naming/ensure-app-keyword v)))
 
 (defn build-list-handler
   "Builds a generic list handler for an entity."
@@ -199,7 +198,7 @@
               custom-params (when custom-query-params (custom-query-params qp))
               query-params (merge {:limit (utils/parse-int-param qp :limit default-limit)
                                    :offset (utils/parse-int-param qp :offset 0)
-                                   :order-by (order-by->db (get-param qp :order-by) default-order-by)
+                                   :order-by (order-by->app (get-param qp :order-by) default-order-by)
                                    :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
                              custom-params)
               list-fn (resolve-service-op-fn service

@@ -78,11 +78,13 @@
         order-dir (let [direction (:direction sort-config)]
                     (when (contains? #{:asc :desc "asc" "desc"} direction)
                       (name (keyword direction))))
+        order-field (when-let [f (:field sort-config)] (name f))
         filters (normalize-filter-params (get-in db [:ui :lists entity-key :filters]))]
     (cond-> (merge {:limit per-page
                     :offset (* (max 0 (dec current-page)) per-page)}
               filters)
-      (some? order-dir) (assoc :order-dir order-dir))))
+      (some? order-dir) (assoc :order-dir order-dir)
+      (some? order-field) (assoc :order-by order-field))))
 
 (rf/reg-event-fx
   :user-expenses/refresh-categories-list

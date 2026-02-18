@@ -57,9 +57,13 @@
                 limit (parse-page-limit qp 200)
                 offset (parse-page-offset qp)
                 search (h/get-param qp :search)
-                opts {:limit limit
-                      :offset offset
-                      :search search}
+                order-by (h/parse-order-by qp)
+                order-dir (h/parse-order-dir qp)
+                opts (cond-> {:limit limit
+                              :offset offset
+                              :search search}
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 rows (to-app ((:list categories/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
                 total (long (or ((:count categories/service) db {:search search}) 0))]

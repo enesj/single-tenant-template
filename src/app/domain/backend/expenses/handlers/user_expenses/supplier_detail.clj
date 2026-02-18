@@ -29,8 +29,11 @@
 
   Query params:
   - supplier_id (uuid, optional but strongly recommended)
+  - search (string, optional)
   - limit (default 10)
-  - offset (default 0)"
+  - offset (default 0)
+  - order-by (snake/kebab/string/keyword, optional)
+  - order-dir (asc/desc, optional)"
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
@@ -41,8 +44,14 @@
                 limit (parse-page-limit params 10)
                 offset (parse-page-offset params)
                 supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
+                search (h/get-param params :search)
+                order-by (h/parse-order-by params)
+                order-dir (h/parse-order-dir params)
                 opts (cond-> {:limit limit :offset offset}
-                       supplier-id (assoc :supplier_id supplier-id))
+                       supplier-id (assoc :supplier_id supplier-id)
+                       (some? search) (assoc :search search)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 list-aliases (requiring-resolve 'app.domain.backend.expenses.services.article-aliases/list-article-aliases)
                 count-aliases (requiring-resolve 'app.domain.backend.expenses.services.article-aliases/count-article-aliases)
                 rows (vec (list-aliases db opts))

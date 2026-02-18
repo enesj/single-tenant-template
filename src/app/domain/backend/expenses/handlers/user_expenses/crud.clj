@@ -15,14 +15,17 @@
         forbidden
         (try
           (let [params (:query-params request)
-                opts {:from (h/get-param params :from)
-                      :to (h/get-param params :to)
-                      :supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
-                      :payer-id (h/try-parse-uuid (h/get-param params :payer_id))
-                      :is-posted? (h/parse-boolean-param params :is_posted)
-                      :limit (or (some-> (h/get-param params :limit) parse-long) 50)
-                      :offset (or (some-> (h/get-param params :offset) parse-long) 0)
-                      :order-dir (keyword (or (h/get-param params :order_dir) "desc"))}
+                order-by (h/parse-order-by params)
+                order-dir (h/parse-order-dir params)
+                opts (cond-> {:from (h/get-param params :from)
+                              :to (h/get-param params :to)
+                              :supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
+                              :payer-id (h/try-parse-uuid (h/get-param params :payer_id))
+                              :is-posted? (h/parse-boolean-param params :is_posted)
+                              :limit (or (some-> (h/get-param params :limit) parse-long) 50)
+                              :offset (or (some-> (h/get-param params :offset) parse-long) 0)}
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 expenses (user-expenses/list-user-expenses db user-id opts)
                 total (user-expenses/count-user-expenses db user-id opts)]
             (h/json-response {:data expenses

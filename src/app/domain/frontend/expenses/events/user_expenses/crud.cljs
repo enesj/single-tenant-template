@@ -1,7 +1,6 @@
 (ns app.domain.frontend.expenses.events.user-expenses.crud
   "User expense CRUD events."
   (:require
-    [ajax.core :as ajax]
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
@@ -388,7 +387,7 @@
   common-interceptors
   (fn [{:keys [db]} [_response]]
     {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
+     :dispatch-n [[:user-expenses/refresh-expenses-list]
                   [:navigate-to "/expenses/list"]]}))
 
 (rf/reg-event-db

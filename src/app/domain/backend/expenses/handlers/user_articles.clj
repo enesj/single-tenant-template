@@ -59,9 +59,14 @@
                 limit (parse-page-limit qp 200)
                 offset (parse-page-offset qp)
                 search (h/get-param qp :search)
-                rows (to-app (articles/list-articles db {:limit limit
-                                                         :offset offset
-                                                         :search search}))
+                order-by (h/parse-order-by qp)
+                order-dir (h/parse-order-dir qp)
+                opts (cond-> {:limit limit
+                              :offset offset}
+                       (some? search) (assoc :search search)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
+                rows (to-app (articles/list-articles db opts))
                 total (long (or (articles/count-articles db search) 0))]
             (h/json-response {:data rows
                               :total total

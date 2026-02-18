@@ -26,6 +26,8 @@ Learn more: [Allium Skill Guide](../.agents/skills/allium/SKILL.md)
 #### Candidate 🟡
 
 - [Receipt OCR](../specs/allium/drafts/expenses/receipt-ocr.candidate.allium) — Upload → OCR → extract → review → post lifecycle
+- [List View Filtering](../specs/allium/drafts/list-view-filtering.candidate.allium) — Canonical list filtering behavior across client-mode (admin) and server-mode (user) pages
+- [List View Sorting](../specs/allium/drafts/list-view-sort.candidate.allium) — Canonical list sorting behavior with client/server mode split
 
 ### 📂 Browse by Folder
 
@@ -40,6 +42,7 @@ Learn more: [Allium Skill Guide](../.agents/skills/allium/SKILL.md)
 **If you want to:**
 
 - **Understand receipt OCR behavior** → Start with [receipt-ocr.candidate.allium](../specs/allium/drafts/expenses/receipt-ocr.candidate.allium)
+- **Understand canonical list filters/sorting** → Read [list-view-filtering.candidate.allium](../specs/allium/drafts/list-view-filtering.candidate.allium) and [list-view-sort.candidate.allium](../specs/allium/drafts/list-view-sort.candidate.allium)
 - **Learn the Allium language** → Read [SKILL.md](../.agents/skills/allium/SKILL.md) then a spec example
 - **Write a new spec** → See [specs/allium/README.md](../specs/allium/README.md#how-to-write-a-spec)
 - **Find specs by domain** → Browse `specs/allium/domain/`
@@ -62,4 +65,4 @@ When in doubt, trust the spec over the narrative explanation. If they diverge, r
 
 ---
 
-**Last Updated:** 2026-02-14
+**Last Updated:** 2026-02-18

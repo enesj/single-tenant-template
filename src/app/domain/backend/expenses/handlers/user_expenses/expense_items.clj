@@ -16,6 +16,20 @@
   "Roles allowed to access the expense items power page."
   #{"admin" "owner"})
 
+(def ^:private allowed-expense-items-order-by
+  "Allowlisted sort keys for `list-expense-items-handler`.
+
+  Keys are app keywords (kebab-case). Values are HoneySQL identifiers."
+  {:created-at :ei.created_at
+   :expense-id :ei.expense_id
+   :alias-id :ei.alias_id
+   :raw-label :aa.raw_label
+   :article-canonical-name :a.canonical_name
+   :expense-purchased-at :e.purchased_at
+   :qty :ei.qty
+   :unit-price :ei.unit_price
+   :line-total :ei.line_total})
+
 (defn- blank->nil
   [v]
   (cond
@@ -57,7 +71,9 @@
   Returns expense_items joined with basic expense/supplier/payer/article context,
   scoped to the current user's expenses.
 
-  Allowed roles: admin/owner."
+  Allowed roles: admin/owner.
+
+  Supports order-by/order-dir for server-side sorting."
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
@@ -69,6 +85,12 @@
                 limit (clamp-limit (some-> (h/get-param params :limit) parse-long))
                 offset (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0)))
                 search (some-> (h/get-param params :search) str)
+                order-by (h/parse-order-by params)
+                order-dir (or (h/parse-order-dir params) :desc)
+                order-col (get allowed-expense-items-order-by order-by :ei.created_at)
+                ;; Stable tie-breaker to prevent jumping rows when values match.
+                order-by-clause [[order-col order-dir]
+                                 [:ei.id :asc]]
                 search* (when (and (string? search) (not (str/blank? search)))
                           (str "%" search "%"))
                 where (cond-> [:and
@@ -87,7 +109,7 @@
                                    [:article_aliases :aa] [:= :aa.id :ei.alias_id]
                                    [:articles :a] [:= :a.id :aa.article_id]]
                        :where where
-                       :order-by [[:ei.created_at :desc]]
+                       :order-by order-by-clause
                        :limit limit
                        :offset offset}
                 count-query {:select [[[:count :ei.id] :total]]

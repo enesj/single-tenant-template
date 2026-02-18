@@ -307,6 +307,7 @@
    :required-fields [:display_name]
    :allowed-order-by {:display-name :display_name
                       :normalized-key :normalized_key
+                      :address :address
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :display_name
@@ -335,6 +336,8 @@
    :required-fields [:supplier_id :display_name]
    :allowed-order-by {:display-name :st/display_name
                       :normalized-key :st/normalized_key
+                      :address :st/address
+                      :city-id :st/city_id
                       :created-at :st/created_at
                       :updated-at :st/updated_at}
    :default-order-by :st/display_name
@@ -436,6 +439,8 @@
    :required-fields [:name]
    :allowed-order-by {:name :name
                       :normalized-key :normalized_key
+                      :zip :zip
+                      :country :country
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :name

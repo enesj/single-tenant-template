@@ -99,7 +99,8 @@
             opts {:status status
                   :limit (utils/parse-int-param qp :limit 50)
                   :offset (utils/parse-int-param qp :offset 0)
-                  :order-dir (keyword (or (:order-dir qp) "desc"))}
+                  :order-dir (keyword (or (:order-dir qp) "desc"))
+                  :order-by (or (:order-by qp) (get qp "order-by"))}
             results (receipt-queries/list-receipts db opts)]
         (utils/success-response {:receipts (to-app results)})))
     "Failed to list receipts"))

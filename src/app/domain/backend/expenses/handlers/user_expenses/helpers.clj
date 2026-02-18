@@ -5,6 +5,7 @@
   so we keep auth/role extraction and JSON responses consistent."
   (:require
     [app.shared.http :as shared-http]
+    [app.shared.model-naming :as model-naming]
     [app.shared.type-conversion :as type-conv]
     [cheshire.core :as json]
     [clojure.string :as str])
@@ -45,23 +46,48 @@
   (when-let [val (get-param params k)]
     (Boolean/parseBoolean (str val))))
 
+(defn parse-order-by
+  "Parse an `order-by` value from params into an app keyword.
+
+  Accepts values like \"display_name\", \"display-name\", :display_name, :display-name.
+  Ignores blanks; returns nil when missing."
+  [params]
+  (when-let [raw (get-param params :order-by)]
+    (let [s (some-> raw str str/trim not-empty)
+          s (some-> s (str/replace #"^:" ""))]
+      (when s
+        (model-naming/ensure-app-keyword s)))))
+
+(defn parse-order-dir
+  "Parse an `order-dir` value from params into :asc or :desc.
+
+  Accepts \"asc\"/\"desc\" (case-insensitive) and keyword-ish values like :asc.
+  Returns nil when missing/invalid so services can apply their default."
+  [params]
+  (let [s (some-> (get-param params :order-dir) str str/trim str/lower-case)
+        s (some-> s (str/replace #"^:" ""))]
+    (case s
+      "asc" :asc
+      "desc" :desc
+      nil)))
+
 (defn get-user
   "Return the user map from the request (session or identity), or nil if missing.
 
   Some routes/middleware attach an `:identity` map (e.g. Buddy) while others rely
-  on the template session structure." 
+  on the template session structure."
   [request]
   (or (get-in request [:session :auth-session :user])
-      (get-in request [:session :user])
-      (:identity request)))
+    (get-in request [:session :user])
+    (:identity request)))
 
 (defn get-user-id
   "Extract user-id from request session and normalize to UUID.
    Accepts either UUID objects or string UUIDs; returns nil if missing/invalid."
   [request]
   (let [raw-id (or (get-in request [:session :auth-session :user :id])
-                   (get-in request [:session :user :id])
-                   (get-in request [:identity :id]))]
+                 (get-in request [:session :user :id])
+                 (get-in request [:identity :id]))]
     (cond
       (instance? UUID raw-id) raw-id
       :else (try-parse-uuid raw-id))))
@@ -70,7 +96,7 @@
   "Create a JSON response with the given body and status."
   ([body] (json-response body 200))
   ([body status]
-  (shared-http/json-string-response status body)))
+   (shared-http/json-string-response status body)))
 
 (defn unauthorized-response
   "Return 401 unauthorized response."
@@ -101,8 +127,8 @@
   [request]
   (normalize-role
     (or (get-in request [:session :auth-session :user :role])
-        (get-in request [:session :user :role])
-        (get-in request [:identity :role]))))
+      (get-in request [:session :user :role])
+      (get-in request [:identity :role]))))
 
 (def reference-data-read-roles
   #{"viewer" "member" "admin" "owner"})

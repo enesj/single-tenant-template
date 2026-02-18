@@ -157,16 +157,32 @@
       status-clause status-clause
       :else nil)))
 
+(def ^:private sortable-receipt-columns
+  "Whitelist mapping client-supplied column names to ORDER BY expressions.
+  :status uses the effective-status SQL expression so sorting matches
+  the displayed computed status."
+  {"original_filename" :original_filename
+   "original-filename" :original_filename
+   "supplier_guess" :supplier_guess
+   "supplier-guess" :supplier_guess
+   "created_at" :created_at
+   "created-at" :created_at
+   "updated_at" :updated_at
+   "updated-at" :updated_at})
+
 (defn list-receipts
   "List receipts with optional status filter.
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
-  [db {:keys [status limit offset order-dir]
+  [db {:keys [status limit offset order-dir order-by]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status nil helpers)
+        order-col (if (= (some-> order-by name) "status")
+                    [:raw effective-status-sql]
+                    (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
         query (cond-> {:select [:id
                                 :original_filename
                                 [[:raw effective-status-sql] :status]
@@ -179,7 +195,7 @@
                                 :created_at
                                 :updated_at]
                        :from [:receipts]
-                       :order-by [[:created_at order-dir]]
+                       :order-by [[order-col order-dir]]
                        :limit limit
                        :offset offset}
                 where-clause (assoc :where where-clause))]
@@ -196,13 +212,16 @@
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
-  [db user-id {:keys [status limit offset order-dir]
+  [db user-id {:keys [status limit offset order-dir order-by]
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status user-id helpers)
+        order-col (if (= (some-> order-by name) "status")
+                    [:raw effective-status-sql]
+                    (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
         query {:select [:id
                         :original_filename
                         [[:raw effective-status-sql] :status]
@@ -216,7 +235,7 @@
                         :updated_at]
                :from [:receipts]
                :where where-clause
-               :order-by [[:created_at order-dir]]
+               :order-by [[order-col order-dir]]
                :limit limit
                :offset offset}]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))

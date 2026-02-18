@@ -1,6 +1,8 @@
 (ns app.domain.backend.expenses.services.articles
   "Article management and alias mapping for expense items."
   (:require
+    [app.shared.model-naming :as model-naming]
+    [app.shared.query-builders :as shared-qb]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -102,11 +104,31 @@
                  :where [:= :a.id id]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
+(def ^:private allowed-articles-order-by
+  "Whitelist of client-facing order-by keys -> SQL columns.
+
+  Keys are app keywords (kebab-case). Values are HoneySQL identifiers.
+
+  This keeps user-facing list endpoints safe while letting the frontend sort by a
+  supported subset of columns (including joined fields like manufacturer name)."
+  {:canonical-name :a/canonical_name
+   :manufacturer-display-name :m/display_name
+   :link :a/link
+   :normalized-key :a/normalized_key
+   :created-at :a/created_at
+   :updated-at :a/updated_at})
+
 (defn list-articles
-  "List articles with optional search/pagination."
+  "List articles with optional search/pagination.
+
+  Sorting is allowlisted via `allowed-articles-order-by` to prevent ordering by
+  arbitrary columns."
   [db {:keys [search limit offset order-by order-dir]
        :or {limit 50 offset 0 order-by :canonical_name order-dir :asc}}]
-  (let [base {:select [[:a.*]
+  (let [order-by* (model-naming/ensure-app-keyword order-by)
+        order-col (get allowed-articles-order-by order-by* :a/canonical_name)
+        order-dir* (shared-qb/normalize-order-direction order-dir {:default :asc})
+        base {:select [[:a.*]
                        [:m.display_name :manufacturer_display_name]
                        [:s.name :subcategory_name]
                        [:c.name :category_name]]
@@ -114,13 +136,15 @@
               :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
                           [:subcategories :s] [:= :s.id :a.subcategory_id]
                           [:categories :c] [:= :c.id :s.category_id]]
-              :order-by [[(keyword "a" (name order-by)) order-dir]]
+              :order-by [[order-col order-dir*]
+                         [:a.id :asc]]
               :limit limit
               :offset offset}
         query (cond-> base
-                search (assoc :where [:or
-                                      [:ilike :a.canonical_name (str "%" search "%")]
-                                      [:ilike :a.normalized_key (str "%" search "%")]]))]
+                (seq search)
+                (assoc :where [:or
+                               [:ilike :a.canonical_name (str "%" search "%")]
+                               [:ilike :a.normalized_key (str "%" search "%")]]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn update-article!

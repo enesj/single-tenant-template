@@ -1,0 +1,120 @@
+-- Sorting on canonical list pages (list-view control)
+--
+-- Distilled from shared list-view behavior across canonical expenses pages:
+-- - Admin pages commonly run in client mode (fetch-many + local sorting)
+-- - User pages configure server mode (refresh event + backend sorting)
+--
+-- Covers: sort-state toggle, page reset, client/server mode split,
+-- config-driven sortable-column restriction, and allowlist-driven backend ORDER BY.
+-- Does NOT cover: filtering, pagination page size selection, or column visibility.
+
+value SortConfig {
+    field: ColumnId
+    direction: asc | desc
+}
+
+-- Declares which columns may be sorted for a given entity type.
+-- Loaded asynchronously from /admin/api/settings/table-columns at app init.
+-- An empty columns set means all columns are sortable (open access).
+entity SortableColumnsConfig {
+    entity_type: EntityType
+    columns: Set<ColumnId>
+
+    is_open: columns.count = 0
+}
+
+-- Per-entity list state relevant to sorting.
+-- Lives in frontend session state; resets on full page reload.
+entity ListViewState {
+    entity_type: EntityType
+    sort: SortConfig?                   -- null = list uses backend default order
+    current_page: Integer
+    pagination_mode: client | server
+
+    is_sorted: sort != null
+    column_config: SortableColumnsConfig with entity_type = this.entity_type
+}
+
+-- Clicking a sortable column header changes sort state.
+--
+-- Toggle logic: same field + current direction asc → desc.
+--              All other cases (new field, or current direction desc) → asc.
+--
+-- Always resets the list to page 1.
+-- In server mode, emits ServerSortRefetch so the backend reloads the list.
+rule SortFieldSelected {
+    when: UserClicksColumnHeader(list, column_id)
+    requires: list.column_config.is_open or column_id in list.column_config.columns
+    let prev = list.sort
+    let new_direction =
+        if prev != null and prev.field = column_id and prev.direction = asc: desc
+        else: asc
+    ensures: list.sort = SortConfig(field: column_id, direction: new_direction)
+    ensures: list.current_page = 1
+    ensures:
+        if list.pagination_mode = server:
+            ServerSortRefetch(list)
+}
+
+-- Client mode sorting: list-view sorts in-memory rows by `list.sort`,
+-- then paginates that locally sorted result.
+rule ClientModeSortEvaluatesLocally {
+    when: ListRowsRequested(list)
+    requires: list.pagination_mode = client
+    ensures: ClientRowsSorted(list)
+}
+
+-- Server mode sorting: the configured refresh handler sends query params
+-- ?order-by=<field>&order-dir=<asc|desc> to the backend.
+rule ServerModeSortDelegatesToBackend {
+    when: ListRowsRequested(list)
+    requires: list.pagination_mode = server
+    ensures: ServerSortRefetch(list)
+}
+-- Canonical list-view behavior:
+-- - `list.sort.field` is an app keyword (kebab-case, no namespace).
+-- - The request sends `order-by` as the string name of that keyword.
+--   (The backend is tolerant of snake_case and keyword-ish values like ":display_name".)
+-- - The backend normalizes `order-by` into an app keyword (`ensure-app-keyword`)
+--   and normalizes direction into :asc|:desc with a per-entity default.
+-- - ORDER BY is allowlisted per entity: app-keyword -> SQL identifier/expression.
+--   Unknown fields fall back to the entity default sort.
+-- - A stable tie-breaker is applied (typically primary key ascending).
+--
+-- Special case: for receipts, `:status` sorts by the effective-status computed SQL expression.
+-- Client mode does not call backend refetch for sorting.
+deferred ServerSortRefetch    -- dispatched per entity type; handler registered by the domain
+deferred ClientRowsSorted
+
+surface ListTableHeader {
+    facing viewer: User
+
+    context list: ListViewState
+
+    exposes:
+        list.sort.field
+        list.sort.direction
+        list.column_config.is_open
+        list.column_config.columns
+
+    provides:
+        UserClicksColumnHeader(list, column_id)
+            when list.column_config.is_open or column_id in list.column_config.columns
+
+    guarantee:
+        not list.is_sorted
+        or list.column_config.is_open
+        or list.sort.field in list.column_config.columns
+
+    guarantee:
+        if list.pagination_mode = server:
+            ServerSortRefetch(list)
+
+    guarantee:
+        if list.pagination_mode = client:
+            ClientRowsSorted(list)
+}
+
+open question "Should sort state persist across page refresh (e.g. stored in localStorage alongside column-visibility and per-page prefs)?"
+open question "Multi-column sort: should shift-click accumulate a secondary sort key? Currently strictly single-column."
+open question "Articles: category/subcategory sorting is currently disabled in `:sortable-columns`. Re-enable only if the backend supports a safe allowlist + stable ordering for those fields."

@@ -152,7 +152,8 @@
                 opts {:status status
                       :limit (parse-long-param qp :limit 50)
                       :offset (parse-long-param qp :offset 0)
-                      :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))}
+                      :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
+                      :order-by (or (:order-by qp) (get qp "order-by"))}
                 {:keys [rows total limit offset]}
                 (if (= "admin" role)
                   (receipt-queries/list-receipts-page db opts)

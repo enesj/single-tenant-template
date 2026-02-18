@@ -205,6 +205,7 @@
    :display_name :display_name
    :normalized-key :normalized_key
    :normalized_key :normalized_key
+   :address :address
    :created-at :created_at
    :created_at :created_at
    :updated-at :updated_at

@@ -111,8 +111,6 @@
    "updated_at"],
   :sortable-columns
   ["canonical_name"
-   "category_name"
-   "subcategory_name"
    "manufacturer_display_name"
    "link"
    "normalized_key"

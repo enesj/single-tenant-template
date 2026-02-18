@@ -119,6 +119,10 @@ Server-backed pagination mode:
 
 - Configure list UI state with `:pagination-mode :server` and `:refresh-event`.
 - In server mode, list UI events (`set-current-page`, `set-per-page`, `set-sort-field`, filter apply/clear) dispatch the configured refresh event.
+- In that refresh handler, send `order-by` and `order-dir` query params derived from list sort state.
+  - `order-by` should be the string name of the selected field keyword (e.g. `"display-name"` or `"display_name"`).
+  - `order-dir` should be `"asc"` or `"desc"`.
+  - The backend is responsible for normalizing `order-by` to an app keyword (`ensure-app-keyword`) and applying an allowlisted ORDER BY.
 - Persist backend totals in `paths/list-total-items` so pagination reflects total rows, not only current page rows.
 
 Override props for domain pages:

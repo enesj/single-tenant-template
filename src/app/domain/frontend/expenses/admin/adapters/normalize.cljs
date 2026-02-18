@@ -106,6 +106,7 @@
      :id-keys [:id]
      :alias-keys {:original_filename [:original-filename]
                   :supplier_guess [:supplier-guess]
+                  :status [:status]
                   :created_at [:created-at]}
      :post-transform (fn [m]
                        (let [total (:total-amount-guess m)
