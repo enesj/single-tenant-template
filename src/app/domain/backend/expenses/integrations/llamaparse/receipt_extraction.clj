@@ -97,7 +97,7 @@
           (re-find item-like-qty-re norm))))))
 
 (def ^:private address-prefixes
-  ["ul." "ul " "ulica" "trg" "bb" "br." "br " "broj" "street" "st."])
+  ["ul." "ul " "ulica" "trg" "bb" "br." "br " "broj" "street" "st." "bulevar" "avenija" "av." "av " "put" "cesta"])
 
 (defn- address-like-line?
   [line]
@@ -106,7 +106,9 @@
     (boolean
       (and line norm
         (or (some #(str/starts-with? norm %) address-prefixes)
-          (re-matches #"(?iu)^\d{5}\s+\S.*$" line))))))
+          (re-matches #"(?iu)^\d{5}\s+\S.*$" line)
+          (re-find #"(?iu)\b(?:br\.?|broj[a]?)\s*\d+[a-z]?\b" line)
+          (re-matches #"(?iu)^[\p{L}\s\.'’-]{3,}\s+\d+[a-z]?(?:/\d+)?$" line))))))
 
 (defn- separator-noise?
   "Detect separator-like OCR noise lines (e.g. '====E=EE=5SE')."
@@ -169,17 +171,23 @@
         (not (some #(str/starts-with? norm %) merchant-ignore-prefixes))))))
 
 (def ^:private store-line-prefixes
-  ["podruznica" "podružnica" "poslovnica" "filijala" "prodavnica" "radnja" "maloprodaja" "maloprodajna"])
+  ["ogranak" "pj" "podruznica" "podružnica" "poslovnica" "filijala" "prodavnica" "radnja" "maloprodaja" "maloprodajna" "apoteka"])
+
+(def ^:private store-line-regexes
+  [#"(?iu)^p\s*\.?\s*j\s*\.?(?:\s*(?:broj|br\.?))?\s*\d{0,4}\b"
+   #"(?iu)^p\s*\.?\s*o\s*\.?(?:\s*(?:broj|br\.?))?\s*\d{0,4}\b"])
 
 (def ^:private store-line-substrings
   ["trzni centar" "tržni centar" "city center" "shopping center"])
 
 (defn- store-line?
   [line]
-  (let [norm (normalize-text line)]
+  (let [line (some-> line safe-trim)
+        norm (normalize-text line)]
     (boolean
       (and norm
         (or (some #(str/starts-with? norm %) store-line-prefixes)
+          (and line (some #(re-find % line) store-line-regexes))
           (some #(str/includes? norm %) store-line-substrings))))))
 
 (defn- merchant-score
@@ -229,8 +237,10 @@
                        vec)
           quoted (->> candidates
                    (keep (fn [[idx line]]
-                           (when-let [q (extract-quoted-name line)]
-                             [idx q])))
+                           (when (and (not (store-line? line))
+                                   (not (address-like-line? line)))
+                             (when-let [q (extract-quoted-name line)]
+                               [idx q]))))
                    vec)
           legal (->> candidates
                   (filter (fn [[_idx line]]
@@ -239,11 +249,11 @@
                   vec)
           best
           (cond
-            (seq quoted)
-            (second (apply min-key first quoted))
-
             (seq legal)
             (second (apply min-key first legal))
+
+            (seq quoted)
+            (second (apply min-key first quoted))
 
             (seq candidates)
             (->> candidates
@@ -262,10 +272,119 @@
                  (str/replace #"(?is)<[^>]+>" " ")
                  (str/replace #"[_]+" " ")
                  (str/replace #"\s+" " ")
+                 (str/replace #"^[\"'`]+|[\"'`]+$" "")
                  (str/replace #"[\s,;:]+$" "")
                  safe-trim)]
       (when (and best (re-find #"\p{L}" best))
         best))))
+
+(defn- dedupe-lines-by-normalized
+  [lines]
+  (->> lines
+    (reduce (fn [{:keys [seen out]} line]
+              (let [key (normalize-text line)]
+                (if (or (nil? key) (contains? seen key))
+                  {:seen seen :out out}
+                  {:seen (conj seen key)
+                   :out (conj out line)})))
+      {:seen #{}
+       :out []})
+    :out
+    vec))
+
+(defn- text->merchant-context
+  "Best-effort merchant location extraction from OCR header/body text.
+
+  Returns a merchant map that can include:
+  - :name
+  - :store_name
+  - :address
+  - :raw_address (stable alias key candidate from store/address lines)"
+  [header text]
+  (let [header-stop-line?
+        (fn [line]
+          (let [norm (normalize-text line)]
+            (or (re-matches ba-datetime-line-re line)
+              (re-matches ba-date-line-re line)
+              (and norm
+                (or (str/starts-with? norm "bf")
+                  (str/starts-with? norm "tbfm"))))))
+        marker-line?
+        (fn [line]
+          (let [norm (normalize-text line)]
+            (boolean
+              (and norm
+                (some #(str/starts-with? norm %) merchant-ignore-prefixes)))))
+        address-candidate-line?
+        (fn [line]
+          (let [line (some-> line safe-trim)
+                norm (normalize-text line)]
+            (boolean
+              (and line norm
+                (re-find #"\p{L}" line)
+                (not (separator-noise? line))
+                (not (re-matches ba-datetime-line-re line))
+                (not (re-matches ba-date-line-re line))
+                (or (address-like-line? line)
+                  (not (item-like-line? line)))
+                (not (store-line? line))
+                (not (marker-line? line))))))
+        text->lines
+        (fn [s]
+          (when (string? s)
+            (->> (str/split-lines s)
+              (map safe-trim)
+              (remove nil?)
+              (remove separator-noise?)
+              (take 80)
+              (take-while (complement header-stop-line?))
+              dedupe-lines-by-normalized)))
+        header-lines (or (text->lines header) [])
+        text-lines (or (text->lines text) [])
+        source-lines (if (seq header-lines) header-lines text-lines)
+        merchant-name (or (text->merchant-name header)
+                        (text->merchant-name text))
+        merchant-normalized (some-> merchant-name normalize-text)
+        merchant-idx
+        (when (seq merchant-normalized)
+          (->> source-lines
+            (map-indexed vector)
+            (some (fn [[idx line]]
+                    (when (= merchant-normalized (normalize-text line))
+                      idx)))))
+        trailing-lines (if (some? merchant-idx)
+                         (subvec (vec source-lines) (inc merchant-idx))
+                         (vec source-lines))
+        store-idx
+        (->> trailing-lines
+          (map-indexed vector)
+          (some (fn [[idx line]]
+                  (when (store-line? line)
+                    idx))))
+        store-name (when (some? store-idx)
+                     (some-> (nth trailing-lines store-idx nil) safe-trim))
+        address-lines (if (some? store-idx)
+                        (->> (subvec trailing-lines (inc store-idx))
+                          (take-while (complement marker-line?))
+                          (filter address-candidate-line?)
+                          (map safe-trim)
+                          (remove nil?)
+                          (take 3)
+                          vec)
+                        (->> trailing-lines
+                          (filter address-like-line?)
+                          (map safe-trim)
+                          (remove nil?)
+                          vec))
+        address (when (seq address-lines)
+                  (str/join ", " address-lines))
+        raw-address (when (or (seq store-name) (seq address))
+                      (str/join ", " (remove nil? [store-name address])))]
+    (cond-> {}
+      (seq merchant-name) (assoc :name merchant-name)
+      (seq store-name) (assoc :store_name store-name)
+      (seq address) (assoc :address address)
+      (seq raw-address) (assoc :raw_address raw-address))))
 
 (def ^:private total-preferred-prefixes
   ["total" "ukupan iznos" "ukupna" "ukupan" "za uplatu" "za plac" "za pla" "uplaceno" "primljeno"])
@@ -336,14 +455,23 @@
 
 (defn response->header-text
   [resp-json]
-  (let [items (response->all-items resp-json)]
-    (->> items
-      (filter (fn [{:keys [type]}]
-                (= "header" (some-> type str/lower-case))))
+  (let [items (response->all-items resp-json)
+        pre-table-text-items
+        (->> items
+          (take-while (fn [{:keys [type]}]
+                        (not= "table" (some-> type str/lower-case))))
+          (filter (fn [{:keys [type]}]
+                    (contains? #{"header" "text"} (some-> type str/lower-case)))))
+        header-items
+        (filter (fn [{:keys [type]}]
+                  (= "header" (some-> type str/lower-case)))
+          items)]
+    (->> (concat pre-table-text-items header-items)
       (keep (fn [item]
               (or (safe-trim (:md item))
                 (safe-trim (:value item)))))
       (remove str/blank?)
+      distinct
       (str/join "\n\n")
       not-empty)))
 
@@ -406,7 +534,13 @@
                   (if (re-find #"\p{L}" rest)
                     rest
                     raw))
-                raw))]
+                raw))
+        raw (when raw
+              (some-> raw
+                (str/replace #"(?iu)^(?:artik(?:al|l|la|li)?|naziv|opis)\s*:?\s+(?=\p{L})" "")
+                (str/replace #"\s+" " ")
+                str/trim
+                not-empty))]
     raw))
 
 (defn- header-token?
@@ -414,7 +548,7 @@
   (boolean
     (and norm
       (re-find
-        #"^(?:label|naziv|name|opis|description|cijena|price|kol\.?|qty|quantity|ukupno|total|oznaka|pdv|vat|tax|назив|опис|цијена|кол\.?|укупно|пдв)$"
+        #"(?iu)\b(?:label|naziv|artikal|artikl|artikla|name|opis|description|cijena|price|kol\.?|koli[čc]ina|qty|quantity|ukupno|total|iznos|oznaka|pdv|vat|tax|назив|опис|цијена|кол\.?|укупно|износ|пдв)\b"
         norm))))
 
 (defn- header-row?
@@ -485,6 +619,28 @@
       :else
       item)))
 
+(defn- parse-discount-cell
+  "Parse inline discount cell patterns like '-50,00%: 5,00'.
+
+  Guardrails:
+  - require ':' between percent and amount, OR
+  - require a negative percent token when ':' is missing.
+
+  This avoids treating product attributes like '3,2% 657' as discounts."
+  [cell]
+  (let [cell (some-> cell safe-trim)]
+    (when (seq cell)
+      (let [[_ pct amount]
+            (or
+              (re-find #"(?iu)(-?\d[\d,\.]*)\s*%\s*:\s*(-?\d[\d,\.]*)" cell)
+              (re-find #"(?iu)(-\d[\d,\.]*)\s*%\s+(-?\d[\d,\.]*)" cell))]
+        (when (and pct amount)
+          (let [pct (common/parse-money pct)
+                amount (common/parse-money amount)]
+            (when (and pct amount)
+              {:pct pct
+               :amount amount})))))))
+
 (defn- discount-row
   [cells]
   (let [cells* (->> cells (map safe-trim) (remove nil?) vec)
@@ -505,21 +661,25 @@
                          (when (and (string? c) (pct-token? c))
                            c))
                    cells*)
-        pct (when pct-cell (common/parse-money pct-cell))
+        embedded (some parse-discount-cell cells*)
+        pct (or (when pct-cell (common/parse-money pct-cell))
+              (:pct embedded))
         amount-cell (some (fn [c]
                             (when (common/parse-money c)
                               c))
                       (->> cells*
                         reverse
                         (remove #(= % pct-cell))))
-        amount (when amount-cell (common/parse-money amount-cell))
+        amount (or (when amount-cell (common/parse-money amount-cell))
+                 (:amount embedded))
         label-norm (first norms)
-        ignore-summary? (and label-norm (summary-label? label-norm) (not discount-label?))]
+        ignore-summary? (and label-norm (summary-label? label-norm) (not discount-label?))
+        discount-cue? (or discount-label? pct-cell embedded)]
     (cond
       ignore-summary?
       nil
 
-      (and pct amount (or discount-label? (= pct-cell (first cells*))))
+      (and pct amount discount-cue?)
       {:pct pct
        :amount amount}
 
@@ -869,16 +1029,17 @@
         combined (response->combined-text resp-json)
         date-line (text->date-line combined)
         purchased-at (date-line->iso date-line)
-        merchant (or (text->merchant-name header)
-                   (text->merchant-name text))
+        merchant (text->merchant-context header text)
         table-items (response->table-items resp-json)
         {:keys [items total-lines]} (parse-table-items table-items)
         items (if (empty? items)
-                (or (parse-text-items combined) [])
+                (or (parse-text-items text)
+                  (parse-text-items combined)
+                  [])
                 items)
         total (or (extract-total (concat (when combined (str/split-lines combined)) total-lines))
                 (items-total items))]
-    {:merchant (when merchant {:name merchant})
+    {:merchant (not-empty merchant)
      :purchased_at purchased-at
      :currency nil
      :totals (when total {:total total})

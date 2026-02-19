@@ -19,11 +19,14 @@
 (def http-get! http/http-get!)
 
 (defn- build-upload-configuration
-  [{:keys [tier version ocr-languages]}]
+  [{:keys [tier version ocr-languages agentic-custom-prompt]}]
   (cond-> {:tier (or tier "agentic")
            :version (or version "v2")}
     (seq ocr-languages)
-    (assoc-in [:input_options :pdf :ocr_parameters] {:languages ocr-languages})))
+    (assoc-in [:input_options :pdf :ocr_parameters] {:languages ocr-languages})
+
+    (seq (some-> agentic-custom-prompt str str/trim not-empty))
+    (assoc-in [:agentic_options :custom_prompt] (str/trim (str agentic-custom-prompt)))))
 
 (defn- terminal-status?
   [s]

@@ -31,6 +31,26 @@
             second (suppliers/find-or-create-supplier! db "  bingo-centar " {})]
         (is (= (:id (:supplier first)) (:id (:supplier second))))))))
 
+(deftest suppliers-dedupe-location-suffix-and-strip-branch-suffix-test
+  (when-let [db fixtures/*test-db*]
+    (testing "find-or-create dedupes when OCR appends location suffix to existing supplier"
+      (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+            canonical-name (str "Apoteke Sarajevo " suffix)
+            {:keys [supplier]} (suppliers/find-or-create-supplier! db canonical-name {})
+            variant (str canonical-name " Kosevsko Brdo")
+            resolved (suppliers/find-or-create-supplier! db variant {})]
+        (is (= (:id supplier) (get-in resolved [:supplier :id])))
+        (is (true? (:existing? resolved)))))
+
+    (testing "find-or-create strips explicit branch marker suffix (PJ) before create"
+      (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)
+            with-branch (str "Duhanpromet " suffix " PJ 7")
+            expected-display (str "Duhanpromet " suffix)
+            {:keys [supplier]} (suppliers/find-or-create-supplier! db with-branch {})]
+        (is (= expected-display (:display_name supplier)))
+        (is (= (suppliers/normalize-supplier-key expected-display)
+              (:normalized_key supplier)))))))
+
 (deftest find-or-create-supplier-unescapes-existing-display-name-test
   (when-let [db fixtures/*test-db*]
     (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)

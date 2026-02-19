@@ -175,13 +175,17 @@ rule HandleOCRExtractionSuccess {
 
     let extraction = normalize_and_reconcile_extraction(provider_extraction, parsed_markdown)
     let guesses = derive_receipt_guesses(extraction, config.default_currency)
+    let store_alias_key =
+        extraction.merchant?.raw_address
+        ?? extraction.merchant?.address
+        ?? extraction.merchant?.store_name
 
     ensures: receipt.raw_extract_json = provider_extraction
     ensures: receipt.extraction = extraction
     ensures: receipt.parsed_markdown = parsed_markdown
 
     ensures: receipt.supplier_guess = guesses.supplier_guess
-    ensures: receipt.store_guess = guesses.store_guess
+    ensures: receipt.store_guess = guesses.store_guess ?? extraction.merchant?.store_name ?? extraction.merchant?.address
     ensures: receipt.total_amount_guess = guesses.total_amount_guess
     ensures: receipt.currency_guess = guesses.currency_guess
     ensures: receipt.purchased_at_guess = guesses.purchased_at_guess
@@ -205,6 +209,10 @@ rule HandleOCRExtractionSuccess {
     ensures:
         if receipt.status = extracted and config.auto_post_after_upload:
             AutoPostRequested(receipt: receipt)
+
+    ensures:
+        if store_alias_key != null:
+            StoreAliasCandidateObserved(receipt: receipt, alias_key: store_alias_key)
 }
 
 rule HandleOCRExtractionFailure {

@@ -14,6 +14,7 @@
                             :tier "agentic"
                             :version "latest"
                             :expand "markdown"
+                            :agentic-custom-prompt "extract merchant header"
                             :enabled? false
                             :poll-interval-ms 12
                             :poll-timeout-ms 3456
@@ -28,6 +29,7 @@
     (is (= "agentic" (:tier cfg)))
     (is (= "latest" (:version cfg)))
     (is (= "markdown" (:expand cfg)))
+    (is (= "extract merchant header" (:agentic-custom-prompt cfg)))
     (is (= 12 (:poll-interval-ms cfg)))
     (is (= 3456 (:poll-timeout-ms cfg)))
     (is (= 1 (:conn-timeout-ms cfg)))
@@ -40,6 +42,15 @@
               {:llamaparse {:api-key "k"}}
               {:getenv (constantly nil)})]
     (is (= "items,markdown,text" (:expand cfg)))))
+
+(deftest build-config-supports-agentic-custom-prompt-from-env
+  (let [cfg (llamaparse/build-config
+              {:llamaparse {:agentic-custom-prompt "from-config"}}
+              {:getenv (fn [k]
+                         (case k
+                           "LLAMAPARSE_AGENTIC_CUSTOM_PROMPT" "from-env"
+                           nil))})]
+    (is (= "from-env" (:agentic-custom-prompt cfg)))))
 
 (deftest ocr-parse-uploads-and-polls-until-success
   (let [post-call (atom nil)
@@ -68,6 +79,7 @@
                  :tier "agentic"
                  :version "latest"
                  :expand "markdown"
+                 :agentic-custom-prompt "extract supplier/store/address from header"
                  :poll-interval-ms 1
                  :poll-timeout-ms 5000
                  :conn-timeout-ms 1
@@ -89,6 +101,8 @@
         (is (= "Bearer k" (get-in @post-call [:opts :headers "Authorization"])))
         (is (= "agentic" (get config-json :tier)))
         (is (= "latest" (get config-json :version)))
+        (is (= "extract supplier/store/address from header"
+              (get-in config-json [:agentic_options :custom_prompt])))
         (is (= 2 (count @get-calls)))
         (is (= "https://example/api/v2/parse/job-1" (get-in @get-calls [0 :url])))))))
 
@@ -182,6 +196,52 @@
     (is (= 4.80M (bigdec (get-in items [1 :unit_price]))))
     (is (= 9.60M (bigdec (get-in items [1 :line_total]))))))
 
+(deftest receipt-extraction-parses-inline-discount-unit-row
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"Pepco B-H\" d.o.o.\n"
+                                              "Podružnica Sarajevo 2\n"
+                                              "ul. Kolodvorska br.12\n"
+                                              "71000 Sarajevo\n")}
+                                       {:type "table"
+                                        :rows [["62778401 Mirisna svijeca u staklu Premium Collec" "10,00E" ""]
+                                               ["t/pc" "" "-50,00%: 5,00"]
+                                               ["62778401 Mirisna svijeca u staklu Premium Collec" "10,00E" ""]
+                                               ["t/pc" "" "-50,00%: 5,00"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= ["Mirisna svijeca u staklu Premium Collec"
+            "Mirisna svijeca u staklu Premium Collec"]
+          (mapv :raw_label items)))
+    (is (= [5M 5M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= [5M 5M]
+          (mapv (comp bigdec :unit_price) items)))
+    (is (= 10M (bigdec (get-in extraction [:totals :total]))))))
+
+(deftest receipt-extraction-does-not-treat-product-percent-as-discount
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"KONZUM\" d.o.o. Sarajevo\n"
+                                              "Podružnica br. 66\n"
+                                              "Prodavnica br. 90 Sarajevo\n"
+                                              "Braće Begić 3\n"
+                                              "71101 SARAJEVO CENTAR\n")}
+                                       {:type "table"
+                                        :rows [["MLIJEKO MEGGLE 3,2% 657" "6,75E" ""]
+                                               ["3,000x" "" "2,25"]]}]}]}
+              :text {:pages [{:text (str "VE: 17,00%\n"
+                                      "OSN. E: 5,77\n"
+                                      "PDV E: 0,98\n"
+                                      "PDV: 0,98\n")}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 1 (count items)))
+    (is (= "MLIJEKO MEGGLE 3,2% 657" (:raw_label (first items))))
+    (is (= 3M (bigdec (get-in items [0 :qty]))))
+    (is (= 2.25M (bigdec (get-in items [0 :unit_price]))))
+    (is (= 6.75M (bigdec (get-in items [0 :line_total]))))
+    (is (= 6.75M (bigdec (get-in extraction [:totals :total]))))))
+
 (deftest receipt-extraction-prefers-header-over-body-items
   (let [resp {:items {:pages [{:items [{:type "header"
                                         :md (str "\"UNI-EXPERT\" d.o.o.\n"
@@ -218,6 +278,138 @@
         ex2 (receipt-extract/response->extraction pepco)]
     (is (= "ITX BH" (get-in ex1 [:merchant :name])))
     (is (= "Pepco B-H" (get-in ex2 [:merchant :name])))))
+
+(deftest receipt-extraction-builds-store-context-for-alias-resolution
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"LUPRIV PLUS Mostar\" d.o.o.\n"
+                                              "Ogranak Sarajevo 1\n"
+                                              "Milana Preloga 2 S\n"
+                                              "71120 Novo Sarajevo\n"
+                                              "JIB: 4245018500121\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "LUPRIV PLUS Mostar" (:name merchant)))
+    (is (= "Ogranak Sarajevo 1" (:store_name merchant)))
+    (is (= "Milana Preloga 2 S, 71120 Novo Sarajevo" (:address merchant)))
+    (is (= "Ogranak Sarajevo 1, Milana Preloga 2 S, 71120 Novo Sarajevo"
+          (:raw_address merchant)))))
+
+(deftest receipt-extraction-recognizes-pj-store-line-and-address
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"BINGO\" d.o.o. EXPORT-IMPORT TUZLA\n"
+                                              "PJ 219 \"Supermarket Alta\" Sarajevo\n"
+                                              "Bulevar Franca Lehara br. 2, Alta Shopping Centa\n"
+                                              "71000 SARAJEVO\n"
+                                              "JIB: 4209253454360\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "BINGO" (:name merchant)))
+    (is (= "PJ 219 \"Supermarket Alta\" Sarajevo" (:store_name merchant)))
+    (is (= "Bulevar Franca Lehara br. 2, Alta Shopping Centa, 71000 SARAJEVO"
+          (:address merchant)))
+    (is (= "PJ 219 \"Supermarket Alta\" Sarajevo, Bulevar Franca Lehara br. 2, Alta Shopping Centa, 71000 SARAJEVO"
+          (:raw_address merchant)))))
+
+(deftest receipt-extraction-recognizes-pj-broj-store-line-and-address
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"AFRODITA\" d.o.o.\n"
+                                              "P.J. BROJ 3 - MESNICA MAŠIĆ\n"
+                                              "Alipašina bb\n"
+                                              "71000 Sarajevo\n"
+                                              "JIB: 4404096370049\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "AFRODITA" (:name merchant)))
+    (is (= "P.J. BROJ 3 - MESNICA MAŠIĆ" (:store_name merchant)))
+    (is (= "Alipašina bb, 71000 Sarajevo" (:address merchant)))))
+
+(deftest receipt-extraction-recognizes-apoteka-store-line-and-street-address
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "== == == == == == == == == == == ==\n"
+                                              "JU \"APOTEKE SARAJEVO\" SARAJEVO\n"
+                                              "APOTEKA \"KOŠEVSKO BRDO\"\n"
+                                              "BRAĆE BEGIĆ br.4\n"
+                                              "71000 Sarajevo\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "APOTEKE SARAJEVO" (:name merchant)))
+    (is (= "APOTEKA \"KOŠEVSKO BRDO\"" (:store_name merchant)))
+    (is (= "BRAĆE BEGIĆ br.4, 71000 Sarajevo" (:address merchant)))))
+
+(deftest receipt-extraction-recognizes-pj-dot-store-line
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"ŠAMON PROMET\" doo Sarajevo\n"
+                                              "P.J.3 \"HORECA SHOP I MARKET\"\n"
+                                              "MARŠALA TITA 7\n"
+                                              "71120 SARAJEVO CENTAR\n"
+                                              "JIB: 4200397100042\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "ŠAMON PROMET" (:name merchant)))
+    (is (= "P.J.3 \"HORECA SHOP I MARKET\"" (:store_name merchant)))
+    (is (= "MARŠALA TITA 7, 71120 SARAJEVO CENTAR" (:address merchant)))))
+
+(deftest receipt-extraction-deduplicates-repeated-header-address-lines
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "JU \"APOTEKE SARAJEVO\" SARAJEVO\n"
+                                              "APOTEKA \"KOŠEVSKO BRDO\"\n"
+                                              "BRAĆE BEGIĆ br.4\n"
+                                              "71000 Sarajevo\n"
+                                              "APOTEKA \"KOŠEVSKO BRDO\"\n"
+                                              "BRAĆE BEGIĆ br.4\n"
+                                              "71000 Sarajevo\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "APOTEKA \"KOŠEVSKO BRDO\"" (:store_name merchant)))
+    (is (= "BRAĆE BEGIĆ br.4, 71000 Sarajevo" (:address merchant)))
+    (is (= "APOTEKA \"KOŠEVSKO BRDO\", BRAĆE BEGIĆ br.4, 71000 Sarajevo"
+          (:raw_address merchant)))))
+
+(deftest receipt-extraction-strips-leading-artikal-token-from-item-label
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"BINGO\" d.o.o. EXPORT-IMPORT TUZLA\n"
+                                              "PJ 219 \"Supermarket Alta\" Sarajevo\n"
+                                              "Bulevar Franca Lehara br. 2, Alta Shopping Centa\n"
+                                              "71000 SARAJEVO\n"
+                                              "JIB: 4209253454360\n")}
+                                       {:type "table"
+                                        :rows [["Artikal" "Količina x Cijena" "Iznos"]
+                                               ["Artikal BOMBONJERA 230G RAFFAELLO FER" "1,000x 9,90" "9,90E"]
+                                               ["SA9192 ZDJELA SA POKLOPCEM 0 65L FR" "1,000x 1,90" "1,90E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= "BOMBONJERA 230G RAFFAELLO FER" (:raw_label (first items))))
+    (is (= "SA9192 ZDJELA SA POKLOPCEM 0 65L FR" (:raw_label (second items))))
+    (is (= 11.80M (bigdec (get-in extraction [:totals :total]))))))
+
+(deftest receipt-extraction-does-not-promote-quoted-store-name-to-supplier
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "BINGO doo EXPORT-IMPORT TUZLA\n"
+                                              "PJ 57, \"HIPERMARKET\" Otoka\n"
+                                              "ul. Džemala Bijedića br. 123\n"
+                                              "79220 SARAJEVO NOVI GRAD\n"
+                                              "JIB: 4209253451751\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "BINGO" (:name merchant)))
+    (is (= "PJ 57, \"HIPERMARKET\" Otoka" (:store_name merchant)))
+    (is (= "ul. Džemala Bijedića br. 123, 79220 SARAJEVO NOVI GRAD"
+          (:address merchant)))))
 
 (deftest receipt-extraction-handles-multiple-split-label-and-qty-rows
   (let [resp {:text {:pages [{:text "ITX BH\n19.01.2026. 18:22\nTOTAL: 39,90\n"}]}
@@ -362,3 +554,14 @@
     (is (= "357 35924792904 ZENSKA PIDZAMA" (-> items first :raw_label)))
     (is (= "GALAS HERPEGAL MAST 10 G 5122" (-> items second :raw_label)))
     (is (= 31.65M (-> ext :totals :total)))))
+
+(deftest receipt-extraction-fallback-prefers-text-before-combined-to-avoid-duplicates
+  (let [resp {:text {:pages [{:text "CORTIX\n04.02.2026. 19:41\n357 35924792904 ZENSKA PIDZAMA\n24,00E\nTOTAL: 24,00"}]}
+              :items {:pages [{:items [{:type "header"
+                                        :md "357_35924792904_ZENSKA_PIDZAMA 24,00E"}]}]}}
+        ext (receipt-extract/response->extraction resp)
+        items (:items ext)]
+    (is (= 1 (count items)))
+    (is (= "357 35924792904 ZENSKA PIDZAMA" (-> items first :raw_label)))
+    (is (= 24.00M (-> items first :line_total)))
+    (is (= 24.00M (-> ext :totals :total)))))

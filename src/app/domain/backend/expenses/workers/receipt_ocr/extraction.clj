@@ -126,6 +126,36 @@
       (<= markdown-diff 0.05)
       (< (+ markdown-diff 0.01) provider-diff))))
 
+(defn- prefer-markdown-total?
+  "Prefer markdown-derived total only when it is clearly better supported.
+
+  If provider/refined total already matches line-item sum, do not replace it with
+  markdown total (which may represent tendered/payment amount)."
+  [provider-total markdown-total items]
+  (let [provider-total (common/parse-money provider-total)
+        markdown-total (common/parse-money markdown-total)
+        items-total (items-total-amount items)
+        provider-diff (abs-decimal-diff provider-total items-total)
+        markdown-diff (abs-decimal-diff markdown-total items-total)
+        provider-vs-markdown (abs-decimal-diff markdown-total provider-total)]
+    (cond
+      (nil? markdown-total)
+      false
+
+      (nil? provider-total)
+      true
+
+      (nil? items-total)
+      (and (some? provider-vs-markdown)
+        (> provider-vs-markdown 0.05))
+
+      :else
+      (and (some? provider-diff)
+        (some? markdown-diff)
+        (> provider-diff 0.05)
+        (<= markdown-diff 0.05)
+        (< (+ markdown-diff 0.01) provider-diff)))))
+
 (def ^:private discount-label-pattern
   #"(?iu)\b(popust|popost|rabat|discount|akcija)\b")
 
@@ -150,7 +180,7 @@
   #"(?iu)\bbr(?:\.|:)\s*[:#-]?\s*[\p{L}\p{N}/-]+\b")
 
 (def ^:private header-label-pattern
-  #"(?iu)\b(naziv|opis|artik(al)?|šifra|sifra|kol(\.|i[čc]ina)?|qty|cijena|price|jed(\.|inica)?)\b")
+  #"(?iu)^(?:naziv|opis|artik(?:al|l|la|li)?|šifra|sifra|kol(?:\.|i[čc]ina)?|qty|quantity|cijena|price|jed(?:\.|inica)?)(?:[\s\|/:;,-]+(?:naziv|opis|artik(?:al|l|la|li)?|šifra|sifra|kol(?:\.|i[čc]ina)?|qty|quantity|cijena|price|jed(?:\.|inica)?))*$")
 
 (defn- normalize-item-label
   "Normalize a raw item label for robust matching.
@@ -1004,9 +1034,7 @@
                       :else (assoc extraction0 :items []))
         provider-total0 (common/parse-money (get-in extraction0 [:totals :total]))
         extraction0 (cond-> extraction0
-                      (and markdown-total
-                        (or (nil? provider-total0)
-                          (> (abs-decimal-diff markdown-total provider-total0) 0.05)))
+                      (prefer-markdown-total? provider-total0 markdown-total (:items extraction0))
                       (assoc :totals {:total markdown-total})
 
                       (and (nil? (:purchased_at extraction0)) markdown-purchased-at)

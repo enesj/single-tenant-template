@@ -83,3 +83,33 @@
         (is (re-find #"Items table starts" content))
         (is (re-find #"Currency is usually" content))))))
 
+(deftest llm-extraction-reconciles-payment-total-to-items-total
+  (testing "When subtotal matches items but total looks like tendered payment, prefer subtotal as total"
+    (let [raw {"merchant" {"name" "New Yorker BH" "address" nil "tax_id" nil}
+               "purchased_at" "2026-02-10T17:25:00"
+               "currency" nil
+               "totals" {"subtotal_cents" 995 "tax_cents" nil "total_cents" 2000}
+               "items" [{"name" "Amisu Dzemper/Pullove"
+                         "quantity" 1.0
+                         "unit_price_cents" 995
+                         "line_total_cents" 995}]}
+          ex (receipt-refine/llm-extraction->receipt-extraction raw)]
+      (is (= 9.95M (bigdec (get-in ex [:totals :subtotal]))))
+      (is (= 9.95M (bigdec (get-in ex [:totals :total]))))
+      (is (= 9.95M (bigdec (get-in ex [:items 0 :line_total])))))))
+
+(deftest llm-extraction-keeps-total-when-tax-explains-difference
+  (testing "When subtotal + tax explains total, keep total unchanged"
+    (let [raw {"merchant" {"name" "Konzum" "address" nil "tax_id" nil}
+               "purchased_at" "2026-02-10T17:25:00"
+               "currency" "BAM"
+               "totals" {"subtotal_cents" 850 "tax_cents" 145 "total_cents" 995}
+               "items" [{"name" "Amisu Dzemper/Pullove"
+                         "quantity" 1.0
+                         "unit_price_cents" 995
+                         "line_total_cents" 995}]}
+          ex (receipt-refine/llm-extraction->receipt-extraction raw)]
+      (is (= 8.50M (bigdec (get-in ex [:totals :subtotal]))))
+      (is (= 1.45M (bigdec (get-in ex [:totals :tax]))))
+      (is (= 9.95M (bigdec (get-in ex [:totals :total])))))))
+

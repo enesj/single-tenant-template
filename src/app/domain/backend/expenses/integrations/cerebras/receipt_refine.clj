@@ -89,7 +89,8 @@
     "- Remove leading article/product codes from item names when present.\n"
     "\n"
     "Totals rules:\n"
-    "- totals.total_cents is the final amount paid. Prefer the last grand total.\n"
+    "- totals.total_cents is the receipt grand total for purchased items (TOTAL / UKUPNO in totals section), not the tendered payment amount.\n"
+    "- Never use UPLAĆENO/PRIMLJENO/GOTOVINA/KARTICA/POVRAT as totals.total_cents.\n"
     "- Ignore totals that explicitly say 'without tax' (bez poreza / без пореза) or tax-only totals.\n"
     "\n"
     "If a value is not present or not reliable, use null (do not invent values)."))
@@ -299,6 +300,47 @@
   (when (and a b (not (zero? (.compareTo ^java.math.BigDecimal b 0M))))
     (.divide ^java.math.BigDecimal a ^java.math.BigDecimal b 6 java.math.RoundingMode/HALF_UP)))
 
+(defn- approx-eq-money?
+  [a b]
+  (when (and a b)
+    (<= (double (.abs (.subtract (bigdec a) (bigdec b)))) 0.01)))
+
+(defn- items-line-total
+  [items]
+  (when (sequential? items)
+    (let [amounts (->> items
+                    (keep :line_total)
+                    (keep ->bd)
+                    vec)]
+      (when (seq amounts)
+        (reduce #(.add ^java.math.BigDecimal %1 ^java.math.BigDecimal %2) 0M amounts)))))
+
+(defn- reconcile-total-from-items
+  "When LLM output confuses payment amount with receipt total, repair totals.
+
+  Heuristic:
+  - if subtotal matches sum(items)
+  - and total does not match sum(items)
+  - and tax does not explain the difference
+  then prefer subtotal as grand total.
+
+  Also fills missing :total from items sum when possible."
+  [totals items]
+  (let [subtotal (->bd (:subtotal totals))
+        tax (->bd (:tax totals))
+        total (->bd (:total totals))
+        items-total (items-line-total items)
+        subtotal-matches-items? (and subtotal items-total (approx-eq-money? subtotal items-total))
+        total-matches-items? (and total items-total (approx-eq-money? total items-total))
+        tax-explains-diff? (and subtotal tax total
+                             (approx-eq-money? (.add subtotal tax) total))]
+    (cond-> totals
+      (and items-total (nil? total))
+      (assoc :total items-total)
+
+      (and items-total subtotal-matches-items? (not total-matches-items?) (not tax-explains-diff?))
+      (assoc :total subtotal))))
+
 (defn llm-extraction->receipt-extraction
   "Convert the model-facing cents schema into the app's internal extraction shape.
 
@@ -312,7 +354,35 @@
   (let [m (normalize-llm-extraction llm-extraction)
         merchant (get m "merchant")
         totals (get m "totals")
-        items (get m "items")]
+        items (get m "items")
+        parsed-items (when (sequential? items)
+                       (->> items
+                         (keep
+                           (fn [item]
+                             (let [name (some-> (get item "name") str str/trim not-empty)
+                                   qty (->bd (get item "quantity"))
+                                   unit-price (cents->money (get item "unit_price_cents"))
+                                   line-total (cents->money (get item "line_total_cents"))
+                                   unit-price (or unit-price (safe-divide line-total qty))
+                                   line-total (or line-total (when (and unit-price qty)
+                                                               (.multiply ^java.math.BigDecimal unit-price ^java.math.BigDecimal qty)))]
+                               (when (and name line-total)
+                                 (cond-> {:raw_label name
+                                          :line_total line-total}
+                                   qty (assoc :qty qty)
+                                   unit-price (assoc :unit_price unit-price))))))
+                         vec))
+        parsed-totals (when (map? totals)
+                        (-> (cond-> {}
+                              (some? (get totals "subtotal_cents"))
+                              (assoc :subtotal (cents->money (get totals "subtotal_cents")))
+
+                              (some? (get totals "tax_cents"))
+                              (assoc :tax (cents->money (get totals "tax_cents")))
+
+                              (contains? totals "total_cents")
+                              (assoc :total (cents->money (get totals "total_cents"))))
+                          (reconcile-total-from-items parsed-items)))]
     (cond-> {}
       (and (map? merchant) (seq (get merchant "name")))
       (assoc :merchant (cond-> {:name (get merchant "name")}
@@ -325,32 +395,8 @@
       (contains? m "currency")
       (assoc :currency (get m "currency"))
 
-      (map? totals)
-      (assoc :totals (cond-> {}
-                       (some? (get totals "subtotal_cents"))
-                       (assoc :subtotal (cents->money (get totals "subtotal_cents")))
+      (map? parsed-totals)
+      (assoc :totals parsed-totals)
 
-                       (some? (get totals "tax_cents"))
-                       (assoc :tax (cents->money (get totals "tax_cents")))
-
-                       (contains? totals "total_cents")
-                       (assoc :total (cents->money (get totals "total_cents")))))
-
-      (sequential? items)
-      (assoc :items
-        (->> items
-          (keep
-            (fn [item]
-              (let [name (some-> (get item "name") str str/trim not-empty)
-                    qty (->bd (get item "quantity"))
-                    unit-price (cents->money (get item "unit_price_cents"))
-                    line-total (cents->money (get item "line_total_cents"))
-                    unit-price (or unit-price (safe-divide line-total qty))
-                    line-total (or line-total (when (and unit-price qty)
-                                                (.multiply ^java.math.BigDecimal unit-price ^java.math.BigDecimal qty)))]
-                (when (and name line-total)
-                  (cond-> {:raw_label name
-                           :line_total line-total}
-                    qty (assoc :qty qty)
-                    unit-price (assoc :unit_price unit-price))))))
-          vec)))))
+      (some? parsed-items)
+      (assoc :items parsed-items))))

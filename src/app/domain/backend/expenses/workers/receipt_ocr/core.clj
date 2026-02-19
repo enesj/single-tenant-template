@@ -85,13 +85,18 @@
          :user-id (:user_id receipt)})
       false)))
 
+(defn- receipt-eligible-for-refine?
+  [db receipt opts]
+  (or (true? (:force-refine? opts))
+    (user-allows-receipt-refine? db receipt)))
+
 (defn- maybe-refine-with-cerebras
   [db receipt extract-result {:keys [cerebras-cfg] :as _opts}]
   (let [receipt-id (:id receipt)
         markdown (:parsed-markdown extract-result)
         user-id (:user_id receipt)
         filename (:original_filename receipt)
-        user-enabled? (user-allows-receipt-refine? db receipt)
+        user-enabled? (receipt-eligible-for-refine? db receipt _opts)
         has-markdown? (boolean (seq (some-> markdown str str/trim)))
         cerebras-cfg? (map? cerebras-cfg)
         has-api-key? (boolean (and cerebras-cfg? (seq (:api-key cerebras-cfg))))
@@ -223,7 +228,14 @@
                                                (true? (:review-required? result)))
                                        results))
         missing-context (long (max 0 (- review-required-count total)))
-        sample-ids (->> refineable (map :receipt-id) (take 5) vec)]
+        sample-ids (->> refineable (map :receipt-id) (take 5) vec)
+        eligible-refine-count (if db
+                                (->> refineable
+                                  (filter (fn [{:keys [receipt]}]
+                                            (receipt-eligible-for-refine? db receipt refine-opts)))
+                                  count)
+                                0)
+        has-eligible-refine? (pos? eligible-refine-count)]
     (if (zero? total)
       (do
         (when (pos? review-required-count)
@@ -231,18 +243,29 @@
             {:batch-id batch-id
              :review-required-count review-required-count
              :missing-context missing-context
-             :total-results (count results)}))
+             :total-results (count results)
+             :eligible-refine-count eligible-refine-count}))
         results)
       (let [started (System/nanoTime)
             pool (Executors/newFixedThreadPool max-concurrent)]
         (try
-          (log/info "Cerebras parallel refine starting"
-            {:batch-id batch-id
-             :count total
-             :max-concurrent max-concurrent
-             :timeout-ms timeout-ms
-             :receipt-ids-sample sample-ids
-             :receipt-ids-sample-count (count sample-ids)})
+          (if has-eligible-refine?
+            (log/info "Cerebras parallel refine starting"
+              {:batch-id batch-id
+               :count total
+               :eligible-refine-count eligible-refine-count
+               :max-concurrent max-concurrent
+               :timeout-ms timeout-ms
+               :receipt-ids-sample sample-ids
+               :receipt-ids-sample-count (count sample-ids)})
+            (log/info "Review-required post-process starting (no eligible refine)"
+              {:batch-id batch-id
+               :count total
+               :eligible-refine-count eligible-refine-count
+               :max-concurrent max-concurrent
+               :timeout-ms timeout-ms
+               :receipt-ids-sample sample-ids
+               :receipt-ids-sample-count (count sample-ids)}))
           (let [futures (mapv
                           (fn [{:keys [receipt-id receipt extract-result result]}]
                             {:receipt-id receipt-id
@@ -287,12 +310,25 @@
                                      (get refine-map receipt-id result)
                                      result)))
                            results)
+                refined-count (count (filter (fn [result]
+                                               (map? (get-in result [:extract-result :llm_refine])))
+                                       results*))
                 duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
-            (log/info "Cerebras parallel refine complete"
-              {:batch-id batch-id
-               :count (count refine-map)
-               :total-count total
-               :duration-ms duration-ms})
+            (if has-eligible-refine?
+              (log/info "Cerebras parallel refine complete"
+                {:batch-id batch-id
+                 :count (count refine-map)
+                 :total-count total
+                 :eligible-refine-count eligible-refine-count
+                 :refined-count refined-count
+                 :duration-ms duration-ms})
+              (log/info "Review-required post-process complete (no eligible refine)"
+                {:batch-id batch-id
+                 :count (count refine-map)
+                 :total-count total
+                 :eligible-refine-count eligible-refine-count
+                 :refined-count refined-count
+                 :duration-ms duration-ms}))
             results*)
           (finally
             (.shutdown pool)
@@ -482,7 +518,7 @@
                       :cerebras-cfg cerebras-cfg
                       :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)}
-               (or opts {}))]
+                (or opts {}))]
      (if-not (:enabled? ocr-cfg)
        (do
          (log/info "Receipt OCR worker disabled"
@@ -549,7 +585,8 @@
                       :cerebras-cfg cerebras-cfg
                       :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)
-                      :defer-refine? defer-refine?}
+                      :defer-refine? defer-refine?
+                      :force-refine? true}
                 (dissoc opts :reset?))]
      (if-not (:enabled? ocr-cfg)
        (do

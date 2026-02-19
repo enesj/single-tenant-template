@@ -368,10 +368,68 @@
              :limit 1})
           {:builder-fn rs/as-unqualified-lower-maps})))))
 
+(def ^:private branch-suffix-head-tokens
+  #{"pj" "podruznica" "poslovnica" "ogranak" "filijala"})
+
+(def ^:private branch-suffix-display-re
+  #"(?iu)\b(?:pj\.?\s*\d*|podružnica|podruznica|poslovnica|ogranak|filijala)\b.*$")
+
+(defn- strip-branch-suffix
+  [display-name]
+  (when-let [value (some-> display-name str str/trim not-empty)]
+    (let [stripped (some-> value
+                     (str/replace branch-suffix-display-re "")
+                     (str/replace #"[\s,;:\.\-]+$" "")
+                     str/trim
+                     not-empty)]
+      (or stripped value))))
+
+(defn- normalized-key-tokens
+  [normalized-key]
+  (when-let [key* (some-> normalized-key str str/trim not-empty)]
+    (->> (str/split key* #"-")
+      (remove str/blank?)
+      vec)))
+
+(defn- location-or-branch-suffix?
+  [prefix-key candidate-key]
+  (let [prefix-tokens (normalized-key-tokens prefix-key)
+        candidate-tokens (normalized-key-tokens candidate-key)
+        prefix-count (count (or prefix-tokens []))
+        suffix-tokens (vec (drop prefix-count (or candidate-tokens [])))]
+    (boolean
+      (and (seq prefix-tokens)
+        (seq suffix-tokens)
+        (= prefix-tokens (vec (take prefix-count candidate-tokens)))
+        (or
+          (contains? branch-suffix-head-tokens (first suffix-tokens))
+          (and (>= prefix-count 2)
+            (<= (count suffix-tokens) 3)
+            (>= (count suffix-tokens) 2)
+            (every? #(re-matches #"[a-z0-9]+" %) suffix-tokens)
+            (every? #(or (re-matches #"\d+" %) (>= (count %) 3)) suffix-tokens)
+            (not-any? legal-suffix-tokens suffix-tokens)))))))
+
+(defn- find-by-normalized-key-with-location-suffix
+  [db normalized-key]
+  (when (and (seq normalized-key) (str/includes? normalized-key "-"))
+    (let [rows (jdbc/execute!
+                 db
+                 ["SELECT * FROM suppliers WHERE ? LIKE normalized_key || '-%' ORDER BY length(normalized_key) DESC, created_at ASC LIMIT 20"
+                  normalized-key]
+                 {:builder-fn rs/as-unqualified-lower-maps})]
+      (some (fn [row]
+              (let [prefix-key (some-> (:normalized_key row) str str/trim not-empty)]
+                (when (and prefix-key
+                        (location-or-branch-suffix? prefix-key normalized-key))
+                  row)))
+        rows))))
+
 (defn- find-by-normalized-key-or-legacy
   [db normalized-key]
   (or (find-by-normalized-key db normalized-key)
-    (find-by-canonical-key-with-legacy-suffix db normalized-key)))
+    (find-by-canonical-key-with-legacy-suffix db normalized-key)
+    (find-by-normalized-key-with-location-suffix db normalized-key)))
 
 (defn- legacy-normalize-supplier-key-v0
   "Legacy supplier key normalizer used before we started folding diacritics.
@@ -409,8 +467,9 @@
    Returns {:existing? bool :supplier {...}}"
   [db display-name & [{:keys [address]}]]
   (let [display-name (some-> display-name configs/unescape-html-entities str str/trim not-empty)
+        display-name (strip-branch-suffix display-name)
         normalized (normalize-supplier-key display-name)]
-    (if-let [existing (find-by-normalized-key db normalized)]
+    (if-let [existing (find-by-normalized-key-or-legacy db normalized)]
       {:existing? true
        :supplier (maybe-unescape-existing-display-name! db existing)}
       {:existing? false
@@ -423,13 +482,15 @@
 
 (defn- create-supplier-idempotent!
   [db display-name]
-  (try
-    ((:create! service) db {:display_name display-name})
-    (catch java.sql.SQLException e
-      (if (unique-violation? e)
-        (or (find-by-normalized-key db (normalize-supplier-key display-name))
-          (throw e))
-        (throw e)))))
+  (let [display-name (some-> display-name str str/trim not-empty)
+        display-name (strip-branch-suffix display-name)]
+    (try
+      ((:create! service) db {:display_name display-name})
+      (catch java.sql.SQLException e
+        (if (unique-violation? e)
+          (or (find-by-normalized-key-or-legacy db (normalize-supplier-key display-name))
+            (throw e))
+          (throw e))))))
 
 (defn- choose-create-display-name
   "Choose which display name to persist when Places suggests a candidate.
@@ -458,7 +519,8 @@
 
   Returns {:supplier <row> :source :db|:places-api|:ocr-fallback}."
   [db ocr-guess & [opts]]
-  (let [display-name (some-> ocr-guess configs/unescape-html-entities str str/trim not-empty)]
+  (let [display-name (some-> ocr-guess configs/unescape-html-entities str str/trim not-empty)
+        display-name (strip-branch-suffix display-name)]
     (if-not display-name
       {:supplier nil :source :ocr-fallback}
       (let [normalized (normalize-supplier-key display-name)

@@ -906,6 +906,16 @@
               :line_total 3.30}]
     (is (nil? (non-item-reason ctx item)))))
 
+(deftest non-item-reason-keeps-item-with-leading-header-token
+  (let [non-item-reason #'extraction/non-item-reason
+        ctx {:items-count 10
+             :grand-total 49.92M}
+        item {:raw_label "Artikal BOMBONJERA 230G RAFFAELLO FER"
+              :qty 1
+              :unit_price 9.90
+              :line_total 9.90}]
+    (is (nil? (non-item-reason ctx item)))))
+
 (deftest non-item-reason-filters-br-colon-reference-as-metadata
   (let [non-item-reason #'extraction/non-item-reason
         ctx {:items-count 10
@@ -1029,6 +1039,54 @@
         (is (= [{:raw_label "ITEM A" :qty 1.0 :unit_price 9.0 :line_total 9.0}
                 {:raw_label "ITEM B" :qty 1.0 :unit_price 5.0 :line_total 5.0}]
               (mapv normalize-item stored-items)))))))
+
+(deftest persist-extract-result-does-not-replace-refined-total-with-markdown-payment-total
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown (str "New Yorker BH\n"
+                                               "10.02.2026. 17:25\n"
+                                               "| Label | Qty | Unit | Total |\n"
+                                               "| --- | --- | --- | --- |\n"
+                                               "| Amisu Dzemper/Pullove | 1.000 | 9.95 | 9.95 |\n"
+                                               "TOTAL: 20.00\n")
+                            :extraction {:merchant {:name "New Yorker BH"}
+                                         :totals {:subtotal 9.95
+                                                  :total 9.95}
+                                         :items [{:raw_label "Amisu Dzemper/Pullove"
+                                                  :qty 1
+                                                  :unit_price 9.95
+                                                  :line_total 9.95}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= 9.95M (common/parse-money (:total_amount_guess @stored))))
+        (is (= 9.95M (common/parse-money (get-in @stored [:raw_extract_json :extraction :totals :total]))))))))
 
 (deftest persist-extract-result-does-not-create-article-aliases-when-supplier-unknown
   (let [receipt-id (java.util.UUID/randomUUID)
@@ -1629,3 +1687,100 @@
                (fn []
                  (#'core/refine-review-required-results! ::db opts results)))]
     (is (= [receipt-id] @cleared))))
+
+(deftest refine-review-required-results-logs-post-process-when-no-eligible-refine
+  (let [opts {:cerebras-cfg {:refine-concurrency 1 :refine-timeout-ms 1000}}
+        results [{:receipt {:id (java.util.UUID/randomUUID)}
+                  :review-required? true
+                  :extract-result {}}]
+        output (let [w (java.io.StringWriter.)]
+                 (binding [*out* w
+                           *err* w]
+                   (clojure.core/with-redefs-fn
+                     {#'core/maybe-refine-review-required
+                      (fn [_db _receipt _extract-result persist-result _opts]
+                        persist-result)}
+                     (fn []
+                       (#'core/refine-review-required-results! nil opts results)))
+                   (str w)))]
+    (is (str/includes? output "Review-required post-process starting (no eligible refine)"))
+    (is (str/includes? output "Review-required post-process complete (no eligible refine)"))
+    (is (not (str/includes? output "Cerebras parallel refine starting")))))
+
+(deftest refine-review-required-results-logs-cerebras-when-eligible-refine
+  (let [opts {:cerebras-cfg {:refine-concurrency 1 :refine-timeout-ms 1000}}
+        results [{:receipt {:id (java.util.UUID/randomUUID)
+                            :user_id (java.util.UUID/randomUUID)}
+                  :review-required? true
+                  :extract-result {}}]
+        output (let [w (java.io.StringWriter.)]
+                 (binding [*out* w
+                           *err* w]
+                   (clojure.core/with-redefs-fn
+                     {#'core/user-allows-receipt-refine?
+                      (fn [_db _receipt]
+                        true)
+                      #'core/maybe-refine-review-required
+                      (fn [_db _receipt _extract-result persist-result _opts]
+                        (assoc persist-result :extract-result {:llm_refine {:model "test"}}))}
+                     (fn []
+                       (#'core/refine-review-required-results! ::db opts results)))
+                   (str w)))]
+    (is (str/includes? output "Cerebras parallel refine starting"))
+    (is (str/includes? output "Cerebras parallel refine complete"))
+    (is (not (str/includes? output "Review-required post-process starting (no eligible refine)")))))
+
+(deftest refine-review-required-results-logs-cerebras-when-force-refine-without-user
+  (let [opts {:cerebras-cfg {:refine-concurrency 1 :refine-timeout-ms 1000}
+              :force-refine? true}
+        results [{:receipt {:id (java.util.UUID/randomUUID)}
+                  :review-required? true
+                  :extract-result {}}]
+        output (let [w (java.io.StringWriter.)]
+                 (binding [*out* w
+                           *err* w]
+                   (clojure.core/with-redefs-fn
+                     {#'core/user-allows-receipt-refine?
+                      (fn [_db _receipt]
+                        false)
+                      #'core/maybe-refine-review-required
+                      (fn [_db _receipt _extract-result persist-result _opts]
+                        (assoc persist-result :extract-result {:llm_refine {:model "test"}}))}
+                     (fn []
+                       (#'core/refine-review-required-results! ::db opts results)))
+                   (str w)))]
+    (is (str/includes? output "Cerebras parallel refine starting"))
+    (is (str/includes? output "Cerebras parallel refine complete"))
+    (is (not (str/includes? output "Review-required post-process starting (no eligible refine)")))))
+
+(deftest process-receipts-by-ids-defaults-force-refine
+  (let [receipt-id (java.util.UUID/randomUUID)
+        captured-opts (atom nil)]
+    (clojure.core/with-redefs-fn
+      {#'app.domain.backend.expenses.integrations.ocr-provider/build-provider
+       (fn [_]
+         {:provider :llamaparse
+          :enabled? true
+          :api-key "k"
+          :auto-post-after-upload? false})
+       #'app.domain.backend.expenses.integrations.cerebras/build-config
+       (fn [_]
+         {})
+       #'app.domain.backend.expenses.services.places-api/build-config
+       (fn [_]
+         {})
+       #'receipt-status/reset-for-ocr!
+       (fn [_db _receipt-id]
+         nil)
+       #'receipt-queries/get-receipt
+       (fn [_db _receipt-id]
+         {:id receipt-id
+          :status "uploaded"})
+       #'core/process-receipt!
+       (fn [_db _ocr-cfg _receipt opts]
+         (reset! captured-opts opts)
+         {:receipt-id receipt-id
+          :result :ok})}
+      (fn []
+        (core/process-receipts-by-ids! ::db {} [receipt-id])))
+    (is (true? (:force-refine? @captured-opts)))))

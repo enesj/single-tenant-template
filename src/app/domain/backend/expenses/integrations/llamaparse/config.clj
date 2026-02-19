@@ -14,6 +14,21 @@
 (def ^:private default-max-retries 2)
 (def ^:private default-retry-sleep-ms 500)
 
+(def ^:private default-agentic-custom-prompt
+  (str
+    "Extract merchant header fields into: merchant.name, merchant.store_name, merchant.address, merchant.raw_address. "
+    "Rules (in order): "
+    "1) merchant.name (supplier) = legal/brand merchant line (usually first header line, often with doo/d.o.o./dd). Never take supplier from branch/store lines. "
+    "2) merchant.store_name = branch/business-unit line (starts with PJ, Podruznica/Podružnica, Ogranak, Poslovnica, Filijala, etc.). "
+    "3) merchant.address = street + postal/city lines that follow the store line. "
+    "4) Keep postal code/city in address (do not move postal/city into store_name). "
+    "5) merchant.raw_address = merchant.store_name + ', ' + merchant.address. "
+    "6) If a value is missing, leave it null. "
+    "7) For line items, never prefix product labels with table/header words like Artikal/Naziv/Opis/Label/Item; output only the real product name. "
+    "8) Keep all purchased rows exactly once, including the first product row after a header line. "
+    "Important: If store line contains quoted text (e.g. PJ 57, \"HIPERMARKET\" Otoka), keep it in store_name only. "
+    "Never use that quoted branch text as merchant.name."))
+
 (defn- parse-bool [s]
   (when s
     (let [s (str/lower-case (str/trim s))]
@@ -44,6 +59,7 @@
   - LLAMAPARSE_TIER (default agentic)
   - LLAMAPARSE_VERSION (default v2)
   - LLAMAPARSE_EXPAND (default items,markdown,text)
+  - LLAMAPARSE_AGENTIC_CUSTOM_PROMPT (optional, appended to LlamaParse system prompt)
   - LLAMAPARSE_CONN_TIMEOUT_MS
   - LLAMAPARSE_SOCKET_TIMEOUT_MS
   - LLAMAPARSE_POLL_INTERVAL_MS
@@ -72,7 +88,12 @@
          version (if (and (= "agentic" (some-> tier str/lower-case))
                        (= "v2" (some-> raw-version str/lower-case)))
                    "latest"
-                   raw-version)]
+                   raw-version)
+         agentic-custom-prompt
+         (or (getenv* "LLAMAPARSE_AGENTIC_CUSTOM_PROMPT")
+           (some-> (:agentic-custom-prompt cfg) str str/trim not-empty)
+           (some-> (:custom-prompt cfg) str str/trim not-empty)
+           default-agentic-custom-prompt)]
      {:enabled? enabled?
       :auto-post-after-upload? (if (contains? cfg :ocr-auto-post-after-upload?)
                                  (:ocr-auto-post-after-upload? cfg)
@@ -88,6 +109,7 @@
       :expand (or (getenv* "LLAMAPARSE_EXPAND")
                 (:expand cfg)
                 default-expand)
+      :agentic-custom-prompt agentic-custom-prompt
       :ocr-languages (or (some-> (getenv* "LLAMAPARSE_OCR_LANGUAGES") parse-languages)
                        (:ocr-languages cfg))
       :conn-timeout-ms (or (some-> (getenv* "LLAMAPARSE_CONN_TIMEOUT_MS") parse-int)
