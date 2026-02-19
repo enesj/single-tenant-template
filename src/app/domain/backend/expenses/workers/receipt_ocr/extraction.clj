@@ -160,16 +160,16 @@
   #"(?iu)\b(popust|popost|rabat|discount|akcija)\b")
 
 (def ^:private totals-label-pattern
-  #"(?iu)\b(ukupno|ukupan|ukupna|total|subtotal|za\s+uplatu|za\s+pla[ćc]anje|upla[ćc]eno|primljeno|gotovina|kartica|kusur|povrat|razlika|saldo)\b")
+  #"(?iuU)\b(ukupno|ukupan|ukupna|total|subtotal|iznos|bez\s+poreza|za\s+uplatu|za\s+pla[ćc]anje|upla[ćc]eno|primljeno|gotovina|kartica|kusur|povrat|razlika|saldo|укупно|укупан|укупна|износ|без\s+пореза|за\s+уплату|за\s+пла[ћч]ање|упла[ћч]ено|примљено|готовина|картица|кусур|поврат|разлика|салдо)\b")
 
 (def ^:private tax-label-pattern
   ;; Includes a few common abbreviations and OCR misreads seen in BA receipts:
   ;; - OSN/CSN (osnovica)
   ;; - POU (often a misread of PDV)
-  #"(?iu)\b(pdv|vat|porez|osnovica|stopa|(?:osn|csn)\.?|pou)\b")
+  #"(?iuU)\b(pdv|vat|porez|osnovica|stopa|(?:osn|csn)\.?|pou|пдв|порез|основица|стопа)\b")
 
 (def ^:private payment-label-pattern
-  #"(?iu)\b(gotovina|kartica|visa|master(card)?|diners|amex|american|paypal)\b")
+  #"(?iuU)\b(gotovina|kartica|visa|master(card)?|diners|amex|american|paypal|готовина|картица|виза|мастер|динерс|амекс)\b")
 
 (def ^:private meta-label-pattern
   #"(?iu)\b(ra[čc]un|fiskalni|kasa|kasir|operator|datum|vrijeme|broj|id)\b")
