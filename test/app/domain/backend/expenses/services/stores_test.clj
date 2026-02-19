@@ -10,6 +10,21 @@
   (:import
     [java.util UUID]))
 
+(deftest stores-list-sorts-by-supplier-column-test
+  (testing "stores list supports supplier sorting by supplier display name"
+    (let [captured-sql (atom nil)]
+      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                    (reset! captured-sql sql-params)
+                                    [])]
+        ((:list stores/service) :db {:limit 10
+                                     :offset 0
+                                     :order-by :supplier-id
+                                     :order-dir :asc})
+        (let [sql-lc (some-> @captured-sql first str str/lower-case)]
+          (is (string? sql-lc))
+          (is (re-find #"join\s+suppliers" sql-lc))
+          (is (re-find #"order by s\.display_name asc" sql-lc)))))))
+
 (deftest find-or-create-store-resolves-city-id-via-zip-only-test
   (testing "create flow resolves city_id via cities/resolve-city-id-from-text!"
     (let [resolved-city-id (UUID/randomUUID)

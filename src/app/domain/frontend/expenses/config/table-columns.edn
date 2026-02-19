@@ -204,7 +204,7 @@
   ["name" "description" "created_at" "updated_at" "id"],
   :default-visible-columns ["name" "description" "created_at"],
   :filterable-columns ["name" "description" "created_at"],
-  :sortable-columns ["name" "created_at" "updated_at"],
+  :sortable-columns ["name" "description" "created_at" "updated_at"],
   :always-visible ["name"]},
  :supplier-aliases
  {:available-columns

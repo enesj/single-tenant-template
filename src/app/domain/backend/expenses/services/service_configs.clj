@@ -335,16 +335,20 @@
    :primary-key :id
    :required-fields [:supplier_id :display_name]
    :allowed-order-by {:display-name :st/display_name
+                      :supplier-id :s/display_name
+                      :supplier-display-name :s/display_name
                       :normalized-key :st/normalized_key
                       :address :st/address
                       :city-id :st/city_id
                       :created-at :st/created_at
                       :updated-at :st/updated_at}
    :default-order-by :st/display_name
-   :search-fields [:st/display_name :st/normalized_key :st/address :c/name]
-   :joins [[:cities :c] [:= :c.id :st/city_id]]
+   :search-fields [:st/display_name :st/normalized_key :st/address :c/name :s/display_name]
+   :joins [[:cities :c] [:= :c.id :st/city_id]
+           [:suppliers :s] [:= :s/id :st/supplier_id]]
    :select-fields [[:st.*]
-                   [:c/name :city_fk_name]]
+                   [:c/name :city_fk_name]
+                   [:s/display_name :supplier_display_name]]
    :field-transformers {:normalized_key normalize-store-key}
    :before-insert (fn [data]
                     (let [display-name (unescape-html-entities (:display_name data))
@@ -404,6 +408,7 @@
    :primary-key :id
    :required-fields [:name]
    :allowed-order-by {:name :name
+                      :description :description
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :name

@@ -35,3 +35,13 @@
     (let [cfg (service-configs/get-entity-config :city)]
       (is (= "cities" (:table-name cfg)))
       (is (= :id (:primary-key cfg))))))
+
+(deftest sort-allowlists-include-user-visible-columns-test
+  (testing "stores support sorting by supplier columns"
+    (let [cfg (service-configs/get-entity-config :store)]
+      (is (= :s/display_name (get-in cfg [:allowed-order-by :supplier-id])))
+      (is (= :s/display_name (get-in cfg [:allowed-order-by :supplier-display-name])))))
+
+  (testing "categories support sorting by description"
+    (let [cfg (service-configs/get-entity-config :category)]
+      (is (= :description (get-in cfg [:allowed-order-by :description]))))))
