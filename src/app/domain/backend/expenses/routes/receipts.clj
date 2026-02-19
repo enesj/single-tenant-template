@@ -1,7 +1,7 @@
 (ns app.domain.backend.expenses.routes.receipts
   "Admin API routes for receipt ingestion and approval."
   (:require
-    [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
@@ -303,13 +303,14 @@
     (fn [request]
       (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
         (if-let [_receipt (receipt-queries/get-receipt db id)]
-          (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
+          (let [{:keys [enabled? api-key] :as ocr-cfg}
+                (ocr-provider/build-provider app-config)]
             (cond
               (not enabled?)
-              (utils/error-response "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)" :status 409)
+              (utils/error-response (ocr-provider/disabled-message ocr-cfg) :status 409)
 
               (not (seq api-key))
-              (utils/error-response "Receipt OCR is not configured (missing MISTRAL_API_KEY)" :status 409)
+              (utils/error-response (ocr-provider/missing-api-key-message ocr-cfg) :status 409)
 
               :else
               (do

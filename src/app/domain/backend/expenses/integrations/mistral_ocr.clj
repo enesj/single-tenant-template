@@ -47,7 +47,8 @@
     (log/info "Mistral OCR parse complete" {:duration-ms duration-ms
                                             :pages (count (:pages resp-json))
                                             :model (:model resp-json)})
-    {:raw resp-json
+    {:provider "mistral"
+     :raw resp-json
      :parsed-markdown markdown
      :usage-info (:usage_info resp-json)
      :model (:model resp-json)}))
@@ -76,7 +77,8 @@
     (log/info "Mistral OCR extract disabled; using markdown-only parse"
       {:duration-ms duration-ms
        :model (:model parse)})
-    {:raw (:raw parse)
+    {:provider "mistral"
+     :raw (:raw parse)
      :extraction nil
      :parsed-markdown (:parsed-markdown parse)
      :received-at (str (Instant/now))

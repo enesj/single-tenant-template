@@ -9,7 +9,7 @@
   - approve an extracted receipt and create an expense (receipt status → posted)
   - trigger OCR for receipts (single and batch)"
   (:require
-    [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
@@ -450,14 +450,15 @@
                               (receipt-queries/get-receipt db id)
                               (receipt-queries/get-user-receipt db user-id id))]
                 (if receipt
-                  (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
+                  (let [{:keys [enabled? api-key] :as ocr-cfg}
+                        (ocr-provider/build-provider app-config)]
                     (cond
                       (not enabled?)
-                      (h/json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
+                      (h/json-response {:error (ocr-provider/disabled-message ocr-cfg)}
                         409)
 
                       (not (seq api-key))
-                      (h/json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
+                      (h/json-response {:error (ocr-provider/missing-api-key-message ocr-cfg)}
                         409)
 
                       :else
@@ -521,14 +522,15 @@
                                   vec)]
                 (if (empty? accessible-ids)
                   (h/json-response {:error "No accessible receipts found"} 404)
-                  (let [{:keys [enabled? api-key]} (mistral-ocr/build-config app-config)]
+                  (let [{:keys [enabled? api-key] :as ocr-cfg}
+                        (ocr-provider/build-provider app-config)]
                     (cond
                       (not enabled?)
-                      (h/json-response {:error "Receipt OCR is disabled (set MISTRAL_OCR_ENABLED=true to enable)"}
+                      (h/json-response {:error (ocr-provider/disabled-message ocr-cfg)}
                         409)
 
                       (not (seq api-key))
-                      (h/json-response {:error "Receipt OCR is not configured (missing MISTRAL_API_KEY)"}
+                      (h/json-response {:error (ocr-provider/missing-api-key-message ocr-cfg)}
                         409)
 
                       :else

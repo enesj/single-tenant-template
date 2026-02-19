@@ -161,6 +161,8 @@ surface OrderCheckout = {
 ### Candidate 🟡
 
 - **[Receipt OCR](drafts/expenses/receipt-ocr.candidate.allium)**: Upload → OCR extraction → review → optional auto-post lifecycle. Documents extraction post-processing, supplier/store resolution, 8-state finite machine.
+- **[List View Filtering](drafts/list-view-filtering.candidate.allium)**: Canonical list filtering semantics (client/server mode behavior, first-character text auto-apply, conditional server refresh dispatch, and select-dropdown dismissal behavior).
+- **[List View Sorting](drafts/list-view-sort.candidate.allium)**: Canonical list sorting semantics with client/server mode split and sort state propagation.
 
 ### Stable 🟢
 
@@ -185,6 +187,5 @@ surface OrderCheckout = {
 
 ---
 
-**Last Updated:** 2026-02-14  
+**Last Updated:** 2026-02-18  
 **Spec Governance:** Living artifacts; sync with implementation via code review + REPL validation.
-

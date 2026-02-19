@@ -51,7 +51,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `POST /admin/api/expenses/receipts/:id/extraction` – store extraction payloads/guesses.
 - `POST /admin/api/expenses/receipts/:id/review` – save user-reviewed fields/items without approving (does not create an expense).
 - `POST /admin/api/expenses/receipts/:id/approve` – approve + create expense + mark posted.
-- `POST /admin/api/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires `MISTRAL_API_KEY`).
+- `POST /admin/api/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires API key for selected `RECEIPT_OCR_WORKFLOW`).
 
 ### Expenses
 - `GET /admin/api/expenses/entries` – list; filters `from/to`, `supplier-id`, `payer-id`, `is-posted?`, pagination.
@@ -172,8 +172,8 @@ All user report endpoints require an authenticated user with an expenses-read ro
 - `DELETE /api/v1/expenses/receipts/:id` – delete receipt.
 - `POST /api/v1/expenses/receipts/:id/review` – save reviewed fields/items without approving.
 - `POST /api/v1/expenses/receipts/:id/approve` – approve receipt and create expense.
-- `POST /api/v1/expenses/receipts/ocr` – trigger async OCR for selected receipts (`receipt_ids` array; inaccessible ids are skipped; requires `MISTRAL_API_KEY`).
-- `POST /api/v1/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires `MISTRAL_API_KEY`).
+- `POST /api/v1/expenses/receipts/ocr` – trigger async OCR for selected receipts (`receipt_ids` array; inaccessible ids are skipped; requires API key for selected `RECEIPT_OCR_WORKFLOW`).
+- `POST /api/v1/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires API key for selected `RECEIPT_OCR_WORKFLOW`).
 
 ### Articles + Auto-matching (admin/owner only)
 - `GET /api/v1/expenses/articles` – list/search articles.

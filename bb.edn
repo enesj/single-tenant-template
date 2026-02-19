@@ -442,6 +442,14 @@
   {:doc "Group unmapped article aliases by detected brand/product family.\n\nShows size tokens and supplier type (restaurant vs retail) to help spot variant\nconflicts BEFORE creating articles.\n\nUsage:\n  bb group-aliases-by-brand [dev|test] [--mapped] [--min-group N] [--json]",
    :task (apply shell "bb" "scripts/bb/expenses/group_aliases_by_brand.clj" *command-line-args*)},
 
+  articles-phase1-triage
+  {:doc "Build Phase 1 triage summary from pre-generated backlog + brand grouping artifacts.\n\nInputs (must exist):\n  - tmp/phase1-backlog.edn (from list_unmapped_aliases)\n  - tmp/phase1-variant-groups.json (from group-aliases-by-brand --json)\n\nOutputs:\n  - tmp/phase1-triage-summary.edn\n\nUsage:\n  bb articles-phase1-triage",
+   :task (apply shell "bb" "scripts/bb/articles/phase1_triage.clj" *command-line-args*)},
+
+  articles-phase1-triage-report
+  {:doc "Render Phase 1 triage report Markdown.\n\nInputs (must exist):\n  - tmp/phase1-triage-summary.edn\n\nOutputs:\n  - tmp/phase1-triage-report.md\n\nUsage:\n  bb articles-phase1-triage-report",
+   :task (apply shell "bb" "scripts/bb/articles/phase1_triage_report.clj" *command-line-args*)},
+
   validate-article-mappings
   {:doc "Validate existing article alias mappings for suspicious patterns.\n\nDetects size conflicts (different sizes mapped to same article),\nrestaurant/retail mix, and single-alias articles.\n\nUsage:\n  bb validate-article-mappings [dev|test] [--json] [--fix-suggestions]",
    :task (apply shell "bb" "scripts/bb/expenses/validate_article_mappings.clj" *command-line-args*)},

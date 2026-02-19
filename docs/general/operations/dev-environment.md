@@ -42,7 +42,8 @@ bb run-app
 - Receipt OCR processing no longer ships with a dedicated shell worker script in this template. Use the admin or user OCR endpoints instead:
   - Admin: `POST /admin/api/expenses/receipts/:id/ocr`
   - User:  `POST /api/v1/expenses/receipts/:id/ocr`
-  - Set `MISTRAL_API_KEY` to enable OCR processing.
+  - Select provider via `RECEIPT_OCR_WORKFLOW=mistral|llamaparse` (default `mistral`).
+  - Set `MISTRAL_API_KEY` for `mistral` or `LLAMA_CLOUD_API_KEY` for `llamaparse`.
 
 ## Troubleshooting
 - **FileNotFoundException in REPL**: If you get this when requiring `.cljs` files, the REPL is in Clojure (JVM) mode. Switch to ClojureScript by evaluating:

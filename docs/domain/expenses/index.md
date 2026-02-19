@@ -320,11 +320,14 @@ Notes:
 - The system may mark a receipt as `review_required` when extracted totals look inconsistent (e.g. header total vs sum of extracted line totals).
 - Review is intentionally separate from approve so users can save incremental corrections before committing to expense creation.
 
-### Receipt OCR Worker (Mistral + optional AI refine)
+### Receipt OCR Worker (env-selected provider + optional AI refine)
 
 - Run one-shot processing: `bb receipt-ocr-worker dev`
 - Run continuously: `bb receipt-ocr-worker dev --loop` (polls every 30s by default)
-- Requires `MISTRAL_API_KEY` (disable with `MISTRAL_OCR_ENABLED=false`); see `PLAN-mistral-ocr-pos-receipts.md` for details.
+- Workflow is selected by `RECEIPT_OCR_WORKFLOW`:
+  - `mistral` (default): requires `MISTRAL_API_KEY` (disable with `MISTRAL_OCR_ENABLED=false`)
+  - `llamaparse`: requires `LLAMA_CLOUD_API_KEY` (disable with `LLAMAPARSE_ENABLED=false`)
+- See `PLAN-mistral-ocr-pos-receipts.md` for original Mistral rollout details.
 - Before calling Mistral, receipt **images** are preprocessed (best-effort):
   - HEIC/HEIF → JPEG
   - monochrome (default: grayscale; optional bilevel threshold)

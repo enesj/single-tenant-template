@@ -26,7 +26,7 @@ Learn more: [Allium Skill Guide](../.agents/skills/allium/SKILL.md)
 #### Candidate 🟡
 
 - [Receipt OCR](../specs/allium/drafts/expenses/receipt-ocr.candidate.allium) — Upload → OCR → extract → review → post lifecycle
-- [List View Filtering](../specs/allium/drafts/list-view-filtering.candidate.allium) — Canonical list filtering behavior across client-mode (admin) and server-mode (user) pages
+- [List View Filtering](../specs/allium/drafts/list-view-filtering.candidate.allium) — Canonical list filtering behavior across client-mode (admin) and server-mode (user) pages, including first-character text auto-apply and server-mode loaded-row filtering parity
 - [List View Sorting](../specs/allium/drafts/list-view-sort.candidate.allium) — Canonical list sorting behavior with client/server mode split
 
 ### 📂 Browse by Folder

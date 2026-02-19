@@ -1315,6 +1315,33 @@
             :line_total 9.90M}
           (first items)))))
 
+(deftest markdown-line-item-candidates-supports-html-table-cells
+  (let [candidates #'markdown/markdown->line-item-candidates
+        markdown (str "<table>\n"
+                   "  <tbody>\n"
+                   "    <tr>\n"
+                   "      <td>CHYMORAL_S_KAPSULE_A_10_7152</td>\n"
+                   "      <td>21,45E</td>\n"
+                   "    </tr>\n"
+                   "    <tr>\n"
+                   "      <td>HERBIKO_NATURAL_BOKVICA_SIRUP_125_ML_5bad</td>\n"
+                   "      <td>9,20E</td>\n"
+                   "    </tr>\n"
+                   "  </tbody>\n"
+                   "</table>\n")
+        items (candidates markdown)]
+    (is (= 2 (count items)))
+    (is (= {:raw_label "CHYMORAL_S_KAPSULE_A_10_7152"
+            :qty 1M
+            :unit_price 21.45M
+            :line_total 21.45M}
+          (first items)))
+    (is (= {:raw_label "HERBIKO_NATURAL_BOKVICA_SIRUP_125_ML_5bad"
+            :qty 1M
+            :unit_price 9.20M
+            :line_total 9.20M}
+          (second items)))))
+
 (deftest markdown-merchant-header-extracts-quoted-name
   (let [parse-header #'markdown/markdown->merchant-header
         markdown (str "\"Pepco B-H\" d.o.o.\n"
@@ -1380,6 +1407,23 @@
             (resolve nil "HESE-KEMERC d.o.o. Sarajevo" {:merchant nil} {})))
       (is (= "HESE-KEMERC" @created-name)))))
 
+(deftest markdown-supplier-guess-ignores-date-time-and-table-lines
+  (let [markdown (str "# FISKALNI RAČUN\n"
+                   "BF: 238900\n"
+                   "13.02.2026. 17:36\n"
+                   "<table>\n"
+                   "  <tr><td>CHYMORAL_S_KAPSULE_A_10_7152</td><td>21,45E</td></tr>\n"
+                   "</table>\n")]
+    (is (nil? (markdown/markdown->supplier-guess markdown)))))
+
+(deftest markdown-supplier-guess-keeps-valid-merchant-before-table
+  (let [markdown (str "LUPRIV PLUS Mostar\n"
+                   "13.02.2026. 17:36\n"
+                   "<table>\n"
+                   "  <tr><td>ITEM</td><td>1,00E</td></tr>\n"
+                   "</table>\n")]
+    (is (= "LUPRIV PLUS Mostar" (markdown/markdown->supplier-guess markdown)))))
+
 (deftest markdown-purchased-at-extracts-ba-datetime-format
   (testing "parses dd.mm.yyyy. hh:mm with trailing dot"
     (let [markdown "UR CAFFE BAR\n29.01.2026. 14:31\nESPRESSO KAFA 2,00"]
@@ -1406,6 +1450,11 @@
   (let [markdown (str "UKUPNO: 42,00\n"
                    "POVRAT: 0,00\n")]
     (is (= 42.00M (markdown/markdown->total-amount markdown)))))
+
+(deftest markdown-total-amount-supports-heading-prefixed-total
+  (let [markdown (str "## TOTAL: 30,70\n"
+                   "UKUPNO: 0,00\n")]
+    (is (= 30.70M (markdown/markdown->total-amount markdown)))))
 
 (deftest process-extract-auto-retries-review-required-once
   (let [process-extract! #'core/process-extract!

@@ -144,7 +144,7 @@
                          db)
             server-mode? (server-pagination? updated-db entity-type)
             page-reset-needed? (and server-mode?
-                               (not= 1 (current-page updated-db entity-type)))
+                                    (not= 1 (current-page updated-db entity-type)))
             paged-db (if page-reset-needed?
                        (sync-current-page updated-db entity-type 1)
                        updated-db)
@@ -182,7 +182,7 @@
                  changed?]))
             server-mode? (server-pagination? updated-db entity-type)
             page-reset-needed? (and server-mode?
-                               (not= 1 (current-page updated-db entity-type)))
+                                    (not= 1 (current-page updated-db entity-type)))
             paged-db (if page-reset-needed?
                        (sync-current-page updated-db entity-type 1)
                        updated-db)

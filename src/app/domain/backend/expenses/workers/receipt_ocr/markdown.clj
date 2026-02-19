@@ -14,6 +14,29 @@
     str/trim
     not-empty))
 
+(defn- strip-line-markup [s]
+  (some-> s
+    str
+    (str/replace #"(?is)<[^>]+>" " ")
+    (str/replace #"^[\s#>*]+" "")
+    (str/replace #"[|¦│]" " ")
+    (str/replace #"(?i)&nbsp;" " ")
+    (str/replace #"\s+" " ")
+    str/trim
+    not-empty))
+
+(defn- html-markdown->plain-text [markdown]
+  (when (string? markdown)
+    (-> markdown
+      (str/replace #"(?is)<td\b[^>]*>" "")
+      (str/replace #"(?is)</td>" "\n")
+      (str/replace #"(?is)<tr\b[^>]*>" "")
+      (str/replace #"(?is)</tr>" "\n")
+      (str/replace #"(?is)<[^>]+>" " ")
+      (str/replace #"(?i)&nbsp;" " ")
+      (str/replace #"\r" "")
+      (str/replace #"\n{2,}" "\n"))))
+
 (defn label-present-in-markdown?
   [markdown raw-label]
   (let [m (normalize-text markdown)
@@ -187,6 +210,34 @@
               {:store_name first*
                :address address})))))))
 
+(def ^:private receipt-datetime-re
+  #"(?iu)^\d{1,2}\.\d{1,2}\.\d{2,4}\.?\s+\d{1,2}:\d{2}(?::\d{2})?$")
+
+(def ^:private receipt-date-only-re
+  #"(?iu)^\d{1,2}\.\d{1,2}\.\d{2,4}\.?$")
+
+(def ^:private receipt-time-only-re
+  #"(?iu)^\d{1,2}:\d{2}(?::\d{2})?$")
+
+(defn- date-time-line?
+  [s]
+  (let [s (some-> s strip-line-markup)]
+    (boolean
+      (and s
+        (or (re-matches receipt-datetime-re s)
+          (re-matches receipt-date-only-re s)
+          (re-matches receipt-time-only-re s))))))
+
+(defn- table-boundary-line?
+  [s]
+  (let [s (some-> s str str/lower-case str/trim)]
+    (boolean
+      (and s
+        (or (str/includes? s "<table")
+          (str/includes? s "<tbody")
+          (str/includes? s "<tr")
+          (str/starts-with? s "|"))))))
+
 (defn markdown->merchant-header
   "Parse receipt header into structured merchant info.
    Returns {:merchant_name .. :store_name .. :address ..} or nil."
@@ -202,21 +253,25 @@
                             (let [s (-> s str/trim (str/replace #"\s+" ""))]
                               (boolean (re-matches #"\d{6,}" s)))))
           skip-leading-line? (fn [line0]
-                               (let [line (some-> line0 str str/trim not-empty)
+                               (let [line (some-> line0 strip-line-markup)
                                      norm (some-> line normalize-text strip-leading-junk)]
                                  (or (nil? line)
                                    (numeric-line? line)
+                                   (date-time-line? line)
                                    (and norm (some #(str/starts-with? norm %) supplier-ignore-prefixes)))))
           lines (->> (str/split-lines markdown)
+                  (take-while (complement table-boundary-line?))
                   (drop-while skip-leading-line?)
                   vec)
           header-lines (take-while
                          (fn [line0]
-                           (let [line (some-> line0 str str/trim not-empty)
+                           (let [line (some-> line0 strip-line-markup)
                                  norm (normalize-text line)]
-                             (and norm (not (is-header-stop-line? norm)))))
+                             (and norm
+                               (not (table-boundary-line? line0))
+                               (not (is-header-stop-line? norm)))))
                          lines)
-          header-lines (map #(some-> % str str/trim not-empty) header-lines)
+          header-lines (map #(some-> % strip-line-markup) header-lines)
           header-lines (remove nil? header-lines)]
       (when (seq header-lines)
         (let [first-line (first header-lines)
@@ -267,11 +322,13 @@
                             (let [s (-> s str/trim (str/replace #"\s+" ""))]
                               (boolean (re-matches #"\d{6,}" s)))))]
       (->> (str/split-lines markdown)
+        (take-while (complement table-boundary-line?))
         (keep (fn [line0]
-                (let [line (some-> line0 str str/trim not-empty)
+                (let [line (some-> line0 strip-line-markup)
                       norm (some-> line normalize-text strip-leading-junk)]
                   (when (and norm
                           (not (numeric-line? line))
+                          (not (date-time-line? line))
                           (not (some #(str/starts-with? norm %) supplier-ignore-prefixes)))
                     line))))
         first))))
@@ -290,13 +347,7 @@
   `UKUPNO: 0,00` that can appear after `TOTAL: <amount>`."
   [markdown]
   (when (string? markdown)
-    (let [clean-line (fn [s]
-                       (some-> s
-                         str
-                         (str/replace #"[|¦│]" " ")
-                         (str/replace #"\s+" " ")
-                         str/trim
-                         not-empty))
+    (let [clean-line (fn [s] (strip-line-markup s))
           preferred-prefixes ["total" "ukupan iznos" "ukupna" "укупан износ"]
           fallback-prefixes ["ukupno" "укупно"]
           exclude-substrings ["bez porez" "без порез" "porez" "порез" "pdv" "пдв" "vat"]
@@ -766,7 +817,10 @@
   then label + price heuristics."
   [markdown]
   (when (string? markdown)
-    (let [pipe-items (markdown->pipe-line-items markdown)]
+    (let [markdown (if (re-find #"(?is)<td\b" markdown)
+                     (html-markdown->plain-text markdown)
+                     markdown)
+          pipe-items (markdown->pipe-line-items markdown)]
       (if (seq pipe-items)
         pipe-items
         (let [qty-items (markdown->qty-line-items markdown)]

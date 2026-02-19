@@ -14,7 +14,7 @@
   Notes:
   - Clears article_aliases.article_id before deleting articles
   - This preserves article_aliases rows without changing schema at runtime
-  - Deletes all rows from: articles, manufacturers, categories, subcategories
+  - Deletes all rows from: articles, manufacturers, categories
   - Deleting from `articles` will cascade to price_observations
   - expense_items.article_id will be set to NULL"
   (:require
@@ -94,7 +94,6 @@
        "  (SELECT count(*) FROM articles) AS articles,\n"
        "  (SELECT count(*) FROM manufacturers) AS manufacturers,\n"
        "  (SELECT count(*) FROM categories) AS categories,\n"
-       "  (SELECT count(*) FROM subcategories) AS subcategories,\n"
        "  (SELECT count(*) FROM article_aliases) AS article_aliases,\n"
        "  (SELECT count(*) FROM article_aliases WHERE article_id IS NOT NULL) AS article_aliases_mapped,\n"
        "  (SELECT count(*) FROM price_observations) AS price_observations,\n"
@@ -109,7 +108,7 @@
 
 (defn- confirm!
   [{:keys [profile dbname]}]
-  (println (str "⚠️  DANGER: This will DELETE ALL rows from articles, manufacturers, categories, and subcategories in the " (name profile) " database!"))
+  (println (str "⚠️  DANGER: This will DELETE ALL rows from articles, manufacturers and categories in the " (name profile) " database!"))
   (println (str "🎯 Target DB: " dbname))
   (println "")
   (print "Type 'DELETE ARTICLES TAXONOMY' to confirm: ")
@@ -134,7 +133,6 @@
     (println "  articles:" (:articles before))
     (println "  manufacturers:" (:manufacturers before))
     (println "  categories:" (:categories before))
-    (println "  subcategories:" (:subcategories before))
     (println "  article_aliases:" (:article_aliases before))
     (println "  article_aliases (mapped):" (:article_aliases_mapped before))
     (println "  price_observations:" (:price_observations before))
@@ -159,19 +157,16 @@
 
     (println "Deleting articles and taxonomy tables...")
     (let [deleted-articles (update-count (jdbc/execute-one! ds ["DELETE FROM articles"]))
-          deleted-subcategories (update-count (jdbc/execute-one! ds ["DELETE FROM subcategories"]))
           deleted-manufacturers (update-count (jdbc/execute-one! ds ["DELETE FROM manufacturers"]))
           after (stats ds)]
       (println "✅ Done")
       (println "  deleted articles:" deleted-articles)
-      (println "  deleted subcategories:" deleted-subcategories)
       (println "  deleted manufacturers:" deleted-manufacturers)
       (println "")
       (println "After:")
       (println "  articles:" (:articles after))
       (println "  manufacturers:" (:manufacturers after))
       (println "  categories:" (:categories after))
-      (println "  subcategories:" (:subcategories after))
       (println "  article_aliases:" (:article_aliases after))
       (println "  article_aliases (mapped):" (:article_aliases_mapped after))
       (println "  price_observations:" (:price_observations after))

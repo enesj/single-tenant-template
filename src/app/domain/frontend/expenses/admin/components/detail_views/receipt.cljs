@@ -221,5 +221,5 @@
                   (when (seq (:raw-parse-json receipt))
                     ($ json-display-card
                       {:id (str "receipt-parse-json-" rid-str)
-                       :title "LlamaParse Results"
+                       :title "Raw Parse JSON"
                        :json (:raw-parse-json receipt)})))))))))))

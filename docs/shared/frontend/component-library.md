@@ -118,7 +118,9 @@ Features: dynamic columns, filtering, pagination, sorting, selection, batch acti
 Server-backed pagination mode:
 
 - Configure list UI state with `:pagination-mode :server` and `:refresh-event`.
-- In server mode, list UI events (`set-current-page`, `set-per-page`, `set-sort-field`, filter apply/clear) dispatch the configured refresh event.
+- In server mode, list UI events (`set-current-page`, `set-per-page`, `set-sort-field`) dispatch the configured refresh event.
+- Filter apply/clear dispatches the configured refresh event only when filter state changes and/or page reset is required (avoids duplicate refresh loops).
+- Active filters are still applied locally to currently loaded rows in server mode, so visible rows stay aligned with active filter chips/match counts while remote refresh completes.
 - In that refresh handler, send `order-by` and `order-dir` query params derived from list sort state.
   - `order-by` should be the string name of the selected field keyword (e.g. `"display-name"` or `"display_name"`).
   - `order-dir` should be `"asc"` or `"desc"`.
@@ -179,6 +181,11 @@ This keeps row layouts consistent and preserves `actions-btn-<id>` hooks for bro
                 :on-filter-change #(rf/dispatch [:login-events/filters %])
                 :on-filter-clear #(rf/dispatch [:login-events/clear-filters])})
 ```
+
+Behavior notes:
+
+- Text filters auto-apply after the first non-blank character (debounced ~250ms) and auto-clear when input becomes blank.
+- Select filter dropdowns close when clicking outside, and on `Enter`/`Escape`.
 
 ### Pagination (`app.template.frontend.components.pagination`)
 

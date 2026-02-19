@@ -66,7 +66,7 @@ The `reframe-events-analysis` skill uses `app.template.frontend.dev.repl-tracing
 - DB/migrations: `resources/db/models.edn`, `docs/general/migrations/*`
 - Frontend config alignment: `bb validate-frontend-config`, `bb sync-frontend-config [--apply]`
 - Monitoring: audit/login events in `docs/admin/backend/http-api.md` and `docs/general/reference/api-reference.md`
-- Home Expenses domain: guide `docs/domain/expenses/index.md`; endpoints in `docs/domain/expenses/http-api.md` (`/admin/api/expenses/**`, `/api/v1/expenses/**`); plans `app-specs/home-expenses-tracker-plan.md`, `PLAN-mistral-ocr-pos-receipts.md`; worker `bb receipt-ocr-worker` (set `MISTRAL_API_KEY`)
+- Home Expenses domain: guide `docs/domain/expenses/index.md`; endpoints in `docs/domain/expenses/http-api.md` (`/admin/api/expenses/**`, `/api/v1/expenses/**`); plans `app-specs/home-expenses-tracker-plan.md`, `PLAN-mistral-ocr-pos-receipts.md`; worker `bb receipt-ocr-worker` (set `RECEIPT_OCR_WORKFLOW` + provider API key)
 - **Component IDs (browser testing)**: `INTERACTIVE-COMPONENTS-ID-AUDIT.md`, `docs/shared/frontend/component-library.md#component-id-requirements`
 
 ## AI Skills & Debugging Tools

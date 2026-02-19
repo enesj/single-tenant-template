@@ -7,6 +7,7 @@
   namespace directly)."
   (:require
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
+    [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
@@ -327,12 +328,38 @@
                 result)))
       results)))
 
+(defn- provider-key
+  [ocr-cfg]
+  (or (some-> (:provider ocr-cfg) name)
+    "mistral"))
+
+(defn- parse-with-provider!
+  [ocr-cfg req]
+  (let [parse-fn (or (:parse! ocr-cfg)
+                   (fn [req] (mistral-ocr/ocr-parse! ocr-cfg req)))
+        result (parse-fn req)]
+    (if (contains? result :provider)
+      result
+      (assoc result :provider (provider-key ocr-cfg)))))
+
+(defn- extract-with-provider!
+  [ocr-cfg req]
+  (let [extract-fn (or (:extract! ocr-cfg)
+                     (fn [req] (mistral-ocr/ocr-extract! ocr-cfg req)))
+        result (extract-fn req)]
+    (if (contains? result :provider)
+      result
+      (assoc result :provider (provider-key ocr-cfg)))))
+
 (defn- process-parse!
   [db ocr-cfg receipt opts]
   (let [receipt-id (:id receipt)]
     (if-not (seq (:api-key ocr-cfg))
       (do
-        (log/warn "Receipt OCR parse skipped: missing Mistral API key" {:receipt-id receipt-id})
+        (log/warn "Receipt OCR parse skipped: missing API key"
+          {:receipt-id receipt-id
+           :provider (provider-key ocr-cfg)
+           :provider-name (:provider-name ocr-cfg)})
         {:receipt-id receipt-id :stage :parse :result :skipped :reason :missing-api-key})
       (if-let [_claimed (receipt-status/claim-for-parsing! db receipt-id {:lease-seconds (:lease-seconds opts)})]
         (try
@@ -343,9 +370,11 @@
                                                             :filename (:original_filename receipt)})
                 bytes* (:bytes prepared)
                 content-type* (or (:content-type prepared) (:content_type receipt))
-                parse-result (mistral-ocr/ocr-parse! ocr-cfg {:bytes bytes*
-                                                              :filename (:original_filename receipt)
-                                                              :content-type content-type*})]
+                parse-result (parse-with-provider!
+                               ocr-cfg
+                               {:bytes bytes*
+                                :filename (:original_filename receipt)
+                                :content-type content-type*})]
             (receipt-status/store-extraction-results! db receipt-id {:parsed_markdown (:parsed-markdown parse-result)})
             (receipt-status/update-status! db receipt-id "parsed" {:error_message nil :error_details nil})
             {:receipt-id receipt-id :stage :parse :result :ok})
@@ -373,7 +402,10 @@
   (let [receipt-id (:id receipt)]
     (if-not (seq (:api-key ocr-cfg))
       (do
-        (log/warn "Receipt OCR extract skipped: missing Mistral API key" {:receipt-id receipt-id})
+        (log/warn "Receipt OCR extract skipped: missing API key"
+          {:receipt-id receipt-id
+           :provider (provider-key ocr-cfg)
+           :provider-name (:provider-name ocr-cfg)})
         {:receipt-id receipt-id :stage :extract :result :skipped :reason :missing-api-key})
       (if-let [_claimed (receipt-status/claim-for-extracting! db receipt-id {:lease-seconds (:lease-seconds opts)})]
         (try
@@ -384,8 +416,11 @@
                                                             :filename (:original_filename receipt)})
                 bytes* (:bytes prepared)
                 content-type* (or (:content-type prepared) (:content_type receipt))
-                extract-result (mistral-ocr/ocr-extract! ocr-cfg {:bytes bytes*
-                                                                  :content-type content-type*})
+                extract-result (extract-with-provider!
+                                 ocr-cfg
+                                 {:bytes bytes*
+                                  :filename (:original_filename receipt)
+                                  :content-type content-type*})
                 user-auto-post? (user-allows-auto-post? db receipt)
                 auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?)
                 opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
@@ -402,8 +437,8 @@
 (defn process-receipt!
   "Process a single receipt based on its current status.
 
-  If status is 'uploaded', the worker uses extraction (for Mistral, that call
-  also returns markdown) to do the full pipeline.
+  If status is 'uploaded', the worker uses provider extraction (which may also
+  include markdown) to do the full pipeline.
 
   Returns a small result map describing what happened."
   [db ocr-cfg receipt opts]
@@ -438,7 +473,7 @@
   ([db app-config]
    (process-pending! db app-config nil))
   ([db app-config {:keys [max-receipts] :as opts}]
-   (let [ocr-cfg (mistral-ocr/build-config app-config)
+   (let [ocr-cfg (ocr-provider/build-provider app-config)
          cerebras-cfg (cerebras/build-config app-config)
          places-cfg (places-api/build-config app-config)
          opts (merge {:max-receipts 25
@@ -447,14 +482,17 @@
                       :cerebras-cfg cerebras-cfg
                       :places-cfg places-cfg
                       :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)}
-                (or opts {}))]
+               (or opts {}))]
      (if-not (:enabled? ocr-cfg)
        (do
-         (log/info "Receipt OCR worker disabled" {:enabled? false})
+         (log/info "Receipt OCR worker disabled"
+           {:enabled? false
+            :provider (provider-key ocr-cfg)})
          {:enabled? false :processed 0})
        (if-not (:api-key ocr-cfg)
          (do
-           (log/warn "Receipt OCR worker skipped: missing API key")
+           (log/warn "Receipt OCR worker skipped: missing API key"
+             {:provider (provider-key ocr-cfg)})
            {:enabled? true :error :missing-api-key :processed 0})
          (let [receipts (receipt-queries/list-pending-for-processing db {:limit (or max-receipts 25)})
                defer-refine? (if (contains? opts :defer-refine?)
@@ -499,7 +537,7 @@
   ([db app-config receipt-ids]
    (process-receipts-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
-   (let [ocr-cfg (mistral-ocr/build-config app-config)
+   (let [ocr-cfg (ocr-provider/build-provider app-config)
          cerebras-cfg (cerebras/build-config app-config)
          places-cfg (places-api/build-config app-config)
          defer-refine? (if (contains? opts :defer-refine?)
@@ -515,13 +553,17 @@
                 (dissoc opts :reset?))]
      (if-not (:enabled? ocr-cfg)
        (do
-         (log/info "Receipt OCR disabled (by-ids)" {:receipt-ids receipt-ids})
+         (log/info "Receipt OCR disabled (by-ids)"
+           {:receipt-ids receipt-ids
+            :provider (provider-key ocr-cfg)})
          {:enabled? false
           :processed 0
           :receipt-ids receipt-ids})
        (if-not (:api-key ocr-cfg)
          (do
-           (log/warn "Receipt OCR skipped: missing API key" {:receipt-ids receipt-ids})
+           (log/warn "Receipt OCR skipped: missing API key"
+             {:receipt-ids receipt-ids
+              :provider (provider-key ocr-cfg)})
            {:enabled? true
             :error :missing-api-key
             :processed 0
@@ -590,4 +632,3 @@
       :queued-count (count receipt-ids)
       :receipt-ids receipt-ids
       :max-concurrent ui-ocr-max-concurrent})))
-

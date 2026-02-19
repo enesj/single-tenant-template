@@ -24,7 +24,10 @@ Quick guide for configuring and running the template locally. Defaults match `co
 - Backend tests: `bb be-test`
 - Frontend tests (node): `npm run test:cljs`
 - Database helpers: `bb backup-db`, `bb restore-db` (see `scripts/bb/database/README.md`)
-- Receipt OCR worker (optional): `bb receipt-ocr-worker dev` (one-shot) or `bb receipt-ocr-worker dev --loop` (requires `MISTRAL_API_KEY`)
+- Receipt OCR worker (optional): `bb receipt-ocr-worker dev` (one-shot) or `bb receipt-ocr-worker dev --loop`
+  - Select workflow with `RECEIPT_OCR_WORKFLOW=mistral|llamaparse`
+  - `mistral` requires `MISTRAL_API_KEY`
+  - `llamaparse` requires `LLAMA_CLOUD_API_KEY`
 - Frontend config checks (fast):
    - `bb validate-frontend-config`
    - `bb config-audit --strict`

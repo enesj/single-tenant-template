@@ -1090,7 +1090,9 @@
                                      :store_guess store-guess
                                      :source store-source}
                              :items item-aliases-snapshot}
-        raw-extract-json (cond-> {:provider "mistral"
+        provider-name (or (some-> (:provider extract-result) str str/trim not-empty)
+                        "mistral")
+        raw-extract-json (cond-> {:provider provider-name
                                   :received_at (:received-at extract-result)
                                   :model (:model extract-result)
                                   :response (:raw extract-result)

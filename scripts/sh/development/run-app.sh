@@ -31,6 +31,7 @@ check_app_running() {
             echo ""
             echo "ℹ️  The development server automatically restarts after any file changes."
             echo "   You don't need to manually restart it - just edit your code and it will reload."
+            echo "⚠️  Environment changes in .env are NOT applied until you fully restart the running process."
             echo ""
             exit 0
         else
