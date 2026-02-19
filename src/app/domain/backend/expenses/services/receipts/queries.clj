@@ -165,6 +165,9 @@
    "original-filename" :original_filename
    "supplier_guess" :supplier_guess
    "supplier-guess" :supplier_guess
+   "total_amount_guess" :total_amount_guess
+   "total-amount-guess" :total_amount_guess
+   "total-display" :total_amount_guess
    "created_at" :created_at
    "created-at" :created_at
    "updated_at" :updated_at
