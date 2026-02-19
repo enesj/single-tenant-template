@@ -7,7 +7,17 @@ tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/m
 
 # CreateArticles Phase 2A — Research only (parallel-safe)
 
-You own **research only** for a given backlog slice (typically partitioned by supplier or brand cluster). You do not write to the database and you do not run any “create/mapping” scripts.
+You own **research only** for a given backlog slice (typically partitioned by supplier or brand cluster). You do not write to the database and you do not run any "create/mapping" scripts.
+
+## Run metadata (mandatory)
+
+You will be invoked with:
+
+- `run_id` (example: `create-articles-20260219-154512`)
+- `partition_id` (example: `p01-dm`)
+- an explicit list of `alias_id` to cover
+
+You must include `run_id`, `partition_id`, and the `alias_id` list you actually covered in your handoff.
 
 ## Scope (must / must not)
 
@@ -18,7 +28,7 @@ You own **research only** for a given backlog slice (typically partitioned by su
 ## Language policy (mandatory)
 
 - Proposed `articles.name` and `subcategories.name` must be written in **Bosnian** (Latin + diacritics).
-- Proposed `manufacturers.name` must use the manufacturer’s official brand spelling (do not translate trademarks).
+- Proposed `manufacturers.name` must use the manufacturer's official brand spelling (do not translate trademarks).
 
 ## Web research policy (mandatory)
 
@@ -31,7 +41,7 @@ You own **research only** for a given backlog slice (typically partitioned by su
 
 Return a report containing:
 
-1. **Partition definition**: which supplier(s)/alias_id(s) you covered (so other research agents don’t overlap).
+1. **Partition definition**: `run_id`, `partition_id`, which supplier(s)/alias_id(s) you covered (so other research agents don't overlap).
 2. **Per-alias proposed canonicalization** (group by intended canonical article):
    - alias_id(s) + raw alias text
    - proposed Bosnian `articles.name`
@@ -39,8 +49,28 @@ Return a report containing:
    - proposed category + proposed Bosnian subcategory name
    - size/weight/volume/pack details (must keep variants separate)
    - barcode/EAN/GTIN if found
+   - confidence: `high` | `medium` | `low`
 3. **Web research report**:
    - the `web search` queries you ran
    - the key `web fetch` sources you opened (URLs + why trusted)
    - contradictions across sources and your resolution
+4. **Machine-readable EDN block** embedded in the message, matching (at minimum):
+
+```edn
+{:run_id "..."
+ :phase :phase2a
+ :partition_id "..."
+ :covered_alias_ids [...]
+ :proposals
+ [{:alias_ids [...]
+   :article {:name "..."
+            :manufacturer "..."
+            :category "..."
+            :subcategory "..."
+            :size "..."
+            :barcode "..."}
+   :confidence :high
+   :queries [...]
+   :sources [{:url "..." :trusted_because "..."}]}]}
+```
 
