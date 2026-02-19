@@ -31,7 +31,7 @@
 
 (defn- parse-long-param
   [params k default-val]
-  (if-let [v (get params k)]
+  (if-let [v (h/get-param params k)]
     (try
       (Long/parseLong (str v))
       (catch Exception _ default-val))

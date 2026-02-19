@@ -76,6 +76,35 @@
           (is (= 2 (:limit body)))
           (is (= 1 (:offset body))))))))
 
+(deftest user-receipts-list-parses-string-query-param-keys
+  (testing "list receipts parses string-keyed limit/offset params"
+    (let [handler (user-receipts/list-receipts-handler :mock-db)
+          user-id (UUID/randomUUID)
+          request {:identity {:id user-id
+                              :role "member"}
+                   :query-params {"status" "uploaded"
+                                  "limit" "20"
+                                  "offset" "40"}}
+          sample-row {:id (UUID/randomUUID)
+                      :status "uploaded"
+                      :original_filename "receipt-2.jpg"}]
+      (with-redefs [receipt-queries/list-user-receipts-page
+                    (fn [_db actual-user-id opts]
+                      (is (= user-id actual-user-id))
+                      (is (= "uploaded" (:status opts)))
+                      (is (= 20 (:limit opts)))
+                      (is (= 40 (:offset opts)))
+                      {:rows [sample-row]
+                       :total 42
+                       :limit (:limit opts)
+                       :offset (:offset opts)})]
+        (let [resp (handler request)
+              body (parse-json-body resp)]
+          (is (= 200 (:status resp)))
+          (is (= 42 (:total body)))
+          (is (= 20 (:limit body)))
+          (is (= 40 (:offset body))))))))
+
 (deftest user-receipts-batch-ocr-empty-selection-is-safe
   (testing "batch OCR returns 400 when no receipt ids are provided"
     (let [handler (user-receipts/ocr-batch-receipts-handler nil nil)]
