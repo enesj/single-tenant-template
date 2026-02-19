@@ -784,12 +784,82 @@
              :unit_price unit-price
              :line_total price}))))))
 
+(def ^:private money-only-line-re
+  #"(?iu)^[^\p{L}\p{N}]*(-?\d{1,9}[\.,]\d{2})\s*(?:[A-Z])?\s*(?:e|km|bam|€)?[^\p{L}\p{N}]*$")
+
+(defn- line->money-only
+  [line]
+  (when-let [line (safe-trim line)]
+    (when-let [[_ amount] (re-matches money-only-line-re line)]
+      (common/parse-money amount))))
+
+(defn- text-item-label-line?
+  [line]
+  (let [line (some-> line safe-trim)
+        norm (normalize-text line)]
+    (boolean
+      (and line norm
+        (re-find #"\p{L}" line)
+        (not (summary-label? norm))
+        (not (re-matches ba-datetime-line-re line))
+        (not (re-matches ba-date-line-re line))
+        (not (address-like-line? line))
+        (not (store-line? line))
+        (not (separator-noise? line))
+        (nil? (line->total-candidate line))))))
+
 (defn- parse-text-items
   [text]
   (when (string? text)
-    (->> (str/split-lines text)
-      (keep line->text-item)
-      vec)))
+    (let [lines (->> (str/split-lines text)
+                  (map safe-trim)
+                  (remove nil?)
+                  vec)
+          date-idx (some (fn [[idx line]]
+                           (when (or (re-matches ba-datetime-line-re line)
+                                   (re-matches ba-date-line-re line))
+                             idx))
+                     (map-indexed vector lines))
+          lines (if (some? date-idx)
+                  (subvec lines (inc date-idx))
+                  lines)]
+      (loop [remaining lines
+             pending-label nil
+             items []]
+        (if-not (seq remaining)
+          items
+          (let [line (first remaining)
+                inline-item (line->text-item line)
+                amount-only (line->money-only line)
+                pending-label (some-> pending-label normalize-item-label safe-trim)]
+            (cond
+              inline-item
+              (recur (rest remaining) nil (conj items inline-item))
+
+              (and amount-only pending-label
+                (re-find #"\p{L}" pending-label)
+                (not (summary-label? (normalize-text pending-label))))
+              (let [line-total (bigdec amount-only)
+                    qty 1M
+                    unit-price line-total]
+                (recur (rest remaining)
+                  nil
+                  (conj items {:raw_label pending-label
+                               :qty qty
+                               :unit_price unit-price
+                               :line_total line-total})))
+
+              (text-item-label-line? line)
+              (let [label (some-> line normalize-item-label safe-trim)
+                    label-norm (normalize-text label)]
+                (recur (rest remaining)
+                  (if (and label (re-find #"\p{L}" label) (not (summary-label? label-norm)))
+                    label
+                    pending-label)
+                  items))
+
+              :else
+              (recur (rest remaining) pending-label items))))))))
 
 (defn response->extraction
   "Build a ReceiptExtraction map from a LlamaParse result response JSON."

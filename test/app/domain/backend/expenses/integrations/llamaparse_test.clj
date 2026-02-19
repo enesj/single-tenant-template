@@ -330,3 +330,35 @@
       (is (= 1 (get-in res [:extraction :totals :total])))
       (is (= "hello" (:parsed-markdown res)))
       (is (= "job-9" (:job-id res))))))
+
+(deftest receipt-extraction-falls-back-to-text-items
+  (let [resp {:text {:content "Some header\n\nŽENSKA PIDŽAMA 24,00E\nGALAS_... 39,95E\nGALAS_... 7,65E\n\nUKUPNO 71,60E"}}
+        ext (receipt-extract/response->extraction resp)]
+    (is (= 3 (count (:items ext))))
+    (is (= {:raw_label "ŽENSKA PIDŽAMA"
+            :qty 1M
+            :unit_price 24.00M
+            :line_total 24.00M}
+          (first (:items ext))))
+    (is (= {:raw_label "GALAS ..."
+            :qty 1M
+            :unit_price 39.95M
+            :line_total 39.95M}
+          (second (:items ext))))
+    (is (= {:raw_label "GALAS ..."
+            :qty 1M
+            :unit_price 7.65M
+            :line_total 7.65M}
+          (nth (:items ext) 2)))
+    (is (= 71.60M (-> ext :totals :total)))))
+
+(deftest receipt-extraction-falls-back-to-split-text-item-lines
+  (let [resp {:text {:content "04.02.2026. 19:41\n357 35924792904 ZENSKA PIDZAMA\n24,00E\nGALAS_HERPEGAL_MAST_10_G_5122\n7,65E\nTOTAL: 31,65"}}
+        ext (receipt-extract/response->extraction resp)
+        items (:items ext)]
+    (is (= 2 (count items)))
+    (is (= 24.00M (-> items first :line_total)))
+    (is (= 7.65M (-> items second :line_total)))
+    (is (= "357 35924792904 ZENSKA PIDZAMA" (-> items first :raw_label)))
+    (is (= "GALAS HERPEGAL MAST 10 G 5122" (-> items second :raw_label)))
+    (is (= 31.65M (-> ext :totals :total)))))
