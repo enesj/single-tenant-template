@@ -2,7 +2,7 @@
 name: CreateArticles
 description: Maps OCR article aliases to canonical products using web research (Serper), deterministic taxonomy upserts, and batch alias mapping.
 model: Claude Opus 4.6 (copilot)
-tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*']
+tools: [vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/openIntegratedBrowser, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, execute/runNotebookCell, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/getNotebookSummary, read/problems, read/readFile, read/readNotebookCellOutput, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web/fetch, web/githubRepo, clojure-mcp/clojure_edit, clojure-mcp/clojure_edit_replace_sexp, clojure-mcp/clojure_eval, clojure-mcp/clojure_inspect_project, clojure-mcp/clojurescript_eval, clojure-mcp/dispatch_agent, clojure-mcp/file_edit, clojure-mcp/file_write, clojure-mcp/glob_files, clojure-mcp/grep, clojure-mcp/list_nrepl_ports, clojure-mcp/paren_repair, clojure-mcp/read_file, clojure-mcp/scratch_pad, postgres/database_overview, postgres/execute_sql, postgres/get_column_cardinality, postgres/get_query_plan, postgres/list_active_queries, postgres/list_autovacuum_configurations, postgres/list_available_extensions, postgres/list_database_stats, postgres/list_indexes, postgres/list_installed_extensions, postgres/list_invalid_indexes, postgres/list_locks, postgres/list_memory_configurations, postgres/list_pg_settings, postgres/list_publication_tables, postgres/list_query_stats, postgres/list_replication_slots, postgres/list_roles, postgres/list_schemas, postgres/list_sequences, postgres/list_stored_procedure, postgres/list_table_stats, postgres/list_tables, postgres/list_tablespaces, postgres/list_top_bloated_tables, postgres/list_triggers, postgres/list_views, postgres/long_running_transactions, postgres/replication_stats, todo]
 ---
 
 # CreateArticles Agent
@@ -72,8 +72,8 @@ Follow the skill’s steps and scripts; prefer deterministic batch operations.
 - **Do not create new categories** in this workflow.
 - **Do not assume a category like `Food` exists.** Category sets are tenant-specific.
 - Always pick a category **from the existing `categories` table**.
-- If research suggests a category that does not exist, map to **`Other`** and create an English subcategory (commonly `General`) under `Other`.
-- **Subcategory names must be in English.**
+- If research suggests a category that does not exist, map to **`Other`** and create a Bosnian subcategory (commonly `Opšte`) under `Other`.
+- **Subcategory names must be in Bosnian.**
 - Taxonomy upserts preserve existing canonical values by default; use explicit `--update-*` flags only for intentional overwrites.
 
 ### Fallback categorization when web search fails
@@ -83,9 +83,9 @@ If Serper doesn’t yield a reliable product identity, create a best-effort cano
 Examples (non-exhaustive; see the skill for the full list):
 
 - Supplier-based defaults:
-   - pharmacies → `Health & Pharmacy` / `General`
-   - clothing retailers → `Clothing & Accessories` / `General`
-   - drugstores → `Personal Care` / `General`
+   - pharmacies → `Health & Pharmacy` / `Opšte`
+   - clothing retailers → `Clothing & Accessories` / `Opšte`
+   - drugstores → `Personal Care` / `Opšte`
 - Keyword overrides (when supplier is a generic supermarket): dairy terms → `Dairy & Eggs`, bread/pastry terms → `Bakery & Desserts`, drinks → a packaged drinks category, etc.
 
 ## Manufacturer resolution policy (maximize attribution)
@@ -140,8 +140,9 @@ Default completion is:
 3. Taxonomy is linked for created articles where reasonably known,
 4. **No subcategory named "General" exists** — all subcategories are descriptive,
 5. **"Generic" manufacturer is under ~30%** of total articles (or remaining ones are genuinely unbranded),
-6. **"Other" category is used sparingly** — if many items landed there, new categories were proposed to the user,
-7. Progress is verified (`report_progress.clj`) and remaining unmapped items are either:
+6. **"Other" category is used sparingly** — if many items landed there, new categories were proposed to the user (in Bosnian),
+7. **Missing/new categories are suggested** — after processing, list all categories that would better fit mapped items but don't exist yet (provide Bosnian names and brief justification),
+8. Progress is verified (`report_progress.clj`) and remaining unmapped items are either:
    - documented as ambiguous, or
    - classified as OCR noise (optionally deleted per the skill).
 
@@ -149,7 +150,20 @@ Default completion is:
 
 When you finish a run, report:
 
-1. What you created (articles + taxonomy) and what you mapped (aliases → articles).
-2. How you prevented size/variant conflation (mention any `VARIANT RISK` handling).
-3. What you verified and where evidence lives in `tmp/` (if generated).
-4. What remains unmapped and why (noise vs ambiguity).
+1. **Summary counts** (required):
+   - New articles created vs existing articles reused
+   - New stores (suppliers) encountered vs existing stores reused
+   - New providers (manufacturers) created vs existing providers reused
+2. What you created (articles + taxonomy) and what you mapped (aliases → articles).
+3. How you prevented size/variant conflation (mention any `VARIANT RISK` handling).
+4. What you verified and where evidence lives in `tmp/` (if generated).
+5. What remains unmapped and why (noise vs ambiguity).
+6. **Suggested new categories**: List any categories missing from the taxonomy that would better classify items that fell into `Other`. Provide names in Bosnian with a brief justification for each.
+
+## Cleanup (always run last)
+
+After reporting, delete all temporary files created during the run:
+
+```bash
+bb clear-folder
+```
