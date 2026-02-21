@@ -32,6 +32,44 @@
       default-cerebras-model
       model)))
 
+(defn run-command!
+  "Run a command and stream output. Returns true when exit code is 0."
+  [label & cmd]
+  (println (str "🧪 " label "..."))
+  (let [result (apply p/shell (concat [{:out :inherit :err :inherit :continue true}] cmd))]
+    (if (= 0 (:exit result))
+      (do
+        (println (str "✅ " label " passed"))
+        true)
+      (do
+        (println (str "❌ " label " failed"))
+        false))))
+
+(defn run-required-tests!
+  "Run required backend/frontend tests before AI analysis."
+  []
+  (println "\n=== Required Test Gate ===")
+  (println "AI commit message generation is blocked until tests are clean.")
+  (let [backend-ok?  (run-command! "Backend tests (bb be-test)" "bb" "be-test")
+        frontend-ok? (when backend-ok?
+                       (run-command! "Frontend tests (bb fe-test-parallel)" "bb" "fe-test-parallel"))]
+    (if (and backend-ok? frontend-ok?)
+      (do
+        (println "✅ All required tests passed. Proceeding with AI analysis.\n")
+        true)
+      (do
+        (println "❌ Tests are not clean. Commit aborted before AI analysis.")
+        (System/exit 1)))))
+
+(defn parse-status-line
+  "Parse a `git status --porcelain` line safely."
+  [line]
+  (when (and (not (str/blank? line))
+          (>= (count line) 3))
+    {:index-status    (subs line 0 1)
+     :worktree-status (subs line 1 2)
+     :path            (str/trim (subs line 3))}))
+
 (defn call-cerebras-api
   "Use Cerebras API to generate AI-powered commit message"
   [diff-content files-list]
@@ -123,19 +161,23 @@
 
 ;; Main execution
 (let [status-result (p/shell {:out :string} "git status --porcelain")
+  status-lines (->> (str/split-lines (:out status-result))
+         (map parse-status-line)
+         (remove nil?))
+
       ;; Files that are staged for commit (first status char not space)
-      staged-files (->> (str/split-lines (:out status-result))
-                     (filter #(re-matches #"^[MARCD].*" %))
-                     (map #(subs % 3)))
+  staged-files (->> status-lines
+         (filter #(re-matches #"[MARCD]" (:index-status %)))
+         (map :path)
+         (remove str/blank?))
 
       ;; Files with unstaged modifications or untracked files
-      unstaged-files (->> (str/split-lines (:out status-result))
-                       (filter (fn [l]
-                                 (let [idx (subs l 0 1)
-                                       wt  (subs l 1 2)]
-                                   (or (= idx "?") ; untracked
-                                     (not= wt " ")))))
-                       (map #(subs % 3)))
+  unstaged-files (->> status-lines
+           (filter (fn [{:keys [index-status worktree-status]}]
+             (or (= index-status "?") ; untracked
+               (not= worktree-status " "))))
+           (map :path)
+           (remove str/blank?))
 
       ;; Get the actual diff content for AI analysis
       diff-result (p/shell {:out :string} "git diff --cached")
@@ -182,6 +224,9 @@
       (doseq [file staged-files]
         (println "  " file))
       (println)
+
+      ;; Block AI analysis until tests are clean
+      (run-required-tests!)
 
       ;; Use Cerebras API
       (let [commit-msg (call-cerebras-api final-diff-content staged-files)]
