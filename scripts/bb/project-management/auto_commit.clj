@@ -61,6 +61,19 @@
         (println "❌ Tests are not clean. Commit aborted before AI analysis.")
         (System/exit 1)))))
 
+(defn commit-with-message!
+  "Commit staged changes with generated commit message. Returns true when commit succeeds."
+  [commit-msg]
+  (let [full-msg (str commit-msg
+                   "\n\n🤖 Generated with [Claude Code](https://claude.ai/code)"
+                   "\n\nCo-Authored-By: Claude <noreply@anthropic.com>")]
+    (run-command! "Commit changes" "git" "commit" "-m" full-msg)))
+
+(defn push-origin!
+  "Push current HEAD to origin. Returns true when push succeeds."
+  []
+  (run-command! "Push to origin" "git" "push" "origin" "HEAD"))
+
 (defn parse-status-line
   "Parse a `git status --porcelain` line safely."
   [line]
@@ -160,24 +173,32 @@
         error-msg))))
 
 ;; Main execution
-(let [status-result (p/shell {:out :string} "git status --porcelain")
-  status-lines (->> (str/split-lines (:out status-result))
-         (map parse-status-line)
-         (remove nil?))
+(let [arg-set    (set *command-line-args*)
+      push-mode? (or (contains? arg-set "push")
+                  (contains? arg-set "--push"))
+      _          (when push-mode?
+                   (println "🚀 Push mode enabled: staging all changes first.")
+                   (when-not (run-command! "Stage all changes (git add .)" "git" "add" ".")
+                     (println "❌ Could not stage changes for push mode.")
+                     (System/exit 1)))
+      status-result (p/shell {:out :string} "git status --porcelain")
+      status-lines (->> (str/split-lines (:out status-result))
+                     (map parse-status-line)
+                     (remove nil?))
 
       ;; Files that are staged for commit (first status char not space)
-  staged-files (->> status-lines
-         (filter #(re-matches #"[MARCD]" (:index-status %)))
-         (map :path)
-         (remove str/blank?))
+      staged-files (->> status-lines
+                     (filter #(re-matches #"[MARCD]" (:index-status %)))
+                     (map :path)
+                     (remove str/blank?))
 
       ;; Files with unstaged modifications or untracked files
-  unstaged-files (->> status-lines
-           (filter (fn [{:keys [index-status worktree-status]}]
-             (or (= index-status "?") ; untracked
-               (not= worktree-status " "))))
-           (map :path)
-           (remove str/blank?))
+      unstaged-files (->> status-lines
+                       (filter (fn [{:keys [index-status worktree-status]}]
+                                 (or (= index-status "?") ; untracked
+                                   (not= worktree-status " "))))
+                       (map :path)
+                       (remove str/blank?))
 
       ;; Get the actual diff content for AI analysis
       diff-result (p/shell {:out :string} "git diff --cached")
@@ -204,7 +225,7 @@
 
   (cond
     ;; Warn if there are unstaged changes
-    (seq unstaged-files)
+    (and (not push-mode?) (seq unstaged-files))
     (do (println "⚠️  Unstaged changes detected. Stage or discard them before committing.")
       (doseq [file unstaged-files]
         (println "  " file))
@@ -234,12 +255,27 @@
         (println commit-msg)
         (println)
 
-        (print "Proceed with this commit? (y/N): ")
-        (flush)
-        (let [input (read-line)
-              user-input (if input (str/lower-case (str/trim input)) "n")]
-          (if (= user-input "y")
-            (let [full-msg (str commit-msg "\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>")]
-              (p/shell ["git" "commit" "-m" full-msg])
-              (println "✅ Changes committed successfully!"))
-            (println "❌ Commit cancelled.")))))))
+        (if push-mode?
+          (do
+            (println "🚀 Push mode: committing and pushing to origin.")
+            (if (commit-with-message! commit-msg)
+              (if (push-origin!)
+                (println "✅ Changes committed and pushed to origin successfully!")
+                (do
+                  (println "❌ Push failed.")
+                  (System/exit 1)))
+              (do
+                (println "❌ Commit failed.")
+                (System/exit 1))))
+          (do
+            (print "Proceed with this commit? (y/N): ")
+            (flush)
+            (let [input (read-line)
+                  user-input (if input (str/lower-case (str/trim input)) "n")]
+              (if (= user-input "y")
+                (if (commit-with-message! commit-msg)
+                  (println "✅ Changes committed successfully!")
+                  (do
+                    (println "❌ Commit failed.")
+                    (System/exit 1)))
+                (println "❌ Commit cancelled.")))))))))
