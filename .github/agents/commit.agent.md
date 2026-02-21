@@ -7,6 +7,7 @@ tools:
   - runInTerminal
 ---
 
+
 You accept an optional argument: `push`.
 
 ## Default behavior (no argument or `commit`)
