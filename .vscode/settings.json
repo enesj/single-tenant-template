@@ -2,6 +2,9 @@
   "chat.instructionsFilesLocations": {
     ".github/copilot-instructions.md": true
   },
+  "chat.promptFilesLocations": {
+    ".vscode/prompts": true
+  },
   "chat.mcp.serverSampling": {
     "single-tenant-template/.vscode/mcp.json: clojure-mcp": {
       "allowedModels": [
