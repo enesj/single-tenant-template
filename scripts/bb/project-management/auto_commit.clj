@@ -60,38 +60,42 @@
         (println "  " file))
       (println "\n=== DEBUG: DIFF INFO ===")
       (println (str "Total diff length: " (count diff-content) " chars"))
-      (println (str "Sending to API: " (min 8000 (count diff-content)) " chars"))
-      (println "\n=== DEBUG: DIFF CONTENT (first 15000 chars) ===")
-      (println (subs diff-content 0 (min 8000 (count diff-content))))
+      (println (str "Sending to API: " (min 16000 (count diff-content)) " chars"))
+      (println "\n=== DEBUG: DIFF CONTENT (first 16000 chars) ===")
+      (println (subs diff-content 0 (min 16000 (count diff-content))))
       (println "...\n")
 
-      (let [api-key (get-cerebras-api-key)
-        model (get-cerebras-model)
+      (let [api-key       (get-cerebras-api-key)
+            model         (get-cerebras-model)
 
             ;; Prepare request body
-            request-body (json/generate-string
-                           {:model model
-                            :messages [{:role "user" :content prompt}]
-                            :max_tokens 1000
-                            :temperature 0.3})
+            request-body  (json/generate-string
+                            {:model       model
+                             :messages    [{:role    "user"
+                                            :content prompt}]
+                             :max_tokens  1000
+                             :temperature 0.3})
 
             ;; Call Cerebras API
-            result (p/shell {:out :string :err :string :continue true :in request-body}
+            result        (p/shell {:out      :string
+                                    :err      :string
+                                    :continue true
+                                    :in       request-body}
                             "curl" "-sS" "-X" "POST" "--fail-with-body"
                             "https://api.cerebras.ai/v1/chat/completions"
                             "-H" "Content-Type: application/json"
                             "-H" (str "Authorization: Bearer " api-key)
                             "-d" "@-")
-            raw-response (:out result)
-            response (when-not (str/blank? raw-response)
-                       (try
-                         (json/parse-string raw-response true)
-                         (catch Exception _e
-                           (throw (Exception.
-                                    (str "Cerebras API returned non-JSON response: "
-                                         (subs raw-response 0 (min 400 (count raw-response)))))))))
+            raw-response  (:out result)
+            response      (when-not (str/blank? raw-response)
+                            (try
+                              (json/parse-string raw-response true)
+                              (catch Exception _e
+                                (throw (Exception.
+                                         (str "Cerebras API returned non-JSON response: "
+                                           (subs raw-response 0 (min 400 (count raw-response)))))))))
             error-message (or (get-in response [:error :message])
-                              (get-in response [:error :type]))]
+                            (get-in response [:error :type]))]
         (println (str "Using Cerebras model: " model))
         (cond
           (not= 0 (:exit result))
@@ -105,7 +109,7 @@
 
           :else
           (let [ai-response (some-> (get-in response [:choices 0 :message :content])
-                                    str/trim)]
+                              str/trim)]
             (if (str/blank? ai-response)
               (throw (Exception. "Cerebras returned empty response"))
               (do
