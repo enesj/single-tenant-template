@@ -83,6 +83,13 @@
      :worktree-status (subs line 1 2)
      :path            (str/trim (subs line 3))}))
 
+(defn code-file-path?
+  "Return true when a path looks like a code/config file that should trigger tests."
+  [path]
+  (boolean
+    (re-find #"\.(clj|cljs|cljc|bb|edn|js|jsx|ts|tsx|mjs|cjs|json|sql|sh|bash|zsh|css|scss|html|htm)$"
+      (str/lower-case (or path "")))))
+
 (defn call-cerebras-api
   "Use Cerebras API to generate AI-powered commit message"
   [diff-content files-list]
@@ -207,6 +214,9 @@
                      (map :path)
                      (remove str/blank?))
 
+      code-staged-files (->> staged-files
+              (filter code-file-path?))
+
       ;; Files with unstaged modifications or untracked files
       unstaged-files (->> status-lines
                        (filter (fn [{:keys [index-status worktree-status]}]
@@ -260,8 +270,10 @@
         (println "  " file))
       (println)
 
-      ;; Block AI analysis until tests are clean
-      (run-required-tests!)
+      ;; Block AI analysis until tests are clean only when code files changed
+      (if (seq code-staged-files)
+        (run-required-tests!)
+        (println "ℹ️  No code files changed. Skipping tests."))
 
       ;; Use Cerebras API
       (let [commit-msg (call-cerebras-api final-diff-content staged-files)]
