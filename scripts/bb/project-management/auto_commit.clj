@@ -176,10 +176,25 @@
 (let [arg-set    (set *command-line-args*)
       push-mode? (or (contains? arg-set "push")
                   (contains? arg-set "--push"))
-      _          (when push-mode?
-                   (println "🚀 Push mode enabled: staging all changes first.")
+      initial-status-result (p/shell {:out :string} "git status --porcelain")
+      initial-status-lines (->> (str/split-lines (:out initial-status-result))
+                             (map parse-status-line)
+                             (remove nil?))
+      initial-unstaged-files (->> initial-status-lines
+                               (filter (fn [{:keys [index-status worktree-status]}]
+                                         (or (= index-status "?") ; untracked
+                                           (not= worktree-status " "))))
+                               (map :path)
+                               (remove str/blank?))
+      _          (when (or push-mode? (seq initial-unstaged-files))
+                   (if push-mode?
+                     (println "🚀 Push mode enabled: staging all changes first.")
+                     (do
+                       (println "⚠️  Unstaged changes detected. Auto-staging them before commit flow.")
+                       (doseq [file initial-unstaged-files]
+                         (println "  " file))))
                    (when-not (run-command! "Stage all changes (git add .)" "git" "add" ".")
-                     (println "❌ Could not stage changes for push mode.")
+                     (println "❌ Could not stage changes.")
                      (System/exit 1)))
       status-result (p/shell {:out :string} "git status --porcelain")
       status-lines (->> (str/split-lines (:out status-result))
@@ -224,13 +239,6 @@
       final-diff-content filtered-diff-content]
 
   (cond
-    ;; Warn if there are unstaged changes
-    (and (not push-mode?) (seq unstaged-files))
-    (do (println "⚠️  Unstaged changes detected. Stage or discard them before committing.")
-      (doseq [file unstaged-files]
-        (println "  " file))
-      (System/exit 1))
-
     (empty? staged-files)
     (do (println "No staged changes to commit.")
       (System/exit 0))
@@ -241,6 +249,12 @@
 
     :else
     (do
+      (when (seq unstaged-files)
+        (println "⚠️  Some files are still unstaged after auto-staging; proceeding with staged changes only.")
+        (doseq [file unstaged-files]
+          (println "  " file))
+        (println))
+
       (println "=== Staged Changes ===")
       (doseq [file staged-files]
         (println "  " file))
