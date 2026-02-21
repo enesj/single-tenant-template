@@ -249,6 +249,17 @@
       final-diff-content filtered-diff-content]
 
   (cond
+    (and push-mode? (empty? staged-files))
+    (do
+      (println "ℹ️  No staged changes to commit. Attempting to push current HEAD to origin.")
+      (if (push-origin!)
+        (do
+          (println "✅ Push completed successfully.")
+          (System/exit 0))
+        (do
+          (println "❌ Push failed.")
+          (System/exit 1))))
+
     (empty? staged-files)
     (do (println "No staged changes to commit.")
       (System/exit 0))
