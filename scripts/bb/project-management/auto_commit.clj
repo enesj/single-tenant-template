@@ -5,23 +5,38 @@
   '[cheshire.core :as json]
   '[clojure.string :as str])
 
-(defn get-openai-api-key
-  "Get OpenAI API key from environment or .env"
-  []
-  (or (System/getenv "OPENAI_API_KEY")
-    (try
-      (let [result (p/shell {:out :string}
-                     "bash" "-c"
-                     "set -a; [ -f .env ] && source .env; set +a; echo $OPENAI_API_KEY")]
-        (str/trim (:out result)))
-      (catch Exception _e
-        (throw (Exception. "Could not load OpenAI API key from .env"))))))
+(def default-cerebras-model "gpt-oss-120b")
 
-(defn call-openai-api
-  "Use OpenAI API to generate AI-powered commit message"
+(defn get-cerebras-api-key
+  "Get Cerebras API key from environment or .env"
+  []
+  (let [env-key (System/getenv "CEREBRAS_API_KEY")]
+    (if (not (str/blank? env-key))
+      env-key
+      (let [result (try
+                     (p/shell {:out :string}
+                              "bash" "-c"
+                              "set -a; [ -f .env ] && source .env; set +a; echo $CEREBRAS_API_KEY")
+                     (catch Exception _e
+                       (throw (Exception. "Could not load CEREBRAS_API_KEY from .env"))))
+            file-key (str/trim (:out result))]
+        (if (str/blank? file-key)
+          (throw (Exception. "CEREBRAS_API_KEY is not set in the environment or .env"))
+          file-key)))))
+
+(defn get-cerebras-model
+  "Get Cerebras model from environment, defaulting to a supported production model."
+  []
+  (let [model (System/getenv "CEREBRAS_MODEL")]
+    (if (str/blank? model)
+      default-cerebras-model
+      model)))
+
+(defn call-cerebras-api
+  "Use Cerebras API to generate AI-powered commit message"
   [diff-content files-list]
   (try
-    (println "🤖 Calling OpenAI API to analyze diff...")
+    (println "🤖 Calling Cerebras API to analyze diff...")
 
     ;; Prepare detailed prompt
     (let [prompt (str "Analyze this git diff and generate a professional commit message.\n\n"
@@ -50,35 +65,55 @@
       (println (subs diff-content 0 (min 8000 (count diff-content))))
       (println "...\n")
 
-      (let [api-key (get-openai-api-key)
+      (let [api-key (get-cerebras-api-key)
+        model (get-cerebras-model)
 
             ;; Prepare request body
             request-body (json/generate-string
-                           {:model "gpt-4.1"
+                           {:model model
                             :messages [{:role "user" :content prompt}]
                             :max_tokens 1000
                             :temperature 0.3})
 
-            ;; Call OpenAI API
+            ;; Call Cerebras API
             result (p/shell {:out :string :err :string :continue true :in request-body}
-                     "curl" "-s" "-X" "POST"
-                     "https://api.openai.com/v1/chat/completions"
-                     "-H" "Content-Type: application/json"
-                     "-H" (str "Authorization: Bearer " api-key)
-                     "-d" "@-")]
+                            "curl" "-sS" "-X" "POST" "--fail-with-body"
+                            "https://api.cerebras.ai/v1/chat/completions"
+                            "-H" "Content-Type: application/json"
+                            "-H" (str "Authorization: Bearer " api-key)
+                            "-d" "@-")
+            raw-response (:out result)
+            response (when-not (str/blank? raw-response)
+                       (try
+                         (json/parse-string raw-response true)
+                         (catch Exception _e
+                           (throw (Exception.
+                                    (str "Cerebras API returned non-JSON response: "
+                                         (subs raw-response 0 (min 400 (count raw-response)))))))))
+            error-message (or (get-in response [:error :message])
+                              (get-in response [:error :type]))]
+        (println (str "Using Cerebras model: " model))
+        (cond
+          (not= 0 (:exit result))
+          (throw (Exception. (or error-message (str/trim (:err result)) "Unknown error")))
 
-      (if (= 0 (:exit result))
-        (let [response (json/parse-string (:out result) true)
-              ai-response (str/trim (get-in response [:choices 0 :message :content]))]
-          (if (str/blank? ai-response)
-            (throw (Exception. "OpenAI returned empty response"))
-            (do
-              (println "✅ AI analysis completed successfully!")
-              ai-response)))
-        (throw (Exception. (str "OpenAI API failed: " (:err result)))))))
+          error-message
+          (throw (Exception. error-message))
+
+          (nil? response)
+          (throw (Exception. "Cerebras API returned empty response body"))
+
+          :else
+          (let [ai-response (some-> (get-in response [:choices 0 :message :content])
+                                    str/trim)]
+            (if (str/blank? ai-response)
+              (throw (Exception. "Cerebras returned empty response"))
+              (do
+                (println "✅ AI analysis completed successfully!")
+                ai-response))))))
 
     (catch Exception e
-      (let [error-msg (str "⚠️  OpenAI API failed: " (.getMessage e))]
+      (let [error-msg (str "⚠️  Cerebras API failed: " (or (ex-message e) (str e)))]
         (println error-msg)
         error-msg))))
 
@@ -144,8 +179,8 @@
         (println "  " file))
       (println)
 
-      ;; Use OpenAI API
-      (let [commit-msg (call-openai-api final-diff-content staged-files)]
+      ;; Use Cerebras API
+      (let [commit-msg (call-cerebras-api final-diff-content staged-files)]
         (println "\n=== Generated Commit Message ===")
         (println commit-msg)
         (println)
