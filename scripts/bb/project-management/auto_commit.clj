@@ -186,13 +186,13 @@
                                            (not= worktree-status " "))))
                                (map :path)
                                (remove str/blank?))
-      _          (when (or push-mode? (seq initial-unstaged-files))
-                   (if push-mode?
-                     (println "🚀 Push mode enabled: staging all changes first.")
-                     (do
-                       (println "⚠️  Unstaged changes detected. Auto-staging them before commit flow.")
-                       (doseq [file initial-unstaged-files]
-                         (println "  " file))))
+      _          (do
+                   (when push-mode?
+                     (println "🚀 Push mode enabled: staging all changes first."))
+                   (when (and (not push-mode?) (seq initial-unstaged-files))
+                     (println "⚠️  Unstaged changes detected. Auto-staging them before commit flow.")
+                     (doseq [file initial-unstaged-files]
+                       (println "  " file)))
                    (when-not (run-command! "Stage all changes (git add .)" "git" "add" ".")
                      (println "❌ Could not stage changes.")
                      (System/exit 1)))
