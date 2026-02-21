@@ -1,6 +1,8 @@
 ---
 name: commit
 description: Stage and commit all pending changes with a descriptive commit message
+model: zai-glm-4.7 (customoai)
+
 tools:
   - runInTerminal
 ---
