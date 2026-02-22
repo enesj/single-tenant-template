@@ -181,11 +181,14 @@
 
 ;; Main execution
 (let [arg-set    (set *command-line-args*)
-  test-mode? (or (contains? arg-set "test")
-      (contains? arg-set "--test"))
+      test-mode? (or (contains? arg-set "test")
+                  (contains? arg-set "--test"))
       push-mode? (or (contains? arg-set "push")
                   (contains? arg-set "--push"))
-  run-tests? (or test-mode? push-mode?)
+      yes-mode?  (or (contains? arg-set "yes")
+                  (contains? arg-set "--yes")
+                  (contains? arg-set "-y"))
+      run-tests? (or test-mode? push-mode?)
       initial-status-result (p/shell {:out :string} "git status --porcelain")
       initial-status-lines (->> (str/split-lines (:out initial-status-result))
                              (map parse-status-line)
@@ -313,15 +316,23 @@
               (do
                 (println "❌ Commit failed.")
                 (System/exit 1))))
-          (do
-            (print "Proceed with this commit? (y/N): ")
-            (flush)
-            (let [input (read-line)
-                  user-input (if input (str/lower-case (str/trim input)) "n")]
-              (if (= user-input "y")
-                (if (commit-with-message! commit-msg)
-                  (println "✅ Changes committed successfully!")
-                  (do
-                    (println "❌ Commit failed.")
-                    (System/exit 1)))
-                (println "❌ Commit cancelled.")))))))))
+          (if yes-mode?
+            (do
+              (println "✅ Yes mode enabled: committing without confirmation prompt.")
+              (if (commit-with-message! commit-msg)
+                (println "✅ Changes committed successfully!")
+                (do
+                  (println "❌ Commit failed.")
+                  (System/exit 1))))
+            (do
+              (print "Proceed with this commit? (y/N): ")
+              (flush)
+              (let [input (read-line)
+                    user-input (if input (str/lower-case (str/trim input)) "n")]
+                (if (= user-input "y")
+                  (if (commit-with-message! commit-msg)
+                    (println "✅ Changes committed successfully!")
+                    (do
+                      (println "❌ Commit failed.")
+                      (System/exit 1)))
+                  (println "❌ Commit cancelled."))))))))))
