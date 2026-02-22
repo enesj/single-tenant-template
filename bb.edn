@@ -127,7 +127,7 @@
    :task (apply shell "bb" "scripts/bb/guard_no_concrete_domain.clj" *command-line-args*)},
 
   commit
-  {:doc "Auto-commit with AI message. Modes: `bb commit` (commit only), `bb commit test` (run tests then commit), `bb commit push` (run tests, commit, then push).",
+  {:doc "Auto-commit with AI message. Modes: `bb commit` (commit only), `bb commit test` (run tests when code files changed, then commit), `bb commit push` (run tests when code files changed, commit, then push).",
    :task (load-file "scripts/bb/project-management/auto_commit.clj")},
 
   cljfmt-check
