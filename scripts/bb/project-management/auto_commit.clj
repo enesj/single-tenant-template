@@ -181,8 +181,11 @@
 
 ;; Main execution
 (let [arg-set    (set *command-line-args*)
+  test-mode? (or (contains? arg-set "test")
+      (contains? arg-set "--test"))
       push-mode? (or (contains? arg-set "push")
                   (contains? arg-set "--push"))
+  run-tests? (or test-mode? push-mode?)
       initial-status-result (p/shell {:out :string} "git status --porcelain")
       initial-status-lines (->> (str/split-lines (:out initial-status-result))
                              (map parse-status-line)
@@ -281,10 +284,16 @@
         (println "  " file))
       (println)
 
-      ;; Block AI analysis until tests are clean only when code files changed
-      (if (seq code-staged-files)
+      ;; Run tests only in test/push modes and only when code files changed
+      (cond
+        (not run-tests?)
+        (println "ℹ️  Test mode not requested. Skipping tests.")
+
+        (seq code-staged-files)
         (run-required-tests!)
-        (println "ℹ️  No code files changed. Skipping tests."))
+
+        :else
+        (println "ℹ️  Test mode requested, but no code files changed. Skipping tests."))
 
       ;; Use Cerebras API
       (let [commit-msg (call-cerebras-api final-diff-content staged-files)]

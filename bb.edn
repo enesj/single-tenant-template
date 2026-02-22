@@ -127,14 +127,8 @@
    :task (apply shell "bb" "scripts/bb/guard_no_concrete_domain.clj" *command-line-args*)},
 
   commit
-  {:doc "Auto-commit all staged changes with a generated commit message. Use --test to run tests before commit.",
-   :task (let [args *command-line-args*
-               run-tests? (some #{"--test"} args)]
-           (when run-tests?
-             (println "🧪 Running tests before commit...")
-             (println "✅ All tests passed! Proceeding with commit..."))
-           (shell "bb" "stage")
-           (load-file "scripts/bb/project-management/auto_commit.clj"))},
+  {:doc "Auto-commit with AI message. Modes: `bb commit` (commit only), `bb commit test` (run tests then commit), `bb commit push` (run tests, commit, then push).",
+   :task (load-file "scripts/bb/project-management/auto_commit.clj")},
 
   cljfmt-check
   {:doc "Check code formatting with cljfmt",
