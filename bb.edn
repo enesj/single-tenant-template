@@ -165,13 +165,14 @@
            (shell "bash" "./scripts/sh/build/clean-cljs-cache.sh"))},
 
   run-app
-  {:doc "Start the application server (add --clean to clear caches first)",
+  {:doc "Start app for current folder by default. Targets: `bb run-app main|wk1|wk2` or `bb run-app all` (`--all`) for all instances. Add --clean to clear caches first.",
    :task (let [args *command-line-args*
                clean? (some #{"--clean"} args)]
            (printf "\033]0;🚀 Hosting App Server\007")
            (flush)
            (when clean? (shell "bash" "./scripts/sh/build/clean-cljs-cache.sh"))
-           (shell "./scripts/sh/development/run-app.sh"))},
+           (apply shell "./scripts/sh/development/run-app.sh"
+             (remove #{"--clean"} args)))},
 
   kill-java
   {:doc "Kill all Java processes",
