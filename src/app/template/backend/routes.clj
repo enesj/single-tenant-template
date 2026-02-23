@@ -16,6 +16,7 @@
     [ring.middleware.anti-forgery :refer [*anti-forgery-token*]]
     [ring.middleware.content-type :refer [wrap-content-type]]
     [ring.middleware.defaults :refer [site-defaults wrap-defaults]]
+    [ring.middleware.file :refer [wrap-file]]
     [ring.middleware.resource :refer [wrap-resource]]
     [taoensso.timbre :as log]))
 
@@ -23,9 +24,9 @@
   (let [;; Render the page with authentication info
         html-content (slurp "resources/public/index.html")
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
-  csrf-token (when (bound? #'*anti-forgery-token*)
-         *anti-forgery-token*)
-  html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
+        csrf-token (when (bound? #'*anti-forgery-token*)
+                     *anti-forgery-token*)
+        html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))
@@ -36,9 +37,9 @@
   (let [;; Use the same index.html as the main app
         html-content (slurp "resources/public/index.html")
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
-  csrf-token (when (bound? #'*anti-forgery-token*)
-         *anti-forgery-token*)
-  html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
+        csrf-token (when (bound? #'*anti-forgery-token*)
+                     *anti-forgery-token*)
+        html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))
@@ -218,7 +219,8 @@
 ;; Apply middleware in correct order (security re-enabled with fixes)
                       global-debug-middleware         ; Add global request debugging FIRST
                       (security/wrap-security)        ; HTTPS + security headers - RE-ENABLED
-                      (wrap-resource "public")
+                      (wrap-file "resources/public" {:allow-symlinks? true})
+                      (wrap-resource "public" {:allow-symlinks? true})
                       (wrap-content-type)
                       ;; Removed wrap-oauth2 - using custom handlers with CSRF protection
                       (wrap-defaults site-config))]

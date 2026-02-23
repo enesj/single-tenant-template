@@ -61,6 +61,7 @@
   (shadow.server/start!)
   ;; Start watching builds on main thread
   (shadow.api/watch :app)
+  (shadow.api/watch :admin)
   ;;(shadow.api/watch :test)
   ;; Select browser REPL on main thread before starting nREPL
   (shadow.api/nrepl-select :app)
@@ -68,7 +69,7 @@
   (log/info {:event :dev/nrepl-started
              :port 7888})
   (log/info {:event :dev/shadow-watch-started
-             :builds [:app]
+             :builds [:app :admin]
              :note "(shadow.api/watch :test) currently commented out"})
   (log/info {:event :dev/start-dev-finished
              :watchers [:backend :models]
