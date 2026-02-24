@@ -1555,6 +1555,78 @@
             (resolve nil "HESE-KEMERC d.o.o. Sarajevo" {:merchant nil} {})))
       (is (= "HESE-KEMERC" @created-name)))))
 
+(deftest resolve-supplier-and-alias-prefers-unique-descriptor-tail-supplier-for-unmapped-alias
+  (let [resolve #'extraction/resolve-supplier-and-alias
+        alias-id (java.util.UUID/randomUUID)
+        descriptor-supplier-id (java.util.UUID/randomUUID)
+        calls (atom {:resolve-or-create 0
+                     :map-unmapped 0})]
+    (with-redefs [supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id alias-id
+                     :supplier_id nil
+                     :raw_label_normalized "zavod-za-biomedicinsku-dijagnostiku"})
+                  suppliers/find-unique-descriptor-suffix-supplier
+                  (fn [_db normalized-key]
+                    (is (= "zavod-za-biomedicinsku-dijagnostiku" normalized-key))
+                    {:id descriptor-supplier-id
+                     :normalized_key "zavod-za-biomedicinsku-dijagnostiku-i-ispitivanje-medicover-bh"})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (swap! calls update :resolve-or-create inc)
+                    (throw (ex-info "Should not be called" {})))
+                  supplier-aliases/map-alias-to-supplier-if-unmapped!
+                  (fn [_db passed-alias-id passed-supplier-id confidence]
+                    (swap! calls update :map-unmapped inc)
+                    (is (= alias-id passed-alias-id))
+                    (is (= descriptor-supplier-id passed-supplier-id))
+                    (is (= 25 confidence))
+                    nil)]
+      (is (= {:supplier-id descriptor-supplier-id
+              :supplier-alias-id alias-id
+              :source :alias_descriptor}
+            (resolve nil "Zavod za biomedicinsku dijagnostiku" {:merchant nil} {})))
+      (is (= 0 (:resolve-or-create @calls)))
+      (is (= 1 (:map-unmapped @calls))))))
+
+(deftest resolve-supplier-and-alias-repairs-low-confidence-mapping-to-descriptor-tail-supplier
+  (let [resolve #'extraction/resolve-supplier-and-alias
+        alias-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        descriptor-supplier-id (java.util.UUID/randomUUID)
+        calls (atom {:map-override 0})]
+    (with-redefs [supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id alias-id
+                     :supplier_id mapped-supplier-id
+                     :confidence 25
+                     :raw_label_normalized "zavod-za-biomedicinsku-dijagnostiku"})
+                  suppliers/service
+                  {:get (fn [_db sid]
+                          (when (= mapped-supplier-id sid)
+                            {:id sid
+                             :normalized_key "zavod-za-biomedicinsku-dijagnostiku"}))}
+                  suppliers/find-unique-descriptor-suffix-supplier
+                  (fn [_db _normalized-key]
+                    {:id descriptor-supplier-id
+                     :normalized_key "zavod-za-biomedicinsku-dijagnostiku-i-ispitivanje-medicover-bh"})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+                  supplier-aliases/map-alias-to-supplier!
+                  (fn [_db passed-alias-id passed-supplier-id confidence]
+                    (swap! calls update :map-override inc)
+                    (is (= alias-id passed-alias-id))
+                    (is (= descriptor-supplier-id passed-supplier-id))
+                    (is (= 25 confidence))
+                    {:id passed-alias-id
+                     :supplier_id passed-supplier-id})]
+      (is (= {:supplier-id descriptor-supplier-id
+              :supplier-alias-id alias-id
+              :source :alias_descriptor_repaired}
+            (resolve nil "Zavod za biomedicinsku dijagnostiku" {:merchant nil} {})))
+      (is (= 1 (:map-override @calls))))))
+
 (deftest markdown-supplier-guess-ignores-date-time-and-table-lines
   (let [markdown (str "# FISKALNI RAČUN\n"
                    "BF: 238900\n"

@@ -320,17 +320,23 @@
                       recently-created? (boolean
                                           (and (map? rendered-result)
                                             (:recently-created? rendered-result)))
+                      selected? (boolean
+                                  (and (map? rendered-result)
+                                    (:selected? rendered-result)))
                       ;; Apply different highlight classes based on status and if highlights are shown
                       highlight-class (if show-highlights?
                                         (cond
                                           recently-updated? " bg-green-200/50" ;; More visible green for updates
                                           recently-created? " bg-blue-200/50" ;; More visible blue for new items
                                           :else "")
+                                        "")
+                      selection-class (if selected?
+                                        " bg-primary/5"
                                         "")]
                   ($ row
                     {:key (str "row-" idx "-" row-id)
                      :cells cells
-                     :class (str "ds-hover" highlight-class)
+                     :class (str "ds-hover" highlight-class selection-class)
                      :num-columns header-count
                      :is-header? false
                      :entity-name entity-name

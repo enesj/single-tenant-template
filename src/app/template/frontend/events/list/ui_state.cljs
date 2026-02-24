@@ -266,10 +266,27 @@
       (toggle-entity-flag db entity-key [:show-batch-delete?] false)
       (update-in db [:ui :show-batch-delete?] not))))
 
+(rf/reg-event-db
+  ::toggle-selected-rows
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (toggle-entity-flag db entity-key [:show-selected-rows?] true)
+      (update-in db [:ui :show-selected-rows?] not))))
+
+(rf/reg-event-db
+  ::toggle-unselected-rows
+  [common-interceptors persistence/persist-entity-prefs]
+  (fn [db [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (toggle-entity-flag db entity-key [:show-unselected-rows?] true)
+      (update-in db [:ui :show-unselected-rows?] not))))
+
 (def ^:private display-setting-keys
   [:show-timestamps? :show-edit? :show-delete? :show-highlights?
    :show-select? :show-filtering? :show-pagination? :show-add-button?
-   :show-batch-edit? :show-batch-delete? :per-page])
+   :show-batch-edit? :show-batch-delete? :show-selected-rows?
+   :show-unselected-rows? :per-page])
 
 ;; Remove the current browser's entity-level display preferences.
 ;;

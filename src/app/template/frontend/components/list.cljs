@@ -144,6 +144,26 @@
                          :entity-spec entity-spec})
     vec))
 
+(defn- selected-item?
+  [selected-ids item]
+  (let [selected-set (set (or selected-ids #{}))
+        item-id (id-utils/extract-entity-id item)
+        item-id-int (if (string? item-id) (js/parseInt item-id) item-id)
+        item-id-str (str item-id)]
+    (or (contains? selected-set item-id)
+      (contains? selected-set item-id-int)
+      (contains? selected-set item-id-str))))
+
+(defn- apply-selection-visibility
+  [rows selected-ids {:keys [show-selected-rows? show-unselected-rows?]}]
+  (let [show-selected? (if (nil? show-selected-rows?) true show-selected-rows?)
+        show-unselected? (if (nil? show-unselected-rows?) true show-unselected-rows?)]
+    (cond
+      (and show-selected? show-unselected?) rows
+      (not (or show-selected? show-unselected?)) []
+      show-selected? (vec (filter #(selected-item? selected-ids %) rows))
+      :else (vec (remove #(selected-item? selected-ids %) rows)))))
+
 (defui list-view
   "Renders a list of items with pagination, add form, and error handling.
    
@@ -256,6 +276,10 @@
                              :entity-name entity-kw
                              :entity-spec entity-spec})
                           raw-items)
+        visible-items (apply-selection-visibility effective-items selected-ids merged-display-settings)
+        selected-count (count selected-ids)
+        visible-selected-count (count (filter #(selected-item? selected-ids %) visible-items))
+        hidden-selected-count (max 0 (- selected-count visible-selected-count))
         pagination-current-page (or (:current-page pagination-override)
                                   current-page
                                   1)
@@ -386,7 +410,7 @@
 
           ;; Handle select all / deselect all
           handle-select-all (fn [select-all?]
-                              (rf/dispatch [::selection-events/select-all entity-name effective-items select-all?]))
+                              (rf/dispatch [::selection-events/select-all entity-name visible-items select-all?]))
 
           ;; Handle inline filter click
           handle-inline-filter-click (fn [field-id field-spec]
@@ -503,7 +527,7 @@
                           (render-row base-props {:item item}))
 
           table-headers (make-table-headers (assoc base-props
-                                              :all-items effective-items
+                                              :all-items visible-items
                                               :on-select-all handle-select-all
                                               :active-filters active-filters
 
@@ -666,7 +690,7 @@
                 ;; If show-add-form? is true (inline mode), display the add item section
                 ($ add-item-section base-props)
                 ;; Otherwise, display the table with pagination in same container
-                (let [items-vec effective-items
+                (let [items-vec visible-items
                       disallowed-mode (or disallowed-action-mode :hide)
                       disable-mode? (= disallowed-mode :disable)
                       policy-show-add-button? (not (false? (:show-add-button? merged-display-settings)))
@@ -688,6 +712,14 @@
                        :on-add-click (or (:on-add-click props)
                                        (when use-modal-forms?
                                          handle-add-click))})
+
+                    ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
+                             :class "flex items-center gap-2 mb-2 text-sm text-base-content/70"}
+                      ($ :span {:class "font-semibold"}
+                        (str selected-count " selected"))
+                      (when (pos? hidden-selected-count)
+                        ($ :span
+                          (str "(" hidden-selected-count " hidden by current list view)"))))
 
                     ($ :div {:class "ds-divider"})                    ;; Divider after header
                     ($ table

@@ -1,0 +1,19 @@
+({:action :alter-column,
+  :field-name :priority,
+  :model-name :backlog,
+  :options
+  {:null false,
+   :default 1,
+   :check [:raw "priority BETWEEN 1 AND 5"],
+   :type :integer},
+  :changes {:default {:from 5, :to 1}}}
+ {:action :alter-type,
+  :type-name :backlog-type,
+  :model-name :backlog,
+  :options
+  {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvment"],
+   :type :enum},
+  :changes
+  {:choices
+   {:from ["Issue" "Feature" "Refactoring" "Review"],
+    :to ["Issue" "Feature" "Refactoring" "Review" "Improvment"]}}})

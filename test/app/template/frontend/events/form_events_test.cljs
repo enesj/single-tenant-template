@@ -51,7 +51,41 @@
                               :editing true}])
           (is (true? (get-in @rf-db/app-db (paths/form-submitting? :items))))
           (is (= 55 (:id @captured)) "Should include id in path params")
-          (is (= {:name "Updated"} (:data @captured)) "Should drop :id from request data"))))))
+          (is (= {:name "Updated"} (:data @captured)) "Should drop :id from request data"))))
+
+    (testing "Backlog update keeps provided fields and drops nil select placeholders"
+      (reset-db!)
+      (let [captured (atom nil)]
+        (with-redefs [http-api/update-entity (fn [config] (reset! captured config) ::update-request)
+                      http-api/create-entity (fn [_] (throw (ex-info "should not hit" {})))
+                      http-fx/http-effect (fn [_])]
+          (rf/dispatch-sync [::form-events/submit-form
+                             {:entity-name :backlog
+                              :values {:id 24
+                                       :priority 4
+                                       :status nil
+                                       :type nil}
+                              :editing true}])
+          (is (= 24 (:id @captured)) "Should include backlog id in path params")
+          (is (= {:priority 4} (:data @captured))
+            "Should not send nil status/type when those fields were not changed"))))
+
+    (testing "Backlog update normalizes enum aliases from option maps"
+      (reset-db!)
+      (let [captured (atom nil)]
+        (with-redefs [http-api/update-entity (fn [config] (reset! captured config) ::update-request)
+                      http-api/create-entity (fn [_] (throw (ex-info "should not hit" {})))
+                      http-fx/http-effect (fn [_])]
+          (rf/dispatch-sync [::form-events/submit-form
+                             {:entity-name :backlog
+                              :values {:id 24
+                                       :type {:value "Improvement"}
+                                       :status {:value "Need improvements"}}
+                              :editing true}])
+          (is (= {:type "Improvment"
+                  :status "Need improvments"}
+                (:data @captured))
+            "Should normalize option map payloads to canonical backlog enum values"))))))
 
 (deftest create-success-test
   (testing "Create success clears submitting state and tracks recently created"

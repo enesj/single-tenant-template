@@ -27,6 +27,8 @@
    [:show-add-button? {:optional true} :boolean]
    [:show-batch-edit? {:optional true} :boolean]
    [:show-batch-delete? {:optional true} :boolean]
+   [:show-selected-rows? {:optional true} :boolean]
+   [:show-unselected-rows? {:optional true} :boolean]
    [:per-page {:optional true} [:int {:min 1 :max 1000}]]])
 
 ;; =============================================================================
@@ -110,6 +112,8 @@
    [:show-add-button? {:optional true} :boolean]
    [:show-batch-edit? {:optional true} :boolean]
    [:show-batch-delete? {:optional true} :boolean]
+   [:show-selected-rows? {:optional true} :boolean]
+   [:show-unselected-rows? {:optional true} :boolean]
 
    ;; Non-display view options
    [:search-fields {:optional true} [:vector :string]]

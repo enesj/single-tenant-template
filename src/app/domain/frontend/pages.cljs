@@ -10,6 +10,7 @@
   (:require
     [app.domain.frontend.expenses.pages :as expenses-pages]))
 
+
 (def all-pages
   "Map of route :view keywords to page components.
    

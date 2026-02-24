@@ -33,7 +33,8 @@
       "Issue" "ds-badge-error"
       "Feature" "ds-badge-success"
       "Refactoring" "ds-badge-warning"
-      "Review" "ds-badge-info"))
+      "Review" "ds-badge-info"
+      "Improvment" "ds-badge-secondary"))
 
   (testing "falls back to outline for unknown type values"
     (is (= "ds-badge-outline"

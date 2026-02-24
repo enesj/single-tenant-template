@@ -31,6 +31,60 @@
   [m]
   (model-naming/app-map-keys->db m))
 
+(def ^:private backlog-type-aliases
+  {"issue" "Issue"
+   "feature" "Feature"
+   "refactoring" "Refactoring"
+   "review" "Review"
+   "improvment" "Improvment"
+   "improvement" "Improvment"})
+
+(def ^:private backlog-status-aliases
+  {"waiting" "Waiting"
+   "in progres" "In progres"
+   "in progress" "In progres"
+   "completed" "Completed"
+   "need improvments" "Need improvments"
+   "need improvements" "Need improvments"})
+
+(defn- backlog-option-value
+  [value]
+  (if (map? value)
+    (or (:value value)
+      (get value "value")
+      value)
+    value))
+
+(defn- canonical-backlog-value
+  [aliases value]
+  (let [normalized (some-> value backlog-option-value str str/trim)
+        lowered (some-> normalized str/lower-case)]
+    (or (get aliases lowered) normalized)))
+
+(defn- normalize-backlog-field
+  [request-params field aliases]
+  (let [field-name (name field)]
+    (cond
+      (contains? request-params field)
+      (if-let [canonical (canonical-backlog-value aliases (get request-params field))]
+        (assoc request-params field canonical)
+        (dissoc request-params field))
+
+      (contains? request-params field-name)
+      (if-let [canonical (canonical-backlog-value aliases (get request-params field-name))]
+        (assoc request-params field-name canonical)
+        (dissoc request-params field-name))
+
+      :else request-params)))
+
+(defn- normalize-backlog-request-params
+  [entity-k request-params]
+  (if (= :backlog entity-k)
+    (-> request-params
+      (normalize-backlog-field :type backlog-type-aliases)
+      (normalize-backlog-field :status backlog-status-aliases))
+    request-params))
+
 (rf/reg-event-fx
   :app.template.frontend.events.form/submit-form
   (fn [{:keys [db]} [_ {:keys [entity-name editing values] :as _form-data}]]
@@ -41,6 +95,7 @@
                       (str/includes? (or (.-pathname js/window.location) "") "/admin"))
           ;; Convert keys to snake_case for API
           db-values (convert-keys-to-db values)
+          db-values (normalize-backlog-request-params entity-k db-values)
           ;; For PUT requests, exclude :id from request body since it's in URL
           request-params (if editing
                            (dissoc db-values :id)

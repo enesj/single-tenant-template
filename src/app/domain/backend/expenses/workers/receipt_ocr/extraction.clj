@@ -672,7 +672,51 @@
               (catch Exception e
                 (log/warn e "Failed to repair supplier alias mapping to OCR brand"
                   {:supplier-alias-id (:id alias-row)})
-                nil))))]
+                nil))))
+        descriptor-supplier-for-alias
+        (fn [alias-row]
+          (let [alias-normalized (some-> alias-row :raw_label_normalized str str/trim not-empty)]
+            (when (seq alias-normalized)
+              (try
+                (suppliers/find-unique-descriptor-suffix-supplier db alias-normalized)
+                (catch Exception _
+                  nil)))))
+        alias-needs-descriptor-repair?
+        (fn [alias-row descriptor-supplier]
+          (let [alias-id (:id alias-row)
+                mapped-supplier-id (:supplier_id alias-row)
+                mapped-confidence (long (or (:confidence alias-row) 0))
+                descriptor-id (:id descriptor-supplier)
+                mapped-supplier (when mapped-supplier-id
+                                  (try
+                                    ((:get suppliers/service) db mapped-supplier-id)
+                                    (catch Exception _
+                                      nil)))
+                mapped-normalized (some-> mapped-supplier :normalized_key str str/trim not-empty)
+                alias-normalized (some-> alias-row :raw_label_normalized str str/trim not-empty)]
+            (and alias-id
+              mapped-supplier-id
+              descriptor-id
+              (< mapped-confidence 100)
+              (seq alias-normalized)
+              (seq mapped-normalized)
+              (= alias-normalized mapped-normalized)
+              (not= mapped-supplier-id descriptor-id))))
+        maybe-repair-mapped-alias-to-descriptor
+        (fn [alias-row]
+          (when-let [descriptor-supplier (descriptor-supplier-for-alias alias-row)]
+            (when (alias-needs-descriptor-repair? alias-row descriptor-supplier)
+              (try
+                (let [alias-id (:id alias-row)
+                      supplier-id (:id descriptor-supplier)]
+                  (supplier-aliases/map-alias-to-supplier! db alias-id supplier-id 25)
+                  {:supplier-id supplier-id
+                   :supplier-alias-id alias-id
+                   :source :alias_descriptor_repaired})
+                (catch Exception e
+                  (log/warn e "Failed to repair supplier alias mapping to descriptor-tail supplier"
+                    {:supplier-alias-id (:id alias-row)})
+                  nil)))))]
     (if-not supplier-guess*
       ;; No supplier guess -> try store-based inference, otherwise unknown.
       (or (infer-supplier-from-store-alias)
@@ -685,36 +729,46 @@
             mapped-supplier-id (:supplier_id alias-row)]
         (if mapped-supplier-id
           (or (maybe-repair-mapped-alias alias-row)
+            (maybe-repair-mapped-alias-to-descriptor alias-row)
             {:supplier-id mapped-supplier-id
              :supplier-alias-id alias-id
              :source :alias})
-          (let [inferred0 (or (infer-supplier-from-store-alias)
-                            (infer-existing-supplier-from-store-name))
-                inferred (when-not (inferred-conflicts-with-promoted-brand? inferred0)
-                           inferred0)]
-            (if (and (map? inferred) (:supplier-id inferred))
-              (let [supplier-id (:supplier-id inferred)
-                    source (:source inferred)
-                    confidence (case source
-                                 :store_alias 25
-                                 :store_name_db 10
-                                 10)]
-                (when (and alias-id supplier-id)
-                  (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id confidence))
-                {:supplier-id supplier-id
-                 :supplier-alias-id alias-id
-                 :source source})
-              (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
-                                                db
-                                                supplier-display-guess
-                                                opts)
-                    supplier-id (:id supplier)]
-                (when (and alias-id supplier-id)
-                  ;; Safe during ingestion; won't overwrite manual mappings.
-                  (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
-                {:supplier-id supplier-id
-                 :supplier-alias-id alias-id
-                 :source (or source :resolved)}))))))))
+          (if-let [descriptor-supplier (descriptor-supplier-for-alias alias-row)]
+            (let [supplier-id (:id descriptor-supplier)]
+              (when (and alias-id supplier-id)
+                ;; Prefer mapping raw supplier labels to an existing unique descriptor-tail supplier
+                ;; to avoid creating near-duplicate canonical suppliers from a shortened OCR guess.
+                (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
+              {:supplier-id supplier-id
+               :supplier-alias-id alias-id
+               :source :alias_descriptor})
+            (let [inferred0 (or (infer-supplier-from-store-alias)
+                              (infer-existing-supplier-from-store-name))
+                  inferred (when-not (inferred-conflicts-with-promoted-brand? inferred0)
+                             inferred0)]
+              (if (and (map? inferred) (:supplier-id inferred))
+                (let [supplier-id (:supplier-id inferred)
+                      source (:source inferred)
+                      confidence (case source
+                                   :store_alias 25
+                                   :store_name_db 10
+                                   10)]
+                  (when (and alias-id supplier-id)
+                    (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id confidence))
+                  {:supplier-id supplier-id
+                   :supplier-alias-id alias-id
+                   :source source})
+                (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
+                                                  db
+                                                  supplier-display-guess
+                                                  opts)
+                      supplier-id (:id supplier)]
+                  (when (and alias-id supplier-id)
+                    ;; Safe during ingestion; won't overwrite manual mappings.
+                    (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
+                  {:supplier-id supplier-id
+                   :supplier-alias-id alias-id
+                   :source (or source :resolved)})))))))))
 
 (defn- resolve-store-and-alias
   "Resolve a store (branch/location) for an already-resolved supplier.

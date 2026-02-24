@@ -227,6 +227,8 @@
         curr-show-add-button? (:show-add-button? entity-settings)
         curr-show-batch-edit? (:show-batch-edit? entity-settings)
         curr-show-batch-delete? (:show-batch-delete? entity-settings)
+        curr-show-selected-rows? (:show-selected-rows? entity-settings)
+        curr-show-unselected-rows? (:show-unselected-rows? entity-settings)
 
         ;; Helper component for toggle buttons
         ;; Locked settings (from resolver) are hidden from the UI
@@ -295,6 +297,16 @@
                         :is-active? curr-show-select?
                         :event-key ::ui-events/toggle-select
                         :hardcoded-key :show-select?})
+
+        (toggle-button {:label "Selected Rows"
+                        :is-active? curr-show-selected-rows?
+                        :event-key ::ui-events/toggle-selected-rows
+                        :hardcoded-key :show-selected-rows?})
+
+        (toggle-button {:label "Unselected Rows"
+                        :is-active? curr-show-unselected-rows?
+                        :event-key ::ui-events/toggle-unselected-rows
+                        :hardcoded-key :show-unselected-rows?})
 
         ;; Pagination control
         (toggle-button {:label "Pagination"
