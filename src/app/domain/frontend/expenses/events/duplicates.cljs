@@ -166,6 +166,68 @@
 ;; Subscriptions
 ;; ============================================================================
 
+;; ============================================================================
+;; Hide / Unhide False-Positive Clusters
+;; ============================================================================
+
+(rf/reg-event-fx
+  ::ignore-cluster
+  (fn [{:keys [db]} [_ {:keys [entity-type cluster-id member-ids note]}]]
+    {:db (-> db
+           (assoc-in (conj state-path :flagging?) true)
+           (assoc-in (conj state-path :error) nil))
+     :http-xhrio (admin-http/admin-post
+                   {:uri "/admin/api/expenses/duplicates/ignore"
+                    :params {:entity-type (if (keyword? entity-type) (name entity-type) entity-type)
+                             :cluster-id cluster-id
+                             :member-ids (mapv str member-ids)
+                             :note note}
+                    :on-success [::ignore-cluster-success]
+                    :on-failure [::ignore-cluster-failure]})}))
+
+(rf/reg-event-fx
+  ::ignore-cluster-success
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (conj state-path :flagging?) false)
+     :dispatch [::detect]}))
+
+(rf/reg-event-db
+  ::ignore-cluster-failure
+  (fn [db [_ error]]
+    (log/error "Failed to ignore duplicate cluster" {:error error})
+    (-> db
+      (assoc-in (conj state-path :flagging?) false)
+      (assoc-in (conj state-path :error)
+        (admin-http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  ::unignore-cluster
+  (fn [{:keys [db]} [_ {:keys [entity-type cluster-id]}]]
+    {:db (-> db
+           (assoc-in (conj state-path :flagging?) true)
+           (assoc-in (conj state-path :error) nil))
+     :http-xhrio (admin-http/admin-post
+                   {:uri "/admin/api/expenses/duplicates/unignore"
+                    :params {:entity-type (if (keyword? entity-type) (name entity-type) entity-type)
+                             :cluster-id cluster-id}
+                    :on-success [::unignore-cluster-success]
+                    :on-failure [::unignore-cluster-failure]})}))
+
+(rf/reg-event-fx
+  ::unignore-cluster-success
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (conj state-path :flagging?) false)
+     :dispatch [::detect]}))
+
+(rf/reg-event-db
+  ::unignore-cluster-failure
+  (fn [db [_ error]]
+    (log/error "Failed to unignore duplicate cluster" {:error error})
+    (-> db
+      (assoc-in (conj state-path :flagging?) false)
+      (assoc-in (conj state-path :error)
+        (admin-http/extract-error-message error)))))
+
 (rf/reg-sub ::loading?
   (fn [db _] (get-in db (conj state-path :loading?) false)))
 
@@ -192,6 +254,9 @@
 
 (rf/reg-sub ::merging?
   (fn [db _] (get-in db (conj state-path :merging?) false)))
+
+(rf/reg-sub ::flagging?
+  (fn [db _] (get-in db (conj state-path :flagging?) false)))
 
 (rf/reg-sub ::pending-merge
   (fn [db _] (get-in db (conj state-path :pending-merge))))

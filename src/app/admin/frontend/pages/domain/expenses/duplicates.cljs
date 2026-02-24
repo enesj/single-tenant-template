@@ -91,7 +91,13 @@
   (let [selections (use-subscribe [::dup-events/selections])
         entity-type (use-subscribe [::dup-events/entity-type])
         merging? (use-subscribe [::dup-events/merging?])
+        flagging? (use-subscribe [::dup-events/flagging?])
         members (:members cluster)
+        cluster-id (or (:cluster-id cluster) (:cluster_id cluster))
+        member-ids (->> members
+                     (map :id)
+                     (remove nil?)
+                     vec)
         cluster-sel (get selections idx {})
         primary-id (:primary-id cluster-sel)
         secondary-ids (set (:secondary-ids cluster-sel []))
@@ -103,27 +109,42 @@
                               (fn [member-id]
                                 (rf/dispatch [::dup-events/toggle-secondary idx member-id]))
                               [idx])
-        can-merge? (and primary-id (seq secondary-ids))]
+        can-merge? (and primary-id (seq secondary-ids))
+        can-hide? (and (seq cluster-id) (seq member-ids))]
     ($ :div {:class "ds-card bg-base-100 shadow-md mb-4"
              :id (str "dedup-cluster-" idx)}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex justify-between items-center mb-2"}
           ($ :h3 {:class "font-semibold text-base"}
             (str "Cluster " (inc idx) " (" (count members) " members)"))
-          ($ :button
-            {:id (str "dedup-merge-btn-" idx)
-             :class (str "ds-btn ds-btn-sm ds-btn-warning"
-                      (when-not can-merge? " ds-btn-disabled")
-                      (when merging? " ds-loading"))
-             :disabled (or (not can-merge?) merging?)
-             :on-click (fn [_]
-                         (when can-merge?
-                           (rf/dispatch [::dup-events/merge-preview
-                                         {:entity-type (keyword entity-type)
-                                          :primary-id primary-id
-                                          :secondary-ids (vec secondary-ids)
-                                          :cluster-idx idx}])))}
-            "Merge"))
+          ($ :div {:class "flex items-center gap-2"}
+            (when can-hide?
+              ($ :button
+                {:id (str "dedup-hide-btn-" idx)
+                 :title "Hide this cluster as a false positive"
+                 :class (str "ds-btn ds-btn-sm ds-btn-outline"
+                          (when flagging? " ds-loading"))
+                 :disabled (or flagging? merging?)
+                 :on-click (fn [_]
+                             (rf/dispatch [::dup-events/ignore-cluster
+                                           {:entity-type (keyword entity-type)
+                                            :cluster-id cluster-id
+                                            :member-ids member-ids}]))}
+                "Hide"))
+            ($ :button
+              {:id (str "dedup-merge-btn-" idx)
+               :class (str "ds-btn ds-btn-sm ds-btn-warning"
+                        (when-not can-merge? " ds-btn-disabled")
+                        (when merging? " ds-loading"))
+               :disabled (or (not can-merge?) merging? flagging?)
+               :on-click (fn [_]
+                           (when can-merge?
+                             (rf/dispatch [::dup-events/merge-preview
+                                           {:entity-type (keyword entity-type)
+                                            :primary-id primary-id
+                                            :secondary-ids (vec secondary-ids)
+                                            :cluster-idx idx}])))}
+              "Merge")))
         ($ :div {:class "overflow-x-auto"}
           ($ :table {:class "ds-table ds-table-sm w-full"}
             ($ :thead

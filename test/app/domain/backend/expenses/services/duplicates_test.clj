@@ -79,6 +79,46 @@
 ;; Invalid Entity Type
 ;; ============================================================================
 
+;; ============================================================================
+;; Cluster ID and Ignore Filtering
+;; ============================================================================
+
+(deftest cluster-id-deterministic-order-insensitive-test
+  (testing "same members in different order produce the same cluster-id"
+    (let [id-a (UUID/randomUUID)
+          id-b (UUID/randomUUID)
+          id-c (UUID/randomUUID)
+          cluster-id-a (duplicates/cluster-id :suppliers [{:id id-a} {:id id-b} {:id id-c}])
+          cluster-id-b (duplicates/cluster-id :suppliers [{:id id-c} {:id id-a} {:id id-b}])]
+      (is (string? cluster-id-a))
+      (is (= cluster-id-a cluster-id-b)))))
+
+(deftest cluster-id-changes-when-members-change-test
+  (testing "different member sets produce different cluster IDs"
+    (let [id-a (UUID/randomUUID)
+          id-b (UUID/randomUUID)
+          id-c (UUID/randomUUID)
+          cluster-id-a (duplicates/cluster-id :suppliers [id-a id-b])
+          cluster-id-b (duplicates/cluster-id :suppliers [id-a id-c])]
+      (is (not= cluster-id-a cluster-id-b)))))
+
+(deftest filter-ignored-clusters-removes-only-matching-clusters-test
+  (testing "only clusters present in ignored-id set are removed"
+    (let [clusters [{:cluster-id "cid-1" :members [{:id (UUID/randomUUID)}]}
+                    {:cluster-id "cid-2" :members [{:id (UUID/randomUUID)}]}
+                    {:cluster-id "cid-3" :members [{:id (UUID/randomUUID)}]}]
+          filtered (duplicates/filter-ignored-clusters #{"cid-2"} clusters)]
+      (is (= 2 (count filtered)))
+      (is (= #{"cid-1" "cid-3"}
+            (set (map :cluster-id filtered)))))))
+
+(deftest filter-ignored-clusters-supports-snake-case-key-test
+  (testing "filtering also supports :cluster_id maps"
+    (let [clusters [{:cluster_id "cid-1" :members []}
+                    {:cluster_id "cid-2" :members []}]
+          filtered (duplicates/filter-ignored-clusters #{"cid-2"} clusters)]
+      (is (= [{:cluster_id "cid-1" :members []}] filtered)))))
+
 (deftest detect-duplicates-invalid-entity-type-throws-test
   (testing "unknown entity type throws ex-info"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Unknown entity type"

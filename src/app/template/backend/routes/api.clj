@@ -13,6 +13,7 @@
     [app.shared.http :as http]
     [cheshire.core :as json]
     [java-time.api :as time]
+    [malli.transform :as mt]
     [muuntaja.core :as m]
     [reitit.coercion.malli :as malli-coercion]
     [reitit.ring.coercion :as coercion]
@@ -79,14 +80,29 @@
   [schema _]
   schema)
 
-(def custom-malli-coercion
-  (malli-coercion/create
-    ;; IMPORTANT:
-    ;; We override only schema compilation behavior. Leave :transformers alone so
-    ;; vendored reitit Malli coercion can build transformers via its own
-    ;; TransformationProvider pipeline (avoids :malli.core/invalid-transformer
-    ;; issues during router compilation in dev reloads).
-    {:compile compile-schema}))
+(defn- make-malli-coercion
+  "Create a fresh Malli coercion instance.
+
+  Why: during dev reloads, `clojure.tools.namespace` can reload dependency
+  namespaces like `malli.core` without reloading `reitit.coercion.malli`.
+  The default reitit transformer providers capture transformer instances at load
+  time, which can become invalid after such reloads.
+
+  We therefore build the transformer instances *fresh* for each router build and
+  pass them in explicitly, avoiding cached providers."
+  []
+  (let [strip (mt/strip-extra-keys-transformer)
+        defaults (mt/default-value-transformer {})
+        json (mt/json-transformer)
+        string (mt/string-transformer)
+        base (fn [& xs] (apply mt/transformer (remove nil? xs)))]
+    (malli-coercion/create
+      {:compile compile-schema
+       :transformers {:body {:default (base strip defaults)
+                             :formats {"application/json" (base strip json defaults)}}
+                      :string {:default (base strip string defaults)}
+                      :response {:default (base strip defaults)
+                                 :formats {"application/json" (base strip json defaults)}}}})))
 
 (defn wrap-exception-handling
   "Middleware to handle exceptions and return appropriate responses."
@@ -162,7 +178,7 @@
         domain-user-routes (domain-registry/all-user-api-routes
                              db user-middleware/wrap-user-authentication app-config)]
     [""
-     {:coercion custom-malli-coercion
+     {:coercion (make-malli-coercion)
       :muuntaja m/instance
       :middleware [parameters/parameters-middleware
                    muuntaja/format-negotiate-middleware
