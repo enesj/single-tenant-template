@@ -24,10 +24,10 @@
   (let [current (use-subscribe [::dup-events/entity-type])]
     ($ :div {:class "ds-tabs ds-tabs-boxed mb-4" :id "dedup-entity-tabs"}
       (for [{:keys [key label]} entity-types]
-        ($ :a {:key key
-               :id (str "dedup-tab-" key)
-               :class (str "ds-tab" (when (= current key) " ds-tab-active"))
-               :on-click #(rf/dispatch [::dup-events/set-entity-type key])}
+        ($ :button {:key key
+                    :id (str "dedup-tab-" key)
+                    :class (str "ds-tab" (when (= current key) " ds-tab-active"))
+                    :on-click #(rf/dispatch [::dup-events/set-entity-type key])}
           label)))))
 
 ;; ============================================================================
