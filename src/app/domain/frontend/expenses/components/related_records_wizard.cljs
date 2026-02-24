@@ -7,6 +7,7 @@
   (:require
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.shared-utils :as shared]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
@@ -24,6 +25,57 @@
     (str/split #"\s+")
     (->> (map str/capitalize)
       (str/join " "))))
+
+(defn- timestamp-key?
+  [k]
+  (str/ends-with? (name k) "-at"))
+
+(defn- render-detail-value
+  "Render a field value for the Step 3 detail grid.
+  - Timestamp fields (keys ending in -at): formatted like the list-view Created column.
+  - :receipt-id: clickable link that opens the receipt file in a new tab.
+  - Everything else: shared/format-value with em-dash fallback."
+  [kv value]
+  (cond
+    (timestamp-key? kv)
+    (timestamp/render-timestamp value {:show-seconds? true
+                                       :highlight-seconds? true
+                                       :nil-text "\u2014"})
+
+    (= kv :receipt-id)
+    (if (some? value)
+      ($ :a {:href (str "/admin/api/expenses/receipts/" value "/download")
+             :target "_blank"
+             :rel "noopener noreferrer"
+             :class "font-mono text-xs break-all link link-primary"
+             :on-click (fn [e] (.stopPropagation e))}
+        (str value))
+      "\u2014")
+
+    :else
+    (shared/format-value value "\u2014" false)))
+
+(defn- render-items-table
+  "Render a vector of expense items as a compact table."
+  [items]
+  (if (seq items)
+    ($ :table {:class "w-full text-xs border-collapse"}
+      ($ :thead
+        ($ :tr {:class "border-b border-base-300 text-base-content/60"}
+          ($ :th {:class "text-left py-1 pr-2 font-medium"} "Item")
+          ($ :th {:class "text-right py-1 px-2 font-medium"} "Qty")
+          ($ :th {:class "text-right py-1 px-2 font-medium"} "Unit")
+          ($ :th {:class "text-right py-1 pl-2 font-medium"} "Total")))
+      ($ :tbody
+        (for [{:keys [raw-label canonical-name qty unit-price line-total]} items
+              :let [label (or canonical-name raw-label "\u2014")]]
+          ($ :tr {:key label
+                  :class "border-b border-base-300/50 hover:bg-base-200/40"}
+            ($ :td {:class "py-1 pr-2 text-base-content"} label)
+            ($ :td {:class "text-right py-1 px-2 tabular-nums text-base-content/80"} (str qty))
+            ($ :td {:class "text-right py-1 px-2 tabular-nums text-base-content/80"} (str unit-price))
+            ($ :td {:class "text-right py-1 pl-2 tabular-nums font-medium text-base-content"} (str line-total))))))
+    ($ :span {:class "text-base-content/50 text-xs"} "No items")))
 
 (defn- money-label
   [amount currency]
@@ -254,16 +306,32 @@
                 "Back"))
 
             (if (map? selected-record)
-              ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-2"
-                       :id (str "details-related-record-" s "-" entity-id*)}
-                (for [[kv value] (sort-by (comp name key) (seq selected-record))]
-                  ($ :div {:key (str (name kv))
-                           :id (str "detail-related-record-" (name kv) "-" s "-" entity-id*)
-                           :class "p-3 rounded-lg border border-base-300 bg-base-100 space-y-1"}
-                    ($ :div {:class "text-xs uppercase tracking-wide text-base-content/60"}
-                      (details-label kv))
-                    ($ :div {:class "text-sm"}
-                      (shared/format-value value "\u2014" false)))))
+              (let [all-fields   (->> (seq selected-record)
+                                   (remove (fn [[k _]] (= k :id)))
+                                   (remove (fn [[_ v]] (nil? v)))
+                                   (sort-by (comp name key)))
+                    items-entry  (some (fn [[k v]] (when (= k :items) v)) all-fields)
+                    other-fields (remove (fn [[k _]] (= k :items)) all-fields)]
+                ($ :div {:class "space-y-3"
+                         :id (str "details-related-record-" s "-" entity-id*)}
+                  ;; Regular key/value fields in 2-col grid
+                  (when (seq other-fields)
+                    ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-2"}
+                      (for [[kv value] other-fields]
+                        ($ :div {:key (str (name kv))
+                                 :id (str "detail-related-record-" (name kv) "-" s "-" entity-id*)
+                                 :class "p-3 rounded-lg border border-base-300 bg-base-100 space-y-1"}
+                          ($ :div {:class "text-xs uppercase tracking-wide text-base-content/60"}
+                            (details-label kv))
+                          ($ :div {:class "text-sm"}
+                            (render-detail-value kv value))))))
+                  ;; Items table — full width
+                  (when (some? items-entry)
+                    ($ :div {:class "p-3 rounded-lg border border-base-300 bg-base-100 space-y-2"
+                             :id (str "detail-related-record-items-" s "-" entity-id*)}
+                      ($ :div {:class "text-xs uppercase tracking-wide text-base-content/60"}
+                        "Items")
+                      (render-items-table items-entry)))))
               ($ :div {:class "rounded-lg border border-dashed border-base-300 bg-base-100 p-3 text-sm text-base-content/70"}
                 "No record selected.")))
 
