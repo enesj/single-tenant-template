@@ -22,12 +22,26 @@
 (def FieldType
   [:or :keyword :string])
 
-(def OptionsVec
-  [:vector [:or :keyword :string]])
-
 (def NumberSchema
   "Malli doesn't include a built-in :number schema; use a predicate." 
   [:fn number?])
+
+(def OptionValue
+  "Permissive option values for selects (legacy + rich metadata modes)."
+  [:or :keyword :string NumberSchema :boolean])
+
+(def OptionItem
+  "Select option can be a scalar (legacy) or metadata map (rich mode)."
+  [:or
+   [:or :keyword :string]
+   [:map {:closed false}
+    [:value OptionValue]
+    [:label {:optional true} :string]
+    [:color {:optional true} :string]
+    [:disabled {:optional true} :boolean]]])
+
+(def OptionsVec
+  [:vector OptionItem])
 
 (def FieldConfig
   "Per-field UI config.
