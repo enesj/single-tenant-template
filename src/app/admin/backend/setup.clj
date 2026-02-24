@@ -7,6 +7,7 @@
     [next.jdbc :as jdbc]
     [system.state :as state]))
 
+
 (defn get-db
   "Get database connection from running system"
   []

@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
+    [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.template.backend.routes.admin.utils :as utils]
@@ -66,13 +67,24 @@
         (when (pos? (long count))
           sum)))))
 
+(defn- resolve-supplier-via-alias
+  "Resolve supplier through the receipt's supplier_alias mapping.
+  Returns a supplier row or nil."
+  [db receipt]
+  (when-let [alias-id (:supplier-alias-id receipt)]
+    (try
+      (when-let [alias-row (supplier-aliases/get-alias db alias-id)]
+        (when-let [supplier-id (:supplier_id alias-row)]
+          ((:get suppliers/service) db supplier-id)))
+      (catch Exception _ nil))))
+
 (defn- enrich-receipt-for-detail
   [db receipt]
   (let [supplier-guess (some-> (:supplier-guess receipt) str/trim not-empty)
-        normalized-key (when supplier-guess
-                         (suppliers/normalize-supplier-key supplier-guess))
-        supplier (when normalized-key
-                   (suppliers/find-by-normalized-key db normalized-key))
+        supplier (or (resolve-supplier-via-alias db receipt)
+                   (when-let [normalized-key (when supplier-guess
+                                               (suppliers/normalize-supplier-key supplier-guess))]
+                     (suppliers/find-by-normalized-key db normalized-key)))
         supplier-app (some-> supplier to-app (select-keys [:id :display-name :normalized-key]))
         lines-total (lines-total-amount-guess receipt)
         total (:total-amount-guess receipt)
