@@ -15,7 +15,8 @@
    :api-endpoint "/admin/api/expenses/suppliers"
    :detail-response-key :supplier
    :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :pagination-opts {:default-per-page 25}
+   :server-search-keys #{:display-name}})
 
 (def manufacturers-config
   {:entity-key :manufacturers
@@ -23,7 +24,8 @@
    :api-endpoint "/admin/api/expenses/manufacturers"
    :detail-response-key :manufacturer
    :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :pagination-opts {:default-per-page 25}
+   :server-search-keys #{:display-name}})
 
 (def payers-config
   {:entity-key :payers
@@ -51,7 +53,10 @@
    :api-endpoint "/admin/api/expenses/articles"
    :detail-response-key :article
    :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :pagination-opts {:default-per-page 25}
+   ;; Filter field-ids whose text values should be forwarded as the backend
+   ;; :search query param. Other column filters remain client-side only.
+   :server-search-keys #{:canonical-name}})
 
 (def receipts-config
   {:entity-key :receipts

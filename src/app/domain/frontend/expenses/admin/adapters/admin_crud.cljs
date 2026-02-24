@@ -56,7 +56,7 @@
                                 {:dispatch [:admin/redirect-to-login]}))
                    :on-success (fn [_cofx _entity-type _ids default-effect]
                                  (assoc default-effect
-                                   :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+                                   :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -68,7 +68,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _response default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -81,7 +81,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_cofx _entity-type _id _response default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.suppliers/load-list {}]))}}})
 
 (defn- expenses-request
   "Create HTTP request config for expenses admin API."
@@ -401,7 +401,7 @@
                                 {:dispatch [:admin/redirect-to-login]}))
                    :on-success (fn [_ _ _ default-effect]
                                  (assoc default-effect
-                                   :dispatch [:app.domain.frontend.expenses.events.articles/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+                                   :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -413,7 +413,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -426,7 +426,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.articles/load-list {}]))}}})
 
 (defn- article-aliases-request
   "Create HTTP request config for article aliases admin API."
@@ -746,7 +746,7 @@
                                 {:dispatch [:admin/redirect-to-login]}))
                    :on-success (fn [_ _ _ default-effect]
                                  (assoc default-effect
-                                   :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+                                   :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}
     :create {:request (fn [{:keys [db]} entity-type form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -758,7 +758,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {:fetch-limit 1000 :fetch-offset 0}]))}
+                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}
     :update {:request (fn [{:keys [db]} entity-type id form-data default-effect]
                         (if (adapters.core/admin-token db)
                           (assoc default-effect
@@ -771,7 +771,7 @@
                           {:dispatch [:admin/redirect-to-login]}))
              :on-success (fn [_ _ _ _ default-effect]
                            (assoc default-effect
-                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {:fetch-limit 1000 :fetch-offset 0}]))}}})
+                             :dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list {}]))}}})
 
 (defn- cities-request
   "Create HTTP request config for cities admin API."

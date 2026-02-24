@@ -1072,6 +1072,14 @@
             {:supplier-id (aliases/get-unknown-supplier-id db)
              :supplier-alias-id nil
              :source :unknown}))
+        unknown-supplier-id (try
+                              (aliases/get-unknown-supplier-id db)
+                              (catch Exception _
+                                nil))
+        undefined-supplier? (or (nil? supplier-id)
+                             (= :unknown source)
+                             (and unknown-supplier-id
+                               (= unknown-supplier-id supplier-id)))
         store-res
         (if (= :unknown source)
           {:store-id nil
@@ -1092,7 +1100,10 @@
         {:keys [store-id store-alias-id store-guess] :as store-res*}
         store-res
         store-source (:source store-res*)
-        status (if (and valid-shape? guesses (not (review-required? guesses)))
+        status (if (and valid-shape?
+                     guesses
+                     (not (review-required? guesses))
+                     (not undefined-supplier?))
                  "extracted"
                  "review_required")
         lines-total-mismatch (and (= status "extracted")

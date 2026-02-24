@@ -1191,6 +1191,38 @@
         ;; Critically: don't create article aliases under "Unknown Supplier" during extraction.
         (is (= 0 (:article-aliases @calls)))))))
 
+(deftest persist-extract-result-marks-review-required-when-supplier-is-undefined
+  (let [receipt-id (java.util.UUID/randomUUID)
+        unknown-supplier-id (java.util.UUID/randomUUID)
+        persisted-status (atom nil)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results! (fn [& _] nil)
+                  receipt-status/update-status! (fn [_db _rid status _extra]
+                                                  (reset! persisted-status status)
+                                                  nil)
+                  article-aliases/get-unknown-supplier-id (fn [& _] unknown-supplier-id)
+                  supplier-aliases/find-or-create-alias! (fn [& _]
+                                                           (throw (ex-info "supplier resolution failed" {})))
+                  article-aliases/find-or-create-alias! (fn [& _]
+                                                          {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "Known Label But Unresolved Supplier"}
+                                         :totals {:total 1.00}
+                                         :items [{:raw_label "ITEM" :line_total 1.00}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= "review_required" (:status res)))
+        (is (= "review_required" @persisted-status))))))
+
 (deftest parse-money-handles-common-formats
   (let [parse-money #'common/parse-money]
     (is (= 10.26M (parse-money "10.26")))

@@ -60,8 +60,11 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.manufacturers/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}]))
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
+                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
+                                            [::manufacturers-events/load-list]])
+                         (rf/dispatch [::manufacturers-events/load-list
+                                       {:page 1 :per-page 25}]))
                        [])]
     (use-effect
       (fn []

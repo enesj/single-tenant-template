@@ -128,10 +128,11 @@
 
 (defn generate-list-events
   "Generates load-list, list-loaded, and load-failed events for an entity."
-  [{:keys [entity-key base-path api-endpoint pagination-opts] :as config}]
+  [{:keys [entity-key base-path api-endpoint pagination-opts server-search-keys] :as config}]
   (validate-entity-config config)
 
   (let [pag-opts (or pagination-opts {:default-per-page 25})
+        search-keys (or server-search-keys #{})
         event-ns (str "app.domain.frontend.expenses.events." (name entity-key))]
 
     ;; load-list event
@@ -142,11 +143,22 @@
               fetch-limit (:fetch-limit params)
               fetch-offset (or (:fetch-offset params) 0)
               fetch-mode? (some? fetch-limit)
-              ;; In server mode, seed params with current DB filter state so that
-              ;; page changes and CRUD reloads preserve the active search/filters.
+              ;; In server mode, forward server-searchable filters to the backend as
+              ;; the :search query param. Only filter field-ids listed in
+              ;; :server-search-keys are forwarded; other column filters remain
+              ;; client-side only (applied on the current page by subscriptions).
               server-mode? (= :server (get-in db (paths/list-pagination-mode entity-key)))
-              db-filters (when (and server-mode? (not fetch-mode?))
-                           (get-in db (paths/list-filters entity-key) {}))
+              db-filters (when (and server-mode? (not fetch-mode?) (seq search-keys))
+                           (let [raw-filters (get-in db (paths/list-filters entity-key) {})]
+                             (when (seq raw-filters)
+                               (let [search-val (some (fn [[k v]]
+                                                        (when (and (contains? search-keys k)
+                                                                (string? v)
+                                                                (seq v))
+                                                          v))
+                                                  raw-filters)]
+                                 (when search-val
+                                   {:search search-val})))))
               params (cond-> params
                        (seq db-filters) (as-> p (merge db-filters p)))
               params* (cond-> params
