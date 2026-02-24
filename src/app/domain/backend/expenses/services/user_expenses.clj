@@ -222,6 +222,7 @@
    :total-amount :e.total_amount
    :currency :e.currency
    :supplier-display-name :s.display_name
+  :store-display-name :st.display_name
    :payer-label :p.label
    :payer-type :pt.label
    :expense-category-name :ec.name
@@ -253,12 +254,14 @@
                        (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
           query {:select [[:e.*]
                           [:s.display_name :supplier_display_name]
+                      [:st.display_name :store_display_name]
                           [:s.normalized_key :supplier_normalized_key]
                           [:p.label :payer_label]
                           [:pt.label :payer_type]
                           [:ec.name :expense_category_name]]
                  :from [[:expenses :e]]
                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                        [:stores :st] [:= :st.id :e.store_id]
                              [:payers :p] [:= :p.id :e.payer_id]
                              [:payer_types :pt] [:= :pt.id :p.payer_type_id]
                              [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]

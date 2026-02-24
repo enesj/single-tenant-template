@@ -93,7 +93,10 @@
 (defn approve-and-post!
   "Create an expense from a receipt and update status → posted.
    review-data expects keys for expenses/create-expense! including :supplier_id,
-   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
+   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items.
+
+   store_id is resolved automatically from the receipt's store_alias_id when
+   not explicitly provided in review-data."
   [db receipt-id review-data]
   (jdbc/with-transaction [tx db]
     (let [receipt (queries/get-receipt tx receipt-id)]
@@ -103,13 +106,16 @@
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [expense (expenses/create-expense!
-                      tx
-                      (merge {:receipt_id receipt-id
-                              :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                        review-data)
-                      (:items review-data))
-            extra {:expense_id (:id expense)}]
+      (let [context  (queries/get-receipt-refine-context tx receipt-id)
+            store-id (:store_id context)
+            base     (cond-> {:receipt_id receipt-id
+                              :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                       store-id (assoc :store_id store-id))
+            expense  (expenses/create-expense!
+                       tx
+                       (merge base review-data)
+                       (:items review-data))
+            extra    {:expense_id (:id expense)}]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -122,6 +128,9 @@
 
   If the receipt is unassigned, it is claimed by setting :user_id to user-id.
 
+  store_id is resolved automatically from the receipt's store_alias_id when
+  not explicitly provided in review-data.
+
   review-data expects keys for expenses/create-expense! including :supplier_id,
   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
   [db user-id receipt-id review-data]
@@ -133,16 +142,19 @@
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [expense (expenses/create-expense!
-                      tx
-                      (merge {:receipt_id receipt-id
-                              :user_id user-id
-                              :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                        review-data)
-                      (:items review-data))
-            claim? (nil? (:user_id receipt))
-            extra (cond-> {:expense_id (:id expense)}
-                    claim? (assoc :user_id user-id))]
+      (let [context  (queries/get-receipt-refine-context tx receipt-id)
+            store-id (:store_id context)
+            base     (cond-> {:receipt_id receipt-id
+                              :user_id    user-id
+                              :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                       store-id (assoc :store_id store-id))
+            expense  (expenses/create-expense!
+                       tx
+                       (merge base review-data)
+                       (:items review-data))
+            claim?   (nil? (:user_id receipt))
+            extra    (cond-> {:expense_id (:id expense)}
+                       claim? (assoc :user_id user-id))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -152,6 +164,9 @@
   Intended for user-role admins in the user UI who can process any receipt.
 
   If the receipt is unassigned (`user_id` is NULL), it is claimed by setting :user_id to user-id.
+
+  store_id is resolved automatically from the receipt's store_alias_id when
+  not explicitly provided in review-data.
 
   review-data expects keys for expenses/create-expense! including :supplier_id,
   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
@@ -166,15 +181,18 @@
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [expense (expenses/create-expense!
-                      tx
-                      (merge {:receipt_id receipt-id
-                              :user_id user-id
-                              :currency (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                        review-data)
-                      (:items review-data))
-            claim? (nil? (:user_id receipt))
-            extra (cond-> {:expense_id (:id expense)}
-                    claim? (assoc :user_id user-id))]
+      (let [context  (queries/get-receipt-refine-context tx receipt-id)
+            store-id (:store_id context)
+            base     (cond-> {:receipt_id receipt-id
+                              :user_id    user-id
+                              :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                       store-id (assoc :store_id store-id))
+            expense  (expenses/create-expense!
+                       tx
+                       (merge base review-data)
+                       (:items review-data))
+            claim?   (nil? (:user_id receipt))
+            extra    (cond-> {:expense_id (:id expense)}
+                       claim? (assoc :user_id user-id))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))

@@ -60,6 +60,7 @@
      ;; vector-config / entity-specs (which are based on models.edn) can
      ;; resolve them by the expected IDs like :supplier-id, :payer-id, etc.
      :alias-keys {:supplier_display_name [:supplier-display-name]
+                  :store_display_name [:store-display-name]
                   :supplier_normalized_key [:supplier-normalized-key]
                   :payer_label [:payer-label]
                   :payer_type [:payer-type]

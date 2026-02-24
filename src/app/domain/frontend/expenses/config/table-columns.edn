@@ -133,6 +133,7 @@
  {:available-columns
   ["purchased_at"
    "supplier_display_name"
+   "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
@@ -143,11 +144,13 @@
    "updated_at"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
+    :store_display_name {:type "string", :label "Store"},
    :expense_category_name {:type "string", :label "Expense Category"},
    :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
+    "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
@@ -155,6 +158,7 @@
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
+    "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
@@ -164,6 +168,7 @@
   :sortable-columns
   ["purchased_at"
    "supplier_display_name"
+    "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
