@@ -116,6 +116,14 @@
       :icon "🔒"
       :entities #{:audit-logs :login-events}
       :color "secondary"
+      :scope :admin}
+
+     :project-management
+     {:title "Project Management"
+      :description "Track backlog items and project tasks"
+      :icon "📋"
+      :entities #{:backlog}
+      :color "accent"
       :scope :admin}}
     ;; Domain-specific admin groups from registry
     (domain-registry/all-admin-domain-groups)))

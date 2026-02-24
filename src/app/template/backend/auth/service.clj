@@ -201,6 +201,7 @@
                          :role shared-auth/role-member
                          :status "active"
                          :auth_provider "password"
+                         :email_verified false
                          :created_at now})
           user-plain (db-user->plain user-record)
           verification-token (email-verification/create-verification-token!

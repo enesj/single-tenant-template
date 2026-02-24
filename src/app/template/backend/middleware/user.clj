@@ -4,7 +4,6 @@
    (:require
      [app.shared.http :as shared-http]
      [app.template.backend.security.entity-access :as entity-access]
-     [ring.util.response :as response]
      [taoensso.timbre :as log]))
 
 (defn- unauthorized
@@ -32,46 +31,6 @@
           (log/warn "❌ USER AUTH FAILED: No user in session" {:uri (:uri request)})
           (unauthorized))))))
 
-(defn- handle-tenants-entity-access
-  "Handle special authorization rules for tenants entity."
-  [request handler tenant-id method]
-  (cond
-   ;; Ensure we have a tenant in session for any tenant access
-    (nil? tenant-id)
-    (do (log/warn "❌ TENANT ACCESS DENIED: No tenant in session"
-          {:uri (:uri request) :method method})
-      (unauthorized))
-
-   ;; POST /entities/tenants – creation via generic API not allowed
-    (= method :post)
-    (do (log/warn "🚫 Tenant creation via generic API is not allowed")
-      (-> (response/response {:error "Tenant creation not allowed via this endpoint"})
-        (response/status 403)
-        (response/content-type "application/json")))
-
-   ;; Item routes (have :id param) – allow only when id matches current tenant
-    (some? (get-in request [:path-params :id]))
-    (let [path-id (get-in request [:path-params :id])
-          matches? (= (str path-id) (str tenant-id))]
-      (if matches?
-        (handler request)
-        (do (log/warn "🚫 TENANT ITEM ACCESS DENIED" {:path-id path-id :tenant-id tenant-id})
-          (-> (response/response {:error "Access denied: Can only access your own tenant"})
-            (response/status 403)
-            (response/content-type "application/json")))))
-
-   ;; Collection GET – scope to current tenant by injecting a filter
-    (= method :get)
-    (let [scoped-req (assoc-in request [:query-params :filters]
-                               (merge (or (:filters (:query-params request)) {})
-                                 {:id tenant-id}))]
-      (log/info "🔒 Scoping tenants GET to current tenant" {:tenant-id tenant-id})
-      (handler scoped-req))
-
-   ;; Any other method – pass through with tenant context
-    :else
-    (handler request)))
-
 (defn- handle-users-entity-access
   "Handle special authorization rules for users entity."
   [request handler tenant-id method]
@@ -90,18 +49,13 @@
       (handler request))))
 
 (defn wrap-entities-authorization
-  "Enhanced authorization guard for generic CRUD entities under /api/v1/entities.
-
-   This middleware implements comprehensive security controls:
-   1. Blocks admin-only entities (admins, admin_sessions, audit_logs, etc.)
-   2. Enforces tenant isolation for tenant-specific entities
-   3. Special handling for protected entities (tenants, users)
-   4. Logs all access attempts for security monitoring
+  "Authorization guard for generic CRUD entities under /api/v1/entities.
 
    Security model:
-   - Admin-only entities: NEVER accessible via generic CRUD
-   - Protected entities: Allowed but with strict tenant isolation
-   - Public tenant entities: Normal tenant-scoped access"
+   - Admin-only entities (:admins, :admin-sessions, :audit-logs): NEVER accessible via generic CRUD
+   - Protected entities (:users): Allowed only with tenant context in session
+   - Public entities: currently none
+   - Unknown entities: blocked by default (deny-by-default)"
   [handler]
   (fn [request]
     (let [entity-name (or (get-in request [:path-params :entity])
@@ -134,10 +88,6 @@
           (log/warn "🚫 ENTITY ACCESS BLOCKED"
             {:entity entity-key :reason reason :method method :uri uri})
           (entity-access/get-blocked-entity-response entity-key reason))
-
-        ;; Special handling for tenants entity (protected)
-        (= entity-key :tenants)
-        (handle-tenants-entity-access request handler tenant-id method)
 
         ;; Special handling for users entity (protected)
         (= entity-key :users)
