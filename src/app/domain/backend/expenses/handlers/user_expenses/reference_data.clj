@@ -222,43 +222,6 @@
             (h/json-response {:error "Invalid supplier ID"} 400))))
       (h/unauthorized-response))))
 
-(defn delete-supplier-handler
-  "Handler factory for deleting a supplier (shared catalog).
-
-  Allowed roles: member/admin."
-  [db]
-  (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify suppliers")]
-        forbidden
-        (let [supplier-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
-                            (h/try-parse-uuid (get-in request [:parameters :path :id])))]
-          (if supplier-id
-            (try
-              (let [delete-supplier! (requiring-resolve 'app.domain.backend.expenses.services.suppliers/delete-supplier!)
-                    deleted? (boolean (delete-supplier! db supplier-id))]
-                (if deleted?
-                  (do
-                    (log/info "User deleted supplier" {:user-id (h/get-user-id request)
-                                                       :supplier-id supplier-id
-                                                       :timestamp (java.time.Instant/now)})
-                    {:status 204})
-                  (h/not-found-response "Supplier not found")))
-              (catch org.postgresql.util.PSQLException e
-                (let [sql-state (.getSQLState e)]
-                  (if (= "23503" sql-state) ;; foreign_key_violation
-                    (do
-                      (log/warn "Cannot delete supplier - has related records" {:supplier-id supplier-id})
-                      (h/json-response {:error "Cannot delete supplier: it has related expenses. Delete those expenses first."} 409))
-                    (do
-                      (log/error e "Database error deleting supplier" {:supplier-id supplier-id :sql-state sql-state})
-                      (h/json-response {:error "Failed to delete supplier"} 500)))))
-              (catch Exception e
-                (log/error e "Error deleting supplier" {:supplier-id supplier-id})
-                (h/json-response {:error "Failed to delete supplier"} 500)))
-            (h/json-response {:error "Invalid supplier ID"} 400))))
-      (h/unauthorized-response))))
-
 (defn batch-delete-suppliers-handler
   "Handler factory for deleting multiple suppliers (shared catalog).
 
@@ -387,42 +350,6 @@
               (catch Exception e
                 (log/error e "Error updating payer" {:payer-id payer-id})
                 (h/json-response {:error "Failed to update payer"} 500)))
-            (h/json-response {:error "Invalid payer ID"} 400))))
-      (h/unauthorized-response))))
-
-(defn delete-payer-handler
-  "Handler factory for deleting a payer (shared catalog).
-
-  Allowed roles: member/admin."
-  [db]
-  (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify payers")]
-        forbidden
-        (let [payer-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
-                         (h/try-parse-uuid (get-in request [:parameters :path :id])))]
-          (if payer-id
-            (try
-              (let [delete-payer! (resolve-service-op-fn
-                                    'app.domain.backend.expenses.services.payers
-                                    :delete!
-                                    'delete-payer!)
-                    deleted? (boolean (delete-payer! db payer-id))]
-                (if deleted?
-                  (h/json-response {:data {:deleted true}})
-                  (h/not-found-response "Payer not found")))
-              (catch org.postgresql.util.PSQLException e
-                (let [sql-state (.getSQLState e)]
-                  (if (= "23503" sql-state) ;; foreign_key_violation
-                    (do
-                      (log/warn "Cannot delete payer - has related records" {:payer-id payer-id})
-                      (h/json-response {:error "Cannot delete payer: it has related expenses or other records. Remove related records first."} 409))
-                    (do
-                      (log/error e "Database error deleting payer" {:payer-id payer-id :sql-state sql-state})
-                      (h/json-response {:error "Failed to delete payer"} 500)))))
-              (catch Exception e
-                (log/error e "Error deleting payer" {:payer-id payer-id})
-                (h/json-response {:error "Failed to delete payer"} 500)))
             (h/json-response {:error "Invalid payer ID"} 400))))
       (h/unauthorized-response))))
 

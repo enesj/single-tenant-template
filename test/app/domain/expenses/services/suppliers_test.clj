@@ -84,18 +84,7 @@
                      {:address "Street 123"})]
         (is (= id (:id updated)))
         (is (= "Street 123" (:address updated)))
-        (is (= normalized (:normalized_key updated))))))
-
-  (testing "autocomplete searches display_name"
-    (when-let [db fixtures/*test-db*]
-      (let [id (java.util.UUID/randomUUID)
-            _ (jdbc/execute-one!
-                db
-                ["insert into suppliers (id, display_name, normalized_key) values (?, ?, ?)"
-                 id "ShortBrand" (suppliers/normalize-supplier-key "ShortBrand")]
-                {:builder-fn rs/as-unqualified-lower-maps})
-            results (suppliers/search-suppliers-autocomplete db "Short" {:limit 20})]
-        (is (some #(= id (:id %)) results))))))
+        (is (= normalized (:normalized_key updated)))))))
 
 (deftest resolve-or-create-supplier-with-places-test
   (when-let [db fixtures/*test-db*]

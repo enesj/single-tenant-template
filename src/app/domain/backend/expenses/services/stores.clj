@@ -32,43 +32,6 @@
 ;; City Helpers
 ;; ============================================================================
 
-(defn- ^:unused normalize-city-name
-  "Create normalized key from city name for stable matching.
-
-  Handles diacritics, lowercases text, and trims/collapses whitespace."
-  [city-name]
-  (when-let [name-str (some-> city-name str str/trim not-empty)]
-    (-> name-str
-      (java.text.Normalizer/normalize java.text.Normalizer$Form/NFD)
-      (str/replace #"\p{M}+" "")
-      (str/replace #"Đ" "D")
-      (str/replace #"đ" "d")
-      str/lower-case
-      (str/replace #"\s{2,}" " ")
-      str/trim)))
-
-(defn find-or-create-city!
-  "Legacy city upsert helper retained for compatibility.
-
-  NOTE: Store/receipt flows now use ZIP-only city resolution via
-  `app.domain.backend.expenses.services.cities/resolve-city-id-from-text`."
-  [db city-name]
-  (when-let [name-str (some-> city-name str str/trim not-empty)]
-    (let [normalized (normalize-city-name name-str)
-          city-id (UUID/randomUUID)
-          sql-map {:insert-into :cities
-                   :values [{:id city-id
-                             :name name-str
-                             :normalized_key normalized
-                             :created_at [:now]}]
-                   :on-conflict [:normalized_key]
-                   :do-update-set {:name :excluded/name}
-                   :returning [:id]}]
-      (:id (jdbc/execute-one!
-             db
-             (sql/format sql-map)
-             {:builder-fn rs/as-unqualified-lower-maps})))))
-
 (defn- title-case
   "Convert string to title case (capitalize each word)."
   [s]
@@ -174,52 +137,6 @@
         (not has-noise-token?)
        ;; Token count should be reasonable for a city name
         (<= token-count 5)))))
-
-(defn bad-city?
-  "Check if a city value looks polluted by OCR/address noise.
-
-  This helper is currently not part of ZIP-only city_id resolution."
-  [city]
-  (when-let [text (some-> city str str/trim not-empty)]
-    (let [lower-text (str/lower-case text)
-          tokens (str/split text #"\s+")
-          token-count (count tokens)
-          ;; Known noise tokens that indicate OCR pollution
-          noise-tokens #{"tropic" "maloprodaja" "prodavnica" "hipemarket" "merkur" "market"}
-          has-noise-token? (some #(str/includes? lower-text %) noise-tokens)
-          ;; Check for "centar" contextually:
-          ;; - Allow if it's part of "City Centar" pattern (2 tokens, second is centar)
-          ;; - Reject if standalone or dominant
-          has-bad-centar? (and (str/includes? lower-text "centar")
-                            (not (and (= token-count 2)
-                                   (= (str/lower-case (last tokens)) "centar"))))
-          ;; Legal entity patterns
-          has-legal-entity? (or (str/includes? lower-text "d.o.o")
-                              (str/includes? lower-text "doo")
-                              (str/includes? lower-text "ltd")
-                              (str/includes? lower-text "llc"))
-          ;; Multiple sentences (e.g., "SARAJEVO. Some other text")
-          has-multiple-sentences? (re-find #"\.\s+[A-Z]" text)
-          ;; All uppercase and long (OCR artifact pattern)
-          all-uppercase-long? (and (= text (str/upper-case text))
-                                (> (count text) 15))]
-      (or
-       ;; Contains digits
-        (re-find #"\d" text)
-       ;; Too long
-        (> (count text) 50)
-       ;; Has noise tokens
-        has-noise-token?
-       ;; Has bad centar usage
-        has-bad-centar?
-       ;; Has legal entity markers
-        has-legal-entity?
-       ;; Control characters
-        (re-find #"[\r\n\t]" text)
-       ;; Multiple sentences
-        has-multiple-sentences?
-       ;; All uppercase and suspiciously long
-        all-uppercase-long?))))
 
 (defn- extract-city-from-display-name
   "Extract city from store/branch display name.
@@ -763,76 +680,6 @@
          {:store store
           :store-id (:id store)
           :store-alias-label effective-alias-label})))))
-
-(defn backfill-store-place-ids!
-  "Backfill store normalized keys using Google Places place IDs.
-
-  Intended for REPL/admin maintenance after enabling Places store canonicalization.
-
-  opts:
-  - :limit (default 200)
-  - :region-code / :language-code
-
-  Returns a summary map."
-  ([db places-cfg]
-   (backfill-store-place-ids! db places-cfg nil))
-  ([db places-cfg {:keys [limit region-code language-code] :or {limit 200}}]
-   (if-not (and (map? places-cfg) (seq (:api-key places-cfg)))
-     {:scanned 0 :updated 0 :no-match 0 :failed 0 :reason :missing-places-api-key}
-     (let [rows (jdbc/execute!
-                  db
-                  (sql/format {:select [[:st.id :store_id]
-                                        [:st.supplier_id :supplier_id]
-                                        [:st.display_name :store_display_name]
-                                        [:st.address :store_address]
-                                        [:sp.display_name :supplier_name]]
-                               :from [[:stores :st]]
-                               :join [[:suppliers :sp] [:= :sp.id :st.supplier_id]]
-                               :where [:and
-                                       [:or
-                                        [:is :st.normalized_key nil]
-                                        [:not [:like :st.normalized_key "place-%"]]]
-                                       [:is-not :st.address nil]
-                                       [:<> :st.address ""]]
-                               :limit limit})
-                  {:builder-fn rs/as-unqualified-lower-maps})
-           search-opts {:region-code (or region-code (:region-code places-cfg))
-                        :language-code (or language-code (:language-code places-cfg))
-                        :max-results (or (:max-results places-cfg) 3)
-                        :location-bias (:location-bias places-cfg)
-                        :field-mask "places.displayName,places.id,places.formattedAddress"}]
-       (reduce
-         (fn [acc {:keys [store_id supplier_id store_display_name store_address supplier_name]}]
-           (try
-             (let [query (->> [supplier_name store_display_name store_address]
-                           (remove (fn [s] (str/blank? (str s))))
-                           (map (fn [s] (str/trim (str s))))
-                           (str/join " "))
-                   place (when (seq query)
-                           (first (:places (places-api/search-text! places-cfg query search-opts))))
-                   place-id (some-> place :raw :id str str/trim not-empty)
-                   normalized-key (place-id->normalized-key place-id)
-                   place-address (some-> place :raw :formattedAddress str str/trim not-empty)]
-               (if (seq normalized-key)
-                 (do
-                   (update-store!
-                     db
-                     store_id
-                     {:normalized_key normalized-key
-                      :address (or place-address store_address)
-                      :display_name store_display_name}
-                     {:places-cfg places-cfg
-                      :user-region (or region-code (:region-code places-cfg))})
-                   (merge-duplicate-stores-by-place-id! db supplier_id place-id store_id)
-                   (update acc :updated inc))
-                 (update acc :no-match inc)))
-             (catch Exception _
-               (update acc :failed inc))))
-         {:scanned (count rows)
-          :updated 0
-          :no-match 0
-          :failed 0}
-         rows)))))
 
 ;; Legacy backfill-store-cities! function removed.
 ;; Use app.domain.backend.expenses.services.cities/backfill-store-cities! instead.

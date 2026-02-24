@@ -320,16 +320,6 @@
     (get-in db [:user-expenses :reports :filters])))
 
 (rf/reg-sub
-  :user-expenses/reports-filter-months-back
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :months-back])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-supplier-id
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :supplier-id])))
-
-(rf/reg-sub
   :user-expenses/reports-filter-expanded-supplier-id
   (fn [db _]
     (get-in db [:user-expenses :reports :filters :expanded-supplier-id])))
@@ -338,41 +328,6 @@
   :user-expenses/reports-filter-expanded-top-item-alias-id
   (fn [db _]
     (get-in db [:user-expenses :reports :filters :expanded-top-item-alias-id])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-day-of-week
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :day-of-week])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-category-key
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :category-key])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-amount-bucket
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :amount-bucket])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-selected-day
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :selected-day])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-month-a
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :month-a])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-month-b
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :month-b])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-show-uncategorized?
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :show-uncategorized?])))
 
 (rf/reg-sub
   :user-expenses/report-filter-options

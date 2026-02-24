@@ -248,25 +248,6 @@
           where (assoc :where where)))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn active-expenses-counts-by-supplier
-  "Return a map of supplier-id -> expenses count."
-  [db supplier-ids]
-  (if (seq supplier-ids)
-    (let [rows
-          (jdbc/execute!
-            db
-            (sql/format {:select [:supplier_id [[:count :*] :active_expenses_count]]
-                         :from [:expenses]
-                         :where [:and
-                                 [:in :supplier_id supplier-ids]]
-                         :group-by [:supplier_id]})
-            {:builder-fn rs/as-unqualified-lower-maps})]
-      (reduce (fn [acc {:keys [supplier_id active_expenses_count]}]
-                (assoc acc supplier_id (long (or active_expenses_count 0))))
-        {}
-        rows))
-    {}))
-
 (defn count-suppliers
   "Count suppliers.
 
@@ -599,22 +580,6 @@
                    :source :places-api}))
               {:supplier (create-supplier-idempotent! db display-name)
                :source :ocr-fallback})))))))
-
-(defn search-suppliers-autocomplete
-  "Search suppliers for autocomplete with fuzzy matching."
-  [db query {:keys [limit] :or {limit 10}}]
-  (when (and query (>= (count query) 2))
-    (let [search-pattern (str "%" query "%")]
-      (jdbc/execute!
-        db
-        (sql/format {:select [:*]
-                     :from [:suppliers]
-                     :where [:or
-                             [:ilike :display_name search-pattern]
-                             [:ilike :normalized_key search-pattern]]
-                     :order-by [[:display_name :asc]]
-                     :limit limit})
-        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 ;; ============================================================================
 ;; Related Records

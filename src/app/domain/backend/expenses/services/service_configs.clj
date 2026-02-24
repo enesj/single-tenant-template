@@ -729,11 +729,6 @@
   (when-let [config (get entity-configs entity-key)]
     (factory/register-entity-service! config)))
 
-(defn list-entity-configs
-  "List all available entity configurations."
-  []
-  (keys entity-configs))
-
 ;; ==========================================================================
 ;; Service Registration
 ;; ==========================================================================
