@@ -1,0 +1,309 @@
+(ns app.domain.backend.expenses.services.duplicates
+  "Duplicate detection across canonical entities (Suppliers, Articles, Stores, Manufacturers).
+
+  Strategies:
+  - :prefix   — Group by first N hyphen-tokens of normalized_key (in-memory).
+  - :trigram  — SQL self-join using pg_trgm similarity().
+  - :levenshtein — SQL self-join using fuzzystrmatch levenshtein().
+
+  Each strategy returns clusters: vectors of entity maps belonging together."
+  (:require
+    [clojure.string :as str]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]))
+
+;; ============================================================================
+;; Entity Configuration
+;; ============================================================================
+
+(def ^:private entity-configs
+  "Per-entity config for duplicate detection."
+  {:suppliers     {:table "suppliers"
+                   :name-col :display_name
+                   :key-col :normalized_key
+                   :fk-tables {:expenses {:col :supplier_id}
+                               :stores {:col :supplier_id}
+                               :supplier_aliases {:col :supplier_id}
+                               :article_aliases {:col :supplier_id}
+                               :price_observations {:col :supplier_id}}}
+   :articles      {:table "articles"
+                   :name-col :canonical_name
+                   :key-col :normalized_key
+                   :fk-tables {:expense_items {:col :article_id}
+                               :article_aliases {:col :article_id}
+                               :price_observations {:col :article_id}}}
+   :stores        {:table "stores"
+                   :name-col :display_name
+                   :key-col :normalized_key
+                   :fk-tables {:expenses {:col :store_id}
+                               :store_aliases {:col :store_id}}}
+   :manufacturers {:table "manufacturers"
+                   :name-col :display_name
+                   :key-col :normalized_key
+                   :fk-tables {:articles {:col :manufacturer_id}}}})
+
+(defn- get-entity-config!
+  [entity-type]
+  (or (get entity-configs entity-type)
+    (throw (ex-info (str "Unknown entity type: " entity-type)
+             {:entity-type entity-type
+              :valid-types (keys entity-configs)}))))
+
+;; ============================================================================
+;; Helpers
+;; ============================================================================
+
+(defn- fetch-all-rows
+  "Fetch all rows for an entity (id, name-col, key-col)."
+  [db {:keys [table name-col key-col]}]
+  (jdbc/execute!
+    db
+    (sql/format {:select [:id name-col key-col :created_at]
+                 :from [(keyword table)]
+                 :order-by [[:created_at :asc]]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- prefix-tokens
+  "Extract first `n` hyphen-delimited tokens from a normalized key."
+  [normalized-key n]
+  (when (and normalized-key (pos? n))
+    (let [tokens (str/split normalized-key #"-")]
+      (when (>= (count tokens) n)
+        (str/join "-" (take n tokens))))))
+
+;; ============================================================================
+;; Union-Find for Clustering Pairs
+;; ============================================================================
+
+(defn- make-union-find
+  "Create a mutable union-find structure (atom of parent map)."
+  [ids]
+  (atom (zipmap ids ids)))
+
+(defn- uf-find
+  "Find root with path compression."
+  [uf x]
+  (let [parent (get @uf x x)]
+    (if (= parent x)
+      x
+      (let [root (uf-find uf parent)]
+        (swap! uf assoc x root)
+        root))))
+
+(defn- uf-union
+  "Merge the sets containing x and y."
+  [uf x y]
+  (let [rx (uf-find uf x)
+        ry (uf-find uf y)]
+    (when (not= rx ry)
+      (swap! uf assoc ry rx))))
+
+(defn- uf-clusters
+  "Return clusters (groups of >=2 items) from the union-find."
+  [uf]
+  (->> (keys @uf)
+    (group-by #(uf-find uf %))
+    vals
+    (filter #(> (count %) 1))))
+
+;; ============================================================================
+;; Strategy: Prefix Grouping
+;; ============================================================================
+
+(defn detect-prefix-duplicates
+  "Group entities by first N hyphen-tokens of normalized_key.
+
+  Options:
+  - :prefix-words (default 2) — number of leading tokens to group by
+  - :limit (default 50) — max clusters to return"
+  [db entity-type {:keys [prefix-words limit]
+                   :or {prefix-words 2 limit 50}}]
+  (let [config (get-entity-config! entity-type)
+        rows (fetch-all-rows db config)
+        key-col (:key-col config)
+        grouped (->> rows
+                  (filter #(get % key-col))
+                  (group-by #(prefix-tokens (get % key-col) prefix-words))
+                  (remove (fn [[k _]] (nil? k)))
+                  (filter (fn [[_ members]] (> (count members) 1)))
+                  (sort-by (fn [[_ members]] (- (count members))))
+                  (take limit))]
+    (mapv (fn [[_prefix members]]
+            {:members (vec members)
+             :count (count members)})
+      grouped)))
+
+;; ============================================================================
+;; Strategy: Trigram Similarity
+;; ============================================================================
+
+(defn detect-trigram-duplicates
+  "Find duplicates using pg_trgm similarity() via SQL self-join.
+
+  Options:
+  - :threshold (default 0.4) — minimum similarity score
+  - :limit (default 50) — max clusters to return"
+  [db entity-type {:keys [threshold limit]
+                   :or {threshold 0.4 limit 50}}]
+  (let [config (get-entity-config! entity-type)
+        table (keyword (:table config))
+        ;; Self-join: find pairs where similarity exceeds threshold
+        pairs (jdbc/execute!
+                db
+                (sql/format
+                  {:select [[:a.id :id_a] [:b.id :id_b]
+                            [[:similarity :a.normalized_key :b.normalized_key] :sim]]
+                   :from [[table :a]]
+                   :join [[table :b] [:and
+                                      [:< :a.id :b.id]
+                                      [:> [:similarity :a.normalized_key :b.normalized_key]
+                                       threshold]]]
+                   :order-by [[:sim :desc]]
+                   :limit (* limit 10)})
+                {:builder-fn rs/as-unqualified-lower-maps})
+        ;; Build clusters via union-find
+        all-ids (distinct (concat (map :id_a pairs) (map :id_b pairs)))
+        uf (make-union-find all-ids)]
+    (doseq [{:keys [id_a id_b]} pairs]
+      (uf-union uf id_a id_b))
+    (let [clusters (uf-clusters uf)
+          ;; Fetch full rows for clustered IDs
+          clustered-ids (set (apply concat clusters))]
+      (if (empty? clustered-ids)
+        []
+        (let [rows (jdbc/execute!
+                     db
+                     (sql/format {:select [:id (:name-col config) (:key-col config) :created_at]
+                                  :from [table]
+                                  :where [:in :id clustered-ids]})
+                     {:builder-fn rs/as-unqualified-lower-maps})
+              id->row (zipmap (map :id rows) rows)]
+          (->> clusters
+            (mapv (fn [ids]
+                    {:members (mapv id->row ids)
+                     :count (count ids)}))
+            (sort-by #(- (:count %)))
+            (take limit)
+            vec))))))
+
+;; ============================================================================
+;; Strategy: Levenshtein Distance
+;; ============================================================================
+
+(defn detect-levenshtein-duplicates
+  "Find duplicates using fuzzystrmatch levenshtein() via SQL self-join.
+
+  Options:
+  - :max-distance (default 2) — maximum edit distance
+  - :limit (default 50) — max clusters to return"
+  [db entity-type {:keys [max-distance limit]
+                   :or {max-distance 2 limit 50}}]
+  (let [config (get-entity-config! entity-type)
+        table (keyword (:table config))
+        pairs (jdbc/execute!
+                db
+                (sql/format
+                  {:select [[:a.id :id_a] [:b.id :id_b]
+                            [[:levenshtein :a.normalized_key :b.normalized_key] :dist]]
+                   :from [[table :a]]
+                   :join [[table :b] [:and
+                                      [:< :a.id :b.id]
+                                      [:<= [:levenshtein :a.normalized_key :b.normalized_key]
+                                       max-distance]]]
+                   :order-by [[:dist :asc]]
+                   :limit (* limit 10)})
+                {:builder-fn rs/as-unqualified-lower-maps})
+        all-ids (distinct (concat (map :id_a pairs) (map :id_b pairs)))
+        uf (make-union-find all-ids)]
+    (doseq [{:keys [id_a id_b]} pairs]
+      (uf-union uf id_a id_b))
+    (let [clusters (uf-clusters uf)
+          clustered-ids (set (apply concat clusters))]
+      (if (empty? clustered-ids)
+        []
+        (let [rows (jdbc/execute!
+                     db
+                     (sql/format {:select [:id (:name-col config) (:key-col config) :created_at]
+                                  :from [table]
+                                  :where [:in :id clustered-ids]})
+                     {:builder-fn rs/as-unqualified-lower-maps})
+              id->row (zipmap (map :id rows) rows)]
+          (->> clusters
+            (mapv (fn [ids]
+                    {:members (mapv id->row ids)
+                     :count (count ids)}))
+            (sort-by #(- (:count %)))
+            (take limit)
+            vec))))))
+
+;; ============================================================================
+;; Dispatcher
+;; ============================================================================
+
+(defn detect-duplicates
+  "Detect duplicates for an entity type using the specified strategy.
+
+  Strategy must be one of :prefix, :trigram, :levenshtein.
+  Options are strategy-specific (see individual functions)."
+  [db entity-type strategy opts]
+  (case strategy
+    :prefix (detect-prefix-duplicates db entity-type opts)
+    :trigram (detect-trigram-duplicates db entity-type opts)
+    :levenshtein (detect-levenshtein-duplicates db entity-type opts)
+    (throw (ex-info (str "Unknown strategy: " strategy)
+             {:strategy strategy
+              :valid-strategies [:prefix :trigram :levenshtein]}))))
+
+;; ============================================================================
+;; Usage Count Enrichment
+;; ============================================================================
+
+(defn enrich-with-usage-counts
+  "For each member in each cluster, sum FK reference counts across referencing tables.
+
+  Adds :usage-count to each member map."
+  [db entity-type clusters]
+  (let [config (get-entity-config! entity-type)
+        fk-tables (:fk-tables config)
+        all-ids (->> clusters
+                  (mapcat :members)
+                  (map :id)
+                  distinct
+                  vec)]
+    (if (or (empty? all-ids) (empty? fk-tables))
+      clusters
+      (let [;; For each FK table, count references per entity ID
+            counts-by-id
+            (reduce
+              (fn [acc [fk-table {:keys [col]}]]
+                (let [rows (jdbc/execute!
+                             db
+                             (sql/format {:select [[col :entity_id]
+                                                   [[:count :*] :cnt]]
+                                          :from [(keyword (name fk-table))]
+                                          :where [:in col all-ids]
+                                          :group-by [col]})
+                             {:builder-fn rs/as-unqualified-lower-maps})]
+                  (reduce
+                    (fn [a {:keys [entity_id cnt]}]
+                      (update a entity_id (fnil + 0) cnt))
+                    acc
+                    rows)))
+              {}
+              fk-tables)]
+        (mapv
+          (fn [cluster]
+            (update cluster :members
+              (fn [members]
+                (mapv #(assoc % :usage-count (get counts-by-id (:id %) 0))
+                  members))))
+          clusters)))))
+
+(comment
+  ;; REPL usage examples
+  ;; (detect-duplicates db :suppliers :prefix {:prefix-words 2})
+  ;; (detect-duplicates db :articles :trigram {:threshold 0.5})
+  ;; (detect-duplicates db :manufacturers :levenshtein {:max-distance 2})
+  ;; (enrich-with-usage-counts db :suppliers clusters)
+  :rcf)

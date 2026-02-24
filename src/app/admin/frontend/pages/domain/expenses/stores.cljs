@@ -4,7 +4,11 @@
   Renders an admin-native list backed by the expenses admin API."
   (:require
     [app.admin.frontend.components.layout :as layout]
+    [app.domain.frontend.expenses.components.related-records-wizard :as rr-wizard]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.list.cells :as list-cells]
+    [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
@@ -15,7 +19,46 @@
     app.domain.frontend.expenses.admin.adapters.sync
     app.domain.frontend.expenses.events.cities
     app.domain.frontend.expenses.events.suppliers
-    app.domain.frontend.expenses.events.stores))
+    app.domain.frontend.expenses.events.stores
+    app.domain.frontend.expenses.subs.stores))
+
+(defn- show-related-records-actions
+  [store]
+  [{:group-title "Related"
+    :items [{:id "show-related-records"
+             :icon "\uD83D\uDD17"
+             :label "Show related records"
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (rf/dispatch [:app.domain.frontend.expenses.events.stores/open-related-records-modal store]))}]}])
+
+(defn- render-store-row-actions
+  [store]
+  (let [item-id (id-utils/extract-entity-id store)]
+    ($ list-cells/action-buttons
+      {:item store
+       :entity-name :stores
+       :show-edit? (:show-edit? store)
+       :show-delete? (:show-delete? store)
+       :edit-disabled? (:edit-disabled? store)
+       :delete-disabled? (:delete-disabled? store)
+       :on-edit-click (:on-edit-click store)
+       :custom-actions (fn [_]
+                         ($ dropdown/action-dropdown
+                           {:entity-id item-id
+                            :actions (show-related-records-actions store)
+                            :position :portal}))})))
+
+(def ^:private store-type-options
+  [{:id "expenses"
+    :label "Expenses"
+    :description "Expenses at this store location."}
+   {:id "receipts"
+    :label "Receipts"
+    :description "Receipts connected through expenses."}
+   {:id "articles"
+    :label "Articles"
+    :description "Articles purchased at this store."}])
 
 (defui admin-stores-page
   "Admin route: /admin/stores"
@@ -53,4 +96,14 @@
            :allow-add? false
            :allow-edit? true
            :allow-delete? true
-           :disallowed-action-mode :hide})))))
+           :disallowed-action-mode :hide
+           :render-actions render-store-row-actions})
+
+        ($ rr-wizard/related-records-wizard
+          {:entity-singular "store"
+           :entity-key :stores
+           :type-options store-type-options
+           :entity-name-fn (fn [entity]
+                             (or (:display-name entity)
+                               (:display_name entity)
+                               "Selected store"))})))))

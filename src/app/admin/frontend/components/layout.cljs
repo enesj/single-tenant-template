@@ -119,7 +119,12 @@
                          :label "Store Aliases"
                          :href "/admin/store-aliases"
                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                         :active? (= route-name :admin-store-aliases)}]
+                         :active? (= route-name :admin-store-aliases)}
+                        {:id "admin-sidebar-expenses-duplicates"
+                         :label "Dedup & Merge"
+                         :href "/admin/duplicates"
+                         :icon ($ articles-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-duplicates)}]
 
         sections [{:title "System Administration" :items system-admin-items}
                   {:title "Domain"

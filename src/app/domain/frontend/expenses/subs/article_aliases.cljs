@@ -1,5 +1,7 @@
 (ns app.domain.frontend.expenses.subs.article-aliases
-  (:require [re-frame.core :as rf]))
+  (:require
+    [app.domain.frontend.expenses.subs.related-records-factory :as rr-subs]
+    [re-frame.core :as rf]))
 
 (def ^:private base-path [:admin :expenses :article-aliases])
 
@@ -32,3 +34,8 @@
   :expenses/article-alias-detail-modal-id
   (fn [db _]
     (get-in db (conj base-path :detail-modal :entity-id))))
+
+;; Related records modal subs
+(rr-subs/register-related-records-subs!
+  {:entity-singular "article-alias"
+   :base-path base-path})

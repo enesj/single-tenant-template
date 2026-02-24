@@ -4,7 +4,11 @@
   Renders an admin-native list backed by the expenses admin API."
   (:require
     [app.admin.frontend.components.layout :as layout]
+    [app.domain.frontend.expenses.components.related-records-wizard :as rr-wizard]
+    [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.list.cells :as list-cells]
+    [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
@@ -13,7 +17,40 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.manufacturers))
+    app.domain.frontend.expenses.events.manufacturers
+    app.domain.frontend.expenses.subs.manufacturers))
+
+(defn- show-related-records-actions
+  [manufacturer]
+  [{:group-title "Related"
+    :items [{:id "show-related-records"
+             :icon "\uD83D\uDD17"
+             :label "Show related records"
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (rf/dispatch [:app.domain.frontend.expenses.events.manufacturers/open-related-records-modal manufacturer]))}]}])
+
+(defn- render-manufacturer-row-actions
+  [manufacturer]
+  (let [item-id (id-utils/extract-entity-id manufacturer)]
+    ($ list-cells/action-buttons
+      {:item manufacturer
+       :entity-name :manufacturers
+       :show-edit? (:show-edit? manufacturer)
+       :show-delete? (:show-delete? manufacturer)
+       :edit-disabled? (:edit-disabled? manufacturer)
+       :delete-disabled? (:delete-disabled? manufacturer)
+       :on-edit-click (:on-edit-click manufacturer)
+       :custom-actions (fn [_]
+                         ($ dropdown/action-dropdown
+                           {:entity-id item-id
+                            :actions (show-related-records-actions manufacturer)
+                            :position :portal}))})))
+
+(def ^:private manufacturer-type-options
+  [{:id "articles"
+    :label "Articles"
+    :description "Articles from this manufacturer."}])
 
 (defui admin-manufacturers-page
   "Admin route: /admin/manufacturers"
@@ -47,4 +84,14 @@
            :allow-add? false
            :allow-edit? true
            :allow-delete? true
-           :disallowed-action-mode :hide})))))
+           :disallowed-action-mode :hide
+           :render-actions render-manufacturer-row-actions})
+
+        ($ rr-wizard/related-records-wizard
+          {:entity-singular "manufacturer"
+           :entity-key :manufacturers
+           :type-options manufacturer-type-options
+           :entity-name-fn (fn [entity]
+                             (or (:display-name entity)
+                               (:display_name entity)
+                               "Selected manufacturer"))})))))

@@ -4,6 +4,7 @@
     [app.admin.frontend.pages.admins :as admins]
     [app.admin.frontend.pages.backlog :as backlog]
     [app.admin.frontend.pages.domain.expenses.article-aliases :as article-aliases]
+    [app.admin.frontend.pages.domain.expenses.duplicates :as duplicates]
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
     [app.admin.frontend.pages.domain.expenses.categories :as categories]
@@ -147,6 +148,11 @@
          ["/unmapped-aliases"
           {:name :admin-unmapped-aliases
            :view unmapped-aliases/admin-unmapped-aliases-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/duplicates"
+          {:name :admin-duplicates
+           :view duplicates/admin-duplicates-page
            :controllers [(guarded-start nil)]}]
 
          ;; Audit Logs

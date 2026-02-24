@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.routes.categories :as categories]
     [app.domain.backend.expenses.routes.cities :as cities]
     [app.domain.backend.expenses.routes.countries :as countries]
+    [app.domain.backend.expenses.routes.duplicates :as duplicates]
     [app.domain.backend.expenses.routes.expense-categories :as expense-categories]
     [app.domain.backend.expenses.routes.expense-items :as expense-items]
     [app.domain.backend.expenses.routes.expenses :as expenses]
@@ -47,7 +48,8 @@
    (expenses/routes db)
    (expense-items/routes db)
    (articles/routes db)
-   (reports/routes db)])
+   (reports/routes db)
+   (duplicates/routes db)])
 
 
 

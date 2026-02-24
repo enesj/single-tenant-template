@@ -9,6 +9,7 @@
   (:require
     [app.domain.backend.expenses.services.cities :as cities]
     [app.domain.backend.expenses.services.places-api :as places-api]
+    [app.domain.backend.expenses.services.related-records :as rr]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
     [app.domain.backend.expenses.services.stores.matching :as store-matching]
@@ -836,3 +837,119 @@
 ;; Legacy backfill-store-cities! function removed.
 ;; Use app.domain.backend.expenses.services.cities/backfill-store-cities! instead.
 ;; That function resolves stores.city_id via ZIP lookup in existing cities rows.
+
+;; ============================================================================
+;; Related Records
+;; ============================================================================
+
+(defn- list-related-expenses
+  [db store-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:e.id :id]
+                                   [:e.purchased_at :purchased_at]
+                                   [:e.total_amount :total_amount]
+                                   [:e.currency :currency]
+                                   [:e.notes :notes]
+                                   [:e.receipt_id :receipt_id]
+                                   [:e.created_at :created_at]
+                                   [:s.display_name :supplier_display_name]]
+                 :from [[:expenses :e]]
+                 :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
+                 :where [:= :e.store_id store-id]
+                 :order-by [[:e.purchased_at :desc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-receipts
+  [db store-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:r.id :id]
+                                   [:r.original_filename :original_filename]
+                                   [:r.status :status]
+                                   [:r.supplier_guess :supplier_guess]
+                                   [:r.total_amount_guess :total_amount_guess]
+                                   [:r.currency_guess :currency_guess]
+                                   [:r.created_at :created_at]
+                                   [:r.updated_at :updated_at]
+                                   [:e.id :expense_id]
+                                   [:s.display_name :supplier_display_name]]
+                 :from [[:expenses :e]]
+                 :join [[:receipts :r] [:= :r.id :e.receipt_id]]
+                 :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
+                 :where [:= :e.store_id store-id]
+                 :order-by [[:r.created_at :desc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-articles-direct
+  [db store-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:a.id :id]
+                                   [:a.canonical_name :canonical_name]
+                                   [:a.normalized_key :normalized_key]
+                                   [:a.link :link]
+                                   [:a.created_at :created_at]
+                                   [:m.display_name :manufacturer_display_name]
+                                   [:sc.name :subcategory_name]]
+                 :from [[:expense_items :ei]]
+                 :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                        [:articles :a] [:= :a.id :ei.article_id]]
+                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                             [:subcategories :sc] [:= :sc.id :a.subcategory_id]]
+                 :where [:and
+                         [:= :e.store_id store-id]
+                         [:is-not :ei.article_id nil]]
+                 :order-by [[:a.canonical_name :asc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-articles-via-aliases
+  [db store-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:a.id :id]
+                                   [:a.canonical_name :canonical_name]
+                                   [:a.normalized_key :normalized_key]
+                                   [:a.link :link]
+                                   [:a.created_at :created_at]
+                                   [:m.display_name :manufacturer_display_name]
+                                   [:sc.name :subcategory_name]]
+                 :from [[:expense_items :ei]]
+                 :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                        [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                        [:articles :a] [:= :a.id :aa.article_id]]
+                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                             [:subcategories :sc] [:= :sc.id :a.subcategory_id]]
+                 :where [:and
+                         [:= :e.store_id store-id]
+                         [:is-not :aa.article_id nil]]
+                 :order-by [[:a.canonical_name :asc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-articles
+  [db store-id limit]
+  (rr/merge-related-rows
+    limit
+    (list-related-articles-direct db store-id limit)
+    (list-related-articles-via-aliases db store-id limit)))
+
+(defn list-related-records
+  "List records related to a store by type.
+
+  Supported types: expenses, receipts, articles."
+  [db store-id {:keys [type limit]}]
+  (when-not store-id
+    (throw (ex-info "store-id is required" {:status 400})))
+  (let [related-type (rr/normalize-related-type type)
+        related-limit (rr/clamp-related-limit limit)]
+    (case related-type
+      :expenses (list-related-expenses db store-id related-limit)
+      :receipts (list-related-receipts db store-id related-limit)
+      :articles (list-related-articles db store-id related-limit)
+      (throw (ex-info
+               "Invalid related type. Expected one of: expenses, receipts, articles."
+               {:status 400 :type type})))))

@@ -2,6 +2,7 @@
   "Supplier CRUD services using factory pattern."
   (:require
     [app.domain.backend.expenses.services.places-api :as places-api]
+    [app.domain.backend.expenses.services.related-records :as rr]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
     [clojure.string :as str]
@@ -567,3 +568,133 @@
                      :order-by [[:display_name :asc]]
                      :limit limit})
         {:builder-fn rs/as-unqualified-lower-maps}))))
+
+;; ============================================================================
+;; Related Records
+;; ============================================================================
+
+(defn- list-related-expenses
+  [db supplier-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:e.id :id]
+                                   [:e.purchased_at :purchased_at]
+                                   [:e.total_amount :total_amount]
+                                   [:e.currency :currency]
+                                   [:e.notes :notes]
+                                   [:e.receipt_id :receipt_id]
+                                   [:e.created_at :created_at]
+                                   [:st.display_name :store_display_name]]
+                 :from [[:expenses :e]]
+                 :left-join [[:stores :st] [:= :st.id :e.store_id]]
+                 :where [:= :e.supplier_id supplier-id]
+                 :order-by [[:e.purchased_at :desc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-receipts
+  [db supplier-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:r.id :id]
+                                   [:r.original_filename :original_filename]
+                                   [:r.status :status]
+                                   [:r.supplier_guess :supplier_guess]
+                                   [:r.total_amount_guess :total_amount_guess]
+                                   [:r.currency_guess :currency_guess]
+                                   [:r.created_at :created_at]
+                                   [:r.updated_at :updated_at]
+                                   [:e.id :expense_id]]
+                 :from [[:expenses :e]]
+                 :join [[:receipts :r] [:= :r.id :e.receipt_id]]
+                 :where [:= :e.supplier_id supplier-id]
+                 :order-by [[:r.created_at :desc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-articles-via-aliases
+  [db supplier-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:a.id :id]
+                                   [:a.canonical_name :canonical_name]
+                                   [:a.normalized_key :normalized_key]
+                                   [:a.link :link]
+                                   [:a.created_at :created_at]
+                                   [:m.display_name :manufacturer_display_name]
+                                   [:s.name :subcategory_name]]
+                 :from [[:article_aliases :aa]]
+                 :join [[:articles :a] [:= :a.id :aa.article_id]]
+                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                             [:subcategories :s] [:= :s.id :a.subcategory_id]]
+                 :where [:and
+                         [:= :aa.supplier_id supplier-id]
+                         [:is-not :aa.article_id nil]]
+                 :order-by [[:a.canonical_name :asc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-articles-via-expenses
+  [db supplier-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:a.id :id]
+                                   [:a.canonical_name :canonical_name]
+                                   [:a.normalized_key :normalized_key]
+                                   [:a.link :link]
+                                   [:a.created_at :created_at]
+                                   [:m.display_name :manufacturer_display_name]
+                                   [:s.name :subcategory_name]]
+                 :from [[:expense_items :ei]]
+                 :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                        [:articles :a] [:= :a.id :ei.article_id]]
+                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                             [:subcategories :s] [:= :s.id :a.subcategory_id]]
+                 :where [:and
+                         [:= :e.supplier_id supplier-id]
+                         [:is-not :ei.article_id nil]]
+                 :order-by [[:a.canonical_name :asc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-articles
+  [db supplier-id limit]
+  (rr/merge-related-rows
+    limit
+    (list-related-articles-via-aliases db supplier-id limit)
+    (list-related-articles-via-expenses db supplier-id limit)))
+
+(defn- list-related-stores
+  [db supplier-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select [[:st.id :id]
+                          [:st.display_name :display_name]
+                          [:st.normalized_key :normalized_key]
+                          [:st.address :address]
+                          [:st.created_at :created_at]
+                          [:c.name :city]]
+                 :from [[:stores :st]]
+                 :left-join [[:cities :c] [:= :c.id :st.city_id]]
+                 :where [:= :st.supplier_id supplier-id]
+                 :order-by [[:st.display_name :asc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn list-related-records
+  "List records related to a supplier by type.
+
+  Supported types: expenses, receipts, articles, stores."
+  [db supplier-id {:keys [type limit]}]
+  (when-not supplier-id
+    (throw (ex-info "supplier-id is required" {:status 400})))
+  (let [related-type (rr/normalize-related-type type)
+        related-limit (rr/clamp-related-limit limit)]
+    (case related-type
+      :expenses (list-related-expenses db supplier-id related-limit)
+      :receipts (list-related-receipts db supplier-id related-limit)
+      :articles (list-related-articles db supplier-id related-limit)
+      :stores (list-related-stores db supplier-id related-limit)
+      (throw (ex-info
+               "Invalid related type. Expected one of: expenses, receipts, articles, stores."
+               {:status 400 :type type})))))

@@ -2,6 +2,7 @@
   "Article alias management (unified raw_label + article mapping)."
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
+    [app.domain.backend.expenses.services.related-records :as rr]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
     [app.shared.type-conversion :as type-conv]
@@ -230,4 +231,69 @@
                    :where [:in :id alias-ids]
                    :returning [:*]})
       {:builder-fn rs/as-unqualified-lower-maps})))
+
+;; ============================================================================
+;; Related Records
+;; ============================================================================
+
+(defn- list-related-expenses
+  [db alias-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:e.id :id]
+                                   [:e.purchased_at :purchased_at]
+                                   [:e.total_amount :total_amount]
+                                   [:e.currency :currency]
+                                   [:e.notes :notes]
+                                   [:e.receipt_id :receipt_id]
+                                   [:e.created_at :created_at]
+                                   [:s.display_name :supplier_display_name]
+                                   [:st.display_name :store_display_name]]
+                 :from [[:expense_items :ei]]
+                 :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                 :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                             [:stores :st] [:= :st.id :e.store_id]]
+                 :where [:= :ei.alias_id alias-id]
+                 :order-by [[:e.purchased_at :desc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- list-related-receipts
+  [db alias-id limit]
+  (jdbc/execute!
+    db
+    (sql/format {:select-distinct [[:r.id :id]
+                                   [:r.original_filename :original_filename]
+                                   [:r.status :status]
+                                   [:r.supplier_guess :supplier_guess]
+                                   [:r.total_amount_guess :total_amount_guess]
+                                   [:r.currency_guess :currency_guess]
+                                   [:r.created_at :created_at]
+                                   [:r.updated_at :updated_at]
+                                   [:e.id :expense_id]
+                                   [:s.display_name :supplier_display_name]]
+                 :from [[:expense_items :ei]]
+                 :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                        [:receipts :r] [:= :r.id :e.receipt_id]]
+                 :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
+                 :where [:= :ei.alias_id alias-id]
+                 :order-by [[:r.created_at :desc]]
+                 :limit limit})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn list-related-records
+  "List records related to an article alias by type.
+
+  Supported types: expenses, receipts."
+  [db alias-id {:keys [type limit]}]
+  (when-not alias-id
+    (throw (ex-info "alias-id is required" {:status 400})))
+  (let [related-type (rr/normalize-related-type type)
+        related-limit (rr/clamp-related-limit limit)]
+    (case related-type
+      :expenses (list-related-expenses db alias-id related-limit)
+      :receipts (list-related-receipts db alias-id related-limit)
+      (throw (ex-info
+               "Invalid related type. Expected one of: expenses, receipts."
+               {:status 400 :type type})))))
 
