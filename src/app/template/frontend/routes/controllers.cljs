@@ -62,3 +62,13 @@
                    :else
                    nil)))
       :stop (fn [_] (rf/dispatch [:page/cleanup]))}]))
+
+(defn user-guarded-start
+  "Creates a route controller that runs init-event only after confirming user auth.
+   Redirects to /login if the session is expired or the user is not authenticated.
+   Mirrors the admin's guarded-start but for cookie-based user sessions."
+  [init-event]
+  [{:start (fn [_]
+             (rf/dispatch [:user/check-auth-protected (when init-event [init-event])]))
+    :stop  (fn [_]
+             (rf/dispatch [:page/cleanup]))}])

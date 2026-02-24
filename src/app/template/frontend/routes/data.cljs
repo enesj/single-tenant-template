@@ -98,12 +98,12 @@
        ["/entities"
         {:name :entities
          :view :entities
-         :controllers (controllers/make-simple-controller :page/init-entities)}]
+         :controllers (controllers/user-guarded-start :page/init-entities)}]
 
        ["/entities/"
         {:name :entities-slash
          :view :entities
-         :controllers (controllers/make-simple-controller :page/init-entities)}]]
+         :controllers (controllers/user-guarded-start :page/init-entities)}]]
       ;; Domain user routes from registry (decoupled from template)
       (domain-registry/all-user-routes)
       (generate-entity-routes)

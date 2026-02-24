@@ -5,6 +5,7 @@
   (:require
     [app.template.frontend.events.auth.change-password]
     [app.template.frontend.events.auth.fx]
+    [app.template.frontend.events.auth.guard]
     [app.template.frontend.events.auth.login]
     [app.template.frontend.events.auth.logout]
     [app.template.frontend.events.auth.pages]
