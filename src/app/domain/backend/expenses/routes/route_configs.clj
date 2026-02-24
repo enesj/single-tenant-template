@@ -169,9 +169,11 @@
    :default-limit 50
    :default-order-by "canonical_name"
    :required-fields [:canonical-name]
-   :has-count? false
-   :has-search? false
+   :has-count? true
+   :has-search? true
    :custom-query-params (fn [qp]
+                          {:search (:search qp)})
+   :custom-count-params (fn [qp]
                           {:search (:search qp)})})
 
 (def expense-config

@@ -142,6 +142,13 @@
               fetch-limit (:fetch-limit params)
               fetch-offset (or (:fetch-offset params) 0)
               fetch-mode? (some? fetch-limit)
+              ;; In server mode, seed params with current DB filter state so that
+              ;; page changes and CRUD reloads preserve the active search/filters.
+              server-mode? (= :server (get-in db (paths/list-pagination-mode entity-key)))
+              db-filters (when (and server-mode? (not fetch-mode?))
+                           (get-in db (paths/list-filters entity-key) {}))
+              params (cond-> params
+                       (seq db-filters) (as-> p (merge db-filters p)))
               params* (cond-> params
                         fetch-mode? (dissoc :fetch-limit :fetch-offset))
               {:keys [limit offset] :as pagination} (when-not fetch-mode?
@@ -167,10 +174,15 @@
     (rf/reg-event-fx
       (keyword event-ns "list-loaded")
       (fn [{:keys [db]} [_ pagination response]]
-        (let [db* (-> db
+        (let [total (:total response)
+              db* (-> db
                     (finish-load entity-key base-path nil)
                     (assoc-in (conj base-path :items)
                       (vec (or (get response (keyword (name entity-key))) []))))
+              ;; Store total for server-mode pagination UI
+              db* (if (some? total)
+                    (assoc-in db* (paths/list-total-items entity-key) total)
+                    db*)
               db* (if pagination
                     (update-pagination-state db* entity-key pagination)
                     db*)]

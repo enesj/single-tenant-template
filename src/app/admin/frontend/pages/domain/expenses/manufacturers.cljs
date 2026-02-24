@@ -17,8 +17,9 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.manufacturers
-    app.domain.frontend.expenses.subs.manufacturers))
+    [app.domain.frontend.expenses.events.manufacturers :as manufacturers-events]
+    app.domain.frontend.expenses.subs.manufacturers
+    [app.template.frontend.events.list.ui-state :as ui-state]))
 
 (defn- show-related-records-actions
   [manufacturer]

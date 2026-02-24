@@ -19,7 +19,8 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    [app.domain.frontend.expenses.events.articles :as articles-events]))
+    [app.domain.frontend.expenses.events.articles :as articles-events]
+    [app.template.frontend.events.list.ui-state :as ui-state]))
 
 (defn- show-related-records-actions
   [article]
@@ -55,10 +56,12 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         ;; Template list-view pagination is client-side; fetch a reasonably large
-                         ;; set so the list can paginate without additional backend wiring.
-                         (rf/dispatch [:app.domain.frontend.expenses.events.articles/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}]))
+                         ;; Server-side pagination: set mode, register refresh event, load page 1
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
+                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
+                                            [::articles-events/load-list]])
+                         (rf/dispatch [::articles-events/load-list
+                                       {:page 1 :per-page 25}]))
                        [])]
     (use-effect
       (fn []

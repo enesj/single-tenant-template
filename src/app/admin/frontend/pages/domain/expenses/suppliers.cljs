@@ -18,8 +18,9 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.suppliers
-    app.domain.frontend.expenses.subs.suppliers))
+    [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
+    app.domain.frontend.expenses.subs.suppliers
+    [app.template.frontend.events.list.ui-state :as ui-state]))
 
 (defn- show-related-records-actions
   [supplier]
@@ -69,8 +70,11 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.suppliers/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}]))
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
+                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
+                                            [::suppliers-events/load-list]])
+                         (rf/dispatch [::suppliers-events/load-list
+                                       {:page 1 :per-page 25}]))
                        [])]
     (use-effect
       (fn []

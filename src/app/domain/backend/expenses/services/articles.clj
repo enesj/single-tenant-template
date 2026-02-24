@@ -184,17 +184,21 @@
                      :where [:= :id id]})))))
 
 (defn count-articles
-  "Count total articles, optionally with search filter."
-  [db & [search]]
+  "Count total articles, optionally with search filter.
+
+  Accepts a map with optional :search key, matching the signature expected by
+  the routes factory count handler."
+  [db {:keys [search]}]
   (let [base-query {:select [[[:count :*] :total]]
                     :from [:articles]}
-        final-query (if search
+        final-query (if (seq search)
                       (assoc base-query :where [:or
                                                 [:ilike :canonical_name (str "%" search "%")]
                                                 [:ilike :normalized_key (str "%" search "%")]])
                       base-query)]
-    (:total (jdbc/execute-one! db (sql/format final-query)
-              {:builder-fn rs/as-unqualified-lower-maps}))))
+    {:total (or (:total (jdbc/execute-one! db (sql/format final-query)
+                          {:builder-fn rs/as-unqualified-lower-maps}))
+              0)}))
 
 (defn search-articles
   "Search articles for autocomplete."

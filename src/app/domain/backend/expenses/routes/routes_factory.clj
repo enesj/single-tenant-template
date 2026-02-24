@@ -187,10 +187,25 @@
   (let [v (or order-by default-order-by)]
     (model-naming/ensure-app-keyword v)))
 
+(defn- normalize-count-result
+  "Normalize a count function's return value to a number.
+
+  Count functions may return either {:total N} (map) or N (number)."
+  [result]
+  (cond
+    (map? result) (:total result)
+    (number? result) result
+    :else nil))
+
 (defn build-list-handler
-  "Builds a generic list handler for an entity."
+  "Builds a generic list handler for an entity.
+
+  When the entity config includes :has-count? true, the handler also calls the
+  count function with the same filter params and includes :total in the response.
+  This enables server-side pagination by letting the frontend know the total
+  number of matching records."
   [{:keys [service _entity-key entity-plural default-limit default-order-by
-           custom-query-params transform-response]}]
+           has-count? custom-query-params custom-count-params transform-response]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
@@ -208,8 +223,21 @@
               response-key (or (:response-key transform-response) entity-plural)
               response-data (if (:transform transform-response)
                               ((:transform transform-response) results)
-                              (to-app results))]
-          (utils/success-response {response-key response-data})))
+                              (to-app results))
+              ;; Inline total count for server-side pagination
+              total (when has-count?
+                      (try
+                        (let [count-params (if custom-count-params (custom-count-params qp) {})
+                              count-fn (resolve-service-op-fn service
+                                         (symbol (str "count-" (name entity-plural)))
+                                         :count)]
+                          (normalize-count-result (count-fn db count-params)))
+                        (catch Exception e
+                          (log/warn e "Failed to get count for" (name entity-plural))
+                          nil)))
+              response (cond-> {response-key response-data}
+                         (some? total) (assoc :total total))]
+          (utils/success-response response)))
       (str "Failed to list " (name entity-plural)))))
 
 (defn build-count-handler
