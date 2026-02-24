@@ -8,6 +8,8 @@
 
   Each strategy returns clusters: vectors of entity maps belonging together."
   (:require
+    [buddy.core.codecs :as codecs]
+    [buddy.core.hash :as hash]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -71,6 +73,50 @@
     (let [tokens (str/split normalized-key #"-")]
       (when (>= (count tokens) n)
         (str/join "-" (take n tokens))))))
+
+(defn cluster-id
+  "Compute a deterministic signature for a detected cluster.
+
+  The ID is based on:
+  - entity-type (keyword, e.g. :suppliers)
+  - sorted member UUIDs (as lowercase strings)
+
+  This intentionally hides *exactly* that set of members. If membership changes,
+  the resulting cluster-id changes too (acceptable for MVP)."
+  [entity-type members]
+  (let [entity-part (some-> entity-type name)
+        member-ids (->> members
+                     (map #(or (:id %) %))
+                     (keep identity)
+                     (map str)
+                     (map str/lower-case)
+                     sort)
+        payload (when (and (seq entity-part) (seq member-ids))
+                  (str entity-part ":" (str/join "," member-ids)))]
+    (when payload
+      (-> payload
+        (.getBytes "UTF-8")
+        hash/sha256
+        codecs/bytes->hex))))
+
+(defn attach-cluster-ids
+  "Attach `:cluster-id` to each cluster map."
+  [entity-type clusters]
+  (mapv (fn [cluster]
+          (let [cid (cluster-id entity-type (:members cluster))]
+            (cond-> cluster
+              cid (assoc :cluster-id cid))))
+    clusters))
+
+(defn filter-ignored-clusters
+  "Remove clusters whose `:cluster-id` exists in `ignored-ids` (a set)."
+  [ignored-ids clusters]
+  (if (seq ignored-ids)
+    (->> clusters
+      (remove (fn [cluster]
+                (contains? ignored-ids (or (:cluster-id cluster) (:cluster_id cluster)))))
+      vec)
+    (vec clusters)))
 
 ;; ============================================================================
 ;; Union-Find for Clustering Pairs

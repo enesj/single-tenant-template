@@ -23,7 +23,7 @@
   [{:keys [resources-dir migrations-dir]}]
   (let [db-dir (file-util/join-path resources-dir "db")
         migrations-full-dir (file-util/join-path resources-dir migrations-dir)
-        existing-migrations (files/migrations-list migrations-full-dir)
+        existing-migrations (files/migrations-list migrations-dir)
 
         ;; Check if hstore extension migration already exists
         hstore-migration-exists? (some #(str/includes? % "enable_hstore_extension") existing-migrations)
@@ -54,7 +54,7 @@
         views-all (files/read-hierarchical-edn db-dir "views.edn")
 
         ;; Get existing migrations again to include the new hstore one
-        all-migrations (files/migrations-list migrations-full-dir)
+        all-migrations (files/migrations-list migrations-dir)
 
           ;; Find orphaned migrations
         orphaned-functions (files/find-orphaned-migrations all-migrations functions-all :fn)
@@ -70,8 +70,8 @@
 
         ;; After possibly creating hstore, continue from the highest current number
         creation-start-number (if hstore-migration-number
-                              (inc hstore-migration-number)
-                              start-number)]
+                                (inc hstore-migration-number)
+                                start-number)]
 
       ;; Log what we're skipping and what we're dropping
     (let [skipped-functions (- (count functions-all) (count functions))
