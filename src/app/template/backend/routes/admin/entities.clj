@@ -14,7 +14,37 @@
   #{"Waiting" "In progres" "Completed" "Need improvments"})
 
 (def ^:private backlog-type-options
-  #{"Issue" "Feature" "Refactoring" "Review"})
+  #{"Issue" "Feature" "Refactoring" "Review" "Improvment"})
+
+(def ^:private backlog-status-aliases
+  {"waiting" "Waiting"
+   "in progres" "In progres"
+   "in progress" "In progres"
+   "completed" "Completed"
+   "need improvments" "Need improvments"
+   "need improvements" "Need improvments"})
+
+(def ^:private backlog-type-aliases
+  {"issue" "Issue"
+   "feature" "Feature"
+   "refactoring" "Refactoring"
+   "review" "Review"
+   "improvment" "Improvment"
+   "improvement" "Improvment"})
+
+(defn- backlog-option-value
+  [value]
+  (if (map? value)
+    (or (get value :value)
+      (get value "value")
+      value)
+    value))
+
+(defn- canonical-backlog-value
+  [aliases value]
+  (let [normalized (some-> value backlog-option-value str str/trim)
+        lowered (some-> normalized str/lower-case)]
+    (or (get aliases lowered) normalized)))
 
 (defn- payload-value
   [payload k]
@@ -67,16 +97,16 @@
     priority))
 
 (defn- normalize-backlog-enum!
-  [field allowed value]
-  (let [normalized (some-> value str str/trim)]
-    (when-not (contains? allowed normalized)
+  [field allowed aliases value]
+  (let [canonical (canonical-backlog-value aliases value)]
+    (when-not (contains? allowed canonical)
       (throw (ex-info
                (str "Invalid backlog " (name field))
                {:status 400
                 :field field
                 :value value
                 :allowed (vec allowed)})))
-    normalized))
+    canonical))
 
 (defn- require-backlog-description!
   [value]
@@ -95,11 +125,11 @@
      :status (if (or (nil? status-value)
                    (and (string? status-value) (str/blank? status-value)))
                "Waiting"
-               (normalize-backlog-enum! :status backlog-status-options status-value))
-     :type (normalize-backlog-enum! :type backlog-type-options (payload-value payload :type))
+               (normalize-backlog-enum! :status backlog-status-options backlog-status-aliases status-value))
+     :type (normalize-backlog-enum! :type backlog-type-options backlog-type-aliases (payload-value payload :type))
      :priority (if (or (nil? priority-value)
                      (and (string? priority-value) (str/blank? priority-value)))
-                 5
+                 1
                  (parse-backlog-priority! priority-value))}))
 
 (defn- normalize-backlog-update-payload
@@ -107,18 +137,25 @@
   (let [has-key? (fn [k]
                    (or (contains? payload k)
                      (contains? payload (name k))))
+        status-value (payload-value payload :status)
+        type-value (payload-value payload :type)
+        priority-value (payload-value payload :priority)
+        present-update-value? (fn [value]
+                                (not (or (nil? value)
+                                       (and (string? value)
+                                         (str/blank? value)))))
         updates (cond-> {}
                   (has-key? :description)
                   (assoc :description (require-backlog-description! (payload-value payload :description)))
 
-                  (has-key? :status)
-                  (assoc :status (normalize-backlog-enum! :status backlog-status-options (payload-value payload :status)))
+                  (and (has-key? :status) (present-update-value? status-value))
+                  (assoc :status (normalize-backlog-enum! :status backlog-status-options backlog-status-aliases status-value))
 
-                  (has-key? :type)
-                  (assoc :type (normalize-backlog-enum! :type backlog-type-options (payload-value payload :type)))
+                  (and (has-key? :type) (present-update-value? type-value))
+                  (assoc :type (normalize-backlog-enum! :type backlog-type-options backlog-type-aliases type-value))
 
-                  (has-key? :priority)
-                  (assoc :priority (parse-backlog-priority! (payload-value payload :priority))))]
+                  (and (has-key? :priority) (present-update-value? priority-value))
+                  (assoc :priority (parse-backlog-priority! priority-value)))]
     (when (empty? updates)
       (throw (ex-info "No backlog fields supplied for update"
                {:status 400

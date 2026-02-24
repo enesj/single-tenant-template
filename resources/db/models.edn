@@ -444,7 +444,7 @@
    [:priority
     :integer
     {:null false,
-     :default 5,
+     :default 1,
      :check [:raw "priority BETWEEN 1 AND 5"]}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
@@ -454,7 +454,8 @@
     {:choices ["Waiting" "In progres" "Completed" "Need improvments"]}]
    [:backlog-type
     :enum
-    {:choices ["Issue" "Feature" "Refactoring" "Review"]}]]},
+    {:choices
+     ["Issue" "Feature" "Refactoring" "Review" "Improvment"]}]]},
  :raw_labels
  {:fields
   [[:id :uuid {:primary-key true}]

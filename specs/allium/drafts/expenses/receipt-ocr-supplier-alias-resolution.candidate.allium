@@ -1,0 +1,135 @@
+-- allium: 1
+-- Receipt OCR supplier alias resolution
+--
+-- Distilled from:
+-- - src/app/domain/backend/expenses/workers/receipt_ocr/extraction.clj (resolve-supplier-and-alias)
+-- - src/app/domain/backend/expenses/services/suppliers.clj (unique descriptor-tail match)
+-- - src/app/domain/backend/expenses/services/supplier_aliases.clj (confidence + mapping rules)
+--
+-- Scope:
+-- - Resolving an OCR supplier guess into a canonical Supplier
+-- - Creating/updating SupplierAlias rows for OCR-observed labels
+-- - Auto-linking/repairing low-confidence alias mappings when a unique descriptor-tail supplier exists
+--
+-- Excludes:
+-- - Store alias inference and store resolution
+-- - Places / external canonicalization details
+-- - Article alias creation and reparse flows
+
+entity Supplier {
+    display_name: String
+    normalized_key: String
+}
+
+entity SupplierAlias {
+    raw_label: String
+    raw_label_normalized: String
+    supplier: Supplier?
+    confidence: Integer
+
+    is_mapped: supplier != null
+    is_low_confidence: confidence < config.manual_mapping_confidence
+}
+
+config {
+    manual_mapping_confidence: Integer = 100
+    automated_mapping_confidence: Integer = 25
+}
+
+rule ObserveSupplierAliasFromOcrGuess {
+    when: ResolveSupplierForOcr(raw_supplier_label)
+
+    let normalized = normalize_supplier_key(raw_supplier_label)
+
+    requires: normalized != null
+    requires: not exists SupplierAlias{raw_label_normalized: normalized}
+
+    ensures: SupplierAlias.created(
+        raw_label: raw_supplier_label,
+        raw_label_normalized: normalized,
+        supplier: null,
+        confidence: 0
+    )
+}
+
+rule RefreshSupplierAliasRawLabelFromOcrGuess {
+    when: ResolveSupplierForOcr(raw_supplier_label)
+
+    let normalized = normalize_supplier_key(raw_supplier_label)
+    let alias = SupplierAlias{raw_label_normalized: normalized}
+
+    requires: normalized != null
+    requires: exists alias
+
+    ensures: alias.raw_label = raw_supplier_label
+}
+
+rule RepairLowConfidenceAliasToDescriptorTailSupplier {
+    when: ResolveSupplierForOcr(raw_supplier_label)
+
+    let normalized = normalize_supplier_key(raw_supplier_label)
+    let alias = SupplierAlias{raw_label_normalized: normalized}
+    let mapped_supplier = alias.supplier
+    let descriptor_supplier = unique_descriptor_tail_supplier_for(normalized)
+
+    requires: normalized != null
+    requires: exists alias
+    requires: mapped_supplier != null
+    requires: alias.is_low_confidence
+    requires: mapped_supplier.normalized_key = alias.raw_label_normalized
+    requires: descriptor_supplier != null
+    requires: descriptor_supplier != mapped_supplier
+
+    ensures: alias.supplier = descriptor_supplier
+    ensures: alias.confidence = config.automated_mapping_confidence
+    ensures: SupplierResolvedFromOcrGuess(
+        supplier: descriptor_supplier,
+        alias: alias,
+        source: alias_descriptor_repaired
+    )
+}
+
+rule MapUnmappedAliasToUniqueDescriptorTailSupplier {
+    when: ResolveSupplierForOcr(raw_supplier_label)
+
+    let normalized = normalize_supplier_key(raw_supplier_label)
+    let alias = SupplierAlias{raw_label_normalized: normalized}
+    let descriptor_supplier = unique_descriptor_tail_supplier_for(normalized)
+
+    requires: normalized != null
+    requires: exists alias
+    requires: alias.supplier = null
+    requires: descriptor_supplier != null
+
+    ensures: alias.supplier = descriptor_supplier
+    ensures: alias.confidence = config.automated_mapping_confidence
+    ensures: SupplierResolvedFromOcrGuess(
+        supplier: descriptor_supplier,
+        alias: alias,
+        source: alias_descriptor
+    )
+}
+
+rule ResolveSupplierFromExistingAliasMapping {
+    when: ResolveSupplierForOcr(raw_supplier_label)
+
+    let normalized = normalize_supplier_key(raw_supplier_label)
+    let alias = SupplierAlias{raw_label_normalized: normalized}
+    let descriptor_supplier = unique_descriptor_tail_supplier_for(normalized)
+
+    requires: normalized != null
+    requires: exists alias
+    requires: alias.supplier != null
+    requires:
+        not (
+            alias.is_low_confidence
+            and alias.supplier.normalized_key = alias.raw_label_normalized
+            and descriptor_supplier != null
+            and descriptor_supplier != alias.supplier
+        )
+
+    ensures: SupplierResolvedFromOcrGuess(supplier: alias.supplier, alias: alias, source: alias)
+}
+
+deferred normalize_supplier_key(raw_supplier_label)
+deferred unique_descriptor_tail_supplier_for(normalized_key)    -- returns supplier only when match is unambiguous

@@ -439,6 +439,7 @@ surface AdminReceiptOperations {
 }
 
 deferred ReceiptExtraction.normalize_and_reconcile_extraction
+deferred ReceiptExtraction.resolve_supplier_and_alias             -- see: drafts/expenses/receipt-ocr-supplier-alias-resolution.candidate.allium
 deferred ReceiptResolution.resolve_canonical_supplier_store
 deferred ReceiptReview.reviewed_items_match_guess
 

@@ -156,6 +156,7 @@
                   (contains? #{"feature"} value-lower) "ds-badge-success"
                   (contains? #{"refactoring"} value-lower) "ds-badge-warning"
                   (contains? #{"review"} value-lower) "ds-badge-info"
+                  (contains? #{"improvment" "improvement"} value-lower) "ds-badge-secondary"
                   :else "ds-badge-outline")}
 
       "backlog-priority-badge"
@@ -183,74 +184,115 @@
   ([field value]
    (get-field-display-value field value nil))
   ([field value item]
-   (if (and (= (:type field) "select")
+   (let [field-id (:id field)
+         _normalized-field-id (normalize-field-key field-id)
+         display-source-field (:display-source-field field)
+         display-value (or (lookup-item-value item display-source-field) value)
+         input-type (:input-type field)
+         field-type (:type field)
+         text-value (str (if (keyword? display-value)
+                           (name display-value)
+                           (or display-value "")))
+         value-lower (some-> display-value str str/trim str/lower-case)
+         formatter-badge (resolve-backlog-badge (:formatter field) display-value)
+         status-field-id? (or (= field-id :status)
+                            (= field-id "status")
+                            (= (name field-id) "status"))
+         type-field-id? (or (= field-id :type)
+                          (= field-id "type")
+                          (= (name field-id) "type"))
+         priority-field-id? (or (= field-id :priority)
+                              (= field-id "priority")
+                              (= (name field-id) "priority"))
+         backlog-badge-fallback (cond
+                                  (and status-field-id?
+                                    (contains? #{"waiting"
+                                                 "in progres"
+                                                 "in progress"
+                                                 "in-progress"
+                                                 "completed"
+                                                 "need improvments"
+                                                 "need improvements"
+                                                 "needs improvement"
+                                                 "needs improvements"}
+                                      value-lower))
+                                  (resolve-backlog-badge "backlog-status-badge" display-value)
+
+                                  (and type-field-id?
+                                    (contains? #{"issue"
+                                                 "feature"
+                                                 "refactoring"
+                                                 "review"
+                                                 "improvment"
+                                                 "improvement"}
+                                      value-lower))
+                                  (resolve-backlog-badge "backlog-type-badge" display-value)
+
+                                  (and priority-field-id?
+                                    (contains? #{"1" "2" "3" "4" "5"} (some-> display-value str str/trim)))
+                                  (resolve-backlog-badge "backlog-priority-badge" display-value)
+
+                                  :else
+                                  nil)
+         status-str (when status-field-id? (some-> text-value str/trim not-empty))
+         status-lower (some-> status-str str/lower-case)
+         is-json-field? (or (= field-type "json")
+                          (= field-type "jsonb"))
+         is-datetime-field? (or (= field-type :datetime)
+                              (= field-type "datetime")
+                              (= field-type :timestamp)
+                              (= field-type "timestamp")
+                              (= field-type :datetime-local)
+                              (= field-type "datetime-local")
+                              (= input-type "datetime-local")
+                              (= input-type :datetime-local))
+         _show-seconds? true
+         should-truncate? (or
+                            (= input-type "url")
+                            (= input-type "email")
+                            (= field-type "text")
+                            (= field-type "textarea")
+                            is-json-field?
+                            (= field-id :avatar_url)
+                            (= field-id :settings)
+                            (= field-id :financial_settings)
+                            (= field-id :metadata)
+                            (= field-id :tags)
+                            (= field-id :attachments)
+                            (= field-id :changes)
+                            (= field-id :calculation_details)
+                            (= field-id :template_data))
+         max-length (cond
+                      is-json-field? 25
+                      (= input-type "url") 40
+                      (= input-type "email") 30
+                      (= field-type "textarea") 100
+                      (= field-type "text") 50
+                      :else 30)]
+     (cond
+       formatter-badge
+       (render-badge formatter-badge)
+
+       backlog-badge-fallback
+       (render-badge backlog-badge-fallback)
+
+       status-str
+       (render-badge {:label (titleize-status status-str)
+                      :variant (status->badge-variant status-lower)})
+
+       (and (= field-type "select")
          (:options field)
-         value)
-     ($ select-field-value {:field field :value value})
-     (let [field-id (:id field)
-           _normalized-field-id (normalize-field-key field-id)
-           display-source-field (:display-source-field field)
-           display-value (or (lookup-item-value item display-source-field) value)
-           input-type (:input-type field)
-           field-type (:type field)
-           text-value (str (if (keyword? display-value)
-                             (name display-value)
-                             (or display-value "")))
-           formatter-badge (resolve-backlog-badge (:formatter field) display-value)
-           status-field-id? (or (= field-id :status)
-                              (= field-id "status")
-                              (= (name field-id) "status"))
-           status-str (when status-field-id? (some-> text-value str/trim not-empty))
-           status-lower (some-> status-str str/lower-case)
-           is-json-field? (or (= field-type "json")
-                            (= field-type "jsonb"))
-           is-datetime-field? (or (= field-type :datetime)
-                                (= field-type "datetime")
-                                (= field-type :timestamp)
-                                (= field-type "timestamp")
-                                (= field-type :datetime-local)
-                                (= field-type "datetime-local")
-                                (= input-type "datetime-local")
-                                (= input-type :datetime-local))
-           _show-seconds? true
-           should-truncate? (or
-                              (= input-type "url")
-                              (= input-type "email")
-                              (= field-type "text")
-                              (= field-type "textarea")
-                              is-json-field?
-                              (= field-id :avatar_url)
-                              (= field-id :settings)
-                              (= field-id :financial_settings)
-                              (= field-id :metadata)
-                              (= field-id :tags)
-                              (= field-id :attachments)
-                              (= field-id :changes)
-                              (= field-id :calculation_details)
-                              (= field-id :template_data))
-           max-length (cond
-                        is-json-field? 25
-                        (= input-type "url") 40
-                        (= input-type "email") 30
-                        (= field-type "textarea") 100
-                        (= field-type "text") 50
-                        :else 30)]
-       (cond
-         formatter-badge
-         (render-badge formatter-badge)
+         display-value)
+       ($ select-field-value {:field field :value display-value})
 
-         status-str
-         (render-badge {:label (titleize-status status-str)
-                        :variant (status->badge-variant status-lower)})
+       is-datetime-field?
+       (format-timestamp display-value)
 
-         is-datetime-field?
-         (format-timestamp display-value)
+       should-truncate?
+       ($ truncated-text-value {:text text-value
+                                :max-length max-length
+                                :field-type field-type
+                                :field-id field-id})
 
-         should-truncate?
-         ($ truncated-text-value {:text text-value
-                                  :max-length max-length
-                                  :field-type field-type
-                                  :field-id field-id})
-
-         :else
-         ($ :span text-value))))))
+       :else
+       ($ :span text-value)))))

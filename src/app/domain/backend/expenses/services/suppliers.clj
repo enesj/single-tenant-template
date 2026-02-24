@@ -327,6 +327,9 @@
   ;; Must stay in sync with `service-configs/normalize-supplier-key`.
   #{"doo" "dd" "ad" "llc" "ltd" "inc" "gmbh" "ag"})
 
+(def ^:private descriptor-joiner-tokens
+  #{"i" "and" "with"})
+
 (defn- legacy-suffix-like-clauses
   "Return LIKE clauses that match normalized_key containing any legal suffix token.
 
@@ -410,6 +413,23 @@
             (every? #(or (re-matches #"\d+" %) (>= (count %) 3)) suffix-tokens)
             (not-any? legal-suffix-tokens suffix-tokens)))))))
 
+(defn- descriptor-tail-suffix?
+  [prefix-key candidate-key]
+  (let [prefix-tokens (normalized-key-tokens prefix-key)
+        candidate-tokens (normalized-key-tokens candidate-key)
+        prefix-count (count (or prefix-tokens []))
+        suffix-tokens (vec (drop prefix-count (or candidate-tokens [])))]
+    (boolean
+      (and (seq prefix-tokens)
+        (>= prefix-count 3)
+        (>= (count (or prefix-key "")) 16)
+        (seq suffix-tokens)
+        (= prefix-tokens (vec (take prefix-count candidate-tokens)))
+        (contains? descriptor-joiner-tokens (first suffix-tokens))
+        (>= (count suffix-tokens) 3)
+        (not-any? legal-suffix-tokens suffix-tokens)
+        (every? #(re-matches #"[a-z0-9]+" %) suffix-tokens)))))
+
 (defn- find-by-normalized-key-with-location-suffix
   [db normalized-key]
   (when (and (seq normalized-key) (str/includes? normalized-key "-"))
@@ -425,11 +445,38 @@
                   row)))
         rows))))
 
+(defn- find-by-normalized-key-with-descriptor-suffix
+  [db normalized-key]
+  (when (and (seq normalized-key) (str/includes? normalized-key "-"))
+    (let [rows (jdbc/execute!
+                 db
+                 ["SELECT * FROM suppliers WHERE normalized_key LIKE ? ORDER BY length(normalized_key) ASC, created_at ASC LIMIT 25"
+                  (str normalized-key "-%")]
+                 {:builder-fn rs/as-unqualified-lower-maps})
+          matches (->> rows
+                    (filter (fn [row]
+                              (let [candidate-key (some-> (:normalized_key row) str str/trim not-empty)]
+                                (and candidate-key
+                                  (descriptor-tail-suffix? normalized-key candidate-key)))))
+                    vec)]
+      ;; Match only when this heuristic is unambiguous.
+      (when (= 1 (count matches))
+        (first matches)))))
+
+(defn find-unique-descriptor-suffix-supplier
+  "When `normalized-key` looks like a base supplier key, try to find exactly one
+  existing supplier whose key extends it with a descriptor tail (e.g. `-i-...`).
+
+  Returns a supplier row or nil."
+  [db normalized-key]
+  (find-by-normalized-key-with-descriptor-suffix db normalized-key))
+
 (defn- find-by-normalized-key-or-legacy
   [db normalized-key]
   (or (find-by-normalized-key db normalized-key)
     (find-by-canonical-key-with-legacy-suffix db normalized-key)
-    (find-by-normalized-key-with-location-suffix db normalized-key)))
+    (find-by-normalized-key-with-location-suffix db normalized-key)
+    (find-by-normalized-key-with-descriptor-suffix db normalized-key)))
 
 (defn- legacy-normalize-supplier-key-v0
   "Legacy supplier key normalizer used before we started folding diacritics.

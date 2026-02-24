@@ -231,6 +231,10 @@
                             (or (contains? created-ids item-id)
                               (contains? created-ids item-id-int)
                               (contains? created-ids item-id-str)))
+        selected-id-set (set (or selected-ids #{}))
+        selected? (or (contains? selected-id-set item-id)
+                    (contains? selected-id-set item-id-int)
+                    (contains? selected-id-set item-id-str))
         disallowed-mode (or (:disallowed-action-mode props) :hide)
         disable-mode? (= disallowed-mode :disable)
         allowed-edit? (not (false? (:allow-edit? props)))
@@ -289,4 +293,5 @@
                             :selected-ids (or selected-ids #{})
                             :on-select-change on-select-change})
        :recently-updated? recently-updated?
-       :recently-created? recently-created?})))
+       :recently-created? recently-created?
+       :selected? selected?})))

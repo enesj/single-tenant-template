@@ -7,6 +7,7 @@
     [app.template.frontend.db.db :as db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.list.crud :as crud-events]
+    [clojure.string :as str]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -15,6 +16,60 @@
   "Convert all keys in a map from kebab-case to snake_case for database/API compatibility"
   [m]
   (model-naming/app-map-keys->db m))
+
+(def ^:private backlog-type-aliases
+  {"issue" "Issue"
+   "feature" "Feature"
+   "refactoring" "Refactoring"
+   "review" "Review"
+   "improvment" "Improvment"
+   "improvement" "Improvment"})
+
+(def ^:private backlog-status-aliases
+  {"waiting" "Waiting"
+   "in progres" "In progres"
+   "in progress" "In progres"
+   "completed" "Completed"
+   "need improvments" "Need improvments"
+   "need improvements" "Need improvments"})
+
+(defn- backlog-option-value
+  [value]
+  (if (map? value)
+    (or (:value value)
+      (get value "value")
+      value)
+    value))
+
+(defn- canonical-backlog-value
+  [aliases value]
+  (let [normalized (some-> value backlog-option-value str str/trim)
+        lowered (some-> normalized str/lower-case)]
+    (or (get aliases lowered) normalized)))
+
+(defn- normalize-backlog-field
+  [request-params field aliases]
+  (let [field-name (name field)]
+    (cond
+      (contains? request-params field)
+      (if-let [canonical (canonical-backlog-value aliases (get request-params field))]
+        (assoc request-params field canonical)
+        (dissoc request-params field))
+
+      (contains? request-params field-name)
+      (if-let [canonical (canonical-backlog-value aliases (get request-params field-name))]
+        (assoc request-params field-name canonical)
+        (dissoc request-params field-name))
+
+      :else request-params)))
+
+(defn- normalize-backlog-request-params
+  [entity-name request-params]
+  (if (= :backlog (model-naming/ensure-app-keyword entity-name))
+    (-> request-params
+      (normalize-backlog-field :type backlog-type-aliases)
+      (normalize-backlog-field :status backlog-status-aliases))
+    request-params))
 
 ;;; -------------------------
 ;;; Form Submission
@@ -29,7 +84,8 @@
           ;; For PUT requests, exclude :id from request body since it's already in the URL path
           request-params (if editing
                            (dissoc db-values :id)
-                           db-values)]
+                           db-values)
+          request-params (normalize-backlog-request-params entity-name request-params)]
       {:db (assoc-in db (paths/form-submitting? entity-name) true)
        :http-xhrio (if editing
                      (http/update-entity
@@ -56,7 +112,8 @@
           ;; For PUT requests, exclude :id from request body since it's already in the URL path
           request-params (if editing
                            (dissoc db-values :id)
-                           db-values)]
+                           db-values)
+          request-params (normalize-backlog-request-params entity-name request-params)]
       {:db (assoc-in db (paths/form-submitting? entity-name) true)
        :http-xhrio (if editing
                      (http/update-entity

@@ -79,6 +79,8 @@
    [:show-add-button? {:optional true} :boolean]
    [:show-batch-edit? {:optional true} :boolean]
    [:show-batch-delete? {:optional true} :boolean]
+   [:show-selected-rows? {:optional true} :boolean]
+   [:show-unselected-rows? {:optional true} :boolean]
 
    ;; Pagination
    [:per-page {:optional true} [:int {:min 1 :max 1000}]]])

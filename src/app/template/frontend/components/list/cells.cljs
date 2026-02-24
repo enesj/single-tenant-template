@@ -57,8 +57,16 @@
 (defui select-all-checkbox
   "Three-state checkbox for selecting all rows in a table."
   [{:keys [entity-name all-items selected-ids on-select-all]}]
-  (let [total-count (count all-items)
-        selected-count (count selected-ids)
+  (let [selected-set (set (or selected-ids #{}))
+        selected-item? (fn [item]
+                         (let [item-id (id-utils/extract-entity-id item)
+                               item-id-int (if (string? item-id) (js/parseInt item-id) item-id)
+                               item-id-str (str item-id)]
+                           (or (contains? selected-set item-id)
+                             (contains? selected-set item-id-int)
+                             (contains? selected-set item-id-str))))
+        total-count (count all-items)
+        selected-count (count (filter selected-item? all-items))
         indeterminate? (and (> selected-count 0) (< selected-count total-count))
         checked? (and (> total-count 0) (= selected-count total-count))]
     ($ :div {:class "flex justify-center items-center"}

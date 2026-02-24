@@ -38,13 +38,16 @@
    :show-add-button?    true
    :show-batch-edit?    false
    :show-batch-delete?  false
+   :show-selected-rows? true
+   :show-unselected-rows? true
    :per-page            25})
 
 (def all-setting-keys
   "All known display setting keys."
   [:show-timestamps? :show-edit? :show-delete? :show-highlights?
    :show-select? :show-filtering? :show-pagination? :show-add-button?
-   :show-batch-edit? :show-batch-delete? :per-page])
+   :show-batch-edit? :show-batch-delete?
+   :show-selected-rows? :show-unselected-rows? :per-page])
 
 ;; ============================================================================
 ;; Feature constraint → locks conversion
