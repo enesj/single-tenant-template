@@ -27,8 +27,10 @@
 
 (def ^:private try-parse-uuid h/try-parse-uuid)
 
-(def ^:private receipts-read-roles h/receipts-read-roles)
-(def ^:private receipts-write-roles h/receipts-write-roles)
+(def ^:private receipts-read-roles
+  #{"viewer" "member" "admin" "owner"})
+(def ^:private receipts-write-roles
+  #{"member" "admin" "owner"})
 
 (defn- parse-long-param
   [params k default-val]

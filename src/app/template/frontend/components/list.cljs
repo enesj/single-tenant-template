@@ -1,26 +1,23 @@
 (ns app.template.frontend.components.list
   (:require
     [app.shared.keywords :as kw]
-    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
     [app.template.frontend.components.filter :refer [filter-form]]
-    [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.components.filter.ui :refer [compact-active-filters]]
-    [app.template.frontend.components.form :refer [form]]
+    [app.template.frontend.components.list.handlers :as list-handlers]
+    [app.template.frontend.components.list.modals :as list-modals]
+    [app.template.frontend.components.list.overrides :as overrides]
     [app.template.frontend.components.list.rows :refer [render-row]]
     [app.template.frontend.components.list.table :refer [make-table-headers]]
     [app.template.frontend.components.list.ui :refer [add-item-section
                                                       header-section]]
     [app.template.frontend.components.messages :refer [error-alert]]
-    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.pagination :refer [pagination]]
     [app.template.frontend.components.table :refer [table]]
     [app.template.frontend.events.config :as config-events]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.batch :as batch-events]
-    [app.template.frontend.events.list.crud :as crud-events]
     [app.template.frontend.events.list.filters :as filter-events]
-    [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.subs.entity :as entity-subs]
@@ -37,132 +34,42 @@
 
 (defn- entity-spec-fields
   [entity-spec]
-  (cond
-    (and (map? entity-spec) (sequential? (:fields entity-spec)))
-    (:fields entity-spec)
-
-    (sequential? entity-spec)
-    entity-spec
-
-    :else
-    []))
+  (overrides/entity-spec-fields entity-spec))
 
 (defn- resolve-row-field
   [item entity-name fld]
-  (let [direct (get item fld)]
-    (if (some? direct)
-      direct
-      (let [by-db (when (keyword? fld)
-                    (get item (model-naming/app-keyword->db fld)))]
-        (if (some? by-db)
-          by-db
-          (let [ns-key (when (and entity-name fld)
-                         (keyword (name entity-name) (name fld)))
-                by-ns (when ns-key (get item ns-key))]
-            (if (some? by-ns)
-              by-ns
-              (some (fn [[k v]]
-                      (when (and (keyword? k)
-                              (= (name k) (name fld)))
-                        v))
-                item))))))))
+  (overrides/resolve-row-field item entity-name fld))
 
 (defn- infer-filter-type
   [filter-value]
-  (cond
-    (vector? filter-value)
-    :select
-
-    (and (map? filter-value)
-      (or (contains? filter-value :min)
-        (contains? filter-value :max)))
-    :number-range
-
-    (and (map? filter-value)
-      (or (contains? filter-value :from)
-        (contains? filter-value :to)))
-    :date-range
-
-    :else
-    :text))
+  (overrides/infer-filter-type filter-value))
 
 (defn- apply-override-filters
   [rows active-filters]
-  (if (empty? active-filters)
-    rows
-    (vec
-      (filter (fn [item]
-                (every? (fn [[field-id filter-value]]
-                          (filter-helpers/matches-filter? {:item item
-                                                           :field-id field-id
-                                                           :filter-value filter-value
-                                                           :filter-type (infer-filter-type filter-value)}))
-                  active-filters))
-        rows))))
+  (overrides/apply-override-filters rows active-filters))
 
 (defn- sort-override-rows
   [rows {:keys [sort-config entity-name entity-spec]}]
-  (let [{:keys [field direction]} sort-config
-        field (some-> field model-naming/ensure-app-keyword)
-        field-spec (some (fn [spec]
-                           (when (= (some-> (:id spec) model-naming/ensure-app-keyword name)
-                                   (some-> field name))
-                             spec))
-                     (entity-spec-fields entity-spec))
-        date-field? (contains? #{"datetime-local" "date" "time"}
-                      (some-> field-spec :input-type kw/ensure-name))
-        normalize (fn [v]
-                    (cond
-                      (nil? v) nil
-                      (string? v)
-                      (if date-field?
-                        (let [d (try (js/Date. v) (catch :default _ nil))]
-                          (if (and d (not (js/isNaN (.getTime d))))
-                            (.getTime d)
-                            (str/lower-case v)))
-                        (str/lower-case v))
-                      (boolean? v) (if v 1 0)
-                      (instance? js/Date v) (.getTime v)
-                      :else v))]
-    (if (and field direction)
-      (let [sorted (sort-by (fn [item]
-                              (let [v (normalize (resolve-row-field item entity-name field))
-                                    nil-key (if (some? v) 1 0)]
-                                [nil-key v]))
-                     rows)]
-        (if (= direction :desc)
-          (reverse sorted)
-          sorted))
-      rows)))
+  (overrides/sort-override-rows rows {:sort-config sort-config
+                                      :entity-name entity-name
+                                      :entity-spec entity-spec}))
 
 (defn- apply-rows-override-transforms
   [{:keys [rows active-filters sort-config entity-name entity-spec]}]
-  (-> rows
-    (apply-override-filters active-filters)
-    (sort-override-rows {:sort-config sort-config
-                         :entity-name entity-name
-                         :entity-spec entity-spec})
-    vec))
+  (overrides/apply-rows-override-transforms {:rows rows
+                                             :active-filters active-filters
+                                             :sort-config sort-config
+                                             :entity-name entity-name
+                                             :entity-spec entity-spec}))
 
 (defn- selected-item?
   [selected-ids item]
-  (let [selected-set (set (or selected-ids #{}))
-        item-id (id-utils/extract-entity-id item)
-        item-id-int (if (string? item-id) (js/parseInt item-id) item-id)
-        item-id-str (str item-id)]
-    (or (contains? selected-set item-id)
-      (contains? selected-set item-id-int)
-      (contains? selected-set item-id-str))))
+  (overrides/selected-item? selected-ids item))
 
 (defn- apply-selection-visibility
   [rows selected-ids {:keys [show-selected-rows? show-unselected-rows?]}]
-  (let [show-selected? (if (nil? show-selected-rows?) true show-selected-rows?)
-        show-unselected? (if (nil? show-unselected-rows?) true show-unselected-rows?)]
-    (cond
-      (and show-selected? show-unselected?) rows
-      (not (or show-selected? show-unselected?)) []
-      show-selected? (vec (filter #(selected-item? selected-ids %) rows))
-      :else (vec (remove #(selected-item? selected-ids %) rows)))))
+  (overrides/apply-selection-visibility rows selected-ids {:show-selected-rows? show-selected-rows?
+                                                           :show-unselected-rows? show-unselected-rows?}))
 
 (defui list-view
   "Renders a list of items with pagination, add form, and error handling.
@@ -404,93 +311,36 @@
         js/undefined)
       [on-add-success use-modal-forms? add-modal-open? has-custom-add-form? form-success? form-submitted? entity-kw])
 
-    ;; Handle single item selection toggle
-    (let [handle-select-change (fn [item-id selected?]
-                                 (rf/dispatch [::selection-events/select-item entity-name item-id selected?]))
-
-          ;; Handle select all / deselect all
-          handle-select-all (fn [select-all?]
-                              (rf/dispatch [::selection-events/select-all entity-name visible-items select-all?]))
-
-          ;; Handle inline filter click
-          handle-inline-filter-click (fn [field-id field-spec]
-                                       (if (= active-inline-filter field-id)
-                                         ;; If clicking the same filter, close it
-                                         (do
-                                           (set-active-inline-filter nil)
-                                           (set-inline-filter-field-spec nil)
-                                           (set-inline-filter-value ""))
-                                         ;; Otherwise, open the new filter with existing value
-                                         (let [field-key (if (keyword? field-id) field-id (keyword field-id))
-                                               existing-filter-value (get active-filters field-key)]
-                                           (set-active-inline-filter field-id)
-                                           (set-inline-filter-field-spec field-spec)
-                                           (set-inline-filter-value (or existing-filter-value "")))))
-
-          ;; Handle filter apply
-          handle-filter-apply (fn [entity-type field-name filter-value keep-open?]
-                                (rf/dispatch [::filter-events/apply-filter entity-type field-name filter-value keep-open?])
-                                (when (not keep-open?)
-                                  (set-active-inline-filter nil)
-                                  (set-inline-filter-field-spec nil)
-                                  (set-inline-filter-value "")))
-
-          ;; Handle filter close
-          handle-filter-close (fn []
-                                (set-active-inline-filter nil)
-                                (set-inline-filter-field-spec nil)
-                                (set-inline-filter-value ""))
-
-          ;; Modal handlers for custom forms
-          handle-add-click (fn []
-                             (when (not (false? allow-add?))
-                               (rf/dispatch [::crud-events/clear-error entity-kw])
-                               (rf/dispatch [::form-events/clear-form-errors entity-kw])
-                               ;; Ensure we don't reuse stale form state between opens.
-                               (rf/dispatch [::form-events/cancel-form entity-kw])
-                               (if use-modal-forms?
-                                 ;; Modal behavior (default or custom): keep table visible.
-                                 (set-add-modal-open! true)
-                                 ;; Inline behavior
-                                 (do
-                                   (rf/dispatch [::config-events/set-show-add-form true])
-                                   (rf/dispatch [::config-events/set-editing nil])))))
-
-          handle-add-modal-close (fn []
-                                   (rf/dispatch [::crud-events/clear-error entity-kw])
-                                   (rf/dispatch [::form-events/clear-form-errors entity-kw])
-                                   (rf/dispatch [::form-events/cancel-form entity-kw])
-                                   (set-add-modal-open! false))
-
-          handle-add-modal-success (fn []
-                                     (set-add-modal-open! false)
-                                     (when on-add-success
-                                       (on-add-success)))
-
-          handle-edit-click (fn [item]
-                              (rf/dispatch [::crud-events/clear-error entity-kw])
-                              (rf/dispatch [::form-events/clear-form-errors entity-kw])
-                              (if use-modal-forms?
-                                ;; Modal behavior (default or custom): keep table visible.
-                                (do
-                                  ;; Ensure the modal form starts from item values (not stale form state).
-                                  (rf/dispatch [::form-events/cancel-form entity-kw])
-                                  (set-edit-modal-item! item)
-                                  (set-edit-modal-open! true))
-                                ;; Inline behavior
-                                (rf/dispatch [::config-events/set-editing (id-utils/extract-entity-id item)])))
-
-          handle-edit-modal-close (fn []
-                                    (rf/dispatch [::form-events/cancel-form entity-kw])
-                                    (set-edit-modal-open! false)
-                                    (set-edit-modal-item! nil))
-
-          handle-edit-modal-success (fn []
-                                      (rf/dispatch [::form-events/cancel-form entity-kw])
-                                      (set-edit-modal-open! false)
-                                      (set-edit-modal-item! nil)
-                                      (when on-edit-success
-                                        (on-edit-success)))
+    ;; Handle events/actions via extracted handler module.
+    (let [{:keys [handle-select-change
+                  handle-select-all
+                  handle-inline-filter-click
+                  handle-filter-apply
+                  handle-filter-close
+                  handle-add-click
+                  handle-add-modal-close
+                  handle-add-modal-success
+                  handle-edit-click
+                  handle-edit-modal-close
+                  handle-edit-modal-success]}
+          (list-handlers/build-handlers
+            {:entity-name entity-name
+             :entity-kw entity-kw
+             :allow-add? allow-add?
+             :use-modal-forms? use-modal-forms?
+             :has-custom-add-form? has-custom-add-form?
+             :has-custom-edit-form? has-custom-edit-form?
+             :on-add-success on-add-success
+             :on-edit-success on-edit-success
+             :active-inline-filter active-inline-filter
+             :active-filters active-filters
+             :visible-items visible-items
+             :set-active-inline-filter set-active-inline-filter
+             :set-inline-filter-field-spec set-inline-filter-field-spec
+             :set-inline-filter-value set-inline-filter-value
+             :set-add-modal-open! set-add-modal-open!
+             :set-edit-modal-open! set-edit-modal-open!
+             :set-edit-modal-item! set-edit-modal-item!})
 
           base-props (merge (assoc props
                               :editing editing
@@ -551,89 +401,32 @@
       ($ :div {:class "w-full flex justify-start items-start"
                :id (str "table-" (kw/ensure-name entity-name))}
         ($ :div {:class "p-2 w-full"}
-          ;; Modal for custom add form
-          (when add-modal-open?
-            ($ modal-wrapper
-              {:visible? true
-               :title (str "Add " title)
-               :size :large
-               :on-close handle-add-modal-close
-               :close-button-id (str "btn-close-add-modal-" (kw/ensure-name entity-name))}
-              (if has-custom-add-form?
-                (render-add-form {:entity-name entity-name
-                                  :entity-spec entity-spec
-                                  :on-success handle-add-modal-success
-                                  :on-cancel handle-add-modal-close})
-                (let [effective-form-spec (or form-entity-spec
-                                            (when (vector? entity-spec) entity-spec)
-                                            (when (map? entity-spec)
-                                              (let [fields (:fields entity-spec)]
-                                                (cond
-                                                  (vector? fields) fields
-                                                  (sequential? fields) (vec fields)
-                                                  :else nil)))
-                                            [])
-                      default-values (reduce (fn [acc field-spec]
-                                               (if-let [default-value (:default-value field-spec)]
-                                                 (assoc acc (keyword (:id field-spec)) default-value)
-                                                 acc))
-                                       {}
-                                       effective-form-spec)]
-                  ($ form
-                    {:key (str "modal-add-" (kw/ensure-name entity-name))
-                     :entity-name entity-kw
-                     :entity-spec effective-form-spec
-                     :editing false
-                     :initial-values default-values
-                     :on-cancel handle-add-modal-close})))))
+          ;; Modal rendering moved to extracted module.
+          (list-modals/render-add-modal
+            {:add-modal-open? add-modal-open?
+             :title title
+             :entity-name entity-name
+             :entity-kw entity-kw
+             :entity-spec entity-spec
+             :form-entity-spec form-entity-spec
+             :has-custom-add-form? has-custom-add-form?
+             :render-add-form render-add-form
+             :handle-add-modal-close handle-add-modal-close
+             :handle-add-modal-success handle-add-modal-success})
 
-          ;; Modal for edit form (custom or default)
-          (when (and edit-modal-open? edit-modal-item)
-            (let [item-clj (if (map? edit-modal-item)
-                             edit-modal-item
-                             (js->clj edit-modal-item :keywordize-keys true))
-                  item-id (id-utils/extract-entity-id item-clj)
-                  initial-values (into {}
-                                   (map (fn [[k v]]
-                                          ;; Convert namespaced keys to simple keys for form fields
-                                          (let [simple-key (if (and (keyword? k) (namespace k))
-                                                             (keyword (name k))
-                                                             k)]
-                                            [simple-key v]))
-                                     item-clj))
-                  effective-form-spec (or form-entity-spec-edit
-                                        form-entity-spec
-                                        entity-spec)
-                  handle-default-submit (fn [{:keys [dirty values] :as payload}]
-                                          (let [changed-values (-> values
-                                                                 (select-keys (cons :id (keys dirty))))]
-                                            (rf/dispatch [::form-events/submit-form
-                                                          (assoc payload
-                                                            :values changed-values
-                                                            :entity-name entity-kw
-                                                            :editing true)])
-                                            (rf/dispatch [::form-events/set-submitted entity-kw true])))]
-              ($ modal-wrapper
-                {:visible? true
-                 :title (str "Edit " title)
-                 :size :large
-                 :draggable? true
-                 :on-close handle-edit-modal-close
-                 :close-button-id (str "btn-close-edit-modal-" (kw/ensure-name entity-name))}
-                (if has-custom-edit-form?
-                  (render-edit-form item-clj
-                    {:entity-name entity-name
-                     :entity-spec entity-spec
-                     :on-success handle-edit-modal-success
-                     :on-cancel handle-edit-modal-close})
-                  ($ form
-                    {:key (str "modal-edit-" (kw/ensure-name entity-name) "-" (or item-id "unknown"))
-                     :entity-name entity-kw
-                     :entity-spec effective-form-spec
-                     :editing true
-                     :initial-values initial-values
-                     :on-cancel handle-edit-modal-close
-                     :on-submit handle-default-submit})))))
+          (list-modals/render-edit-modal
+            {:edit-modal-open? edit-modal-open?
+             :edit-modal-item edit-modal-item
+             :title title
+             :entity-name entity-name
+             :entity-kw entity-kw
+             :entity-spec entity-spec
+             :form-entity-spec form-entity-spec
+             :form-entity-spec-edit form-entity-spec-edit
+             :has-custom-edit-form? has-custom-edit-form?
+             :render-edit-form render-edit-form
+             :handle-edit-modal-close handle-edit-modal-close
+             :handle-edit-modal-success handle-edit-modal-success})
 
           ;; Remove the old modal filter form rendering
           nil
