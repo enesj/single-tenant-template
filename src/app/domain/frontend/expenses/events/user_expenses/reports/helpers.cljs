@@ -1,0 +1,127 @@
+(ns app.domain.frontend.expenses.events.user-expenses.reports.helpers
+  "Shared data helpers for report filter state and fetch events."
+  (:require
+    [app.template.frontend.api.http :as http]
+    [clojure.string :as str]))
+
+(def reports-path [:user-expenses :reports])
+
+(defn ->positive-int
+  [value fallback]
+  (let [parsed (cond
+                 (number? value) value
+                 (string? value) (js/parseInt value 10)
+                 :else fallback)]
+    (if (and (number? parsed)
+          (not (js/isNaN parsed))
+          (pos? parsed))
+      (int parsed)
+      fallback)))
+
+(defn normalize-id
+  [value]
+  (let [v (some-> value str str/trim)]
+    (when (seq v) v)))
+
+(defn normalize-id-values
+  [value]
+  (let [values (cond
+                 (nil? value) []
+                 (sequential? value) value
+                 :else [value])]
+    (->> values
+      (keep normalize-id)
+      distinct
+      vec)))
+
+(defn normalize-id-filter
+  [value]
+  (let [values (normalize-id-values value)]
+    (cond
+      (empty? values) nil
+      (= 1 (count values)) (first values)
+      :else values)))
+
+(defn normalize-month
+  [value]
+  (let [v (some-> value str str/trim)]
+    (when (seq v) v)))
+
+(defn- pad2
+  [n]
+  (if (< n 10)
+    (str "0" n)
+    (str n)))
+
+(defn- month-key-from-date
+  [d]
+  (str (.getUTCFullYear d) "-" (pad2 (inc (.getUTCMonth d)))))
+
+(defn- shift-months
+  [d months]
+  (let [copy (js/Date. (.getTime d))]
+    (.setUTCMonth copy (+ (.getUTCMonth copy) months))
+    copy))
+
+(defn default-month-range
+  []
+  (let [now (js/Date.)
+        month-b (month-key-from-date now)
+        month-a (month-key-from-date (shift-months now -1))]
+    {:month-a month-a
+     :month-b month-b}))
+
+(defn default-report-filters
+  []
+  (merge
+    {:months-back 6
+     :supplier-id nil
+     :category-id nil
+     :subcategory-id nil
+     :expense-category-id nil
+     :manufacturer-id nil
+     :day-of-week nil
+     :category-key nil
+     :amount-bucket nil
+     :selected-day nil
+     :top-items-limit 20
+     :show-uncategorized? true
+     :expanded-supplier-id nil
+     :expanded-top-item-alias-id nil}
+    (default-month-range)))
+
+(defn report-range-params
+  [months-back]
+  (let [months* (->positive-int months-back 6)
+        now (js/Date.)
+        from (js/Date. (.getTime now))]
+    (.setUTCDate from 1)
+    (.setUTCHours from 0 0 0 0)
+    (.setUTCMonth from (- (.getUTCMonth from) (max 1 months*)))
+    {:from (.toISOString from)
+     :to (.toISOString now)}))
+
+(defn common-report-params
+  [db]
+  (let [{:keys [months-back
+                supplier-id
+                category-id
+                subcategory-id
+                expense-category-id
+                manufacturer-id]} (get-in db (conj reports-path :filters))
+        range-params (report-range-params months-back)
+        supplier-id* (normalize-id-filter supplier-id)
+        category-id* (normalize-id-filter category-id)
+        subcategory-id* (normalize-id-filter subcategory-id)
+        expense-category-id* (normalize-id-filter expense-category-id)
+        manufacturer-id* (normalize-id-filter manufacturer-id)]
+    (cond-> range-params
+      supplier-id* (assoc :supplier_id supplier-id*)
+      category-id* (assoc :category_id category-id*)
+      subcategory-id* (assoc :subcategory_id subcategory-id*)
+      expense-category-id* (assoc :expense_category_id expense-category-id*)
+      manufacturer-id* (assoc :manufacturer_id manufacturer-id*))))
+
+(defn finish-failure-message
+  [error]
+  (http/extract-error-message error))
