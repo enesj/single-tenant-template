@@ -75,30 +75,34 @@
 ;;; Form Submission
 ;;; -------------------------
 
+(defn- build-submit-fx
+  "Shared implementation for submit-form and process-default-submission.
+  Converts values, normalises backlog fields, and returns an fx map."
+  [db {:keys [values entity-name editing]}]
+  (let [db-values (convert-keys-to-db values)
+        request-params (if editing
+                         (dissoc db-values :id)
+                         db-values)
+        request-params (normalize-backlog-request-params entity-name request-params)]
+    {:db (assoc-in db (paths/form-submitting? entity-name) true)
+     :http-xhrio (if editing
+                   (http/update-entity
+                     {:entity-name (name entity-name)
+                      :id (:id values)
+                      :data request-params
+                      :on-success [::update-success entity-name]
+                      :on-failure [::update-failure entity-name]})
+                   (http/create-entity
+                     {:entity-name (name entity-name)
+                      :data request-params
+                      :on-success [::create-success entity-name]
+                      :on-failure [::create-failure entity-name]}))}))
+
 (rf/reg-event-fx
   ::submit-form
   common-interceptors
-  (fn [{:keys [db]} [{:keys [values entity-name editing]}]]
-    (let [;; Convert keys from kebab-case to snake_case for API
-          db-values (convert-keys-to-db values)
-          ;; For PUT requests, exclude :id from request body since it's already in the URL path
-          request-params (if editing
-                           (dissoc db-values :id)
-                           db-values)
-          request-params (normalize-backlog-request-params entity-name request-params)]
-      {:db (assoc-in db (paths/form-submitting? entity-name) true)
-       :http-xhrio (if editing
-                     (http/update-entity
-                       {:entity-name (name entity-name)
-                        :id (:id values)
-                        :data request-params
-                        :on-success [::update-success entity-name]
-                        :on-failure [::update-failure entity-name]})
-                     (http/create-entity
-                       {:entity-name (name entity-name)
-                        :data request-params
-                        :on-success [::create-success entity-name]
-                        :on-failure [::create-failure entity-name]}))})))
+  (fn [{:keys [db]} [opts]]
+    (build-submit-fx db opts)))
 
 ;; This event is dispatched by the admin form interceptors when no admin-specific
 ;; overrides apply. It mirrors the default template submission behavior to avoid
@@ -106,27 +110,8 @@
 (rf/reg-event-fx
   ::process-default-submission
   common-interceptors
-  (fn [{:keys [db]} [{:keys [values entity-name editing]}]]
-    (let [;; Convert keys from kebab-case to snake_case for API
-          db-values (convert-keys-to-db values)
-          ;; For PUT requests, exclude :id from request body since it's already in the URL path
-          request-params (if editing
-                           (dissoc db-values :id)
-                           db-values)
-          request-params (normalize-backlog-request-params entity-name request-params)]
-      {:db (assoc-in db (paths/form-submitting? entity-name) true)
-       :http-xhrio (if editing
-                     (http/update-entity
-                       {:entity-name (name entity-name)
-                        :id (:id values)
-                        :data request-params
-                        :on-success [::update-success entity-name]
-                        :on-failure [::update-failure entity-name]})
-                     (http/create-entity
-                       {:entity-name (name entity-name)
-                        :data request-params
-                        :on-success [::create-success entity-name]
-                        :on-failure [::create-failure entity-name]}))})))
+  (fn [{:keys [db]} [opts]]
+    (build-submit-fx db opts)))
 
 (rf/reg-event-fx
   ::create-success

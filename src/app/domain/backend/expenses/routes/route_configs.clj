@@ -15,6 +15,15 @@
   ;; Use direct keyword access like (:search qp).
   :ok)
 
+;; =============================================================================
+;; Shared Query-Param Helpers
+;; =============================================================================
+
+(defn- search-query-params
+  "Standard query-param extractor for entities that support a :search filter."
+  [qp]
+  {:search (:search qp)})
+
 (def category-config
   {:entity-key :category
    :entity-plural :categories
@@ -25,10 +34,8 @@
    :required-fields [:name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def expense-category-config
   {:entity-key :expense-category
@@ -40,10 +47,8 @@
    :required-fields [:name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def subcategory-config
   {:entity-key :subcategory
@@ -55,10 +60,8 @@
    :required-fields [:category-id :name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def supplier-config
   {:entity-key :supplier
@@ -70,10 +73,8 @@
    :required-fields [:display-name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def store-config
   {:entity-key :store
@@ -85,10 +86,8 @@
    :required-fields [:supplier-id :display-name]
    :has-count? true
    :has-search? false
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def city-config
   {:entity-key :city
@@ -100,10 +99,8 @@
    :required-fields [:name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def country-config
   {:entity-key :country
@@ -130,10 +127,8 @@
    :required-fields [:display-name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def payer-config
   {:entity-key :payer
@@ -171,10 +166,8 @@
    :required-fields [:canonical-name]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
-   :custom-count-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params
+   :custom-count-params search-query-params})
 
 (def expense-config
   {:entity-key :expense
@@ -206,8 +199,7 @@
    :required-fields [:expense-id :line-total]
    :has-count? true
    :has-search? true
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})})
+   :custom-query-params search-query-params})
 
 (def receipt-config
   {:entity-key :receipt
@@ -285,8 +277,7 @@
    :required-fields [:raw-label :raw-label-normalized]
    :has-count? false
    :has-search? false
-   :custom-query-params (fn [qp]
-                          {:search (:search qp)})
+   :custom-query-params search-query-params
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.
    ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.

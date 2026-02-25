@@ -48,32 +48,12 @@
       :server
       :client)))
 
-(defn- server-pagination?
+(defn server-pagination?
+  "Returns true when the ui-state map indicates server-side pagination mode."
   [ui-state]
   (= :server (pagination-mode ui-state)))
 
-(defn- infer-filter-type
-  [filter-value]
-  (cond
-    (vector? filter-value)
-    :select
-
-    (and (map? filter-value)
-      (or (contains? filter-value :min)
-        (contains? filter-value :max)))
-    :number-range
-
-    (and (map? filter-value)
-      (or (contains? filter-value :from)
-        (contains? filter-value :to)))
-    :date-range
-
-    (and (map? filter-value)
-      (contains? filter-value :value))
-    :select
-
-    :else
-    :text))
+;; infer-filter-type is provided by filter-helpers/infer-filter-type
 
 (rf/reg-sub
   ::sort-config
@@ -174,7 +154,7 @@
                                            (filter-helpers/matches-filter? {:item item
                                                                             :field-id field-key
                                                                             :filter-value filter-value
-                                                                            :filter-type (infer-filter-type filter-value)})))
+                                                                            :filter-type (filter-helpers/infer-filter-type filter-value)})))
                                  filters))
                        items)]
         filtered))))

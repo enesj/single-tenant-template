@@ -88,16 +88,15 @@
 (rf/reg-sub
   :entity-specs/by-name
   (fn [db [_ entity-name]]
-    (let [entity-kw (normalize-entity-name entity-name)
-          specs (get-in db [:entities :specs])
-          base-spec (get specs entity-kw)
-          base-fields (cond
-                        (sequential? base-spec) base-spec
-                        (map? base-spec) (vals base-spec)
-                        :else [])
+    (let [entity-kw    (normalize-entity-name entity-name)
+          specs        (get-in db [:entities :specs])
+          base-spec    (get specs entity-kw)
+          base-fields  (cond
+                         (sequential? base-spec) base-spec
+                         (map? base-spec) (vals base-spec)
+                         :else [])
           ;; Route-aware table-columns config (admin vs user routes).
-          route-name (get-in db (paths/current-route-name))
-          admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+          admin-route? (paths/admin-route? db)
           table-config (when entity-kw
                          (if admin-route?
                            (get-in db [:admin :config :table-columns entity-kw])
@@ -123,13 +122,13 @@
           column-config-for (fn [col-kw]
                               (lookup-column-entry (:column-config table-config) col-kw))
           computed-field-spec (fn [col-kw]
-                                (let [m (computed-meta-for col-kw)
+                                (let [m     (computed-meta-for col-kw)
                                       label (or (resolve-column-label-override table-config col-kw)
                                               (:label m)
                                               (labels/field-name->label col-kw))]
-                                  {:id (name col-kw)
+                                  {:id    (name col-kw)
                                    :label label
-                                   :type (or (:type m) :string)
+                                   :type  (or (:type m) :string)
                                    :admin (merge
                                             {:visible-in-table? true
                                              :filterable? true
@@ -144,22 +143,21 @@
       ;; to the same columns the table renders).
       (if (seq available-cols)
         (mapv (fn [k]
-                (let [field-spec (or (get merged-by-id k)
-                                   (computed-field-spec k))
-                      column-config (column-config-for k)
-                      field-spec* (if (map? column-config)
-                                    (merge field-spec column-config)
-                                    field-spec)]
+                (let [field-spec     (or (get merged-by-id k) (computed-field-spec k))
+                      col-cfg        (column-config-for k)
+                      field-spec*    (if (map? col-cfg)
+                                       (merge field-spec col-cfg)
+                                       field-spec)]
                   (apply-column-label-override table-config k field-spec*)))
           available-cols)
         ;; Fallback: preserve backend/models-derived field order, and append any
         ;; computed fields not already present.
-        (let [base-ids (set (keep field-id->kw base-fields))
-              base-fields* (mapv (fn [field]
-                                   (if-let [field-id (field-id->kw field)]
-                                     (apply-column-label-override table-config field-id field)
-                                     field))
-                             base-fields)
+        (let [base-ids         (set (keep field-id->kw base-fields))
+              base-fields*     (mapv (fn [field]
+                                       (if-let [field-id (field-id->kw field)]
+                                         (apply-column-label-override table-config field-id field)
+                                         field))
+                                 base-fields)
               missing-computed (remove base-ids computed-cols)]
           (vec (concat base-fields* (map computed-field-spec missing-computed))))))))
 

@@ -17,7 +17,6 @@
    
    Events read from both paths during migration, write to new path only."
   (:require
-    [clojure.string]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
@@ -29,18 +28,18 @@
   (fn [db [_ entity-key]]
     (let [entity-key (model-naming/ensure-app-keyword entity-key)]
     ;; Read from new path first, fall back to legacy path
-    (or (get-in db (paths/entity-prefs-filters-fields entity-key))
-      (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
-      {}))))
+      (or (get-in db (paths/entity-prefs-filters-fields entity-key))
+        (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
+        {}))))
 
 (rf/reg-sub
   ::table-width
   (fn [db [_ entity-key]]
     (let [entity-key (model-naming/ensure-app-keyword entity-key)]
     ;; Read from new path first, fall back to legacy path
-    (or (get-in db (paths/entity-prefs-columns-width entity-key))
-      (get-in db (conj (paths/entity-display-settings entity-key) :table-width))
-      2800))))
+      (or (get-in db (paths/entity-prefs-columns-width entity-key))
+        (get-in db (conj (paths/entity-display-settings entity-key) :table-width))
+        2800))))
 
 (rf/reg-sub
   ::column-order
@@ -79,30 +78,28 @@
   [persistence/persist-entity-prefs]
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
-      (let [entity-key (model-naming/ensure-app-keyword entity-name)
-            field-key (model-naming/ensure-app-keyword (kw/ensure-name field-name))
-            route-name (get-in db (paths/current-route-name))
-            admin-route? (and route-name
-                           (clojure.string/starts-with? (name route-name) "admin"))
+      (let [entity-key    (model-naming/ensure-app-keyword entity-name)
+            field-key     (model-naming/ensure-app-keyword (kw/ensure-name field-name))
+            admin-route?  (paths/admin-route? db)
             entity-view-options (if admin-route?
-                                 (merge
-                                   (get-in db [:admin :config :view-options entity-key])
-                                   (get-in db [:admin :settings :view-options entity-key]))
-                                 (get-in db [:domain :config :view-options entity-key]))
-            locked-cols (:column-locks entity-view-options)
-              locked? (and (map? locked-cols)
-                        (contains? (into #{} (keep model-naming/ensure-app-keyword (keys locked-cols))) field-key))
-            table-config (if admin-route?
-                           (get-in db [:admin :config :table-columns entity-key])
-                           (get-in db [:domain :config :table-columns entity-key]))
-              always-visible? (contains? (into #{} (keep model-naming/ensure-app-keyword (or (:always-visible table-config) [])))
-                               field-key)
+                                  (merge
+                                    (get-in db [:admin :config :view-options entity-key])
+                                    (get-in db [:admin :settings :view-options entity-key]))
+                                  (get-in db [:domain :config :view-options entity-key]))
+            locked-cols   (:column-locks entity-view-options)
+            locked?       (and (map? locked-cols)
+                            (contains? (into #{} (keep model-naming/ensure-app-keyword (keys locked-cols))) field-key))
+            table-config  (if admin-route?
+                            (get-in db [:admin :config :table-columns entity-key])
+                            (get-in db [:domain :config :table-columns entity-key]))
+            always-visible? (contains? (into #{} (keep model-naming/ensure-app-keyword (or (:always-visible table-config) [])))
+                              field-key)
             ;; Read from new path first, fall back to legacy
-            current-map (or (get-in db (paths/entity-prefs-columns-visible entity-key))
-                          (get-in db (conj (paths/entity-display-settings entity-key) :visible-columns))
-                          {})
+            current-map   (or (get-in db (paths/entity-prefs-columns-visible entity-key))
+                            (get-in db (conj (paths/entity-display-settings entity-key) :visible-columns))
+                            {})
             current-setting (get current-map field-key true)
-            updated-map (assoc current-map field-key (not current-setting))]
+            updated-map   (assoc current-map field-key (not current-setting))]
         (if (or locked? always-visible?)
           db
           ;; Write to new path only

@@ -8,21 +8,6 @@
 (def ^:private power-user-roles
   #{"admin" "owner"})
 
-(def ^:private max-page-limit
-  500)
-
-(defn- parse-page-limit
-  [params default-limit]
-  (-> (or (some-> (h/get-param params :limit) parse-long)
-        default-limit)
-    long
-    (max 1)
-    (min max-page-limit)))
-
-(defn- parse-page-offset
-  [params]
-  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
-
 (defn list-supplier-aliases-handler
   "List supplier aliases for power users.
 
@@ -42,8 +27,8 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (parse-page-limit params 50)
-                offset (parse-page-offset params)
+                limit (h/parse-page-limit params 50)
+                offset (h/parse-page-offset params)
                 search (h/get-param params :search)
                 supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                 unmapped-only (h/parse-boolean-param params :unmapped-only)

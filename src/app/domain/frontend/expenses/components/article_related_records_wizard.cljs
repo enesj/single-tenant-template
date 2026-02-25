@@ -105,7 +105,7 @@
 (defui article-related-records-wizard
   []
   (let [open? (use-subscribe [:expenses/article-related-records-modal-open?])
-        article (use-subscribe [:expenses/article-related-records-modal-article])
+        article (use-subscribe [:expenses/article-related-records-modal-entity])
         step (use-subscribe [:expenses/article-related-records-step])
         related-type (use-subscribe [:expenses/article-related-records-type])
         records (use-subscribe [:expenses/article-related-records])

@@ -1,4 +1,5 @@
-(ns app.template.frontend.db.paths)
+(ns app.template.frontend.db.paths
+  (:require [clojure.string :as str]))
 
 ;; Navigation & Routing
 (defn current-route
@@ -10,6 +11,13 @@
   "Returns [:current-route :data :name] path vector for the current route name."
   []
   [:current-route :data :name])
+
+(defn admin-route?
+  "Returns true when the current route stored in db is an admin route.
+  Admin routes have names that start with \"admin\" (e.g. :admin/users)."
+  [db]
+  (let [route-name (get-in db (current-route-name))]
+    (boolean (and route-name (str/starts-with? (name route-name) "admin")))))
 
 (defn current-page
   "Returns [:ui :current-page] path vector for the current page in the UI state."

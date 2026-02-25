@@ -9,21 +9,6 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [taoensso.timbre :as log]))
 
-(def ^:private max-page-limit
-  500)
-
-(defn- parse-page-limit
-  [params default-limit]
-  (-> (or (some-> (h/get-param params :limit) parse-long)
-        default-limit)
-    long
-    (max 1)
-    (min max-page-limit)))
-
-(defn- parse-page-offset
-  [params]
-  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
-
 (defn list-article-aliases-handler
   "List article aliases, optionally filtered by supplier_id.
 
@@ -41,8 +26,8 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (parse-page-limit params 10)
-                offset (parse-page-offset params)
+                limit (h/parse-page-limit params 10)
+                offset (h/parse-page-offset params)
                 supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                 search (h/get-param params :search)
                 order-by (h/parse-order-by params)

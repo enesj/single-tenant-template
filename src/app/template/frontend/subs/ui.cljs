@@ -25,7 +25,6 @@
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.settings.resolver :as resolver]
-    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (rf/reg-sub
@@ -76,30 +75,25 @@
 
   User preferences ([:ui :entity-prefs]) still apply to both."
   [db entity-kw]
-  (let [;; Route name is stored in [:current-route :data :name] by reitit-frontend
-        route-name (get-in db (paths/current-route-name))
-        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
-
+  (let [admin-route?          (paths/admin-route? db)
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
-        config-view-options (get-in db [:admin :config :view-options entity-kw])
-        domain-view-options (get-in db [:domain :config :view-options entity-kw])
+        config-view-options   (get-in db [:admin :config :view-options entity-kw])
+        domain-view-options   (get-in db [:domain :config :view-options entity-kw])
 
-        view-options (if admin-route?
-                       (merge config-view-options settings-view-options)
-                       domain-view-options)
+        view-options   (if admin-route?
+                         (merge config-view-options settings-view-options)
+                         domain-view-options)
 
-        entity-config (if admin-route?
-                      ;; Entity config from entities.edn (admin registry)
-                        (or (get-in db [:admin :entity-registry entity-kw]) {})
-                      ;; Domain-owned entities.edn (user routes)
-                        (or (get-in db [:domain :config :entities entity-kw]) {}))
+        entity-config  (if admin-route?
+                         (or (get-in db [:admin :entity-registry entity-kw]) {})
+                         (or (get-in db [:domain :config :entities entity-kw]) {}))
 
-        user-prefs (get-in db (paths/entity-prefs-display entity-kw))
+        user-prefs   (get-in db (paths/entity-prefs-display entity-kw))
         legacy-prefs (get-in db (paths/entity-display-settings entity-kw))]
-    {:view-options view-options
+    {:view-options  view-options
      :entity-config entity-config
-     :user-prefs user-prefs
-     :legacy-prefs legacy-prefs}))
+     :user-prefs    user-prefs
+     :legacy-prefs  legacy-prefs}))
 
 (defn- gather-view-options-for-entity
   "Return the appropriate entity-specific view-options map for the current route.
@@ -107,11 +101,10 @@
   Admin routes: merge preloaded config + runtime settings draft.
   User routes:  use domain-owned config only."
   [db entity-kw]
-  (let [route-name (get-in db (paths/current-route-name))
-        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+  (let [admin-route?          (paths/admin-route? db)
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
-        config-view-options (get-in db [:admin :config :view-options entity-kw])
-        domain-view-options (get-in db [:domain :config :view-options entity-kw])]
+        config-view-options   (get-in db [:admin :config :view-options entity-kw])
+        domain-view-options   (get-in db [:domain :config :view-options entity-kw])]
     (if admin-route?
       (merge config-view-options settings-view-options)
       domain-view-options)))
@@ -211,10 +204,8 @@
     ;; 3) Legacy prefs ([:ui :entity-configs])
     ;; 4) Policy defaults from view-options (:column-defaults)
     ;; 5) Config defaults (admin or domain table-columns)
-    (let [entity-kw (model-naming/ensure-app-keyword entity-name)
-          ;; Route name is stored in [:current-route :data :name] by reitit-frontend
-          route-name (get-in db (paths/current-route-name))
-          admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+    (let [entity-kw    (model-naming/ensure-app-keyword entity-name)
+          admin-route? (paths/admin-route? db)
           table-config (when entity-kw
                          (if admin-route?
                            (get-in db [:admin :config :table-columns entity-kw])
@@ -230,7 +221,7 @@
           ;; Policy (view-options) column defaults/locks
           entity-view-options (when entity-kw (gather-view-options-for-entity db entity-kw))
           policy-defaults (normalize-col-map (:column-defaults entity-view-options))
-          policy-locks (normalize-col-map (:column-locks entity-view-options))
+          policy-locks    (normalize-col-map (:column-locks entity-view-options))
 
           ;; Per-user column prefs (map). Admin vector mode may store only an ordered vector.
           explicit-map (when entity-kw
@@ -261,12 +252,10 @@
                        (remove visible-set)
                        vec)))
           defaults-from-config (when (seq hidden)
-                                 ;; Provide explicit false entries for hidden columns.
-                                 ;; Rendering treats missing keys as visible.
                                  (into {} (map (fn [k] [k false]) hidden)))
 
-          defaults (merge (or defaults-from-config {})
-                     (or policy-defaults {}))
+          defaults  (merge (or defaults-from-config {})
+                      (or policy-defaults {}))
 
           user-choice (or explicit-map derived-from-vector legacy)
 
@@ -285,18 +274,17 @@
 (rf/reg-sub
   ::locked-visible-columns
   (fn [db [_ entity-name]]
-    (let [entity-kw (model-naming/ensure-app-keyword entity-name)
+    (let [entity-kw    (model-naming/ensure-app-keyword entity-name)
+          admin-route? (paths/admin-route? db)
           table-config (when entity-kw
-                         (let [route-name (get-in db (paths/current-route-name))
-                               admin-route? (and route-name (str/starts-with? (name route-name) "admin"))]
-                           (if admin-route?
-                             (get-in db [:admin :config :table-columns entity-kw])
-                             (get-in db [:domain :config :table-columns entity-kw]))))
+                         (if admin-route?
+                           (get-in db [:admin :config :table-columns entity-kw])
+                           (get-in db [:domain :config :table-columns entity-kw])))
           always-visible (->> (or (:always-visible table-config) [])
                            (keep normalize-col)
                            vec)
           entity-view-options (when entity-kw (gather-view-options-for-entity db entity-kw))
-          policy-locks (normalize-col-map (:column-locks entity-view-options))]
+          policy-locks        (normalize-col-map (:column-locks entity-view-options))]
       (when entity-kw
         (merge (or policy-locks {})
           (into {} (map (fn [k] [k true]) always-visible)))))))

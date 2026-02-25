@@ -11,6 +11,13 @@
 ;; User Update Validation
 ;; ============================================================================
 
+(def user-normalization-config
+  "Shared normalization config for user database results.
+  Used by the users façade and bulk operations to avoid duplication."
+  {:prefixes ["users-" "user-"]
+   :namespaces #{"users" "user" "u"}
+   :id-fields #{:id}})
+
 (defonce ^:private models-data-cache
   (delay
     (try

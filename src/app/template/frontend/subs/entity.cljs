@@ -52,12 +52,7 @@
         result)
       [])))
 
-(defn- server-pagination?
-  [ui-state]
-  (let [mode (or (:pagination-mode ui-state)
-               (get-in ui-state [:pagination :mode]))]
-    (or (= mode :server)
-      (= mode "server"))))
+;; server-pagination? is provided by list-subs/server-pagination?
 
 ;; Filter and sort entities
 (rf/reg-sub
@@ -69,32 +64,13 @@
   (fn [[entities active-filters entity-config] [_ _entity-type]]
     (if (empty? active-filters)
       entities
-      (let [;; Create a map of field-id to field-spec for quick lookup
-            fields-by-id (into {} (map (fn [field] [(keyword (:id field)) field])
-                                    (:fields entity-config)))
-            filtered (filter (fn [item]
+      (let [filtered (filter (fn [item]
                                (every? (fn [[field-id filter-value]]
-                                         (let [field-key (if (keyword? field-id) field-id (keyword field-id))
-                                               _field-spec (get fields-by-id field-key)
-                                               ;; Determine filter type based on the filter value structure
-                                               filter-type (cond
-                                                             ;; Vector means select/multi-select filter
-                                                             (vector? filter-value) :select
-                                                             ;; Map with :min/:max means number range
-                                                             (and (map? filter-value)
-                                                               (or (contains? filter-value :min)
-                                                                 (contains? filter-value :max))) :number-range
-                                                             ;; Map with :from/:to means date range
-                                                             (and (map? filter-value)
-                                                               (or (contains? filter-value :from)
-                                                                 (contains? filter-value :to))) :date-range
-                                                             ;; String or other means text filter
-                                                             :else :text)]
-                                           ;; Use the helper function to check if item matches
+                                         (let [field-key (if (keyword? field-id) field-id (keyword field-id))]
                                            (filter-helpers/matches-filter? {:item item
-                                                                            :field-id field-id
+                                                                            :field-id field-key
                                                                             :filter-value filter-value
-                                                                            :filter-type filter-type})))
+                                                                            :filter-type (filter-helpers/infer-filter-type filter-value)})))
                                  active-filters))
                        entities)]
         filtered))))
@@ -109,7 +85,7 @@
      (rf/subscribe [::entities-state])
      (rf/subscribe [::list-subs/entity-ui-state entity-type])])
   (fn [[entities sort-config entity-specs entities-state ui-state] [_ entity-type]]
-    (if (server-pagination? ui-state)
+    (if (list-subs/server-pagination? ui-state)
       entities
       (let [{:keys [field direction]} sort-config
             field (when field (model-naming/ensure-app-keyword field))
@@ -173,12 +149,10 @@
                           (nil? v) nil
                           (string? v)
                           (if date-field?
-                            ;; Only attempt date parsing for fields with date/time input types
                             (let [d (try (js/Date. v) (catch :default _ nil))]
                               (if (and d (not (js/isNaN (.getTime d))))
                                 (.getTime d)
                                 (str/lower-case v)))
-                            ;; For non-date fields, always treat as strings
                             (str/lower-case v))
                           (boolean? v) (if v 1 0)
                           (instance? js/Date v) (.getTime v)
@@ -186,7 +160,6 @@
         (if (and field direction)
           (let [sorted (sort-by (fn [item]
                                   (let [v (normalize (resolve-sort-value item))
-                                        ;; nil first for ascending; will be reversed for descending
                                         nil-key (if (some? v) 1 0)]
                                     [nil-key v]))
                          entities)]
@@ -202,18 +175,16 @@
     [(rf/subscribe [::sorted-entities entity-type])
      (rf/subscribe [::list-subs/entity-ui-state entity-type])])
   (fn [[sorted-entities ui-state] [_ _entity-type]]
-    (if (server-pagination? ui-state)
+    (if (list-subs/server-pagination? ui-state)
       (vec sorted-entities)
-      (let [per-page (or (:per-page ui-state)
-                       (get-in ui-state [:pagination :per-page])
-                       10)
-            current-page (or (get-in ui-state [:pagination :current-page])
-                           (:current-page ui-state)
-                           1)
-            start-idx (* (dec current-page) per-page)
-            _end-idx (+ start-idx per-page)
-            result (vec (take per-page (drop start-idx sorted-entities)))]
-        result))))
+      (let [per-page      (or (:per-page ui-state)
+                            (get-in ui-state [:pagination :per-page])
+                            10)
+            current-page  (or (get-in ui-state [:pagination :current-page])
+                            (:current-page ui-state)
+                            1)
+            start-idx     (* (dec current-page) per-page)]
+        (vec (take per-page (drop start-idx sorted-entities)))))))
 
 ;; Get loading and error status
 (rf/reg-sub

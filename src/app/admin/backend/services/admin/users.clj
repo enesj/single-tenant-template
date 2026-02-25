@@ -3,6 +3,7 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.users.management :as management]
+    [app.admin.backend.services.admin.users.validation :as validation]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
@@ -11,11 +12,7 @@
     [next.jdbc :as jdbc]
     [taoensso.timbre :as log]))
 
-(def ^:private user-config
-  "Configuration for normalizing user database results to application format"
-  {:prefixes ["users-" "user-"]
-   :namespaces #{"users" "user" "u"}
-   :id-fields #{:id}})
+(def ^:private user-config validation/user-normalization-config)
 
 (defn- db-user->app
   "Normalize a user row from the database using shared utilities"

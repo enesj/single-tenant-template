@@ -193,32 +193,13 @@
 
 ;; Logging Utilities
 
-(defn log-admin-action
-  "Log admin action to audit_logs table and application logs"
-  [action admin-id entity-type entity-id details]
-  ;; Log to application logs for immediate debugging
-  (log/info "Admin action:"
-    {:action action
-     :admin-id admin-id
-     :entity-type entity-type
-     :entity-id entity-id
-     :details details})
+(declare log-admin-action-with-context)
 
-  ;; Store in audit_logs table for compliance and persistence
-  (try
-    (when-let [db (requiring-resolve 'system.state/db)]
-      (let [audit-service (requiring-resolve 'app.backend.services.admin/log-audit!)]
-        (when (and @db audit-service)
-          (audit-service @db
-            {:admin_id admin-id
-             :action action
-             :entity-type (str entity-type)
-             :entity-id (type-conv/try-parse-uuid entity-id)
-             :changes details
-             :ip-address nil
-             :user-agent nil}))))
-    (catch Exception e
-      (log/warn "Failed to persist audit log to database:" (.getMessage e)))))
+(defn log-admin-action
+  "Log admin action to audit_logs table and application logs.
+  Delegates to log-admin-action-with-context with nil ip-address and user-agent."
+  [action admin-id entity-type entity-id details]
+  (log-admin-action-with-context action admin-id entity-type entity-id details nil nil))
 
 (defn get-client-ip
   "Extract client IP address from request, considering proxy headers"

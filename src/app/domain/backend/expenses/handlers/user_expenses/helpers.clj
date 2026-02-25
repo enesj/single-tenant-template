@@ -71,6 +71,26 @@
       "desc" :desc
       nil)))
 
+(def ^:private max-page-limit
+  "Maximum rows a paginated endpoint will return."
+  500)
+
+(defn parse-page-limit
+  "Parse the `limit` query param to a clamped long in [1, 500].
+
+  Falls back to `default-limit` when the param is absent or non-numeric."
+  [params default-limit]
+  (-> (or (some-> (get-param params :limit) parse-long)
+        default-limit)
+    long
+    (max 1)
+    (min max-page-limit)))
+
+(defn parse-page-offset
+  "Parse the `offset` query param to a non-negative long."
+  [params]
+  (max 0 (long (or (some-> (get-param params :offset) parse-long) 0))))
+
 (defn get-user
   "Return the user map from the request (session or identity), or nil if missing.
 

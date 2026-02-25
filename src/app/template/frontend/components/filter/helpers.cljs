@@ -197,6 +197,36 @@
                                    :filter-type filter-type}))
         count))))
 
+(defn infer-filter-type
+  "Infer a filter type keyword from the shape of a stored filter value.
+
+  This mirrors the branching used by `matches-filter?` so callers can
+  determine which filtering branch will be taken without supplying a
+  field-spec.
+
+  Returns one of: :text :number-range :date-range :select"
+  [filter-value]
+  (cond
+    (vector? filter-value)
+    :select
+
+    (and (map? filter-value)
+      (or (contains? filter-value :min)
+        (contains? filter-value :max)))
+    :number-range
+
+    (and (map? filter-value)
+      (or (contains? filter-value :from)
+        (contains? filter-value :to)))
+    :date-range
+
+    (and (map? filter-value)
+      (contains? filter-value :value))
+    :select
+
+    :else
+    :text))
+
 (defn format-filter-value-for-display
   "Formats a filter value for display in the UI"
   [{:keys [filter-value filter-type]}]

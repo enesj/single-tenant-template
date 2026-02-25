@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.services.articles
   "Article management and alias mapping for expense items."
   (:require
+    [app.domain.backend.expenses.services.related-records :as related-records]
     [app.shared.model-naming :as model-naming]
     [app.shared.query-builders :as shared-qb]
     [clojure.string :as str]
@@ -216,50 +217,11 @@
                      :limit limit})
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
-(defn- normalize-related-type
-  [related-type]
-  (let [raw (cond
-              (keyword? related-type) (name related-type)
-              (string? related-type) related-type
-              :else nil)
-        related-type* (some-> raw str/trim str/lower-case keyword)]
-    (case related-type*
-      :supplier :providers
-      :suppliers :providers
-      :provider :providers
-      :manufacturer :manufacturers
-      :subcategory :subcategories
-      related-type*)))
-
-(defn- clamp-related-limit
-  [limit]
-  (-> (or limit 100)
-    (max 1)
-    (min 500)))
-
 (defn- article-item-linkage-where
   [article-id]
   [:or
    [:= :ei.article_id article-id]
    [:= :aa.article_id article-id]])
-
-(defn- merge-related-rows
-  "Merge ordered related-record result sets, de-duplicating by `:id` while
-  preserving the order of higher-signal sources passed first."
-  [limit & row-groups]
-  (->> row-groups
-    (apply concat)
-    (reduce (fn [{:keys [seen rows] :as acc} row]
-              (let [row-id (:id row)]
-                (if (contains? seen row-id)
-                  acc
-                  {:seen (conj seen row-id)
-                   :rows (conj rows row)})))
-      {:seen #{}
-       :rows []})
-    :rows
-    (take limit)
-    vec))
 
 (defn- list-related-expenses
   [db article-id limit]
@@ -344,7 +306,7 @@
 
 (defn- list-related-receipts
   [db article-id limit]
-  (merge-related-rows
+  (related-records/merge-related-rows
     limit
     (list-related-receipts-expense-linked db article-id limit)
     (list-related-receipts-alias-linked db article-id limit)))
@@ -422,7 +384,7 @@
 
 (defn- list-related-stores
   [db article-id limit]
-  (merge-related-rows
+  (related-records/merge-related-rows
     limit
     (list-related-stores-expense-linked db article-id limit)
     (list-related-stores-alias-linked db article-id limit)))
@@ -470,8 +432,8 @@
   [db article-id {:keys [type limit]}]
   (when-not article-id
     (throw (ex-info "article-id is required" {:status 400})))
-  (let [related-type (normalize-related-type type)
-        related-limit (clamp-related-limit limit)]
+  (let [related-type (related-records/normalize-related-type type)
+        related-limit (related-records/clamp-related-limit limit)]
     (case related-type
       :expenses (list-related-expenses db article-id related-limit)
       :receipts (list-related-receipts db article-id related-limit)

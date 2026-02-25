@@ -34,13 +34,7 @@
   :app.admin.frontend.events.settings/load-table-columns-failure
   (fn [{:keys [db]} [_ error]]
     (log/error "Failed to load table columns" error)
-    (let [db' (-> db
-                (assoc-in [:admin :settings :table-columns-loading?] false)
-                (assoc-in [:admin :settings :error] "Failed to load table columns"))]
-      (if (utils/unauthorized? error)
-        {:db db'
-         :dispatch [:admin/auth-invalid]}
-        {:db db'}))))
+    (utils/load-failure-effect db :table-columns-loading? "Failed to load table columns" error)))
 
 ;; =============================================================================
 ;; Update Table Columns Entity Config
@@ -78,9 +72,6 @@
   :app.admin.frontend.events.settings/update-table-columns-failure
   (fn [{:keys [db]} [_ entity-kw error]]
     (log/error "Failed to update table columns" {:entity entity-kw :error error})
-    (cond-> {:db (-> db
-                   (assoc-in [:admin :settings :saving?] false)
-                   (assoc-in [:admin :settings :error] "Failed to save table columns"))
-             :fx [[:dispatch [:app.admin.frontend.events.settings/load-table-columns]]]}
-      (utils/unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
+    (utils/update-failure-effect db error "Failed to save table columns"
+      [:app.admin.frontend.events.settings/load-table-columns])))
 

@@ -41,21 +41,6 @@
            db)
     :id))
 
-(def ^:private max-page-limit
-  500)
-
-(defn- parse-page-limit
-  [params default-limit]
-  (-> (or (some-> (h/get-param params :limit) parse-long)
-        default-limit)
-    long
-    (max 1)
-    (min max-page-limit)))
-
-(defn- parse-page-offset
-  [params]
-  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
-
 (defn list-suppliers-handler
   "Handler factory for listing suppliers available to users."
   [db]
@@ -65,8 +50,8 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (parse-page-limit params 100)
-                offset (parse-page-offset params)
+                limit (h/parse-page-limit params 100)
+                offset (h/parse-page-offset params)
                 search (h/get-param params :search)
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)
@@ -124,8 +109,8 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (parse-page-limit params 100)
-                offset (parse-page-offset params)
+                limit (h/parse-page-limit params 100)
+                offset (h/parse-page-offset params)
                 search (h/get-param params :search)
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)
@@ -429,8 +414,8 @@
         forbidden
         (try
           (let [params (:query-params request)
-                limit (parse-page-limit params 100)
-                offset (parse-page-offset params)
+                limit (h/parse-page-limit params 100)
+                offset (h/parse-page-offset params)
                 search (h/get-param params :search)
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)

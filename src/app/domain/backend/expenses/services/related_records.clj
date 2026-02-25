@@ -11,13 +11,25 @@
     (min 500)))
 
 (defn normalize-related-type
-  "Normalize a related type parameter to a keyword."
+  "Normalize a related type parameter to a canonical keyword.
+
+  Also resolves common singular/alternate spellings:
+  - :supplier / :suppliers / :provider  -> :providers
+  - :manufacturer                        -> :manufacturers
+  - :subcategory                         -> :subcategories"
   [related-type]
   (let [raw (cond
               (keyword? related-type) (name related-type)
               (string? related-type) related-type
-              :else nil)]
-    (some-> raw str/trim str/lower-case keyword)))
+              :else nil)
+        kw (some-> raw str/trim str/lower-case keyword)]
+    (case kw
+      :supplier :providers
+      :suppliers :providers
+      :provider :providers
+      :manufacturer :manufacturers
+      :subcategory :subcategories
+      kw)))
 
 (defn merge-related-rows
   "Merge ordered related-record result sets, de-duplicating by `:id` while

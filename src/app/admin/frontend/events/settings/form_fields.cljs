@@ -34,13 +34,7 @@
   :app.admin.frontend.events.settings/load-form-fields-failure
   (fn [{:keys [db]} [_ error]]
     (log/error "Failed to load form fields" error)
-    (let [db' (-> db
-                (assoc-in [:admin :settings :form-fields-loading?] false)
-                (assoc-in [:admin :settings :error] "Failed to load form fields"))]
-      (if (utils/unauthorized? error)
-        {:db db'
-         :dispatch [:admin/auth-invalid]}
-        {:db db'}))))
+    (utils/load-failure-effect db :form-fields-loading? "Failed to load form fields" error)))
 
 ;; =============================================================================
 ;; Update Form Fields Entity Config
@@ -78,9 +72,6 @@
   :app.admin.frontend.events.settings/update-form-fields-failure
   (fn [{:keys [db]} [_ entity-kw error]]
     (log/error "Failed to update form fields" {:entity entity-kw :error error})
-    (cond-> {:db (-> db
-                   (assoc-in [:admin :settings :saving?] false)
-                   (assoc-in [:admin :settings :error] "Failed to save form fields"))
-             :fx [[:dispatch [:app.admin.frontend.events.settings/load-form-fields]]]}
-      (utils/unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
+    (utils/update-failure-effect db error "Failed to save form fields"
+      [:app.admin.frontend.events.settings/load-form-fields])))
 
