@@ -54,7 +54,7 @@
   [& _args]
   (println "🔍 Analyzing Clojure files (.clj, .cljs, .cljc) in project...")
   (let [root-dir "."
-        exclusions #{"/.git/" "/node_modules/" "/target/" "/.shadow-cljs/" "/.cpcache/" "/out/" "/tmp/"}]
+        exclusions #{"/.git/" "/node_modules/" "/target/" "/.shadow-cljs/" "/.cpcache/" "/out/" "/tmp/" "/worktrees/" "/@worktrees/"}]
 
     (println "📁 Root directory:" (.getCanonicalPath (io/file root-dir)))
     (println "🚫 Excluding directories with:" (str/join ", " exclusions))
