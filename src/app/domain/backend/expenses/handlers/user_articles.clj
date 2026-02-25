@@ -180,37 +180,6 @@
                                                          :article-id (str article-id)})
                 (h/json-response {:error "Failed to update article"} 500)))))))))
 
-(defn delete-article-handler
-  [db]
-  (fn [request]
-    (if-not (h/get-user request)
-      (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
-        forbidden
-        (let [article-id (h/try-parse-uuid (or (get-in request [:path-params :id])
-                                             (get-in request [:parameters :path :id])))]
-          (if-not article-id
-            (h/json-response {:error "Invalid article id"} 400)
-            (try
-              (let [deleted? (boolean (articles/delete-article! db article-id))]
-                (if deleted?
-                  (h/json-response {:data {:deleted true}})
-                  (h/not-found-response "Article not found")))
-              (catch org.postgresql.util.PSQLException e
-                (let [sql-state (.getSQLState e)]
-                  (if (= "23503" sql-state)
-                    (do
-                      (log/warn "Cannot delete article - has related records" {:article-id (str article-id)})
-                      (h/json-response {:error "Cannot delete article: it has related expense items, aliases, or price observations. Remove related records first."} 409))
-                    (do
-                      (log/error e "Database error deleting article" {:article-id (str article-id)
-                                                                      :sql-state sql-state})
-                      (h/json-response {:error "Failed to delete article"} 500)))))
-              (catch Exception e
-                (log/error e "Failed to delete article" {:message (.getMessage e)
-                                                         :article-id (str article-id)})
-                (h/json-response {:error "Failed to delete article"} 500)))))))))
-
 (defn batch-delete-articles-handler
   "Batch delete articles (admin/owner only).
 

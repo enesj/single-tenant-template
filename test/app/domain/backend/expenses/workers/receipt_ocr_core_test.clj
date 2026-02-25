@@ -1,19 +1,24 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr-core-test
   (:require
+    [app.domain.backend.expenses.integrations.cerebras :as cerebras]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
+    [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
+    [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as core]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
+    [app.domain.backend.expenses.workers.receipt-ocr.refine :as refine]
+    [app.domain.backend.expenses.workers.receipt-ocr.runner :as runner]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing]])
+    [clojure.test :refer [deftest is]])
   (:import
     [java.util.concurrent CountDownLatch TimeUnit]))
 
 (deftest process-extract-auto-retries-review-required-once
-  (let [process-extract! #'core/process-extract!
+  (let [process-extract! #'runner/run-receipt!
         receipt-id (java.util.UUID/randomUUID)
         calls (atom {:claim 0 :ocr 0 :persist 0 :retry 0})]
     (with-redefs [receipt-status/claim-for-extracting! (fn [_db _rid _opts]
@@ -36,7 +41,7 @@
                   receipt-status/retry-extraction! (fn [_db _rid]
                                                      (swap! calls update :retry inc)
                                                      nil)]
-      (let [res (process-extract! nil {:api-key "k"} {:id receipt-id :content_type "image/jpeg"} {:lease-seconds 900})]
+      (let [res (process-extract! nil {:api-key "k"} {:id receipt-id :status "uploaded" :content_type "image/jpeg"} {:lease-seconds 900})]
         ;; Current implementation does not auto-retry review_required.
         (is (= "review_required" (:status res)))
         (is (= 1 (:claim @calls)))
@@ -45,7 +50,7 @@
         (is (= 0 (:retry @calls)))))))
 
 (deftest process-extract-preprocesses-image-before-mistral
-  (let [process-extract! #'core/process-extract!
+  (let [process-extract! #'runner/run-receipt!
         receipt-id (java.util.UUID/randomUUID)
         seen (atom nil)
         prepared-bytes (.getBytes "prepared")]
@@ -69,6 +74,7 @@
       (let [res (process-extract! nil
                   {:api-key "k" :auto-post-after-upload? false}
                   {:id receipt-id
+                   :status "uploaded"
                    :content_type "image/heic"
                    :original_filename "r.heic"}
                   {:lease-seconds 900
@@ -90,7 +96,7 @@
                         :extract-result {}}))
         runner (future
                  (clojure.core/with-redefs-fn
-                   {#'core/maybe-refine-review-required
+                   {#'refine/maybe-refine-review-required
                     (fn [_db _receipt _extract-result persist-result _opts]
                       (let [n (swap! active inc)]
                         (swap! max-active max n)
@@ -99,7 +105,7 @@
                         (swap! active dec)
                         (assoc persist-result :refined? true)))}
                    (fn []
-                     (#'core/refine-review-required-results! nil opts results))))]
+                     (#'refine/refine-review-required-results! nil opts results))))]
     (is (.await started 1 TimeUnit/SECONDS))
     (is (<= @max-active limit))
     (.countDown release)
@@ -118,13 +124,13 @@
                   :review-required? true
                   :extract-result {}}]
         res (clojure.core/with-redefs-fn
-              {#'core/maybe-refine-review-required
+              {#'refine/maybe-refine-review-required
                (fn [_db receipt _extract-result persist-result _opts]
                  (if (= bad-id (:id receipt))
                    (throw (ex-info "boom" {:receipt-id bad-id}))
                    (assoc persist-result :refined? true)))}
               (fn []
-                (#'core/refine-review-required-results! nil opts results)))]
+                (#'refine/refine-review-required-results! nil opts results)))]
     (is (true? (get-in res [0 :refined?])))
     (is (nil? (get-in res [1 :refined?])))))
 
@@ -132,14 +138,14 @@
   (let [receipt-id (java.util.UUID/randomUUID)
         cleared (atom [])
         res (clojure.core/with-redefs-fn
-              {#'core/maybe-refine-with-cerebras (fn [_db _receipt extract-result _opts]
+              {#'refine/maybe-refine-with-cerebras (fn [_db _receipt extract-result _opts]
                                                   ;; Skip/failed refine: no :llm_refine returned.
-                                                   extract-result)
+                                                     extract-result)
                #'receipt-status/clear-refine-pending! (fn [_db rid]
                                                         (swap! cleared conj rid)
                                                         {:id rid})}
               (fn []
-                (#'core/maybe-refine-review-required
+                (#'refine/maybe-refine-review-required
                  ::db
                  {:id receipt-id}
                  {:parsed-markdown "x"}
@@ -154,14 +160,14 @@
                   :review-required? true
                   :extract-result {}}]
         res (clojure.core/with-redefs-fn
-              {#'core/maybe-refine-review-required
+              {#'refine/maybe-refine-review-required
                (fn [_db _receipt _extract-result persist-result _opts]
                  (try
                    (Thread/sleep 200)
                    (catch InterruptedException _))
                  (assoc persist-result :refined? true))}
               (fn []
-                (#'core/refine-review-required-results! nil opts results)))]
+                (#'refine/refine-review-required-results! nil opts results)))]
     (is (nil? (get-in res [0 :refined?])))))
 
 (deftest refine-review-required-results-clears-refine-pending-on-timeout
@@ -172,7 +178,7 @@
                   :review-required? true
                   :extract-result {}}]
         _res (clojure.core/with-redefs-fn
-               {#'core/maybe-refine-review-required
+               {#'refine/maybe-refine-review-required
                 (fn [_db _receipt _extract-result persist-result _opts]
                   (try
                     (Thread/sleep 200)
@@ -183,7 +189,7 @@
                   (swap! cleared conj rid)
                   {:id rid})}
                (fn []
-                 (#'core/refine-review-required-results! ::db opts results)))]
+                 (#'refine/refine-review-required-results! ::db opts results)))]
     (is (= [receipt-id] @cleared))))
 
 (deftest refine-review-required-results-logs-post-process-when-no-eligible-refine
@@ -195,11 +201,11 @@
                  (binding [*out* w
                            *err* w]
                    (clojure.core/with-redefs-fn
-                     {#'core/maybe-refine-review-required
+                     {#'refine/maybe-refine-review-required
                       (fn [_db _receipt _extract-result persist-result _opts]
                         persist-result)}
                      (fn []
-                       (#'core/refine-review-required-results! nil opts results)))
+                       (#'refine/refine-review-required-results! nil opts results)))
                    (str w)))]
     (is (str/includes? output "Review-required post-process starting (no eligible refine)"))
     (is (str/includes? output "Review-required post-process complete (no eligible refine)"))
@@ -215,14 +221,14 @@
                  (binding [*out* w
                            *err* w]
                    (clojure.core/with-redefs-fn
-                     {#'core/user-allows-receipt-refine?
+                     {#'refine/user-allows-receipt-refine?
                       (fn [_db _receipt]
                         true)
-                      #'core/maybe-refine-review-required
+                      #'refine/maybe-refine-review-required
                       (fn [_db _receipt _extract-result persist-result _opts]
                         (assoc persist-result :extract-result {:llm_refine {:model "test"}}))}
                      (fn []
-                       (#'core/refine-review-required-results! ::db opts results)))
+                       (#'refine/refine-review-required-results! ::db opts results)))
                    (str w)))]
     (is (str/includes? output "Cerebras parallel refine starting"))
     (is (str/includes? output "Cerebras parallel refine complete"))
@@ -238,14 +244,14 @@
                  (binding [*out* w
                            *err* w]
                    (clojure.core/with-redefs-fn
-                     {#'core/user-allows-receipt-refine?
+                     {#'refine/user-allows-receipt-refine?
                       (fn [_db _receipt]
                         false)
-                      #'core/maybe-refine-review-required
+                      #'refine/maybe-refine-review-required
                       (fn [_db _receipt _extract-result persist-result _opts]
                         (assoc persist-result :extract-result {:llm_refine {:model "test"}}))}
                      (fn []
-                       (#'core/refine-review-required-results! ::db opts results)))
+                       (#'refine/refine-review-required-results! ::db opts results)))
                    (str w)))]
     (is (str/includes? output "Cerebras parallel refine starting"))
     (is (str/includes? output "Cerebras parallel refine complete"))
@@ -255,16 +261,16 @@
   (let [receipt-id (java.util.UUID/randomUUID)
         captured-opts (atom nil)]
     (clojure.core/with-redefs-fn
-      {#'app.domain.backend.expenses.integrations.ocr-provider/build-provider
+      {#'ocr-provider/build-provider
        (fn [_]
          {:provider :llamaparse
           :enabled? true
           :api-key "k"
           :auto-post-after-upload? false})
-       #'app.domain.backend.expenses.integrations.cerebras/build-config
+       #'cerebras/build-config
        (fn [_]
          {})
-       #'app.domain.backend.expenses.services.places-api/build-config
+       #'places-api/build-config
        (fn [_]
          {})
        #'receipt-status/reset-for-ocr!
@@ -274,7 +280,7 @@
        (fn [_db _receipt-id]
          {:id receipt-id
           :status "uploaded"})
-       #'core/process-receipt!
+       #'runner/run-receipt!
        (fn [_db _ocr-cfg _receipt opts]
          (reset! captured-opts opts)
          {:receipt-id receipt-id

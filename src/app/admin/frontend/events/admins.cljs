@@ -4,7 +4,6 @@
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.utils.state :as state-utils]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.state.normalize :as normalize]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -249,26 +248,4 @@
 ;; Fetch Entities Integration (for template system)
 ;; ============================================================================
 
-(rf/reg-event-fx
-  :admin/fetch-admins-entities-success
-  (fn [{:keys [db]} [_ response]]
-    (let [clj-response (if (object? response) (js->clj response :keywordize-keys true) response)
-          entities (or (get clj-response :admins) clj-response)
-          clj-entities (if (and (coll? entities) (object? (first entities)))
-                         (map #(js->clj % :keywordize-keys true) entities)
-                         entities)
-          normalized-data (normalize/normalize-entities clj-entities)
-          {:keys [data ids]} normalized-data]
-      {:db (-> db
-             (assoc-in (paths/entity-data :admins) data)
-             (assoc-in (paths/entity-ids :admins) ids)
-             (assoc-in (paths/entity-loading? :admins) false)
-             (assoc :admin/admins clj-entities))
-       :dispatch-n [[:app.admin.frontend.adapters.admins/sync-admins-to-template clj-entities]]})))
 
-(rf/reg-event-db
-  :admin/fetch-admins-entities-failure
-  (fn [db [_ error]]
-    (-> db
-      (assoc-in (paths/entity-loading? :admins) false)
-      (assoc-in (paths/entity-error :admins) (str "Failed to load admins: " error)))))

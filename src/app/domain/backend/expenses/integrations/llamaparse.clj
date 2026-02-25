@@ -15,8 +15,6 @@
 (def build-config config/build-config)
 
 ;; Re-export HTTP utilities (for test stubbing)
-(def http-post! http/http-post!)
-(def http-get! http/http-get!)
 
 (defn- build-upload-configuration
   [{:keys [tier version ocr-languages agentic-custom-prompt]}]
