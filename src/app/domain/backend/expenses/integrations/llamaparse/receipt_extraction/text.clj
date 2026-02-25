@@ -1,0 +1,115 @@
+(ns app.domain.backend.expenses.integrations.llamaparse.receipt-extraction.text
+  (:require
+    [app.domain.backend.expenses.integrations.llamaparse.http :as http]
+    [clojure.string :as str]))
+
+(defn safe-trim
+  [s]
+  (some-> s str str/trim not-empty))
+
+(defn normalize-text
+  [s]
+  (some-> s safe-trim str/lower-case (str/replace #"\s+" " ") str/trim not-empty))
+
+(def ba-datetime-line-re
+  #"(?iu)^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\.?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$")
+
+(def ba-date-line-re
+  #"(?iu)^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\.?$")
+
+(defn- normalize-year
+  [year-str]
+  (let [year-str (some-> year-str str/trim)]
+    (cond
+      (nil? year-str) nil
+      (= 4 (count year-str)) year-str
+      (= 3 (count year-str)) (str "2" year-str)
+      (= 2 (count year-str)) (str "20" year-str)
+      :else year-str)))
+
+(defn text->date-line
+  [text]
+  (when (string? text)
+    (->> (str/split-lines text)
+      (map safe-trim)
+      (remove nil?)
+      (filter (fn [line]
+                (or (re-matches ba-datetime-line-re line)
+                  (re-matches ba-date-line-re line))))
+      first)))
+
+(defn date-line->iso
+  [date-line]
+  (when-let [date-line (safe-trim date-line)]
+    (or
+      (when-let [[_ day month year hour minute sec] (re-matches ba-datetime-line-re date-line)]
+        (let [year (normalize-year year)
+              sec (or sec "00")]
+          (when (and year (re-matches #"\d{4}" year))
+            (format "%s-%02d-%02dT%02d:%02d:%02d"
+              year
+              (parse-long month)
+              (parse-long day)
+              (parse-long hour)
+              (parse-long minute)
+              (parse-long sec)))))
+      (when-let [[_ day month year] (re-matches ba-date-line-re date-line)]
+        (let [year (normalize-year year)]
+          (when (and year (re-matches #"\d{4}" year))
+            (format "%s-%02d-%02d" year (parse-long month) (parse-long day))))))))
+
+(defn response->pages
+  [resp-json]
+  (let [pages (get-in resp-json [:items :pages])]
+    (if (sequential? pages) pages [])))
+
+(defn- flatten-items
+  [items]
+  (letfn [(walk [item]
+            (lazy-seq
+              (cons item
+                (when (sequential? (:items item))
+                  (mapcat walk (:items item))))))]
+    (->> (or items [])
+      (mapcat walk)
+      (remove nil?)
+      vec)))
+
+(defn response->all-items
+  [resp-json]
+  (->> (response->pages resp-json)
+    (mapcat :items)
+    flatten-items
+    vec))
+
+(defn response->header-text
+  [resp-json]
+  (let [items (response->all-items resp-json)
+        pre-table-text-items
+        (->> items
+          (take-while (fn [{:keys [type]}]
+                        (not= "table" (some-> type str/lower-case))))
+          (filter (fn [{:keys [type]}]
+                    (contains? #{"header" "text"} (some-> type str/lower-case)))))
+        header-items
+        (filter (fn [{:keys [type]}]
+                  (= "header" (some-> type str/lower-case)))
+          items)]
+    (->> (concat pre-table-text-items header-items)
+      (keep (fn [item]
+              (or (safe-trim (:md item))
+                (safe-trim (:value item)))))
+      (remove str/blank?)
+      distinct
+      (str/join "\n\n")
+      not-empty)))
+
+(defn response->combined-text
+  [resp-json]
+  (let [header (response->header-text resp-json)
+        text (http/response->text resp-json)]
+    (->> [header text]
+      (map safe-trim)
+      (remove nil?)
+      (str/join "\n\n")
+      not-empty)))
