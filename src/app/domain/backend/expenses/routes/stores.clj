@@ -3,7 +3,7 @@
   (:require
     [app.domain.backend.expenses.routes.route-configs :as configs]
     [app.domain.backend.expenses.routes.routes-factory :as factory]
-    [app.domain.backend.expenses.services.stores :as stores]
+    [app.domain.backend.expenses.services.stores.related :as stores-related]
     [app.template.backend.routes.admin.utils :as utils]))
 
 (defn routes [db]
@@ -21,7 +21,7 @@
                           limit (utils/parse-int-param qp :limit 100)]
                       (when-not store-id
                         (throw (ex-info "Invalid store id" {:status 400})))
-                      (let [rows (stores/list-related-records
+                      (let [rows (stores-related/list-related-records
                                    db store-id
                                    {:type related-type :limit limit})]
                         (utils/success-response {:related-records (factory/to-app rows)}))))

@@ -9,7 +9,8 @@
   - Responses are normalized to {:data ...} to keep frontend handlers consistent."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [app.domain.backend.expenses.services.stores :as stores]
+    [app.domain.backend.expenses.services.stores.service :as stores-service]
+    [app.domain.backend.expenses.services.stores.upsert :as stores-upsert]
     [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
     [taoensso.timbre :as log]))
@@ -80,9 +81,9 @@
                               :search search}
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir))
-                rows (to-app ((:list stores/service) db opts))
+                rows (to-app ((:list stores-service/entity-service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count stores/service) db {:search search}) 0))]
+                total (long (or ((:count stores-service/entity-service) db {:search search}) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit
@@ -125,10 +126,10 @@
               (h/json-response {:error "display_name is required"} 400)
 
               :else
-              (let [store (-> (stores/find-or-create-store! db {:supplier_id supplier-id
-                                                                :display_name display-name
-                                                                :address address*
-                                                                :place_id place-id*})
+              (let [store (-> (stores-upsert/find-or-create-store! db {:supplier_id supplier-id
+                                                                       :display_name display-name
+                                                                       :address address*
+                                                                       :place_id place-id*})
                             to-app)]
                 (h/json-response {:data store} 201))))
           (catch clojure.lang.ExceptionInfo e
@@ -165,7 +166,7 @@
                               place-id-provided? (assoc :place_id (body-get-first body place-id-keys)))]
                 (if (empty? updates)
                   (h/json-response {:error "No store fields provided"} 400)
-                  (if-let [updated (some-> ((:update! stores/service) db store-id updates)
+                  (if-let [updated (some-> ((:update! stores-service/entity-service) db store-id updates)
                                      to-app)]
                     (h/json-response {:data updated})
                     (h/not-found-response "Store not found"))))
@@ -208,7 +209,7 @@
               (h/json-response {:error "One or more store ids are invalid"} 400)
 
               :else
-              (let [delete! (:delete! stores/service)
+              (let [delete! (:delete! stores-service/entity-service)
                     deleted-ids (atom [])
                     errors (atom [])]
                 (doseq [id ids]

@@ -22,7 +22,7 @@
     [app.domain.backend.expenses.services.payer-types :as payer-types]
     [app.domain.backend.expenses.services.payers :as payers]
     [app.domain.backend.expenses.services.store-aliases :as store-aliases]
-    [app.domain.backend.expenses.services.stores :as stores]
+    [app.domain.backend.expenses.services.stores.service :as stores-service]
     [app.domain.backend.expenses.services.subcategories :as subcategories]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
@@ -238,8 +238,8 @@
                      total))]
     (with-redefs [store-aliases/service {:list (mk-list :store-aliases)
                                          :count (mk-count :store-aliases 11)}
-                  stores/service {:list (mk-list :stores)
-                                  :count (mk-count :stores 12)}
+                  stores-service/entity-service {:list (mk-list :stores)
+                                                 :count (mk-count :stores 12)}
                   cities/service {:list (mk-list :cities)
                                   :count (mk-count :cities 13)}
                   manufacturers/service {:list (mk-list :manufacturers)

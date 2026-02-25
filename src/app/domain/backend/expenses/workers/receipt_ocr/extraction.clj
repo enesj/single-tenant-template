@@ -12,7 +12,10 @@
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.review :as review]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.shape :as shape]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.supplier-store :as supplier-store]
-    [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.header :as markdown-header]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.items :as markdown-items]
+
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.totals :as markdown-totals]
     [clojure.string :as str]
     [malli.core :as m]
     [taoensso.timbre :as log]))
@@ -95,14 +98,14 @@
         opts (cond-> opts
                user-region (assoc :user-region user-region))
         markdown-content (:parsed-markdown extract-result)
-        markdown-items (markdown/markdown->line-item-candidates markdown-content)
-        markdown-merchant-header (markdown/markdown->merchant-header markdown-content)
+        markdown-items (markdown-items/candidates markdown-content)
+        markdown-merchant-header (markdown-header/merchant-header markdown-content)
         markdown-merchant-name (some-> (:merchant_name markdown-merchant-header) str/trim not-empty)
         markdown-supplier (if markdown-merchant-name
                             markdown-merchant-name
-                            (markdown/markdown->supplier-guess markdown-content))
-        markdown-total (markdown/markdown->total-amount markdown-content)
-        markdown-purchased-at (markdown/markdown->purchased-at markdown-content)
+                            (markdown-header/supplier-guess markdown-content))
+        markdown-total (markdown-totals/total-amount markdown-content)
+        markdown-purchased-at (markdown-totals/purchased-at markdown-content)
         extraction0 (or (:extraction extract-result) {})
         extraction0 (if (looks-like-json-schema? extraction0) {} extraction0)
         extraction0 (cond
@@ -154,9 +157,9 @@
                               (catch Exception _
                                 nil))
         undefined-supplier? (or (nil? supplier-id)
-                             (= :unknown source)
-                             (and unknown-supplier-id
-                               (= unknown-supplier-id supplier-id)))
+                              (= :unknown source)
+                              (and unknown-supplier-id
+                                (= unknown-supplier-id supplier-id)))
         store-res
         (if (= :unknown source)
           {:store-id nil

@@ -1,11 +1,13 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr-markdown-test
   (:require
-    [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.header :as header]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.items :as items]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.totals :as totals]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]))
 
 (deftest markdown-line-item-candidates-supports-qty-lines
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "020327 HLJEB 400G SA SJEMELKA MA\n"
                    "1.000x 2,10 2.10E\n"
                    "B31508 PASTETA 114G KOKOSTJA ARGETA\n"
@@ -24,7 +26,7 @@
           (second items)))))
 
 (deftest markdown-line-item-candidates-supports-label-plus-price
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "A10150772 Snala za kosu BH231226\n"
                    "1,95E\n"
                    "VOLTAREN RETARD TABLETE 100 MG A 2\n"
@@ -51,7 +53,7 @@
 
 (deftest markdown-line-item-candidates-supports-price-with-vat-letter-suffix
   (testing "BA receipts with VAT category suffix (e.g. 2,00A)"
-    (let [candidates #'markdown/markdown->line-item-candidates
+    (let [candidates items/candidates
           ;; Real-world example from caffe bar receipts in Bosnia:
           ;; Lines end with X,XXA where A is the VAT category letter.
           markdown (str "FISKALNI RAČUN\n"
@@ -67,7 +69,7 @@
       (is (str/includes? (:raw_label (second items)) "CAJ")))))
 
 (deftest markdown-line-item-candidates-supports-mixed-qty-and-inline-price
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "TUBORG 0,33 NEPOVRATNI/KO\n"
                    "24,000x 1,55 37,20E\n"
                    "SCHWEPPES TONIC 1L/KO\n"
@@ -92,7 +94,7 @@
           (nth items 2)))))
 
 (deftest markdown-line-item-candidates-does-not-treat-dimensions-as-qty
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown "60963601 Torba papirna velika 32 x 16 x 45 - bez /pc 0,70E\n"
         items (candidates markdown)]
     (is (= 1 (count items)))
@@ -103,7 +105,7 @@
           (first items)))))
 
 (deftest markdown-line-item-candidates-applies-discounts
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "62778401 Mirisna svijeca u staklu Premium Collec\n"
                    "t/pc 10,00E\n"
                    "-50,00%: 5,00\n")
@@ -116,7 +118,7 @@
           (first items)))))
 
 (deftest markdown-line-item-candidates-applies-discounts-in-pipe-table
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "|  ITEM A | 1,000x | 10,00 | 10,00E  |\n"
                    "| --- | --- | --- | --- |\n"
                    "|  POPUST | -10,00% |  | 9,00  |\n"
@@ -135,7 +137,7 @@
           (second items)))))
 
 (deftest markdown-line-item-candidates-ignores-tax-like-lines
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "ITEM\n"
                    "1,000x 1,00 1,00E\n"
                    "PDU E: 7,25\n"
@@ -145,7 +147,7 @@
     (is (= "ITEM" (:raw_label (first items))))))
 
 (deftest markdown-line-item-candidates-ignores-payment-summary-lines
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "POVRCE MIX\n"
                    "1,00E\n"
                    "POV E: 0,00\n"
@@ -160,7 +162,7 @@
     (is (= "CEKIC" (:raw_label (second items))))))
 
 (deftest markdown-line-item-candidates-supports-markdown-table-rows
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "|  Mivolis flasteri za djecu |  |   |\n"
                    "| --- | --- | --- |\n"
                    "|  1,000x | 1,85 | 1,85E  |\n")
@@ -173,7 +175,7 @@
           (first items)))))
 
 (deftest markdown-line-item-candidates-supports-table-total-in-label-row
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "|  E09438 | BOMBONJERA 230G RAFFAELLO FER | 9,90E  |\n"
                    "| --- | --- | --- |\n"
                    "|  1,000x | 9,90 |   |\n")
@@ -186,7 +188,7 @@
           (first items)))))
 
 (deftest markdown-line-item-candidates-supports-html-table-cells
-  (let [candidates #'markdown/markdown->line-item-candidates
+  (let [candidates items/candidates
         markdown (str "<table>\n"
                    "  <tbody>\n"
                    "    <tr>\n"
@@ -213,7 +215,7 @@
           (second items)))))
 
 (deftest markdown-merchant-header-extracts-quoted-name
-  (let [parse-header #'markdown/markdown->merchant-header
+  (let [parse-header header/merchant-header
         markdown (str "\"Pepco B-H\" d.o.o.\n"
                    "Podružnica Sarajevo 2\n"
                    "ul. Kolodvorska br.12\n"
@@ -227,7 +229,7 @@
     (is (= "ul. Kolodvorska br.12, 71000 Sarajevo" (:address result)))))
 
 (deftest markdown-merchant-header-extracts-unquoted-name
-  (let [parse-header #'markdown/markdown->merchant-header
+  (let [parse-header header/merchant-header
         markdown (str "KONZUM d.o.o.\n"
                    "Poslovnica Tuzla 5\n"
                    "Trg slobode 10\n"
@@ -239,7 +241,7 @@
     (is (= "Trg slobode 10, 75000 Tuzla" (:address result)))))
 
 (deftest markdown-merchant-header-handles-minimal-header
-  (let [parse-header #'markdown/markdown->merchant-header
+  (let [parse-header header/merchant-header
         markdown (str "BINGO d.d.\n"
                    "TC Mercator\n"
                    "JIB: 999\n")
@@ -249,7 +251,7 @@
     (is (nil? (:address result)))))
 
 (deftest markdown-merchant-header-handles-no-store-name
-  (let [parse-header #'markdown/markdown->merchant-header
+  (let [parse-header header/merchant-header
         markdown (str "\"DM\" d.o.o.\n"
                    "ul. Marsala Tita 25\n"
                    "71000 Sarajevo\n"
@@ -265,7 +267,7 @@
                    "<table>\n"
                    "  <tr><td>CHYMORAL_S_KAPSULE_A_10_7152</td><td>21,45E</td></tr>\n"
                    "</table>\n")]
-    (is (nil? (markdown/markdown->supplier-guess markdown)))))
+    (is (nil? (header/supplier-guess markdown)))))
 
 (deftest markdown-supplier-guess-keeps-valid-merchant-before-table
   (let [markdown (str "LUPRIV PLUS Mostar\n"
@@ -273,21 +275,21 @@
                    "<table>\n"
                    "  <tr><td>ITEM</td><td>1,00E</td></tr>\n"
                    "</table>\n")]
-    (is (= "LUPRIV PLUS Mostar" (markdown/markdown->supplier-guess markdown)))))
+    (is (= "LUPRIV PLUS Mostar" (header/supplier-guess markdown)))))
 
 (deftest markdown-purchased-at-extracts-ba-datetime-format
   (testing "parses dd.mm.yyyy. hh:mm with trailing dot"
     (let [markdown "UR CAFFE BAR\n29.01.2026. 14:31\nESPRESSO KAFA 2,00"]
-      (is (= "2026-01-29T14:31:00" (markdown/markdown->purchased-at markdown)))))
+      (is (= "2026-01-29T14:31:00" (totals/purchased-at markdown)))))
   (testing "parses dd.mm.yyyy hh:mm without trailing dot"
     (let [markdown "BINGO\n21.01.2026 17:25\nItem 5,00"]
-      (is (= "2026-01-21T17:25:00" (markdown/markdown->purchased-at markdown)))))
+      (is (= "2026-01-21T17:25:00" (totals/purchased-at markdown)))))
   (testing "parses date-only format dd.mm.yyyy"
     (let [markdown "MERCHANT\n15.03.2026\nItem 10,00"]
-      (is (= "2026-03-15" (markdown/markdown->purchased-at markdown)))))
+      (is (= "2026-03-15" (totals/purchased-at markdown)))))
   (testing "returns nil when no date found"
-    (is (nil? (markdown/markdown->purchased-at "No date here")))
-    (is (nil? (markdown/markdown->purchased-at nil)))))
+    (is (nil? (totals/purchased-at "No date here")))
+    (is (nil? (totals/purchased-at nil)))))
 
 (deftest markdown-total-amount-prefers-total-over-trailing-ukupno-zero
   (let [markdown (str "TOTAL: 19,50\n"
@@ -295,14 +297,14 @@
                    "GOTOVINA: 19,50\n"
                    "UKUPNO: 0,00\n"
                    "POVRAT: 0,00\n")]
-    (is (= 19.50M (markdown/markdown->total-amount markdown)))))
+    (is (= 19.50M (totals/total-amount markdown)))))
 
 (deftest markdown-total-amount-falls-back-to-ukupno-when-total-missing
   (let [markdown (str "UKUPNO: 42,00\n"
                    "POVRAT: 0,00\n")]
-    (is (= 42.00M (markdown/markdown->total-amount markdown)))))
+    (is (= 42.00M (totals/total-amount markdown)))))
 
 (deftest markdown-total-amount-supports-heading-prefixed-total
   (let [markdown (str "## TOTAL: 30,70\n"
                    "UKUPNO: 0,00\n")]
-    (is (= 30.70M (markdown/markdown->total-amount markdown)))))
+    (is (= 30.70M (totals/total-amount markdown)))))

@@ -2,7 +2,7 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.handlers.user-stores :as user-stores]
-    [app.domain.backend.expenses.services.stores :as stores]
+    [app.domain.backend.expenses.services.stores.upsert :as stores-upsert]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]]))
 
@@ -70,7 +70,7 @@
 
   (testing "201 when valid payload provided"
     (let [supplier-id (java.util.UUID/randomUUID)]
-      (with-redefs [stores/find-or-create-store!
+      (with-redefs [stores-upsert/find-or-create-store!
                     (fn [_db data]
                       (is (= supplier-id (:supplier_id data)))
                       (is (= "Mega Market" (:display_name data)))

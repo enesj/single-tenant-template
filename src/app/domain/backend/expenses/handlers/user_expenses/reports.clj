@@ -2,7 +2,11 @@
   "User-scoped reporting handlers for `/api/v1/expenses/reports/*`."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [app.domain.backend.expenses.services.user-expense-reports :as reports]
+    [app.domain.backend.expenses.services.user-expense-reports.categories :as report-categories]
+    [app.domain.backend.expenses.services.user-expense-reports.filters :as report-filters]
+    [app.domain.backend.expenses.services.user-expense-reports.items :as report-items]
+    [app.domain.backend.expenses.services.user-expense-reports.suppliers :as report-suppliers]
+    [app.domain.backend.expenses.services.user-expense-reports.time :as report-time]
     [clojure.string :as str]
     [taoensso.timbre :as log])
   (:import
@@ -146,7 +150,7 @@
               (nil? (:supplier-id opts)) (h/json-response {:error "supplier_id is required"} 400)
               :else
               (h/json-response
-                {:data (reports/get-user-supplier-deep-dive
+                {:data (report-suppliers/deep-dive
                          db
                          user-id
                          (assoc opts :alias-limit alias-limit))})))
@@ -168,7 +172,7 @@
                 {:keys [error opts]} (parse-common-report-opts params)]
             (if error
               error
-              (h/json-response {:data (reports/get-user-day-of-week-spending-pattern db user-id opts)})))
+              (h/json-response {:data (report-time/day-of-week db user-id opts)})))
           (catch Exception e
             (log/error e "Error getting day-of-week spending report"
               {:user-id user-id
@@ -190,7 +194,7 @@
               error error
               (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
               :else
-              (h/json-response {:data (reports/get-user-top-item-spending db user-id (assoc opts :limit limit))})))
+              (h/json-response {:data (report-items/top-spending db user-id (assoc opts :limit limit))})))
           (catch Exception e
             (log/error e "Error getting top items spending report"
               {:user-id user-id
@@ -216,7 +220,7 @@
               (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
               :else
               (h/json-response
-                {:data (reports/get-user-top-item-breakdown db user-id alias-id (assoc opts :limit limit))})))
+                {:data (report-items/top-breakdown db user-id alias-id (assoc opts :limit limit))})))
           (catch Exception e
             (log/error e "Error getting top item breakdown"
               {:user-id user-id
@@ -240,7 +244,7 @@
               error error
               (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
               :else
-              (h/json-response {:data (reports/get-user-top-suppliers db user-id (assoc opts :limit limit))})))
+              (h/json-response {:data (report-suppliers/top db user-id (assoc opts :limit limit))})))
           (catch Exception e
             (log/error e "Error getting top suppliers report"
               {:user-id user-id
@@ -265,7 +269,7 @@
               (sequential? (:supplier-id opts)) (h/json-response {:error "supplier_id must be a single UUID"} 400)
               :else
               (h/json-response
-                {:data (reports/get-user-supplier-stores db user-id (assoc opts :limit limit))})))
+                {:data (report-suppliers/stores db user-id (assoc opts :limit limit))})))
           (catch Exception e
             (log/error e "Error getting supplier stores report"
               {:user-id user-id
@@ -287,7 +291,7 @@
               error error
               (= invalid limit) (h/json-response {:error "Invalid limit"} 400)
               :else
-              (h/json-response {:data (reports/get-user-supplier-monthly-trends db user-id (assoc opts :limit limit))})))
+              (h/json-response {:data (report-suppliers/monthly-trends db user-id (assoc opts :limit limit))})))
           (catch Exception e
             (log/error e "Error getting supplier monthly trends report"
               {:user-id user-id
@@ -316,7 +320,7 @@
               (= invalid (month->year-month month-b)) (h/json-response {:error "Invalid month_b format (expected YYYY-MM)"} 400)
               :else
               (h/json-response
-                {:data (reports/get-user-monthly-comparison
+                {:data (report-time/monthly-comparison
                          db
                          user-id
                          (assoc opts :month-a month-a :month-b month-b))})))
@@ -338,7 +342,7 @@
                 {:keys [error opts]} (parse-common-report-opts params)]
             (if error
               error
-              (h/json-response {:data (reports/get-user-expense-size-distribution db user-id opts)})))
+              (h/json-response {:data (report-time/size-distribution db user-id opts)})))
           (catch Exception e
             (log/error e "Error getting expense size distribution report"
               {:user-id user-id
@@ -357,7 +361,7 @@
                 {:keys [error opts]} (parse-common-report-opts params)]
             (if error
               error
-              (h/json-response {:data (reports/get-user-daily-heatmap db user-id opts)})))
+              (h/json-response {:data (report-time/daily-heatmap db user-id opts)})))
           (catch Exception e
             (log/error e "Error getting daily heatmap report"
               {:user-id user-id
@@ -376,7 +380,7 @@
                 {:keys [error opts]} (parse-common-report-opts params)]
             (if error
               error
-              (h/json-response {:data (reports/get-user-report-filter-options db user-id opts)})))
+              (h/json-response {:data (report-filters/options db user-id opts)})))
           (catch Exception e
             (log/error e "Error getting report filter options"
               {:user-id user-id
@@ -395,7 +399,7 @@
                 {:keys [error opts]} (parse-common-report-opts params)]
             (if error
               error
-              (h/json-response {:data (reports/get-user-category-allocation db user-id opts)})))
+              (h/json-response {:data (report-categories/allocation db user-id opts)})))
           (catch Exception e
             (log/error e "Error getting category allocation report"
               {:user-id user-id

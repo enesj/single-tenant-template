@@ -1,6 +1,8 @@
 (ns app.domain.backend.expenses.services.user-expense-reports-test
   (:require
-    [app.domain.backend.expenses.services.user-expense-reports :as service]
+    [app.domain.backend.expenses.services.user-expense-reports.categories :as categories]
+    [app.domain.backend.expenses.services.user-expense-reports.items :as items]
+    [app.domain.backend.expenses.services.user-expense-reports.suppliers :as suppliers]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
@@ -27,7 +29,7 @@
                                       [])
                       jdbc/execute-one! (fn [_db _sql-params _opts]
                                           {:display_name "Any Supplier"})]
-          (service/get-user-supplier-deep-dive
+          (suppliers/deep-dive
             :db
             user-id
             {:supplier-id supplier-id
@@ -42,7 +44,7 @@
         (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
                                       (reset! captured-sql (sql-text sql-params))
                                       [])]
-          (service/get-user-top-item-spending :db user-id {:limit 20})
+          (items/top-spending :db user-id {:limit 20})
           (is (string? @captured-sql))
           (is (str/includes? @captured-sql "from expense_items"))
           (is (has-distinct-receipt-count? @captured-sql))
@@ -53,7 +55,7 @@
         (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
                                       (reset! captured-sql (sql-text sql-params))
                                       [])]
-          (service/get-user-category-allocation :db user-id {})
+          (categories/allocation :db user-id {})
           (is (string? @captured-sql))
           (is (str/includes? @captured-sql "from expense_items"))
           (is (has-distinct-receipt-count? @captured-sql))
@@ -66,7 +68,7 @@
         (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
                                       (reset! captured-sql (sql-text sql-params))
                                       [])]
-          (service/get-user-top-item-spending :db user-id {:limit 20})
+          (items/top-spending :db user-id {:limit 20})
           (is (string? @captured-sql))
           ;; Regression guard: the grouping key should be the canonical article id when present.
           (is (or (str/includes? @captured-sql "coalesce(aa.article_id, ei.alias_id)")

@@ -1,7 +1,9 @@
 (ns app.domain.backend.expenses.handlers.user-expenses.reports-test
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.reports :as reports]
-    [app.domain.backend.expenses.services.user-expense-reports :as report-services]
+    [app.domain.backend.expenses.services.user-expense-reports.categories :as report-categories]
+    [app.domain.backend.expenses.services.user-expense-reports.items :as report-items]
+    [app.domain.backend.expenses.services.user-expense-reports.suppliers :as report-suppliers]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]])
   (:import
@@ -88,7 +90,7 @@
         from "2026-01-01"
         to "2026-01-31T23:59:59Z"
         handler (reports/supplier-stores-handler nil)]
-    (with-redefs [report-services/get-user-supplier-stores
+    (with-redefs [report-suppliers/stores
                   (fn [_db passed-user-id opts]
                     (reset! captured {:user-id passed-user-id :opts opts})
                     [{:store_id nil
@@ -143,7 +145,7 @@
         from "2026-01-01"
         to "2026-01-31T23:59:59Z"
         handler (reports/top-items-spending-handler nil)]
-    (with-redefs [report-services/get-user-top-item-spending
+    (with-redefs [report-items/top-spending
                   (fn [_db passed-user-id opts]
                     (reset! captured {:user-id passed-user-id :opts opts})
                     [{:alias_label "MILK"
@@ -187,7 +189,7 @@
 (deftest category-allocation-handler-returns-representative-shape
   (let [handler (reports/category-allocation-handler nil)
         user-id (UUID/randomUUID)]
-    (with-redefs [report-services/get-user-category-allocation
+    (with-redefs [report-categories/allocation
                   (fn [_db _user-id _opts]
                     [{:category_key "food"
                       :category_name "Food"
@@ -215,7 +217,7 @@
   (let [handler (reports/supplier-deep-dive-handler nil)
         user-id (UUID/randomUUID)
         supplier-id (UUID/randomUUID)]
-    (with-redefs [report-services/get-user-supplier-deep-dive
+    (with-redefs [report-suppliers/deep-dive
                   (fn [_db _user-id _opts]
                     {:supplier-id supplier-id
                      :supplier-name "Test Supplier"

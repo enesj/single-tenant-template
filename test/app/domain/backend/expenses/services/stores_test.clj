@@ -4,6 +4,8 @@
     [app.domain.backend.expenses.services.cities :as cities]
     [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.stores :as stores]
+    [app.domain.backend.expenses.services.stores.repo :as store-repo]
+    [app.domain.backend.expenses.services.stores.upsert :as store-upsert]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
@@ -85,7 +87,7 @@
                                         (reset! captured-sql sql-params)
                                         {:id store-id
                                          :city_id nil})]
-        (let [row (stores/update-store! :db store-id {:address "No valid ZIP in this address"} opts)
+        (let [row (store-upsert/update-store! :db store-id {:address "No valid ZIP in this address"} opts)
               sql-lc (str/lower-case (first @captured-sql))]
           (is (nil? (:city_id row)))
           (is (str/includes? sql-lc "city_id"))
@@ -102,7 +104,7 @@
                                         {:id store-id
                                          :display_name "Renamed"
                                          :city_id (UUID/randomUUID)})]
-        (stores/update-store! :db store-id {:display_name "Renamed"})
+        (store-upsert/update-store! :db store-id {:display_name "Renamed"})
         (is (not (str/includes? (str/lower-case (first @captured-sql)) "city_id")))))))
 
 (deftest resolve-store-from-merchant-threads-opts-to-store-writes-test
@@ -121,18 +123,18 @@
                                               {:places [{:name "Bingo Store"
                                                          :raw {:id "place-123"
                                                                :formattedAddress "Vrbanja 1, 71000 Sarajevo"}}]})
-                    stores/find-by-supplier-and-normalized-key
+                    store-repo/find-by-supplier-and-normalized-key
                     (fn [_db _supplier-id normalized-key]
                       (reset! called-key normalized-key)
                       {:id existing-store-id})
-                    stores/update-store! (fn [_db store-id patch resolver-opts]
-                                           (is (= existing-store-id store-id))
-                                           (is (= "Vrbanja 1, 71000 Sarajevo" (:address patch)))
-                                           (is (string? (:normalized_key patch)))
-                                           (reset! passed-opts resolver-opts)
-                                           {:id existing-store-id
-                                            :supplier_id supplier-id})
-                    stores/merge-duplicate-stores-by-place-id! (fn [& _] {:kept existing-store-id :merged 0})]
+                    store-upsert/update-store! (fn [_db store-id patch resolver-opts]
+                                                 (is (= existing-store-id store-id))
+                                                 (is (= "Vrbanja 1, 71000 Sarajevo" (:address patch)))
+                                                 (is (string? (:normalized_key patch)))
+                                                 (reset! passed-opts resolver-opts)
+                                                 {:id existing-store-id
+                                                  :supplier_id supplier-id})
+                    store-upsert/merge-duplicate-stores-by-place-id! (fn [& _] {:kept existing-store-id :merged 0})]
         (let [res (stores/resolve-store-from-merchant :db supplier-id merchant opts)]
           (is (= existing-store-id (:store-id res)))
           (is (= opts @passed-opts))
