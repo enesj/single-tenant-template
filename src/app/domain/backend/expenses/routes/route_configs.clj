@@ -209,7 +209,7 @@
    :default-limit 50
    :default-order-by "raw_label"
    :required-fields [:supplier-id :raw-label :raw-label-normalized]
-   :has-count? false
+   :has-count? true
    :has-search? false
    :custom-query-params (fn [qp]
                           {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
@@ -232,7 +232,7 @@
    :default-limit 50
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
-   :has-count? false
+   :has-count? true
    :has-search? false
    :custom-query-params (fn [qp]
                           {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
@@ -260,7 +260,7 @@
    :default-limit 50
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
-   :has-count? false
+   :has-count? true
    :has-search? false
    :custom-query-params search-query-params
 

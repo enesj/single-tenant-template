@@ -21,8 +21,7 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.unmapped-aliases/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}]))
+                         (rf/dispatch [:app.domain.frontend.expenses.events.unmapped-aliases/load-list {}]))
                        [])]
     (use-effect
       (fn []

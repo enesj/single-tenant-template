@@ -133,3 +133,45 @@ Before starting the search, read these files for context:
 - `src/app/template/backend/middleware/rate_limiting.clj` — `try/catch` masking time-comparison error
 
 These files contain the most representative examples across all seven categories.
+
+---
+
+## Prior Audit Results — 2026-02-26
+
+**Full report**: `tmp/fallback-audit-2026-02-26.md`
+
+### Category totals
+
+| Category | Count | Highest-risk item |
+|----------|-------|-------------------|
+| A — stacked `(or ...)` defaults | 26 | `resolve-pagination` 4-level chain with literal `25` (`events_factory.cljs:76–87`) |
+| B — `get`/`get-in` hardcoded defaults | 13 | `entity-metadata` inline `{:loading? false :error nil}` mask (`subs/list.cljs:18`) |
+| C — nil guard branches | 4 | Triple nil-check `(and entity-type (not= entity-type nil) (not= entity-type "null"))` (`subs/list.cljs:15`) |
+| D — `try/catch` returning fallback | 21 | 5 nested catch arms in `wrap-rate-limiting` all resolve to "allow request" |
+| E — client-side fetch-1000 | 10 pages + 1 config | All **RESOLVED** — switched to server-side pagination (see below) |
+| F — `:else` catchall coercions | 9 | `:else nil` in `receipts/queries.clj` returns nil WHERE → all-rows query |
+| G — resolver precedence chain | 1 | Well-structured; `fallback-defaults :per-page 25` duplicated in 5+ other places |
+
+### P1 Status — COMPLETED (2026-02-26)
+
+All 10 entities switched from `{:fetch-limit 1000 :fetch-offset 0}` → `{}` (server-side pagination).
+
+**Backend additions**: `has-count? true` added to `article-alias-config`, `supplier-alias-config`, `store-alias-config` in `route_configs.clj` so the list handler returns `:total` (needed for pagination UI).
+
+**Known trade-off**: The stores page side-loads suppliers and cities for FK dropdowns. With server-side pagination those lists are now limited to the first page (~25 per page by default). If FK dropdowns need more entries, add search/autocomplete endpoints for those reference entities.
+
+### Remaining priorities
+
+| Priority | Description | Status |
+|----------|-------------|--------|
+| P0 | 5 `try/catch` arms in `rate_limiting.clj` all return "allow request" on error | **Pending** |
+| P2 | Nil guards in `subs/list.cljs` + entity.cljs that should be caller fixes | Pending |
+| P3 | Literal `25`/`10`/`1` pagination constants scattered across 5+ files | Pending |
+| P4 | `:else nil` in `receipts/queries.clj` causes all-rows query on unknown filter | Pending |
+
+### Key files for remaining work
+
+- **P0**: `src/app/template/backend/middleware/rate_limiting.clj` — lines 107–215
+- **P2**: `src/app/template/frontend/subs/list.cljs` (C-01, C-02, D-01, D-02), `entity.cljs` (C-03)
+- **P3**: `src/app/domain/frontend/expenses/events/events_factory.cljs` (A-07, A-08), `src/app/template/frontend/settings/resolver.cljs` (canonical `fallback-defaults`)
+- **P4**: `src/app/domain/backend/expenses/services/receipts/queries.clj` (F-06, F-07)

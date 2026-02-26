@@ -36,11 +36,11 @@
    {:entity-key :stores
     :base-uri "/admin/api/expenses/stores"
     :log-prefix "🏬 stores-request:"
-    :on-success-dispatch [:app.domain.frontend.expenses.events.stores/load-list {:fetch-limit 1000 :fetch-offset 0}]}
+    :on-success-dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]}
    {:entity-key :store-aliases
     :base-uri "/admin/api/expenses/store-aliases"
     :log-prefix "🏷️ store-aliases-request:"
-    :on-success-dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {:fetch-limit 1000 :fetch-offset 0}]}
+    :on-success-dispatch [:app.domain.frontend.expenses.events.store-aliases/load-list {}]}
    {:entity-key :manufacturers
     :base-uri "/admin/api/expenses/manufacturers"
     :log-prefix "🏭 manufacturers-request:"
@@ -48,17 +48,17 @@
    {:entity-key :cities
     :base-uri "/admin/api/expenses/cities"
     :log-prefix "🏙️ cities-request:"
-    :on-success-dispatch [:app.domain.frontend.expenses.events.cities/load-list {:fetch-limit 1000 :fetch-offset 0}]}
+    :on-success-dispatch [:app.domain.frontend.expenses.events.cities/load-list {}]}
    {:entity-key :countries
     :base-uri "/admin/api/expenses/countries"
     :encode-id? true
     :log-prefix "🌍 countries-request:"
-    :on-success-dispatch [:app.domain.frontend.expenses.events.countries/load-list {:fetch-limit 1000 :fetch-offset 0}]}
+    :on-success-dispatch [:app.domain.frontend.expenses.events.countries/load-list {}]}
    {:entity-key :categories
     :base-uri "/admin/api/expenses/categories"
     :log-prefix "📂 categories-request:"
-    :on-success-dispatch [:app.domain.frontend.expenses.events.categories/load-list {:fetch-limit 1000 :fetch-offset 0}]}
+    :on-success-dispatch [:app.domain.frontend.expenses.events.categories/load-list {}]}
    {:entity-key :subcategories
     :base-uri "/admin/api/expenses/subcategories"
     :log-prefix "📁 subcategories-request:"
-    :on-success-dispatch [:app.domain.frontend.expenses.events.subcategories/load-list {:fetch-limit 1000 :fetch-offset 0}]}])
+    :on-success-dispatch [:app.domain.frontend.expenses.events.subcategories/load-list {}]}])

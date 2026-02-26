@@ -18,7 +18,6 @@
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
     app.domain.frontend.expenses.events.cities
-    app.domain.frontend.expenses.events.suppliers
     app.domain.frontend.expenses.events.stores
     app.domain.frontend.expenses.subs.stores))
 
@@ -67,12 +66,10 @@
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.suppliers/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}])
+                         ;; Cities: reference data for city_id filter dropdown (fetch-mode, no pagination state)
                          (rf/dispatch [:app.domain.frontend.expenses.events.cities/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}])
-                         (rf/dispatch [:app.domain.frontend.expenses.events.stores/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}]))
+                                       {:fetch-limit 200 :fetch-offset 0}])
+                         (rf/dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))
                        [])]
     (use-effect
       (fn []

@@ -60,11 +60,11 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         ;; Ensure categories are available for FK selects
+                         ;; Categories: reference data for category_id FK select (fetch-mode, no pagination state)
                          (rf/dispatch [:app.domain.frontend.expenses.events.categories/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}])
+                                       {:fetch-limit 200 :fetch-offset 0}])
                          (rf/dispatch [:app.domain.frontend.expenses.events.subcategories/load-list
-                                       {:fetch-limit 1000 :fetch-offset 0}]))
+                                       {}]))
                        [])]
     (use-effect
       (fn []
