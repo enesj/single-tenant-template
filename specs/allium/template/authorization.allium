@@ -214,4 +214,6 @@ surface ExpensesAuthorizationBoundary {
         request.action = power implies request.session.user.role in {admin, owner}
 }
 
-open question "`wrap-entities-authorization` contains tenant-specific handling for :tenants, but current entity allowlist blocks unknown entities before that branch. Should :tenants be formally allowlisted or the dead branch removed?"
+-- resolved: `handle-tenants-entity-access` (dead branch) was removed.
+-- :tenants is now blocked by BlockUnknownEntitiesByDefault (not in allowlist).
+-- Decision: :tenants is not exposed via generic CRUD at the user-API level.

@@ -75,7 +75,8 @@
   [db]
   (admin-utils/with-error-handling
     (fn [request]
-      (let [body (routes-factory/read-json-body request)
+      (let [admin-role (-> request :admin :role)
+            body (routes-factory/read-json-body request)
             entity-type (parse-entity-type (or (:entity-type body)
                                              (:entity_type body)
                                              (get body "entity-type")
@@ -94,6 +95,9 @@
                             (filter some?)
                             vec)]
         (cond
+          (not (#{"admin" "owner" "super_admin"} admin-role))
+          (admin-utils/error-response "Insufficient permissions: admin role required" :status 403)
+
           (nil? entity-type)
           (admin-utils/error-response "Missing or invalid entity-type" :status 400)
 
@@ -112,7 +116,8 @@
   [db]
   (admin-utils/with-error-handling
     (fn [request]
-      (let [body (routes-factory/read-json-body request)
+      (let [admin-role (-> request :admin :role)
+            body (routes-factory/read-json-body request)
             entity-type (parse-entity-type (or (:entity-type body)
                                              (:entity_type body)
                                              (get body "entity-type")
@@ -131,6 +136,9 @@
                             (filter some?)
                             vec)]
         (cond
+          (not (#{"admin" "owner" "super_admin"} admin-role))
+          (admin-utils/error-response "Insufficient permissions: admin role required" :status 403)
+
           (nil? entity-type)
           (admin-utils/error-response "Missing or invalid entity-type" :status 400)
 

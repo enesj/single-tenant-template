@@ -57,13 +57,15 @@
 ;; ============================================================================
 
 (defn- fetch-all-rows
-  "Fetch all rows for an entity (id, name-col, key-col)."
-  [db {:keys [table name-col key-col]}]
+  "Fetch rows for an entity (id, name-col, key-col).
+  `fetch-limit` caps the scan; prevents unbounded heap loads on large tables."
+  [db {:keys [table name-col key-col]} fetch-limit]
   (jdbc/execute!
     db
-    (sql/format {:select [:id name-col key-col :created_at]
-                 :from [(keyword table)]
-                 :order-by [[:created_at :asc]]})
+    (sql/format (cond-> {:select [:id name-col key-col :created_at]
+                         :from [(keyword table)]
+                         :order-by [[:created_at :asc]]}
+                  fetch-limit (assoc :limit fetch-limit)))
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- prefix-tokens
@@ -162,11 +164,12 @@
 
   Options:
   - :prefix-words (default 2) — number of leading tokens to group by
-  - :limit (default 50) — max clusters to return"
-  [db entity-type {:keys [prefix-words limit]
-                   :or {prefix-words 2 limit 50}}]
+  - :limit (default 50) — max clusters to return
+  - :fetch-limit (default 5000) — max rows fetched; guards against unbounded table scans"
+  [db entity-type {:keys [prefix-words limit fetch-limit]
+                   :or {prefix-words 2 limit 50 fetch-limit 5000}}]
   (let [config (get-entity-config! entity-type)
-        rows (fetch-all-rows db config)
+        rows (fetch-all-rows db config fetch-limit)
         key-col (:key-col config)
         grouped (->> rows
                   (filter #(get % key-col))

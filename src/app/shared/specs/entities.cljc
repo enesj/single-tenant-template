@@ -8,6 +8,7 @@
    These two files have different shapes, so we provide separate schemas and
    validators for each."
   (:require
+    [app.shared.specs.view-options :as view-options]
     [malli.core :as m]
     [malli.error :as me]))
 
@@ -53,27 +54,9 @@
 ;; =============================================================================
 
 (def AdminDisplaySettings
-  "Admin entity :display-settings.
-
-  This is not identical to view-options.edn, but shares the same `:show-*?`
-  boolean pattern."
-  [:map {:closed false}
-   ;; Common list-view display toggles
-   [:show-timestamps? {:optional true} :boolean]
-   [:show-edit? {:optional true} :boolean]
-   [:show-delete? {:optional true} :boolean]
-   [:show-highlights? {:optional true} :boolean]
-   [:show-select? {:optional true} :boolean]
-   [:show-filtering? {:optional true} :boolean]
-   [:show-pagination? {:optional true} :boolean]
-   [:show-add-button? {:optional true} :boolean]
-   [:show-batch-edit? {:optional true} :boolean]
-   [:show-batch-delete? {:optional true} :boolean]
-   [:show-selected-rows? {:optional true} :boolean]
-   [:show-unselected-rows? {:optional true} :boolean]
-
-   ;; Pagination
-   [:per-page {:optional true} [:int {:min 1 :max 1000}]]])
+  "Admin entity :display-settings. Reuses the shared DisplayTogglesMap schema
+  (show-*? booleans + :per-page) from specs.view-options — single source of truth."
+  view-options/DisplayTogglesMap)
 
 (def AdminFeatures
   "Admin entity :features.
