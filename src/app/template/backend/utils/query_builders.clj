@@ -223,86 +223,8 @@
 ;; Convenience Functions for Common Patterns
 ;; ============================================================================
 
-(defn admin-list-query
-  "Build a standard admin list query with common patterns.
-
-   This is a convenience function for the most common admin query pattern:
-   listing entities with search, filters, sorting, and pagination.
-
-   Parameters:
-   - table: Main table keyword (e.g., :users)
-   - table-alias: Alias for main table (e.g., :u)
-   - joins: Optional join clauses
-   - search-columns: Columns to search in (e.g., [:u/email :u/full_name])
-   - options: Same as compose-admin-query options
-
-   Example:
-   (admin-list-query :users :u
-     [[:tenants :t] [:= :u.tenant_id :t.id]]
-     [:u/email :u/full_name]
-     {:search {:term \"john\"}
-      :filters {:status {:type :equal :value \"active\"}}
-      :sort {:by :created-at}
-      :pagination {:limit 25}})"
-  [table table-alias joins search-columns options]
-  (let [base-select [(keyword (str (name table-alias) ".*"))]
-        base-query (cond-> {:select base-select
-                            :from [[table table-alias]]}
-                     joins (assoc :join joins))
-
-        ;; Enhance options with search columns if search term provided
-        enhanced-options (if (and (:search options) search-columns)
-                           (assoc-in options [:search :columns] search-columns)
-                           options)]
-
-    (compose-admin-query base-query enhanced-options)))
-
 ;; ============================================================================
 ;; Integration Helpers
 ;; ============================================================================
 
-(defn extract-query-params
-  "Extract query parameters from request params into structured format.
 
-   Converts flat request parameters into the structured format expected
-   by compose-admin-query. Handles common parameter naming conventions.
-
-   Example:
-   (extract-query-params {:search \"john\"
-                         :status \"active\"
-                         :tenant-id \"123\"
-                         :sort-by \"created-at\"
-                         :sort-order \"desc\"
-                         :limit \"25\"
-                         :offset \"50\"})
-   ; => {:search {:term \"john\"}
-   ;     :filters {:status {:type :equal :value \"active\"}
-   ;               :tenant-id {:type :equal :value 123}}
-   ;     :sort {:by :created-at :order :desc}
-   ;     :pagination {:limit 25 :offset 50}}"
-  [params]
-  (let [{:keys [search sort-by sort-order limit offset]
-         :or {sort-order "desc"}} params
-
-        ;; Extract filter parameters (anything not in special keys)
-        special-keys #{:search :sort-by :sort-order :limit :offset}
-        filter-params (apply dissoc params special-keys)
-
-        ;; Build result map
-        result (cond-> {}
-                 search (assoc :search {:term search})
-
-                 (seq filter-params)
-                 (assoc :filters
-                   (into {} (map (fn [[k v]]
-                                   [k {:type :equal :value v}])
-                              filter-params)))
-
-                 sort-by (assoc :sort {:by (keyword sort-by)
-                                       :order (keyword sort-order)})
-
-                 (or limit offset)
-                 (assoc :pagination (cond-> {}
-                                      limit (assoc :limit (parse-long (str limit)))
-                                      offset (assoc :offset (parse-long (str offset))))))]
-    result))

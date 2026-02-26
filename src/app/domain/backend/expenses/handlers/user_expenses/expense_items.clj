@@ -237,33 +237,6 @@
        :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
-(defn delete-expense-item-handler
-  "DELETE /api/v1/expenses/expense-items/:id
-
-  Hard-deletes an expense item scoped to the current user's expenses.
-
-  Allowed roles: admin/owner."
-  [db]
-  (fn [request]
-    (if-let [user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request power-user-roles
-                           "Only admins and owners can modify expense items")]
-        forbidden
-        (if-let [item-id (expense-item-id request)]
-          (try
-            (if-let [_deleted (delete-expense-item! db user-id item-id)]
-              (do
-                (log/info "User deleted expense item" {:user-id user-id
-                                                       :expense-item-id item-id
-                                                       :timestamp (java.time.Instant/now)})
-                {:status 204})
-              (h/not-found-response "Expense item not found or access denied"))
-            (catch Exception e
-              (log/error e "Error deleting expense item" {:user-id user-id :item-id item-id})
-              (h/json-response {:error "Failed to delete expense item"} 500)))
-          (h/json-response {:error "Invalid expense item ID"} 400)))
-      (h/unauthorized-response))))
-
 (defn batch-delete-expense-items-handler
   "Batch delete expense items scoped to the current user's expenses.
 

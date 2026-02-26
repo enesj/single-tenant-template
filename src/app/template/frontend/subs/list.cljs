@@ -8,11 +8,6 @@
 ;; Entity-related subscriptions
 
 (rf/reg-sub
-  ::entity-ids
-  (fn [db [_ entity-type]]
-    (get-in db (paths/entity-ids entity-type))))
-
-(rf/reg-sub
   ::entity-list
   (fn [db [_ entity-type]]
 
@@ -158,11 +153,6 @@
                                  filters))
                        items)]
         filtered))))
-
-(rf/reg-sub
-  ::entity-config
-  (fn [db [_ entity-type]]
-    (get-in db [:entities :config entity-type])))
 
 ;; Batch Edit Inline Subscription
 (rf/reg-sub

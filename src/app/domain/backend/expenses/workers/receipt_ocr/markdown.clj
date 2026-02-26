@@ -6,8 +6,7 @@
   (:require
     [app.domain.backend.expenses.workers.receipt-ocr.markdown.header :as header]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown.items :as items]
-    [app.domain.backend.expenses.workers.receipt-ocr.markdown.text :as text]
-    [app.domain.backend.expenses.workers.receipt-ocr.markdown.totals :as totals]))
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.text :as text]))
 
 (defn label-present-in-markdown?
   [markdown raw-label]
@@ -20,22 +19,6 @@
 (defn split-store-name-and-address
   [s]
   (header/split-store-name-and-address s))
-
-(defn markdown->merchant-header
-  [markdown]
-  (header/merchant-header markdown))
-
-(defn markdown->supplier-guess
-  [markdown]
-  (header/supplier-guess markdown))
-
-(defn markdown->total-amount
-  [markdown]
-  (totals/total-amount markdown))
-
-(defn markdown->purchased-at
-  [markdown]
-  (totals/purchased-at markdown))
 
 (defn markdown->line-item-candidates
   [markdown]

@@ -274,13 +274,6 @@
                       :on-success [:user-expenses/upload-receipt-success]
                       :on-failure [:user-expenses/upload-receipt-failure]})})))
 
-;; Backwards-compatible alias (older pages called it "upload-image")
-(rf/reg-event-fx
-  :user-expenses/upload-image
-  common-interceptors
-  (fn [_ [file]]
-    {:dispatch [:user-expenses/upload-receipt file]}))
-
 (rf/reg-event-fx
   :user-expenses/upload-receipt-success
   common-interceptors
@@ -427,11 +420,3 @@
             ;; Even if some uploads failed, still OCR the receipts that *did* upload.
             (seq all-ids)
             (assoc :fx (mapv (fn [rid] [:http-xhrio (ocr-receipt-xhrio db' rid)]) all-ids))))))))
-
-(rf/reg-event-db
-  :user-expenses/clear-upload
-  common-interceptors
-  (fn [db _]
-    (-> db
-      (assoc-in [:user-expenses :upload] nil)
-      (assoc-in [:user-expenses :receipts] nil))))

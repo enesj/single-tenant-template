@@ -158,9 +158,9 @@
         (extract-props-data element)
         _ (invoke-side-effects! props-map)
         is-admin-protected? (and (= entity-name "users")
-                               role status
-                               (= "admin" (str role))
-                               (= "active" (str status)))]
+                              role status
+                              (= "admin" (str role))
+                              (= "active" (str status)))]
 
     (case comp-type
       :enhanced-action-buttons
@@ -231,8 +231,8 @@
 
         (or page-title page-description custom-header?)
         (let [wrapper-class (str "custom-wrapper-class "
-                               (when show-selection? "selection-counter ")
-                               "test-content")
+                              (when show-selection? "selection-counter ")
+                              "test-content")
               db (try @rf-db/app-db (catch :default _ {}))
               error-sub-key (keyword "admin" (str entity-name "-error"))
               success-sub-key (keyword "admin" (str entity-name "-success-message"))
@@ -324,13 +324,4 @@
     (catch :default e
       (str "<error>Rendering failed: " (.-message e) "</error>"))))
 
-(defn component-contains?
-  [markup content]
-  (and markup (str/includes? markup content)))
 
-(defn component-classes
-  [markup]
-  (when markup
-    (let [class-attrs (re-seq #"class=\"([^\"]+)\"" markup)
-          all-classes (str/join " " (map second class-attrs))]
-      (set (str/split all-classes #"\s+")))))

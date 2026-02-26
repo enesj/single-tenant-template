@@ -5,13 +5,10 @@
   `app.domain.backend.expenses.services.stores.*`."
   (:require
     [app.domain.backend.expenses.services.stores.city :as stores-city]
-    [app.domain.backend.expenses.services.stores.related :as stores-related]
     [app.domain.backend.expenses.services.stores.repo :as stores-repo]
     [app.domain.backend.expenses.services.stores.resolution :as stores-resolution]
     [app.domain.backend.expenses.services.stores.service :as stores-service]
     [app.domain.backend.expenses.services.stores.upsert :as stores-upsert]))
-
-(def config stores-service/config)
 
 (def service stores-service/entity-service)
 
@@ -25,12 +22,6 @@
 
 (defn get-store [db store-id]
   (stores-repo/get-store db store-id))
-
-(defn find-by-supplier-and-normalized-key [db supplier-id normalized-key]
-  (stores-repo/find-by-supplier-and-normalized-key db supplier-id normalized-key))
-
-(defn find-by-supplier-and-place-id [db supplier-id place-id]
-  (stores-repo/find-by-supplier-and-place-id db supplier-id place-id))
 
 (defn update-store!
   ([db store-id patch]
@@ -50,5 +41,4 @@
   ([db supplier-id merchant opts]
    (stores-resolution/resolve-store-from-merchant db supplier-id merchant opts)))
 
-(defn list-related-records [db store-id opts]
-  (stores-related/list-related-records db store-id opts))
+

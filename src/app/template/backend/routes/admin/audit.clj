@@ -30,32 +30,6 @@
                               :offset offset})))
     "Failed to retrieve audit logs"))
 
-(defn delete-audit-log-handler
-  "Delete audit log (admin action)"
-  [db]
-  (utils/with-error-handling
-    (fn [request]
-      (utils/handle-uuid-request request :id
-        (fn [audit-id request]
-          (let [admin (:admin request)]
-            (log/info "Admin" (str (:email admin)) "attempting to delete audit log" audit-id)
-
-            ;; Execute delete with admin context - set RLS bypass
-            (let [result (next-jdbc/with-transaction [tx db]
-                           ;; Set admin bypass context
-                           (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
-                           ;; Execute the delete
-                           (next-jdbc/execute-one! tx
-                             ["DELETE FROM audit_logs WHERE id = ?::uuid" audit-id]))]
-              (if (> (:next.jdbc/update-count result) 0)
-                (do
-                  (log/info "Successfully deleted audit log" audit-id "by admin" (:email admin))
-                  (utils/log-admin-action "delete_audit_log" (:id admin)
-                    "audit_log" audit-id {})
-                  (utils/success-response {:message "Audit log deleted successfully"}))
-                (utils/error-response "Audit log not found" :status 404)))))))
-    "Failed to delete audit log"))
-
 (defn bulk-delete-audit-logs-handler
   "Delete multiple audit logs (admin action)"
   [db]

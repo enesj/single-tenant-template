@@ -3,22 +3,13 @@
    Aggregates models, utilities, and generators into a simplified interface."
   (:require
     [app.template.frontend.auto-test-generators :as generators]
-    [app.template.frontend.auto-test-models :as models]
-    [app.template.frontend.auto-test-utils :as utils]))
+    [app.template.frontend.auto-test-models :as models]))
 
 ;; =============================================================================
 ;; Re-exports for Backward Compatibility
 ;; =============================================================================
 
 (def models models/models)
-
-(def generate-unique-id generators/generate-unique-id)
-(def ^:dynamic *data-context* generators/*data-context*)
-(def ^:dynamic *id-counter* generators/*id-counter*)
-(def ^:dynamic *random* generators/*random*)
-
-(def build-dependency-graph utils/build-dependency-graph)
-(def topological-sort utils/topological-sort)
 
 ;; =============================================================================
 ;; Entity Data Generation

@@ -15,7 +15,6 @@
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
 
-    [clojure.string :as str]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -344,14 +343,6 @@
                       :on-success      [:admin/all-audit-logs-exported]
                       :on-failure      [:admin/audit-logs-export-failed]}}
         {:db (assoc-in db [:admin :audit :error] "Authentication required")}))))
-
-(rf/reg-event-db
-  :admin/audit-logs-exported
-  (fn [db [_ format count]]
-    (log/info "Audit logs exported successfully, format:" format "count:" count)
-    (-> db
-      (assoc-in [:admin :audit :exporting?] false)
-      (assoc-in [:admin :success-message] (str count " audit logs exported as " (str/upper-case format))))))
 
 (rf/reg-event-db
   :admin/all-audit-logs-exported

@@ -83,31 +83,6 @@
             (utils/json-response {:user converted-user})))))
     "Failed to create user"))
 
-(defn delete-user-handler
-  "Delete user with comprehensive validation and audit logging"
-  [db]
-  (utils/with-error-handling
-    (fn [request]
-      (utils/handle-uuid-request request :id
-        (fn [user-id _request]
-          (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-                {:keys [force-delete]} (:body request)
-                result (user-deletion/delete-user! db user-id
-                         (:id admin)
-                         ip-address
-                         user-agent
-                         :force-delete force-delete)]
-
-            (utils/log-admin-action "delete_user" (:id admin)
-              "user" user-id {:force-delete force-delete})
-
-            (if (:success result)
-              (utils/success-response {:message (:message result)
-                                       :user (:user result)
-                                       :deleted-at (:deleted-at result)})
-              (utils/error-response (:message result) :status 400))))))
-    "Failed to delete user"))
-
 (defn batch-delete-users-handler
   "Batch delete users.
 

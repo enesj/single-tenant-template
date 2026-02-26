@@ -20,15 +20,6 @@
    (auto-test-data/generate-entities entity-type count overrides)))
 
 ;; Additional test data helpers
-(defn generate-invalid-test-entity
-  "Generate an entity with invalid data for testing validation"
-  [entity-type]
-  (auto-test-data/generate-invalid-entity entity-type))
-
-(defn generate-comprehensive-test-data
-  "Generate comprehensive test data for all entities"
-  ([] (auto-test-data/get-auto-generated-data))
-  ([options] (auto-test-data/get-auto-generated-data options)))
 
 (defn reset-test-data!
   "Reset test data generation counters for test isolation"
@@ -52,18 +43,6 @@
   "Get all entity types from models"
   []
   (keys auto-test-data/models))
-
-(defn generate-test-entity-for-any-type
-  "Generate test entity for any available entity type"
-  ([]
-   (let [entity-types (get-all-entity-types)
-         random-type (nth (vec entity-types)
-                       (mod (auto-test-data/generate-unique-id)
-                         (count entity-types)))]
-     (generate-test-entity-for-any-type random-type)))
-  ([entity-type] (generate-test-entity-for-any-type entity-type {}))
-  ([entity-type overrides]
-   (auto-test-data/generate-entity entity-type overrides)))
 
 (defn generate-test-data-for-all-entities
   "Generate test data for all entities defined in models"
@@ -152,11 +131,6 @@
   (is (not (some #{entity-id} (:ids normalized-data)))
     (str "Entity ID " entity-id " should not exist in ids vector")))
 ;; Comparison helpers
-(defn entities-equal?
-  "Check if two entity collections are equal (ignoring order)"
-  [entities1 entities2]
-  (= (set (map :id entities1))
-    (set (map :id entities2))))
 
 (defn log-test-start
   "Log the start of a test with emoji"

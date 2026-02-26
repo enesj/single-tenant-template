@@ -9,7 +9,6 @@
     [clojure.string :as str]))
 
 ;; Re-export from consolidated namespace
-(def parse-number type-conv/parse-number)
 (def numeric-field-type? type-conv/numeric-field-type?)
 
 ;; Validator creators

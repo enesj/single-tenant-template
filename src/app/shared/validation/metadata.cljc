@@ -317,22 +317,6 @@
   [field-name]
   (labels/field-name->label field-name))
 
-(defn process-model-validation
-  "Process all validation metadata for a model, returning enhanced field definitions"
-  [model-def]
-  (let [fields (:fields model-def)]
-    (map (fn [[field-name _field-type constraints :as field-def]]
-           (let [validation-meta (extract-validation-metadata constraints)
-                 validation-errors (validate-metadata-schema validation-meta)]
-             (if (seq validation-errors)
-               (do
-                 ;; Log validation errors in development
-                 #?(:clj (println "Validation metadata errors for field" field-name ":" validation-errors)
-                    :cljs (js/console.warn "Validation metadata errors for field" field-name ":" validation-errors))
-                 field-def)  ;; Return original if invalid
-               field-def))) ;; Return enhanced or original
-      fields)))
-
 (defn process-models-for-frontend
   "Process models data to include validation specs for frontend consumption.
    Accepts either the raw models map (as loaded from resources/db/models.edn)

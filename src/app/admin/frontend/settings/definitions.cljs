@@ -36,10 +36,6 @@
   "Available options for rows per page setting."
   [5 10 20 25 50 100])
 
-(def default-per-page
-  "Default rows per page value."
-  25)
-
 (def all-setting-keys
   "Combined list of all display and action setting keys."
   (into display-setting-keys action-setting-keys))
@@ -206,19 +202,6 @@
       (mapcat :entities)
       set)))
 
-(defn domain-groups-for-scope
-  "Get domain groups for a given scope."
-  [scope]
-  (case scope
-    :admin admin-domain-groups
-    :user user-domain-groups
-    {}))
 
-(defn domain-color-classes
-  "Get CSS classes for a domain's color scheme."
-  [domain-color]
-  (case domain-color
-    "primary" "from-primary/10 to-primary/5 border-primary/20"
-    "secondary" "from-secondary/10 to-secondary/5 border-secondary/20"
-    "accent" "from-accent/10 to-accent/5 border-accent/20"
-    "from-neutral/10 to-neutral/5 border-neutral/20"))
+
+

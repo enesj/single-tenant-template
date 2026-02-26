@@ -9,7 +9,6 @@
 
   (:require
     [app.shared.keywords :as kw]
-    [app.template.frontend.subs.entity :as entity-subs]
     [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.subs.ui :as ui-subs]
     [re-frame.core :refer [dispatch]]
@@ -76,16 +75,6 @@
     {:entity-spec entity-spec
      :display-settings display-settings}))
 
-(defn use-paginated-entities
-  "Get paginated entities for an entity type.
-
-   Parameters:
-   - entity-name - keyword for entity type
-   - module-prefix - module prefix for subscriptions"
-  [entity-name _module-prefix]
-
-  (use-subscribe [::entity-subs/paginated-entities entity-name]))
-
 ;; Event Dispatch Utilities
 
 (defn dispatch-entity-operation
@@ -127,52 +116,6 @@
                        (kw/ensure-name operation-type)))]
     (dispatch [event-name ids operation-value])))
 
-;; Key Generation Utilities
-
-(defn get-entity-loading-key
-  "Gets the standard loading key for an entity type.
-
-   Parameters:
-   - module-prefix - module prefix (e.g., :admin, :tenant)
-   - entity-name - entity type keyword"
-  [module-prefix entity-name]
-
-  (keyword (kw/ensure-name module-prefix)
-    (str (kw/ensure-name entity-name) "-loading?")))
-
-(defn get-entity-error-key
-  "Gets the standard error key for an entity type.
-
-   Parameters:
-   - module-prefix - module prefix (e.g., :admin, :tenant)
-   - entity-name - entity type keyword"
-  [module-prefix entity-name]
-
-  (keyword (kw/ensure-name module-prefix)
-    (str (kw/ensure-name entity-name) "-error")))
-
-(defn get-batch-actions-key
-  "Gets the standard batch actions visibility key for an entity type.
-
-   Parameters:
-   - module-prefix - module prefix (e.g., :admin, :tenant)
-   - entity-name - entity type keyword"
-  [module-prefix entity-name]
-
-  (keyword (kw/ensure-name module-prefix)
-    (str "batch-" (kw/ensure-name entity-name) "-actions-visible?")))
-
-(defn get-batch-selected-key
-  "Gets the standard batch selected IDs key for an entity type.
-
-   Parameters:
-   - module-prefix - module prefix (e.g., :admin, :tenant)
-   - entity-name - entity type keyword"
-  [module-prefix entity-name]
-
-  (keyword (kw/ensure-name module-prefix)
-    (str "batch-selected-" (kw/ensure-name entity-name) "-ids")))
-
 ;; Common Configuration Helpers
 
 (defn default-list-display-settings
@@ -189,16 +132,6 @@
    :show-batch-delete? false
    :per-page 25
    :page-size 25})
-
-(defn merge-display-settings
-  "Merge default display settings with custom overrides.
-
-   Parameters:
-   - defaults - default settings map
-   - overrides - custom settings to merge"
-  [defaults overrides]
-
-  (merge defaults overrides))
 
 ;; Entity ID Utilities
 
@@ -221,29 +154,6 @@
     (map extract-entity-id)
     (filter some?)
     vec))
-
-;; Selection Utilities
-
-(defn select-all-entities
-  "Select all entities in a collection.
-
-   Parameters:
-   - entities - collection of entities
-   - on-select - function to call with selected IDs"
-  [entities on-select]
-
-  (let [ids (extract-entity-ids entities)]
-    (when (seq ids)
-      (on-select ids))))
-
-(defn clear-selection
-  "Clear current selection.
-
-   Parameters:
-   - on-clear - function to call to clear selection"
-  [on-clear]
-
-  (on-clear []))
 
 ;; Validation Utilities
 

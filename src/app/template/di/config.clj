@@ -15,72 +15,16 @@
 
 (def create-database-adapter factories/create-database-adapter)
 (def create-authentication-service factories/create-authentication-service)
-(def create-auth-routes factories/create-auth-routes)
-(def create-oauth-routes factories/create-oauth-routes)
 (def create-metadata-service factories/create-metadata-service)
 (def create-type-casting-service factories/create-type-casting-service)
 (def create-validation-service factories/create-validation-service)
 (def create-query-builder factories/create-query-builder)
 (def create-crud-service factories/create-crud-service)
 (def create-crud-routes factories/create-crud-routes)
-(def create-email-service factories/create-email-service)
-
-(def register-template-services! registry/register-template-services!)
 
 ;; =============================================================================
 ;; High-level Orchestration
 ;; =============================================================================
-
-(defn create-template-services
-  "Create all template infrastructure services"
-  [config db-connection metadata]
-  (log/info "Creating template infrastructure services...")
-
-  (let [app-models (model-naming/app-models metadata)
-        db-adapter (factories/create-database-adapter db-connection)
-        email-service (factories/create-email-service config)
-        auth-service (factories/create-authentication-service config db-adapter app-models email-service)
-        crud-service (factories/create-crud-service db-adapter app-models)
-        auth-routes (factories/create-auth-routes auth-service)
-        oauth-routes (factories/create-oauth-routes auth-service)]
-
-    (log/info "Template services initialized successfully")
-
-    {:auth-service auth-service
-     :crud-service crud-service
-     :email-service email-service
-     :auth-routes auth-routes
-     :oauth-routes oauth-routes
-     :db-adapter db-adapter
-     :app-models app-models
-     :metadata-service (factories/create-metadata-service app-models)
-     :type-casting-service (factories/create-type-casting-service app-models)
-     :validation-service (factories/create-validation-service app-models db-adapter)
-     :query-builder (factories/create-query-builder app-models)
-     ;; Placeholder for future template services
-     :tenant-service nil
-     :user-service nil
-     :invitation-service nil}))
-
-(defn create-domain-services
-  "Create domain-specific services using template services"
-  [_template-services _config _db-connection _metadata]
-  (log/info "Creating domain services...")
-
-  ;; For now, just return empty placeholders
-  ;; These will be implemented in future phases
-  {:property-service nil
-   :booking-service nil
-   :transaction-service nil
-   :reporting-service nil})
-
-(defn create-application-services
-  "Create high-level application services"
-  [_template-services _domain-services _config]
-  (log/info "Creating application services...")
-
-  ;; For now, just return empty placeholders
-  {:hosting-app-service nil})
 
 (defn cleanup-services!
   "Cleanup all services"
@@ -94,7 +38,6 @@
   ;; TODO: Cleanup other services as they are created
 
   (log/info "Services cleanup complete"))
-
 
 (defn create-service-container
   "Create and boot a DI container with all services"

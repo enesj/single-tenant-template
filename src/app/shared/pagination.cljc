@@ -126,25 +126,6 @@
 ;; Navigation Functions
 ;; -------------------------
 
-(defn can-go-previous?
-  "Check if can navigate to previous page"
-  [pagination-state]
-  (when pagination-state
-    (> (:current-page pagination-state) min-page-number)))
-
-(defn can-go-next?
-  "Check if can navigate to next page"
-  [pagination-state]
-  (when pagination-state
-    (< (:current-page pagination-state) (:total-pages pagination-state))))
-
-(defn go-to-page
-  "Navigate to specific page"
-  [pagination-state page-number]
-  (when pagination-state
-    (let [normalized-page (normalize-page-number page-number (:total-pages pagination-state))]
-      (update-pagination-state pagination-state {:current-page normalized-page}))))
-
 ;; -------------------------
 ;; Data Slicing Functions
 ;; -------------------------
@@ -194,13 +175,6 @@
 ;; -------------------------
 ;; Backend Query Helpers
 ;; -------------------------
-
-(defn pagination-params
-  "Generate pagination parameters for database queries"
-  [pagination-state]
-  (when pagination-state
-    {:limit (:page-size pagination-state)
-     :offset (:offset pagination-state)}))
 
 ;; -------------------------
 ;; Frontend UI Helpers

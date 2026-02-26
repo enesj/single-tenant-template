@@ -94,45 +94,6 @@
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
-;; Update expense
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-fx
-  :user-expenses/update-expense
-  common-interceptors
-  (fn [{:keys [db]} [expense-id expense-data]]
-    {:db (-> db
-           (assoc-in [:user-expenses :form :loading?] true)
-           (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (x/xhrio db
-                   {:method :put
-                    :uri (str endpoints/list-endpoint "/" expense-id)
-                    :params expense-data
-                    :on-success [:user-expenses/update-expense-success expense-id]
-                    :on-failure [:user-expenses/update-expense-failure]})}))
-
-(rf/reg-event-fx
-  :user-expenses/update-expense-success
-  common-interceptors
-  (fn [{:keys [db]} [expense-id response]]
-    (let [expense (:data response)]
-      (cond-> {:db (-> db
-                     (assoc-in [:user-expenses :form :loading?] false)
-                     (assoc-in [:user-expenses :form :error] nil))
-               :dispatch-n [[:user-expenses/fetch-expense expense-id]
-                            [:user-expenses/fetch-recent {:limit 25 :offset 0}]]}
-        expense (assoc :dispatch [::expenses-sync/upsert-expenses [expense]])))))
-
-(rf/reg-event-db
-  :user-expenses/update-expense-failure
-  common-interceptors
-  (fn [db [error]]
-    (log/warn "Failed to update expense" {:error error})
-    (-> db
-      (assoc-in [:user-expenses :form :loading?] false)
-      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
-
-;; ---------------------------------------------------------------------------
 ;; Update expense (modal)
 ;; ---------------------------------------------------------------------------
 

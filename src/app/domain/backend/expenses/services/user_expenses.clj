@@ -53,25 +53,6 @@
       (when existing
         (admin-expenses/update-expense! db expense-id updates)))))
 
-(defn delete-user-expense!
-  "Hard delete a user's own expense. Returns deleted expense or nil if not found/unauthorized."
-  [db user-id expense-id]
-  (let [user-id (ensure-uuid user-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:expense-id expense-id})))
-    ;; First verify ownership
-    (let [existing (jdbc/execute-one!
-                     db
-                     (sql/format {:select [:id :user_id]
-                                  :from [:expenses]
-                                  :where [:and
-                                          [:= :id expense-id]
-                                          [:= :user_id user-id]]})
-
-                     {:builder-fn rs/as-unqualified-lower-maps})]
-      (when existing
-        (admin-expenses/delete-expense! db expense-id)))))
-
 (defn delete-user-expenses!
   "Hard delete multiple expenses owned by a user.
 
@@ -222,7 +203,7 @@
    :total-amount :e.total_amount
    :currency :e.currency
    :supplier-display-name :s.display_name
-  :store-display-name :st.display_name
+   :store-display-name :st.display_name
    :payer-label :p.label
    :payer-type :pt.label
    :expense-category-name :ec.name
@@ -254,14 +235,14 @@
                        (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
           query {:select [[:e.*]
                           [:s.display_name :supplier_display_name]
-                      [:st.display_name :store_display_name]
+                          [:st.display_name :store_display_name]
                           [:s.normalized_key :supplier_normalized_key]
                           [:p.label :payer_label]
                           [:pt.label :payer_type]
                           [:ec.name :expense_category_name]]
                  :from [[:expenses :e]]
                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                        [:stores :st] [:= :st.id :e.store_id]
+                             [:stores :st] [:= :st.id :e.store_id]
                              [:payers :p] [:= :p.id :e.payer_id]
                              [:payer_types :pt] [:= :pt.id :p.payer_type_id]
                              [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]

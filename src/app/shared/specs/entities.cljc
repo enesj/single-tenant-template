@@ -6,7 +6,7 @@
    - src/app/admin/frontend/config/entities.edn (admin entity registry preload)
 
    These two files have different shapes, so we provide separate schemas and
-   validators for each." 
+   validators for each."
   (:require
     [malli.core :as m]
     [malli.error :as me]))
@@ -16,10 +16,6 @@
 ;; =============================================================================
 
 (def EntityKey :keyword)
-
-(def Identifier
-  "Field/column identifiers in config files are commonly keywords or strings."
-  [:or :keyword :string])
 
 (defn- validate*
   [schema data]
@@ -35,12 +31,12 @@
 (def UserEntityConfig
   "Currently used for simple per-entity metadata like a page title.
 
-  Keep this schema open to allow future domain-specific extensions." 
+  Keep this schema open to allow future domain-specific extensions."
   [:map {:closed false}
    [:title {:optional true} :string]])
 
 (def UserEntitiesFile
-  "Top-level map of entity keyword -> config map." 
+  "Top-level map of entity keyword -> config map."
   [:map-of EntityKey UserEntityConfig])
 
 (defn validate-user-entities
@@ -48,15 +44,9 @@
 
   Returns:
   - {:valid? true :data data} on success
-  - {:valid? false :errors [...]} on failure" 
+  - {:valid? false :errors [...]} on failure"
   [data]
   (validate* UserEntitiesFile data))
-
-(defn explain-user-entities
-  "Return a Malli explanation map when invalid, otherwise nil." 
-  [data]
-  (when-not (m/validate UserEntitiesFile data)
-    (m/explain UserEntitiesFile data)))
 
 ;; =============================================================================
 ;; Admin entities.edn (entity registry preload)
@@ -66,7 +56,7 @@
   "Admin entity :display-settings.
 
   This is not identical to view-options.edn, but shares the same `:show-*?`
-  boolean pattern." 
+  boolean pattern."
   [:map {:closed false}
    ;; Common list-view display toggles
    [:show-timestamps? {:optional true} :boolean]
@@ -88,7 +78,7 @@
 (def AdminFeatures
   "Admin entity :features.
 
-  This is intentionally open - feature keys evolve as capabilities are added." 
+  This is intentionally open - feature keys evolve as capabilities are added."
   [:map {:closed false}
    [:read-only? {:optional true} :boolean]
    [:batch-operations? {:optional true} :boolean]
@@ -99,7 +89,7 @@
   "Admin entity :components.
 
   Values can be symbols, vars, functions, or vectors of them depending on
-  when/where the config is loaded." 
+  when/where the config is loaded."
   [:map {:closed false}
    [:actions {:optional true} :any]
    [:custom-actions {:optional true} :any]
@@ -107,7 +97,7 @@
    [:custom-header {:optional true} :any]])
 
 (def AdminEntityConfig
-  "Schema for a single admin entity definition." 
+  "Schema for a single admin entity definition."
   [:map {:closed false}
    [:entity-key {:optional true} :keyword]
    [:page-title {:optional true} :string]
@@ -124,7 +114,7 @@
 (defn- check-admin-entity-key-consistency
   "Ensure that if an entry includes :entity-key, it matches the top-level key.
 
-  Returns nil if OK, otherwise returns a seq of problems." 
+  Returns nil if OK, otherwise returns a seq of problems."
   [data]
   (let [problems (for [[k cfg] data
                        :let [declared (:entity-key cfg)]
@@ -140,12 +130,12 @@
 
   Returns:
   - {:valid? true :data data} on success
-  - {:valid? false :errors [...]} on failure" 
+  - {:valid? false :errors [...]} on failure"
   [data]
   (validate* AdminEntitiesFile data))
 
 (defn validate-admin-entities-strict
-  "Validate admin entities.edn with additional consistency checks." 
+  "Validate admin entities.edn with additional consistency checks."
   [data]
   (let [schema-result (validate-admin-entities data)
         consistency (check-admin-entity-key-consistency data)]
@@ -162,7 +152,4 @@
       :else
       schema-result)))
 
-(defn explain-admin-entities
-  [data]
-  (when-not (m/validate AdminEntitiesFile data)
-    (m/explain AdminEntitiesFile data)))
+

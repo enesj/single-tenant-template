@@ -50,28 +50,6 @@
                       (assoc acc field-key nil))))
           {})))))
 
-(defn has-form-errors?
-  "Check if there are any actual form-level errors (non-nil error messages)"
-  [form-errors]
-  (some (fn [[_ v]] (and v (get v :message))) form-errors))
 
-(defn calculate-dirty-fields
-  "Calculate which fields have changed from original values"
-  [current-values original-values]
-  (->> (keys current-values)
-    (filter #(and
-               (some? (get current-values %))
-               (not= (get current-values %)
-                 (get original-values %))))
-    (into #{})))
 
-(defn has-changes?
-  "Check if there are any changes in the form"
-  [current-values original-values dirty-fields component-dirty-fields]
-  (or
-    ;; Form values have changed from initial
-    (not= current-values original-values)
-    ;; Dirty fields exist (from form state)
-    (seq dirty-fields)
-    ;; Component-level dirty fields exist
-    (seq component-dirty-fields)))
+

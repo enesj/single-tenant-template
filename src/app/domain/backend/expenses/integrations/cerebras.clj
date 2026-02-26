@@ -19,7 +19,6 @@
 (def build-config config/build-config)
 
 ;; Re-export HTTP utilities (for test stubbing)
-(def http-post! http/http-post!)
 
 (defn- json-object-substring
   "Best-effort extraction of a JSON object substring from LLM output.

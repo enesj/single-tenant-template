@@ -100,16 +100,6 @@
 
 ;; Convenience functions for common use cases
 
-(defui admin-auth-guard
-  "Convenience component for admin authentication guard."
-  [props]
-  ($ auth-guard (merge {:auth-type :admin} props)))
-
-(defui tenant-auth-guard
-  "Convenience component for tenant authentication guard."
-  [props]
-  ($ auth-guard (merge {:auth-type :tenant} props)))
-
 (defui customer-auth-guard
   "Convenience component for customer authentication guard."
   [props]

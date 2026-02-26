@@ -63,20 +63,6 @@
               (throw e))
             (throw e)))))))
 
-(defn get-article
-  [db id]
-  (jdbc/execute-one! db
-    (sql/format {:select [[:a.*]
-                          [:m.display_name :manufacturer_display_name]
-                          [:s.name :subcategory_name]
-                          [:c.name :category_name]]
-                 :from [[:articles :a]]
-                 :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
-                             [:subcategories :s] [:= :s.id :a.subcategory_id]
-                             [:categories :c] [:= :c.id :s.category_id]]
-                 :where [:= :a.id id]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
-
 (def ^:private allowed-articles-order-by
   "Whitelist of client-facing order-by keys -> SQL columns.
 
@@ -173,18 +159,4 @@
                           {:builder-fn rs/as-unqualified-lower-maps}))
               0)}))
 
-(defn search-articles
-  "Search articles for autocomplete."
-  [db query {:keys [limit] :or {limit 10}}]
-  (when (and query (>= (count query) 2))
-    (let [search-pattern (str "%" query "%")]
-      (jdbc/execute!
-        db
-        (sql/format {:select [:*]
-                     :from [:articles]
-                     :where [:or
-                             [:ilike :canonical_name search-pattern]
-                             [:ilike :normalized_key search-pattern]]
-                     :order-by [[:canonical_name :asc]]
-                     :limit limit})
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+

@@ -39,36 +39,4 @@
         settings (use-subscribe [::ui-subs/entity-display-settings entity-key])]
     settings))
 
-(defn use-show-select?
-  "Returns just the show-select? setting for an entity.
-   Convenience hook for components that only need selection visibility."
-  [entity-name]
-  (:show-select? (use-display-settings entity-name)))
 
-(defn use-show-edit?
-  "Returns just the show-edit? setting for an entity.
-   Convenience hook for components that only need edit button visibility."
-  [entity-name]
-  (:show-edit? (use-display-settings entity-name)))
-
-(defn use-show-delete?
-  "Returns just the show-delete? setting for an entity.
-   Convenience hook for components that only need delete button visibility."
-  [entity-name]
-  (:show-delete? (use-display-settings entity-name)))
-
-(defn use-show-highlights?
-  "Returns just the show-highlights? setting for an entity.
-   Convenience hook for components that only need highlight visibility."
-  [entity-name]
-  (:show-highlights? (use-display-settings entity-name)))
-
-(defn use-action-visibility
-  "Returns edit and delete visibility together.
-   Convenience hook for action button components.
-   
-   Returns: {:show-edit? bool, :show-delete? bool}"
-  [entity-name]
-  (let [settings (use-display-settings entity-name)]
-    {:show-edit? (:show-edit? settings)
-     :show-delete? (:show-delete? settings)}))

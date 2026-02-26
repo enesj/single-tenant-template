@@ -188,20 +188,6 @@
   [message]
   (response/not-found {:error message}))
 
-(defn bad-request-response
-  "Create a bad request response with error details."
-  [message & [details]]
-  (cond-> {:error message}
-    details (assoc :details details)
-    :always response/bad-request))
-
-(defn conflict-response
-  "Create a conflict response (409) with error message."
-  [message]
-  (response/status
-    (response/response {:error message})
-    409))
-
 ;; ================================================================================
 ;; Handler Creation Helpers
 ;; ================================================================================

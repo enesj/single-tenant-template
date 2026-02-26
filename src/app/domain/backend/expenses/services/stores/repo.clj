@@ -34,11 +34,6 @@
   (when-let [place-id* (some-> place-id str str/trim not-empty)]
     (configs/normalize-store-key (str "place " place-id*))))
 
-(defn find-by-supplier-and-place-id
-  [db supplier-id place-id]
-  (when-let [normalized-key (place-id->normalized-key place-id)]
-    (find-by-supplier-and-normalized-key db supplier-id normalized-key)))
-
 (defn list-stores-for-supplier
   [db supplier-id]
   (jdbc/execute!

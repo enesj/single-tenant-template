@@ -60,26 +60,6 @@
 ;; Trend Indicator Component
 ;; ============================================================================
 
-(defui trend-indicator
-  "Component for displaying growth/decline trends with directional arrows.
-
-   Props:
-   - :value - The percentage value (positive for growth, negative for decline)
-   - :show-arrow? - Whether to show directional arrow (default: true)
-   - :precision - Number of decimal places (default: 1)
-   - :positive-color - Color class for positive values (default: 'ds-text-success')
-   - :negative-color - Color class for negative values (default: 'ds-text-error')"
-  [{:keys [value show-arrow? precision positive-color negative-color]
-    :or {show-arrow? true precision 1 positive-color "ds-text-success" negative-color "ds-text-error"}}]
-  (let [is-positive (>= value 0)
-        color-class (if is-positive positive-color negative-color)
-        arrow (if is-positive "📈" "📉")
-        formatted-value (.toFixed (js/Number value) precision)]
-    ($ :span {:class (str "ds-badge ds-badge-lg ds-badge-outline ds-shadow-sm ds-transition-all ds-duration-200 ds-hover:ds-scale-105 " color-class)}
-      (if show-arrow?
-        (str arrow " " formatted-value "%")
-        (str formatted-value "%")))))
-
 ;; ============================================================================
 ;; Page Header Component
 ;; ============================================================================

@@ -25,9 +25,6 @@
             (catch :default _
               (str (or currency "$") " " (.toFixed (js/Number amount) 2))))))
 
-(defn format-date [date-str]
-  (timestamp/format-timestamp-string date-str))
-
 (defn format-short-date [date-str]
   (timestamp/format-timestamp-string date-str))
 

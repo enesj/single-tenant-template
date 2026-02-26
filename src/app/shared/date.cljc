@@ -8,11 +8,6 @@
     #?(:clj [taoensso.timbre :as log])))
 
 ;; Re-export core functions
-(def now core/now)
-(def today core/today)
-(def valid-date? core/valid-date?)
-(def ensure-date core/ensure-date)
-(def parse-iso-date core/parse-iso-date)
 (def parse-date-string core/parse-date-string)
 (def format-iso-date core/format-iso-date)
 (def format-display-date core/format-display-date)
@@ -24,8 +19,6 @@
 (def end-of-month arithmetic/end-of-month)
 
 ;; Re-export range functions
-(def date-in-range? range/date-in-range?)
-(def normalize-date-range range/normalize-date-range)
 (def date-range range/date-range)
 (def format-date-range range/format-date-range)
 

@@ -3,7 +3,6 @@
   (:require
     [app.template.frontend.components.shared-utils :as shared]
     [app.template.frontend.utils.id :as id-utils]
-    [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
 (defn label-value
@@ -13,45 +12,10 @@
     ($ :span {:class "text-sm font-medium"}
       (shared/format-value value "—" false))))
 
-(defn format-bytes
-  [value]
-  (let [bytes (cond
-                (number? value) value
-                (string? value) (js/parseFloat value)
-                :else nil)
-        kb 1024
-        mb (* 1024 1024)]
-    (cond
-      (nil? bytes) "—"
-      (< bytes kb) (str bytes " B")
-      (< bytes mb) (str (.toFixed (/ bytes kb) 1) " KB")
-      :else (str (.toFixed (/ bytes mb) 1) " MB"))))
-
 (defn format-money
   [amount currency]
   (when (some? amount)
     (str amount (when currency (str " " currency)))))
-
-(defn status-class
-  [status]
-  (case status
-    "uploaded" "ds-badge ds-badge-ghost"
-    "parsing" "ds-badge ds-badge-info"
-    "parsed" "ds-badge ds-badge-info"
-    "extracting" "ds-badge ds-badge-warning"
-    "extracted" "ds-badge ds-badge-success"
-    "review_required" "ds-badge ds-badge-warning"
-    "approved" "ds-badge ds-badge-success"
-    "posted" "ds-badge ds-badge-success"
-    "failed" "ds-badge ds-badge-error"
-    "ds-badge"))
-
-(defn capitalize-words
-  [s]
-  (when (string? s)
-    (->> (str/split (str/replace s #"_" " ") #"\s+")
-      (map str/capitalize)
-      (str/join " "))))
 
 (defn- column-value
   [row {:keys [key value-fn]}]
@@ -92,13 +56,4 @@
           ($ :div {:class "text-sm text-base-content/70"}
             (or empty-label "No related records found.")))))))
 
-(def receipt-status-options
-  ["uploaded"
-   "parsing"
-   "parsed"
-   "extracting"
-   "extracted"
-   "review_required"
-   "approved"
-   "posted"
-   "failed"])
+

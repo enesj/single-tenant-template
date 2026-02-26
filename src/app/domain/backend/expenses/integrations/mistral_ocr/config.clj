@@ -10,42 +10,6 @@
 (def ^:private default-max-retries 2)
 (def ^:private default-retry-sleep-ms 500)
 
-(def receipt-extraction-json-schema
-  "JSON Schema (draft-07) used for structured extraction of receipt metadata.
-
-  Stored provider responses are persisted in `receipts.raw_extract_json`.
-  The worker augments this metadata with line items parsed from OCR markdown."
-  {"$schema" "http://json-schema.org/draft-07/schema#"
-   "title" "ReceiptMetaExtractionV1"
-   "type" "object"
-   "properties"
-   {"merchant" {"type" "object"
-                "description" "Seller/merchant printed on the receipt."
-                "properties" {"name" {"type" "string"
-                                      "description" "Merchant/store name (as printed)."}
-                              "address" {"type" ["string" "null"]
-                                         "description" "Address if present."}
-                              "tax_id" {"type" ["string" "null"]
-                                        "description" "Merchant tax/VAT id if present."}}
-                "required" ["name"]}
-
-    "purchased_at" {"type" ["string" "null"]
-                    "description" "ISO-8601 timestamp (local time) if available, e.g. 2023-12-23T19:23:00"}
-
-    "currency" {"type" ["string" "null"]
-                "description" "ISO 4217 currency code (e.g. BAM/EUR/USD). Use null if unknown."}
-
-    "totals" {"type" "object"
-              "description" "Totals printed on the receipt."
-              "properties" {"subtotal" {"type" ["number" "null"]
-                                        "description" "Subtotal before tax/fees if present."}
-                            "tax" {"type" ["number" "null"]
-                                   "description" "Total tax amount if present."}
-                            "total" {"type" "number"
-                                     "description" "Grand total paid; prefer the final total."}}
-              "required" ["total"]}}
-   "required" ["totals"]})
-
 (defn build-config
   "Build a provider config from an app config map (Aero) and environment.
 
@@ -87,9 +51,9 @@
                       (:ocr-enabled? cfg)
                       true))]
      {:enabled? enabled?
-       :auto-post-after-upload? (if (contains? cfg :ocr-auto-post-after-upload?)
-                                  (:ocr-auto-post-after-upload? cfg)
-                                  true)
+      :auto-post-after-upload? (if (contains? cfg :ocr-auto-post-after-upload?)
+                                 (:ocr-auto-post-after-upload? cfg)
+                                 true)
       :api-key (or (getenv* "MISTRAL_API_KEY") (:api-key cfg))
       :base-url (or (getenv* "MISTRAL_OCR_BASE_URL") (:base-url cfg) default-base-url)
       :model (or (getenv* "MISTRAL_OCR_MODEL") (:ocr-model cfg) default-model)

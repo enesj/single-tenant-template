@@ -114,9 +114,4 @@
                       :verification-status (:verification-status status)
                       :needs-verification (email-verify/user-needs-verification? user)})}))))))
 
-(defn create-email-verification-routes
-  "Create email verification routes"
-  [db email-service]
-  {:verify-email-handler (verify-email-handler db email-service)
-   :resend-verification-handler (resend-verification-handler db email-service)
-   :verification-status-handler (verification-status-handler db)})
+

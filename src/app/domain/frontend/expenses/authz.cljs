@@ -102,12 +102,6 @@
     (power-user? role)))
 
 (rf/reg-sub
-  :expenses/assigned?
-  :<- [:expenses/user-role]
-  (fn [role _]
-    (assigned? role)))
-
-(rf/reg-sub
   :expenses/can-write?
   :<- [:expenses/user-role]
   (fn [role _]

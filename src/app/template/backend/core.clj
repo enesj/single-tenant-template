@@ -192,6 +192,7 @@
 
 (def init (atom #(throw (ex-info "init not set" {}))))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn main []
   (reset! init #(with-my-system await-scheduler))
   (future-call @init))

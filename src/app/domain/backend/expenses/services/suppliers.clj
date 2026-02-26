@@ -24,10 +24,6 @@
   [db opts]
   (repo/count-suppliers db opts))
 
-(defn search-suppliers
-  [db query opts]
-  (repo/search-suppliers db query opts))
-
 (defn delete-supplier!
   [db supplier-id]
   (repo/delete-supplier! db supplier-id))

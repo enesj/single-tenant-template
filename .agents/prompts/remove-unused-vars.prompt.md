@@ -1,26 +1,48 @@
 ---
 name: remove-unused-vars
-description: Safely remove unused public vars from the codebase in tested batches
+description: Safely remove unused code (vars, namespaces, referred vars, private vars) from the codebase in tested batches
 ---
 
-# Remove Unused Public Vars
+# Remove Unused Code
 
-Execute a safe, batched removal of unused public vars identified by clojure-lsp.
+Execute a safe, batched removal of unused code identified by clojure-lsp.
+
+The diagnostics script captures:
+- `unused-public-var` - public vars (functions, defs) never referenced
+- `unused-namespace` - required namespaces never used
+- `unused-referred-var` - vars from `:refer` never used
+- `unused-private-var` - private vars never used within their namespace
 
 ## Workflow
 
 ### Phase 1: Gather Diagnostics
 
-1. Run the diagnostics script:
+1. Run the diagnostics task with desired scope:
    ```bash
-   bb scripts/bb/code_quality/unused_public_var.clj
+   # Default: domain + admin only
+   bb unused-public-var
+   
+   # Specific paths
+   bb unused-public-var --domain
+   bb unused-public-var --admin
+   bb unused-public-var --template
+   bb unused-public-var --shared
+   
+   # Multiple paths
+   bb unused-public-var --domain --admin
+   
+   # Custom output file
+   bb unused-public-var --domain -o tmp/domain-unused.txt
    ```
 
-2. Read the output file at `tmp/unused_public_var.txt`.
+2. Read the output file at `tmp/unused_public_var.txt` (or custom path).
 
-3. Parse and categorize the unused vars by:
+3. Parse and categorize the unused items by:
    - **Namespace group**: `app.domain.backend`, `app.domain.frontend`, `app.admin`, `system`, `test`, `dev`, `scripts`
-   - **Type**: `var` (function/def) vs `keyword` (re-frame subscription/event)
+   - **Diagnostic type**: 
+     - `unused-public-var` / `unused-private-var` → remove the var
+     - `unused-namespace` → remove the `:require` entry
+     - `unused-referred-var` → remove from `:refer` vector or switch to alias-only
    - **Risk level**:
      - Low: test helpers, dev utilities, isolated handlers
      - Medium: domain services, admin events/subs
@@ -69,10 +91,18 @@ For each batch:
    - Check for dynamic usage patterns (e.g., re-frame keyword construction)
    - Note any vars that might be used via indirection
 
-2. **Remove the var**:
+2. **Remove the item**:
    - Use `clojure-mcp` structural edits for `.clj`/`.cljs`/`.cljc` files
-   - For re-frame keywords: remove the entire `reg-event-fx`/`reg-sub` block
-   - For functions: remove the entire `defn`/`def` form
+   - **For `unused-public-var` / `unused-private-var`**:
+     - Remove the entire `defn`/`def`/`defn-` form
+     - For re-frame keywords: remove the entire `reg-event-fx`/`reg-sub` block
+   - **For `unused-namespace`**:
+     - Remove the entire `:require` entry from the `ns` form
+     - If the namespace is the only require in a `:require` block, remove the whole `:require` clause
+   - **For `unused-referred-var`**:
+     - Remove the var from the `:refer` vector
+     - If `:refer` becomes empty, either remove the whole require or switch to alias-only usage
+     - Example: `[some.ns :refer [unused-fn used-fn]]` → `[some.ns :refer [used-fn]]` or `[some.ns :as some]`
 
 3. **Validate**:
    - Lint touched files first:
@@ -117,7 +147,9 @@ After all batches:
 
 ## Safety Rules
 
-- **Never remove vars from**: `vendor/`, `src/app/template/`, `src/app/shared/` (already excluded by script)
+- **Default scope**: `--domain` + `--admin` only; `--template` and `--shared` are excluded unless explicitly passed
+- **Vendor always excluded**: Never remove vars from `vendor/`
+- **Explicit opt-in**: Only remove from `template` or `shared` when explicitly requested via flags
 - **Preserve metadata**: If a var has a docstring explaining purpose, document why it was removed
 - **Check protocol implementations**: Protocol method removals require checking all extenders
 - **Re-frame keyword patterns**: Be cautious of dynamically constructed keywords like `(keyword "admin" (str entity "-loading?"))`
@@ -133,7 +165,9 @@ After each batch, report:
 ## Batch N Complete
 
 **Removed**: 
-- `namespace/var-name` (type)
+- `namespace/var-name` (unused-public-var)
+- `namespace/require-entry` (unused-namespace)
+- `namespace/referred-var` (unused-referred-var)
 - ...
 
 **Tests**: PASSED / FAILED
@@ -148,6 +182,10 @@ After each batch, report:
 This prompt takes no arguments. It reads fresh diagnostics each run.
 
 ## Example Invocation
+
+```
+Run the remove-unused-vars prompt to clean up unused code from domain and admin paths.
+```
 
 ```
 Run the remove-unused-vars prompt to clean up unused public vars.

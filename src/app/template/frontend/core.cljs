@@ -109,6 +109,7 @@
 
 (defonce last-non-nil-route (atom nil))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defui current-page []
   (let [current-route (use-subscribe [:current-route])
         ;; Domain pages map - loaded from aggregator

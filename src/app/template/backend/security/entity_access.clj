@@ -106,11 +106,6 @@
   []
   (set/union public-entities protected-entities))
 
-(defn get-all-known-entities
-  "Get all entities known to the access control system."
-  []
-  (set/union admin-only-entities protected-entities public-entities))
-
 ;; ================================================================================
 ;; Validation Functions
 ;; ================================================================================

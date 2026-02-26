@@ -8,46 +8,6 @@
     [uix.core :refer [use-callback use-effect use-state]]))
 
 ;; Custom hook for debounced filter updates
-(defn use-debounced-filter
-  "Custom hook for managing debounced filter updates"
-  [entity-type field-id initial-value debounce-ms]
-  (let [[local-value, set-local-value] (use-state initial-value)
-
-        ;; Create the filter update function
-        update-filter (use-callback
-                        (fn [new-value]
-                          (when entity-type
-                            (let [field-keyword (if (string? field-id) (keyword field-id) field-id)]
-                              (if (or (nil? new-value)
-                                    (and (string? new-value) (empty? new-value))
-                                    (and (map? new-value) (every? nil? (vals new-value))))
-                                ;; Clear filter if value is empty/nil
-                                (rf/dispatch [::filter-events/clear-filter entity-type field-keyword])
-                                ;; Apply filter with new value
-                                (rf/dispatch [::filter-events/apply-filter
-                                              entity-type
-                                              field-keyword
-                                              new-value
-                                              true])))))
-                        [entity-type field-id])
-
-        ;; Create debounced version
-        debounced-update (use-callback
-                           (fn [value]
-                             (let [f (debounce/debounce update-filter debounce-ms)]
-                               (f value)))
-                           [update-filter debounce-ms])
-
-        ;; Update local value and trigger debounced update
-        update-value (use-callback
-                       (fn [new-value]
-                         (set-local-value new-value)
-                         (debounced-update new-value))
-                       [debounced-update])]
-
-    {:local-value local-value
-     :set-local-value set-local-value
-     :update-value update-value}))
 
 ;; Custom hook for number range filters
 (defn use-number-range-filter

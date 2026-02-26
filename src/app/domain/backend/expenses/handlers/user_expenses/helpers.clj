@@ -164,10 +164,6 @@
   "Roles allowed to create/update/delete expenses."
   reference-data-write-roles)
 
-(def receipts-read-roles
-  "Roles allowed to view receipts."
-  reference-data-read-roles)
-
 (def receipts-write-roles
   "Roles allowed to mutate receipts (upload, review, approve, delete, OCR)."
   reference-data-write-roles)

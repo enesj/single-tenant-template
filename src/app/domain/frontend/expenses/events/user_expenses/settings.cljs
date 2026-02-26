@@ -87,22 +87,6 @@
       (assoc-in [:user-expenses :settings :error] (http/extract-error-message error)))))
 
 ;; ---------------------------------------------------------------------------
-;; Local settings (UI preferences stored in app-db)
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-db
-  :user-expenses/set-local-setting
-  common-interceptors
-  (fn [db [setting-key value]]
-    (assoc-in db [:user-expenses :local-settings setting-key] value)))
-
-(rf/reg-event-db
-  :user-expenses/toggle-local-setting
-  common-interceptors
-  (fn [db [setting-key]]
-    (update-in db [:user-expenses :local-settings setting-key] not)))
-
-;; ---------------------------------------------------------------------------
 ;; Save settings (alias for update-settings for better UX naming)
 ;; ---------------------------------------------------------------------------
 
@@ -160,7 +144,4 @@
   (fn [db _]
     (get-in db [:user-expenses :settings :saving?] false)))
 
-(rf/reg-sub
-  :user-expenses/settings-error
-  (fn [db _]
-    (get-in db [:user-expenses :settings :error])))
+

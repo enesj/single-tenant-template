@@ -48,21 +48,6 @@
           db [:admin :user-settings :draft :view-options entity-kw] column-kw kind value)))))
 
 ;; =============================================================================
-;; Bulk helpers: column visibility defaults
-;; =============================================================================
-
-(rf/reg-event-db
-  :app.admin.frontend.events.user-settings/set-column-defaults-bulk
-  (fn [db [_ entity column-keys value]]
-    (let [entity-kw (u/normalize-kw entity)
-          cols (->> (or column-keys []) (keep u/normalize-kw) vec)
-          value (boolean value)]
-      (if (or (nil? entity-kw) (empty? cols))
-        db
-        (vo-helpers/apply-column-defaults-bulk
-          db [:admin :user-settings :draft :view-options entity-kw] cols value)))))
-
-;; =============================================================================
 ;; Bulk helpers: apply tristate to many display settings / columns
 ;; =============================================================================
 
@@ -131,4 +116,3 @@
 
             (not (map? saved-col-locks))
             (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :column-locks)))))))
-

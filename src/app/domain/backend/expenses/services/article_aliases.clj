@@ -201,36 +201,9 @@
                  :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
-(defn unmap-alias!
-  "Remove article mapping from an alias (set article_id to NULL)."
-  [db alias-id]
-  (jdbc/execute-one!
-    db
-    (sql/format {:update :article_aliases
-                 :set {:article_id nil}
-                 :where [:= :id alias-id]
-                 :returning [:*]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
-
 ;; ============================================================================
 ;; Batch Operations
 ;; ============================================================================
-
-(defn batch-map-aliases!
-  "Map multiple aliases to a single article.
-
-   Parameters:
-   - alias-ids: seq of alias UUIDs
-   - article-id: the target article UUID"
-  [db alias-ids article-id]
-  (when (seq alias-ids)
-    (jdbc/execute!
-      db
-      (sql/format {:update :article_aliases
-                   :set {:article_id article-id}
-                   :where [:in :id alias-ids]
-                   :returning [:*]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
 
 ;; ============================================================================
 ;; Related Records

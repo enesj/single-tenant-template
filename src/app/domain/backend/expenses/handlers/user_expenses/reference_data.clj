@@ -497,41 +497,6 @@
             (h/json-response {:error "Invalid payer type ID"} 400))))
       (h/unauthorized-response))))
 
-(defn delete-payer-type-handler
-  "Handler factory for deleting a payer type.
-
-  Allowed roles: admin/owner."
-  [db]
-  (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request payer-type-manage-roles "Only admins and owners can manage payer types")]
-        forbidden
-        (let [payer-type-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
-                              (h/try-parse-uuid (get-in request [:parameters :path :id])))]
-          (if payer-type-id
-            (try
-              (let [delete-payer-type! (resolve-service-op-fn
-                                         'app.domain.backend.expenses.services.payer-types
-                                         :delete!)
-                    deleted? (boolean (delete-payer-type! db payer-type-id))]
-                (if deleted?
-                  (h/json-response {:data {:deleted true}})
-                  (h/not-found-response "Payer type not found")))
-              (catch org.postgresql.util.PSQLException e
-                (let [sql-state (.getSQLState e)]
-                  (if (= "23503" sql-state) ;; foreign_key_violation
-                    (do
-                      (log/warn "Cannot delete payer type - has related records" {:payer-type-id payer-type-id})
-                      (h/json-response {:error "Cannot delete payer type: it has related payers. Update those payers first."} 409))
-                    (do
-                      (log/error e "Database error deleting payer type" {:payer-type-id payer-type-id :sql-state sql-state})
-                      (h/json-response {:error "Failed to delete payer type"} 500)))))
-              (catch Exception e
-                (log/error e "Error deleting payer type" {:payer-type-id payer-type-id})
-                (h/json-response {:error "Failed to delete payer type"} 500)))
-            (h/json-response {:error "Invalid payer type ID"} 400))))
-      (h/unauthorized-response))))
-
 (defn batch-delete-payer-types-handler
   "Handler factory for deleting multiple payer types.
 

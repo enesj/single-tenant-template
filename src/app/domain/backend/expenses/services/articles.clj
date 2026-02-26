@@ -9,14 +9,13 @@
 (def normalize-alias-label service/normalize-alias-label)
 
 (def create-article! service/create-article!)
-(def get-article-by-normalized-key service/get-article-by-normalized-key)
+
 (def find-or-create-article-by-canonical-name! service/find-or-create-article-by-canonical-name!)
-(def get-article service/get-article)
+
 (def list-articles service/list-articles)
 (def update-article! service/update-article!)
 (def delete-article! service/delete-article!)
 (def count-articles service/count-articles)
-(def search-articles service/search-articles)
 
 (def list-related-records service/list-related-records)
 

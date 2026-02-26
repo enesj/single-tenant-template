@@ -8,11 +8,8 @@
 ;; ---------------------------------------------------------------------------
 
 ;; String constants (DB-friendly)
-(def role-owner "owner")
 (def role-admin "admin")
 (def role-member "member")
-(def role-viewer "viewer")
-(def role-unassigned "unassigned")
 
 ;; Keyword roles (UI-friendly)
 (def core-roles

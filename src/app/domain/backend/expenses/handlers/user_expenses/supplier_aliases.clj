@@ -80,26 +80,6 @@
             (h/json-response {:error "Failed to update supplier alias"} 500))))
       (h/unauthorized-response))))
 
-(defn delete-supplier-alias-handler
-  "Delete supplier alias (admin/owner only)."
-  [db]
-  (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request power-user-roles
-                           "Only admins and owners can delete supplier aliases")]
-        forbidden
-        (try
-          (let [alias-id (h/try-parse-uuid (get-in request [:path-params :id]))
-                delete! (:delete! supplier-aliases/service)
-                deleted? (when alias-id (delete! db alias-id))]
-            (if deleted?
-              (h/json-response {:data {:deleted true}})
-              (h/not-found-response "Supplier alias not found")))
-          (catch Exception e
-            (log/error e "Failed to delete supplier alias" {:alias-id (get-in request [:path-params :id])})
-            (h/json-response {:error "Failed to delete supplier alias"} 500))))
-      (h/unauthorized-response))))
-
 (defn batch-delete-supplier-aliases-handler
   "Batch delete supplier aliases (admin/owner only).
 

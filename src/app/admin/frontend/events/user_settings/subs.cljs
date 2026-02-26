@@ -37,13 +37,5 @@
   (fn [db _]
     (get-in db [:admin :user-settings :error])))
 
-(rf/reg-sub
-  :app.admin.frontend.events.user-settings/last-saved
-  (fn [db _]
-    (get-in db [:admin :user-settings :last-saved])))
 
-(rf/reg-sub
-  :app.admin.frontend.events.user-settings/table-columns-config
-  (fn [db _]
-    (u/safe-map (get-in db [:admin :user-settings :draft :table-columns]))))
 

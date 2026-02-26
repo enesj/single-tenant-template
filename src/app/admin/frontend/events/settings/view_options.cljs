@@ -40,26 +40,6 @@
 ;; View Options Draft Editing (staged changes)
 ;; =============================================================================
 
-(rf/reg-event-db
-  :app.admin.frontend.events.settings/set-view-option-draft
-  (fn [db [_ entity-name setting-key new-value]]
-    (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-          setting-kw (if (keyword? setting-key) setting-key (keyword setting-key))
-          display? (utils/display-setting-key? setting-kw)
-          base-path [:admin :settings :view-options entity-kw]]
-      (cond
-        (and display? (nil? new-value))
-        (update-in db (conj base-path :display-locks) (fnil dissoc {}) setting-kw)
-
-        display?
-        (assoc-in db (conj base-path :display-locks setting-kw) new-value)
-
-        (nil? new-value)
-        (update-in db base-path dissoc setting-kw)
-
-        :else
-        (assoc-in db (conj base-path setting-kw) new-value)))))
-
 ;; =============================================================================
 ;; Display toggles draft editing (explicit defaults vs locks)
 ;; =============================================================================
@@ -102,21 +82,6 @@
         db
         (vo-helpers/apply-column-visibility-setting
           db [:admin :settings :view-options entity-kw] column-kw kind value)))))
-
-;; =============================================================================
-;; Bulk helpers: column visibility defaults
-;; =============================================================================
-
-(rf/reg-event-db
-  :app.admin.frontend.events.settings/set-column-defaults-bulk
-  (fn [db [_ entity-name column-keys value]]
-    (let [entity-kw (utils/normalize-kw entity-name)
-          cols (utils/normalize-kws column-keys)
-          value (boolean value)]
-      (if (or (nil? entity-kw) (empty? cols))
-        db
-        (vo-helpers/apply-column-defaults-bulk
-          db [:admin :settings :view-options entity-kw] cols value)))))
 
 ;; =============================================================================
 ;; Bulk helpers: apply tristate to many display settings / columns
@@ -199,66 +164,3 @@
                    (assoc-in [:admin :settings :loading?] false)
                    (assoc-in [:admin :settings :error] "Failed to load settings"))}
       (utils/unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
-
-;; =============================================================================
-;; Update Single View Option Setting
-;; =============================================================================
-
-(rf/reg-event-fx
-  :app.admin.frontend.events.settings/update-setting-success
-  (fn [{:keys [db]} [_ entity-kw setting-kw new-value _response]]
-    (log/info "Setting updated successfully" {:entity entity-kw :setting setting-kw :value new-value})
-    ;; Also update the config-loader cache so components pick up the change
-    (let [current-options (config-loader/get-all-view-options)
-          display? (utils/display-setting-key? setting-kw)
-          path (if display?
-                 [entity-kw :display-locks setting-kw]
-                 [entity-kw setting-kw])
-          updated-options (assoc-in current-options path new-value)]
-      (config-loader/register-preloaded-config! :view-options updated-options))
-    {:db (-> db
-           (assoc-in [:admin :settings :saving?] false)
-           (assoc-in [:admin :settings :last-saved] (js/Date.now))
-           (assoc-in [:admin :settings :error] nil))}))
-
-(rf/reg-event-fx
-  :app.admin.frontend.events.settings/update-setting-failure
-  (fn [{:keys [db]} [_ entity-kw setting-kw error]]
-    (log/error "Failed to update setting" {:entity entity-kw :setting setting-kw :error error})
-    ;; Revert the optimistic update by reloading from backend
-    (cond-> {:db (-> db
-                   (assoc-in [:admin :settings :saving?] false)
-                   (assoc-in [:admin :settings :error] "Failed to save setting"))
-             :fx [[:dispatch [:app.admin.frontend.events.settings/load-view-options]]]}
-      (utils/unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
-
-;; =============================================================================
-;; Remove Setting (make user-configurable)
-;; =============================================================================
-
-(rf/reg-event-fx
-  :app.admin.frontend.events.settings/remove-setting-success
-  (fn [{:keys [db]} [_ entity-kw setting-kw _response]]
-    (log/info "Setting removed successfully" {:entity entity-kw :setting setting-kw})
-    ;; Also update the config-loader cache
-    (let [current-options (config-loader/get-all-view-options)
-          display? (utils/display-setting-key? setting-kw)
-          updated-options (if display?
-                            (update-in current-options [entity-kw :display-locks] (fnil dissoc {}) setting-kw)
-                            (update current-options entity-kw dissoc setting-kw))]
-      (config-loader/register-preloaded-config! :view-options updated-options))
-    {:db (-> db
-           (assoc-in [:admin :settings :saving?] false)
-           (assoc-in [:admin :settings :last-saved] (js/Date.now))
-           (assoc-in [:admin :settings :error] nil))}))
-
-(rf/reg-event-fx
-  :app.admin.frontend.events.settings/remove-setting-failure
-  (fn [{:keys [db]} [_ entity-kw setting-kw error]]
-    (log/error "Failed to remove setting" {:entity entity-kw :setting setting-kw :error error})
-    (cond-> {:db (-> db
-                   (assoc-in [:admin :settings :saving?] false)
-                   (assoc-in [:admin :settings :error] "Failed to remove setting"))
-             :fx [[:dispatch [:app.admin.frontend.events.settings/load-view-options]]]}
-      (utils/unauthorized? error) (assoc :dispatch [:admin/auth-invalid]))))
-

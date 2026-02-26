@@ -36,35 +36,6 @@
     (update-user-in-admin-state user-id update-fn)
     (update-user-in-entity-store user-id update-fn)))
 
-(defn bulk-update-users-in-admin-state
-  "Updates multiple users in the :admin/users array"
-  [db user-ids update-fn]
-  (update db :admin/users
-    (fn [users]
-      (mapv #(if (some #{(:users/id %)} user-ids)
-               (update-fn %)
-               %)
-        users))))
-
-(defn bulk-update-users-in-entity-store
-  "Updates multiple users in the entity store"
-  [db user-ids update-fn]
-  (update-in db [:entities :users :data]
-    (fn [users-by-id]
-      (reduce (fn [acc user-id]
-                (if-let [user (get acc user-id)]
-                  (assoc acc user-id (update-fn user))
-                  acc))
-        users-by-id
-        user-ids))))
-
-(defn sync-bulk-admin-and-entity-stores
-  "Updates multiple users in both admin and entity stores"
-  [db user-ids update-fn]
-  (-> db
-    (bulk-update-users-in-admin-state user-ids update-fn)
-    (bulk-update-users-in-entity-store user-ids update-fn)))
-
 ;; ============================================================================
 ;; HTTP Request Utilities
 ;; ============================================================================

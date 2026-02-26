@@ -2,8 +2,7 @@
   "Configuration maps for expenses domain entities.
    
    Each configuration defines the specific details needed by the event factory
-   to generate standard CRUD events for that entity type."
-  (:require [app.domain.frontend.expenses.events.events-factory :as factory]))
+   to generate standard CRUD events for that entity type.")
 
 ;; =============================================================================
 ;; Entity Configurations
@@ -159,34 +158,4 @@
    :has-forms? false
    :pagination-opts {:default-per-page 25}})
 
-(def all-entity-configs
-  "Map of all entity configurations for easy lookup."
-  {:suppliers suppliers-config
-   :stores stores-config
-   :manufacturers manufacturers-config
-   :categories categories-config
-   :expense-categories expense-categories-config
-   :cities cities-config
-   :countries countries-config
-   :subcategories subcategories-config
-   :payers payers-config
-   :articles articles-config
-   :receipts receipts-config
-   :expenses expenses-config
-   :expense-items expense-items-config
 
-   :article-aliases article-aliases-config
-   :supplier-aliases supplier-aliases-config
-   :store-aliases store-aliases-config
-   :payer-types payer-types-config})
-
-;; =============================================================================
-;; Registration Helper
-;; =============================================================================
-
-(defn register-all-entity-events!
-  "Registers events for all configured entities."
-  []
-  (doseq [[_ config] all-entity-configs]
-    (factory/register-entity-events! config))
-  (println "Registered all expenses domain entity events"))

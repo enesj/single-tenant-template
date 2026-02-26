@@ -1,6 +1,4 @@
-(ns app.template.frontend.db.schemas
-  (:require
-    [app.shared.field-specs :refer [excluded-fields]]))
+(ns app.template.frontend.db.schemas)
 
 (defn models-data->map
   "Normalizes models-data into a keyword-indexed map regardless of JSON/EDN shape."
@@ -18,63 +16,6 @@
     (keyword? k) k
     (string? k) (keyword k)
     :else k))
-
-(defn compute-types-map
-  "Build a lookup of `type-key → props` for every enum type declared in the
-  models metadata. Works both for EDN-loaded maps (keyword keys) and the
-  JSON-encoded `[k v]` vector form where keys and type names are strings."
-  [md]
-  (let [md-map (models-data->map md)]
-    (->> md-map
-      vals
-      (mapcat (fn [table-def]
-                ;; Each :types entry is [type-name base-type props]
-                ;; where `type-name` may be string when coming from JSON.
-                (map (fn [[type-name _ props]]
-                       [(keyword type-name) props])
-                  (:types table-def))))
-      (into {}))))
-
-(defn field-type
-  "Field type function that takes models-data as parameter instead of using shared state"
-  [field-def models-data]
-  (let [types-map (compute-types-map models-data)]
-    (if (vector? field-def)
-      (let [[base-type & args] field-def
-            ;; Handle both keyword and string base types (from JSON serialization)
-            base-type-kw (if (keyword? base-type) base-type (keyword base-type))]
-        (case base-type-kw
-          :enum (if-let [enum-ref (first args)]
-                  (let [enum-ref-kw (if (keyword? enum-ref) enum-ref (keyword enum-ref))]
-                    (if-let [choices (get-in types-map [enum-ref-kw :choices])]
-                      (into [:enum] choices)
-                      :string))
-                  :string)
-          :varchar [:string {:max (first args)}]
-          :decimal (if (> (count args) 1)
-                     :double
-                     :double)
-          :array (if-let [element-type (first args)]
-                   (let [element-type-kw (if (keyword? element-type) element-type (keyword element-type))]
-                     [:vector (case element-type-kw
-                                :uuid :string
-                                :any)])
-                   [:vector :any])
-          base-type-kw))
-      (let [field-def-kw (if (keyword? field-def) field-def (keyword field-def))]
-        (case field-def-kw
-          :text [:string {:min 0}]
-          :integer :int
-          :decimal :double
-          :timestamp inst?
-          :timestamptz inst?
-          :jsonb [:map]
-          :serial :int
-          :uuid :string
-          :inet :string
-          :boolean :boolean
-          :date inst?
-          :any)))))
 
 (def entity-id-schema
   [:or :int :string :keyword])
@@ -94,13 +35,6 @@
    [:pending? {:optional true} :boolean]
    [:stats {:optional true} :any]
    [:context {:optional true} :any]])
-
-(defn make-entity-structure
-  [model models-data]
-  (into [:map {:closed false}]
-    (for [[k field-def] (:fields model)
-          :when (not (excluded-fields k))]
-      [k {:optional true} (field-type field-def models-data)])))
 
 (defn make-entity-store-schema
   [_model _models-map]
@@ -198,7 +132,7 @@
 (def ui-pagination-schema
   [:map {:closed false}
    [:current-page {:optional true} :int]
-  [:per-page {:optional true} [:maybe :int]]
+   [:per-page {:optional true} [:maybe :int]]
    [:total-items {:optional true} :int]])
 
 (def ui-filter-modal-schema
@@ -241,7 +175,7 @@
 (def list-ui-state
   [:map {:closed false}
    [:current-page {:optional true} :int]
-  [:per-page {:optional true} [:maybe :int]]
+   [:per-page {:optional true} [:maybe :int]]
    [:total-items {:optional true} :int]
    [:pagination {:optional true} ui-pagination-schema]
    [:sort {:optional true}
@@ -338,19 +272,19 @@
        [:show-delete? {:optional true} :boolean]
        [:show-highlights? {:optional true} :boolean]
        [:show-select? {:optional true} :boolean]
-     [:show-filtering? {:optional true} :boolean]
-     [:show-pagination? {:optional true} :boolean]
-     [:lists {:optional true} lists-schema]
-     [:defaults {:optional true} ui-defaults-schema]
-     [:controls {:optional true} ui-controls-schema]
-     [:entity-configs {:optional true} [:map-of :keyword ui-entity-config-schema]]
-     [:entity-prefs {:optional true} [:map-of :keyword :any]]
-     [:notifications {:optional true} ui-notifications-schema]
-     [:sidebar {:optional true} ui-sidebar-schema]
-     [:modals {:optional true} [:map-of :keyword :any]]
-     [:toasts {:optional true} ui-notifications-schema]]]
+       [:show-filtering? {:optional true} :boolean]
+       [:show-pagination? {:optional true} :boolean]
+       [:lists {:optional true} lists-schema]
+       [:defaults {:optional true} ui-defaults-schema]
+       [:controls {:optional true} ui-controls-schema]
+       [:entity-configs {:optional true} [:map-of :keyword ui-entity-config-schema]]
+       [:entity-prefs {:optional true} [:map-of :keyword :any]]
+       [:notifications {:optional true} ui-notifications-schema]
+       [:sidebar {:optional true} ui-sidebar-schema]
+       [:modals {:optional true} [:map-of :keyword :any]]
+       [:toasts {:optional true} ui-notifications-schema]]]
      [:forms {:optional true} [:map-of :keyword form-state]]
-    [:user-expenses {:optional true} :any]
+     [:user-expenses {:optional true} :any]
      [:entity-fetches {:optional true} [:map-of :keyword [:map-of :string :boolean]]]
      [:csrf-token {:optional true} :any]]))
 

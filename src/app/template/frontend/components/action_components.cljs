@@ -51,11 +51,6 @@
 ;; Loading Indicator Component
 ;; =============================================================================
 
-(defui loading-spinner
-  "Small loading spinner for individual actions"
-  []
-  ($ :span {:class "loading loading-spinner loading-xs"}))
-
 ;; =============================================================================
 ;; Action Handler Factory Functions
 ;; =============================================================================
@@ -177,12 +172,6 @@
 ;; Utility Functions
 ;; =============================================================================
 
-(defn create-dropdown-ids
-  "Generate consistent IDs for dropdown components"
-  [entity-type entity-id]
-  {:dropdown-id (str entity-type "-actions-dropdown-" entity-id)
-   :trigger-id (str entity-type "-actions-trigger-" entity-id)})
-
 (defn filter-empty-groups
   "Remove empty action groups from a collection"
   [groups]
@@ -205,18 +194,5 @@
 ;; =============================================================================
 ;; Loading State Utilities
 ;; =============================================================================
-
-(defn create-loading-states-map
-  "Create a loading states map from individual loading state subscriptions"
-  [& {:keys [updating? loading-details? loading-other?]}]
-  (cond-> {}
-    updating? (assoc :updating? updating?)
-    loading-details? (assoc :loading-details? loading-details?)
-    loading-other? (assoc :loading-other? loading-other?)))
-
-(defn is-action-loading?
-  "Check if a specific action is currently loading"
-  [loading-states loading-key]
-  (get loading-states loading-key false))
 
 ;

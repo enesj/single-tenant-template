@@ -55,21 +55,6 @@
            where (assoc :where where)))
        {:builder-fn rs/as-unqualified-lower-maps}))))
 
-(defn search-suppliers
-  [db query {:keys [limit]
-             :or {limit 10}}]
-  (when (and query (>= (count query) 2))
-    (let [where (suppliers-where {:search query})]
-      (jdbc/execute!
-        db
-        (sql/format
-          (cond-> {:select [:*]
-                   :from [:suppliers]
-                   :order-by [[:display_name :asc]]
-                   :limit limit}
-            where (assoc :where where)))
-        {:builder-fn rs/as-unqualified-lower-maps}))))
-
 (defn delete-supplier!
   [db supplier-id]
   (jdbc/execute-one!

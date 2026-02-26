@@ -107,11 +107,6 @@
 ;; This event is dispatched by the admin form interceptors when no admin-specific
 ;; overrides apply. It mirrors the default template submission behavior to avoid
 ;; re-dispatching to the intercepted ::submit-form and causing recursion.
-(rf/reg-event-fx
-  ::process-default-submission
-  common-interceptors
-  (fn [{:keys [db]} [opts]]
-    (build-submit-fx db opts)))
 
 (rf/reg-event-fx
   ::create-success

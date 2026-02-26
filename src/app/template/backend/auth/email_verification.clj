@@ -198,18 +198,6 @@
   (send-verification-success-email [service user]))
 
 ;; Mock email service for development/testing
-(defrecord MockEmailService [base-url]
-  EmailService
-  (send-verification-email [_service user token]
-    (let [verify-url (str base-url "/verify-email?token=" token)]
-      (log/info "Mock email sent to" (:email user) "with verification URL:" verify-url)
-      {:success true :url verify-url}))
 
-  (send-verification-success-email [_service user]
-    (log/info "Mock verification success email sent to" (:email user))
-    {:success true}))
 
-(defn create-mock-email-service
-  "Create a mock email service for development"
-  [base-url]
-  (->MockEmailService base-url))
+

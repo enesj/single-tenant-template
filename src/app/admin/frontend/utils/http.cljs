@@ -135,23 +135,6 @@
                     :on-success on-success
                     :on-failure on-failure})))
 
-(defn bulk-operation-request
-  "Bulk operation request for multiple entities"
-  [{:keys [entity-type operation params on-success on-failure]}]
-  (admin-post {:uri (str "/admin/api/" (name entity-type) "/bulk/" (name operation))
-               :params params
-               :on-success on-success
-               :on-failure on-failure}))
-
-(defn export-request
-  "Export data request with longer timeout for large datasets"
-  [{:keys [entity-type params on-success on-failure]}]
-  (admin-post {:uri (str "/admin/api/" (name entity-type) "/export")
-               :params params
-               :timeout 30000 ; 30 seconds for exports
-               :on-success on-success
-               :on-failure on-failure}))
-
 ;; ============================================================================
 ;; Error Handling Utilities
 ;; ============================================================================
@@ -160,15 +143,6 @@
   "Extract user-friendly error message from API response"
   [error-response]
   (shared-http/extract-error-message error-response "An unexpected error occurred"))
-
-(defn log-request-error
-  "Log request error with context for debugging"
-  [context error-response]
-  (log/error "Admin API request failed:"
-    {:context context
-     :error (extract-error-message error-response)
-     :status (get-in error-response [:response :status])
-     :uri (get-in error-response [:uri])}))
 
 ;; ============================================================================
 ;; Re-frame Integration Helpers

@@ -10,7 +10,6 @@
 
 ;; 2xx Success
 (def status-ok 200)
-(def status-created 201)
 
 ;; 3xx Redirection
 
@@ -34,8 +33,6 @@
 ;; -------------------------
 
 (def header-content-type "Content-Type")
-(def header-authorization "Authorization")
-(def header-user-agent "User-Agent")
 
 ;; App-specific auth header used by the admin UI + backend.
 (def header-x-admin-token "x-admin-token")

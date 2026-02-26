@@ -154,17 +154,6 @@
   (let [entity-key (normalize-entity-key entity)]
     (get-in (keywordize-top models) [entity-key :types] [])))
 
-(defn get-all-entities
-  "Get all entity names from models data.
-
-   Args:
-     models: The models data structure from models.edn
-
-  Returns:
-     Set of entity names (keywords)"
-  [models]
-  (set (keys (keywordize-top models))))
-
 (defn get-enum-choices
   "Extract enum choices for a field from models.
 
@@ -181,31 +170,13 @@
       (let [enum-type-name (second field-type)
             entity-types (get-entity-types models entity)
             type-def (some #(when (= (normalize-field-key (first %))
-                                     (normalize-field-key enum-type-name)) %)
-                           entity-types)]
+                                    (normalize-field-key enum-type-name)) %)
+                       entity-types)]
         (get-in type-def [2 :choices] [])))))
 
 ;; =============================================================================
 ;; Field Type Utilities
 ;; =============================================================================
-
-(defn field-has-type?
-  "Check if a field has a specific type.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-     field: Field identifier (keyword or string)
-     expected-type: The type to check for
-
-   Returns:
-     Boolean indicating if field has the expected type"
-  [models entity field expected-type]
-  (let [field-type (get-field-type models entity field)]
-    (cond
-      (= field-type expected-type) true
-      (and (vector? field-type) (= (first field-type) expected-type)) true
-      :else false)))
 
 (defn field-required?
   "Check if a field is required.
@@ -266,75 +237,8 @@
   (let [entity-key (normalize-entity-key entity)]
     (contains? models entity-key)))
 
-(defn validate-field-exists
-  "Validate that a field exists for a specific entity.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier
-     field: Field identifier to validate
-
-   Returns:
-     Boolean indicating if field exists"
-  [models entity field]
-  (let [field-names (get-entity-field-names models entity)]
-    (contains? field-names (normalize-field-key field))))
-
-(defn get-missing-required-fields
-  "Get required fields that are missing from the provided data.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier
-     data: Map of field values to validate
-
-   Returns:
-     Set of required field names that are missing"
-  [models entity data]
-  (let [fields (get-entity-fields models entity)
-        required-fields (set (map first (filter #(get-in % [2 :required]) fields)))
-        provided-fields (set (keys data))]
-    (clojure.set/difference required-fields provided-fields)))
-
 ;; =============================================================================
 ;; Debug and Inspection Utilities
 ;; =============================================================================
 
-(defn describe-entity
-  "Get a description of an entity's structure.
 
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier
-
-   Returns:
-     Map describing the entity structure"
-  [models entity]
-  (let [entity-key (normalize-entity-key entity)]
-    (when (validate-entity-exists models entity)
-      {:entity entity-key
-       :fields (get-entity-fields models entity)
-       :types (get-entity-types models entity)
-       :field-count (count (get-entity-field-names models entity))})))
-
-(defn describe-field
-  "Get a description of a field's specification.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier
-     field: Field identifier
-
-   Returns:
-     Map describing the field specification"
-  [models entity field]
-  (let [field-type (get-field-type models entity field)
-        constraints (get-field-constraints models entity field)]
-    (when field-type
-      {:entity (normalize-entity-key entity)
-       :field (normalize-field-key field)
-       :type field-type
-       :constraints constraints
-       :required? (field-required? models entity field)
-       :unique? (field-unique? models entity field)
-       :default (get-field-default models entity field)})))

@@ -20,10 +20,6 @@
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
-(def admin-form-exclusions
-  "Fields to exclude from admin form specs"
-  #{:id :created-at :updated-at})
-
 (defn- app-col->db-col
   [column-key]
   (some-> column-key
@@ -149,94 +145,8 @@
       nil)))
 
 ;; LEGACY: Keep the old function for backward compatibility (but mark it as reading from cache)
-(defn generate-admin-entity-spec-from-config
-  "Generate admin entity spec using vector-based configuration from config-loader cache"
-  [entity-keyword]
-
-  (if-let [table-config (config-loader/get-table-config entity-keyword)]
-    (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
-          always-visible-set (->> (or always-visible [])
-                               (keep model-naming/ensure-app-keyword)
-                               set)
-          column-specs (mapv (fn [column-key]
-                               (let [normalized-column (model-naming/ensure-app-keyword column-key)
-                                     specific-config (or (lookup-column-entry column-config column-key) {})
-                                     is-always-visible (contains? always-visible-set normalized-column)]
-                                 (create-column-spec-from-config
-                                   column-key
-                                   (assoc specific-config :always-visible is-always-visible)
-                                   computed-fields
-                                   column-metadata
-                                   nil)))
-                         available-columns)]
-      {:id entity-keyword
-       :fields column-specs
-       :vector-config table-config})
-
-    ;; Fallback to legacy approach for unmigrated entities
-    (do
-      (log/info "No vector config found for" entity-keyword ", legacy approach removed!!")
-      nil)))
-
-(defn get-effective-column-visibility
-  "Get effective column visibility for an entity considering user preferences"
-  [entity-keyword admin-id]
-  (let [table-config (config-loader/get-table-config entity-keyword)
-        effective-config (when table-config
-                           (vector-config/get-effective-column-config entity-keyword table-config admin-id))]
-    (if effective-config
-      {:visible-columns (:visible-columns effective-config)
-       :available-columns (:available-columns effective-config)
-       :field-visibility-map (vector-config/vector-config->boolean-map
-                               (:visible-columns effective-config)
-                               (:available-columns effective-config))}
-      ;; Return empty state for unmigrated entities
-      {:visible-columns []
-       :available-columns []
-       :field-visibility-map {}})))
-
-(defn generate-admin-entity-spec-with-user-prefs
-  "Generate admin entity spec with user preferences applied"
-  [entity-keyword admin-id]
-  (let [base-spec (generate-admin-entity-spec-from-config entity-keyword)
-        visibility-config (get-effective-column-visibility entity-keyword admin-id)]
-    (if base-spec
-      (assoc base-spec
-        :effective-visibility visibility-config
-        :user-customized true)
-      ;; For unmigrated entities, return nil to trigger legacy fallback
-      nil)))
 
 ;; Legacy functions maintained for backward compatibility
-(defn generate-admin-entity-spec
-  "Generate admin entity spec with configuration-first approach and legacy fallback"
-  [entity-keyword _models-map]
-  ;; First try vector configuration approach
-  (if-let [config-spec (generate-admin-entity-spec-from-config entity-keyword)]
-    config-spec
-    ;; Fall back to legacy models.edn approach
-    (do
-      (log/info "Using legacy models.edn approach for" entity-keyword)
-      ;; Legacy implementation here - simplified for demo
-      {:id entity-keyword
-       :fields []
-       :legacy-fallback true})))
-
-(defn get-admin-display-settings
-  "Get display settings for admin table with vector config integration"
-  [entity-keyword admin-id]
-  (let [visibility-config (get-effective-column-visibility entity-keyword admin-id)
-        table-config (config-loader/get-table-config entity-keyword)]
-    (merge
-      {:show-filtering? true
-       :show-pagination? true
-       :show-export? true
-       :show-column-settings? true}
-      (when table-config
-        {:vector-config-enabled true
-         :sortable-columns (set (:sortable-columns table-config))
-         :filterable-columns (set (:filterable-columns table-config))})
-      visibility-config)))
 
 ;; Admin-specific entity spec overrides for vector config entities
 ;; This ensures column visibility panels show correct labels from vector config
@@ -266,10 +176,6 @@
     (create-admin-entity-specs-override-from-db db entity-name)))
 
 ;; Backward compatibility subscription for :entity-specs/<entity> format
-(rf/reg-sub
-  :entity-specs/users
-  (fn [db _]
-    (create-admin-entity-specs-override-from-db db :users)))
 
 ;; =============================================================================
 ;; Admin Form Entity Specs - form-fields.edn based configuration

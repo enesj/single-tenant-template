@@ -10,18 +10,6 @@
                       (when-not (js/isNaN parsed) parsed))
     :else nil))
 
-(defn normalize-id-list
-  [value]
-  (let [values (cond
-                 (nil? value) []
-                 (sequential? value) value
-                 :else [value])]
-    (->> values
-      (map #(some-> % str str/trim))
-      (remove str/blank?)
-      distinct
-      vec)))
-
 (defn format-money
   [amount currency]
   (let [amount* (->number amount)

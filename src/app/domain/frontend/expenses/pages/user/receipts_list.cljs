@@ -89,12 +89,6 @@
    :close-modal [:user-expenses/close-receipt-detail-modal]
    :approve-form user-expense-add-form-modal})
 
-(defui receipt-detail-body
-  [{:keys [receipt-id]}]
-  ($ receipt-detail-ui/receipt-detail-body
-    {:receipt-id receipt-id
-     :ctx receipt-detail-ctx}))
-
 (defui receipt-detail-modal
   []
   ($ receipt-detail-ui/receipt-detail-modal

@@ -82,11 +82,6 @@
     (get-in db (conj base-path :map-modal :error))))
 
 (rf/reg-sub
-  :expenses/unmapped-items-map-modal-alias-result
-  (fn [db _]
-    (get-in db (conj base-path :map-modal :alias-result))))
-
-(rf/reg-sub
   :expenses/unmapped-items-map-modal-progress
   (fn [db _]
     (get-in db (conj base-path :map-modal :progress))))

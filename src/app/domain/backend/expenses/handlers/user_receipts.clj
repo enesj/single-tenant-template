@@ -282,36 +282,6 @@
         (h/unauthorized-response)))
     "Failed to download receipt"))
 
-(defn delete-receipt-handler
-  "DELETE /api/v1/expenses/receipts/:id
-
-  Returns JSON to keep frontend XHR pipelines (which may expect JSON) happy."
-  [db]
-  (with-error-handling
-    (fn [request]
-      (if-let [user-id (h/get-user-id request)]
-        (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can delete receipts")]
-          forbidden
-          (let [role (h/get-user-role request)]
-            (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
-              (if (= "admin" role)
-                (if-let [deleted (receipt-queries/delete-receipt! db id)]
-                  (h/json-response {:data {:deleted true
-                                           :receipt (to-app deleted)}}
-                    200)
-                  (h/json-response {:error "Receipt not found"} 404))
-                ;; Regular users can only delete receipts visible to them (owned or unassigned).
-                (if-not (receipt-queries/get-user-receipt db user-id id)
-                  (h/json-response {:error "Receipt not found"} 404)
-                  (if-let [deleted (receipt-queries/delete-receipt! db id)]
-                    (h/json-response {:data {:deleted true
-                                             :receipt (to-app deleted)}}
-                      200)
-                    (h/json-response {:error "Receipt not found"} 404))))
-              (h/json-response {:error "Invalid id"} 400))))
-        (h/unauthorized-response)))
-    "Failed to delete receipt"))
-
 (defn batch-delete-receipts-handler
   "DELETE /api/v1/expenses/receipts/batch
 

@@ -98,6 +98,10 @@
   {:doc "Create a provenance-preserving evidence bundle (ripgrep JSON) for Lattice-based audits.\n\nUsage:\n  bb audit-bundle --query <regex> [--query <regex> ...] [--glob <glob> ...] [--context N] [--label <slug>] [--out <path>]",
    :task (apply shell "bb" "scripts/bb/ai/audit_bundle.clj" *command-line-args*)},
 
+  schedule-claude
+  {:doc "Schedule Claude CLI commands to run at a specific time using the 'at' command.\n\nUsage:\n  bb schedule-claude --prompt \"YOUR_PROMPT\" --time \"TIME_SPEC\"\n  bb schedule-claude -p \"YOUR_PROMPT\" -t \"TIME_SPEC\" [-l LOG_PATH]\n\nOptions:\n  -p, --prompt   The prompt to send to Claude CLI\n  -t, --time     Time specification for the 'at' command\n  -l, --log      Log file path (default: tmp/claude-scheduled.log)\n\nTime Examples:\n  \"2AM tomorrow\"       - Run at 2 AM tomorrow\n  \"3PM today\"          - Run at 3 PM today\n  \"now + 1 hour\"       - Run in 1 hour\n  \"now + 30 minutes\"   - Run in 30 minutes\n\nLogging:\n  Output is logged to the specified file (default: tmp/claude-scheduled.log)\n  Check execution status with: cat tmp/claude-scheduled.log\n\nNote: Requires 'at' command to be installed and atd service running.",
+   :task (apply shell "bb" "scripts/bb/ai/schedule_claude.clj" *command-line-args*)},
+
   config-audit
   {:doc "Audit frontend config EDN keys for potential unused settings. Usage: bb config-audit [--strict] [--allowlist <path>]",
    :task (apply shell "bb" "scripts/bb/config_audit.clj" *command-line-args*)},
@@ -200,6 +204,10 @@
   fix-docstrings
   {:doc "Automatically fix clj-kondo 'Misplaced docstring.' warnings",
    :task (apply shell "bb" "scripts/bb/code_quality/fix_misplaced_docstrings.clj" *command-line-args*)},
+
+  unused-public-var
+  {:doc "Find unused code via clojure-lsp (public-var, namespace, referred-var, private-var). Usage: bb unused-public-var [--domain] [--template] [--admin] [--shared] [-o <path>]\n\nDefault: domain + admin only. Flags filter to specific paths. Vendor always excluded.",
+   :task (apply shell "bb" "scripts/bb/code_quality/unused_public_var.clj" *command-line-args*)},
 
   fix-str-warnings
   {:doc "Remove redundant (str ...) calls flagged by clj-kondo",

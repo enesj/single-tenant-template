@@ -180,8 +180,6 @@
 ;; correct operation keyword. run-bridge-operation does not pass the
 ;; operation into default-effect-fn, so the event registrations below
 ;; use these wrappers.
-(defn default-delete-failure [cofx entity-type error]
-  (default-crud-failure cofx entity-type :delete error))
 
 (defn default-batch-delete-failure [cofx entity-type _ids error]
   (default-crud-failure cofx entity-type :batch-delete error))
@@ -213,17 +211,6 @@
                    (some-> js/window .-location .-pathname))
         in-admin-path? (and pathname (str/includes? pathname "/admin"))]
     (boolean (or admin-route? in-admin-path?))))
-
-(defn default-delete-request [{:keys [db]} entity-type id]
-  ; Default delete request handler using template HTTP.
-  {:db (assoc-in db (paths/entity-loading? entity-type) true)
-   :http-xhrio (let [opts {:entity-name (entity-name entity-type)
-                           :id id
-                           :on-success [:app.template.frontend.events.list.crud/delete-success entity-type id]
-                           :on-failure [:app.template.frontend.events.list.crud/delete-failure entity-type]}]
-                 (if (in-admin-context? db)
-                   (template-http/delete-entity-admin opts)
-                   (template-http/delete-entity-public opts)))})
 
 (defn default-batch-delete-request
   [{:keys [db]} entity-type ids]
@@ -307,18 +294,6 @@
                               (conj existing-bridges new-bridge))]
         (assoc registry entity-key updated-bridges))))
   {:entity-key entity-key :bridge-id bridge-id})
-
-(defn unregister-crud-bridge!
-  "Remove a specific bridge registration."
-  [entity-key bridge-id]
-  (swap! bridge-registry
-    (fn [registry]
-      (let [existing-bridges (get registry entity-key [])
-            filtered-bridges (remove (fn [bridge] (= bridge-id (:bridge-id bridge))) existing-bridges)]
-        (if (seq filtered-bridges)
-          (assoc registry entity-key filtered-bridges)
-          (dissoc registry entity-key)))))
-  nil)
 
 (defn get-bridges-for-entity
   "Get all registered bridges for an entity type, sorted by priority (highest first).
@@ -468,24 +443,4 @@
 ;; Utilities and Helpers
 ;; ============================================================================
 
-(defn assoc-paths
-  "Utility to assoc multiple `[path value]` pairs in a db map."
-  [db path-value-pairs]
-  (reduce (fn [acc [path value]]
-            (assoc-in acc path value))
-    db
-    path-value-pairs))
 
-(defn clear-all-bridges!
-  "Clear all bridge registrations (primarily for testing)."
-  []
-  (reset! bridge-registry {})
-  (log/info "All CRUD bridges cleared"))
-
-(defn bridge-registry-summary
-  "Get a summary of current bridge registrations for debugging."
-  []
-  (into {}
-    (map (fn [[entity-key bridges]]
-           [entity-key (mapv (juxt :bridge-id :priority (comp count :operations)) bridges)]))
-    @bridge-registry))

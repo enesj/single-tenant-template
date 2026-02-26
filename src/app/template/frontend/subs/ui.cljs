@@ -54,11 +54,6 @@
 ;; Default Display Settings (kept for backward compatibility)
 ;; ============================================================================
 
-(def default-display-settings
-  "Default values for all display settings.
-   DEPRECATED: Use resolver/fallback-defaults instead."
-  resolver/fallback-defaults)
-
 ;; ============================================================================
 ;; Unified Display Settings Resolution
 ;; ============================================================================

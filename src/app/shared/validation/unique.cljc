@@ -3,16 +3,6 @@
    This namespace provides validation for unique constraints without
    direct database access - instead accepting functions to retrieve values.")
 
-(defn create-unique-validator
-  "Creates a validator that checks if value is unique.
-   Takes a function that retrieves existing values rather than
-   accessing the database directly."
-  [get-existing-values-fn]
-  [:fn {:error/message "This value already exists"}
-   (fn [value]
-     (let [existing-values (get-existing-values-fn)]
-       (not (contains? (set existing-values) value))))])
-
 (defn create-unique-validator-with-context
   "Creates a unique validator with entity and field context.
    The get-values-fn should accept entity-type and field-name as parameters."

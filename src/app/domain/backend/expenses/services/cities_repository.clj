@@ -18,22 +18,6 @@
                    :limit 1})
       {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn ensure-city!
-  [db city-name]
-  (when-let [name* (some-> city-name str str/trim not-empty)]
-    (let [normalized (normalize/normalize-city-key name*)
-          row (jdbc/execute-one!
-                db
-                (sql/format {:insert-into :cities
-                             :values [{:name name*
-                                       :normalized_key normalized
-                                       :created_at [:now]}]
-                             :on-conflict [:normalized_key]
-                             :do-update-set {:name :excluded/name}
-                             :returning [:id]})
-                {:builder-fn rs/as-unqualified-lower-maps})]
-      (:id row))))
-
 (defn find-city-by-country-and-zip
   [db country zip]
   (let [country* (or (some-> country str str/trim not-empty)

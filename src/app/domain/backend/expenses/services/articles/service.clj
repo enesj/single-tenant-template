@@ -15,14 +15,13 @@
 
 ;; CRUD
 (def create-article! crud/create-article!)
-(def get-article-by-normalized-key crud/get-article-by-normalized-key)
+
 (def find-or-create-article-by-canonical-name! crud/find-or-create-article-by-canonical-name!)
-(def get-article crud/get-article)
+
 (def list-articles crud/list-articles)
 (def update-article! crud/update-article!)
 (def delete-article! crud/delete-article!)
 (def count-articles crud/count-articles)
-(def search-articles crud/search-articles)
 
 ;; Related records
 (def list-related-records related-records/list-related-records)

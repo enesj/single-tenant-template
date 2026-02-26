@@ -12,10 +12,7 @@
 
 (def cast-for-database db/cast-for-database)
 (def cast-field-value db/cast-field-value)
-(def format-date-for-db db/format-date-for-db)
-(def format-json-for-db db/format-json-for-db)
 (def prepare-data-for-db db/prepare-data-for-db)
-(def resolve-field-type db/resolve-field-type)
 
 ;; =============================================================================
 ;; Type Parsing Functions
@@ -209,7 +206,7 @@
               :else (str value))
       :array (let [element-type (when (and (vector? target-type)
                                         (> (count target-type) 1))
-                                   (second target-type))
+                                  (second target-type))
                    convert-element (fn [item]
                                      (if element-type
                                        (convert-to-type item element-type)

@@ -149,42 +149,9 @@
   "Dynamic var bound to test database connection within test fixtures"
   nil)
 
-(def ^:dynamic *test-service-container*
-  "Dynamic var bound to service container within test fixtures"
-  nil)
-
 ;; ============================================================================
 ;; Test Fixtures for Individual Tests
 ;; ============================================================================
-
-(defn with-test-db
-  "Fixture that provides database access to a test.
-   Binds *test-db* to the database connection."
-  [f]
-  (if-let [db (get-test-db)]
-    (binding [*test-db* db]
-      (f))
-    (do
-      (log/warn "Test DB not available, running test without DB")
-      (f))))
-
-(defn with-service-container
-  "Fixture that provides service container access to a test.
-   Binds *test-service-container* to the service container."
-  [f]
-  (if-let [sc (get-test-service-container)]
-    (binding [*test-service-container* sc]
-      (f))
-    (do
-      (log/warn "Service container not available")
-      (f))))
-
-(defn with-test-system-bindings
-  "Fixture that provides both DB and service container."
-  [f]
-  (binding [*test-db* (get-test-db)
-            *test-service-container* (get-test-service-container)]
-    (f)))
 
 (defn with-transaction-rollback
   "Fixture that wraps test in a transaction and rolls back after.

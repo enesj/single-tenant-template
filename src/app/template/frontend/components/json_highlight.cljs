@@ -74,62 +74,9 @@
       (log/warn "Failed to format JSON for display:" e)
       (str json-value))))
 
-(defn safe-parse-json
-  "Safely parse JSON string with error handling.
-
-   Args:
-     json-str: JSON string to parse
-
-   Returns:
-     Parsed JSON object or original string if parsing fails"
-  [json-str]
-  (when (and json-str (not (str/blank? json-str)))
-    (try
-      (js/JSON.parse json-str)
-      (catch js/Error e
-        (log/warn "Failed to parse JSON string:" e)
-        json-str))))
-
-(defn safe-stringify-json
-  "Safely convert value to JSON string with error handling.
-
-   Args:
-     value: Value to convert to JSON
-     pretty?: Whether to format with indentation (default: false)
-
-   Returns:
-     JSON string or original value if stringification fails"
-  ([value]
-   (safe-stringify-json value false))
-  ([value pretty?]
-   (try
-     (cond
-       (string? value) value
-       pretty? (js/JSON.stringify (clj->js value) nil 2)
-       :else (js/JSON.stringify (clj->js value)))
-     (catch js/Error e
-       (log/warn "Failed to stringify JSON value:" e)
-       (str value)))))
-
 ;; =============================================================================
 ;; JSON Validation
 ;; ============================================================================
-
-(defn valid-json?
-  "Check if a string contains valid JSON.
-
-   Args:
-     json-str: String to validate
-
-   Returns:
-     true if valid JSON, false otherwise"
-  [json-str]
-  (when (and json-str (not (str/blank? json-str)))
-    (try
-      (js/JSON.parse json-str)
-      true
-      (catch js/Error _
-        false))))
 
 ;; =============================================================================
 ;; UI Component Helpers

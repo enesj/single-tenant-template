@@ -96,16 +96,6 @@
 
       :else db)))
 
-(defn apply-column-defaults-bulk
-  "Set column-defaults for `cols` to `value`, clearing any existing locks."
-  [db base-path cols value]
-  (let [defaults-path (conj base-path :column-defaults)
-        locks-path (conj base-path :column-locks)]
-    (reduce (fn [db' col]
-              (assoc-in db' (conj defaults-path col) value))
-      (update-in db locks-path (fnil (fn [m] (apply dissoc m cols)) {}))
-      cols)))
-
 (defn apply-column-visibility-bulk
   "Apply a tristate state to many column-visibility settings at once."
   [db base-path cols kind value]

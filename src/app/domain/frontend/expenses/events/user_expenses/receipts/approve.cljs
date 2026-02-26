@@ -75,64 +75,6 @@
 ;; ---------------------------------------------------------------------------
 
 (rf/reg-event-fx
-  :user-expenses/approve-receipt-from-list
-  common-interceptors
-  (fn [{:keys [db]} [receipt-id]]
-    (let [payers (get-in db [:user-expenses :payers :items])
-          settings (get-in db [:user-expenses :settings :data])]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] true)
-             (assoc-in [:user-expenses :form :error] nil)
-             (assoc-in (conj base-path :action-loading?) true)
-             (assoc-in (conj base-path :error) nil)
-             (assoc-in (conj base-path :detail-loading?) true))
-       :dispatch-n (cond-> []
-                     (empty? payers) (conj [:user-expenses/fetch-payers {:limit 100 :offset 0}])
-                     (nil? settings) (conj [:user-expenses/fetch-settings]))
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri (str endpoints/receipts-endpoint "/" receipt-id)
-                      :on-success [:user-expenses/approve-receipt-from-list-success receipt-id]
-                      :on-failure [:user-expenses/approve-receipt-from-list-failure receipt-id]})})))
-
-(rf/reg-event-fx
-  :user-expenses/approve-receipt-from-list-success
-  common-interceptors
-  (fn [{:keys [db]} [receipt-id response]]
-    (let [receipt (:data response)
-          db* (-> db
-                (assoc-in (conj base-path :detail-loading?) false)
-                (assoc-in (conj base-path :error) nil)
-                (assoc-in (conj base-path :by-id receipt-id) receipt))
-          values (normalize-approve-values db* receipt)
-          validation (norm/validate-expense-values values)]
-      (if (:ok? validation)
-        {:db db*
-         :dispatch [:user-expenses/approve-receipt
-                    receipt-id
-                    (norm/prepare-expense-submit-values values)
-                    nil]}
-        (let [message (:error validation)]
-          {:db (-> db*
-                 (assoc-in [:user-expenses :form :loading?] false)
-                 (assoc-in [:user-expenses :form :error] message)
-                 (assoc-in (conj base-path :action-loading?) false)
-                 (assoc-in (conj base-path :error) message))})))))
-
-(rf/reg-event-db
-  :user-expenses/approve-receipt-from-list-failure
-  common-interceptors
-  (fn [db [_receipt-id error]]
-    (log/warn "Failed to load receipt for approval" {:error error})
-    (let [message (http/extract-error-message error)]
-      (-> db
-        (assoc-in [:user-expenses :form :loading?] false)
-        (assoc-in [:user-expenses :form :error] message)
-        (assoc-in (conj base-path :detail-loading?) false)
-        (assoc-in (conj base-path :action-loading?) false)
-        (assoc-in (conj base-path :error) message)))))
-
-(rf/reg-event-fx
   :user-expenses/approve-receipt
   common-interceptors
   (fn [{:keys [db]} [receipt-id form-data on-success]]

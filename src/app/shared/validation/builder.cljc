@@ -144,15 +144,4 @@
      (for [model-name (keys models-data)]
        [model-name (generate-model-validators models-data model-name get-values-fn)]))))
 
-(defn create-validators-with-platform-getters
-  "Creates validators with platform-specific value getters.
-   For CLJ: takes db-conn, execute-fn, and format-sql-fn
-   For CLJS: takes app-db-atom and denormalize-fn"
-  #?(:clj
-     ([models-data db-conn execute-fn format-sql-fn]
-      (let [get-values-fn (unique/make-clj-value-getter db-conn execute-fn format-sql-fn)]
-        (create-validators models-data get-values-fn)))
-     :cljs
-     ([models-data app-db-atom denormalize-fn]
-      (let [get-values-fn (unique/make-cljs-value-getter app-db-atom denormalize-fn)]
-        (create-validators models-data get-values-fn)))))
+

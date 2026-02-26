@@ -28,7 +28,7 @@
   (try
     (when json-str
       (-> (js->clj (js/JSON.parse json-str))
-          (walk/keywordize-keys)))
+        (walk/keywordize-keys)))
     (catch js/Error e
       (log/error e "Failed to deserialize data from localStorage")
       nil)))
@@ -37,7 +37,7 @@
   "Check if the stored session is still valid based on timestamp"
   [timestamp]
   (and timestamp
-       (< (- (js/Date.now) timestamp) session-timeout)))
+    (< (- (js/Date.now) timestamp) session-timeout)))
 
 (defn store-auth-state!
   "Persist authentication state to localStorage"
@@ -49,9 +49,9 @@
     (.setItem js/localStorage user-key (serialize-data user)))
   (.setItem js/localStorage auth-status-key (str (boolean authenticated?)))
   (log/info "Stored auth state in localStorage"
-           {:token-present (boolean token)
-            :user-present (boolean user)
-            :authenticated? authenticated?}))
+    {:token-present (boolean token)
+     :user-present (boolean user)
+     :authenticated? authenticated?}))
 
 (defn clear-auth-state!
   "Clear all authentication state from localStorage"
@@ -75,10 +75,10 @@
       (let [user (deserialize-data user-json)
             authenticated? (and auth-status-str (= "true" auth-status-str))]
         (log/info "Loaded valid auth state from localStorage"
-                 {:token-present (boolean token)
-                  :user-present (boolean user)
-                  :authenticated? authenticated?
-                  :session-age-ms (- (js/Date.now) timestamp)})
+          {:token-present (boolean token)
+           :user-present (boolean user)
+           :authenticated? authenticated?
+           :session-age-ms (- (js/Date.now) timestamp)})
         {:token token
          :user user
          :authenticated? authenticated?
@@ -86,24 +86,11 @@
       (do
         (when (or token timestamp)
           (log/warn "Found expired or invalid auth state, clearing"
-                   {:token-present (boolean token)
-                    :timestamp timestamp
-                    :current-time (js/Date.now)}))
+            {:token-present (boolean token)
+             :timestamp timestamp
+             :current-time (js/Date.now)}))
         (clear-auth-state!)
         {:valid? false}))))
-
-(defn update-token!
-  "Update just the token in storage (e.g., after session refresh)"
-  [token]
-  (if token
-    (do
-      (.setItem js/localStorage token-key token)
-      (.setItem js/localStorage timestamp-key (str (js/Date.now)))
-      (log/info "Updated token in localStorage"))
-    (do
-      (.removeItem js/localStorage token-key)
-      (.removeItem js/localStorage timestamp-key)
-      (log/info "Removed token from localStorage"))))
 
 (defn get-persisted-token
   "Get the persisted token if valid"
@@ -151,8 +138,8 @@
   []
   (let [token (.getItem js/localStorage token-key)
         timestamp-str (.getItem js/localStorage timestamp-key)
-    raw-timestamp (when timestamp-str (js/parseInt timestamp-str))
-    timestamp (when (and raw-timestamp (not (js/isNaN raw-timestamp))) raw-timestamp)]
-  (boolean (and token (or (nil? timestamp) (is-session-valid? timestamp))))))
+        raw-timestamp (when timestamp-str (js/parseInt timestamp-str))
+        timestamp (when (and raw-timestamp (not (js/isNaN raw-timestamp))) raw-timestamp)]
+    (boolean (and token (or (nil? timestamp) (is-session-valid? timestamp))))))
 
 ;; Export for debugging

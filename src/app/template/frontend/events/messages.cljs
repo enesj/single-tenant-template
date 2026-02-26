@@ -42,7 +42,7 @@
     ;; Domain code often dispatches: [:toast {:type :success :message "..."}]
     ;; This handler exists primarily to avoid missing-handler console errors.
     ;; UI layers may render :ui/:toasts using template notification components.
-        (let [{:keys [type title message] :as t} (or toast {})
+    (let [{:keys [type title message] :as t} (or toast {})
           toast' (merge {:id (random-uuid)
                          :type (or type :info)
                          :message (or message "")}
@@ -53,13 +53,5 @@
                                        :title title
                                        :message (:message toast')})))))
 
-(rf/reg-event-db
-  :toast/dismiss
-  common-interceptors
-  (fn [db [toast-id]]
-    (update-in db [:ui :toasts]
-      (fn [xs]
-        (->> (or xs [])
-          (remove (fn [t] (= (:id t) toast-id)))
-          vec)))))
+
 

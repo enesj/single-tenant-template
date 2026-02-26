@@ -59,17 +59,6 @@
       :config {:base-url "http://localhost:8086"}}
      overrides)))
 
-(defn stub-admin-service-container
-  "Create a service container stub with admin-specific services.
-   Useful for admin API tests."
-  ([] (stub-admin-service-container {}))
-  ([overrides]
-   (stub-service-container
-     (merge
-       {:email-service {:send-email (fn [_] (println "Mock: sending email"))}
-        :db-adapter nil}
-       overrides))))
-
 ;; ============================================================================
 ;; Handler Builders
 ;; ============================================================================
@@ -109,23 +98,8 @@
                        (fn [_ _] 0))]
          (actual-handler request))))))
 
-(defn build-handler-with-db
-  "Build a handler using the real test database.
-   Requires test system to be running.
-   
-   Usage:
-   (use-fixtures :once fixtures/start-test-system)
-   (let [handler (build-handler-with-db)]
-     (handler (mock/request :get \"/api/v1/metrics\")))"
-  []
-  (require '[app.backend.fixtures :as fixtures])
-  (let [db ((resolve 'app.backend.fixtures/get-test-db))
-        sc ((resolve 'app.backend.fixtures/get-test-service-container))]
-    (-> (routes/app-routes db sc)
-      (webserver/wrap-service-container sc))))
-
 ;; ============================================================================
-;; Request Helpers  
+;; Request Helpers
 ;; ============================================================================
 
 (defn json-request
@@ -137,26 +111,6 @@
   (-> (mock/request method path)
     (mock/content-type "application/json")
     (cond-> body (mock/body (json/generate-string body)))))
-
-(defn admin-request
-  "Create a request with admin auth token header.
-   
-   Usage:
-   (admin-request :get \"/admin/api/users\")
-   (admin-request :post \"/admin/api/users\" {:email \"new@example.com\"} \"custom-token\")"
-  [method path & [body token]]
-  (-> (json-request method path body)
-    (mock/header "X-Admin-Token" (or token "test-admin-token"))))
-
-(defn user-request
-  "Create a request with user session cookie.
-   
-   Usage:
-   (user-request :get \"/api/v1/entities/items\")"
-  [method path & [body session-data]]
-  (-> (json-request method path body)
-    (cond-> session-data
-      (mock/header "Cookie" (str "ring-session=" session-data)))))
 
 ;; ============================================================================
 ;; Response Helpers
@@ -194,26 +148,6 @@
   [resp]
   (status? resp 200))
 
-(defn created?
-  "Check if response is 201 Created."
-  [resp]
-  (status? resp 201))
-
-(defn bad-request?
-  "Check if response is 400 Bad Request."
-  [resp]
-  (status? resp 400))
-
-(defn unauthorized?
-  "Check if response is 401 Unauthorized."
-  [resp]
-  (status? resp 401))
-
-(defn forbidden?
-  "Check if response is 403 Forbidden."
-  [resp]
-  (status? resp 403))
-
 (defn not-found?
   "Check if response is 404 Not Found."
   [resp]
@@ -235,36 +169,10 @@
 ;; Test Data Generators
 ;; ============================================================================
 
-(defn random-email
-  "Generate a random test email address."
-  []
-  (str "test-" (java.util.UUID/randomUUID) "@example.com"))
-
 (defn random-uuid
   "Generate a random UUID."
   []
   (java.util.UUID/randomUUID))
-
-(defn test-admin-data
-  "Generate test admin data for creation tests."
-  ([] (test-admin-data {}))
-  ([overrides]
-   (merge
-     {:email (random-email)
-      :password "TestPassword123!"
-      :full_name "Test Admin"
-      :role "admin"}
-     overrides)))
-
-(defn test-user-data
-  "Generate test user data for creation tests."
-  ([] (test-user-data {}))
-  ([overrides]
-   (merge
-     {:email (random-email)
-      :password "TestPassword123!"
-      :name "Test User"}
-     overrides)))
 
 ;; ============================================================================
 ;; Fixtures for Unit Tests
@@ -277,7 +185,7 @@
   (f))
 
 ;; ============================================================================
-;; Mock Helpers for Unit Tests  
+;; Mock Helpers for Unit Tests
 ;; ============================================================================
 
 (defn mock-db

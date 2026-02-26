@@ -173,7 +173,6 @@
              :stroke-linejoin "round"}
       ($ :polygon {:points "22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"}))))
 
-
 (defui chart-bar [{:keys [class] :or {class "w-5 h-5"}}]
   ($ :svg {:class class
            :fill "none"
@@ -196,7 +195,6 @@
               :stroke-width "2"
               :d "M7 14l5-5 5 5"})))
 
-
 (defui exclamation-triangle [{:keys [class] :or {class "w-5 h-5"}}]
   ($ :svg {:class class
            :fill "none"
@@ -207,17 +205,6 @@
               :stroke-linejoin "round"
               :stroke-width "2"
               :d "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.704-.833-2.464 0L4.34 16.5c-.77.833.192 2.5 1.732 2.5z"})))
-
-(defui exclamation-circle [{:keys [class] :or {class "w-5 h-5"}}]
-  ($ :svg {:class class
-           :fill "none"
-           :stroke "currentColor"
-           :viewBox "0 0 24 24"
-           :xmlns "http://www.w3.org/2000/svg"}
-    ($ :path {:stroke-linecap "round"
-              :stroke-linejoin "round"
-              :stroke-width "2"
-              :d "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"})))
 
 (defui arrow-path [{:keys [class] :or {class "w-5 h-5"}}]
   ($ :svg {:class class
@@ -238,17 +225,6 @@
     ($ :path {:fill-rule "evenodd"
               :d "M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
               :clip-rule "evenodd"})))
-
-(defui mail [{:keys [class] :or {class "w-5 h-5"}}]
-  ($ :svg {:class class
-           :fill "none"
-           :stroke "currentColor"
-           :viewBox "0 0 24 24"
-           :xmlns "http://www.w3.org/2000/svg"}
-    ($ :path {:stroke-linecap "round"
-              :stroke-linejoin "round"
-              :stroke-width "2"
-              :d "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"})))
 
 (defui dashboard-icon [{:keys [class] :or {class "w-6 h-6"}}]
   ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
@@ -311,17 +287,6 @@
   ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
               :d "M10 13l-2 2a3 3 0 104.243 4.243l2-2M14 11l2-2a3 3 0 00-4.243-4.243l-2 2"})))
-
-(defui raw-labels-icon [{:keys [class] :or {class "w-6 h-6"}}]
-  ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-              :d "M3 11V5a2 2 0 012-2h6l10 10a2 2 0 010 2.828l-6 6a2 2 0 01-2.828 0L3 11z"})
-    ($ :circle {:cx "7" :cy "7" :r "1"})))
-
-(defui price-observations-icon [{:keys [class] :or {class "w-6 h-6"}}]
-  ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-              :d "M4 17l4-4 4 4 6-6 2 2M4 7h16"})))
 
 (defui unmapped-items-icon [{:keys [class] :or {class "w-6 h-6"}}]
   ($ :svg {:class class

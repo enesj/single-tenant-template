@@ -113,26 +113,4 @@
             (h/json-response {:error "Invalid expense ID"} 400))))
       (h/unauthorized-response))))
 
-(defn delete-expense-handler
-  "Handler factory for deleting a user expense."
-  [db]
-  (fn [request]
-    (if-let [user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/expenses-write-roles "Only members, admins, and owners can modify expenses")]
-        forbidden
-        (let [expense-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
-                           (h/try-parse-uuid (get-in request [:parameters :path :id])))]
-          (if expense-id
-            (try
-              (if-let [_expense (user-expenses/delete-user-expense! db user-id expense-id)]
-                (do
-                  (log/info "User deleted expense" {:user-id user-id
-                                                    :expense-id expense-id
-                                                    :timestamp (java.time.Instant/now)})
-                  {:status 204})
-                (h/not-found-response "Expense not found or access denied"))
-              (catch Exception e
-                (log/error e "Error deleting user expense" {:expense-id expense-id})
-                (h/json-response {:error "Failed to delete expense"} 500)))
-            (h/json-response {:error "Invalid expense ID"} 400))))
-      (h/unauthorized-response))))
+

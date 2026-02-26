@@ -63,7 +63,4 @@
   [entities]
   (swap! registered-entities merge entities))
 
-(defn load-entity-configs!
-  "Return a resolved promise to match previous async API while doing nothing."
-  []
-  (js/Promise.resolve @registered-entities))
+

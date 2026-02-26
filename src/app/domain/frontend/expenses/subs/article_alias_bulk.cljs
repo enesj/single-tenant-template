@@ -1,6 +1,4 @@
-(ns app.domain.frontend.expenses.subs.article-alias-bulk
-  (:require
-    [re-frame.core :as rf]))
+(ns app.domain.frontend.expenses.subs.article-alias-bulk)
 
 (def ^:private base-path [:admin :expenses :articles :add-aliases-modal])
 
@@ -8,11 +6,6 @@
   ::open?
   (fn [db _]
     (get-in db (conj base-path :open?) false)))
-
-(rf/reg-sub
-  ::article-id
-  (fn [db _]
-    (get-in db (conj base-path :article-id))))
 
 (rf/reg-sub
   ::working?

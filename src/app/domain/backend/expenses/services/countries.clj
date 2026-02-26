@@ -135,9 +135,4 @@
         row (jdbc/execute-one! db (sql/format q) jdbc-opts)]
     (boolean row)))
 
-(def service
-  {:list list-countries
-   :get get-country
-   :create! create-country!
-   :update! update-country!
-   :delete! delete-country!})
+

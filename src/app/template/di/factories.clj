@@ -6,9 +6,7 @@
     [app.template.backend.db.adapter :as db-adapter]
     [app.template.backend.email.service :as email-service]
     [app.template.backend.metadata.service :as metadata-service]
-    [app.template.backend.routes.auth :as auth-routes]
-    [app.template.backend.routes.crud :as crud-routes]
-    [app.template.backend.routes.oauth :as oauth-routes]))
+    [app.template.backend.routes.crud :as crud-routes]))
 
 (defn create-database-adapter
   "Create database adapter for template services"
@@ -23,16 +21,6 @@
   [config db-connection metadata email-service]
   (let [db-adapter (create-database-adapter db-connection)]
     (auth-service/create-authentication-service db-adapter metadata config email-service)))
-
-(defn create-auth-routes
-  "Create authentication routes"
-  [auth-service]
-  (auth-routes/create-auth-routes auth-service))
-
-(defn create-oauth-routes
-  "Create OAuth routes"
-  [auth-service]
-  (oauth-routes/create-oauth-routes auth-service))
 
 (defn create-metadata-service
   "Create metadata service for model introspection"

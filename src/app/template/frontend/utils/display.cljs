@@ -4,7 +4,6 @@
   Note: this was extracted from admin UI formatting helpers so domain/template/admin
   code can share the same formatting behavior without depending on admin namespaces."
   (:require
-    [app.shared.date :as date]
     [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [goog.object :as gobj]))
@@ -46,31 +45,6 @@
   [date-str]
   (when (and date-str (not= date-str "N/A") (not= date-str "—"))
     (timestamp/format-timestamp-string date-str)))
-
-(defn format-relative-time
-  "Format a date as relative time (e.g., \"2 hours ago\", \"3 days ago\").
-
-  Falls back to `format-date` for very old dates or parsing errors."
-  [date-str]
-  (when date-str
-    (try
-      (let [date (if (string? date-str)
-                   (or (date/parse-date-string date-str)
-                     (js/Date. date-str))
-                   date-str)
-            now (js/Date.)
-            diff-ms (- (.getTime now) (.getTime date))
-            diff-minutes (/ diff-ms (* 60 1000))
-            diff-hours (/ diff-minutes 60)
-            diff-days (/ diff-hours 24)]
-        (cond
-          (< diff-minutes 1) "Just now"
-          (< diff-minutes 60) (str (Math/round diff-minutes) " minutes ago")
-          (< diff-hours 24) (str (Math/round diff-hours) " hours ago")
-          (< diff-days 7) (str (Math/round diff-days) " days ago")
-          :else (format-date date-str)))
-      (catch js/Error _
-        (format-date date-str)))))
 
 (defn user-initials
   "Return graceful initials based on full name or email."

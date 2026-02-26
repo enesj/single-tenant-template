@@ -55,10 +55,5 @@
                   :provided-type email-type}))))))
 
 ;; Email service component for dependency injection
-(defrecord EmailServiceComponent [config]
-  ;; Implement lifecycle protocol if needed
-  )
-(defn create-email-service-component
-  "Create email service component for dependency injection"
-  [config]
-  (->EmailServiceComponent config))
+
+

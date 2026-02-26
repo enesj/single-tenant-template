@@ -1,67 +1,6 @@
 (ns app.template.backend.utils.model-customizations
-  "Utilities for extracting field and entity customizations from models.edn.
-
-   This namespace is part of the backend template layer. Extraction helpers are
-   implemented in `app.shared.model-customizations` to avoid duplication/drift.
-
-   This namespace also contains schema-stripping helpers (`strip-*`) that are
-   used by migration/alignment tooling to remove UI config from schema sources."
-  (:require
-    [app.shared.model-customizations :as shared-model-cust]))
-
-;; ---------------------------------------------------------------------------
-;; Extraction helpers (delegated to shared)
-;; ---------------------------------------------------------------------------
-
-(def extract-field-admin-customizations shared-model-cust/extract-field-admin-customizations)
-(def extract-field-form-customizations shared-model-cust/extract-field-form-customizations)
-(def extract-field-security-settings shared-model-cust/extract-field-security-settings)
-
-(def extract-computed-fields shared-model-cust/extract-computed-fields)
-(def extract-entity-admin-customizations shared-model-cust/extract-entity-admin-customizations)
-(def extract-entity-form-customizations shared-model-cust/extract-entity-form-customizations)
-
-(def extract-all-admin-customizations shared-model-cust/extract-all-admin-customizations)
-
-;; Keep these wrapper shapes stable to the historical behavior of this namespace.
-;; (The shared versions keywordize entity keys for form/computed extraction.)
-
-(defn extract-all-form-customizations
-  "Extract form customizations from complete models data.
-
-   Accepts either a map (EDN) or a vector of pairs (JSON-like) and returns a map
-   keyed by the same entity identifiers as provided in the input."
-  [models-data]
-  (let [md-map (cond
-                 (map? models-data) models-data
-                 (vector? models-data) (into {} models-data)
-                 :else {})]
-    (->> md-map
-      (map (fn [[entity-name entity-def]]
-             [entity-name (extract-entity-form-customizations entity-def)]))
-      (into {}))))
-
-(defn extract-all-computed-fields
-  "Extract computed field definitions from complete models data.
-
-   Accepts either a map (EDN) or a vector of pairs (JSON-like). Returns only
-   entities that have at least one computed field, keyed by the same entity
-   identifiers as provided in the input."
-  [models-data]
-  (let [md-map (cond
-                 (map? models-data) models-data
-                 (vector? models-data) (into {} models-data)
-                 :else {})]
-    (->> md-map
-      (map (fn [[entity-name entity-def]]
-             [entity-name (extract-computed-fields entity-def)]))
-      (filter (fn [[_entity-name computed-fields]] (seq computed-fields)))
-      (into {}))))
-
-(def role-sufficient? shared-model-cust/role-sufficient?)
-(def merge-with-defaults shared-model-cust/merge-with-defaults)
-(def filter-by-role shared-model-cust/filter-by-role)
-(def filter-by-conditions shared-model-cust/filter-by-conditions)
+  "Schema-stripping helpers (`strip-*`) used by migration/alignment tooling
+   to remove UI config from schema sources.")
 
 ;; ---------------------------------------------------------------------------
 ;; Clean separation: Strip admin configuration from models

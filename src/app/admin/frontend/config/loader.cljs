@@ -62,66 +62,16 @@
   []
   @config-cache)
 
-(defn get-table-config
-  "Get table configuration for an entity"
-  [entity-keyword]
-  (let [config (get-in @config-cache [:table-columns entity-keyword])]
-    (when-not config
-      (log/warn "No table-columns config found for entity:"
-        entity-keyword
-        "available entities:" (keys (get @config-cache :table-columns))))
-    config))
-
-(defn get-view-options
-  "Get view options for an entity"
-  [entity-keyword]
-  (let [view-options (get-in @config-cache [:view-options entity-keyword])]
-    (when-not view-options
-      (log/warn "No view options found for entity:"
-        entity-keyword
-        "available entities:" (keys (get @config-cache :view-options))))
-    view-options))
-
-(defn get-form-config
-  "Get form configuration for an entity"
-  [entity-keyword]
-  (let [form-config (get-in @config-cache [:form-fields entity-keyword])]
-    (when-not form-config
-      (log/warn "No form config found for entity:"
-        entity-keyword
-        "available entities:" (keys (get @config-cache :form-fields))))
-    form-config))
-
-(defn get-default-visible-columns
-  "Get default visible columns for an entity as vector"
-  [entity-keyword]
-  (get-in @config-cache [:table-columns entity-keyword :default-visible-columns] []))
-
 (defn get-available-columns
   "Get all available columns for an entity"
   [entity-keyword]
   (get-in @config-cache [:table-columns entity-keyword :available-columns] []))
-
-(defn get-computed-fields
-  "Get computed field definitions for an entity"
-  [entity-keyword]
-  (get-in @config-cache [:table-columns entity-keyword :computed-fields] {}))
-
-(defn get-column-config
-  "Get column-specific configuration (width, formatter, etc.)"
-  [entity-keyword column-key]
-  (get-in @config-cache [:table-columns entity-keyword :column-config column-key] {}))
 
 (defn is-always-visible?
   "Check if a column should always be visible"
   [entity-keyword column-key]
   (contains? (set (get-in @config-cache [:table-columns entity-keyword :always-visible] []))
     column-key))
-
-(defn is-computed-field?
-  "Check if a column is a computed field"
-  [entity-keyword column-key]
-  (contains? (get-computed-fields entity-keyword) column-key))
 
 (defn has-vector-config?
   "Check if an entity has vector-based configuration"
@@ -144,26 +94,6 @@
   ([config-type entity-key config]
    (register-preloaded-config! config-type {entity-key config})))
 
-(defn get-all-view-options
-  "Get all view options from config cache.
-   Returns a map of entity-keyword -> view-options."
-  []
-  (get @config-cache :view-options {}))
 
-(defn get-all-form-fields
-  "Get all form fields from config cache.
-   Returns a map of entity-keyword -> form-fields config."
-  []
-  (get @config-cache :form-fields {}))
 
-(defn get-all-table-columns
-  "Get all table columns from config cache.
-   Returns a map of entity-keyword -> table-columns config."
-  []
-  (get @config-cache :table-columns {}))
 
-(defn init-config-loader!
-  "Initialize the configuration loader"
-  []
-  (log/info "Initializing admin UI configuration loader")
-  (load-all-configs!))

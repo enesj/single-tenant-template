@@ -17,9 +17,4 @@
 
 (defonce models-watcher (atom nil))
 
-(defn clear-state! []
-  (reset! instance (future ::never-run))
-  (reset! state nil)
-  (reset! postcss-watcher nil)
-  (reset! backend-watcher nil)
-  (reset! models-watcher nil))
+

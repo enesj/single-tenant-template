@@ -201,21 +201,6 @@
    :has-search? true
    :custom-query-params search-query-params})
 
-(def receipt-config
-  {:entity-key :receipt
-   :entity-plural :receipts
-   :route-segment "receipts"
-   :service 'app.domain.backend.expenses.services.receipts.queries
-   :default-limit 50
-   :default-order-by "receipt_date"
-   :required-fields [:file-url]
-   :has-count? false
-   :has-search? false
-   :custom-query-params (fn [qp]
-                          {:status (:status qp)})
-   :transform-request (fn [body]
-                        (update body :status #(when % (name %))))})
-
 (def article-alias-config
   {:entity-key :article-alias
    :entity-plural :article-aliases
@@ -296,23 +281,5 @@
 ;; Configuration Map
 ;; =============================================================================
 
-(def entity-configs
-  "Map of all entity configurations for easy lookup."
-  {:categories category-config
-   :expense-categories expense-category-config
-   :subcategories subcategory-config
-   :suppliers supplier-config
-   :stores store-config
-   :cities city-config
-   :manufacturers manufacturer-config
-   :payers payer-config
-   :payer-types payer-type-config
-   :articles article-config
-   :expenses expense-config
-   :expense-items expense-item-config
-   :receipts receipt-config
 
-   :article-aliases article-alias-config
-   :supplier-aliases supplier-alias-config
-   :store-aliases store-alias-config})
 

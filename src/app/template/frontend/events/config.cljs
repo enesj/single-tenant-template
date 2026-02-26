@@ -27,10 +27,10 @@
                (assoc :template/config-loading? true)
                (dissoc :template/config-load-error))
          :http-xhrio (http/api-request
-                      {:method :get
-                       :uri (:config api/endpoints)
-                       :on-success [::fetch-config-success]
-                       :on-failure [::fetch-config-failure]})}))))
+                       {:method :get
+                        :uri (:config api/endpoints)
+                        :on-success [::fetch-config-success]
+                        :on-failure [::fetch-config-failure]})}))))
 
 (rf/reg-event-fx
   ::fetch-config-success
@@ -83,7 +83,7 @@
 
       {:db (-> final-db
              (assoc :template/config-loading? false
-                    :template/config-loaded? true)
+               :template/config-loaded? true)
              (dissoc :template/config-load-error))
        :dispatch [::entity-specs/initialize-entity-specs]})))
 
@@ -119,7 +119,4 @@
 
 ;; No-op event for cases where an event is required but no action is needed
 ;; (e.g., modal-wrapper requires on-close event vector but we handle close locally)
-(rf/reg-event-db
-  ::noop
-  (fn [db _]
-    db))
+

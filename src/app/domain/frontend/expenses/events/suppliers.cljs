@@ -87,40 +87,6 @@
 ;; ---------------------------------------------------------------------------
 
 (rf/reg-event-fx
-  ::delete-supplier
-  (fn [{:keys [db]} [_ supplier-id]]
-    {:db (-> db
-           (assoc-in (conj delete-path :loading?) true)
-           (assoc-in (conj delete-path :error) nil))
-     :http-xhrio (admin-http/admin-delete
-                   {:uri (str "/admin/api/expenses/suppliers/" supplier-id)
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [::delete-supplier-success supplier-id]
-                    :on-failure [::delete-supplier-failed supplier-id]})}))
-
-(rf/reg-event-fx
-  ::delete-supplier-success
-  (fn [{:keys [db]} [_ _supplier-id _response]]
-    {:db (-> db
-           (assoc-in (conj delete-path :loading?) false)
-           (assoc-in (conj delete-path :error) nil)
-           (assoc-in (conj base-path :error) nil))
-     :dispatch-n [[:admin/show-success-message "Supplier deleted."]
-                  [::close-detail-modal]
-                  [:admin/navigate-client "/admin/suppliers"]
-                  [::load-list]]}))
-
-(rf/reg-event-fx
-  ::delete-supplier-failed
-  (fn [{:keys [db]} [_ _supplier-id error]]
-    (let [msg (admin-http/extract-error-message error)]
-      {:db (-> db
-             (assoc-in (conj delete-path :loading?) false)
-             (assoc-in (conj delete-path :error) msg)
-             (assoc-in (conj base-path :error) msg))
-       :dispatch [:admin/show-error-message msg]})))
-
-(rf/reg-event-fx
   ::create-inline-failed
   (fn [{:keys [db]} [_ error]]
     {:db (-> db

@@ -60,12 +60,6 @@
               :existing-def (get-in container [:defs (:id service-def)])})))
   (assoc-in container [:defs (:id service-def)] service-def))
 
-(defn add-lifecycle-listener!
-  "Add a listener function that will be called on lifecycle events"
-  [container listener-fn]
-  (swap! (:listeners container) conj listener-fn)
-  container)
-
 ;; ============================================================================
 ;; Dependency Resolution
 ;; ============================================================================
@@ -256,16 +250,6 @@
 ;; Service Discovery and Retrieval
 ;; ============================================================================
 
-(defn list-services
-  "List all registered service IDs"
-  [container]
-  (keys (:defs container)))
-
-(defn list-active-services
-  "List service IDs that are configured as active"
-  [container]
-  (get-active-services container))
-
 (defn service-status
   "Get the current status of a service"
   [container service-id]
@@ -308,14 +292,6 @@
 ;; ============================================================================
 ;; Convenience Functions
 ;; ============================================================================
-
-(defn create-and-boot-system
-  "Create container, register services, and boot the system"
-  [config service-registration-fn]
-  (-> (create-container config)
-    service-registration-fn
-    initialize-services!
-    start-services!))
 
 (defn shutdown-system!
   "Gracefully shutdown the system"

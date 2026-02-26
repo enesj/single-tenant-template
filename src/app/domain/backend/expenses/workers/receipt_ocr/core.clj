@@ -10,7 +10,5 @@
     [app.domain.backend.expenses.workers.receipt-ocr.runner :as runner]
     [app.domain.backend.expenses.workers.receipt-ocr.ui-queue :as ui-queue]))
 
-(def process-receipt! runner/run-receipt!)
-(def process-pending! runner/run-pending!)
 (def process-receipts-by-ids! runner/run-by-ids!)
 (def queue-ui-ocr! ui-queue/enqueue!)

@@ -49,13 +49,6 @@
   (update-in db [:ui :recently-updated entity-type]
     (fn [ids] (conj (or ids #{}) entity-id))))
 
-(defn track-recently-updated-bulk
-  "Add multiple entity IDs to recently-updated set for highlighting.
-   Returns updated db."
-  [db entity-type entity-ids]
-  (update-in db [:ui :recently-updated entity-type]
-    (fn [ids] (reduce conj (or ids #{}) entity-ids))))
-
 ;; =============================================================================
 ;; Form State Management
 ;; =============================================================================
@@ -96,9 +89,4 @@
        (update-in [:forms entity-type] merge (clear-form-success-state))
        (track-recently-updated entity-type entity-id)))))
 
-(defn handle-bulk-update-success
-  "Bulk update success handling.
-   Tracks multiple entity IDs as recently updated.
-   Returns updated db with IDs tracked."
-  [db entity-type entity-ids]
-  (track-recently-updated-bulk db entity-type entity-ids))
+

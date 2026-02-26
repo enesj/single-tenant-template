@@ -26,33 +26,10 @@
     [app.template.frontend.subs.ui :as ui-subs]
     [app.template.frontend.utils.column-config :as column-config]
     [app.template.frontend.utils.id :as id-utils]
-    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :as uix :refer [$ defui use-effect use-state]]
     [uix.dom]
     [uix.re-frame :refer [use-subscribe]]))
-
-(defn- entity-spec-fields
-  [entity-spec]
-  (overrides/entity-spec-fields entity-spec))
-
-(defn- resolve-row-field
-  [item entity-name fld]
-  (overrides/resolve-row-field item entity-name fld))
-
-(defn- infer-filter-type
-  [filter-value]
-  (overrides/infer-filter-type filter-value))
-
-(defn- apply-override-filters
-  [rows active-filters]
-  (overrides/apply-override-filters rows active-filters))
-
-(defn- sort-override-rows
-  [rows {:keys [sort-config entity-name entity-spec]}]
-  (overrides/sort-override-rows rows {:sort-config sort-config
-                                      :entity-name entity-name
-                                      :entity-spec entity-spec}))
 
 (defn- apply-rows-override-transforms
   [{:keys [rows active-filters sort-config entity-name entity-spec]}]

@@ -181,17 +181,4 @@
 ;; Convenience accessors
 ;; ============================================================================
 
-(defn setting-locked?
-  "Check if a setting is locked for the given resolved settings."
-  [resolved-settings setting-key]
-  (contains? (:locked resolved-settings) setting-key))
 
-(defn get-effective
-  "Get the effective value for a setting."
-  [resolved-settings setting-key]
-  (get-in resolved-settings [:effective setting-key]))
-
-(defn get-all-effective
-  "Get all effective settings as a flat map."
-  [resolved-settings]
-  (:effective resolved-settings))

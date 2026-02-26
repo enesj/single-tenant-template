@@ -3,10 +3,7 @@
   (:require
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.shared.data :as shared-data]
-    [honey.sql :as hsql]
-    [next.jdbc :as jdbc]
     [system.state :as state]))
-
 
 (defn get-db
   "Get database connection from running system"
@@ -56,15 +53,4 @@
     (println "Email: admin@example.com")
     (println "Password: admin123")))
 
-(defn dangerously-delete-all-data!
-  "Delete all data from admin-related tables."
-  ([] (dangerously-delete-all-data! (get-db)))
-  ([db]
-   (println "DANGER: Deleting all data from admin-related tables...")
-   (try
-     (jdbc/execute! db (hsql/format {:delete-from :email_verification_tokens}))
-     (jdbc/execute! db (hsql/format {:delete-from :users}))
-     (jdbc/execute! db (hsql/format {:delete-from :admins}))
-     (println "All data deleted successfully!")
-     (catch Exception e
-       (println "Error deleting data:" (.getMessage e))))))
+

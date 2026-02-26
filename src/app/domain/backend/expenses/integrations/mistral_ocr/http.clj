@@ -101,12 +101,6 @@
 (defn ocr-url [{:keys [base-url]}]
   (str (or base-url (config/default-base-url-value)) "/v1/ocr"))
 
-(defn files-url [{:keys [base-url]}]
-  (str (or base-url (config/default-base-url-value)) "/v1/files"))
-
-(defn file-content-url [{:keys [base-url]} file-id]
-  (str (or base-url (config/default-base-url-value)) "/v1/files/" file-id "/content"))
-
 (defn post-with-retries!
   [cfg request-opts]
   (request-with-retries! cfg :post (ocr-url cfg) request-opts))
@@ -129,28 +123,4 @@
       {:type "image_url"
        :image_url (str "data:" mime ";base64," b64)})))
 
-(defn extract-structured
-  "Best-effort extraction of the structured object from a provider response.
 
-  Because provider contracts can evolve, this tries a few common shapes.
-  The worker persists the full raw response regardless."
-  [resp-json]
-  (cond
-    (and (map? resp-json)
-      (contains? resp-json :totals))
-    resp-json
-
-    (map? (:extraction resp-json))
-    (:extraction resp-json)
-
-    (string? (:document_annotation resp-json))
-    (parse-json-body (:document_annotation resp-json))
-
-    (map? (:data resp-json))
-    (:data resp-json)
-
-    (map? (:result resp-json))
-    (:result resp-json)
-
-    :else
-    nil))

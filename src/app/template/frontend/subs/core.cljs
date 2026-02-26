@@ -8,11 +8,6 @@
   (fn [db _]
     (get-in db [:ui :entity-name])))
 
-(rf/reg-sub
-  ::show-add-form
-  (fn [db _]
-    (get-in db [:ui :show-add-form])))
-
 ;; Auth status subscription
 ;; Auth status subscription - updated for multi-tenant support
 (rf/reg-sub
@@ -57,11 +52,6 @@
     (get-in db [:session :tenant])))
 
 (rf/reg-sub
-  :user-permissions
-  (fn [db _]
-    (get-in db [:session :permissions] #{})))
-
-(rf/reg-sub
   :user-role
   :<- [:current-user]
   (fn [user _]
@@ -103,11 +93,6 @@
   :password-reset/error
   (fn [db _]
     (get-in db [:password-reset :error])))
-
-(rf/reg-sub
-  :password-reset/token
-  (fn [db _]
-    (get-in db [:password-reset :token])))
 
 (rf/reg-sub
   :password-reset/token-verified?

@@ -1,7 +1,6 @@
 (ns app.template.backend.middleware.admin
   "Admin auth middleware; update authentication checks here."
   (:require
-    [app.admin.backend.services.admin.audit :as admin-audit]
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.template.backend.routes.admin.utils :as utils]
     [taoensso.timbre :as log]))
@@ -36,29 +35,6 @@
           (log/warn "❌ ADMIN AUTH FAILED: No token provided" {:uri (:uri request)})
           (utils/error-response "Admin authentication required" :status 401))))))
 
-(defn wrap-admin-audit
-  "Middleware to automatically log admin actions"
-  [handler db]
-  (fn [request]
-    (let [response (handler request)
-          admin (:admin request)]
-      (when (and admin
-              (#{:post :put :patch :delete} (:request-method request))
-              (<= 200 (:status response) 299))
-        (try
-          (admin-audit/log-audit! db
-            {:admin_id (:id admin)
-             :action (str (name (:request-method request)) " " (:uri request))
-             :entity-type "admin_action"              ; Provide a default entity type
-             :entity-id nil                           ; Can be nil for general actions
-             :changes nil                             ; Can be nil for simple actions
-             :ip-address (or (get-in request [:headers "x-forwarded-for"])
-                           (:remote-addr request))
-             :user-agent (get-in request [:headers "user-agent"])})
-          (catch Exception e
-            (log/error e "Failed to log admin audit"))))
-      response)))
-
 (defn wrap-admin-role
   "Middleware to check admin role permissions.
 
@@ -74,6 +50,6 @@
                           :owner 3
                           :super_admin 4}]
       (if (>= (get role-hierarchy admin-role 0)
-              (get role-hierarchy required-role 0))
+            (get role-hierarchy required-role 0))
         (handler request)
         (utils/error-response "Insufficient permissions" :status 403)))))

@@ -135,19 +135,6 @@
           "Failed to reset password. Please try again.")))))
 
 ;; ============================================================================
-;; Clear State Event
-;; ============================================================================
-
-(rf/reg-event-db
-  :admin/clear-password-reset-state
-  (fn [db _]
-    (dissoc db
-      :admin/password-reset-loading?
-      :admin/password-reset-error
-      :admin/password-reset-success?
-      :admin/password-reset-token-verified?)))
-
-;; ============================================================================
 ;; Initialize Events
 ;; ============================================================================
 

@@ -30,13 +30,6 @@
   [id]
   (some-> id str))
 
-(defn- ->id-strs
-  [ids]
-  (->> ids
-    (map ->id-str)
-    (remove nil?)
-    vec))
-
 (defn- parse-pos-int
   [value]
   (cond
@@ -240,21 +233,6 @@
                       :on-failure [:user-expenses/delete-store-failure]})})))
 
 (rf/reg-event-fx
-  :user-expenses/delete-stores
-  common-interceptors
-  (fn [{:keys [db]} [store-ids]]
-    (let [ids (->id-strs store-ids)]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] true)
-             (assoc-in [:user-expenses :form :error] nil))
-       :http-xhrio (x/xhrio db
-                     {:method :delete
-                      :uri (str endpoints/stores-endpoint "/batch")
-                      :params {:ids ids}
-                      :on-success [:user-expenses/delete-store-success]
-                      :on-failure [:user-expenses/delete-store-failure]})})))
-
-(rf/reg-event-fx
   :user-expenses/delete-store-success
   common-interceptors
   (fn [{:keys [db]} [_response]]
@@ -364,21 +342,6 @@
                      {:method :delete
                       :uri (str endpoints/store-aliases-endpoint "/batch")
                       :params {:ids [store-alias-id-str]}
-                      :on-success [:user-expenses/delete-store-alias-success]
-                      :on-failure [:user-expenses/delete-store-alias-failure]})})))
-
-(rf/reg-event-fx
-  :user-expenses/delete-store-aliases
-  common-interceptors
-  (fn [{:keys [db]} [store-alias-ids]]
-    (let [ids (->id-strs store-alias-ids)]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] true)
-             (assoc-in [:user-expenses :form :error] nil))
-       :http-xhrio (x/xhrio db
-                     {:method :delete
-                      :uri (str endpoints/store-aliases-endpoint "/batch")
-                      :params {:ids ids}
                       :on-success [:user-expenses/delete-store-alias-success]
                       :on-failure [:user-expenses/delete-store-alias-failure]})})))
 

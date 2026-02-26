@@ -1,7 +1,6 @@
 (ns app.domain.backend.expenses.services.cities
   "Facade namespace for city ZIP-based lookup services."
   (:require
-    [app.domain.backend.expenses.services.cities-backfill :as backfill]
     [app.domain.backend.expenses.services.cities-normalize :as normalize]
     [app.domain.backend.expenses.services.cities-places :as places]
     [app.domain.backend.expenses.services.cities-repository :as repository]
@@ -9,17 +8,9 @@
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]))
 
-(defn normalize-city-key
-  [city-name]
-  (normalize/normalize-city-key city-name))
-
 (defn find-city-by-normalized-key
   [db normalized-key]
   (repository/find-city-by-normalized-key db normalized-key))
-
-(defn ensure-city!
-  [db city-name]
-  (repository/ensure-city! db city-name))
 
 (defn normalize-zip
   [zip-value]
@@ -102,22 +93,6 @@
                    (ensure-city-by-country-and-zip! db country* zip city-name)))))
            (when-let [{:keys [zip city-name]} (infer-city-and-zip-via-places text* opts :query-text (places-query-from-text text* nil))]
              (ensure-city-by-country-and-zip! db country* zip city-name))))))))
-
-(defn backfill-store-cities!
-  [db & {:keys [dry-run? limit] :or {dry-run? false}}]
-  (backfill/backfill-store-cities! db :dry-run? dry-run? :limit limit))
-
-(defn backfill-store-cities-with-places!
-  [db places-cfg & {:keys [dry-run? limit country user-region]
-                    :or {dry-run? true
-                         limit 25}}]
-  (backfill/backfill-store-cities-with-places!
-    db
-    places-cfg
-    :dry-run? dry-run?
-    :limit limit
-    :country country
-    :user-region user-region))
 
 (def config
   (configs/get-entity-config :city))

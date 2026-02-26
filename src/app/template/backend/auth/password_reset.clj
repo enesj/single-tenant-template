@@ -341,11 +341,4 @@
 ;; Cleanup
 ;; ============================================================================
 
-(defn cleanup-expired-tokens!
-  "Remove expired password reset tokens"
-  [db]
-  (let [result (db-protocols/execute! db
-                 "DELETE FROM password_reset_tokens WHERE expires_at < NOW()"
-                 [])]
-    (log/info "Cleaned up expired password reset tokens" {:count (count result)})
-    {:removed (count result)}))
+

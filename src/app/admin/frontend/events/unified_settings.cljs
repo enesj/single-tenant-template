@@ -92,10 +92,10 @@
                            sort
                            first)]
       {:db (-> db
-               (assoc-in [:admin :unified-settings :mode] mode)
-               (cond->
-                 (and (= mode :edit) (nil? selected-entity))
-                 (assoc-in [:admin :unified-settings :selected-entity] default-entity)))})))
+             (assoc-in [:admin :unified-settings :mode] mode)
+             (cond->
+               (and (= mode :edit) (nil? selected-entity))
+               (assoc-in [:admin :unified-settings :selected-entity] default-entity)))})))
 
 ;; =============================================================================
 ;; Scope Switching
@@ -157,15 +157,6 @@
         {}))))
 
 ;; =============================================================================
-;; Config Tab (view-options, form-fields, table-columns)
-;; =============================================================================
-
-(rf/reg-event-fx
-  ::set-tab
-  (fn [{:keys [db]} [_ tab]]
-    {:db (assoc-in db [:admin :unified-settings :tab] tab)}))
-
-;; =============================================================================
 ;; Subscriptions
 ;; =============================================================================
 
@@ -183,11 +174,6 @@
   ::selected-entity
   (fn [db _]
     (get-in db [:admin :unified-settings :selected-entity])))
-
-(rf/reg-sub
-  ::tab
-  (fn [db _]
-    (get-in db [:admin :unified-settings :tab] "view-options")))
 
 ;; Derived: is current scope dirty?
 (rf/reg-sub
@@ -242,9 +228,3 @@
   ::admin-view-options
   (fn [db _]
     (get-in db [:admin :settings :view-options] {})))
-
-;; User view-options config for overview
-(rf/reg-sub
-  ::user-view-options
-  (fn [db _]
-    (get-in db [:admin :user-settings :draft :view-options] {})))
