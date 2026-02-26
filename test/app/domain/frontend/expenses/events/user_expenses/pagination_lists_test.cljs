@@ -109,7 +109,7 @@
           (rf/reg-fx :dispatch rf/dispatch))))))
 
 (deftest receipts-processing-check-uses-template-pagination-state
-  (testing "processing check derives params from current receipts list UI state"
+  (testing "processing check derives unfiltered limit/offset from current receipts list UI state"
     (sup/reset-db!)
     (swap! rf-db/app-db assoc-in (paths/list-per-page :receipts) 25)
     (swap! rf-db/app-db assoc-in (paths/list-current-page :receipts) 2)
@@ -119,11 +119,11 @@
     (let [req (sup/last-http-request)]
       (is (= :get (sup/req-method req)))
       (is (= "/api/v1/expenses/receipts" (sup/req-uri req)))
-      (is (= {:limit 25 :offset 25 :status ["parsing"]}
-            (select-keys (sup/req-params req) [:limit :offset :status]))))))
+      (is (= {:limit 25 :offset 25}
+            (select-keys (sup/req-params req) [:limit :offset]))))))
 
 (deftest receipts-processing-check-success-no-refresh-when-still-processing
-  (testing "completion check does not refresh list while any receipt is still processing"
+  (testing "completion check updates rows and does not refresh list while any receipt is still processing"
     (sup/reset-db!)
     (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] true)
     (let [dispatches (atom [])]
@@ -132,8 +132,12 @@
       (try
         (rf/dispatch-sync
           [:user-expenses/check-receipts-processing-complete-success
-           {:data [{:id "rec-1" :status "extracting"}]}])
-        (is (empty? @dispatches))
+           {:data [{:id "rec-1"
+                    :status "review_required"
+                    :refine-pending true}]}])
+        (is (= 1 (count @dispatches)))
+        (is (not= :user-expenses/refresh-receipts-list (ffirst @dispatches)))
+        (is (= "refining" (get-in @rf-db/app-db [:user-expenses :receipts :items 0 :status])))
         (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :loading?])))
         (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :refresh-pending?])))
         (finally

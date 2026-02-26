@@ -73,28 +73,43 @@
       (->status status-filter))))
 
 (defn- current-receipts-page-params
+  ([db]
+   (current-receipts-page-params db {:include-status? true}))
+  ([db {:keys [include-status?]
+        :or {include-status? true}}]
+   (let [entity-key :receipts
+         per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
+                    (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
+                    (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
+                    10)
+         current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
+                        (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
+                        (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
+                        1)
+         active-filters (or (get-in db (paths/list-filters entity-key)) {})
+         status (normalize-status-filter (:status active-filters))
+         sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
+         order-dir (let [direction (:direction sort-config)]
+                     (when (contains? #{:asc :desc "asc" "desc"} direction)
+                       (name (keyword direction))))
+         order-field (when-let [f (:field sort-config)] (name f))]
+     (cond-> {:limit per-page
+              :offset (* (max 0 (dec current-page)) per-page)}
+       (and include-status? (some? status)) (assoc :status status)
+       (some? order-dir) (assoc :order-dir order-dir)
+       (some? order-field) (assoc :order-by order-field)))))
+
+(defn- processing-check-page-params
   [db]
-  (let [entity-key :receipts
-        per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
-                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
-                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
-                   10)
-        current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
-                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
-                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
-                       1)
-        active-filters (or (get-in db (paths/list-filters entity-key)) {})
-        status (normalize-status-filter (:status active-filters))
-        sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
-        order-dir (let [direction (:direction sort-config)]
-                    (when (contains? #{:asc :desc "asc" "desc"} direction)
-                      (name (keyword direction))))
-        order-field (when-let [f (:field sort-config)] (name f))]
-    (cond-> {:limit per-page
-             :offset (* (max 0 (dec current-page)) per-page)}
-      (some? status) (assoc :status status)
-      (some? order-dir) (assoc :order-dir order-dir)
-      (some? order-field) (assoc :order-by order-field))))
+  (current-receipts-page-params db {:include-status? false}))
+
+(defn- apply-refining-status
+  [rows]
+  (mapv (fn [receipt]
+          (if (receipt-refine-pending? receipt)
+            (assoc receipt :status "refining")
+            receipt))
+    (or rows [])))
 
 ;; ---------------------------------------------------------------------------
 ;; Template CRUD bridge — routes user-receipts delete/batch-delete to the
@@ -172,7 +187,7 @@
          :http-xhrio (x/xhrio db
                        {:method :get
                         :uri endpoints/receipts-endpoint
-                        :params (current-receipts-page-params db)
+                        :params (processing-check-page-params db)
                         :on-success [:user-expenses/check-receipts-processing-complete-success]
                         :on-failure [:user-expenses/check-receipts-processing-complete-failure]})}))))
 
@@ -180,14 +195,23 @@
   :user-expenses/check-receipts-processing-complete-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [rows (or (:data response) [])
+    (let [rows (apply-refining-status (:data response))
           still-processing? (response-has-processing? rows)
           check-path (conj base-path :processing-check)
+          total (or (:total response) (count rows))
+          limit (or (:limit response) (get-in db (conj base-path :limit)))
+          offset (or (:offset response) (get-in db (conj base-path :offset)))
           db' (-> db
                 (assoc-in (conj check-path :loading?) false)
-                (assoc-in (conj check-path :refresh-pending?) (not still-processing?)))]
+                (assoc-in (conj check-path :refresh-pending?) (not still-processing?))
+                (assoc-in (conj base-path :items) rows)
+                (assoc-in (conj base-path :total) total)
+                (assoc-in (conj base-path :limit) limit)
+                (assoc-in (conj base-path :offset) offset)
+                (assoc-in (paths/list-total-items :receipts) total))]
       (if still-processing?
-        {:db db'}
+        {:db db'
+         :dispatch [::expenses-sync/sync-receipts rows]}
         {:db db'
          :dispatch [:user-expenses/refresh-receipts-list]}))))
 
@@ -226,12 +250,7 @@
   :user-expenses/fetch-receipts-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [rows (or (:data response) [])
-          rows (mapv (fn [r]
-                       (if (receipt-refine-pending? r)
-                         (assoc r :status "refining")
-                         r))
-                 rows)
+    (let [rows (apply-refining-status (:data response))
           total (or (:total response) (count rows))
           limit (or (:limit response) (get-in db (conj base-path :limit)))
           offset (or (:offset response) (get-in db (conj base-path :offset)))]
@@ -242,7 +261,7 @@
              (assoc-in (conj base-path :error) nil)
              (assoc-in (conj base-path :processing-check :loading?) false)
              (assoc-in (conj base-path :processing-check :refresh-pending?) false)
-             (assoc-in (conj base-path :items) (vec rows))
+             (assoc-in (conj base-path :items) rows)
              (assoc-in (conj base-path :total) total)
              (assoc-in (conj base-path :limit) limit)
              (assoc-in (conj base-path :offset) offset)
