@@ -88,7 +88,6 @@
    :session default-session-state
    :forms {}
    :ui {:current-page nil
-        :entity-name nil
         :current-entity-type nil
         :theme "light"
         :show-add-form false
@@ -142,6 +141,5 @@
       (assoc :entities (make-default-entities models-map))
       (assoc-in [:ui :lists] lists)
       (assoc-in [:ui :entity-configs] merged-configs)
-      (update-in [:ui :entity-name] #(or % first-entity))
       (update-in [:ui :current-entity-type] #(or % first-entity))
       (validation/debug-validate-critical-state))))

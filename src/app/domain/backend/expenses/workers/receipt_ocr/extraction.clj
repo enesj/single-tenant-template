@@ -146,8 +146,8 @@
         (try
           (resolve-supplier-and-alias db supplier-guess extraction opts)
           (catch Exception e
-            (log/warn e "Failed to resolve supplier from supplier_guess" {:receipt-id receipt-id})
-            {:supplier-id (aliases/get-unknown-supplier-id db)
+            (log/error e "Failed to resolve supplier from supplier_guess" {:receipt-id receipt-id})
+            {:supplier-id nil
              :supplier-alias-id nil
              :source :unknown}))
         unknown-supplier-id (try

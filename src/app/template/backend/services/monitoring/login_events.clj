@@ -28,45 +28,37 @@
    - :user-agent      optional user-agent string"
   [db {:keys [principal-type principal-id success reason ip user-agent]
        :or {success false}}]
-  (try
-    (let [principal-type-str (name principal-type)
-          principal-id-uuid (cond
-                              (instance? java.util.UUID principal-id) principal-id
-                              (some? principal-id) (tc/try-parse-uuid principal-id)
-                              :else (do
-                                      (log/warn "record-login-event! called without principal-id"
-                                        {:principal-type principal-type :success success})
-                                      nil))]
-      (when (and (some? principal-id) (nil? principal-id-uuid))
-        (log/warn "record-login-event! called with invalid principal-id"
-          {:principal-type principal-type
-           :principal-id principal-id
-           :success success}))
-      (when principal-id-uuid
-        (log/info "LOGIN-MONITOR: recording login event"
-          {:principal-type principal-type-str
-           :principal-id (str principal-id-uuid)
-           :success success
-           :reason reason
-           :ip ip})
-        (jdbc/execute-one! db
-          (hsql/format
-            {:insert-into :login_events
-             :values [{:id (UUID/randomUUID)
-                       :principal_type (tc/cast-for-database :login-principal-type principal-type-str)
-                       :principal_id principal-id-uuid
-                       :success success
-                       :reason reason
-                       :ip ip
-                       :user_agent user-agent
-                       :created_at (time/instant)}]}))))
-    (catch Exception e
-      (log/error e "Failed to record login event"
+  (let [principal-type-str (name principal-type)
+        principal-id-uuid (cond
+                            (instance? java.util.UUID principal-id) principal-id
+                            (some? principal-id) (tc/try-parse-uuid principal-id)
+                            :else (do
+                                    (log/warn "record-login-event! called without principal-id"
+                                      {:principal-type principal-type :success success})
+                                    nil))]
+    (when (and (some? principal-id) (nil? principal-id-uuid))
+      (log/warn "record-login-event! called with invalid principal-id"
         {:principal-type principal-type
          :principal-id principal-id
+         :success success}))
+    (when principal-id-uuid
+      (log/info "LOGIN-MONITOR: recording login event"
+        {:principal-type principal-type-str
+         :principal-id (str principal-id-uuid)
          :success success
-         :reason reason})
-      nil)))
+         :reason reason
+         :ip ip})
+      (jdbc/execute-one! db
+        (hsql/format
+          {:insert-into :login_events
+           :values [{:id (UUID/randomUUID)
+                     :principal_type (tc/cast-for-database :login-principal-type principal-type-str)
+                     :principal_id principal-id-uuid
+                     :success success
+                     :reason reason
+                     :ip ip
+                     :user_agent user-agent
+                     :created_at (time/instant)}]})))))
 
 (defn count-recent-login-events
   "Count login events since a given instant.

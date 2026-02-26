@@ -10,23 +10,14 @@
 (rf/reg-sub
   ::entity-list
   (fn [db [_ entity-type]]
-
-    (try
-      (if (and entity-type (not= entity-type nil) (not= entity-type "null"))
-        (let [ids (get-in db (paths/entity-ids entity-type) [])
-              data (get-in db (paths/entity-data entity-type) {})
-              metadata (get-in db (paths/entity-metadata entity-type) {:loading? false :error nil})
-              result {:items (map #(get data % {}) ids)
-                      :loading? (:loading? metadata)
-                      :error (:error metadata)}]
-
-          result)
-        (let [result {:items [] :loading? false :error nil}]
-
-          result))
-      (catch :default e
-        (js/console.error "Error in entity-list:" e)
-        {:items [] :loading? false :error nil}))))
+    (if (and entity-type (not= entity-type "null"))
+      (let [ids (get-in db (paths/entity-ids entity-type) [])
+            data (get-in db (paths/entity-data entity-type) {})
+            metadata (get-in db (paths/entity-metadata entity-type) {:loading? false :error nil})]
+        {:items (map #(get data % {}) ids)
+         :loading? (:loading? metadata)
+         :error (:error metadata)})
+      {:items [] :loading? false :error nil})))
 
 ;; UI state subscriptions
 (rf/reg-sub
@@ -120,13 +111,9 @@
 (rf/reg-sub
   ::selected-ids
   (fn [db [_ entity-type]]
-    (try
-      (if (nil? entity-type)
-        #{}
-        (get-in db (paths/entity-selected-ids entity-type) #{}))
-      (catch :default e
-        (js/console.error "Error in ::selected-ids subscription for entity-type:" entity-type "error:" e)
-        #{}))))
+    (if (nil? entity-type)
+      #{}
+      (get-in db (paths/entity-selected-ids entity-type) #{}))))
 
 (rf/reg-sub
   ::active-filters
@@ -163,6 +150,4 @@
 (rf/reg-sub
   ::current-entity-type
   (fn [db _]
-    ;; Get current entity type from UI state - could be in either location
-    (or (get-in db [:ui :current-entity-type])
-      (get-in db [:ui :entity-name]))))
+    (get-in db [:ui :current-entity-type])))

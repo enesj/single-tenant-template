@@ -7,7 +7,8 @@
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
+    [next.jdbc.result-set :as rs]
+    [taoensso.timbre :as log])
   (:import
     [java.math RoundingMode]
     [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
@@ -125,7 +126,8 @@
   "Derive a unit price from line total and quantity.
 
   Receipts often omit an explicit unit price; when qty is missing we treat the
-  line total as the unit price (i.e. assume qty=1)."
+  line total as the unit price (i.e. assume qty=1).
+  Returns nil when qty is zero or negative (bad OCR data)."
   [qty line-total]
   (cond
     (nil? line-total) nil
@@ -134,7 +136,10 @@
                  ^java.math.BigDecimal qty
                  2
                  RoundingMode/HALF_UP)
-    :else nil))
+    :else (do
+            (log/warn "derive-unit-price: non-positive qty; unit price will be nil"
+              {:qty qty :line-total line-total})
+            nil)))
 
 (defn- normalize-expense-item
   [item]

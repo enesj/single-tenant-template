@@ -4,10 +4,10 @@
 
 (defn get-server-port
   "Get the server port from service container config.
-   Returns the configured port or default 8080 for development."
+   Throws if :webserver :port is not set — port must be explicit in config."
   [service-container]
-  (let [config (:config service-container)]
-    (or (get-in config [:webserver :port]) 8080)))
+  (or (get-in service-container [:config :webserver :port])
+    (throw (ex-info "webserver :port is required in config" {:config-key [:webserver :port]}))))
 
 (defn sanitize-for-serialization
   "Recursively sanitizes an object for JSON/EDN serialization by converting

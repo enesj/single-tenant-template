@@ -187,7 +187,12 @@
                                              name (cond
                                                     (string? display-name) display-name
                                                     (string? (:text display-name)) (:text display-name)
-                                                    :else nil)]
+                                                    :else
+                                                    (do
+                                                      (log/warn "Places API: unexpected displayName format"
+                                                        {:place-id (:id place)
+                                                         :display-name display-name})
+                                                      nil))]
                                          (when (seq (some-> name str str/trim))
                                            {:name (str/trim name)
                                             :raw place}))))

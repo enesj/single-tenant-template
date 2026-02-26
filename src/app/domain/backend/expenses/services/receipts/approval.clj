@@ -11,7 +11,8 @@
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs]))
+    [next.jdbc.result-set :as rs]
+    [taoensso.timbre :as log]))
 
 (defn save-review!
   "Persist reviewed receipt values without posting an expense.
@@ -39,7 +40,9 @@
             supplier-alias-id (try
                                 (when-not (str/blank? (some-> supplier-guess str))
                                   (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
-                                (catch Exception _
+                                (catch Exception e
+                                  (log/warn e "Failed to find-or-create supplier alias during review"
+                                    {:receipt-id receipt-id :supplier-guess supplier-guess})
                                   nil))
             _ (when (and supplier-alias-id supplier-uuid)
                  ;; User selected a canonical supplier during review: this is a strong
@@ -48,7 +51,11 @@
                  ;; automated OCR flows which only map when unmapped.
                 (try
                   (supplier-aliases/map-alias-to-supplier! tx supplier-alias-id supplier-uuid 100)
-                  (catch Exception _
+                  (catch Exception e
+                    (log/warn e "Failed to map alias to supplier during review"
+                      {:receipt-id receipt-id
+                       :supplier-alias-id supplier-alias-id
+                       :supplier-uuid supplier-uuid})
                     nil)))
             purchased-at* (parsing/parse-instant! :purchased_at purchased_at)
             currency* (parsing/normalize-currency! currency)

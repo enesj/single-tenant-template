@@ -29,10 +29,7 @@
 (rf/reg-sub
   :admin/all-entity-configs
   (fn [_ _]
-    (try
-      @entity-registry/registered-entities
-      (catch :default _
-        {}))))
+    @entity-registry/registered-entities))
 
 (rf/reg-sub
   :admin/entity-config

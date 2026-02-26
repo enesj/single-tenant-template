@@ -7,6 +7,7 @@
   (:require
     [ajax.core :as ajax]
     [app.admin.frontend.utils.http :as admin-http]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.db.paths :as paths]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
@@ -59,7 +60,7 @@
   "Generic pagination resolver that works with configurable parameter keys.
    
    Options:
-   - :default-per-page (default: 25)
+   - :default-per-page (default: pagination/default-page-size)
    - :param-keys (map of parameter names to extract from params)
      Default: {:limit :limit, :offset :offset, :page :page, :per-page :per-page}"
   [entity-key db {:keys [_limit _offset _page _per-page] :as params} {:keys [default-per-page param-keys]}]
@@ -76,14 +77,15 @@
         existing-per-page (or (get-in db (paths/list-per-page entity-key))
                             (get-in db (conj (paths/list-ui-state entity-key) :per-page))
                             (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page))
-                            default-per-page 25)
+                            default-per-page
+                            pagination/default-page-size)
         existing-page (or (get-in db (paths/list-current-page entity-key))
                         (get-in db (conj (paths/list-ui-state entity-key) :current-page))
                         (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page))
-                        1)
+                        pagination/default-page-number)
 
         per-page (or limit per-page existing-per-page)
-        page (or page (when offset (inc (quot offset (max per-page 1)))) existing-page 1)
+        page (or page (when offset (inc (quot offset (max per-page 1)))) existing-page pagination/default-page-number)
         offset (or offset (* (max 0 (dec page)) per-page))]
 
     {:limit per-page
@@ -131,7 +133,7 @@
   [{:keys [entity-key base-path api-endpoint pagination-opts server-search-keys] :as config}]
   (validate-entity-config config)
 
-  (let [pag-opts (or pagination-opts {:default-per-page 25})
+  (let [pag-opts (or pagination-opts {:default-per-page pagination/default-page-size})
         search-keys (or server-search-keys #{})
         event-ns (str "app.domain.frontend.expenses.events." (name entity-key))]
 

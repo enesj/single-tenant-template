@@ -2,6 +2,7 @@
   (:require
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.subs.list :as list-subs]
@@ -42,7 +43,7 @@
 (rf/reg-sub
   ::entities
   (fn [[_ entity-type]]
-    (if (or (nil? entity-type) (= entity-type ""))
+    (if (nil? entity-type)
       []
       [(rf/subscribe [::entity-ids entity-type])
        (rf/subscribe [::entity-data entity-type])]))
@@ -176,13 +177,13 @@
   (fn [[sorted-entities ui-state] [_ _entity-type]]
     (if (list-subs/server-pagination? ui-state)
       (vec sorted-entities)
-      (let [per-page      (or (:per-page ui-state)
-                            (get-in ui-state [:pagination :per-page])
-                            10)
-            current-page  (or (get-in ui-state [:pagination :current-page])
-                            (:current-page ui-state)
-                            1)
-            start-idx     (* (dec current-page) per-page)]
+      (let [per-page     (or (:per-page ui-state)
+                           (get-in ui-state [:pagination :per-page])
+                           pagination/default-page-size)
+            current-page (or (get-in ui-state [:pagination :current-page])
+                           (:current-page ui-state)
+                           pagination/default-page-number)
+            start-idx    (* (dec current-page) per-page)]
         (vec (take per-page (drop start-idx sorted-entities)))))))
 
 ;; Get loading and error status
@@ -201,4 +202,4 @@
   ::current-page
   (fn [db [_ entity-type]]
     (or (get-in db (paths/list-current-page entity-type))
-      1)))
+      pagination/default-page-number)))

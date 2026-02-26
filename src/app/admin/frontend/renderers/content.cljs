@@ -2,6 +2,7 @@
   "Renderers for configuration-driven admin entity pages"
   (:require
     [app.admin.frontend.renderers.actions :as actions-renderer]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.utils.shared :as shared-utils]
     [clojure.string :as str]
@@ -91,7 +92,7 @@
               (or overrides {}))))]
     (fn [entity-spec propagated-settings]
       (let [display-settings (effective-display-settings entity-config propagated-settings)
-            per-page (or (:per-page display-settings) 10)
+            per-page (or (:per-page display-settings) pagination/default-page-size)
             actions (actions-renderer/create-actions-renderer entity-config display-settings)
             list-title (or page-title (str/capitalize (name entity-key)))
             overrides (sanitize-overrides list-overrides)

@@ -102,41 +102,25 @@
         blocked-until (:blocked-until entry)]
 
     (cond
-      ;; Currently blocked - with safer time comparison
+      ;; Currently blocked
       (and blocked-until
-        (try
-          (time/after? blocked-until now)
-          (catch Exception e
-            (log/warn "Time comparison failed in rate limiting, allowing request" {:error (.getMessage e)})
-            false)))
+        (time/after? blocked-until now))
       (do
         (log/warn "Rate limit block active"
           {:ip ip :route-type route-type :blocked-until blocked-until})
         true)
 
       :else
-      ;; Check attempt count in current window - with safer time comparisons
-      (let [recent-attempts (try
-                              (filter (fn [attempt-time]
-                                        (and attempt-time window-start
-                                          (try
-                                            (time/after? attempt-time window-start)
-                                            (catch Exception e
-                                              (log/debug "Time comparison failed for attempt, excluding" {:error (.getMessage e)})
-                                              false))))
-                                (:attempts entry))
-                              (catch Exception e
-                                (log/warn "Failed to filter recent attempts, using empty list" {:error (.getMessage e)})
-                                []))
+      ;; Check attempt count in current window
+      (let [recent-attempts (filter (fn [attempt-time]
+                                      (and attempt-time window-start
+                                        (time/after? attempt-time window-start)))
+                              (:attempts entry))
             attempt-count (count recent-attempts)]
 
         (if (>= attempt-count (:max-attempts config))
           ;; Block client
-          (let [block-until (try
-                              (time/plus now (time/minutes (:block-minutes config)))
-                              (catch Exception e
-                                (log/error "Failed to calculate block-until time" {:error (.getMessage e)})
-                                now))
+          (let [block-until (time/plus now (time/minutes (:block-minutes config)))
                 updated-entry (assoc entry
                                 :blocked-until block-until
                                 :attempts (conj recent-attempts now))]
@@ -170,7 +154,8 @@
   "Middleware to enforce rate limiting on specified routes.
 
    Automatically detects route types and applies appropriate limits.
-   Cleans up expired entries periodically to prevent memory leaks."
+   Cleans up expired entries periodically to prevent memory leaks.
+   Any internal error returns 503 rather than silently allowing the request."
   [handler]
   (fn [request]
     (try
@@ -196,10 +181,7 @@
                                (System/getProperty "DISABLE_RATE_LIMITING"))]
 
             (if (and (not is-local-dev)
-                  (try (is-rate-limited? ip route-type user-id)
-                    (catch Exception e
-                      (log/error e "Rate limiting check failed, allowing request")
-                      false)))
+                  (is-rate-limited? ip route-type user-id))
               ;; Return rate limit response
               (let [config (get rate-limits route-type)
                     retry-after (* (:block-minutes config) 60)]
@@ -211,8 +193,10 @@
           ;; No rate limiting for this route
           (handler request)))
       (catch Exception e
-        (log/error e "Rate limiting middleware failed, allowing request")
-        (handler request)))))
+        (log/error e "Rate limiting middleware failed, returning 503")
+        {:status 503
+         :headers {"Content-Type" "application/json"}
+         :body "{\"error\":\"Service unavailable\",\"message\":\"Rate limiting system failure. Please try again shortly.\"}"}))))
 
 (defn get-rate-limit-stats
   "Get current rate limiting statistics for monitoring."

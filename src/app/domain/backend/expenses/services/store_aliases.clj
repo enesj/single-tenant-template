@@ -69,6 +69,10 @@
                   :returning [:*]})
      {:builder-fn rs/as-unqualified-lower-maps})))
 
+(def ^:private default-ocr-confidence
+  "Confidence score used when OCR auto-maps an alias; lower than manual mappings (100)."
+  25)
+
 (defn map-alias-to-store-if-unmapped!
   "Map a store alias to a canonical store only if it is currently unmapped.
 
@@ -77,13 +81,13 @@
 
   Returns the updated alias row when an update happened, otherwise nil."
   ([db alias-id store-id]
-   (map-alias-to-store-if-unmapped! db alias-id store-id 25))
+   (map-alias-to-store-if-unmapped! db alias-id store-id default-ocr-confidence))
   ([db alias-id store-id confidence]
    (jdbc/execute-one!
      db
      (sql/format {:update :store_aliases
                   :set {:store_id store-id
-                        :confidence (or confidence 25)}
+                        :confidence (or confidence default-ocr-confidence)}
                   :where [:and
                           [:= :id alias-id]
                           [:is :store_id nil]]

@@ -49,7 +49,7 @@
     (if entity-name
       {:db (-> db
              (assoc-in (paths/current-page) :entity-detail)
-             (assoc-in [:ui :entity-name] (keyword entity-name)))
+             (assoc-in [:ui :current-entity-type] (keyword entity-name)))
        :dispatch-n [[::crud-events/fetch-entities (keyword entity-name)]
                     [::filter-events/clear-filter-modal]]}
       {:db (assoc-in db (paths/current-page) :entity-detail)})))
@@ -60,7 +60,7 @@
   (fn [{:keys [db]} [_ entity-name item-id]]
     {:db (-> db
            (assoc-in (paths/current-page) :entity-detail)
-           (assoc-in [:ui :entity-name] (keyword entity-name))
+           (assoc-in [:ui :current-entity-type] (keyword entity-name))
            (assoc-in [:ui :editing-id] item-id))
      :dispatch-n [[::selection-events/fetch-item-by-id (keyword entity-name) item-id]
                   [::filter-events/clear-filter-modal]]}))
@@ -72,7 +72,7 @@
     (if entity-name
       {:db (-> db
              (assoc-in (paths/current-page) :entity-detail)
-             (assoc-in [:ui :entity-name] (keyword entity-name))
+             (assoc-in [:ui :current-entity-type] (keyword entity-name))
              (assoc-in [:ui :show-add-form] true))
        :dispatch-n
        [[::crud-events/fetch-entities (keyword entity-name)]

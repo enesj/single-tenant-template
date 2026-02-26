@@ -6,10 +6,13 @@
     [taoensso.timbre :as log]))
 
 (defn create-base-url
-  "Create base URL from webserver configuration"
+  "Create base URL from webserver configuration.
+   Requires :webserver :host and :webserver :port to be present in config."
   [config]
-  (let [host (get-in config [:webserver :host] "localhost")
-        port (get-in config [:webserver :port] 8085) ; Updated default to match dev config
+  (let [host (or (get-in config [:webserver :host])
+               (throw (ex-info "webserver :host is required in config" {:config-key [:webserver :host]})))
+        port (or (get-in config [:webserver :port])
+               (throw (ex-info "webserver :port is required in config" {:config-key [:webserver :port]})))
         protocol (if (or (= port 443) (contains? config :https)) "https" "http")]
     (str protocol "://" host ":" port)))
 

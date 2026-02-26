@@ -217,9 +217,10 @@
   (fn count-entity
     [db & [opts]]
     (let [search (cond
+                   (nil? opts) nil
                    (map? opts) (:search opts)
                    (string? opts) opts
-                   :else nil)
+                   :else (throw (ex-info "opts must be a map, string, or nil" {:opts opts})))
           where (build-where-clause base-filters)
           base-query (cond-> {:select [[[:count :*] :total]]
                               :from (if table-alias

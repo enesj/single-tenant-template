@@ -137,6 +137,10 @@
                   :returning [:*]})
      {:builder-fn rs/as-unqualified-lower-maps})))
 
+(def ^:private default-ocr-confidence
+  "Confidence score used when OCR auto-maps an alias; lower than manual mappings (100)."
+  25)
+
 (defn map-alias-to-supplier-if-unmapped!
   "Map a supplier alias to a canonical supplier only if it is currently unmapped.
 
@@ -145,13 +149,13 @@
 
   Returns the updated alias row when an update happened, otherwise nil."
   ([db alias-id supplier-id]
-   (map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
+   (map-alias-to-supplier-if-unmapped! db alias-id supplier-id default-ocr-confidence))
   ([db alias-id supplier-id confidence]
    (jdbc/execute-one!
      db
      (sql/format {:update :supplier_aliases
                   :set {:supplier_id supplier-id
-                        :confidence (or confidence 25)}
+                        :confidence (or confidence default-ocr-confidence)}
                   :where [:and
                           [:= :id alias-id]
                           [:is :supplier_id nil]]

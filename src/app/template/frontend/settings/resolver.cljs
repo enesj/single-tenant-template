@@ -19,7 +19,9 @@
    - New explicit schema (:display-defaults / :display-locks)
    - Legacy admin schema where presence of :show-*? keys means 'locked'
 
-   Prefer the explicit schema for new configs.")
+   Prefer the explicit schema for new configs."
+  (:require
+    [app.shared.pagination :as pagination]))
 
 ;; ============================================================================
 ;; Fallback defaults (in-code)
@@ -40,7 +42,7 @@
    :show-batch-delete?  false
    :show-selected-rows? true
    :show-unselected-rows? true
-   :per-page            25})
+   :per-page            pagination/default-page-size})
 
 (def all-setting-keys
   "All known display setting keys."

@@ -6,7 +6,7 @@
 (rf/reg-sub
   ::entity-type
   (fn [db _]
-    (get-in db [:ui :entity-name])))
+    (get-in db [:ui :current-entity-type])))
 
 ;; Auth status subscription
 ;; Auth status subscription - updated for multi-tenant support

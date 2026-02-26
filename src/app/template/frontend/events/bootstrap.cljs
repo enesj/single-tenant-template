@@ -92,7 +92,7 @@
   ::set-entity-type
   common-interceptors
   (fn [db [page]]
-    (assoc-in db [:ui :entity-name] page)))
+    (assoc-in db [:ui :current-entity-type] page)))
 
 ;; ========================================================================
 ;; Theme Management

@@ -16,12 +16,16 @@
   Also resolves common singular/alternate spellings:
   - :supplier / :suppliers / :provider  -> :providers
   - :manufacturer                        -> :manufacturers
-  - :subcategory                         -> :subcategories"
+  - :subcategory                         -> :subcategories
+
+  Throws when related-type is not a keyword or string."
   [related-type]
   (let [raw (cond
               (keyword? related-type) (name related-type)
               (string? related-type) related-type
-              :else nil)
+              :else (throw (ex-info "normalize-related-type expects a keyword or string"
+                             {:related-type related-type
+                              :type (type related-type)})))
         kw (some-> raw str/trim str/lower-case keyword)]
     (case kw
       :supplier :providers

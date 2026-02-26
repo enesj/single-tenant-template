@@ -2,11 +2,15 @@
   (:require
     [app.domain.backend.expenses.services.user-expense-reports.shared :as shared]))
 
+(def ^:private default-supplier-report-limit 20)
+(def ^:private default-monthly-limit 10)
+(def ^:private default-alias-limit 10)
+
 (defn top
   "Top suppliers ranked by total spending grouped by currency."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
-        limit* (-> (or limit 20) long (max 1) (min 100))]
+        limit* (-> (or limit default-supplier-report-limit) long (max 1) (min 100))]
     (when-not user-id
       (throw (ex-info "user-id is required" {:status 400})))
     (let [supplier-rows (shared/supplier-breakdown-by-currency db user-id opts)
@@ -34,7 +38,7 @@
   [db user-id {:keys [supplier-id limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
         supplier-id (shared/ensure-uuid supplier-id)
-        limit* (-> (or limit 20) long (max 1) (min 100))]
+        limit* (-> (or limit default-supplier-report-limit) long (max 1) (min 100))]
     (when-not user-id
       (throw (ex-info "user-id is required" {:status 400})))
     (when-not supplier-id
@@ -92,7 +96,7 @@
   "Month-by-month supplier totals for the top suppliers in scope."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
-        limit* (-> (or limit 10) long (max 1) (min 50))]
+        limit* (-> (or limit default-monthly-limit) long (max 1) (min 50))]
     (when-not user-id
       (throw (ex-info "user-id is required" {:status 400})))
     (let [top-supplier-ids (->> (shared/query-many
@@ -134,7 +138,7 @@
 
 (defn deep-dive
   "Supplier deep-dive report for a specific supplier."
-  [db user-id {:keys [supplier-id alias-limit] :or {alias-limit 10} :as opts}]
+  [db user-id {:keys [supplier-id alias-limit] :or {alias-limit default-alias-limit} :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
         supplier-id (shared/ensure-uuid supplier-id)]
     (when-not user-id
@@ -181,7 +185,7 @@
                                     :e.currency]
                          :order-by [[[:sum :ei.line_total] :desc]
                                     [[:raw "COALESCE(aa.raw_label, a.canonical_name, 'Unmapped item')"] :asc]]
-                         :limit (-> (or alias-limit 10) long (max 1) (min 100))})]
+                         :limit (-> (or alias-limit default-alias-limit) long (max 1) (min 100))})]
       {:supplier-id supplier-id
        :supplier-name supplier-name
        :summary (vec summary)

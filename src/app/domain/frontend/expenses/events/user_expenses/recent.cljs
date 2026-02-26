@@ -5,6 +5,7 @@
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [re-frame.core :as rf]
@@ -74,7 +75,7 @@
   :user-expenses/recent-go-to-page
   common-interceptors
   (fn [{:keys [db]} [{:keys [page limit]}]]
-    (let [limit* (->positive-int (or limit (get-in db [:user-expenses :recent :limit])) 25)
+    (let [limit* (->positive-int (or limit (get-in db [:user-expenses :recent :limit])) pagination/default-page-size)
           page* (->positive-int page 1)
           offset* (page->offset page* limit*)]
       (fetch-recent-fx db {:limit limit* :offset offset*}))))

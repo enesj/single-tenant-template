@@ -2,11 +2,14 @@
   (:require
     [app.domain.backend.expenses.services.user-expense-reports.shared :as shared]))
 
+(def ^:private default-item-report-limit 20)
+(def ^:private default-breakdown-limit 50)
+
 (defn top-spending
   "Top product/item spending grouped by canonical article (merging aliases)."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
-        limit* (-> (or limit 20) long (max 1) (min 100))
+        limit* (-> (or limit default-item-report-limit) long (max 1) (min 100))
         resolved-store-id-sql [:raw "COALESCE(e.store_id, sa_receipt.store_id)"]
         resolved-item-id-sql [:raw "COALESCE(aa.article_id, ei.alias_id)"]
         item-label-sql [:raw "COALESCE(a.canonical_name, aa.raw_label, 'Unmapped item')"]]
@@ -46,7 +49,7 @@
   [db user-id alias-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
         alias-id (shared/ensure-uuid alias-id)
-        limit* (-> (or limit 50) long (max 1) (min 200))
+        limit* (-> (or limit default-breakdown-limit) long (max 1) (min 200))
         resolved-store-id-sql [:raw "COALESCE(e.store_id, sa_receipt.store_id)"]
         store-name-sql [:raw "COALESCE(st.display_name, 'Unmapped store')"]
         where-clause (conj (shared/item-base-where user-id opts)

@@ -137,7 +137,10 @@
         (and want-extracted? (not want-review?)) [:and base not-mismatch-clause]
         :else base))
 
-    :else nil))
+    (nil? status) nil
+
+    :else (throw (ex-info "status filter must be a string, sequential, or nil"
+                   {:status status :type (type status)}))))
 
 (defn- build-receipts-where-clause
   "Build WHERE clause for receipt list/count queries.
