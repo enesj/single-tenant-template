@@ -77,11 +77,13 @@
  {:display-defaults
   {:show-select? true,
    :show-pagination? true,
-   :show-add-button? true,
+   :show-add-button? false,
    :show-filtering? true,
    :show-highlights? true,
    :per-page 50},
-  :display-locks {:show-batch-edit? false, :show-batch-delete? true}},
+  :display-locks {:show-add-button? false,
+                  :show-batch-edit? false,
+                  :show-batch-delete? true}},
  :stores
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 10},

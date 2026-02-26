@@ -341,16 +341,9 @@
   "Admin receipts routes. Mounted under /admin/api/expenses/receipts."
   [db & [app-config]]
   ["/receipts"
-   ["" {:get (list-receipts-handler db)
-        :post (upload-receipt-handler db)}]
-   ["/pending" {:get (list-pending-handler db)}]
+   ["" {:get (list-receipts-handler db)}]
    ["/:id/download" {:get (download-receipt-handler db)}]
    ["/:id" {:get (get-receipt-handler db)
             :delete (delete-receipt-handler db)}]
-   ["/:id/status" {:post (update-status-handler db)}]
-   ["/:id/retry" {:post (retry-receipt-handler db)}]
-   ["/:id/fail" {:post (fail-receipt-handler db)}]
-   ["/:id/extraction" {:post (save-extraction-handler db)}]
    ["/:id/review" {:post (save-review-handler db)}]
-   ["/:id/approve" {:post (approve-and-post-handler db)}]
-   ["/:id/ocr" {:post (ocr-single-receipt-handler db app-config)}]])
+   ["/:id/approve" {:post (approve-and-post-handler db)}]])

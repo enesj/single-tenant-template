@@ -1,7 +1,7 @@
 (ns app.domain.backend.expenses.routes.core
   "Expenses backend route assembly; add new expense endpoints here."
   (:require
-    [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
+
     [app.domain.backend.expenses.routes.articles :as articles]
     [app.domain.backend.expenses.routes.article-aliases :as article-aliases]
     [app.domain.backend.expenses.routes.categories :as categories]
@@ -24,12 +24,9 @@
     [app.domain.backend.expenses.routes.suppliers :as suppliers]))
 
 (defn routes
-  "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses.
-
-  app-config is optional and is passed to routes that need it (e.g., receipts for OCR)."
+  "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses."
   [db & [app-config]]
   ["/expenses"
-   ["/upload" {:post {:handler (receipt-upload/admin-upload-handler db)}}]
    (suppliers/routes db)
    (stores/routes db)
    (cities/routes db)
