@@ -36,6 +36,9 @@
        (contains? #{"suspended" "cancelled" "canceled" "failed" "error"} status-lower)
        "ds-badge-error"
 
+       (contains? #{"refining"} status-lower)
+       "ds-badge-secondary"
+
        (contains? #{"invited" "pending" "in-progress"} status-lower)
        "ds-badge-info"
 

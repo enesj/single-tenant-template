@@ -52,7 +52,7 @@
                 badge (case status
                         "extracted" "ds-badge-success"
                         "posted" "ds-badge-primary"
-                        "refining" "ds-badge-info"
+                        "refining" "ds-badge-secondary"
                         "review_required" "ds-badge-warning"
                         "failed" "ds-badge-error"
                         "ds-badge-ghost")]

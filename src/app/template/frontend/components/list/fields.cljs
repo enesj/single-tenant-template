@@ -87,7 +87,10 @@
     (contains? #{"failed" "error" "cancelled" "canceled"} status-lower)
     "ds-badge-error"
 
-    (contains? #{"uploaded" "pending" "parsing" "parsed" "extracting" "processing" "in-progress" "refining"} status-lower)
+    (contains? #{"refining"} status-lower)
+    "ds-badge-secondary"
+
+    (contains? #{"uploaded" "pending" "parsing" "parsed" "extracting" "processing" "in-progress"} status-lower)
     "ds-badge-info"
 
     (contains? #{"inactive" "suspended" "archived"} status-lower)
