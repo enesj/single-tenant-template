@@ -108,6 +108,65 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest receipts-processing-check-uses-template-pagination-state
+  (testing "processing check derives params from current receipts list UI state"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :receipts) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :receipts) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :receipts)
+      {:status [{:value "parsing" :label "Parsing"}]})
+    (rf/dispatch-sync [:user-expenses/check-receipts-processing-complete])
+    (let [req (sup/last-http-request)]
+      (is (= :get (sup/req-method req)))
+      (is (= "/api/v1/expenses/receipts" (sup/req-uri req)))
+      (is (= {:limit 25 :offset 25 :status ["parsing"]}
+            (select-keys (sup/req-params req) [:limit :offset :status]))))))
+
+(deftest receipts-processing-check-success-no-refresh-when-still-processing
+  (testing "completion check does not refresh list while any receipt is still processing"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] true)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync
+          [:user-expenses/check-receipts-processing-complete-success
+           {:data [{:id "rec-1" :status "extracting"}]}])
+        (is (empty? @dispatches))
+        (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :loading?])))
+        (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :refresh-pending?])))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest receipts-processing-check-success-refreshes-once-when-finished
+  (testing "completion check triggers one refresh after processing finishes"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] true)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync
+          [:user-expenses/check-receipts-processing-complete-success
+           {:data [{:id "rec-1" :status "extracted"}]}])
+        (is (= [[:user-expenses/refresh-receipts-list]] @dispatches))
+        (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :loading?])))
+        (is (true? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :refresh-pending?])))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest receipts-processing-check-noop-when-check-in-flight-or-refresh-pending
+  (testing "processing check does not enqueue duplicate requests while guarded"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] true)
+    (rf/dispatch-sync [:user-expenses/check-receipts-processing-complete])
+    (is (= 0 (count @sup/captured-http-requests)))
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] false)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :refresh-pending?] true)
+    (rf/dispatch-sync [:user-expenses/check-receipts-processing-complete])
+    (is (= 0 (count @sup/captured-http-requests)))))
+
 (deftest fetch-receipts-success-stores-server-total-items
   (testing "fetch success persists server :total for template server pagination"
     (sup/reset-db!)
@@ -120,6 +179,28 @@
         :offset 50}])
     (is (= 87 (get-in @rf-db/app-db (paths/list-total-items :receipts))))
     (is (= 87 (get-in @rf-db/app-db [:user-expenses :receipts :total])))))
+
+(deftest fetch-receipts-clears-processing-check-guards
+  (testing "fetch success and failure reset processing-check guard flags"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] true)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :refresh-pending?] true)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-receipts-success
+       {:data [{:id "rec-1"}]
+        :total 1
+        :limit 10
+        :offset 0}])
+    (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :loading?])))
+    (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :refresh-pending?])))
+
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :loading?] true)
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :processing-check :refresh-pending?] true)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-receipts-failure
+       {:response {:error "boom"}}])
+    (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :loading?])))
+    (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :processing-check :refresh-pending?])))))
 
 (deftest unmapped-refresh-list-derives-limit-offset-and-supplier-filter
   (testing "unmapped refresh wrapper derives limit/offset from list UI state and forwards supplier filter"

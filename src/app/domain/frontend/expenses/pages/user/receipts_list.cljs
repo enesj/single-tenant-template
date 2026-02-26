@@ -156,6 +156,11 @@
                      (rf/dispatch [:user-expenses/refresh-receipts-list])
                      (set-last-checked! (js/Date.)))
                    [])
+        check-processing-complete! (use-callback
+                                     (fn []
+                                       (rf/dispatch [:user-expenses/check-receipts-processing-complete])
+                                       (set-last-checked! (js/Date.)))
+                                     [])
         parse-selected! (use-callback
                           (fn [e]
                             (.preventDefault e)
@@ -188,14 +193,14 @@
         js/undefined)
       [refresh!])
 
-    ;; Auto-poll while any receipt is processing
+    ;; Poll processing status in the background; refresh list once processing ends.
     (use-effect
       (fn []
         (when processing?
-          (let [handle (js/setInterval refresh! 3000)]
+          (let [handle (js/setInterval check-processing-complete! 3000)]
             (fn []
               (js/clearInterval handle)))))
-      [refresh! processing?])
+      [check-processing-complete! processing?])
 
     ;; Track a processing "session" start time so we can display duration.
     (use-effect

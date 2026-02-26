@@ -14,6 +14,35 @@
 
 (def ^:private base-path [:user-expenses :receipts])
 
+(def ^:private receipt-processing-statuses
+  #{"uploaded" "parsing" "parsed" "extracting"})
+
+(defn- receipt-processing?
+  [status]
+  (let [normalized-status (cond
+                            (keyword? status) (name status)
+                            (string? status) status
+                            :else (some-> status str))]
+    (contains? receipt-processing-statuses normalized-status)))
+
+(defn- receipt-refine-pending?
+  [receipt]
+  (let [refine-pending (or (:refine-pending receipt)
+                         (:refine_pending receipt)
+                         (get-in receipt [:raw-extract-json :refine-pending])
+                         (get-in receipt [:raw-extract-json :refine_pending])
+                         (get-in receipt [:raw_extract_json :refine_pending]))]
+    (true? refine-pending)))
+
+(defn- response-has-processing?
+  [rows]
+  (boolean
+    (some (fn [receipt]
+            (or (receipt-processing? (or (:status receipt)
+                                       (:receipts/status receipt)))
+              (receipt-refine-pending? receipt)))
+      rows)))
+
 (defn- parse-pos-int
   [value]
   (cond
@@ -126,6 +155,45 @@
     {:dispatch [:user-expenses/fetch-receipts (current-receipts-page-params db)]}))
 
 (rf/reg-event-fx
+  :user-expenses/check-receipts-processing-complete
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (let [check-path (conj base-path :processing-check)
+          loading? (true? (get-in db (conj check-path :loading?)))
+          refresh-pending? (true? (get-in db (conj check-path :refresh-pending?)))]
+      (if (or loading? refresh-pending?)
+        {}
+        {:db (assoc-in db (conj check-path :loading?) true)
+         :http-xhrio (x/xhrio db
+                       {:method :get
+                        :uri endpoints/receipts-endpoint
+                        :params (current-receipts-page-params db)
+                        :on-success [:user-expenses/check-receipts-processing-complete-success]
+                        :on-failure [:user-expenses/check-receipts-processing-complete-failure]})}))))
+
+(rf/reg-event-fx
+  :user-expenses/check-receipts-processing-complete-success
+  common-interceptors
+  (fn [{:keys [db]} [response]]
+    (let [rows (or (:data response) [])
+          still-processing? (response-has-processing? rows)
+          check-path (conj base-path :processing-check)
+          db' (-> db
+                (assoc-in (conj check-path :loading?) false)
+                (assoc-in (conj check-path :refresh-pending?) (not still-processing?)))]
+      (if still-processing?
+        {:db db'}
+        {:db db'
+         :dispatch [:user-expenses/refresh-receipts-list]}))))
+
+(rf/reg-event-db
+  :user-expenses/check-receipts-processing-complete-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/debug "Failed to check receipts processing completion" {:error error})
+    (assoc-in db (conj base-path :processing-check :loading?) false)))
+
+(rf/reg-event-fx
   :user-expenses/fetch-receipts
   common-interceptors
   (fn [{:keys [db]} [payload]]
@@ -162,6 +230,8 @@
              (assoc-in (paths/entity-error :receipts) nil)
              (assoc-in (conj base-path :loading?) false)
              (assoc-in (conj base-path :error) nil)
+             (assoc-in (conj base-path :processing-check :loading?) false)
+             (assoc-in (conj base-path :processing-check :refresh-pending?) false)
              (assoc-in (conj base-path :items) (vec rows))
              (assoc-in (conj base-path :total) total)
              (assoc-in (conj base-path :limit) limit)
@@ -178,4 +248,6 @@
       (assoc-in (paths/entity-loading? :receipts) false)
       (assoc-in (paths/entity-error :receipts) (http/extract-error-message error))
       (assoc-in (conj base-path :loading?) false)
+      (assoc-in (conj base-path :processing-check :loading?) false)
+      (assoc-in (conj base-path :processing-check :refresh-pending?) false)
       (assoc-in (conj base-path :error) (http/extract-error-message error)))))
