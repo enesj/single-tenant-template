@@ -3,7 +3,7 @@
    
    Also includes modal-specific events that call callbacks instead of navigating."
   (:require
-    [app.admin.frontend.utils.http :as admin-http]
+
     [app.domain.frontend.expenses.events.entity-configs :as configs]
     [app.domain.frontend.expenses.events.events-factory :as factory]
     [app.template.frontend.shared.crud.success :as crud-success]

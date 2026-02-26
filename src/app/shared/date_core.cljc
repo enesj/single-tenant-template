@@ -13,12 +13,14 @@
   [n]
   (if (< n 10) (str "0" n) (str n)))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn now
   "Get current date/time in the appropriate platform format"
   []
   #?(:clj (time/local-date-time)
      :cljs (js/Date.)))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn today
   "Get today's date at midnight in local timezone"
   []

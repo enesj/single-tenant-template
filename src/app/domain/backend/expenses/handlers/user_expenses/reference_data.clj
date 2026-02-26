@@ -2,10 +2,7 @@
   "Reference data (suppliers, payers) handlers for user expenses."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [clojure.string :as str]
-    [honey.sql :as hsql]
-    [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs]
+
     [taoensso.timbre :as log]))
 
 (defn- resolve-service-map
@@ -136,18 +133,6 @@
             (log/error e "Error listing payers")
             (h/json-response {:error "Failed to list payers"} 500))))
       (h/unauthorized-response))))
-
-(defn- find-payer-type-id-by-label
-  [db label]
-  (when (some? label)
-    (some-> (jdbc/execute-one!
-              db
-              (hsql/format {:select [:id]
-                            :from [:payer_types]
-                            :where [:= [:lower :label] (some-> label str str/lower-case)]
-                            :limit 1})
-              {:builder-fn rs/as-unqualified-lower-maps})
-      :id)))
 
 (defn create-supplier-handler
   "Handler factory for creating a supplier (shared catalog).

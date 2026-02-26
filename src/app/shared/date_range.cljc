@@ -4,6 +4,7 @@
     [app.shared.date-core :as core]
     #?(:cljs [goog.object :as gobj])))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn date-in-range?
   "Check if a date falls within a range (inclusive)"
   [date start end]
@@ -24,6 +25,7 @@
          (and (>= time start-time)
            (<= time end-time))))))
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn normalize-date-range
   "Normalize a date range object, ensuring from/to are Date objects"
   [range-obj]

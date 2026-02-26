@@ -5,11 +5,10 @@
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
-    [app.template.frontend.db.db :refer [common-interceptors]]
+
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.bridges.crud :as crud-bridges]
-    [clojure.string :as str]
-    [re-frame.core :as rf]))
+    [clojure.string :as str]))
 
 (defn- user-ui-context?
   "True only for the user-facing (non-admin) UI."

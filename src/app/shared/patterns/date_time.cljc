@@ -5,6 +5,7 @@
   "ISO 8601 date format (YYYY-MM-DD)"
   #"^\d{4}-\d{2}-\d{2}$")
 
+^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (def iso-datetime-pattern
   "ISO 8601 datetime format with optional timezone"
   #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")

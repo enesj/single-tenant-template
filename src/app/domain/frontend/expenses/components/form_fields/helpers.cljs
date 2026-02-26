@@ -102,11 +102,4 @@
     (sort-by :label)
     vec))
 
-(defn dom-id
-  [v]
-  (cond
-    (string? v) v
-    (keyword? v) (name v)
-    (symbol? v) (name v)
-    (nil? v) nil
-    :else (str v)))
+

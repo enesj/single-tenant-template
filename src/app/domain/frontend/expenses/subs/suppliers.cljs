@@ -4,23 +4,11 @@
     [re-frame.core :as rf]))
 
 (def ^:private base-path [:admin :expenses :suppliers])
-(def ^:private inline-create-path (conj base-path :inline-create))
-(def ^:private delete-path (conj base-path :delete))
 
 (rf/reg-sub
   :expenses/suppliers
   (fn [db _]
     (get-in db (conj base-path :items))))
-
-(rf/reg-sub
-  :expenses/supplier-inline-create-loading?
-  (fn [db _]
-    (true? (get-in db (conj inline-create-path :loading?)))))
-
-(rf/reg-sub
-  :expenses/supplier-inline-create-error
-  (fn [db _]
-    (get-in db (conj inline-create-path :error))))
 
 ;; Related records modal subs
 (rr-subs/register-related-records-subs!

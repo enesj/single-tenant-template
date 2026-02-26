@@ -4,21 +4,11 @@
    embedded in database model EDN files."
   (:require
     [app.shared.labels :as labels]
-    [clojure.set :as set]
     [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Validation Metadata Schema Definition
 ;; ============================================================================
-
-(def validation-types
-  "Supported validation types for metadata"
-  #{:text :email :phone :url :number :date :datetime :enum :boolean :json})
-
-(def constraint-types
-  "Supported constraint types in validation metadata"
-  #{:pattern :min-length :max-length :min-value :max-value
-    :required :unique :values :step})
 
 ;; ============================================================================
 ;; Validation Metadata Extraction
@@ -294,23 +284,6 @@
     (assoc :validation-messages (:messages validation-spec))
     (merge (:ui validation-spec))
     (assoc :has-validation-metadata (:has-metadata validation-spec))))
-
-(defn validate-metadata-schema
-  "Validate that validation metadata follows the expected schema"
-  [validation-meta]
-  (when validation-meta
-    (let [errors []]
-      (cond-> errors
-        (and (:type validation-meta)
-          (not (validation-types (:type validation-meta))))
-        (conj (str "Invalid validation type: " (:type validation-meta)
-                ". Must be one of: " validation-types))
-
-        (and (:constraints validation-meta)
-          (not (set/subset? (set (keys (:constraints validation-meta))) constraint-types)))
-        (conj (str "Invalid constraint keys: "
-                (set/difference (set (keys (:constraints validation-meta))) constraint-types)
-                ". Must be subset of: " constraint-types))))))
 
 (defn field-name->label
   "Convert field name to human readable label"

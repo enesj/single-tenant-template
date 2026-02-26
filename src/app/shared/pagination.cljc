@@ -105,23 +105,6 @@
       :total-pages total-pages
       :offset (calculate-offset normalized-page normalized-size)})))
 
-(defn update-pagination-state
-  "Update pagination state with new values"
-  [state updates]
-  (let [current-state (or state (create-pagination-state))
-        new-total-items (get updates :total-items (:total-items current-state))
-        new-page-size (normalize-page-size (get updates :page-size (:page-size current-state)))
-        new-total-pages (calculate-total-pages new-total-items new-page-size)
-        new-page-number (normalize-page-number
-                          (get updates :current-page (:current-page current-state))
-                          new-total-pages)]
-    (assoc current-state
-      :current-page new-page-number
-      :page-size new-page-size
-      :total-items new-total-items
-      :total-pages new-total-pages
-      :offset (calculate-offset new-page-number new-page-size))))
-
 ;; -------------------------
 ;; Navigation Functions
 ;; -------------------------

@@ -39,6 +39,8 @@
   [items total-amount]
   (shape/lines-total-mismatch? items total-amount))
 
+^{:clj-kondo/ignore [:unused-private-var]
+  :clojure-lsp/ignore [:unused-private-var]}
 (defn- non-item-reason
   [ctx item]
   (extraction-items/non-item-reason ctx item))
@@ -58,10 +60,6 @@
 (defn- auto-create-aliases!
   [db supplier-id extraction opts]
   (item-aliases/auto-create-aliases! db supplier-id extraction opts))
-
-(defn- mark-review-required!
-  [db receipt-id message]
-  (review/mark-review-required! db receipt-id message))
 
 (defn- auto-approve-extracted-receipt!
   [db receipt-id extraction supplier-id store-id opts]

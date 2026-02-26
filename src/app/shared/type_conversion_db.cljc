@@ -2,7 +2,6 @@
   "Database-specific type casting and formatting logic.
    Handles HoneySQL formatting and PostgreSQL type preparations."
   (:require
-    #?@(:clj [[cheshire.core :as json]])
     [app.shared.field-metadata :as field-meta]
     [clojure.string :as str]))
 
@@ -114,23 +113,6 @@
 ;; =============================================================================
 ;; Formatters
 ;; =============================================================================
-
-(defn format-date-for-db
-  "Format a date value for database storage."
-  [date-value]
-  (cond
-    #?@(:clj [(instance? java.util.Date date-value) (str date-value)])
-    #?@(:cljs [(instance? js/Date date-value) (.toISOString date-value)])
-    :else date-value))
-
-(defn format-json-for-db
-  "Format a value for JSONB storage in the database."
-  [value]
-  (cond
-    (string? value) value
-    :else
-    #?(:clj (json/generate-string value)
-       :cljs (js/JSON.stringify value))))
 
 ;; =============================================================================
 ;; Data Preparation

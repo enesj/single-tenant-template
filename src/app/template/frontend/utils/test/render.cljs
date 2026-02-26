@@ -289,11 +289,11 @@
   (if (exists? js/document)
     (let [container (.createElement js/document "div")
           _ (when js/document.body (.appendChild js/document.body container))
-          root (when (and react-dom-client (gobj/get react-dom-client "createRoot"))
-                 (.createRoot ^js react-dom-client container))
+          ^js root (when (and react-dom-client (gobj/get react-dom-client "createRoot"))
+                     (.createRoot ^js react-dom-client container))
           render! (fn []
                     (cond
-                      root (.render root element)
+                      root (.render ^js root element)
                       (and react-dom (gobj/get react-dom "render"))
                       (.render ^js react-dom element container)
                       :else nil))]
@@ -310,7 +310,7 @@
         (finally
           (try
             (cond
-              root (.unmount root)
+              root (.unmount ^js root)
               (and react-dom (gobj/get react-dom "unmountComponentAtNode"))
               (.unmountComponentAtNode ^js react-dom container))
             (catch :default _))
@@ -323,5 +323,4 @@
     (render-to-static-markup element)
     (catch :default e
       (str "<error>Rendering failed: " (.-message e) "</error>"))))
-
 

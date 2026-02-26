@@ -3,7 +3,8 @@
    Aggregates models, utilities, and generators into a simplified interface."
   (:require
     [app.template.frontend.auto-test-generators :as generators]
-    [app.template.frontend.auto-test-models :as models]))
+    [app.template.frontend.auto-test-models :as models]
+    [app.template.frontend.auto-test-utils :as utils]))
 
 ;; =============================================================================
 ;; Re-exports for Backward Compatibility

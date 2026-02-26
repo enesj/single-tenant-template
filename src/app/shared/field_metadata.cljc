@@ -93,53 +93,9 @@
     (some #(when (= (normalize-field-key (first %)) field-key) %)
       (get-in models* [entity-key :fields]))))
 
-(defn get-field-constraints
-  "Get field constraints from models data.
-
-   Extracts constraints like :required, :unique, :min, :max, etc.
-   from the field specification.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-     field: Field identifier (keyword or string)
-
-   Returns:
-     Map of field constraints or empty map if none found"
-  [models entity field]
-  (let [field-spec (get-field-spec models entity field)]
-    (when field-spec
-      (into {} (drop 2 field-spec)))))
-
 ;; =============================================================================
 ;; Model Introspection
 ;; =============================================================================
-
-(defn get-entity-fields
-  "Get all fields for a specific entity.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-
-   Returns:
-     Vector of field specifications for the entity"
-  [models entity]
-  (let [entity-key (normalize-entity-key entity)]
-    (get-in (keywordize-top models) [entity-key :fields] [])))
-
-(defn get-entity-field-names
-  "Get all field names for a specific entity.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-
-   Returns:
-     Set of field names (keywords)"
-  [models entity]
-  (let [fields (get-entity-fields models entity)]
-    (set (map first fields))))
 
 (defn get-entity-types
   "Get all type definitions for a specific entity.
@@ -178,64 +134,9 @@
 ;; Field Type Utilities
 ;; =============================================================================
 
-(defn field-required?
-  "Check if a field is required.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-     field: Field identifier (keyword or string)
-
-   Returns:
-     Boolean indicating if field is required"
-  [models entity field]
-  (let [constraints (get-field-constraints models entity field)]
-    (boolean (:required constraints))))
-
-(defn field-unique?
-  "Check if a field is unique.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-     field: Field identifier (keyword or string)
-
-   Returns:
-     Boolean indicating if field is unique"
-  [models entity field]
-  (let [constraints (get-field-constraints models entity field)]
-    (boolean (:unique constraints))))
-
-(defn get-field-default
-  "Get the default value for a field.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier (keyword or string)
-     field: Field identifier (keyword or string)
-
-   Returns:
-     Default value or nil if none specified"
-  [models entity field]
-  (let [constraints (get-field-constraints models entity field)]
-    (:default constraints)))
-
 ;; =============================================================================
 ;; Validation Utilities
 ;; =============================================================================
-
-(defn validate-entity-exists
-  "Validate that an entity exists in the models data.
-
-   Args:
-     models: The models data structure from models.edn
-     entity: Entity identifier to validate
-
-   Returns:
-     Boolean indicating if entity exists"
-  [models entity]
-  (let [entity-key (normalize-entity-key entity)]
-    (contains? models entity-key)))
 
 ;; =============================================================================
 ;; Debug and Inspection Utilities
