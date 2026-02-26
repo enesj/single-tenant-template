@@ -87,7 +87,12 @@
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn- build-status-query-helpers
-  "Build SQL helpers for status filtering with mismatch detection."
+  "Build SQL helpers for status filtering with mismatch detection.
+
+  Receipts with refine_pending=true are excluded from the mismatch condition so
+  the effective status stays as the raw DB status while Cerebras refinement is
+  running. Once refinement completes the flag is cleared and the mismatch check
+  applies normally."
   []
   (let [lines-total-sql
         (str
@@ -100,7 +105,8 @@
           "status = 'extracted'::receipt_status"
           " and total_amount_guess is not null"
           " and " lines-total-sql " is not null"
-          " and abs((" lines-total-sql ") - total_amount_guess) > 0.01")
+          " and abs((" lines-total-sql ") - total_amount_guess) > 0.01"
+          " and not coalesce((raw_extract_json->>'refine_pending')::boolean, false)")
 
         mismatch-clause [:raw mismatch-sql]
         not-mismatch-clause [:raw (str "not (" mismatch-sql ")")]

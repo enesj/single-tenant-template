@@ -25,6 +25,7 @@
                        {:value "parsed" :label "Parsed"}
                        {:value "extracting" :label "Extracting"}
                        {:value "extracted" :label "Extracted"}
+                       {:value "refining" :label "Refining"}
                        {:value "review_required" :label "Review required"}
                        {:value "approved" :label "Approved"}
                        {:value "posted" :label "Posted"}
@@ -36,7 +37,7 @@
             {:id :updated-at :label "updated at" :type :datetime}]})
 
 (def ^:private receipt-processing-statuses
-  #{"uploaded" "parsing" "parsed" "extracting"})
+  #{"uploaded" "parsing" "parsed" "extracting" "refining"})
 
 (defn- receipt-processing?
   [status]

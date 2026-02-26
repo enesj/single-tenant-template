@@ -227,6 +227,11 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [rows (or (:data response) [])
+          rows (mapv (fn [r]
+                       (if (receipt-refine-pending? r)
+                         (assoc r :status "refining")
+                         r))
+                 rows)
           total (or (:total response) (count rows))
           limit (or (:limit response) (get-in db (conj base-path :limit)))
           offset (or (:offset response) (get-in db (conj base-path :offset)))]

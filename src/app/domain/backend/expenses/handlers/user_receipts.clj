@@ -116,9 +116,11 @@
         abs-dec (fn [d] (if (neg? d) (- d) d))
         total-equals-lines? (when (and (some? total) (some? lines-total))
                               (<= (abs-dec (- total lines-total)) 0.01M))
+        refine-pending? (true? (get-in receipt [:raw-extract-json :refine-pending]))
         effective-status (let [status (:status receipt)]
                            (if (and (= "extracted" status)
-                                 (false? total-equals-lines?))
+                                 (false? total-equals-lines?)
+                                 (not refine-pending?))
                              "review_required"
                              status))]
     (cond-> (assoc receipt
