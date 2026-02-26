@@ -186,6 +186,7 @@
     ;; Initial load
     (use-effect
       (fn []
+        (rf/dispatch [:app.template.frontend.events.list/clear-selection :receipts])
         (rf/dispatch [::list-ui-state-events/set-pagination-mode :receipts :server])
         (rf/dispatch [::list-ui-state-events/set-refresh-event :receipts [:user-expenses/refresh-receipts-list]])
         (refresh!)
