@@ -2,7 +2,7 @@
   "Unit tests for shared handler helpers — pure functions, no DB required."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is]]))
 
 ;; ============================================================================
 ;; parse-page-limit

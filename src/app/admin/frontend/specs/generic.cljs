@@ -9,6 +9,7 @@
    - Vector-based: Explicit column ordering and visibility
    - Flexible: User preferences layer over default configurations
    - Maintainable: Configuration-driven approach eliminates hardcoded customizations"
+  {:clj-kondo/ignore [:unused-namespace]}
   (:require
     [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.specs.form-components :as form-components]

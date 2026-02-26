@@ -2,8 +2,9 @@
 
 (ns scripts.bb.articles.map-aliases
   (:require
+    [articles.db :as db]
     [clojure.edn :as edn]
-    [articles.db :as db]))
+    [clojure.string :as str]))
 
 (defn- usage
   ([] (usage nil))
@@ -94,8 +95,8 @@
 (defn- keywordize-k
   [k]
   (cond
-    (keyword? k) (keyword (clojure.string/replace (name k) "_" "-"))
-    (string? k) (keyword (clojure.string/replace k "_" "-"))
+    (keyword? k) (keyword (str/replace (name k) "_" "-"))
+    (string? k) (keyword (str/replace k "_" "-"))
     :else k))
 
 (defn- normalize-map-keys
@@ -264,7 +265,7 @@
 
 (defn- validate-mapping!
   [mapping context]
-  (let [{:keys [alias-ids raw-label supplier-display-name]} mapping
+  (let [{:keys [raw-label supplier-display-name]} mapping
         _ (when (or (and raw-label (not supplier-display-name))
                   (and supplier-display-name (not raw-label)))
             (throw (ex-info "--raw-label and --supplier must be provided together"

@@ -1,5 +1,6 @@
 (ns app.admin.frontend.subs.config
   "Simplified subscriptions for vector-based column configuration"
+  {:clj-kondo/ignore [:unused-namespace]}
   (:require
     [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.system.entity-registry :as entity-registry]

@@ -86,14 +86,14 @@
 
   ;; 2. Register our custom trace collector
   (trace/register-trace-cb :app/dev-tracer on-traces)
-  
+
   ;; 3. Redirect re-frame internal logs (like "Handling event") to our tracer
   (rlog/set-loggers!
     {:log (fn [& args] (log :info (str/join " " args)))
      :warn (fn [& args] (log :warn (str/join " " args)))
      :error (fn [& args] (js/console.error (str/join " " args))) ;; Keep errors in console!
-     :group (fn [& args] nil)  ;; Silence groups
-     :groupEnd (fn [& args] nil)})
+     :group (fn [& _args] nil)  ;; Silence groups
+     :groupEnd (fn [& _args] nil)})
 
   ;; 4. Configure Timbre to use our tracer and silence console
   (log/merge-config!

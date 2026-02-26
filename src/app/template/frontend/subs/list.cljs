@@ -138,9 +138,8 @@
   ::filtered-items
   (fn [[_ entity-type] _]
     [(rf/subscribe [::items entity-type])
-     (rf/subscribe [::active-filters entity-type])
-     (rf/subscribe [::entity-ui-state entity-type])])
-  (fn [[items filters ui-state] [_ _]]
+     (rf/subscribe [::active-filters entity-type])])
+  (fn [[items filters] [_ _]]
     (if (empty? filters)
       items
       (let [filtered (filter (fn [item]

@@ -209,7 +209,6 @@
 
         ;; Current browser overrides that can mask policy defaults.
         local-display-prefs (or (use-subscribe [::ui-subs/entity-display-prefs entity-kw]) {})
-        local-overrides-count (count local-display-prefs)
 
         ;; Always call hooks unconditionally
         entity-type-sub (use-subscribe [::core-subs/entity-type])

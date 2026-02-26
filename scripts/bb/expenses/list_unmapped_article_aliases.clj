@@ -3,11 +3,10 @@
 (ns scripts.bb.expenses.list-unmapped-article-aliases
   (:require
     [aero.core :as aero]
-    [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs]
+    [clojure.data.json :as json]
     [honey.sql :as sql]
-    [clojure.string :as str]
-    [clojure.data.json :as json]))
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]))
 
 (defn- datasource-from-config [config]
   (let [{:keys [host port dbname user password]} (:database config)]
@@ -38,7 +37,7 @@
     ;; Extract all unique article aliases from receipts
     (let [all-aliases
           (->> receipts-with-data
-            (mapcat (fn [{:keys [id supplier_guess raw_extract_json]}]
+            (mapcat (fn [{:keys [supplier_guess raw_extract_json]}]
                       (when raw_extract_json
                         (try
                           (let [json-str (str raw_extract_json)
@@ -48,7 +47,7 @@
                                    {:raw_label raw_label
                                     :supplier supplier_guess})
                               items))
-                          (catch Exception e
+                          (catch Exception _e
                             [])))))
             (remove nil?)
             (distinct)

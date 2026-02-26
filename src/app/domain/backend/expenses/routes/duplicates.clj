@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.services.duplicates :as duplicates]
     [app.domain.backend.expenses.services.merge :as merge]
     [app.shared.adapters.database :as shared-db]
+    [clojure.string :as str]
     [app.template.backend.routes.admin.utils :as admin-utils]))
 
 (def ^:private to-app shared-db/to-app)
@@ -172,7 +173,7 @@
             parsed-member-ids (mapv admin-utils/parse-uuid-custom member-ids-vec)
             note (some-> (or (:note body) (get body "note")) str)
             expected-id (duplicates/cluster-id entity-type parsed-member-ids)
-            member-ids* (->> parsed-member-ids (map str) (map clojure.string/lower-case) sort vec)]
+            member-ids* (->> parsed-member-ids (map str) (map str/lower-case) sort vec)]
         (cond
           (nil? admin-id)
           (admin-utils/error-response "Admin authentication required" :status 401)

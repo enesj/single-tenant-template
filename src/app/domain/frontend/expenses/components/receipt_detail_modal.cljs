@@ -196,7 +196,6 @@
               (when (map? receipt)
                 (id-utils/extract-entity-id receipt)))
         rid-str (if rid (str rid) "unknown")
-        approve-allowed? (contains? #{"extracted" "review_required"} status)
         approve-form-visible? (contains? #{"extracted" "review_required" "posted"} status)
 
         ;; Resize handlers

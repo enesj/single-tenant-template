@@ -1,4 +1,6 @@
-(ns app.domain.frontend.expenses.subs.article-alias-bulk)
+(ns app.domain.frontend.expenses.subs.article-alias-bulk
+  (:require
+    [re-frame.core :as rf]))
 
 (def ^:private base-path [:admin :expenses :articles :add-aliases-modal])
 

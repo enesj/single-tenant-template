@@ -3,7 +3,7 @@
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is]]))
 
 (deftest resolve-supplier-and-alias-strips-legal-suffix-before-creating-supplier
   (let [resolve #'extraction/resolve-supplier-and-alias

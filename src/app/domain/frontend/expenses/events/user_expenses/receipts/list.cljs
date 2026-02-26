@@ -107,7 +107,12 @@
    :bridge-id :expenses-user-receipts
    :priority 90
    :context-pred (fn [db]
-                   (not (crud-bridges/in-admin-context? db)))
+                   (let [route-name (get-in db (paths/current-route-name))
+                         admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+                         pathname (when (exists? js/window)
+                                    (some-> js/window .-location .-pathname))
+                         in-admin-path? (and pathname (str/includes? pathname "/admin"))]
+                     (not (or admin-route? in-admin-path?))))
    :operations
    {:delete
     {:request (fn [{:keys [db]} entity-type id default-effect]

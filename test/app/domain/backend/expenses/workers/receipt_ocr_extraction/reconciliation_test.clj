@@ -7,7 +7,7 @@
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is]]))
 
 (deftest persist-extract-result-applies-discount-override-for-popost-ocr-misread
   (let [receipt-id (java.util.UUID/randomUUID)

@@ -59,9 +59,8 @@
   ::filtered-entities
   (fn [[_ entity-type]]
     [(rf/subscribe [::entities entity-type])
-     (rf/subscribe [::list-subs/active-filters entity-type])
-     (rf/subscribe [::entity-config entity-type])])
-  (fn [[entities active-filters entity-config] [_ _entity-type]]
+     (rf/subscribe [::list-subs/active-filters entity-type])])
+  (fn [[entities active-filters] [_ _entity-type]]
     (if (empty? active-filters)
       entities
       (let [filtered (filter (fn [item]

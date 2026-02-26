@@ -56,7 +56,7 @@
           id-b (UUID/randomUUID)
           clusters [{:members [{:id id-a} {:id id-b}] :count 2}]
           call-count (atom 0)]
-      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+      (with-redefs [jdbc/execute! (fn [_db _sql-params _opts]
                                     (swap! call-count inc)
                                     ;; Return different counts for different FK tables
                                     [{:entity_id id-a :cnt 5}

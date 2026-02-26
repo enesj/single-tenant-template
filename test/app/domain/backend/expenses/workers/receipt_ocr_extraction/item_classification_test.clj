@@ -6,7 +6,7 @@
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is]]))
 
 (deftest non-item-reason-keeps-legitimate-item-label-with-br-fino
   (let [non-item-reason #'extraction/non-item-reason

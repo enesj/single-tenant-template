@@ -4,7 +4,7 @@
     [app.template.frontend.api.http :as http]))
 
 (defn xhrio
-  [db {:keys [method uri params body format response-format headers timeout on-success on-failure]}]
+  [_db {:keys [method uri params body format response-format headers timeout on-success on-failure]}]
   (let [req (cond-> {:method method
                      :uri uri
                      :on-success on-success

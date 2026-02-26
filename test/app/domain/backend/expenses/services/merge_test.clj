@@ -63,10 +63,9 @@
     (let [primary-id (UUID/randomUUID)
           secondary-id (UUID/randomUUID)
           operations (atom [])]
-      (with-redefs [jdbc/with-transaction (fn [binding-vec & body-fns]
+      (with-redefs [jdbc/with-transaction (fn [_binding-vec & body-fns]
                                             ;; Simple mock: just call the body with db as tx
-                                            (let [body-fn (last body-fns)
-                                                  tx :mock-tx]
+                                            (let [body-fn (last body-fns)]
                                               (body-fn)))
                     jdbc/execute! (fn [_db sql-params _opts]
                                     (swap! operations conj {:type :select :sql (first sql-params)})

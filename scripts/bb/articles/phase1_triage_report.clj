@@ -46,7 +46,7 @@
   []
   (let [stats (:supplier-risk-stats summary)]
     (->> stats
-      (map (fn [{:keys [supplier alias-count risky-alias-count] :as s}]
+      (map (fn [{:keys [alias-count risky-alias-count] :as s}]
              (assoc s
                :score (supplier-score {:alias-count alias-count
                                        :risky-alias-count risky-alias-count}))))
@@ -60,7 +60,7 @@
     "- sizes: " (if (seq sizes) (str/join ", " sizes) "(none detected)") "\n"
     "- constraint: **Do not map different sizes/pack tokens (or restaurant vs retail) to the same article.**\n\n"
     (str/join "\n"
-      (for [{:keys [raw_label normalized supplier sizes restaurant? alias_ids]} aliases]
+      (for [{:keys [raw_label supplier sizes restaurant? alias_ids]} aliases]
         (str "- "
           "`" (or (some-> alias_ids first) "(alias_id?)") "` "
           (md-escape (or raw_label ""))

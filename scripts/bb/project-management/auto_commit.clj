@@ -1,5 +1,6 @@
 #!/usr/bin/env bb
 
+#_{:clj-kondo/ignore [:duplicate-require]}
 (require
   '[babashka.process :as p]
   '[cheshire.core :as json]
@@ -15,8 +16,8 @@
       env-key
       (let [result (try
                      (p/shell {:out :string}
-                              "bash" "-c"
-                              "set -a; [ -f .env ] && source .env; set +a; echo $CEREBRAS_API_KEY")
+                       "bash" "-c"
+                       "set -a; [ -f .env ] && source .env; set +a; echo $CEREBRAS_API_KEY")
                      (catch Exception _e
                        (throw (Exception. "Could not load CEREBRAS_API_KEY from .env"))))
             file-key (str/trim (:out result))]
@@ -182,12 +183,12 @@
 ;; Main execution
 (let [arg-set    (set *command-line-args*)
       test-mode? (or (contains? arg-set "test")
-                  (contains? arg-set "--test"))
+                   (contains? arg-set "--test"))
       push-mode? (or (contains? arg-set "push")
-                  (contains? arg-set "--push"))
+                   (contains? arg-set "--push"))
       yes-mode?  (or (contains? arg-set "yes")
-                  (contains? arg-set "--yes")
-                  (contains? arg-set "-y"))
+                   (contains? arg-set "--yes")
+                   (contains? arg-set "-y"))
       run-tests? (or test-mode? push-mode?)
       initial-status-result (p/shell {:out :string} "git status --porcelain")
       initial-status-lines (->> (str/split-lines (:out initial-status-result))
@@ -221,7 +222,7 @@
                      (remove str/blank?))
 
       code-staged-files (->> staged-files
-              (filter code-file-path?))
+                          (filter code-file-path?))
 
       ;; Files with unstaged modifications or untracked files
       unstaged-files (->> status-lines

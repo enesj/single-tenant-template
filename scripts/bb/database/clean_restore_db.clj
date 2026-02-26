@@ -2,9 +2,9 @@
 
 (ns scripts.bb.database.clean-restore-db
   (:require
-   [aero.core :as aero]
-   [clojure.java.shell :as shell]
-   [clojure.string :as str]))
+    [aero.core :as aero]
+    [clojure.java.shell :as shell]
+    [clojure.string :as str]))
 
 (defn get-db-config [profile]
   (let [config (aero/read-config "config/base.edn" {:profile profile})
@@ -86,7 +86,7 @@
             (println "Error:" (:err result)))
           (throw (Exception. "Database creation failed")))))))
 
-(defn restore-from-backup [env backup-file db-config]
+(defn restore-from-backup [_env backup-file db-config]
   (println (str "📥 Restoring from backup: " backup-file))
 
   (let [psql-cmd ["/opt/homebrew/bin/psql"

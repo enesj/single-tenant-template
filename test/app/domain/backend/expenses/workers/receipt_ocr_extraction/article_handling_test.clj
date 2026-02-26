@@ -7,7 +7,7 @@
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
-    [clojure.test :refer [deftest is testing]]))
+    [clojure.test :refer [deftest is]]))
 
 (deftest persist-extract-result-auto-creates-articles-when-enabled
   (let [receipt-id (java.util.UUID/randomUUID)

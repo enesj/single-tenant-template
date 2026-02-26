@@ -139,7 +139,7 @@
         "\n"
         "Tip: ensure `rg` is installed and the query/globs are valid."))))
 
-(defn- run!
+(defn- run-audit!
   [opts]
   (let [out-path (or (:out opts) (default-out-path opts))
         _ (fs/create-dirs (fs/parent out-path))
@@ -174,6 +174,6 @@
                 (recur (rest lines) match-count ctx-count)))))))))
 
 (let [opts (parse-args *command-line-args*)
-      result (run! opts)]
+      result (run-audit! opts)]
   (println (str "Wrote audit bundle: " (:out result)))
   (println (str "Matches: " (:matches result) ", context lines: " (:ctx result) ", rg-exit: " (:exit result))))

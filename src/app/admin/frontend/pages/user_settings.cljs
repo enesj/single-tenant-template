@@ -3,6 +3,7 @@
 
   These settings are stored in `src/app/domain/frontend/expenses/config/*` via
   the admin API and are used by the non-admin (user-facing) routes."
+  {:clj-kondo/ignore [:unused-namespace :unused-referred-var :unused-private-var]}
   (:require
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.events.user-settings :as user-settings-events]
