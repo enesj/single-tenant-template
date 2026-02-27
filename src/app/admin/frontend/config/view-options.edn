@@ -4,6 +4,18 @@
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
+ :subcategories
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 50},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
+ :cities
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 50},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
  :admins
  {:column-locks {},
   :display-locks
@@ -13,24 +25,6 @@
  :articles
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 25},
-  :display-locks {},
-  :column-defaults {},
-  :column-locks {}}
- :categories
- {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 50},
-  :display-locks {},
-  :column-defaults {},
-  :column-locks {}}
- :cities
- {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 50},
-  :display-locks {},
-  :column-defaults {},
-  :column-locks {}}
- :subcategories
- {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 50},
   :display-locks {},
   :column-defaults {},
   :column-locks {}},
@@ -60,6 +54,12 @@
   :display-defaults {:per-page 50, :show-edit? false},
   :column-defaults {},
   :column-locks {}},
+ :categories
+ {:display-defaults
+  {:show-edit? true, :show-filtering? true, :per-page 50},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {}},
  :supplier-aliases
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 10},
@@ -81,9 +81,10 @@
    :show-filtering? true,
    :show-highlights? true,
    :per-page 50},
-  :display-locks {:show-add-button? false,
-                  :show-batch-edit? false,
-                  :show-batch-delete? true}},
+  :display-locks
+  {:show-add-button? false,
+   :show-batch-edit? false,
+   :show-batch-delete? true}},
  :stores
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 10},
@@ -109,6 +110,18 @@
    :per-page 25,
    :show-delete? false},
   :display-locks {:show-add-button? false},
+  :column-defaults {},
+  :column-locks {}},
+ :expense-categories
+ {:display-locks {},
+  :display-defaults
+  {:show-add-button? true,
+   :show-delete? true,
+   :show-edit? true,
+   :show-filtering? true,
+   :show-highlights? true,
+   :show-pagination? true,
+   :per-page 50},
   :column-defaults {},
   :column-locks {}},
  :users

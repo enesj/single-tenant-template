@@ -46,9 +46,9 @@
    (println "  --manufacturer-name NAME          (optional)")
    (println "  --manufacturer-key KEY            (optional; defaults to normalized(NAME) when NAME present)")
    (println "")
-   (println "  --category-name NAME              (optional)")
+   (println "  --category-name NAME              (optional; created automatically if absent)")
    (println "  --category-description TEXT       (optional)")
-   (println "  --subcategory-name NAME           (optional; requires --category-name)")
+   (println "  --subcategory-name NAME           (optional; requires --category-name; created automatically if absent)")
    (println "  --subcategory-description TEXT    (optional)")
    (println "")
    (println "Batch options:")
@@ -375,22 +375,27 @@
             "LIMIT 1"))))))
 
 (defn- ensure-subcategory!
-  [db {:keys [category-name subcategory-name subcategory-description update-subcategory-description?]}]
+  "Finds or creates a subcategory under the given category.
+  Resolution order for category-id:
+    1. :resolved-category-id in opts (threaded from process-article!)
+    2. SELECT from DB by :category-name
+    3. Auto-create via ensure-category! (handles brand-new category names)"
+  [db {:keys [category-name subcategory-name subcategory-description
+              update-subcategory-description? resolved-category-id]
+       :as opts}]
   (when subcategory-name
-    (let [category-id
-          (:id
-           (db/query1
-             db
-             (str
-               "SELECT id\n"
-               "FROM categories\n"
-               "WHERE name = " (db/sql-literal category-name) "\n"
-               "LIMIT 1")))
+    (let [category-id (or resolved-category-id
+                        (:id (db/query1
+                               db
+                               (str
+                                 "SELECT id\n"
+                                 "FROM categories\n"
+                                 "WHERE name = " (db/sql-literal category-name) "\n"
+                                 "LIMIT 1")))
+                        (:id (ensure-category! db opts)))
           _ (when-not category-id
-              (throw
-                (ex-info
-                  "Category not found (did you pass --category-name / ensure it first)?"
-                  {:category-name category-name})))
+              (throw (ex-info "Category could not be found or created"
+                       {:category-name category-name})))
           id (db/uuid)
           inserted (db/query1
                      db
@@ -467,7 +472,10 @@
         subcategory (cached-call!
                       (:subcategory caches)
                       subcategory-cache-key
-                      #(ensure-subcategory! db opts))
+                      ;; Pass already-resolved category-id so ensure-subcategory!
+                      ;; skips its own SELECT (and never needs the auto-create fallback
+                      ;; in normal flow — it's there for direct callers only).
+                      #(ensure-subcategory! db (assoc opts :resolved-category-id (:id category))))
         subcategory-id (:id subcategory)
         inserted (create-article! db {:canonical-name (:canonical-name opts)
                                       :normalized-key (:normalized-key opts)

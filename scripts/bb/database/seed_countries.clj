@@ -221,16 +221,18 @@
                                  :port port
                                  :dbname dbname
                                  :user user
-                                 :password password})
-        _ (jdbc/execute-batch! ds
-            "INSERT INTO countries (country, code, created_at, updated_at)
-             VALUES (?, ?, NOW(), NOW())
-             ON CONFLICT (country) DO UPDATE
-               SET code = EXCLUDED.code,
-                   updated_at = NOW()"
-            countries)
-        {:keys [n]} (jdbc/execute-one! ds ["SELECT COUNT(*)::int AS n FROM countries"])]
-    (println (format "✓ Seeded %d entries (total in DB: %d)" (count countries) n))))
+                                 :password password})]
+    (jdbc/with-transaction [tx ds]
+      (jdbc/execute-batch! tx
+        "INSERT INTO countries (country, code, created_at, updated_at)
+         VALUES (?, ?, NOW(), NOW())
+         ON CONFLICT (country) DO UPDATE
+           SET code = EXCLUDED.code,
+               updated_at = NOW()"
+        countries
+        {}))
+    (let [{:keys [n]} (jdbc/execute-one! ds ["SELECT COUNT(*)::int AS n FROM countries"])]
+      (println (format "✓ Seeded %d entries (total in DB: %d)" (count countries) n)))))
 
 (defn -main [& args]
   (let [env (or (first args) "dev")

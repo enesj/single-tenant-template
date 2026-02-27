@@ -13,7 +13,8 @@
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.cities))
+    [app.domain.frontend.expenses.events.cities :as cities-events]
+    [app.template.frontend.events.list.ui-state :as ui-state]))
 
 (defui admin-cities-page
   "Admin route: /admin/cities"
@@ -22,7 +23,10 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.cities/load-list {}]))
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
+                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
+                                            [::cities-events/load-list]])
+                         (rf/dispatch [::cities-events/load-list {:page 1 :per-page 25}]))
                        [])]
     (use-effect
       (fn []

@@ -22,53 +22,53 @@
   - Before pruning, it remaps `subcategories.category_id` from legacy category names to the
     new consolidated names (so subcategories aren’t lost)."
   [;; Food (5)
-   {:name "Produce" :description "Fresh fruits, vegetables, herbs."}
-   {:name "Dairy & Eggs" :description "Milk, cheese, yogurt, butter, eggs."}
-   {:name "Meat, Seafood & Deli" :description "Meat, seafood, deli meats and related items."}
-   {:name "Bakery & Desserts" :description "Bread, pastries, cakes, desserts."}
-   {:name "Packaged Foods & Drinks" :description "Pantry, snacks, frozen foods, beverages, coffee/tea, alcohol."}
+   {:name "Svježe voće i povrće" :description "Svježe voće, povrće, začinsko bilje."}
+   {:name "Mliječni proizvodi i jaja" :description "Mlijeko, sir, jogurt, maslac, jaja."}
+   {:name "Meso, morski plodovi i delikatesi" :description "Meso, morski plodovi, suhomesnati proizvodi i srodni artikli."}
+   {:name "Pekara i deserti" :description "Hljeb, peciva, kolači, deserti."}
+   {:name "Pakovana hrana i pića" :description "Ostava, grickalice, smrznuta hrana, pića, kafa/čaj, alkohol."}
 
    ;; Non-food (20)
-   {:name "Cleaning Supplies" :description "Cleaning chemicals, detergents, sanitizers."}
-   {:name "Paper Goods" :description "Paper towels, napkins, tissues, toilet paper."}
-   {:name "Disposables & Packaging" :description "To-go containers, bags, wraps, labels."}
-   {:name "Kitchen Supplies" :description "Foil, film, parchment, storage, prep items."}
-   {:name "Smallwares & Utensils" :description "Cutlery, tongs, ladles, tools, smallwares."}
-   {:name "Equipment & Appliances" :description "Appliances and equipment."}
-   {:name "Maintenance & Repair" :description "Repairs, parts, maintenance supplies."}
-   {:name "Office Supplies" :description "Stationery, printer supplies, admin items."}
-   {:name "Household Essentials" :description "Batteries, light bulbs, general household essentials."}
-   {:name "Storage & Organization" :description "Bins, shelves, organizers, containers."}
-   {:name "Personal Care" :description "Toiletries, hygiene and grooming items."}
-   {:name "Health & Pharmacy" :description "Over-the-counter health products and pharmacy items."}
-   {:name "Baby Products" :description "Diapers, wipes and baby care items."}
-   {:name "Pet Supplies" :description "Pet food, litter, grooming and accessories."}
-   {:name "Electronics & Accessories" :description "Electronics, cables, batteries, accessories."}
-   {:name "Clothing & Accessories" :description "Apparel, shoes, accessories."}
-   {:name "Home & Garden" :description "Home improvement, garden and outdoor items."}
-   {:name "Hardware & Tools" :description "Tools, hardware, fasteners and related supplies."}
-   {:name "Toys & Games" :description "Toys, games and hobby items."}
-   {:name "Other" :description "Miscellaneous items that don’t fit elsewhere."}])
+   {:name "Sredstva za čišćenje" :description "Hemikalije za čišćenje, deterdženti, dezinfekciona sredstva."}
+   {:name "Papirna galanterija" :description "Papirni ubrusi, salvete, maramice, toaletni papir."}
+   {:name "Jednokratno posuđe i pakovanje" :description "Posude za ponijeti, kese, folije, etikete."}
+   {:name "Kuhinjske potrepštine" :description "Alu-folija, prijanjajuća folija, papir za pečenje, skladištenje hrane."}
+   {:name "Sitni inventar i pribor" :description "Pribor za jelo, hvataljke, kutlače, alati, sitni inventar."}
+   {:name "Oprema i uređaji" :description "Uređaji i oprema."}
+   {:name "Održavanje i popravke" :description "Popravke, dijelovi, materijal za održavanje."}
+   {:name "Kancelarijski materijal" :description "Pribor za pisanje, printeri i toner, administrativni artikli."}
+   {:name "Kućne potrepštine" :description "Baterije, sijalice, opće kućne potrepštine."}
+   {:name "Skladištenje i organizacija" :description "Kutije, police, organizatori, kontejneri."}
+   {:name "Lična njega" :description "Toaletne potrepštine, higijena i njegu tijela."}
+   {:name "Zdravlje i apoteka" :description "Lijekovi bez recepta i apotekarski proizvodi."}
+   {:name "Proizvodi za bebe" :description "Pelene, maramice i artikli za njegu beba."}
+   {:name "Oprema za kućne ljubimce" :description "Hrana za ljubimce, pijesak, njega i oprema."}
+   {:name "Elektronika i dodaci" :description "Elektronika, kablovi, baterije, oprema."}
+   {:name "Odjeća i modni dodaci" :description "Odjeća, obuća, modni dodaci."}
+   {:name "Dom i vrt" :description "Uređenje doma, baštenski i vanjski artikli."}
+   {:name "Željeznarija i alati" :description "Alati, željeznarija, vijci i srodna oprema."}
+   {:name "Igračke i igre" :description "Igračke, društvene igre i hobi artikli."}
+   {:name "Ostalo" :description "Razni artikli koji se ne uklapaju u ostale kategorije."}])
 
 (def subcategory-remaps
   "Legacy category names to consolidate into the new top-level categories.
 
   This is best-effort; missing legacy categories are ignored."
-  [["Meat & Poultry" "Meat, Seafood & Deli"]
-   ["Seafood" "Meat, Seafood & Deli"]
-   ["Bakery" "Bakery & Desserts"]
+  [["Meat & Poultry" "Meso, morski plodovi i delikatesi"]
+   ["Seafood" "Meso, morski plodovi i delikatesi"]
+   ["Bakery" "Pekara i deserti"]
 
-   ["Pantry Staples" "Packaged Foods & Drinks"]
-   ["Grains & Pasta" "Packaged Foods & Drinks"]
-   ["Canned & Jarred" "Packaged Foods & Drinks"]
-   ["Condiments & Sauces" "Packaged Foods & Drinks"]
-   ["Spices & Seasonings" "Packaged Foods & Drinks"]
-   ["Baking Supplies" "Packaged Foods & Drinks"]
-   ["Snacks" "Packaged Foods & Drinks"]
-   ["Frozen Foods" "Packaged Foods & Drinks"]
-   ["Beverages" "Packaged Foods & Drinks"]
-   ["Coffee & Tea" "Packaged Foods & Drinks"]
-   ["Alcohol" "Packaged Foods & Drinks"]])
+   ["Pantry Staples" "Pakovana hrana i pića"]
+   ["Grains & Pasta" "Pakovana hrana i pića"]
+   ["Canned & Jarred" "Pakovana hrana i pića"]
+   ["Condiments & Sauces" "Pakovana hrana i pića"]
+   ["Spices & Seasonings" "Pakovana hrana i pića"]
+   ["Baking Supplies" "Pakovana hrana i pića"]
+   ["Snacks" "Pakovana hrana i pića"]
+   ["Frozen Foods" "Pakovana hrana i pića"]
+   ["Beverages" "Pakovana hrana i pića"]
+   ["Coffee & Tea" "Pakovana hrana i pića"]
+   ["Alcohol" "Pakovana hrana i pića"]])
 
 (defn get-db-config [profile]
   (let [config (aero/read-config "config/base.edn" {:profile profile})]

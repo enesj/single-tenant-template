@@ -95,7 +95,7 @@
            :entity-spec entity-spec
            :title "Suppliers"
            :form-display :modal
-           :allow-add? false
+           :allow-add? true
            :allow-edit? true
            :allow-delete? true
            :disallowed-action-mode :hide
@@ -109,3 +109,4 @@
                              (or (:display-name entity)
                                (:display_name entity)
                                "Selected supplier"))})))))
+
