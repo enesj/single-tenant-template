@@ -121,4 +121,6 @@
               :allow-delete? can-manage?
               :render-edit-form render-edit-form
               :on-edit-success refresh-aliases
-              :render-actions render-actions})))})))
+              :render-actions render-actions
+              :on-batch-delete (fn [ids]
+                                 (rf/dispatch [:user-expenses/batch-delete-store-aliases ids]))})))})))

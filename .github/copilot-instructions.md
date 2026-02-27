@@ -25,7 +25,6 @@
 
 ## Local dev
 
-- Run once: `bb run-app` (auto-reloads).
 - Tests: `bb be-test` (backend), `bb fe-test-parallel` (frontend) or `npm run test:cljs`.
 - Temp artifacts: use project-local `tmp/` (not system `/tmp`); delete when done.
 - Save test output once (don’t re-run to grep): `mkdir -p tmp && bb be-test 2>&1 | tee tmp/be-test.txt`.

@@ -359,3 +359,19 @@
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
+
+(rf/reg-event-fx
+  :user-expenses/batch-delete-store-aliases
+  common-interceptors
+  (fn [{:keys [db]} [ids]]
+    (let [id-strs (mapv ->id-str ids)]
+      {:db (-> db
+             (assoc-in [:user-expenses :form :loading?] true)
+             (assoc-in [:user-expenses :form :error] nil))
+       :http-xhrio (x/xhrio db
+                     {:method :delete
+                      :uri (str endpoints/store-aliases-endpoint "/batch")
+                      :params {:ids id-strs}
+                      :on-success [:user-expenses/delete-store-alias-success]
+                      :on-failure [:user-expenses/delete-store-alias-failure]})})))
+

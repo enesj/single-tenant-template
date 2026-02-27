@@ -1,13 +1,9 @@
-{:http {:host "localhost"
-  :port #shadow/env ["SHADOW_HTTP_PORT" :as :int :default 9630]
-  :strict true}
+{:nrepl {:port 8777
+         :init-ns shadow.user}
 
- :nrepl {:port #shadow/env ["SHADOW_NREPL_PORT" :as :int :default 8777]
-   :init-ns shadow.user}
-
- ;; Optional devtools HTTP port (not the main Shadow server port).
- :devtools {:http-port #shadow/env ["SHADOW_DEVTOOLS_HTTP_PORT" :as :int :default 9650]
-      :http-host "localhost"}
+ ;; Avoid clashing with other running Shadow servers (hosting app uses 9630)
+ :devtools {:http-port 9650
+            :http-host "localhost"}
 
  :source-paths ["src" "test" "resources/db"]
 
@@ -61,7 +57,7 @@
    :ns-regexp "-test$"
    :compiler-options {:optimizations :none}
    :devtools {:http-root "target/test"
-              :http-port #shadow/env ["SHADOW_TEST_HTTP_PORT" :as :int :default 9095]}}
+              :http-port 9095}}
 
   ;; ClojureScript Node.js test build for command line
   :test-node

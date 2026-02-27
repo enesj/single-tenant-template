@@ -7,7 +7,8 @@
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
+    [next.jdbc.result-set :as rs]
+    [taoensso.timbre :as log])
   (:import
     [java.util UUID]))
 
@@ -31,7 +32,13 @@
                             (str/join "\n")
                             (not-empty))
          city-id (when address*
-                   (cities/resolve-city-id-from-text! db (or city-source-text address*) opts))
+                   (try
+                     (cities/resolve-city-id-from-text! db (or city-source-text address*) opts)
+                     (catch Exception e
+                       (log/warn e "City resolution failed during store update; skipping city"
+                         {:store-id store-id
+                          :display-name display-name*})
+                       nil)))
          set-map (cond-> {}
                    (some? display-name*) (assoc :display_name display-name*)
                    (some? address*) (assoc :address address*)
@@ -109,7 +116,13 @@
                               (str/join "\n")
                               (not-empty))
            city-id (when address*
-                     (cities/resolve-city-id-from-text! db (or city-source-text address*) opts))
+                     (try
+                       (cities/resolve-city-id-from-text! db (or city-source-text address*) opts)
+                       (catch Exception e
+                         (log/warn e "City resolution failed during store creation; continuing without city"
+                           {:supplier-id supplier-id*
+                            :display-name display-name*})
+                         nil)))
            row {:id (UUID/randomUUID)
                 :supplier_id supplier-id*
                 :display_name display-name*

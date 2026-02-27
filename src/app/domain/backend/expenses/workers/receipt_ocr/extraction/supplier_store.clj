@@ -294,10 +294,16 @@
              :store-guess store-guess
              :source :alias})
           (let [{:keys [store-id store-alias-label]}
-                (stores/resolve-store-from-merchant db supplier-id merchant
-                  (assoc opts
-                    :store-alias-raw-label (:raw_label alias-row)
-                    :store-alias-normalized (:raw_label_normalized alias-row)))]
+                (try
+                  (stores/resolve-store-from-merchant db supplier-id merchant
+                    (assoc opts
+                      :store-alias-raw-label (:raw_label alias-row)
+                      :store-alias-normalized (:raw_label_normalized alias-row)))
+                  (catch Exception e
+                    (log/warn e "Failed to resolve/create store from merchant; alias preserved"
+                      {:supplier-id supplier-id
+                       :store-alias-id alias-id})
+                    nil))]
             (when (and alias-id store-id)
               (store-aliases/map-alias-to-store-if-unmapped! db alias-id store-id 25))
             {:store-id store-id

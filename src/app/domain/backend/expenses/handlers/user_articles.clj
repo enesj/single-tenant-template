@@ -67,7 +67,7 @@
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir))
                 rows (to-app (articles/list-articles db opts))
-                total (long (or (articles/count-articles db search) 0))]
+                total (long (or (:total (articles/count-articles db {:search search})) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit

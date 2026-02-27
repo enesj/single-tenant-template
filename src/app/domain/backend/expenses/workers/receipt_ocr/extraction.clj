@@ -185,6 +185,12 @@
                  "review_required")
         lines-total-mismatch (and (= status "extracted")
                                (lines-total-mismatch? (:items extraction) (:total_amount_guess guesses)))
+        ;; Write review_required to DB when lines/total mismatch so the raw DB
+        ;; status is consistent with the effective status returned by the API.
+        ;; Previously the mismatch override only happened at query time via
+        ;; effective_status_sql, causing DB "extracted" vs app-db "review_required"
+        ;; discrepancies after the Cerebras refine step cleared refine_pending.
+        db-status (if lines-total-mismatch "review_required" status)
         llm-refine (:llm_refine extract-result)
         item-aliases-snapshot (if (= :unknown source)
                                 (when (and (map? extraction) (sequential? (:items extraction)))
@@ -236,7 +242,7 @@
         (when supplier-alias-id {:supplier_alias_id supplier-alias-id})
         (when store-guess {:store_guess store-guess})
         (when store-alias-id {:store_alias_id store-alias-id})))
-    (receipt-status/update-status! db receipt-id status {:error_message nil :error_details nil})
+    (receipt-status/update-status! db receipt-id db-status {:error_message nil :error_details nil})
 
     (let [auto-post? (and (not (:defer-refine? opts))
                        (get opts :auto-post-after-upload? true))
