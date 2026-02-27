@@ -4,6 +4,7 @@
 -- Approach: shared database schema with tenant_id FK on tenant-owned tables.
 -- No row-level security policies (enforcement at application/middleware layer).
 -- Users can belong to multiple tenants via TenantMembership.
+-- Two identity pools: platform admins (admins table) and tenant users (users table).
 
 use "./authentication.allium" as auth
 
@@ -18,6 +19,7 @@ entity Tenant {
 
     -- Relationships
     memberships: TenantMembership with tenant = this
+    impersonation_grants: ImpersonationGrant with tenant = this
 
     -- Projections
     owners: memberships where role = owner and status = active
@@ -28,14 +30,15 @@ entity TenantMembership {
     tenant: Tenant
     user: auth/User
     role: owner | admin | member | viewer
-    status: active | suspended | invited
+    status: active | suspended
     invited_by: auth/User?
 
     -- Derived
     can_manage_users: role in {owner, admin}
-    has_full_domain_access: role in {owner, admin}
-    has_expense_access: role in {owner, admin, member}
-    has_expense_read_access: role in {owner, admin, member, viewer}
+    has_full_tenant_access: role in {owner, admin}
+    can_write_expenses: role in {owner, admin, member}
+    can_read_expenses: role in {owner, admin, member, viewer}
+    can_read_geo: role in {owner, admin}
 }
 
 entity TenantInvitation {
@@ -50,26 +53,56 @@ entity TenantInvitation {
     is_valid: status = pending and expires_at > now
 }
 
+entity ImpersonationGrant {
+    tenant: Tenant
+    admin: auth/Admin                                   -- the platform admin
+    granted_by: auth/User                               -- the tenant owner who approved
+    role: owner | admin | member | viewer               -- what role the admin operates under
+    status: active | revoked
+    revoked_by_admin: auth/Admin?                       -- platform admin ended it
+    revoked_by_user: auth/User?                         -- tenant owner revoked it
+
+    is_active: status = active
+}
+
+-- Note: auth/BrowserSession is extended with:
+--   active_tenant: Tenant?
+--   active_membership: TenantMembership?
+-- These fields are written by tenant context rules below.
+
 -- ============================================================
 -- DATA SCOPING CLASSIFICATION
 -- ============================================================
 
 -- Tenant-scoped tables (get tenant_id FK, NOT NULL):
 --
---   Transactional (user-owned):
---     expenses, expense_items, receipts,
---     user_expense_settings, payers
+--   Transactional:
+--     expenses, expense_items, receipts, payers, user_expense_settings
 --
---   Reference (per-tenant catalog):
---     suppliers, stores, articles, manufacturers,
---     categories, subcategories,
---     supplier_aliases, store_aliases, article_aliases,
+--   Tenant-managed lookup (admin/owner write, all roles read):
+--     payer_types, expense_categories
+--
+--   Tenant aliases (OCR mapping layer — created by OCR + users within tenant):
+--     supplier_aliases, store_aliases, article_aliases
+--
+-- Global product catalog (no tenant_id — shared across all tenants):
+--
+--   Created bottom-up (OCR + any tenant user + platform admin):
+--     suppliers, stores
+--
+--   Created top-down (platform admin via /create-articles skill):
+--     articles, categories, subcategories, manufacturers
+--
+-- Global geographic (no tenant_id — platform admin managed):
+--     cities, countries
+--
+-- Global OCR cache (no tenant_id):
+--     raw_labels
+--
+-- Deleted (to be reimplemented):
 --     price_observations
 --
--- Global tables (no tenant_id, shared across all tenants):
---     cities, countries, payer_types, expense_categories, raw_labels
---
--- Platform tables (no tenant_id, admin-only):
+-- Platform tables (no tenant_id — platform admin only):
 --     admins, admin_sessions, audit_logs, login_events,
 --     backlog, dedup_ignored_clusters
 
@@ -80,19 +113,23 @@ entity TenantInvitation {
 -- Two identity pools, separate concerns:
 --
 --   Platform Admins (admins table):
---     Full access to ALL tables EXCEPT:
---       expenses, expense_items, receipts, payers, payer_types
---     Manage global reference data (cities, countries, expense_categories).
---     Can view/manage tenants and memberships.
+--     Full CRUD: global product catalog, global geographic, platform tables.
+--     Full CRUD: users records and tenant_memberships across all tenants (superpower).
+--     Full read: tenants.
+--     Blocked: expenses, expense_items, receipts, payers, payer_types,
+--              tenant aliases — UNLESS impersonating a tenant user.
+--     Impersonation: logs in as existing tenant user with that user's permissions.
+--       Requires tenant owner approval (set in DB after out-of-band conversation).
+--       Either party can end it. Fully audit-logged.
 --
 --   Tenant Users (users table + tenant_memberships):
---     ALL access scoped to their tenant's rows via tenant_id filtering.
---     A user NEVER sees another tenant's data, regardless of role.
+--     Transactional data scoped to their tenant's rows via tenant_id filtering.
+--     A user NEVER sees another tenant's transactional data, regardless of role.
 --
---     owner:  full domain access within tenant + user management + tenant settings
---     admin:  full domain access within tenant + user management
---     member: expenses, expense_items, receipts (read + write) + payers (read)
---     viewer: expenses, expense_items, receipts (read only) + payers (read)
+--     owner:  transactional rw + lookup rw + aliases rw + catalog r+create + geo r
+--     admin:  transactional rw + lookup rw + aliases rw + catalog r+create + geo r
+--     member: expense rw + payers r + lookup r + aliases rw (OCR) + catalog r+create (OCR)
+--     viewer: expense r + payers r + lookup r + aliases r + catalog r
 
 -- ============================================================
 -- TENANT PROVISIONING (self-service)
@@ -106,9 +143,11 @@ rule CreateTenantOnFirstLogin {
 
     requires: user.memberships.count = 0                -- first-time user, no tenant yet
 
+    let tenant_name = user.full_name ?? user.email
+
     ensures:
         let tenant = Tenant.created(
-            name: user.full_name + "'s workspace",
+            name: tenant_name + "'s workspace",
             slug: generate_slug(user.email),
             status: active
         )
@@ -122,31 +161,46 @@ rule CreateTenantOnFirstLogin {
         TenantProvisioned(tenant: tenant, owner: user)
 }
 
-rule SeedTenantReferenceData {
+-- Seed tenant-scoped lookup tables so new tenants aren't empty.
+-- Only payer_types and expense_categories need seeding (the rest is global or
+-- accumulates through usage).
+rule SeedTenantLookupData {
     when: TenantProvisioned(tenant, owner)
 
-    -- Copy current global reference data into tenant-scoped rows.
-    -- Each copied row gets tenant_id = tenant.id.
-    -- Source: the reference tables at the time of provisioning.
-
     ensures:
-        for s in Supplier:
-            Supplier.created(tenant: tenant, name: s.name, metadata: s.metadata)
-        for st in Store:
-            Store.created(tenant: tenant, supplier: st.supplier, city: st.city, name: st.name)
-        for a in Article:
-            Article.created(tenant: tenant, name: a.name, subcategory: a.subcategory, manufacturer: a.manufacturer)
-        for m in Manufacturer:
-            Manufacturer.created(tenant: tenant, name: m.name)
-        for c in Category:
-            Category.created(tenant: tenant, name: c.name)
-        for sc in Subcategory:
-            Subcategory.created(tenant: tenant, name: sc.name, category: sc.category)
-        TenantReferenceDataSeeded(tenant: tenant)
+        for pt in default_payer_types:
+            PayerType.created(tenant: tenant, name: pt.name)
+        for ec in default_expense_categories:
+            ExpenseCategory.created(tenant: tenant, name: ec.name)
+        TenantLookupDataSeeded(tenant: tenant)
 
     guidance:
-        Alias tables (supplier_aliases, store_aliases, article_aliases) and
-        price_observations start empty — they accumulate as the tenant uses the system.
+        default_payer_types and default_expense_categories are seed templates
+        maintained by the platform. Example payer types: "Cash", "Credit Card",
+        "Debit Card", "Bank Transfer". Example categories: "Groceries", "Transport",
+        "Utilities", "Dining", "Healthcare".
+}
+
+-- Chain from TenantProvisioned so session context is set AFTER the
+-- membership exists (AutoSetTenantAfterLogin fires on UserAuthenticated
+-- but sees pre-creation state for brand-new users).
+rule AutoSetSessionAfterProvisioning {
+    when: TenantProvisioned(tenant, owner)
+
+    let membership = TenantMembership{tenant: tenant, user: owner}
+
+    requires: exists membership
+
+    ensures:
+        session.active_tenant = tenant
+        session.active_membership = membership
+        TenantContextSet(user: owner, tenant: tenant)
+
+    guidance:
+        This rule chains from TenantProvisioned (not UserAuthenticated) to
+        guarantee the membership row exists before setting the session.
+        For returning users with existing memberships, AutoSetTenantAfterLogin
+        handles session setup.
 }
 
 rule JoinTenantFromInvitation {
@@ -185,6 +239,11 @@ rule InviteUserToTenant {
     requires: inviter_membership.status = active
     requires: role in {admin, member, viewer}           -- can't invite as owner
     requires: not exists TenantInvitation{tenant: tenant, email: email, status: pending}
+    requires: not exists TenantMembership{
+        tenant: tenant,
+        user: auth/User{email: email},
+        status: active
+    }                                                   -- can't invite existing member
 
     ensures:
         TenantInvitation.created(
@@ -199,6 +258,19 @@ rule InviteUserToTenant {
         InvitationEmailDispatched(email: email, tenant: tenant)
 }
 
+rule RevokeInvitation {
+    when: InvitationRevoked(actor, invitation)
+
+    let actor_membership = TenantMembership{tenant: invitation.tenant, user: actor}
+
+    requires: exists actor_membership
+    requires: actor_membership.can_manage_users
+    requires: actor_membership.status = active
+    requires: invitation.status = pending
+
+    ensures: invitation.status = revoked
+}
+
 rule ChangeTenantMemberRole {
     when: TenantMemberRoleChanged(actor, tenant, target_user, new_role)
 
@@ -210,17 +282,39 @@ rule ChangeTenantMemberRole {
     requires: actor_membership.status = active
     requires: actor != target_user                      -- can't change own role
 
-    -- Only owners can promote to admin or change admin roles
+    -- Only owners can change owner or admin roles
     requires:
-        if new_role = admin or target_membership.role = admin:
+        if new_role = admin or target_membership.role in {admin, owner}:
             actor_membership.role = owner
         else:
             actor_membership.can_manage_users
 
-    -- Owner role is not assignable this way
+    -- Owner role is not assignable this way (use TransferTenantOwnership)
     requires: new_role in {admin, member, viewer}
 
     ensures: target_membership.role = new_role
+}
+
+rule TransferTenantOwnership {
+    when: TenantOwnershipTransferred(owner, tenant, new_owner)
+
+    let owner_membership = TenantMembership{tenant: tenant, user: owner}
+    let target_membership = TenantMembership{tenant: tenant, user: new_owner}
+
+    requires: exists owner_membership
+    requires: exists target_membership
+    requires: owner_membership.role = owner
+    requires: target_membership.role = admin             -- can only promote admins
+    requires: target_membership.status = active
+    requires: owner != new_owner
+
+    ensures: target_membership.role = owner
+    ensures: owner_membership.role = admin               -- demote old owner to admin
+
+    guidance:
+        The old owner becomes an admin, not removed. This ensures the tenant always
+        has at least one owner (the new one) and the old owner retains admin access.
+        To fully leave, the old owner can be removed separately after transfer.
 }
 
 rule RemoveUserFromTenant {
@@ -233,7 +327,7 @@ rule RemoveUserFromTenant {
     requires: exists target_membership
     requires: actor_membership.can_manage_users
     requires: actor != target_user
-    requires: target_membership.role != owner           -- can't remove an owner
+    requires: target_membership.role != owner            -- can't remove an owner
 
     ensures: not exists target_membership
 }
@@ -246,79 +340,199 @@ entity TenantDataRequest {
     user: auth/User
     tenant: Tenant
     resource: String
-    action: read | write | power
-    membership: TenantMembership?
+    action: read | write
 
-    -- Derived
+    -- Derived (looked up, not passed in)
     membership: TenantMembership{tenant: tenant, user: user}
 }
 
--- Resource tiers define which tenant roles can access which resources.
--- ALL tiers are scoped to the requesting user's active tenant (tenant_id filtering).
--- No rule in this spec ever grants cross-tenant data access.
+-- Resource classification.
+-- Tenant-scoped resources have tenant_id FK; queries filter by tenant_id.
+-- Global resources have no tenant_id; filtered at query time where noted.
 config {
-    -- Expense tier: core transactional data. Members can read+write, viewers read-only.
-    expense_tier_resources: Set<String> = {
+    -- Core transactional: member can write, viewer read-only.
+    expense_write_resources: Set<String> = {
         "expenses", "expense_items", "receipts"
     }
 
-    -- Payers: needed by all members to create expenses. Read-only for members/viewers.
-    expense_tier_read_resources: Set<String> = {
+    -- Expense read tier: includes payers (needed for dropdowns).
+    expense_read_resources: Set<String> = {
         "expenses", "expense_items", "receipts", "payers"
     }
 
-    -- Full tier: all tenant-scoped resources. Admin and owner only, within their tenant.
-    full_tier_resources: Set<String> = {
+    -- Tenant-managed lookup: admin/owner write, all roles read.
+    tenant_lookup_resources: Set<String> = {
+        "payer_types", "expense_categories"
+    }
+
+    -- Tenant aliases: admin/owner full CRUD, member rw (via OCR/expense flow), viewer read.
+    tenant_alias_resources: Set<String> = {
+        "supplier_aliases", "store_aliases", "article_aliases"
+    }
+
+    -- All tenant-scoped resources where admin/owner has full write.
+    tenant_admin_write_resources: Set<String> = {
         "expenses", "expense_items", "receipts",
         "payers", "user_expense_settings",
-        "suppliers", "stores", "articles", "manufacturers",
-        "categories", "subcategories",
-        "supplier_aliases", "store_aliases", "article_aliases",
-        "price_observations"
+        "payer_types", "expense_categories",
+        "supplier_aliases", "store_aliases", "article_aliases"
     }
-}
 
-rule AllowExpenseTierReadForAllTenantMembers {
-    when: TenantDataRequested(request)
+    -- Global product catalog: read for all tenant users, create for member+.
+    -- Suppliers and stores created bottom-up by OCR + users.
+    -- Articles, categories, subcategories, manufacturers created by platform admin.
+    global_catalog_resources: Set<String> = {
+        "suppliers", "stores",
+        "articles", "categories", "subcategories", "manufacturers"
+    }
 
-    requires: request.action = read
-    requires: request.resource in config.expense_tier_read_resources
-    requires: exists request.membership
-    requires: request.membership.status = active
-    requires: request.membership.has_expense_read_access
+    -- Subset of global catalog that tenant users can create (via OCR/expense flow).
+    global_catalog_creatable: Set<String> = {
+        "suppliers", "stores"
+    }
 
-    ensures: TenantDataGranted(request: request, scope: request.tenant)
-}
+    -- Global geographic: read-only for tenant admin/owner.
+    global_geo_resources: Set<String> = {
+        "cities", "countries"
+    }
 
-rule AllowExpenseTierWriteForMembersAndAbove {
-    when: TenantDataRequested(request)
+    -- Platform admin: cannot access these without impersonation.
+    platform_admin_blocked_resources: Set<String> = {
+        "expenses", "expense_items", "receipts",
+        "payers", "payer_types",
+        "supplier_aliases", "store_aliases", "article_aliases"
+    }
 
-    requires: request.action = write
-    requires: request.resource in config.expense_tier_resources
-    requires: exists request.membership
-    requires: request.membership.status = active
-    requires: request.membership.has_expense_access
-
-    ensures: TenantDataGranted(request: request, scope: request.tenant)
-}
-
-rule AllowFullTierForTenantAdminsAndOwners {
-    when: TenantDataRequested(request)
-
-    requires: request.resource in config.full_tier_resources
-    requires: exists request.membership
-    requires: request.membership.status = active
-    requires: request.membership.has_full_domain_access
-
-    ensures: TenantDataGranted(request: request, scope: request.tenant)
+    rate_limit_scope: per_tenant
 }
 
 -- TENANT ISOLATION GUARANTEE
--- Every TenantDataGranted emission carries scope = request.tenant.
--- The implementation layer MUST filter all queries by tenant_id = scope.id.
--- This is enforced at the middleware/service layer (not RLS) for now.
+-- For tenant-scoped resources: all queries MUST filter by tenant_id = session.active_tenant.id.
+-- For global catalog: queries return shared rows (no tenant filtering).
+-- Enforcement is at the middleware/service layer (not RLS) for now.
 
-rule DenyAccessWhenNoMembership {
+-- == Tenant-scoped grant rules ==
+
+rule AllowExpenseReadForAllTenantMembers {
+    when: TenantDataRequested(request)
+
+    requires: request.action = read
+    requires: request.resource in config.expense_read_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+    requires: request.membership.can_read_expenses
+
+    ensures: TenantDataGranted(request: request, scope: request.tenant)
+}
+
+rule AllowExpenseWriteForMembersAndAbove {
+    when: TenantDataRequested(request)
+
+    requires: request.action = write
+    requires: request.resource in config.expense_write_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+    requires: request.membership.can_write_expenses
+
+    ensures: TenantDataGranted(request: request, scope: request.tenant)
+}
+
+rule AllowTenantLookupReadForAllMembers {
+    when: TenantDataRequested(request)
+
+    requires: request.action = read
+    requires: request.resource in config.tenant_lookup_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+
+    ensures: TenantDataGranted(request: request, scope: request.tenant)
+}
+
+rule AllowTenantAliasReadForAllMembers {
+    when: TenantDataRequested(request)
+
+    requires: request.action = read
+    requires: request.resource in config.tenant_alias_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+
+    ensures: TenantDataGranted(request: request, scope: request.tenant)
+}
+
+rule AllowTenantAliasWriteForMembersAndAbove {
+    when: TenantDataRequested(request)
+
+    requires: request.action = write
+    requires: request.resource in config.tenant_alias_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+    requires: request.membership.can_write_expenses         -- member+ (OCR creates aliases)
+
+    ensures: TenantDataGranted(request: request, scope: request.tenant)
+}
+
+rule AllowFullTenantWriteForAdminsAndOwners {
+    when: TenantDataRequested(request)
+
+    requires: request.action = write
+    requires: request.resource in config.tenant_admin_write_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+    requires: request.membership.has_full_tenant_access
+
+    ensures: TenantDataGranted(request: request, scope: request.tenant)
+}
+
+-- == Global catalog grant rules ==
+
+rule AllowGlobalCatalogReadForAllTenantMembers {
+    when: TenantDataRequested(request)
+
+    requires: request.action = read
+    requires: request.resource in config.global_catalog_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+
+    ensures: TenantDataGranted(request: request, scope: global)
+
+    guidance:
+        Global catalog returns shared rows (no tenant_id filtering).
+        All tenant users can browse suppliers, stores, articles, etc.
+        for use in expense creation and OCR review.
+}
+
+rule AllowGlobalCatalogCreateForMembersAndAbove {
+    when: TenantDataRequested(request)
+
+    requires: request.action = write
+    requires: request.resource in config.global_catalog_creatable
+    requires: exists request.membership
+    requires: request.membership.status = active
+    requires: request.membership.can_write_expenses         -- member+ (OCR creates suppliers/stores)
+
+    ensures: TenantDataGranted(request: request, scope: global)
+
+    guidance:
+        Members can create new suppliers and stores (via OCR extraction or
+        manual expense creation). Articles, categories, subcategories, and
+        manufacturers are managed by platform admins via /create-articles skill.
+}
+
+rule AllowGeoReadForTenantAdminsAndOwners {
+    when: TenantDataRequested(request)
+
+    requires: request.action = read
+    requires: request.resource in config.global_geo_resources
+    requires: exists request.membership
+    requires: request.membership.status = active
+    requires: request.membership.can_read_geo
+
+    ensures: TenantDataGranted(request: request, scope: global)
+}
+
+-- == Deny rules ==
+
+rule DenyAccessWhenNoActiveMembership {
     when: TenantDataRequested(request)
 
     requires:
@@ -328,26 +542,35 @@ rule DenyAccessWhenNoMembership {
     ensures: TenantDataDenied(request: request, reason: no_active_membership)
 }
 
-rule DenyNonExpenseTierWriteForRegularMembers {
+rule DenyWriteToReadOnlyResources {
     when: TenantDataRequested(request)
 
     requires: request.action = write
-    requires: request.resource not in config.expense_tier_resources
     requires: exists request.membership
     requires: request.membership.status = active
-    requires: not request.membership.has_full_domain_access
+    requires: not request.membership.has_full_tenant_access
+
+    -- Regular members can't write to: payers, user_expense_settings,
+    -- payer_types, expense_categories, geo, or read-only global catalog.
+    requires:
+        (request.resource = "payers" and not request.membership.has_full_tenant_access)
+        or request.resource = "user_expense_settings"
+        or request.resource in config.tenant_lookup_resources
+        or request.resource in config.global_geo_resources
+        or (request.resource in config.global_catalog_resources
+            and request.resource not in config.global_catalog_creatable)
 
     ensures: TenantDataDenied(request: request, reason: insufficient_tenant_role)
 }
 
-rule DenyNonExpenseTierReadForRegularMembers {
+rule DenyGeoReadForRegularMembers {
     when: TenantDataRequested(request)
 
     requires: request.action = read
-    requires: request.resource not in config.expense_tier_read_resources
+    requires: request.resource in config.global_geo_resources
     requires: exists request.membership
     requires: request.membership.status = active
-    requires: not request.membership.has_full_domain_access
+    requires: not request.membership.can_read_geo
 
     ensures: TenantDataDenied(request: request, reason: insufficient_tenant_role)
 }
@@ -362,12 +585,6 @@ entity PlatformAdminDataRequest {
     action: read | write
 }
 
-config {
-    platform_admin_blocked_resources: Set<String> = {
-        "expenses", "expense_items", "receipts", "payers", "payer_types"
-    }
-}
-
 rule AllowPlatformAdminAccessOutsideBlockedResources {
     when: PlatformAdminDataRequested(request)
 
@@ -375,6 +592,12 @@ rule AllowPlatformAdminAccessOutsideBlockedResources {
     requires: request.resource not in config.platform_admin_blocked_resources
 
     ensures: PlatformAdminDataGranted(request: request)
+
+    guidance:
+        Platform admins have full CRUD on: global product catalog (suppliers, stores,
+        articles, categories, subcategories, manufacturers), global geographic (cities,
+        countries), platform tables, users records, tenant_memberships, and tenants.
+        Users/memberships CRUD is a superpower — bypasses tenant rule chains.
 }
 
 rule DenyPlatformAdminAccessToBlockedResources {
@@ -384,15 +607,162 @@ rule DenyPlatformAdminAccessToBlockedResources {
 
     ensures: PlatformAdminDataDenied(
         request: request,
-        reason: expense_data_restricted_from_platform_admin
+        reason: tenant_data_requires_impersonation
     )
 }
 
 -- ============================================================
--- TENANT CONTEXT IN SESSION
+-- IMPERSONATION
 -- ============================================================
 
-rule SetActiveTenantInSession {
+-- Impersonation is implemented at the app level: the platform admin logs in
+-- as an existing tenant user and gets exactly that user's permissions.
+-- No permission elevation. Fully audit-logged with both identities.
+--
+-- The grant is lightweight — no request/approve UI flow. Tenant owner creates
+-- the grant directly (in DB or via endpoint) after an out-of-band conversation
+-- with the platform admin.
+
+rule GrantImpersonation {
+    when: ImpersonationGrantCreated(owner, tenant, admin, role)
+
+    let owner_membership = TenantMembership{tenant: tenant, user: owner}
+
+    requires: exists owner_membership
+    requires: owner_membership.role = owner
+    requires: owner_membership.status = active
+    requires: admin.status = active
+    requires: not exists ImpersonationGrant{tenant: tenant, admin: admin, status: active}
+
+    ensures:
+        ImpersonationGrant.created(
+            tenant: tenant,
+            admin: admin,
+            granted_by: owner,
+            role: role,
+            status: active,
+            revoked_by_admin: null,
+            revoked_by_user: null
+        )
+        ImpersonationGranted(tenant: tenant, admin: admin, role: role)
+}
+
+rule RevokeImpersonationByOwner {
+    when: ImpersonationRevokedByOwner(owner, grant)
+
+    let owner_membership = TenantMembership{tenant: grant.tenant, user: owner}
+
+    requires: exists owner_membership
+    requires: owner_membership.role = owner
+    requires: grant.is_active
+
+    ensures: grant.status = revoked
+    ensures: grant.revoked_by_user = owner
+}
+
+rule RevokeImpersonationByAdmin {
+    when: ImpersonationRevokedByAdmin(admin, grant)
+
+    requires: grant.admin = admin
+    requires: grant.is_active
+
+    ensures: grant.status = revoked
+    ensures: grant.revoked_by_admin = admin
+}
+
+rule ImpersonatedAccessGranted {
+    when: ImpersonatedDataRequested(admin, tenant, resource, action)
+
+    let grant = ImpersonationGrant{tenant: tenant, admin: admin, status: active}
+
+    requires: exists grant
+
+    -- The admin operates under the granted role's permissions.
+    -- Delegate to tenant data access rules using the granted role.
+    ensures: ImpersonatedDataEvaluated(
+        grant: grant,
+        resource: resource,
+        action: action,
+        effective_role: grant.role
+    )
+
+    guidance:
+        Implementation creates a synthetic TenantMembership-like context
+        from the grant's role and evaluates tenant data rules against it.
+        All actions audit-logged as: admin X (impersonating tenant Y at role Z).
+}
+
+-- ============================================================
+-- TENANT CONTEXT: HYBRID (slug URL + session)
+-- ============================================================
+
+-- Routing model:
+--   SPA navigation:  /t/{slug}/expenses, /t/{slug}/receipts, etc.
+--   User API:        /api/v1/* (tenant from session, no slug in API paths)
+--   Admin API:       /admin/api/* (no tenant context, platform-level)
+--
+-- The slug in the URL provides: bookmarkable links, browser history,
+-- clarity about which tenant is active, deep-link support.
+-- The session provides: API authorization, avoids re-lookup per request.
+--
+-- On SPA navigation to /t/{slug}/*, middleware resolves slug → tenant,
+-- verifies membership, and sets/switches the session tenant context.
+
+rule ResolveTenantFromSlug {
+    when: TenantSlugNavigated(user, slug, session)
+
+    let tenant = Tenant{slug: slug}
+
+    requires: exists tenant
+    requires: tenant.status = active
+
+    let membership = TenantMembership{tenant: tenant, user: user}
+
+    requires: exists membership
+    requires: membership.status = active
+
+    ensures:
+        if session.active_tenant != tenant:
+            session.active_tenant = tenant
+            session.active_membership = membership
+            TenantContextSet(user: user, tenant: tenant)
+}
+
+rule RejectInvalidTenantSlug {
+    when: TenantSlugNavigated(user, slug, _)
+
+    let tenant = Tenant{slug: slug}
+
+    requires:
+        not exists tenant
+        or (exists tenant and tenant.status != active)
+        or (exists tenant and not exists TenantMembership{
+            tenant: tenant, user: user, status: active
+        })
+
+    ensures: TenantNavigationDenied(slug: slug, reason: invalid_or_no_access)
+}
+
+-- After login, if user has one tenant → auto-set; if multiple → switcher.
+-- Only fires for returning users (new users handled by AutoSetSessionAfterProvisioning).
+rule AutoSetTenantAfterLogin {
+    when: UserAuthenticated(user)
+
+    let memberships = TenantMembership with user = user and status = active
+
+    requires: memberships.count > 0
+
+    ensures:
+        if memberships.count = 1:
+            let m = memberships.first
+            session.active_tenant = m.tenant
+            session.active_membership = m
+            TenantContextSet(user: user, tenant: m.tenant)
+        else:
+            TenantSelectionRequired(user: user)
+}
+
+rule SetActiveTenantFromSwitcher {
     when: UserSelectsTenant(user, tenant, session)
 
     let membership = TenantMembership{tenant: tenant, user: user}
@@ -405,6 +775,15 @@ rule SetActiveTenantInSession {
         session.active_membership = membership
         TenantContextSet(user: user, tenant: tenant)
 }
+
+-- ============================================================
+-- RATE LIMITING (per-tenant)
+-- ============================================================
+
+-- Rate limits are evaluated per tenant_id for user API (/api/v1/*).
+-- Prevents one tenant from exhausting shared resources.
+-- Platform admin API (/admin/api/*) uses global rate limiting.
+-- Tenant provisioning rate-limited to prevent signup abuse.
 
 -- ============================================================
 -- SURFACES
@@ -431,6 +810,18 @@ surface TenantManagementBoundary {
         TenantMemberRemoved(viewer, membership.tenant, target_user)
             when membership.can_manage_users
 
+        TenantOwnershipTransferred(viewer, membership.tenant, new_owner)
+            when membership.role = owner
+
+        InvitationRevoked(viewer, invitation)
+            when membership.can_manage_users
+
+        ImpersonationGrantCreated(viewer, membership.tenant, admin, role)
+            when membership.role = owner
+
+        ImpersonationRevokedByOwner(viewer, grant)
+            when membership.role = owner
+
     related:
         TenantMembersView(membership.tenant)
             when membership.can_manage_users
@@ -447,10 +838,20 @@ surface TenantMembersView {
             m.user.email
             m.role
             m.status
+        for g in tenant.impersonation_grants where status = active:
+            g.admin.email
+            g.role
+            g.granted_by.full_name
 
     provides:
         TenantMemberRoleChanged(viewer, tenant, target_user, new_role)
+            when viewer_membership.can_manage_users
+
         TenantMemberRemoved(viewer, tenant, target_user)
+            when viewer_membership.can_manage_users
+
+        InvitationRevoked(viewer, invitation)
+            when viewer_membership.can_manage_users
 }
 
 surface TenantSwitcher {
@@ -477,22 +878,39 @@ surface PlatformTenantAdminView {
             t.owners.count
             t.active_memberships.count
 
+    provides:
+        ImpersonationRevokedByAdmin(admin, grant)
+
     guidance:
-        Platform admins can view all tenants but cannot access
-        tenant expense data (expenses, expense_items, receipts, payers, payer_types).
+        Platform admins can view all tenants.
+        Tenant expense data (expenses, receipts, payers, payer_types, aliases)
+        requires impersonation with tenant owner approval.
+        Platform admins have superpower CRUD on users and tenant_memberships
+        across all tenants (bypasses tenant rule chains).
 }
 
 -- ============================================================
--- OPEN QUESTIONS
+-- RESOLVED DECISIONS
 -- ============================================================
 
--- resolved: Tenant members DO have read access to payers (added to expense_tier_read_resources).
--- resolved: OAuth signup DOES auto-create a tenant (CreateTenantOnFirstLogin chains from UserAuthenticated).
+-- resolved: Tenant members have read access to payers (in expense_read_resources).
+-- resolved: OAuth signup auto-creates a tenant (CreateTenantOnFirstLogin chains from UserAuthenticated).
 -- resolved: No data migration needed — fresh start, just seed the platform admin.
--- resolved: New tenants start with a COPY of current reference data (SeedTenantReferenceData rule).
-
-open question "Tenant ownership transfer — should an owner be able to transfer ownership to another admin? What happens if the only owner leaves?"
-
-open question "Should the tenant slug be used for URL routing (e.g., /t/{slug}/expenses) or should tenant context be purely session-based?"
-
-open question "Rate limiting and quotas — should these be per-tenant or remain global?"
+-- resolved: Global product catalog stays GLOBAL — suppliers, stores, articles, categories,
+--           subcategories, manufacturers. No tenant_id. Tenant users read + create suppliers/stores.
+-- resolved: Aliases (supplier_aliases, store_aliases, article_aliases) are TENANT-SCOPED.
+--           Each tenant builds its own OCR mapping intelligence.
+-- resolved: payer_types and expense_categories are TENANT-SCOPED (admin/owner write, all read).
+--           New tenants seeded from platform template.
+-- resolved: cities and countries are GLOBAL, read-only for tenant admin/owner.
+-- resolved: price_observations table DELETED (to be reimplemented).
+-- resolved: Owner CAN transfer ownership to an admin. Old owner demotes to admin.
+-- resolved: Hybrid URL routing — slug in SPA paths (/t/{slug}/*), session for API auth.
+-- resolved: Rate limiting per-tenant for user API, global for admin API.
+-- resolved: Platform admin impersonation implemented at app level (login as existing user).
+--           Requires tenant owner approval via DB grant. Either party can revoke.
+-- resolved: Platform admin has superpower CRUD on users/memberships (bypasses tenant rules).
+--           Cannot force-add users to tenants — that's the tenant admin's job via invitations.
+-- resolved: Platform admin manages global catalog quality (dedup, cleanup).
+--           Articles/categories/manufacturers created top-down via /create-articles skill.
+--           Suppliers/stores created bottom-up by OCR and tenant users.
