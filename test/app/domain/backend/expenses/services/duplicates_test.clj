@@ -46,6 +46,17 @@
           (is (= #{id-a id-b}
                 (set (map :id (:members (first clusters)))))))))))
 
+(deftest detect-prefix-duplicates-fetch-limit-bounded-test
+  (testing "fetch-limit defaults and clamps to safe bounds"
+    (let [captured-limits (atom [])]
+      (with-redefs [jdbc/execute! (fn [_db sql _opts]
+                                    (swap! captured-limits conj (second sql))
+                                    [])]
+        (duplicates/detect-prefix-duplicates :db :suppliers {})
+        (duplicates/detect-prefix-duplicates :db :suppliers {:fetch-limit 0})
+        (duplicates/detect-prefix-duplicates :db :suppliers {:fetch-limit 999999}))
+      (is (= [5000 1 20000] @captured-limits)))))
+
 ;; ============================================================================
 ;; Usage Count Enrichment
 ;; ============================================================================

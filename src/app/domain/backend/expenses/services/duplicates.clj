@@ -45,6 +45,23 @@
                    :key-col :normalized_key
                    :fk-tables {:articles {:col :manufacturer_id}}}})
 
+(def ^:private default-prefix-fetch-limit
+  5000)
+
+(def ^:private max-prefix-fetch-limit
+  20000)
+
+(defn- normalize-fetch-limit
+  "Normalize fetch-limit to a bounded positive integer.
+
+  - nil -> default
+  - values < 1 -> 1
+  - values > max -> max"
+  [fetch-limit]
+  (-> (or fetch-limit default-prefix-fetch-limit)
+    (max 1)
+    (min max-prefix-fetch-limit)))
+
 (defn- get-entity-config!
   [entity-type]
   (or (get entity-configs entity-type)
@@ -58,15 +75,16 @@
 
 (defn- fetch-all-rows
   "Fetch rows for an entity (id, name-col, key-col).
-  `fetch-limit` caps the scan; prevents unbounded heap loads on large tables."
+  `fetch-limit` is always normalized and bounded to avoid unbounded scans."
   [db {:keys [table name-col key-col]} fetch-limit]
-  (jdbc/execute!
-    db
-    (sql/format (cond-> {:select [:id name-col key-col :created_at]
-                         :from [(keyword table)]
-                         :order-by [[:created_at :asc]]}
-                  fetch-limit (assoc :limit fetch-limit)))
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  (let [fetch-limit* (normalize-fetch-limit fetch-limit)]
+    (jdbc/execute!
+      db
+      (sql/format {:select [:id name-col key-col :created_at]
+                   :from [(keyword table)]
+                   :order-by [[:created_at :asc]]
+                   :limit fetch-limit*})
+      {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- prefix-tokens
   "Extract first `n` hyphen-delimited tokens from a normalized key."
@@ -165,9 +183,9 @@
   Options:
   - :prefix-words (default 2) — number of leading tokens to group by
   - :limit (default 50) — max clusters to return
-  - :fetch-limit (default 5000) — max rows fetched; guards against unbounded table scans"
+  - :fetch-limit (default 5000) — max rows fetched, bounded to [1, 20000]"
   [db entity-type {:keys [prefix-words limit fetch-limit]
-                   :or {prefix-words 2 limit 50 fetch-limit 5000}}]
+                   :or {prefix-words 2 limit 50 fetch-limit default-prefix-fetch-limit}}]
   (let [config (get-entity-config! entity-type)
         rows (fetch-all-rows db config fetch-limit)
         key-col (:key-col config)

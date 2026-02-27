@@ -7,8 +7,9 @@
     [app.domain.backend.expenses.services.duplicates :as duplicates]
     [app.domain.backend.expenses.services.merge :as merge]
     [app.shared.adapters.database :as shared-db]
-    [clojure.string :as str]
-    [app.template.backend.routes.admin.utils :as admin-utils]))
+    [app.template.backend.middleware.admin :as admin-mw]
+    [app.template.backend.routes.admin.utils :as admin-utils]
+    [clojure.string :as str]))
 
 (def ^:private to-app shared-db/to-app)
 
@@ -32,6 +33,22 @@
       (when (#{:prefix :trigram :levenshtein} k)
         k))))
 
+(def ^:private default-detect-fetch-limit
+  5000)
+
+(def ^:private max-detect-fetch-limit
+  20000)
+
+(defn- clamp-detect-fetch-limit
+  [fetch-limit]
+  (-> fetch-limit
+    (max 1)
+    (min max-detect-fetch-limit)))
+
+(defn- require-elevated-admin-role
+  [handler]
+  (admin-mw/wrap-admin-role handler :admin))
+
 (defn- detect-handler
   [db]
   (admin-utils/with-error-handling
@@ -39,7 +56,9 @@
       (let [qp (:query-params request)
             admin-id (admin-utils/get-admin-id request)
             entity-type (parse-entity-type (get qp "entity-type"))
-            strategy (parse-strategy (get qp "strategy"))]
+            strategy (parse-strategy (get qp "strategy"))
+            fetch-limit (-> (admin-utils/parse-int-param qp "fetch-limit" default-detect-fetch-limit)
+                          clamp-detect-fetch-limit)]
         (cond
           (nil? admin-id)
           (admin-utils/error-response "Admin authentication required" :status 401)
@@ -50,7 +69,7 @@
             :status 400)
 
           :else
-          (let [opts (cond-> {}
+          (let [opts (cond-> {:fetch-limit fetch-limit}
                        (get qp "prefix-words")
                        (assoc :prefix-words (admin-utils/parse-int-param qp "prefix-words" 2))
 
@@ -75,8 +94,7 @@
   [db]
   (admin-utils/with-error-handling
     (fn [request]
-      (let [admin-role (-> request :admin :role)
-            body (routes-factory/read-json-body request)
+      (let [body (routes-factory/read-json-body request)
             entity-type (parse-entity-type (or (:entity-type body)
                                              (:entity_type body)
                                              (get body "entity-type")
@@ -95,9 +113,6 @@
                             (filter some?)
                             vec)]
         (cond
-          (not (#{"admin" "owner" "super_admin"} admin-role))
-          (admin-utils/error-response "Insufficient permissions: admin role required" :status 403)
-
           (nil? entity-type)
           (admin-utils/error-response "Missing or invalid entity-type" :status 400)
 
@@ -116,8 +131,7 @@
   [db]
   (admin-utils/with-error-handling
     (fn [request]
-      (let [admin-role (-> request :admin :role)
-            body (routes-factory/read-json-body request)
+      (let [body (routes-factory/read-json-body request)
             entity-type (parse-entity-type (or (:entity-type body)
                                              (:entity_type body)
                                              (get body "entity-type")
@@ -136,9 +150,6 @@
                             (filter some?)
                             vec)]
         (cond
-          (not (#{"admin" "owner" "super_admin"} admin-role))
-          (admin-utils/error-response "Insufficient permissions: admin role required" :status 403)
-
           (nil? entity-type)
           (admin-utils/error-response "Missing or invalid entity-type" :status 400)
 
@@ -288,8 +299,12 @@
   [db]
   ["/duplicates"
    ["/detect" {:get {:handler (detect-handler db)}}]
-   ["/merge-preview" {:post {:handler (merge-preview-handler db)}}]
-   ["/merge" {:post {:handler (merge-handler db)}}]
+   ["/merge-preview"
+    {:middleware [require-elevated-admin-role]
+     :post {:handler (merge-preview-handler db)}}]
+   ["/merge"
+    {:middleware [require-elevated-admin-role]
+     :post {:handler (merge-handler db)}}]
    ["/ignore" {:post {:handler (ignore-handler db)}}]
    ["/unignore" {:post {:handler (unignore-handler db)}}]
    ["/ignored" {:get {:handler (ignored-handler db)}}]])

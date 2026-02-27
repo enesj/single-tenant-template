@@ -159,6 +159,25 @@ surface ExpensesAdminRouteFactoryBoundary {
         Payer-types admin config uses route-level middleware requiring at least admin role via `wrap-admin-role ... :admin`.
 }
 
+surface ExpensesAdminDuplicatesBoundary {
+    provides:
+        DetectDuplicates(actor, entity_type, strategy, options)
+        PreviewDuplicateMerge(actor, entity_type, primary_id, secondary_ids)
+        ExecuteDuplicateMerge(actor, entity_type, primary_id, secondary_ids)
+        IgnoreDuplicateCluster(actor, entity_type, cluster_id, member_ids)
+        UnignoreDuplicateCluster(actor, entity_type, cluster_id)
+        ListIgnoredDuplicateClusters(actor, filters)
+
+    guarantee:
+        PreviewDuplicateMerge(actor, entity_type, primary_id, secondary_ids) and ExecuteDuplicateMerge(actor, entity_type, primary_id, secondary_ids) require elevated admin role tier (`admin`, `owner`, or `super_admin`), returning 403 for lower tiers.
+
+    guarantee:
+        DetectDuplicates(actor, entity_type, :prefix, options) supports optional `fetch-limit`; the effective value is bounded to [1, 20000] with default 5000 when omitted or invalid.
+
+    guarantee:
+        IgnoreDuplicateCluster(actor, entity_type, cluster_id, member_ids), UnignoreDuplicateCluster(actor, entity_type, cluster_id), and ListIgnoredDuplicateClusters(actor, filters) require authenticated admin session and do not require elevated role tier.
+}
+
 surface SharedDescriptorSourceOfTruthBoundary {
     context descriptors: List<CanonicalRouteDescriptor>
 
