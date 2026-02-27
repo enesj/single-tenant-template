@@ -172,6 +172,9 @@ surface OrderCheckout = {
 - **[Authentication](template/authentication.allium)**: User/admin login flows, OAuth callback behavior, session coexistence rules, password reset, and email verification lifecycle.
 - **[Authorization](template/authorization.allium)**: Admin token + role guards, generic CRUD entity policy, and expenses role-gated access matrix.
 - **[Expenses Implementation Wiring](domain/expenses/implementation.allium)**: Expenses manifest mount points, user/admin route-family boundaries, and route-factory boundary contracts.
+- **[View Options](shared/view-options.allium)**: DisplayTogglesMap as single source of truth, display-defaults/display-locks resolution semantics, lock-nesting validation.
+- **[Form Field Options](shared/form-field-options.allium)**: OptionItem union type (scalar or rich map), OptionsVec mixed-vector compatibility, duplicate field detection.
+- **[Infrastructure](shared/infrastructure.allium)**: get-server-port fail-fast contract, sanitize-for-serialization platform-boundary type conversion.
 
 ### Deferred / Future 📋
 
@@ -187,5 +190,5 @@ surface OrderCheckout = {
 
 ---
 
-**Last Updated:** 2026-02-18  
+**Last Updated:** 2026-02-27
 **Spec Governance:** Living artifacts; sync with implementation via code review + REPL validation.

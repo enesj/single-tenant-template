@@ -1,0 +1,119 @@
+-- Shared view-options configuration schema.
+--
+-- Covers: DisplayTogglesMap as single source of truth for display toggle keys;
+--         display-defaults / display-locks resolution semantics;
+--         show-selected-rows? and show-unselected-rows? additions.
+--
+-- Source: src/app/shared/specs/view_options.cljc
+-- Consumers: admin entities.edn (via AdminDisplaySettings), domain view-options.edn
+
+entity DisplayTogglesMap {
+    show_timestamps: Boolean?
+    show_edit: Boolean?
+    show_delete: Boolean?
+    show_highlights: Boolean?
+    show_select: Boolean?
+    show_filtering: Boolean?
+    show_pagination: Boolean?
+    show_add_button: Boolean?
+    show_batch_edit: Boolean?
+    show_batch_delete: Boolean?
+    show_selected_rows: Boolean?
+    show_unselected_rows: Boolean?
+    per_page: Integer?                -- bounded [1, 1000]
+}
+
+entity EntityViewOptions {
+    -- Explicit schema (preferred)
+    display_defaults: DisplayTogglesMap?
+    display_locks: DisplayTogglesMap?
+
+    -- Column visibility policy
+    column_defaults: Map<String, Boolean>?
+    column_locks: Map<String, Boolean>?
+
+    -- Legacy flat toggles (treated as locks when present)
+    show_timestamps: Boolean?
+    show_edit: Boolean?
+    show_delete: Boolean?
+    show_highlights: Boolean?
+    show_select: Boolean?
+    show_filtering: Boolean?
+    show_pagination: Boolean?
+    show_add_button: Boolean?
+    show_batch_edit: Boolean?
+    show_batch_delete: Boolean?
+    show_selected_rows: Boolean?
+    show_unselected_rows: Boolean?
+
+    -- Non-display options
+    search_fields: List<String>?
+    filters: Map<String, FilterConfig>?
+    export_formats: List<String>?
+    bulk_actions: List<String>?
+    pagination: PaginationConfig?
+    default_sort: SortConfig?
+    per_page: Integer?
+}
+
+external entity FilterConfig { type: String, options: List<String>? }
+external entity PaginationConfig { default_page_size: Integer?, available_page_sizes: List<Integer>? }
+external entity SortConfig { field: String, direction: asc | desc }
+
+surface DisplayTogglesSchemaBoundary {
+    provides:
+        ValidateDisplayTogglesMap(data)
+        ValidateAdminEntityDisplaySettings(data)
+
+    guarantee:
+        DisplayTogglesMap is the single authoritative list of display toggle keys.
+        AdminDisplaySettings in specs/entities delegates directly to DisplayTogglesMap
+        without re-declaring any toggle key.
+
+    guarantee:
+        DisplayTogglesMap includes show_selected_rows and show_unselected_rows
+        as optional booleans.
+
+    guarantee:
+        per_page in DisplayTogglesMap is bounded to [1, 1000] when present.
+
+    guidance:
+        DRY consolidation is intentional: adding a new toggle key requires one change
+        in DisplayTogglesMap; both admin entities.edn and view-options.edn validation
+        inherit the change automatically.
+}
+
+surface ViewOptionsResolutionBoundary {
+    context config: EntityViewOptions
+
+    provides:
+        ResolveEffectiveToggles(entity, user_overrides)
+        ValidateViewOptionsConfig(data)
+
+    guarantee:
+        display_locks keys are not overridable by user preferences.
+
+    guarantee:
+        display_defaults keys may be overridden by user preferences.
+
+    guarantee:
+        Legacy flat show-*? keys at entity top-level are treated as locks
+        (semantically equivalent to display_locks), not defaults.
+
+    guarantee:
+        ValidateViewOptionsConfig(data) rejects display_locks nested inside
+        display_defaults as a misconfiguration.
+
+    guidance:
+        New configurations should prefer the explicit display-defaults / display-locks
+        form over legacy flat top-level toggles.
+}
+
+rule DisplayLocksNestingIsRejected {
+    when: ViewOptionsFileValidated(data)
+
+    requires: exists entry in data where entry.display_defaults contains key display_locks
+
+    ensures: ValidationFailed(reason: display_locks_nested_in_display_defaults,
+                              fix: "Move :display-locks to sibling of :display-defaults")
+}

@@ -1,0 +1,81 @@
+-- Shared form-field option schema.
+--
+-- Covers: OptionItem union type (scalar OR rich map with value/label/color/disabled);
+--         OptionsVec permissive mixed vectors; strict duplicate detection.
+--
+-- Source: src/app/shared/specs/form_fields.cljc
+-- Consumers: admin form-fields.edn, domain form-fields.edn
+
+entity OptionValue {
+    kind: keyword | string | number | boolean
+}
+
+entity OptionItem {
+    kind: Scalar | RichMap
+}
+
+variant Scalar : OptionItem {
+    value: keyword | string
+}
+
+variant RichMap : OptionItem {
+    value: OptionValue
+    label: String?
+    color: String?
+    disabled: Boolean?
+}
+
+entity FieldConfig {
+    field_type: String?
+    validation: String?
+    placeholder: String?
+    options: List<OptionItem>?
+    default_value: Any?
+    min: Number?
+    max: Number?
+    min_length: Integer?
+    max_length: Integer?
+    step: Number?
+}
+
+entity EntityFormFields {
+    create_fields: List<String>?
+    edit_fields: List<String>?
+    required_fields: List<String>?
+    field_config: Map<String, FieldConfig>?
+}
+
+surface FormFieldOptionsBoundary {
+    provides:
+        ValidateFormFields(data)
+        ResolveOptionItems(field_config)
+
+    guarantee:
+        OptionItem accepts either a scalar value (keyword or string)
+        or a rich map with at minimum a :value key.
+
+    guarantee:
+        Rich OptionItem maps accept optional :label, :color, and :disabled metadata
+        without rejecting unknown additional keys (open schema).
+
+    guarantee:
+        Scalar and rich map options are valid in the same OptionsVec;
+        mixed vectors are permitted for backward compatibility.
+
+    guidance:
+        The scalar form is the legacy path. New option definitions should prefer rich maps
+        when color, label, or disabled metadata is needed.
+}
+
+rule FormFieldDuplicatesAreRejected {
+    when: FormFieldsFileValidated(data)
+
+    requires:
+        exists entity in data where
+            entity.create_fields has duplicates
+            or entity.edit_fields has duplicates
+            or entity.required_fields has duplicates
+
+    ensures: ValidationFailed(reason: duplicate_field_ids_in_vector,
+                              fix: "Remove duplicates from the vector")
+}

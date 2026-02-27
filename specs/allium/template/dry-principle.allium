@@ -1,6 +1,5 @@
 entity FrontendEntityTemplate {
     entity_id: String
-    uses_entity_page_wrapper: Boolean
     uses_shared_list_view: Boolean
     entity_spec_driven: Boolean
     supports_inline_form_mode: Boolean
@@ -49,32 +48,32 @@ entity DomainPluginManifest {
     has_spa_fallback_paths: Boolean
 }
 
-surface FrontendListAndEntityManagerReuseBoundary {
+surface FrontendListViewReuseBoundary {
     context templates: List<FrontendEntityTemplate>
 
     provides:
-        RenderEntityPage(entity)
         ResolveTableEntitySpec(entity)
         ComposeListViewProps(entity)
         RenderListView(entity)
 
     guarantee:
-        RenderEntityPage(entity) reuses `entity-page` as the shared wrapper and derives `effective-entity` from URL/entity-set/default fallback logic.
+        ResolveTableEntitySpec(entity) reads from shared `:entity-specs/by-name` subscription
+        and resolves route-aware table config (`:admin` or `:domain` table-columns),
+        including computed field metadata when present.
 
     guarantee:
-        ResolveTableEntitySpec(entity) reads from shared `:entity-specs` and passes the resolved spec to `list-view` as `:entity-spec`.
+        ComposeListViewProps(entity) always includes `:entity-name` + `:entity-spec`,
+        then merges caller-provided props including form display mode, permission flags,
+        and custom form renderers.
 
     guarantee:
-        ComposeListViewProps(entity) always includes `:entity-name` + `:entity-spec`, then merges caller-provided `:list-view-props`.
-
-    guarantee:
-        RenderEntityPage(entity) dispatches `::crud-events/fetch-entities` when `effective-entity` and `table-entity-spec` are present.
-
-    guarantee:
-        RenderListView(entity) centralizes table/filter/pagination/selection/form behavior in one `list-view` component, with form mode selected by `:form-display` (`:inline` or `:modal`).
+        RenderListView(entity) centralizes table/filter/pagination/selection/form behavior
+        in one `list-view` component, with form mode selected by `:form-display`
+        (`:inline` or `:modal`).
 
     guidance:
-        DRY at this layer is configuration-driven: each page changes entity specs/props, not list mechanics.
+        DRY at this layer is configuration-driven: each page directly composes `list-view`
+        with subscription-resolved entity specs instead of routing through a shared page wrapper.
 }
 
 surface FrontendEntitySpecAndAdapterUtilitiesBoundary {
@@ -228,10 +227,10 @@ surface DomainRegistryPluginReuseBoundary {
 }
 
 rule FrontendCrudReuseIsSpecDriven {
-    when: EntityPageUsesTemplateList(entity)
+    when: PageComposesListView(entity)
 
     ensures: ComposeListViewProps(entity) includes `:entity-name` and `:entity-spec`.
-    ensures: ResolveTableEntitySpec(entity) is sourced from shared entity-spec subscriptions.
+    ensures: ResolveTableEntitySpec(entity) is sourced from shared `:entity-specs/by-name` subscription.
     ensures: RenderListView(entity) reuses one list implementation for filtering/sorting/pagination/selection/forms.
 }
 
