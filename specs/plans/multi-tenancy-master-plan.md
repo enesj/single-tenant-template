@@ -10,8 +10,8 @@
 
 | # | Phase | Depends On | Status |
 |---|-------|-----------|--------|
-| 0 | Foundation — DB tables & migrations | — | `[ ]` |
-| 1 | Tenant Lifecycle — provisioning, invitations, session context | 0 | `[ ]` |
+| 0 | Foundation — DB tables & migrations | — | `[x]` |
+| 1 | Tenant Lifecycle — provisioning, invitations, session context | 0 | `[x]` |
 | 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[ ]` |
 | 3 | Access Control — role-based tier rules | 1, 2 | `[ ]` |
 | 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[ ]` |
@@ -46,7 +46,7 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ### Tasks
 
-- [ ] **0.1** Define new PostgreSQL ENUM types in `resources/db/template/models.edn`:
+- [x] **0.1** Define new PostgreSQL ENUM types in `resources/db/template/models.edn`:
   - `:tenant-status` → `["active" "suspended" "archived"]`
   - `:membership-role` → `["owner" "admin" "member" "viewer"]`
   - `:membership-status` → `["active" "suspended"]`
@@ -54,25 +54,31 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - `:invitation-role` → `["admin" "member" "viewer"]`
   - `:impersonation-role` → `["owner" "admin" "member" "viewer"]`
   - `:impersonation-status` → `["active" "revoked"]`
-- [ ] **0.2** Create `tenants` table in `resources/db/template/models.edn`:
+- [x] **0.2** Create `tenants` table in `resources/db/template/models.edn`:
   - id (UUID PK), name (text), slug (varchar, unique), status (enum: tenant-status), created_at, updated_at
-- [ ] **0.3** Create `tenant_memberships` table in `resources/db/template/models.edn`:
+- [x] **0.3** Create `tenant_memberships` table in `resources/db/template/models.edn`:
   - id (UUID PK), tenant_id (FK tenants, cascade), user_id (FK users, cascade), role (enum: membership-role), status (enum: membership-status), invited_by (FK users, nullable, set-null), created_at, updated_at
   - Unique index: (tenant_id, user_id)
-- [ ] **0.4** Create `tenant_invitations` table in `resources/db/template/models.edn`:
+- [x] **0.4** Create `tenant_invitations` table in `resources/db/template/models.edn`:
   - id (UUID PK), tenant_id (FK tenants, cascade), email (text), role (enum: invitation-role), invited_by (FK users, cascade), status (enum: invitation-status), token (varchar, unique), expires_at (timestamptz), created_at, updated_at
-- [ ] **0.5** Create `impersonation_grants` table in `resources/db/template/models.edn`:
+- [x] **0.5** Create `impersonation_grants` table in `resources/db/template/models.edn`:
   - id (UUID PK), tenant_id (FK tenants, cascade), admin_id (FK admins, cascade), granted_by (FK users, cascade), role (enum: impersonation-role), status (enum: impersonation-status), revoked_by_admin (FK admins, nullable, set-null), revoked_by_user (FK users, nullable, set-null), created_at, updated_at
-- [ ] **0.6** Add `tenant_id` (FK tenants, NOT NULL) to tenant-scoped tables in `resources/db/domain/models.edn`:
+- [x] **0.6** Add `tenant_id` (FK tenants, NOT NULL) to tenant-scoped tables in `resources/db/domain/models.edn`:
   - Transactional: `expenses`, `expense_items`, `receipts`, `payers`, `user_expense_settings`
   - Lookup: `payer_types`, `expense_categories`
   - Add tenant_id index on each table
-- [ ] **0.7** Switch to server-side session store
-  - Create `user_sessions` table: id (UUID PK), session_key (varchar, unique), data (text/jsonb), expires_at (timestamptz), created_at, updated_at
-  - OR use ring-session-timeout with in-memory store (simpler, evaluate trade-offs)
-- [ ] **0.8** Delete `price_observations` table (drop migration)
-- [ ] **0.9** Run `(mig/make-all-migrations!)` and `(mig/migrate!)` to generate and apply
-- [ ] **0.10** Seed migration: default payer_types template set, default expense_categories template set (for tenant provisioning to copy from)
+  - Updated unique indexes to be tenant-scoped: `payer_types(label)`, `expense_categories(name)`, `receipts(file_hash)`
+  - Restructured `user_expense_settings`: new id PK, (tenant_id, user_id) unique constraint
+- [x] **0.7** Switch to server-side session store
+  - Created `user_sessions` table: id (UUID PK), session_key (varchar, unique), data (jsonb), expires_at (timestamptz), created_at, updated_at
+- [x] **0.8** Delete `price_observations` table (drop migration)
+- [x] **0.9** Run `(mig/make-all-migrations!)` and `(mig/migrate!)` to generate and apply
+  - Migration `0099_schema.edn` generated with 49 actions
+  - Applied to both dev (port 55432) and test (port 55433) databases
+- [x] **0.10** Tenant provisioning defaults defined in `config/base.edn` under `:tenant-defaults`
+  - 4 payer types: Cash (default), Credit Card, Debit Card, Bank Transfer
+  - 8 expense categories: Groceries, Transport, Utilities, Dining, Healthcare, Entertainment, Shopping, Other
+  - Provisioning service (Phase 1) reads this config and INSERTs per-tenant rows
 
 ### Notes
 - Aliases (`supplier_aliases`, `store_aliases`, `article_aliases`) are NOT modified — stay global.

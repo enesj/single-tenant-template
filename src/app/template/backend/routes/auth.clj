@@ -5,6 +5,7 @@
     [app.shared.data :as shared-data]
     [app.shared.date :as shared-date]
     [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.utils :as route-utils :refer [get-service-container]]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.http :as http :refer [json-response]]
@@ -79,29 +80,35 @@
         (log/debug "Password present:" (not (empty? password)))
 
         ;; Call registration service (handles validation, email verification and email sending)
-        (let [result (auth-service/register-user-with-password!
+        (let [{:keys [db]} (get-service-container req)
+              config (get-in req [:service-container :config])
+              result (auth-service/register-user-with-password!
                        auth-service
                        {:email email
                         :full-name full-name
                         :password password})
               {:keys [user verification-required]} result
-              sanitized-user (sanitize-for-serialization user)
-              new-session (assoc existing-session :auth-session {:user sanitized-user})]
+              sanitized-user (sanitize-for-serialization user)]
 
           (if verification-required
-            ;; User created but needs email verification
-            (-> (json-response
-                  {:success true
-                   :verification-required true
-                   :message "Registration successful. Please check your email for verification."})
-              ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
-              (assoc :session new-session))
+            ;; User created but needs email verification — no tenant provisioning yet
+            (let [new-session (assoc existing-session :auth-session {:user sanitized-user})]
+              (-> (json-response
+                    {:success true
+                     :verification-required true
+                     :message "Registration successful. Please check your email for verification."})
+                ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
+                (assoc :session new-session)))
 
-            ;; User registered successfully without verification requirement
-            (-> (json-response {:success true
-                                :verification-required false
-                                :user sanitized-user})
-              (assoc :session new-session))))))))
+            ;; User registered successfully without verification — provision tenant now
+            (let [tenant-ctx   (tenant-auth/resolve-tenant-context db config user)
+                  auth-session (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx)
+                  new-session  (assoc existing-session :auth-session auth-session)]
+              (-> (json-response {:success true
+                                  :verification-required false
+                                  :user sanitized-user
+                                  :tenant (sanitize-for-serialization (:tenant auth-session))})
+                (assoc :session new-session)))))))))
 
 ;; NEW: Email/password login endpoint
 (defn login-handler
@@ -125,9 +132,23 @@
         (try
           (let [auth-result (auth-service/login-with-password
                               auth-service {:email email :password password})
-                user-safe (sanitize-for-serialization (:user auth-result))
-                user-id (:id (:user auth-result))
-                new-session (assoc existing-session :auth-session {:user user-safe})]
+                user-raw  (:user auth-result)
+                user-safe (sanitize-for-serialization user-raw)
+                user-id   (:id user-raw)
+                ;; Resolve tenant context (provision / auto-set / selection)
+                config       (get-in req [:service-container :config])
+                tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw)
+                auth-session (tenant-auth/build-auth-session {:user user-safe} tenant-ctx)
+                new-session  (assoc existing-session :auth-session auth-session)
+                ;; Build response body with tenant info
+                response-body (cond-> {:success true :user user-safe}
+                                (:tenant auth-session)
+                                (assoc :tenant (sanitize-for-serialization (:tenant auth-session)))
+
+                                (:tenant-selection-required auth-session)
+                                (assoc :tenant-selection-required true
+                                  :available-tenants (sanitize-for-serialization
+                                                       (:available-tenants auth-session))))]
 
             ;; Record successful login
             (login-monitoring/record-login-event! db
@@ -139,7 +160,7 @@
                :user-agent ua})
 
             ;; Return success response with session
-            (-> (json-response {:success true :user user-safe})
+            (-> (json-response response-body)
               ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
               (assoc :session new-session)))
 
@@ -179,7 +200,15 @@
                             :user user
                             :tenant (:tenant auth-session)
                             :permissions (shared-auth/get-user-permissions user)}
-                     provider (assoc :provider (if (keyword? provider) (name provider) (str provider))))]
+                     provider
+                     (assoc :provider (if (keyword? provider) (name provider) (str provider)))
+
+                     (:membership auth-session)
+                     (assoc :membership-role (get-in auth-session [:membership :role]))
+
+                     (:tenant-selection-required auth-session)
+                     (assoc :tenant-selection-required true
+                       :available-tenants (:available-tenants auth-session)))]
           {:status 200
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string body)})

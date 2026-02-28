@@ -10,11 +10,11 @@
             ;; Profile-specific settings
              :port     #profile {:dev  55432
                                  :test 55433}
-             :dbname   #profile {:dev  "single_tenant_pos"
-                                 :test "single_tenant_pos_test"}
+             :dbname   #profile {:dev  "multi_tenant_pos"
+                                 :test "multi_tenant_pos_test"}
              :jdbc-url #profile
-                        {:dev  #join ["jdbc:postgresql://localhost:55432/single_tenant_pos?user=app_user&password=" #ref [:secrets :db :dev-password]]
-                         :test #join ["jdbc:postgresql://localhost:55433/single_tenant_pos_test?user=app_user&password=" #ref [:secrets :db :test-password]]}}
+                        {:dev  #join ["jdbc:postgresql://localhost:55432/multi_tenant_pos?user=app_user&password=" #ref [:secrets :db :dev-password]]
+                         :test #join ["jdbc:postgresql://localhost:55433/multi_tenant_pos_test?user=app_user&password=" #ref [:secrets :db :test-password]]}}
 
  ;; HikariCP Connection Pool Configuration
  :hikari-cp {:maximum-pool-size        20
@@ -133,4 +133,20 @@
              ;; by explicitly budgeting completion tokens for the refine step.
              :refine-max-tokens 32000
              :conn-timeout-ms 5000
-             :socket-timeout-ms 60000}}
+             :socket-timeout-ms 60000}
+
+ ;; Tenant provisioning defaults
+ ;; These are copied into each new tenant's lookup tables on creation.
+ ;; The first payer_type with :is-default true becomes the tenant's default.
+ :tenant-defaults {:payer-types [{:label "Cash"          :is-default true}
+                                 {:label "Credit Card"   :is-default false}
+                                 {:label "Debit Card"    :is-default false}
+                                 {:label "Bank Transfer" :is-default false}]
+                   :expense-categories [{:name "Groceries"}
+                                        {:name "Transport"}
+                                        {:name "Utilities"}
+                                        {:name "Dining"}
+                                        {:name "Healthcare"}
+                                        {:name "Entertainment"}
+                                        {:name "Shopping"}
+                                        {:name "Other"}]}}

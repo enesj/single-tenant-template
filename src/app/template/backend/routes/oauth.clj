@@ -2,6 +2,7 @@
   (:require
     [app.domain.backend.registry :as domain-registry]
     [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.utils :as route-utils :refer [get-oauth-configs]]
     [clj-http.client :as http]
     [clojure.string :as str]
@@ -182,11 +183,13 @@
 
 ;; Enhanced OAuth callback handler with tenant-aware authentication
 (defn oauth-callback-handler
-  "Create OAuth callback handler using authentication service"
-  [auth-service]
+  "Create OAuth callback handler using authentication service.
+   `db` and `app-config` are passed explicitly so the handler can resolve
+   tenant context after authentication."
+  [auth-service db app-config]
   (fn [req]
     (route-utils/with-error-handling "oauth-callback"
-      (let [config (get-in req [:service-container :config])
+      (let [config (or app-config (get-in req [:service-container :config]))
             oauth-configs (get-oauth-configs config)
             uri-path (:uri req)
             provider (cond
@@ -220,20 +223,27 @@
                     (do
                       (log/info "Processing OAuth callback for provider:" provider "user:" (:email user-info))
 
-                      ;; Use auth service to process OAuth callback (single-tenant)
+                      ;; Use auth service to process OAuth callback with tenant context
                       (try
-                        (let [session-data (auth-service/process-oauth-callback auth-service user-info provider)
-                              user-email (get-in session-data [:user :email])
-                              sanitized-user (sanitize-for-serialization (:user session-data))
-                              ;; Get post-login redirect path from domain registry
-                              redirect-url (domain-registry/get-post-login-path)]
+                        (let [session-data    (auth-service/process-oauth-callback auth-service user-info provider)
+                              user-raw        (:user session-data)
+                              user-email      (:email user-raw)
+                              sanitized-user  (sanitize-for-serialization user-raw)
+                              ;; Resolve tenant context (provision / auto-set / selection)
+                              oauth-db        (or db (get-in req [:service-container :db]))
+                              tenant-ctx      (tenant-auth/resolve-tenant-context oauth-db config user-raw)
+                              auth-session    (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx)
+                              ;; Redirect to tenant-select when multiple tenants, else normal path
+                              redirect-url    (if (= :selection-required (:action tenant-ctx))
+                                                "/tenant-select"
+                                                (domain-registry/get-post-login-path))]
 
                           (log/info "Authentication successful for:" user-email)
                           (log/info "Redirecting user" user-email "to:" redirect-url)
 
-                          ;; Redirect with session containing only user data
+                          ;; Redirect with tenant-aware session
                           (-> (response/redirect redirect-url)
-                            (assoc :session {:auth-session {:user sanitized-user}})))
+                            (assoc :session {:auth-session auth-session})))
 
                         (catch clojure.lang.ExceptionInfo e
                           (let [ex-data (ex-data e)]
@@ -288,7 +298,10 @@
     (fetch-google-user-info access-token)))
 
 (defn create-oauth-routes
-  "Create OAuth routes that use the authentication service"
-  [auth-service]
-  {:oauth-callback-handler (oauth-callback-handler auth-service)
-   :get-google-user-info-for-status get-google-user-info-for-status})
+  "Create OAuth routes that use the authentication service.
+   `db` and `config` are threaded through for tenant resolution in the callback."
+  ([auth-service]
+   (create-oauth-routes auth-service nil nil))
+  ([auth-service db config]
+   {:oauth-callback-handler (oauth-callback-handler auth-service db config)
+    :get-google-user-info-for-status get-google-user-info-for-status}))

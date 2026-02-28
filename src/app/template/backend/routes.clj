@@ -23,9 +23,9 @@
   (let [;; Render the page with authentication info
         html-content (slurp "resources/public/index.html")
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
-  csrf-token (when (bound? #'*anti-forgery-token*)
-         *anti-forgery-token*)
-  html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
+        csrf-token (when (bound? #'*anti-forgery-token*)
+                     *anti-forgery-token*)
+        html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))
@@ -36,9 +36,9 @@
   (let [;; Use the same index.html as the main app
         html-content (slurp "resources/public/index.html")
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
-  csrf-token (when (bound? #'*anti-forgery-token*)
-         *anti-forgery-token*)
-  html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
+        csrf-token (when (bound? #'*anti-forgery-token*)
+                     *anti-forgery-token*)
+        html-content-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
     {:status 200
      :headers {"Content-Type" "text/html"}
      :body html-content-with-csrf}))
@@ -91,6 +91,10 @@
          ["/reset-password" {:get {:handler render-page}}]
          ["/change-password" {:get {:handler render-page}}]
 
+         ;; Tenant selection & invitation acceptance (SPA fallback)
+         ["/tenant-select" {:get {:handler render-page}}]
+         ["/invitation/accept" {:get {:handler render-page}}]
+
          ;; OAuth routes (only included when OAuth is enabled)
          ;; (Launch URIs like /login/google are handled directly by wrap-oauth2)
          ;; OAuth routes with CSRF protection
@@ -99,8 +103,9 @@
          ["/oauth2/github" {:get {:handler (oauth/github-login-handler)}}]
          ["/oauth/google/callback" {:get {:handler (fn [req]
                                                      (let [auth-service (get service-container :auth-service)
+                                                           config (:config service-container)
                                                            req-with-container (assoc req :service-container service-container)
-                                                           handler (oauth/oauth-callback-handler auth-service)
+                                                           handler (oauth/oauth-callback-handler auth-service db config)
                                                            resp (handler req-with-container)
                                                            user (get-in resp [:session :auth-session :user])
                                                            user-id (:id user)]
@@ -116,8 +121,9 @@
                                                        resp))}}]
          ["/oauth2/github/callback" {:get {:handler (fn [req]
                                                       (let [auth-service (get service-container :auth-service)
+                                                            config (:config service-container)
                                                             req-with-container (assoc req :service-container service-container)]
-                                                        ((oauth/oauth-callback-handler auth-service) req-with-container)))}}]
+                                                        ((oauth/oauth-callback-handler auth-service db config) req-with-container)))}}]
 
          ;; Auth status route (as JSON for client)
          ["/auth/status" {:get {:handler auth/auth-status-handler}}]

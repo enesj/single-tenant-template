@@ -2,10 +2,11 @@
  ;; Home Expenses Tracker — Domain Database Schema
  ;; ============================================================================
  ;; This file defines all tables for the expense tracking domain.
+ ;; Tables with tenant_id are tenant-scoped; others are global catalog.
  ;; ============================================================================
 
  ;; ----------------------------------------------------------------------------
- ;; Suppliers (stores, shops, vendors)
+ ;; Suppliers (stores, shops, vendors) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :suppliers {:fields [[:id :uuid {:primary-key true}]
@@ -17,7 +18,7 @@
              :indexes [[:idx_suppliers_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Cities (canonical city names)
+ ;; Cities (canonical city names) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :cities {:fields [[:id :uuid {:primary-key true}]
@@ -31,7 +32,7 @@
                     [:uniq_cities_country_zip :btree {:fields [:country :zip] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Countries (canonical country names)
+ ;; Countries (canonical country names) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :countries {:fields [[:country [:varchar 255] {:primary-key true}]
@@ -41,7 +42,7 @@
              :indexes [[:idx_countries_code :btree {:fields [:code] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Stores (locations/branches for a supplier)
+ ;; Stores (locations/branches for a supplier) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :stores {:fields [[:id :uuid {:primary-key true}]
@@ -61,7 +62,7 @@
                     [:idx_stores_city_id :btree {:fields [:city_id]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Store Aliases (deduplicated raw store/address guesses -> canonical stores)
+ ;; Store Aliases (deduplicated raw store/address guesses -> canonical stores) — global
  ;; ----------------------------------------------------------------------------
 
  :store_aliases {:fields [[:id :uuid {:primary-key true}]
@@ -82,7 +83,7 @@
                             {:fields [:store_id]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Supplier Aliases (deduplicated raw supplier guesses -> canonical suppliers)
+ ;; Supplier Aliases (deduplicated raw supplier guesses -> canonical suppliers) — global
  ;; ----------------------------------------------------------------------------
 
  :supplier_aliases {:fields [[:id :uuid {:primary-key true}]
@@ -124,37 +125,41 @@
                                      {:fields [:admin_id :entity_type]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Payers (payment methods: cash, cards, accounts, people)
+ ;; Payers (payment methods: cash, cards, accounts, people) — tenant-scoped
  ;; ----------------------------------------------------------------------------
 
  :payers {:fields [[:id :uuid {:primary-key true}]
+                   [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                    [:payer_type_id :uuid {:foreign-key :payer_types/id :on-delete :set-null}]
                    [:label [:varchar 255] {:null false}]
 
                    [:is_default :boolean {:default false}]
                    [:created_at :timestamptz {:default [:now]}]
                    [:updated_at :timestamptz {:default [:now]}]]
-          :indexes [[:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]}
+          :indexes [[:idx_payers_tenant :btree {:fields [:tenant_id]}]
+                    [:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Payer Types (reference table for payer categories)
+ ;; Payer Types (reference table for payer categories) — tenant-scoped
  ;; ----------------------------------------------------------------------------
 
  :payer_types {:fields [[:id :uuid {:primary-key true}]
+                        [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                         [:label [:varchar 255] {:null false}]
                         [:is_default :boolean {:null false :default false}]
                         [:created_at :timestamptz {:default [:now]}]
                         [:updated_at :timestamptz {:default [:now]}]]
-               :indexes [[:idx_payer_types_label :btree {:fields [:label] :unique true}]
-                         [:uniq_payer_types_default :btree {:fields [:is_default]
-                                                            :unique true
-                                                            :where [:= :is_default true]}]]}
+               :indexes [[:idx_payer_types_tenant_label :btree {:fields [:tenant_id :label] :unique true}]
+                         [:uniq_payer_types_tenant_default :btree {:fields [:tenant_id :is_default]
+                                                                   :unique true
+                                                                   :where [:= :is_default true]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Receipts (uploaded images, ADE processing status)
+ ;; Receipts (uploaded images, ADE processing status) — tenant-scoped
  ;; ----------------------------------------------------------------------------
 
  :receipts {:fields [[:id :uuid {:primary-key true}]
+                     [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                      [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]
                      [:payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
                      [:storage_key :text {:null false}]
@@ -182,24 +187,31 @@
             :types [[:receipt-status :enum {:choices ["uploaded" "parsing" "parsed"
                                                       "extracting" "extracted" "review_required"
                                                       "approved" "posted" "failed"]}]]
-            :indexes [[:idx_receipts_user :btree {:fields [:user_id]}]
-                      [:idx_receipts_file_hash :btree {:fields [:file_hash] :unique true}]
+            :indexes [[:idx_receipts_tenant :btree {:fields [:tenant_id]}]
+                      [:idx_receipts_user :btree {:fields [:user_id]}]
+                      [:idx_receipts_tenant_file_hash :btree {:fields [:tenant_id :file_hash] :unique true}]
                       [:idx_receipts_status :btree {:fields [:status]}]
                       [:idx_receipts_supplier_alias_id :btree {:fields [:supplier_alias_id]}]
                       [:idx_receipts_store_alias_id :btree {:fields [:store_alias_id]}]
                       [:idx_receipts_created_at :btree {:fields [:created_at]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Expenses (posted entries with totals)
+ ;; Expense Categories (grouping for expenses) — tenant-scoped
  ;; ----------------------------------------------------------------------------
 
  :expense_categories {:fields [[:id :uuid {:primary-key true}]
+                               [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                                [:name [:varchar 255] {:null false}]
                                [:created_at :timestamptz {:default [:now]}]
                                [:updated_at :timestamptz {:default [:now]}]]
-                      :indexes [[:idx_expense_categories_name :btree {:fields [:name] :unique true}]]}
+                      :indexes [[:idx_expense_categories_tenant_name :btree {:fields [:tenant_id :name] :unique true}]]}
+
+ ;; ----------------------------------------------------------------------------
+ ;; Expenses (posted entries with totals) — tenant-scoped
+ ;; ----------------------------------------------------------------------------
 
  :expenses {:fields [[:id :uuid {:primary-key true}]
+                     [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                      [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]
                      [:receipt_id :uuid {:foreign-key :receipts/id :on-delete :set-null}]
                      [:store_id :uuid {:foreign-key :stores/id :on-delete :set-null}]
@@ -214,7 +226,8 @@
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
             :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]
-            :indexes [[:idx_expenses_user :btree {:fields [:user_id]}]
+            :indexes [[:idx_expenses_tenant :btree {:fields [:tenant_id]}]
+                      [:idx_expenses_user :btree {:fields [:user_id]}]
                       [:idx_expenses_store :btree {:fields [:store_id]}]
                       [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
                       [:idx_expenses_payer :btree {:fields [:payer_id]}]
@@ -223,12 +236,12 @@
                       [:idx_expenses_is_posted :btree {:fields [:is_posted]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; User Expense Settings (per-user defaults)
+ ;; User Expense Settings (per-user-per-tenant defaults) — tenant-scoped
  ;; ----------------------------------------------------------------------------
 
- :user_expense_settings {:fields [[:user_id :uuid {:primary-key true}
-                                   :foreign-key :users/id
-                                   :on-delete :cascade]
+ :user_expense_settings {:fields [[:id :uuid {:primary-key true}]
+                                  [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
+                                  [:user_id :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
                                   [:default_currency [:enum :currency] {:null false :default "BAM"}]
                                   [:default_payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
                                   [:notifications_enabled :boolean {:null false :default true}]
@@ -236,14 +249,13 @@
                                   [:receipt_refine_enabled :boolean {:null false :default false}]
                                   [:receipt_ocr_provider :text {:null false :default "mistral"}]
                                   [:created_at :timestamptz {:default [:now]}]
-                                  [:updated_at :timestamptz {:default [:now]}]]}
+                                  [:updated_at :timestamptz {:default [:now]}]]
+                         :indexes [[:uniq_user_expense_settings_tenant_user
+                                    :btree
+                                    {:fields [:tenant_id :user_id] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Expense Items (line items on receipts)
- ;; ----------------------------------------------------------------------------
-
- ;; ----------------------------------------------------------------------------
- ;; Raw Labels (deduplicated receipt line item labels)
+ ;; Raw Labels (deduplicated receipt line item labels) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :raw_labels {:fields [[:id :uuid {:primary-key true}]
@@ -253,10 +265,27 @@
                        [:updated_at :timestamptz {:default [:now]}]]
               :indexes [[:idx_raw_labels_normalized_key :btree {:fields [:normalized_key] :unique true}]]}
 
- :expense_items {:fields [[:id :uuid {:primary-key true}] [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}] [:alias_id :uuid {:foreign-key :article_aliases/id}] [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}] [:qty [:decimal 10 3]] [:unit_price [:decimal 12 2]] [:line_total [:decimal 12 2] {:null false}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_expense_items_expense :btree {:fields [:expense_id]}] [:idx_expense_items_article :btree {:fields [:article_id]}] [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
+ ;; ----------------------------------------------------------------------------
+ ;; Expense Items (line items on receipts) — tenant-scoped
+ ;; ----------------------------------------------------------------------------
+
+ :expense_items {:fields [[:id :uuid {:primary-key true}]
+                          [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
+                          [:expense_id :uuid {:foreign-key :expenses/id :null false :on-delete :cascade}]
+                          [:alias_id :uuid {:foreign-key :article_aliases/id}]
+                          [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
+                          [:qty [:decimal 10 3]]
+                          [:unit_price [:decimal 12 2]]
+                          [:line_total [:decimal 12 2] {:null false}]
+                          [:created_at :timestamptz {:default [:now]}]
+                          [:updated_at :timestamptz {:default [:now]}]]
+                 :indexes [[:idx_expense_items_tenant :btree {:fields [:tenant_id]}]
+                           [:idx_expense_items_expense :btree {:fields [:expense_id]}]
+                           [:idx_expense_items_article :btree {:fields [:article_id]}]
+                           [:idx_expense_items_alias :btree {:fields [:alias_id]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Manufacturers (canonical brands)
+ ;; Manufacturers (canonical brands) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :manufacturers {:fields [[:id :uuid {:primary-key true}]
@@ -272,7 +301,7 @@
                             {:fields [:display_name]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Categories (high-level grouping for articles)
+ ;; Categories (high-level grouping for articles) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :categories {:fields [[:id :uuid {:primary-key true}]
@@ -283,7 +312,7 @@
               :indexes [[:idx_categories_name :btree {:fields [:name] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Subcategories (child grouping under a category)
+ ;; Subcategories (child grouping under a category) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :subcategories {:fields [[:id :uuid {:primary-key true}]
@@ -298,7 +327,7 @@
                             {:fields [:category_id :name] :unique true}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Articles (canonical products/items)
+ ;; Articles (canonical products/items) — global catalog
  ;; ----------------------------------------------------------------------------
 
  :articles {:fields [[:id :uuid {:primary-key true}]
@@ -320,13 +349,16 @@
                       [:idx_articles_manufacturer_id :btree {:fields [:manufacturer_id]}]]}
 
  ;; ----------------------------------------------------------------------------
- ;; Article Aliases (mapping raw labels → canonical articles)
+ ;; Article Aliases (mapping raw labels → canonical articles) — global catalog
  ;; ----------------------------------------------------------------------------
 
- :article_aliases {:fields [[:id :uuid {:primary-key true}] [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}] [:raw_label :text] [:raw_label_normalized [:varchar 255] {:null false}] [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}] [:confidence :integer {:default 100}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_article_aliases_supplier_label :btree {:fields [:supplier_id :raw_label_normalized] :unique true}] [:idx_article_aliases_article :btree {:fields [:article_id]}]]}
-
- ;; ----------------------------------------------------------------------------
- ;; Price Observations (track prices over time)
- ;; ----------------------------------------------------------------------------
-
- :price_observations {:fields [[:id :uuid {:primary-key true}] [:article_id :uuid {:foreign-key :articles/id :null false :on-delete :cascade}] [:supplier_id :uuid {:foreign-key :suppliers/id :null false :on-delete :cascade}] [:expense_item_id :uuid {:foreign-key :expense_items/id :on-delete :set-null}] [:observed_at :timestamptz {:null false}] [:unit_price [:decimal 12 2]] [:currency [:enum :currency] {:default "BAM"}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_price_obs_article :btree {:fields [:article_id]}] [:idx_price_obs_supplier :btree {:fields [:supplier_id]}] [:idx_price_obs_observed_at :btree {:fields [:observed_at]}]]}}
+ :article_aliases {:fields [[:id :uuid {:primary-key true}]
+                            [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}]
+                            [:raw_label :text]
+                            [:raw_label_normalized [:varchar 255] {:null false}]
+                            [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
+                            [:confidence :integer {:default 100}]
+                            [:created_at :timestamptz {:default [:now]}]
+                            [:updated_at :timestamptz {:default [:now]}]]
+                   :indexes [[:idx_article_aliases_supplier_label :btree {:fields [:supplier_id :raw_label_normalized] :unique true}]
+                             [:idx_article_aliases_article :btree {:fields [:article_id]}]]}}

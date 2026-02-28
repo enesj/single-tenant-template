@@ -73,9 +73,13 @@
       :get-service! (partial container/get-service! di-container)
       :service-status (partial container/service-status di-container)
       :service-statuses #(container/service-statuses di-container)
-      :tenant-service nil
+      ;; Tenant lifecycle services are plain-function namespaces (no DI lifecycle),
+      ;; but we expose them on the container for discoverability.
+      :tenant-service     {:ns 'app.template.backend.services.tenant}
+      :invitation-service {:ns 'app.template.backend.services.invitation}
+      :member-service     {:ns 'app.template.backend.services.member}
+      ;; Placeholder for future domain services
       :user-service nil
-      :invitation-service nil
       :property-service nil
       :booking-service nil
       :transaction-service nil

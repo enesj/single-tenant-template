@@ -33,7 +33,7 @@
              (when (nil? db-connection)
                (log/error "Database connection is nil when creating adapter!"))
              (let [relationship-mappings (get-in domain-config [:relationship-mappings])]
-                (db-adapter/create-postgres-adapter db-connection relationship-mappings)))))
+               (db-adapter/create-postgres-adapter db-connection relationship-mappings)))))
 
        (container/register-service!
          (container/create-simple-service
@@ -100,7 +100,9 @@
            :oauth-routes
            (fn [c]
              (oauth-routes/create-oauth-routes
-               (container/get-service c :auth-service)))
+               (container/get-service c :auth-service)
+               db-connection
+               config))
            :deps #{:auth-service}))
 
        (container/register-service!

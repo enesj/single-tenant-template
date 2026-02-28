@@ -65,4 +65,79 @@
  :admin_sessions {:fields [[:id :uuid {:primary-key true}] [:admin_id :uuid {:foreign-key :admins/id :null false :on-delete :cascade}] [:token [:varchar 255] {:null false :unique true}] [:created_at :timestamptz {:null false :default [:now]}] [:updated_at :timestamptz {:null false :default [:now]}] [:last_activity :timestamptz {:null false}] [:expires_at :timestamptz {:null false}] [:ip_address :text] [:user_agent :text]] :indexes [[:idx_admin_sessions_token :btree {:fields [:token] :unique true}] [:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}] [:idx_admin_sessions_expires :btree {:fields [:expires_at]}]]}
 
  ;; Backlog items
- :backlog {:fields [[:number :integer {:primary-key true}] [:description :text {:null false}] [:status [:enum :backlog-status] {:null false :default "Waiting"}] [:type [:enum :backlog-type] {:null false}] [:priority :integer {:null false :default 1 :check [:raw "priority BETWEEN 1 AND 5"]}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :types [[:backlog-status :enum {:choices ["Waiting" "In progres" "Completed" "Need improvments"]}] [:backlog-type :enum {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvment"]}]]}}
+ :backlog {:fields [[:number :integer {:primary-key true}] [:description :text {:null false}] [:status [:enum :backlog-status] {:null false :default "Waiting"}] [:type [:enum :backlog-type] {:null false}] [:priority :integer {:null false :default 1 :check [:raw "priority BETWEEN 1 AND 5"]}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :types [[:backlog-status :enum {:choices ["Waiting" "In progres" "Completed" "Need improvments"]}] [:backlog-type :enum {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvment"]}]]}
+
+ ;; ============================================================================
+ ;; Multi-Tenancy Tables
+ ;; ============================================================================
+
+ ;; Tenants (workspace containers for multi-tenant isolation)
+ :tenants {:fields [[:id :uuid {:primary-key true}]
+                    [:name [:varchar 255] {:null false}]
+                    [:slug [:varchar 255] {:null false}]
+                    [:status [:enum :tenant-status] {:null false :default "active"}]
+                    [:created_at :timestamptz {:default [:now]}]
+                    [:updated_at :timestamptz {:default [:now]}]]
+           :types [[:tenant-status :enum {:choices ["active" "suspended" "archived"]}]]
+           :indexes [[:idx_tenants_slug :btree {:fields [:slug] :unique true}]
+                     [:idx_tenants_status :btree {:fields [:status]}]]}
+
+ ;; Tenant Memberships (user-to-tenant bindings with roles)
+ :tenant_memberships {:fields [[:id :uuid {:primary-key true}]
+                               [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
+                               [:user_id :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
+                               [:role [:enum :membership-role] {:null false}]
+                               [:status [:enum :membership-status] {:null false :default "active"}]
+                               [:invited_by :uuid {:foreign-key :users/id :on-delete :set-null}]
+                               [:created_at :timestamptz {:default [:now]}]
+                               [:updated_at :timestamptz {:default [:now]}]]
+                      :types [[:membership-role :enum {:choices ["owner" "admin" "member" "viewer"]}]
+                              [:membership-status :enum {:choices ["active" "suspended"]}]]
+                      :indexes [[:uniq_tenant_memberships_tenant_user :btree {:fields [:tenant_id :user_id] :unique true}]
+                                [:idx_tenant_memberships_user :btree {:fields [:user_id]}]
+                                [:idx_tenant_memberships_status :btree {:fields [:status]}]]}
+
+ ;; Tenant Invitations (pending invitations to join a tenant)
+ :tenant_invitations {:fields [[:id :uuid {:primary-key true}]
+                               [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
+                               [:email :text {:null false}]
+                               [:role [:enum :invitation-role] {:null false}]
+                               [:invited_by :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
+                               [:status [:enum :invitation-status] {:null false :default "pending"}]
+                               [:token [:varchar 255] {:null false}]
+                               [:expires_at :timestamptz {:null false}]
+                               [:created_at :timestamptz {:default [:now]}]
+                               [:updated_at :timestamptz {:default [:now]}]]
+                      :types [[:invitation-status :enum {:choices ["pending" "accepted" "expired" "revoked"]}]
+                              [:invitation-role :enum {:choices ["admin" "member" "viewer"]}]]
+                      :indexes [[:idx_tenant_invitations_token :btree {:fields [:token] :unique true}]
+                                [:idx_tenant_invitations_tenant :btree {:fields [:tenant_id]}]
+                                [:idx_tenant_invitations_email :btree {:fields [:email]}]
+                                [:idx_tenant_invitations_status :btree {:fields [:status]}]]}
+
+ ;; Impersonation Grants (platform admin access to tenant data)
+ :impersonation_grants {:fields [[:id :uuid {:primary-key true}]
+                                 [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
+                                 [:admin_id :uuid {:foreign-key :admins/id :null false :on-delete :cascade}]
+                                 [:granted_by :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
+                                 [:role [:enum :impersonation-role] {:null false}]
+                                 [:status [:enum :impersonation-status] {:null false :default "active"}]
+                                 [:revoked_by_admin :uuid {:foreign-key :admins/id :on-delete :set-null}]
+                                 [:revoked_by_user :uuid {:foreign-key :users/id :on-delete :set-null}]
+                                 [:created_at :timestamptz {:default [:now]}]
+                                 [:updated_at :timestamptz {:default [:now]}]]
+                        :types [[:impersonation-role :enum {:choices ["owner" "admin" "member" "viewer"]}]
+                                [:impersonation-status :enum {:choices ["active" "revoked"]}]]
+                        :indexes [[:idx_impersonation_grants_tenant :btree {:fields [:tenant_id]}]
+                                  [:idx_impersonation_grants_admin :btree {:fields [:admin_id]}]
+                                  [:idx_impersonation_grants_status :btree {:fields [:status]}]]}
+
+ ;; User Sessions (server-side session store)
+ :user_sessions {:fields [[:id :uuid {:primary-key true}]
+                          [:session_key [:varchar 255] {:null false}]
+                          [:data :jsonb {:null false}]
+                          [:expires_at :timestamptz {:null false}]
+                          [:created_at :timestamptz {:default [:now]}]
+                          [:updated_at :timestamptz {:default [:now]}]]
+                 :indexes [[:idx_user_sessions_key :btree {:fields [:session_key] :unique true}]
+                           [:idx_user_sessions_expires :btree {:fields [:expires_at]}]]}}

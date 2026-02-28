@@ -6,8 +6,10 @@
     [app.shared.specs.form-fields :as form-fields-spec]
     [app.shared.specs.table-columns :as table-columns-spec]
     [app.shared.specs.view-options :as view-options-spec]
+    [app.template.backend.email.service :as email-svc]
     [app.template.backend.middleware.user :as user-middleware]
     [app.template.backend.routes.entities :as entities]
+    [app.template.backend.routes.tenant :as tenant-routes]
     [app.admin.backend.services.admin.dashboard :as admin-dashboard]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.http :as http]
@@ -276,6 +278,13 @@
                                                  (let [email-service (get service-container :email-service)]
                                                    (when-let [handler-fn (requiring-resolve 'app.template.backend.routes.email-verification/resend-verification-handler)]
                                                      ((handler-fn db email-service) req))))}}]]
+
+     ;; Tenant management routes (switch, members, invitations)
+     (tenant-routes/tenant-routes
+       db user-middleware/wrap-user-authentication
+       (get service-container :email-service)
+       (email-svc/create-base-url app-config)
+       app-config)
 
      ;; Domain user API routes (from registry)
      ;; Each domain provides routes under its own path prefix (e.g., /expenses)

@@ -1,0 +1,200 @@
+(ns app.template.backend.services.invitation
+  "Tenant invitation service — create, accept, revoke invitations."
+  (:require
+    [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.template.backend.auth.service :as auth-service]
+    [honey.sql :as sql]
+    [java-time.api :as time]
+    [next.jdbc :as jdbc]
+    [taoensso.timbre :as log]))
+
+(def ^:private valid-invitation-roles #{"admin" "member" "viewer"})
+
+;; ============================================================================
+;; Guards
+;; ============================================================================
+
+(defn- assert-valid-role! [role]
+  (when-not (contains? valid-invitation-roles role)
+    (throw (ex-info "Invalid invitation role"
+             {:type :validation-error
+              :errors {:role [(str "Role must be one of: " (pr-str valid-invitation-roles))]}}))))
+
+(defn- assert-no-pending-invite! [db tenant-id email]
+  (let [existing (jdbc/execute-one! db
+                   (sql/format {:select [:id]
+                                :from   [:tenant_invitations]
+                                :where  [:and
+                                         [:= :tenant_id tenant-id]
+                                         [:= :email email]
+                                         [:= :status "pending"]]
+                                :limit  1}))]
+    (when existing
+      (throw (ex-info "A pending invitation already exists for this email"
+               {:type :validation-error
+                :errors {:email ["A pending invitation already exists for this email"]}})))))
+
+(defn- assert-not-already-member! [db tenant-id email]
+  (let [existing (jdbc/execute-one! db
+                   (sql/format {:select [:tm.id]
+                                :from   [[:tenant_memberships :tm]]
+                                :join   [[:users :u] [:= :tm.user_id :u.id]]
+                                :where  [:and
+                                         [:= :tm.tenant_id tenant-id]
+                                         [:= :u.email email]
+                                         [:= :tm.status "active"]]
+                                :limit  1}))]
+    (when existing
+      (throw (ex-info "User is already an active member of this tenant"
+               {:type :validation-error
+                :errors {:email ["User is already an active member of this tenant"]}})))))
+
+;; ============================================================================
+;; CRUD
+;; ============================================================================
+
+(defn create-invitation!
+  "Create a pending invitation. Validates role, uniqueness, and membership."
+  [db {:keys [tenant-id email role invited-by]}]
+  (assert-valid-role! role)
+  (let [t-id (if (string? tenant-id) (java.util.UUID/fromString tenant-id) tenant-id)]
+    (assert-no-pending-invite! db t-id email)
+    (assert-not-already-member! db t-id email)
+    (let [token      (auth-service/create-session-token)
+          expires-at (time/plus (time/local-date-time) (time/days 7))
+          inv-id     (java.util.UUID/randomUUID)
+          now        (java.time.LocalDateTime/now)
+          inv-by     (if (string? invited-by) (java.util.UUID/fromString invited-by) invited-by)]
+      (convert-pg-objects
+        (jdbc/execute-one! db
+          (sql/format {:insert-into [:tenant_invitations]
+                       :values [{:id         inv-id
+                                 :tenant_id  t-id
+                                 :email      email
+                                 :role       role
+                                 :invited_by inv-by
+                                 :status     "pending"
+                                 :token      token
+                                 :expires_at expires-at
+                                 :created_at now
+                                 :updated_at now}]
+                       :returning [:*]}))))))
+
+(defn find-invitation-by-token
+  "Lookup an invitation by token, joined with tenant name/slug."
+  [db token]
+  (convert-pg-objects
+    (jdbc/execute-one! db
+      (sql/format {:select [[:ti :*]
+                            [:t.name :tenant_name]
+                            [:t.slug :tenant_slug]]
+                   :from   [[:tenant_invitations :ti]]
+                   :join   [[:tenants :t] [:= :ti.tenant_id :t.id]]
+                   :where  [:= :ti.token token]}))))
+
+(defn accept-invitation!
+  "Accept an invitation — creates a membership in a transaction.
+   `user` must have :id and :email keys."
+  [db user invitation]
+  ;; Guard: must be pending
+  (when (not= "pending" (or (:status invitation)
+                          (:tenant_invitations/status invitation)))
+    (throw (ex-info "Invitation is not pending"
+             {:type :validation-error
+              :errors {:token ["This invitation is no longer valid"]}})))
+
+  ;; Guard: not expired
+  (let [expires (or (:expires_at invitation)
+                  (:tenant_invitations/expires_at invitation))]
+    (when (and expires (.isBefore (if (instance? java.time.LocalDateTime expires)
+                                    expires
+                                    (java.time.LocalDateTime/parse (str expires)))
+                         (java.time.LocalDateTime/now)))
+      (throw (ex-info "Invitation has expired"
+               {:type :validation-error
+                :errors {:token ["This invitation has expired"]}}))))
+
+  ;; Guard: email matches
+  (let [inv-email (or (:email invitation) (:tenant_invitations/email invitation))
+        user-email (:email user)]
+    (when (not= (some-> inv-email clojure.string/lower-case)
+            (some-> user-email clojure.string/lower-case))
+      (throw (ex-info "Invitation email does not match your account"
+               {:type :validation-error
+                :errors {:email ["This invitation was sent to a different email address"]}}))))
+
+  ;; Guard: not already a member
+  (let [tenant-id (or (:tenant_id invitation) (:tenant_invitations/tenant_id invitation))
+        user-id   (if (string? (:id user)) (java.util.UUID/fromString (:id user)) (:id user))
+        existing  (jdbc/execute-one! db
+                    (sql/format {:select [:id]
+                                 :from   [:tenant_memberships]
+                                 :where  [:and
+                                          [:= :tenant_id tenant-id]
+                                          [:= :user_id user-id]
+                                          [:= :status "active"]]
+                                 :limit  1}))]
+    (when existing
+      (throw (ex-info "You are already a member of this tenant"
+               {:type :validation-error
+                :errors {:email ["You are already a member of this tenant"]}}))))
+
+  ;; All good — create membership and mark invitation accepted
+  (let [tenant-id   (or (:tenant_id invitation) (:tenant_invitations/tenant_id invitation))
+        inv-id      (or (:id invitation) (:tenant_invitations/id invitation))
+        role        (or (:role invitation) (:tenant_invitations/role invitation))
+        invited-by  (or (:invited_by invitation) (:tenant_invitations/invited_by invitation))
+        user-id     (if (string? (:id user)) (java.util.UUID/fromString (:id user)) (:id user))
+        now         (java.time.LocalDateTime/now)
+        member-id   (java.util.UUID/randomUUID)]
+    (jdbc/with-transaction [tx db]
+      ;; Create membership
+      (let [membership (convert-pg-objects
+                         (jdbc/execute-one! tx
+                           (sql/format {:insert-into [:tenant_memberships]
+                                        :values [{:id         member-id
+                                                  :tenant_id  tenant-id
+                                                  :user_id    user-id
+                                                  :role       (name role)
+                                                  :status     "active"
+                                                  :invited_by invited-by
+                                                  :created_at now
+                                                  :updated_at now}]
+                                        :returning [:*]})))]
+        ;; Mark invitation accepted
+        (jdbc/execute-one! tx
+          (sql/format {:update [:tenant_invitations]
+                       :set    {:status     "accepted"
+                                :updated_at now}
+                       :where  [:= :id inv-id]}))
+        (log/info "Invitation accepted — user" (:email user) "joined tenant" tenant-id "as" role)
+        membership))))
+
+(defn revoke-invitation!
+  "Revoke a pending invitation. No-op if already non-pending."
+  [db invitation-id]
+  (let [inv-id (if (string? invitation-id) (java.util.UUID/fromString invitation-id) invitation-id)]
+    (jdbc/execute-one! db
+      (sql/format {:update [:tenant_invitations]
+                   :set    {:status     "revoked"
+                            :updated_at (java.time.LocalDateTime/now)}
+                   :where  [:and
+                            [:= :id inv-id]
+                            [:= :status "pending"]]}))))
+
+(defn list-pending-invitations
+  "List all pending invitations for a tenant."
+  [db tenant-id]
+  (let [t-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)]
+    (mapv convert-pg-objects
+      (jdbc/execute! db
+        (sql/format {:select [:*]
+                     :from   [:tenant_invitations]
+                     :where  [:and
+                              [:= :tenant_id t-id]
+                              [:= :status "pending"]]
+                     :order-by [[:created_at :desc]]})))))
+
+(comment
+  ;; (require 'app.template.backend.services.invitation :reload)
+  :rcf)
