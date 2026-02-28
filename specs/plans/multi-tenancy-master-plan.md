@@ -2,7 +2,7 @@
 
 > **Spec**: `specs/allium/template/multi-tenancy.candidate.allium`
 > **Approach**: shared-schema, tenant_id FK, middleware enforcement (no RLS)
-> **Status**: Phase 0 — In Progress
+> **Status**: Phase 1 — Complete (1.3 slug routing deferred to Phase 2)
 
 ---
 
@@ -96,32 +96,32 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ### Tasks
 
-- [ ] **1.1** Tenant provisioning service: auto-create tenant + owner membership on first login
+- [x] **1.1** Tenant provisioning service: auto-create tenant + owner membership on first login
   - Hook into post-authentication flow (password login, registration, OAuth callback)
   - Generate URL slug from email prefix (handle collisions with suffix)
   - Seed payer_types + expense_categories from template into new tenant
   - Set session `:tenant-id` and `:auth-session :tenant` after creation
-- [ ] **1.2** Populate session tenant context in existing auth flow
+- [x] **1.2** Populate session tenant context in existing auth flow
   - On login (password + OAuth): lookup memberships, auto-set if single tenant
   - On login with multiple memberships: signal tenant selection required
   - Populate `[:session :tenant-id]` and `[:session :auth-session :tenant {:id :name :slug}]`
   - Update `/auth/status` endpoint to return tenant + membership info
-- [ ] **1.3** Tenant slug resolution middleware: `/t/{slug}/*` → set/switch session tenant
+- [ ] **1.3** Tenant slug resolution middleware: `/t/{slug}/*` → set/switch session tenant *(deferred — using session-based switching)*
   - Verify membership exists and is active
   - Switch session if navigating to a different tenant
   - Return 404 for unknown slug, 403 for no membership
-- [ ] **1.4** Invitation flow (backend)
+- [x] **1.4** Invitation flow (backend)
   - Create invitation endpoint (owner/admin only, can't invite as owner)
   - Guard: no pending invitation for same email+tenant, no existing active membership
   - Accept invitation endpoint (token-based, creates membership)
   - Revoke invitation endpoint (owner/admin)
   - Expiration: 7 days
-- [ ] **1.5** Member management (backend)
+- [x] **1.5** Member management (backend)
   - Change role endpoint (owner guards for admin/owner targets)
   - Transfer ownership endpoint (owner → admin promotion, self-demotion)
   - Remove member endpoint (can't remove owners)
-- [ ] **1.6** Tenant switcher endpoint: `POST /api/v1/tenant/switch` (sets session context)
-- [ ] **1.7** Integration tests for provisioning, invitation, and member management flows
+- [x] **1.6** Tenant switcher endpoint: `POST /api/v1/tenant/switch` (sets session context)
+- [x] **1.7** Integration tests for provisioning, invitation, and member management flows
 
 ### Dependencies
 - Phase 0 complete (tables exist)

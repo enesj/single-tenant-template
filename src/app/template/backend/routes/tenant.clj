@@ -280,8 +280,7 @@
 
    ["/switch"       {:post {:handler (switch-tenant-handler db config)}}]
    ["/memberships"  {:get  {:handler (list-memberships-handler db)}}]
-   ["/members"      {:get    {:handler (list-members-handler db)}
-                     :delete {:no-doc true}}]  ;; DELETE handled by sub-route
+   ["/members"      {:get {:handler (list-members-handler db)}}]
    ["/members/:id"       {:delete {:handler (remove-member-handler db)}}]
    ["/members/:id/role"  {:put    {:handler (change-role-handler db)}}]
    ["/invitations"       {:get  {:handler (list-invitations-handler db)}

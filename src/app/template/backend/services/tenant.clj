@@ -10,6 +10,7 @@
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -52,16 +53,27 @@
 (defn generate-tenant-name
   "Derive a human-friendly workspace name from a user record."
   [user]
-  (let [full-name (some-> (:full_name user) str/trim not-empty)]
+  (let [full-name (some-> (or (:full_name user) (:users/full_name user)) str/trim not-empty)
+        email     (or (:email user) (:users/email user))]
     (if full-name
       (str full-name "'s workspace")
-      (str (first (str/split (:email user) #"@")) "'s workspace"))))
+      (str (first (str/split email #"@")) "'s workspace"))))
+
+(defn- user-email [user]
+  (or (:email user) (:users/email user)))
+
+(defn- user-full-name [user]
+  (or (:full_name user) (:users/full_name user)))
+
+(defn- user-id [user]
+  (let [id (or (:id user) (:users/id user))]
+    (if (string? id) (java.util.UUID/fromString id) id)))
 
 (defn provision-tenant!
   "Create a new tenant + owner membership + seed lookup tables, all inside a
    single transaction. Returns {:tenant <row> :membership <row>}."
   [db config user]
-  (let [base-slug  (generate-slug (:email user))
+  (let [base-slug  (generate-slug (user-email user))
         slug       (ensure-unique-slug db base-slug)
         name       (generate-tenant-name user)
         tenant-id  (java.util.UUID/randomUUID)
@@ -76,7 +88,7 @@
                                     :values [{:id         tenant-id
                                               :name       name
                                               :slug       slug
-                                              :status     "active"
+                                              :status     [:cast "active" :tenant_status]
                                               :created_at now
                                               :updated_at now}]
                                     :returning [:*]})))
@@ -86,11 +98,9 @@
                            (sql/format {:insert-into [:tenant_memberships]
                                         :values [{:id         member-id
                                                   :tenant_id  tenant-id
-                                                  :user_id    (if (string? (:id user))
-                                                                (java.util.UUID/fromString (:id user))
-                                                                (:id user))
-                                                  :role       "owner"
-                                                  :status     "active"
+                                                  :user_id    (user-id user)
+                                                  :role       [:cast "owner" :membership_role]
+                                                  :status     [:cast "active" :membership_status]
                                                   :created_at now
                                                   :updated_at now}]
                                         :returning [:*]})))]
@@ -116,7 +126,7 @@
                                    :created_at now
                                    :updated_at now}]})))
 
-        (log/info "Provisioned tenant" slug "for user" (:email user)
+        (log/info "Provisioned tenant" slug "for user" (user-email user)
           "with" (count (:payer-types defaults)) "payer types and"
           (count (:expense-categories defaults)) "expense categories")
 
@@ -135,7 +145,7 @@
                    :from   [:tenants]
                    :where  [:and
                             [:= :slug slug]
-                            [:= :status "active"]]}))))
+                            [:= :status [:cast "active" :tenant_status]]]}))))
 
 (defn find-tenant-by-id
   "Return the tenant with the given id, or nil."
@@ -155,32 +165,36 @@
   "Return all active memberships for a user, joined with tenant info."
   [db user-id]
   (let [uuid-id (if (string? user-id) [:cast user-id :uuid] user-id)]
-    (mapv convert-pg-objects
-      (jdbc/execute! db
-        (sql/format {:select [[:tm :*]
-                              [:t.name :tenant_name]
-                              [:t.slug :tenant_slug]]
-                     :from   [[:tenant_memberships :tm]]
-                     :join   [[:tenants :t] [:= :tm.tenant_id :t.id]]
-                     :where  [:and
-                              [:= :tm.user_id uuid-id]
-                              [:= :tm.status "active"]
-                              [:= :t.status "active"]]})))))
+    (let [opts {:builder-fn rs/as-unqualified-maps}]
+      (mapv convert-pg-objects
+        (jdbc/execute! db
+          (sql/format {:select [:tm.*
+                                [:t.name :tenant_name]
+                                [:t.slug :tenant_slug]]
+                       :from   [[:tenant_memberships :tm]]
+                       :join   [[:tenants :t] [:= :tm.tenant_id :t.id]]
+                       :where  [:and
+                                [:= :tm.user_id uuid-id]
+                                [:= :tm.status [:cast "active" :membership_status]]
+                                [:= :t.status [:cast "active" :tenant_status]]]})
+          opts)))))
 
 (defn get-tenant-members
   "Return all active members of a tenant, joined with user info."
   [db tenant-id]
-  (let [uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)]
+  (let [uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
+        opts    {:builder-fn rs/as-unqualified-maps}]
     (mapv convert-pg-objects
       (jdbc/execute! db
-        (sql/format {:select [[:tm :*]
+        (sql/format {:select [:tm.*
                               [:u.email :user_email]
                               [:u.full_name :user_full_name]]
                      :from   [[:tenant_memberships :tm]]
                      :join   [[:users :u] [:= :tm.user_id :u.id]]
                      :where  [:and
                               [:= :tm.tenant_id uuid-id]
-                              [:= :tm.status "active"]]})))))
+                              [:= :tm.status [:cast "active" :membership_status]]]})
+        opts))))
 
 (defn get-membership
   "Return the single active membership for a user in a tenant, or nil."
@@ -194,7 +208,7 @@
                      :where  [:and
                               [:= :tenant_id t-id]
                               [:= :user_id u-id]
-                              [:= :status "active"]]})))))
+                              [:= :status [:cast "active" :membership_status]]]})))))
 
 (comment
   ;; REPL helpers

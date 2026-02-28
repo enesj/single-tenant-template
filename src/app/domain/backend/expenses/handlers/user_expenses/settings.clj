@@ -129,13 +129,14 @@
     (if-let [user-id (h/get-user-id request)]
       (if-let [forbidden (h/ensure-role request settings-read-roles "Role assignment required")]
         forbidden
-        (try
-          (let [persisted (user-expense-settings/get-user-expense-settings db user-id)
-                effective (user-expense-settings/effective-settings persisted)]
-            (h/json-response {:data effective}))
-          (catch Exception e
-            (log/error e "Failed to load user expense settings" {:user-id user-id})
-            (h/json-response {:error "Failed to load settings"} 500))))
+        (let [tenant-id (h/get-tenant-id request)]
+          (try
+            (let [persisted (user-expense-settings/get-user-expense-settings db tenant-id user-id)
+                  effective (user-expense-settings/effective-settings persisted)]
+              (h/json-response {:data effective}))
+            (catch Exception e
+              (log/error e "Failed to load user expense settings" {:user-id user-id})
+              (h/json-response {:error "Failed to load settings"} 500)))))
       (h/unauthorized-response))))
 
 (defn update-settings-handler
@@ -147,20 +148,21 @@
       (if-let [forbidden (h/ensure-role request settings-write-roles
                            "Only members, admins, and owners can update settings")]
         forbidden
-        (try
-          (let [body (h/read-body-params request)
-                persisted (user-expense-settings/get-user-expense-settings db user-id)
-                current (user-expense-settings/effective-settings persisted)
-                {:keys [settings error]} (normalize-settings-update current body)]
-            (if error
-              error
-              (let [stored (user-expense-settings/upsert-user-expense-settings! db user-id settings)]
-                (log/info "Updated user expense settings" {:user-id user-id
-                                                           :keys (keys body)})
-                (h/json-response {:data stored}))))
-          (catch Exception e
-            (log/error e "Failed to update user expense settings" {:user-id user-id})
-            (h/json-response {:error "Failed to update settings"} 500))))
+        (let [tenant-id (h/get-tenant-id request)]
+          (try
+            (let [body (h/read-body-params request)
+                  persisted (user-expense-settings/get-user-expense-settings db tenant-id user-id)
+                  current (user-expense-settings/effective-settings persisted)
+                  {:keys [settings error]} (normalize-settings-update current body)]
+              (if error
+                error
+                (let [stored (user-expense-settings/upsert-user-expense-settings! db tenant-id user-id settings)]
+                  (log/info "Updated user expense settings" {:user-id user-id
+                                                             :keys (keys body)})
+                  (h/json-response {:data stored}))))
+            (catch Exception e
+              (log/error e "Failed to update user expense settings" {:user-id user-id})
+              (h/json-response {:error "Failed to update settings"} 500)))))
       (h/unauthorized-response))))
 
 ;; ---------------------------------------------------------------------------
@@ -174,17 +176,28 @@
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
       (let [params (:query-params request)
-            format (or (h/get-param params :format) "csv")]
+            format (or (h/get-param params :format) "csv")
+            tenant-id (h/get-tenant-id request)]
         (try
-          (let [expenses (->> (jdbc/execute! db
-                                ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
-                                 FROM expenses e
-                                 LEFT JOIN suppliers s ON e.supplier_id = s.id
-                                 LEFT JOIN payers p ON e.payer_id = p.id
-                                 WHERE e.user_id = ?
-                                 ORDER BY e.purchased_at DESC
-                                 LIMIT 1000"
-                                 user-id])
+          (let [expenses (->> (if tenant-id
+                                (jdbc/execute! db
+                                  ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+                                   FROM expenses e
+                                   LEFT JOIN suppliers s ON e.supplier_id = s.id
+                                   LEFT JOIN payers p ON e.payer_id = p.id
+                                   WHERE e.user_id = ? AND e.tenant_id = ?
+                                   ORDER BY e.purchased_at DESC
+                                   LIMIT 1000"
+                                   user-id tenant-id])
+                                (jdbc/execute! db
+                                  ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+                                   FROM expenses e
+                                   LEFT JOIN suppliers s ON e.supplier_id = s.id
+                                   LEFT JOIN payers p ON e.payer_id = p.id
+                                   WHERE e.user_id = ?
+                                   ORDER BY e.purchased_at DESC
+                                   LIMIT 1000"
+                                   user-id]))
                            (map db-adapter/to-app))]
             (if (= format "csv")
               ;; Return CSV data directly
@@ -231,23 +244,40 @@
                        (:query-params request)
                        {})
               confirmation (or (h/get-param params :confirmation)
-                             (h/get-param params :token))]
+                             (h/get-param params :token))
+              tenant-id (h/get-tenant-id request)]
           (if (= confirmation "DELETE_ALL_EXPENSES")
             (try
               (jdbc/with-transaction [tx db]
-                (jdbc/execute-one!
-                  tx
-                  ["UPDATE receipts
-                    SET expense_id = NULL,
-                        status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
-                    WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
-                   user-id])
-                (let [result (jdbc/execute-one! tx
-                               ["DELETE FROM expenses WHERE user_id = ?"
-                                user-id])]
-                  (log/warn "User deleted all expenses" {:user-id user-id
-                                                         :affected (:next.jdbc/update-count result)})
-                  (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))
+                (if tenant-id
+                  (do
+                    (jdbc/execute-one!
+                      tx
+                      ["UPDATE receipts
+                        SET expense_id = NULL,
+                            status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
+                        WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ? AND tenant_id = ?)"
+                       user-id tenant-id])
+                    (let [result (jdbc/execute-one! tx
+                                   ["DELETE FROM expenses WHERE user_id = ? AND tenant_id = ?"
+                                    user-id tenant-id])]
+                      (log/warn "User deleted all expenses" {:user-id user-id :tenant-id tenant-id
+                                                             :affected (:next.jdbc/update-count result)})
+                      (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))
+                  (do
+                    (jdbc/execute-one!
+                      tx
+                      ["UPDATE receipts
+                        SET expense_id = NULL,
+                            status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
+                        WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
+                       user-id])
+                    (let [result (jdbc/execute-one! tx
+                                   ["DELETE FROM expenses WHERE user_id = ?"
+                                    user-id])]
+                      (log/warn "User deleted all expenses" {:user-id user-id
+                                                             :affected (:next.jdbc/update-count result)})
+                      (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))))
               (catch Exception e
                 (log/error e "Failed to delete all expenses")
                 (h/json-response {:error "Delete failed"} 500)))

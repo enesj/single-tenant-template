@@ -27,31 +27,39 @@
     :else (UUID/fromString (str v))))
 
 (defn create-user-expense!
-  "Create an expense for a specific user. Returns expense with :items."
-  [db user-id expense-data items]
-  (let [user-id (ensure-uuid user-id)]
+  "Create an expense for a specific user. Returns expense with :items.
+   `tenant-id` scopes the expense to a specific tenant."
+  [db tenant-id user-id expense-data items]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {:data expense-data})))
-    (log/debug "Creating expense for user" {:user-id user-id})
-    (admin-expenses/create-expense! db (assoc expense-data :user_id user-id) items)))
+    (log/debug "Creating expense for user" {:user-id user-id :tenant-id tenant-id})
+    (admin-expenses/create-expense! db (cond-> (assoc expense-data :user_id user-id)
+                                         tenant-id (assoc :tenant_id tenant-id))
+      items)))
 
 (defn update-user-expense!
-  "Update expense fields for a user's own expense. Returns updated expense or nil if not found/unauthorized."
-  [db user-id expense-id updates]
-  (let [user-id (ensure-uuid user-id)]
+  "Update expense fields for a user's own expense. Returns updated expense or nil if not found/unauthorized.
+   `tenant-id` scopes the ownership check and update to a specific tenant."
+  [db tenant-id user-id expense-id updates]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {:expense-id expense-id})))
-    ;; First verify ownership
-    (let [existing (jdbc/execute-one!
+    ;; First verify ownership (scoped by tenant when present)
+    (let [ownership-where (cond-> [:and
+                                   [:= :id expense-id]
+                                   [:= :user_id user-id]]
+                            tenant-id (conj [:= :tenant_id tenant-id]))
+          existing (jdbc/execute-one!
                      db
                      (sql/format {:select [:id :user_id]
                                   :from [:expenses]
-                                  :where [:and
-                                          [:= :id expense-id]
-                                          [:= :user_id user-id]]})
+                                  :where ownership-where})
                      {:builder-fn rs/as-unqualified-lower-maps})]
       (when existing
-        (admin-expenses/update-expense! db expense-id updates)))))
+        (admin-expenses/update-expense! db expense-id updates tenant-id)))))
 
 (defn delete-user-expenses!
   "Hard delete multiple expenses owned by a user.
@@ -59,9 +67,12 @@
   Returns a result map:
   - :deleted-count
   - :deleted-ids
-  - :not-found-ids (includes ids not owned by the user or missing)"
-  [db user-id expense-ids]
+  - :not-found-ids (includes ids not owned by the user or missing)
+
+  `tenant-id` scopes the ownership check and delete to a specific tenant."
+  [db tenant-id user-id expense-ids]
   (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)
         ids (->> (or expense-ids [])
               (map ensure-uuid)
               (remove nil?)
@@ -73,19 +84,21 @@
        :deleted-ids []
        :not-found-ids []}
       (jdbc/with-transaction [tx db]
-        ;; Only delete expenses that are owned by the user.
-        (let [owned-rows (jdbc/execute!
+        ;; Only delete expenses that are owned by the user (scoped by tenant).
+        (let [ownership-where (cond-> [:and
+                                       [:= :user_id user-id]
+                                       [:in :id ids]]
+                                tenant-id (conj [:= :tenant_id tenant-id]))
+              owned-rows (jdbc/execute!
                            tx
                            (sql/format {:select [:id]
                                         :from [:expenses]
-                                        :where [:and
-                                                [:= :user_id user-id]
-                                                [:in :id ids]]})
+                                        :where ownership-where})
                            {:builder-fn rs/as-unqualified-lower-maps})
               owned-ids (mapv :id owned-rows)
               deleted-ids (reduce
                             (fn [acc expense-id]
-                              (if-let [deleted (admin-expenses/delete-expense! tx expense-id)]
+                              (if-let [deleted (admin-expenses/delete-expense! tx expense-id tenant-id)]
                                 (conj acc (:id deleted))
                                 acc))
                             []
@@ -108,12 +121,15 @@
   Only the following keys are applied:
   :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id
 
+  `tenant-id` scopes the ownership checks and updates to a specific tenant.
+
   Returns:
   {:updated n
    :results [<updated-expense> ...]
    :errors  [{:id <uuid-or-raw> :error <msg>} ...]}"
-  [db user-id items]
+  [db tenant-id user-id items]
   (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)
         allowed-keys #{:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id}
         items (vec (or items []))
         try-uuid type-conv/try-parse-uuid]
@@ -142,7 +158,7 @@
 
                       :else
                       (try
-                        (if-let [expense (update-user-expense! tx user-id expense-id updates)]
+                        (if-let [expense (update-user-expense! tx tenant-id user-id expense-id updates)]
                           (update acc :results conj expense)
                           (update acc :errors conj {:id expense-id :error "Expense not found or access denied"}))
                         (catch Exception e
@@ -155,12 +171,18 @@
            :errors errors})))))
 
 (defn get-user-expense-with-items
-  "Get a user's own expense with items. Returns nil if not found or not owned by user."
-  [db user-id expense-id]
-  (let [user-id (ensure-uuid user-id)]
+  "Get a user's own expense with items. Returns nil if not found or not owned by user.
+   `tenant-id` scopes the query to a specific tenant."
+  [db tenant-id user-id expense-id]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {:expense-id expense-id})))
-    (let [expense (jdbc/execute-one!
+    (let [where (cond-> [:and
+                         [:= :e.id expense-id]
+                         [:= :e.user_id user-id]]
+                  tenant-id (conj [:= :e.tenant_id tenant-id]))
+          expense (jdbc/execute-one!
                     db
                     (sql/format {:select [[:e.*]
                                           [:s.display_name :supplier_display_name]
@@ -172,9 +194,7 @@
                                  :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                                              [:payers :p] [:= :p.id :e.payer_id]
                                              [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-                                 :where [:and
-                                         [:= :e.id expense-id]
-                                         [:= :e.user_id user-id]]})
+                                 :where where})
                     {:builder-fn rs/as-unqualified-lower-maps})
           items (when expense
                   (jdbc/execute!
@@ -217,10 +237,13 @@
   - :supplier-id, :payer-id, :is-posted?
   - :limit, :offset
   - :order-by (app keyword)
-  - :order-dir (:asc/:desc)"
-  [db user-id {:keys [from to supplier-id payer-id is-posted? limit offset order-by order-dir]
-               :or {limit 50 offset 0 order-dir :desc}}]
+  - :order-dir (:asc/:desc)
+
+  `tenant-id` scopes the query to a specific tenant."
+  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted? limit offset order-by order-dir]
+                         :or {limit 50 offset 0 order-dir :desc}}]
   (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)
         order-by* (model-naming/ensure-app-keyword order-by)
         order-col (get allowed-user-expenses-order-by order-by* :e.purchased_at)
         order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})]
@@ -228,6 +251,7 @@
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
                               [:= :e.user_id user-id]]
+                       tenant-id (conj [:= :e.tenant_id tenant-id])
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to])
                        supplier-id (conj [:= :e.supplier_id supplier-id])
@@ -254,13 +278,16 @@
       (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn count-user-expenses
-  "Count total expenses for a specific user with optional filters."
-  [db user-id {:keys [from to supplier-id payer-id is-posted?]}]
-  (let [user-id (ensure-uuid user-id)]
+  "Count total expenses for a specific user with optional filters.
+   `tenant-id` scopes the count to a specific tenant."
+  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?]}]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
                               [:= :user_id user-id]]
+                       tenant-id (conj [:= :tenant_id tenant-id])
                        from (conj [:>= :purchased_at from])
                        to (conj [:<= :purchased_at to])
                        supplier-id (conj [:= :supplier_id supplier-id])
@@ -278,29 +305,33 @@
 
 (defn get-user-expense-summary
   "Get summary statistics for a user's expenses.
-   Returns: {:total-expenses N :total-amount M :currency-totals {...} :recent-count N}"
-  [db user-id {:keys [days-back] :or {days-back 30}}]
-  (let [user-id (ensure-uuid user-id)]
+   Returns: {:total-expenses N :total-amount M :currency-totals {...} :recent-count N}
+   `tenant-id` scopes the summary to a specific tenant."
+  [db tenant-id user-id {:keys [days-back] :or {days-back 30}}]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
     (let [;; Total count of all expenses
-          total-expenses (count-user-expenses db user-id {})
+          total-expenses (count-user-expenses db tenant-id user-id {})
 
           ;; Total amount by currency
+          currency-where (cond-> [:and
+                                  [:= :user_id user-id]
+                                  [:= :is_posted true]]
+                           tenant-id (conj [:= :tenant_id tenant-id]))
           currency-totals (jdbc/execute!
                             db
                             (sql/format {:select [:currency
                                                   [[:sum :total_amount] :total]]
                                          :from [:expenses]
-                                         :where [:and
-                                                 [:= :user_id user-id]
-                                                 [:= :is_posted true]]
+                                         :where currency-where
                                          :group-by [:currency]})
                             {:builder-fn rs/as-unqualified-lower-maps})
 
           ;; Recent expenses count (last N days)
           recent-date (java.time.Instant/now)
-          recent-count (count-user-expenses db user-id
+          recent-count (count-user-expenses db tenant-id user-id
                          {:from (.minus recent-date (java.time.Duration/ofDays days-back))})]
 
       {:total-expenses total-expenses
@@ -310,36 +341,43 @@
 
 (defn get-user-spending-by-month
   "Get monthly spending aggregation for a user.
-   Returns list of {:month \"YYYY-MM\" :currency C :total N}"
-  [db user-id {:keys [months-back] :or {months-back 6}}]
-  (let [user-id (ensure-uuid user-id)]
+   Returns list of {:month \"YYYY-MM\" :currency C :total N}
+   `tenant-id` scopes the query to a specific tenant."
+  [db tenant-id user-id {:keys [months-back] :or {months-back 6}}]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
-    (jdbc/execute!
-      db
-      (sql/format {:select [[[:to_char :purchased_at [:inline "YYYY-MM"]] :month]
-                            :currency
-                            [[:sum :total_amount] :total]]
-                   :from [:expenses]
-                   :where [:and
-                           [:= :user_id user-id]
-                           [:= :is_posted true]
-                           [:>= :purchased_at
-                            [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
-                   :group-by [[:to_char :purchased_at [:inline "YYYY-MM"]] :currency]
-                   :order-by [[[:to_char :purchased_at [:inline "YYYY-MM"]] :desc]]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+    (let [where (cond-> [:and
+                         [:= :user_id user-id]
+                         [:= :is_posted true]
+                         [:>= :purchased_at
+                          [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
+                  tenant-id (conj [:= :tenant_id tenant-id]))]
+      (jdbc/execute!
+        db
+        (sql/format {:select [[[:to_char :purchased_at [:inline "YYYY-MM"]] :month]
+                              :currency
+                              [[:sum :total_amount] :total]]
+                     :from [:expenses]
+                     :where where
+                     :group-by [[:to_char :purchased_at [:inline "YYYY-MM"]] :currency]
+                     :order-by [[[:to_char :purchased_at [:inline "YYYY-MM"]] :desc]]})
+        {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn get-user-spending-by-supplier
   "Get spending by supplier for a user.
-   Returns list of {:supplier_id UUID :supplier_name S :total N :currency C}"
-  [db user-id {:keys [from to limit] :or {limit 10}}]
-  (let [user-id (ensure-uuid user-id)]
+   Returns list of {:supplier_id UUID :supplier_name S :total N :currency C}
+   `tenant-id` scopes the query to a specific tenant."
+  [db tenant-id user-id {:keys [from to limit] :or {limit 10}}]
+  (let [user-id (ensure-uuid user-id)
+        tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
                               [:= :e.user_id user-id]
                               [:= :e.is_posted true]]
+                       tenant-id (conj [:= :e.tenant_id tenant-id])
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to]))]
       (jdbc/execute!

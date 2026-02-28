@@ -221,6 +221,7 @@
 (def expense-category-config
   {:table-name "expense_categories"
    :primary-key :id
+   :tenant-scoped? true
    :required-fields [:name]
    :allowed-order-by {:name :name
                       :created-at :created_at
@@ -291,6 +292,7 @@
   {:table-name "payers"
    :table-alias :p
    :primary-key :id
+   :tenant-scoped? true
    :required-fields [:payer_type_id :label]
    :allowed-order-by {:label :p/label
                       :payer-type :pt/label
@@ -315,6 +317,7 @@
 (def payer-type-config
   {:table-name "payer_types"
    :primary-key :id
+   :tenant-scoped? true
    :required-fields [:label]
    :allowed-order-by {:label :label
                       :created-at :created_at
@@ -356,6 +359,7 @@
 (def expense-config
   {:table-name "expenses"
    :primary-key :id
+   :tenant-scoped? true
    :required-fields [:supplier_id :payer_id :purchased_at :total_amount]
    :allowed-order-by {:expense-date :purchased_at
                       :purchased-at :purchased_at
@@ -385,6 +389,7 @@
   {:table-name "expense_items"
    :table-alias :ei
    :primary-key :ei/id
+   :tenant-scoped? true
    :required-fields [:expense_id :line_total]
    :allowed-order-by {:expense-id :ei/expense_id
                       :raw-label :aa/raw_label
@@ -442,6 +447,7 @@
 (def receipt-config
   {:table-name "receipts"
    :primary-key :id
+   :tenant-scoped? true
    :required-fields [:storage_key]
    :allowed-order-by {:created-at :created_at
                       :updated-at :updated_at

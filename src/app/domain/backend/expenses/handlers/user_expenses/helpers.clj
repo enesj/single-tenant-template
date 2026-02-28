@@ -112,6 +112,17 @@
       (instance? UUID raw-id) raw-id
       :else (try-parse-uuid raw-id))))
 
+(defn get-tenant-id
+  "Extract tenant-id from request session and normalize to UUID.
+   Mirrors `get-user-id` but reads from the tenant context populated by
+   Phase 1 auth middleware."
+  [request]
+  (let [raw-id (or (get-in request [:session :auth-session :tenant :id])
+                 (get-in request [:session :tenant-id]))]
+    (cond
+      (instance? UUID raw-id) raw-id
+      :else (try-parse-uuid raw-id))))
+
 (defn json-response
   "Create a JSON response with the given body and status."
   ([body] (json-response body 200))

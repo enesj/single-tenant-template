@@ -103,7 +103,9 @@
    :payer_id, :purchased_at, :total_amount, :currency, :notes, :items.
 
    store_id is resolved automatically from the receipt's store_alias_id when
-   not explicitly provided in review-data."
+   not explicitly provided in review-data.
+
+   Reads tenant_id from the receipt row and includes it in the expense data."
   [db receipt-id review-data]
   (jdbc/with-transaction [tx db]
     (let [receipt (queries/get-receipt tx receipt-id)]
@@ -113,16 +115,18 @@
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [context  (queries/get-receipt-refine-context tx receipt-id)
-            store-id (:store_id context)
-            base     (cond-> {:receipt_id receipt-id
-                              :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                       store-id (assoc :store_id store-id))
-            expense  (expenses/create-expense!
-                       tx
-                       (merge base review-data)
-                       (:items review-data))
-            extra    {:expense_id (:id expense)}]
+      (let [context   (queries/get-receipt-refine-context tx receipt-id)
+            store-id  (:store_id context)
+            tenant-id (:tenant_id receipt)
+            base      (cond-> {:receipt_id receipt-id
+                               :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                        store-id  (assoc :store_id store-id)
+                        tenant-id (assoc :tenant_id tenant-id))
+            expense   (expenses/create-expense!
+                        tx
+                        (merge base review-data)
+                        (:items review-data))
+            extra     {:expense_id (:id expense)}]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -136,32 +140,34 @@
   If the receipt is unassigned, it is claimed by setting :user_id to user-id.
 
   store_id is resolved automatically from the receipt's store_alias_id when
-  not explicitly provided in review-data.
+  not explicitly provided in review-data. tenant_id is read from the receipt row.
 
   review-data expects keys for expenses/create-expense! including :supplier_id,
   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
-  [db user-id receipt-id review-data]
+  [db user-id receipt-id review-data & {:keys [tenant-id]}]
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-user-receipt tx user-id receipt-id)]
+    (let [receipt (queries/get-user-receipt tx user-id receipt-id tenant-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
       (when-not (parsing/approvable-status? (:status receipt))
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [context  (queries/get-receipt-refine-context tx receipt-id)
-            store-id (:store_id context)
-            base     (cond-> {:receipt_id receipt-id
-                              :user_id    user-id
-                              :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                       store-id (assoc :store_id store-id))
-            expense  (expenses/create-expense!
-                       tx
-                       (merge base review-data)
-                       (:items review-data))
-            claim?   (nil? (:user_id receipt))
-            extra    (cond-> {:expense_id (:id expense)}
-                       claim? (assoc :user_id user-id))]
+      (let [context      (queries/get-receipt-refine-context tx receipt-id)
+            store-id     (:store_id context)
+            receipt-tid  (:tenant_id receipt)
+            base         (cond-> {:receipt_id receipt-id
+                                  :user_id    user-id
+                                  :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                           store-id    (assoc :store_id store-id)
+                           receipt-tid (assoc :tenant_id receipt-tid))
+            expense      (expenses/create-expense!
+                           tx
+                           (merge base review-data)
+                           (:items review-data))
+            claim?       (nil? (:user_id receipt))
+            extra        (cond-> {:expense_id (:id expense)}
+                           claim? (assoc :user_id user-id))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -173,33 +179,35 @@
   If the receipt is unassigned (`user_id` is NULL), it is claimed by setting :user_id to user-id.
 
   store_id is resolved automatically from the receipt's store_alias_id when
-  not explicitly provided in review-data.
+  not explicitly provided in review-data. tenant_id is read from the receipt row.
 
   review-data expects keys for expenses/create-expense! including :supplier_id,
   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
-  [db user-id receipt-id review-data]
+  [db user-id receipt-id review-data & {:keys [tenant-id]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-receipt tx receipt-id)]
+    (let [receipt (queries/get-receipt tx receipt-id tenant-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
       (when-not (parsing/approvable-status? (:status receipt))
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [context  (queries/get-receipt-refine-context tx receipt-id)
-            store-id (:store_id context)
-            base     (cond-> {:receipt_id receipt-id
-                              :user_id    user-id
-                              :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                       store-id (assoc :store_id store-id))
-            expense  (expenses/create-expense!
-                       tx
-                       (merge base review-data)
-                       (:items review-data))
-            claim?   (nil? (:user_id receipt))
-            extra    (cond-> {:expense_id (:id expense)}
-                       claim? (assoc :user_id user-id))]
+      (let [context      (queries/get-receipt-refine-context tx receipt-id)
+            store-id     (:store_id context)
+            receipt-tid  (:tenant_id receipt)
+            base         (cond-> {:receipt_id receipt-id
+                                  :user_id    user-id
+                                  :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                           store-id    (assoc :store_id store-id)
+                           receipt-tid (assoc :tenant_id receipt-tid))
+            expense      (expenses/create-expense!
+                           tx
+                           (merge base review-data)
+                           (:items review-data))
+            claim?       (nil? (:user_id receipt))
+            extra        (cond-> {:expense_id (:id expense)}
+                           claim? (assoc :user_id user-id))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))

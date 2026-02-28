@@ -7,6 +7,7 @@
   (:require
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.admin.auth :as admin-auth-routes]
     [app.template.backend.routes.admin.utils :as admin-utils]
     [app.template.backend.routes.auth :as user-auth-routes]
@@ -49,6 +50,8 @@
                     auth-service/login-with-password (fn [_svc _params]
                                                        {:user {:id "user-1"
                                                                :email "user@example.com"}})
+                    tenant-auth/resolve-tenant-context (fn [& _] {:action :auto-set})
+                    tenant-auth/build-auth-session (fn [base _ctx] base)
                     login-monitoring/record-login-event! (fn [& _] nil)]
         (let [resp (login req)]
           (is (= "admin-token-1" (get-in resp [:session :admin-token])))

@@ -8,13 +8,18 @@
     [next.jdbc.result-set :as rs]))
 
 (defn get-receipt
-  [db receipt-id]
-  (jdbc/execute-one!
-    db
-    (sql/format {:select [:*]
-                 :from [:receipts]
-                 :where [:= :id receipt-id]})
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  "Get a receipt by id. Optional `tenant-id` scopes to a specific tenant."
+  ([db receipt-id] (get-receipt db receipt-id nil))
+  ([db receipt-id tenant-id]
+   (let [where (if tenant-id
+                 [:and [:= :id receipt-id] [:= :tenant_id tenant-id]]
+                 [:= :id receipt-id])]
+     (jdbc/execute-one!
+       db
+       (sql/format {:select [:*]
+                    :from [:receipts]
+                    :where where})
+       {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn get-receipt-refine-context
   "Load canonical supplier/store context for a receipt.
@@ -62,29 +67,34 @@
 
   Also deletes the associated receipt image file from disk.
 
-  Returns the deleted receipt row (map) or nil if the receipt did not exist."
-  [db receipt-id]
-  (jdbc/with-transaction [tx db]
-    (when-let [receipt (get-receipt tx receipt-id)]
-      (when (= "posted" (:status receipt))
-        (throw (ex-info "Cannot delete a posted receipt"
-                 {:status 409
-                  :id receipt-id
-                  :current-status (:status receipt)})))
-      (let [expense-id (:expense_id receipt)]
-        (when expense-id
-          (when (expenses/get-expense tx expense-id)
-            (throw (ex-info "Cannot delete a receipt linked to an expense"
-                     {:status 409
-                      :id receipt-id
-                      :expense-id expense-id})))))
-      (storage/delete-receipt-file! receipt)
-      (jdbc/execute-one!
-        tx
-        (sql/format {:delete-from :receipts
-                     :where [:= :id receipt-id]
-                     :returning [:*]})
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+  Returns the deleted receipt row (map) or nil if the receipt did not exist.
+  Optional `tenant-id` scopes the delete to a specific tenant."
+  ([db receipt-id] (delete-receipt! db receipt-id nil))
+  ([db receipt-id tenant-id]
+   (jdbc/with-transaction [tx db]
+     (when-let [receipt (get-receipt tx receipt-id tenant-id)]
+       (when (= "posted" (:status receipt))
+         (throw (ex-info "Cannot delete a posted receipt"
+                  {:status 409
+                   :id receipt-id
+                   :current-status (:status receipt)})))
+       (let [expense-id (:expense_id receipt)]
+         (when expense-id
+           (when (expenses/get-expense tx expense-id)
+             (throw (ex-info "Cannot delete a receipt linked to an expense"
+                      {:status 409
+                       :id receipt-id
+                       :expense-id expense-id})))))
+       (storage/delete-receipt-file! receipt)
+       (let [where (if tenant-id
+                     [:and [:= :id receipt-id] [:= :tenant_id tenant-id]]
+                     [:= :id receipt-id])]
+         (jdbc/execute-one!
+           tx
+           (sql/format {:delete-from :receipts
+                        :where where
+                        :returning [:*]})
+           {:builder-fn rs/as-unqualified-lower-maps}))))))
 
 (defn- build-status-query-helpers
   "Build SQL helpers for status filtering with mismatch detection.
@@ -153,18 +163,22 @@
 
   When `user-id` is provided, visibility is scoped to:
   - receipts owned by the user, or
-  - receipts with no owner (`user_id` is nil)."
-  [status user-id helpers]
+  - receipts with no owner (`user_id` is nil).
+
+  When `tenant-id` is provided, scopes to that tenant."
+  [status user-id helpers & {:keys [tenant-id]}]
   (let [status-clause (build-status-clause status helpers)
         visibility-clause (when user-id
                             [:or
                              [:= :user_id user-id]
-                             [:is :user_id nil]])]
-    (cond
-      (and visibility-clause status-clause) [:and visibility-clause status-clause]
-      visibility-clause visibility-clause
-      status-clause status-clause
-      :else nil)))
+                             [:is :user_id nil]])
+        tenant-clause (when tenant-id
+                        [:= :tenant_id tenant-id])
+        clauses (remove nil? [tenant-clause visibility-clause status-clause])]
+    (case (count clauses)
+      0 nil
+      1 (first clauses)
+      (into [:and] clauses))))
 
 (def ^:private sortable-receipt-columns
   "Whitelist mapping client-supplied column names to ORDER BY expressions.
@@ -186,12 +200,13 @@
   "List receipts with optional status filter.
 
   Returns a lightweight projection for list views (detail endpoints return
-  raw_extract_json / parsed_markdown, etc.)."
-  [db {:keys [status limit offset order-dir order-by]
+  raw_extract_json / parsed_markdown, etc.).
+  Optional :tenant-id in opts scopes to a specific tenant."
+  [db {:keys [status tenant-id limit offset order-dir order-by]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
-        where-clause (build-receipts-where-clause status nil helpers)
+        where-clause (build-receipts-where-clause status nil helpers :tenant-id tenant-id)
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
@@ -221,16 +236,17 @@
   - receipts with no `user_id` (unassigned/admin-uploaded)
 
   Supports optional status filter.
+  Optional :tenant-id in opts scopes to a specific tenant.
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
-  [db user-id {:keys [status limit offset order-dir order-by]
+  [db user-id {:keys [status tenant-id limit offset order-dir order-by]
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
-        where-clause (build-receipts-where-clause status user-id helpers)
+        where-clause (build-receipts-where-clause status user-id helpers :tenant-id tenant-id)
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
@@ -253,10 +269,11 @@
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-receipts
-  "Count receipts using the same status filter semantics as `list-receipts`."
-  [db {:keys [status]}]
+  "Count receipts using the same status filter semantics as `list-receipts`.
+   Optional :tenant-id in opts scopes to a specific tenant."
+  [db {:keys [status tenant-id]}]
   (let [helpers (build-status-query-helpers)
-        where-clause (build-receipts-where-clause status nil helpers)
+        where-clause (build-receipts-where-clause status nil helpers :tenant-id tenant-id)
         query (cond-> {:select [[[:count :*] :total]]
                        :from [:receipts]}
                 where-clause (assoc :where where-clause))
@@ -264,12 +281,13 @@
     (long (or (:total row) 0))))
 
 (defn count-user-receipts
-  "Count receipts visible to `user-id` using the same filters as `list-user-receipts`."
-  [db user-id {:keys [status]}]
+  "Count receipts visible to `user-id` using the same filters as `list-user-receipts`.
+   Optional :tenant-id in opts scopes to a specific tenant."
+  [db user-id {:keys [status tenant-id]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
-        where-clause (build-receipts-where-clause status user-id helpers)
+        where-clause (build-receipts-where-clause status user-id helpers :tenant-id tenant-id)
         query {:select [[[:count :*] :total]]
                :from [:receipts]
                :where where-clause}
@@ -305,15 +323,17 @@
   - receipts owned by `user-id`
   - receipts with no `user_id` (unassigned/admin-uploaded)
 
-  Returns nil when not found or not visible."
-  [db user-id receipt-id]
-  (when-not user-id
-    (throw (ex-info "user-id is required" {:status 400})))
-  (let [receipt (get-receipt db receipt-id)]
-    (when (and receipt
-            (or (= user-id (:user_id receipt))
-              (nil? (:user_id receipt))))
-      receipt)))
+  Returns nil when not found or not visible.
+  Optional `tenant-id` scopes to a specific tenant."
+  ([db user-id receipt-id] (get-user-receipt db user-id receipt-id nil))
+  ([db user-id receipt-id tenant-id]
+   (when-not user-id
+     (throw (ex-info "user-id is required" {:status 400})))
+   (let [receipt (get-receipt db receipt-id tenant-id)]
+     (when (and receipt
+             (or (= user-id (:user_id receipt))
+               (nil? (:user_id receipt))))
+       receipt))))
 
 (defn list-pending-for-processing
   "Receipts that are ready to process (uploaded or failed-but-retry)."

@@ -41,7 +41,7 @@
         (sql/format {:insert-into [:tenants]
                      :values [{:id (java.util.UUID/randomUUID)
                                :name "Test" :slug "taken"
-                               :status "active"
+                               :status [:cast "active" :tenant_status]
                                :created_at (java.time.LocalDateTime/now)
                                :updated_at (java.time.LocalDateTime/now)}]}))
       (is (= "taken-2" (tenant-svc/ensure-unique-slug db "taken"))))))
@@ -74,8 +74,8 @@
                              :email (str "test-" id "@example.com")
                              :full_name "Test User"
                              :password_hash "placeholder"
-                             :role "member"
-                             :status "active"
+                             :role [:cast "member" :user_role]
+                             :status [:cast "active" :user_status]
                              :auth_provider "password"
                              :email_verified false
                              :created_at now

@@ -26,40 +26,55 @@
 (def ^:private update-payer-type!* (:update! service))
 
 (def create-payer-type!
-  (fn [db data]
-    (let [want-default? (true? (:is_default data))]
-      (if want-default?
-        (jdbc/with-transaction [tx db]
-          (let [row (create-payer-type!* tx (assoc data :is_default false))]
-            (set-default-payer-type-in-tx! tx (:id row))))
-        (create-payer-type!* db data)))))
+  (fn
+    ([db data] (create-payer-type! db data nil))
+    ([db data opts]
+     (let [want-default? (true? (:is_default data))
+           tenant-id (or (:tenant-id opts) (:tenant_id data))]
+       (if want-default?
+         (jdbc/with-transaction [tx db]
+           (let [row (create-payer-type!* tx (assoc data :is_default false))]
+             (set-default-payer-type-in-tx! tx (:id row) tenant-id)))
+         (create-payer-type!* db data))))))
 
 (def update-payer-type!
-  (fn [db id updates]
-    (let [want-default? (true? (:is_default updates))]
-      (if want-default?
-        (jdbc/with-transaction [tx db]
-          (when-let [_row (update-payer-type!* tx id (assoc (dissoc updates :is_default) :is_default false))]
-            (set-default-payer-type-in-tx! tx id)))
-        (update-payer-type!* db id updates)))))
+  (fn
+    ([db id updates] (update-payer-type! db id updates nil))
+    ([db id updates opts]
+     (let [want-default? (true? (:is_default updates))
+           tenant-id (:tenant-id opts)]
+       (if want-default?
+         (jdbc/with-transaction [tx db]
+           (when-let [_row (update-payer-type!* tx id (assoc (dissoc updates :is_default) :is_default false) opts)]
+             (set-default-payer-type-in-tx! tx id tenant-id)))
+         (update-payer-type!* db id updates opts))))))
 
 (defn get-default-payer-type
-  [db]
-  (jdbc/execute-one!
-    db
-    (sql/format {:select [:*]
-                 :from [:payer_types]
-                 :where [:= :is_default true]
-                 :limit 1})
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  "Get the default payer type. Optional `tenant-id` scopes to a specific tenant."
+  ([db] (get-default-payer-type db nil))
+  ([db tenant-id]
+   (let [where (if tenant-id
+                 [:and [:= :is_default true] [:= :tenant_id tenant-id]]
+                 [:= :is_default true])]
+     (jdbc/execute-one!
+       db
+       (sql/format {:select [:*]
+                    :from [:payer_types]
+                    :where where
+                    :limit 1})
+       {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn- set-default-payer-type-in-tx!
-  [tx id]
-  (jdbc/execute!
-    tx
-    (sql/format {:update :payer_types
-                 :set {:is_default false}
-                 :where [:= :is_default true]}))
+  "Clear existing default payer type within the same tenant, then set new default."
+  [tx id tenant-id]
+  (let [clear-where (if tenant-id
+                      [:and [:= :is_default true] [:= :tenant_id tenant-id]]
+                      [:= :is_default true])]
+    (jdbc/execute!
+      tx
+      (sql/format {:update :payer_types
+                   :set {:is_default false}
+                   :where clear-where})))
   (jdbc/execute-one!
     tx
     (sql/format {:update :payer_types

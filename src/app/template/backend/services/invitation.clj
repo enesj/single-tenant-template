@@ -6,6 +6,7 @@
     [honey.sql :as sql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
 
 (def ^:private valid-invitation-roles #{"admin" "member" "viewer"})
@@ -27,7 +28,7 @@
                                 :where  [:and
                                          [:= :tenant_id tenant-id]
                                          [:= :email email]
-                                         [:= :status "pending"]]
+                                         [:= :status [:cast "pending" :invitation_status]]]
                                 :limit  1}))]
     (when existing
       (throw (ex-info "A pending invitation already exists for this email"
@@ -42,7 +43,7 @@
                                 :where  [:and
                                          [:= :tm.tenant_id tenant-id]
                                          [:= :u.email email]
-                                         [:= :tm.status "active"]]
+                                         [:= :tm.status [:cast "active" :membership_status]]]
                                 :limit  1}))]
     (when existing
       (throw (ex-info "User is already an active member of this tenant"
@@ -71,9 +72,9 @@
                        :values [{:id         inv-id
                                  :tenant_id  t-id
                                  :email      email
-                                 :role       role
+                                 :role       [:cast role :invitation_role]
                                  :invited_by inv-by
-                                 :status     "pending"
+                                 :status     [:cast "pending" :invitation_status]
                                  :token      token
                                  :expires_at expires-at
                                  :created_at now
@@ -85,12 +86,13 @@
   [db token]
   (convert-pg-objects
     (jdbc/execute-one! db
-      (sql/format {:select [[:ti :*]
+      (sql/format {:select [:ti.*
                             [:t.name :tenant_name]
                             [:t.slug :tenant_slug]]
                    :from   [[:tenant_invitations :ti]]
                    :join   [[:tenants :t] [:= :ti.tenant_id :t.id]]
-                   :where  [:= :ti.token token]}))))
+                   :where  [:= :ti.token token]})
+      {:builder-fn rs/as-unqualified-maps})))
 
 (defn accept-invitation!
   "Accept an invitation — creates a membership in a transaction.
@@ -104,19 +106,24 @@
               :errors {:token ["This invitation is no longer valid"]}})))
 
   ;; Guard: not expired
-  (let [expires (or (:expires_at invitation)
-                  (:tenant_invitations/expires_at invitation))]
-    (when (and expires (.isBefore (if (instance? java.time.LocalDateTime expires)
-                                    expires
-                                    (java.time.LocalDateTime/parse (str expires)))
-                         (java.time.LocalDateTime/now)))
+  (let [expires-raw (or (:expires_at invitation)
+                      (:tenant_invitations/expires_at invitation))
+        ;; Handle various time types from DB (LocalDateTime, OffsetDateTime, Instant, String)
+        expires-inst (when expires-raw
+                       (cond
+                         (instance? java.time.Instant expires-raw) expires-raw
+                         (instance? java.time.OffsetDateTime expires-raw) (.toInstant expires-raw)
+                         (instance? java.time.LocalDateTime expires-raw)
+                         (.toInstant (.atZone expires-raw (java.time.ZoneId/systemDefault)))
+                         :else (.toInstant (java.time.OffsetDateTime/parse (str expires-raw)))))]
+    (when (and expires-inst (.isBefore expires-inst (java.time.Instant/now)))
       (throw (ex-info "Invitation has expired"
                {:type :validation-error
                 :errors {:token ["This invitation has expired"]}}))))
 
   ;; Guard: email matches
   (let [inv-email (or (:email invitation) (:tenant_invitations/email invitation))
-        user-email (:email user)]
+        user-email (or (:email user) (:users/email user))]
     (when (not= (some-> inv-email clojure.string/lower-case)
             (some-> user-email clojure.string/lower-case))
       (throw (ex-info "Invitation email does not match your account"
@@ -125,14 +132,15 @@
 
   ;; Guard: not already a member
   (let [tenant-id (or (:tenant_id invitation) (:tenant_invitations/tenant_id invitation))
-        user-id   (if (string? (:id user)) (java.util.UUID/fromString (:id user)) (:id user))
+        user-id   (let [id (or (:id user) (:users/id user))]
+                    (if (string? id) (java.util.UUID/fromString id) id))
         existing  (jdbc/execute-one! db
                     (sql/format {:select [:id]
                                  :from   [:tenant_memberships]
                                  :where  [:and
                                           [:= :tenant_id tenant-id]
                                           [:= :user_id user-id]
-                                          [:= :status "active"]]
+                                          [:= :status [:cast "active" :membership_status]]]
                                  :limit  1}))]
     (when existing
       (throw (ex-info "You are already a member of this tenant"
@@ -144,7 +152,8 @@
         inv-id      (or (:id invitation) (:tenant_invitations/id invitation))
         role        (or (:role invitation) (:tenant_invitations/role invitation))
         invited-by  (or (:invited_by invitation) (:tenant_invitations/invited_by invitation))
-        user-id     (if (string? (:id user)) (java.util.UUID/fromString (:id user)) (:id user))
+        user-id     (let [id (or (:id user) (:users/id user))]
+                      (if (string? id) (java.util.UUID/fromString id) id))
         now         (java.time.LocalDateTime/now)
         member-id   (java.util.UUID/randomUUID)]
     (jdbc/with-transaction [tx db]
@@ -155,8 +164,8 @@
                                         :values [{:id         member-id
                                                   :tenant_id  tenant-id
                                                   :user_id    user-id
-                                                  :role       (name role)
-                                                  :status     "active"
+                                                  :role       [:cast (name role) :membership_role]
+                                                  :status     [:cast "active" :membership_status]
                                                   :invited_by invited-by
                                                   :created_at now
                                                   :updated_at now}]
@@ -164,10 +173,10 @@
         ;; Mark invitation accepted
         (jdbc/execute-one! tx
           (sql/format {:update [:tenant_invitations]
-                       :set    {:status     "accepted"
+                       :set    {:status     [:cast "accepted" :invitation_status]
                                 :updated_at now}
                        :where  [:= :id inv-id]}))
-        (log/info "Invitation accepted — user" (:email user) "joined tenant" tenant-id "as" role)
+        (log/info "Invitation accepted — user" (or (:email user) (:users/email user)) "joined tenant" tenant-id "as" role)
         membership))))
 
 (defn revoke-invitation!
@@ -176,11 +185,11 @@
   (let [inv-id (if (string? invitation-id) (java.util.UUID/fromString invitation-id) invitation-id)]
     (jdbc/execute-one! db
       (sql/format {:update [:tenant_invitations]
-                   :set    {:status     "revoked"
+                   :set    {:status     [:cast "revoked" :invitation_status]
                             :updated_at (java.time.LocalDateTime/now)}
                    :where  [:and
                             [:= :id inv-id]
-                            [:= :status "pending"]]}))))
+                            [:= :status [:cast "pending" :invitation_status]]]}))))
 
 (defn list-pending-invitations
   "List all pending invitations for a tenant."
@@ -192,7 +201,7 @@
                      :from   [:tenant_invitations]
                      :where  [:and
                               [:= :tenant_id t-id]
-                              [:= :status "pending"]]
+                              [:= :status [:cast "pending" :invitation_status]]]
                      :order-by [[:created_at :desc]]})))))
 
 (comment

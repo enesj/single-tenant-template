@@ -120,8 +120,9 @@
 
 (defn upload-receipt!
   "Insert a new receipt record. Expects at least :storage_key and either
-   :file_hash or :bytes to hash. Returns {:duplicate? bool :receipt {...}}."
-  [db {:keys [user_id payer_id storage_key file_hash bytes original_filename content_type file_size] :as data}]
+   :file_hash or :bytes to hash. Returns {:duplicate? bool :receipt {...}}.
+   Includes :tenant_id when present in the data map."
+  [db {:keys [user_id tenant_id payer_id storage_key file_hash bytes original_filename content_type file_size] :as data}]
   (let [hash (or file_hash (compute-file-hash bytes))]
     (when-not storage_key
       (throw (ex-info "storage_key is required" {:data data})))
@@ -130,15 +131,16 @@
 
     (if-let [existing (check-duplicate db hash)]
       {:duplicate? true :receipt existing}
-      (let [row {:id (UUID/randomUUID)
-                 :user_id user_id
-                 :payer_id payer_id
-                 :storage_key storage_key
-                 :file_hash hash
-                 :original_filename original_filename
-                 :content_type content_type
-                 :file_size file_size
-                 :status "uploaded"}
+      (let [row (cond-> {:id (UUID/randomUUID)
+                         :user_id user_id
+                         :payer_id payer_id
+                         :storage_key storage_key
+                         :file_hash hash
+                         :original_filename original_filename
+                         :content_type content_type
+                         :file_size file_size
+                         :status "uploaded"}
+                  tenant_id (assoc :tenant_id tenant_id))
             sql-map {:insert-into :receipts
                      :values [(update row :status #(vector :cast % :receipt_status))]
                      :returning [:*]}]

@@ -27,6 +27,22 @@
 
 (declare build-where-clause)
 
+(defn- tenant-id-column
+  "Return the qualified tenant_id column for a config.
+   Uses table-alias when present (e.g. :p.tenant_id), otherwise :tenant_id."
+  [{:keys [table-alias]}]
+  (if table-alias
+    (keyword (name table-alias) "tenant_id")
+    :tenant_id))
+
+(defn- inject-tenant-filter
+  "Prepend a tenant_id filter to a seq of base-filters when config is tenant-scoped
+   and tenant-id is non-nil."
+  [{:keys [tenant-scoped?] :as config} tenant-id base-filters]
+  (if (and tenant-scoped? tenant-id)
+    (into [[:= (tenant-id-column config) tenant-id]] base-filters)
+    base-filters))
+
 (defn build-base-query
   "Build a base query with joins for an entity."
   [{:keys [table-name _primary-key joins select-fields table-alias base-filters]}]
@@ -92,13 +108,15 @@
 ;; ============================================================================
 
 (defn build-list-function
-  "Build a generic list function for an entity."
+  "Build a generic list function for an entity.
+   When config has :tenant-scoped? true, accepts :tenant-id in opts to scope by tenant."
   [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields table-alias base-filters]
     :as config}]
   (fn list-entity
-    [db {:keys [limit offset order-by order-dir search]
+    [db {:keys [limit offset order-by order-dir search tenant-id]
          :or {limit 50 offset 0 order-dir :asc}}]
     (let [default-order-by (get config :default-order-by primary-key)
+          effective-filters (inject-tenant-filter config tenant-id base-filters)
           base-query (build-query-with-filters
                        {:table-name table-name
                         :primary-key primary-key
@@ -107,7 +125,7 @@
                         :allowed-order-by allowed-order-by
                         :default-order-by default-order-by
                         :table-alias table-alias
-                        :base-filters base-filters}
+                        :base-filters effective-filters}
                        {:limit limit
                         :offset offset
                         :order-by order-by
@@ -119,26 +137,38 @@
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn build-get-function
-  "Build a generic get-by-id function for an entity."
-  [{:keys [table-name primary-key joins select-fields table-alias base-filters]}]
+  "Build a generic get-by-id function for an entity.
+   When config has :tenant-scoped? true, accepts optional third arg opts map
+   with :tenant-id to scope by tenant."
+  [{:keys [table-name primary-key joins select-fields table-alias base-filters]
+    :as config}]
   (fn get-entity
-    [db id]
-    (let [query (-> (build-base-query {:table-name table-name
-                                       :primary-key primary-key
-                                       :joins joins
-                                       :select-fields select-fields
-                                       :table-alias table-alias
-                                       :base-filters base-filters})
-                  (apply-id-filter table-name table-alias id))]
-      (jdbc/execute-one! db (sql/format query)
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+    ([db id] (get-entity db id nil))
+    ([db id opts]
+     (let [tenant-id (:tenant-id opts)
+           effective-filters (inject-tenant-filter config tenant-id base-filters)
+           query (-> (build-base-query {:table-name table-name
+                                        :primary-key primary-key
+                                        :joins joins
+                                        :select-fields select-fields
+                                        :table-alias table-alias
+                                        :base-filters effective-filters})
+                   (apply-id-filter table-name table-alias id))]
+       (jdbc/execute-one! db (sql/format query)
+         {:builder-fn rs/as-unqualified-lower-maps})))))
 
 (defn build-create-function
-  "Build a generic create function for an entity."
-  [{:keys [table-name required-fields field-transformers before-insert]
+  "Build a generic create function for an entity.
+   When config has :tenant-scoped? true, the caller must include :tenant_id in data."
+  [{:keys [table-name required-fields field-transformers before-insert tenant-scoped?]
     :or {field-transformers {}}}]
   (fn create-entity!
     [db data]
+    ;; Validate tenant_id for tenant-scoped entities
+    (when (and tenant-scoped? (nil? (:tenant_id data)))
+      (throw (ex-info "tenant_id is required for tenant-scoped entity"
+               {:entity table-name})))
+
     ;; Validate required fields
     (doseq [field required-fields]
       (when-not (get data field)
@@ -172,48 +202,64 @@
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn build-update-function
-  "Build a generic update function for an entity."
-  [{:keys [table-name field-transformers before-update]
+  "Build a generic update function for an entity.
+   When config has :tenant-scoped? true, accepts optional fourth arg opts map
+   with :tenant-id to add tenant_id to WHERE clause."
+  [{:keys [table-name field-transformers before-update tenant-scoped?]
     :or {field-transformers {}}}]
   (fn update-entity!
-    [db id updates]
-    (let [;; Apply field transformers
-          transformed-updates (reduce-kv
-                                (fn [acc k v]
-                                  (if-let [transformer (get field-transformers k)]
-                                    (assoc acc k (transformer v))
-                                    acc))
-                                updates
-                                updates)
+    ([db id updates] (update-entity! db id updates nil))
+    ([db id updates opts]
+     (let [tenant-id (:tenant-id opts)
+           ;; Apply field transformers
+           transformed-updates (reduce-kv
+                                 (fn [acc k v]
+                                   (if-let [transformer (get field-transformers k)]
+                                     (assoc acc k (transformer v))
+                                     acc))
+                                 updates
+                                 updates)
 
-          ;; Apply before-update hook (db-aware when supported)
-          processed-updates (or (apply-hook before-update
-                                  [db id transformed-updates]
-                                  [id transformed-updates])
-                              transformed-updates)
-          update-data (dissoc processed-updates :updated_at :updated-at)]
+           ;; Apply before-update hook (db-aware when supported)
+           processed-updates (or (apply-hook before-update
+                                   [db id transformed-updates]
+                                   [id transformed-updates])
+                               transformed-updates)
+           update-data (dissoc processed-updates :updated_at :updated-at :tenant_id)
+           where-clause (if (and tenant-scoped? tenant-id)
+                          [:and [:= :id id] [:= :tenant_id tenant-id]]
+                          [:= :id id])]
 
-      (when (seq update-data)
-        (jdbc/execute-one! db
-          (sql/format {:update (keyword table-name)
-                       :set update-data
-                       :where [:= :id id]
-                       :returning [:*]})
-          {:builder-fn rs/as-unqualified-lower-maps})))))
+       (when (seq update-data)
+         (jdbc/execute-one! db
+           (sql/format {:update (keyword table-name)
+                        :set update-data
+                        :where where-clause
+                        :returning [:*]})
+           {:builder-fn rs/as-unqualified-lower-maps}))))))
 
 (defn build-delete-function
-  "Build a generic delete function for an entity."
-  [{:keys [table-name]}]
+  "Build a generic delete function for an entity.
+   When config has :tenant-scoped? true, accepts optional third arg opts map
+   with :tenant-id to scope the DELETE."
+  [{:keys [table-name tenant-scoped?]}]
   (fn delete-entity!
-    [db id]
-    (pos? (::jdbc/update-count
-           (jdbc/execute-one! db
-             (sql/format {:delete-from (keyword table-name)
-                          :where [:= :id id]}))))))
+    ([db id] (delete-entity! db id nil))
+    ([db id opts]
+     (let [tenant-id (:tenant-id opts)
+           where-clause (if (and tenant-scoped? tenant-id)
+                          [:and [:= :id id] [:= :tenant_id tenant-id]]
+                          [:= :id id])]
+       (pos? (::jdbc/update-count
+              (jdbc/execute-one! db
+                (sql/format {:delete-from (keyword table-name)
+                             :where where-clause}))))))))
 
 (defn build-count-function
-  "Build a generic count function for an entity."
-  [{:keys [table-name search-fields joins table-alias base-filters]}]
+  "Build a generic count function for an entity.
+   When config has :tenant-scoped? true, accepts :tenant-id in opts map."
+  [{:keys [table-name search-fields joins table-alias base-filters]
+    :as config}]
   (fn count-entity
     [db & [opts]]
     (let [search (cond
@@ -221,7 +267,9 @@
                    (map? opts) (:search opts)
                    (string? opts) opts
                    :else (throw (ex-info "opts must be a map, string, or nil" {:opts opts})))
-          where (build-where-clause base-filters)
+          tenant-id (when (map? opts) (:tenant-id opts))
+          effective-filters (inject-tenant-filter config tenant-id base-filters)
+          where (build-where-clause effective-filters)
           base-query (cond-> {:select [[[:count :*] :total]]
                               :from (if table-alias
                                       [[(keyword table-name) table-alias]]
@@ -235,13 +283,16 @@
          {:builder-fn rs/as-unqualified-lower-maps})))))
 
 (defn build-search-function
-  "Build a generic search function for autocomplete."
+  "Build a generic search function for autocomplete.
+   When config has :tenant-scoped? true, accepts :tenant-id in opts map."
   [{:keys [table-name search-fields order-by-field default-limit joins table-alias base-filters]
+    :as config
     :or {order-by-field :display_name default-limit 10}}]
   (fn search-entity
-    [db query {:keys [limit] :or {limit default-limit}}]
+    [db query {:keys [limit tenant-id] :or {limit default-limit}}]
     (when (and query (>= (count query) 2))
-      (let [where (build-where-clause base-filters)
+      (let [effective-filters (inject-tenant-filter config tenant-id base-filters)
+            where (build-where-clause effective-filters)
             base-query (cond-> {:select [:*]
                                 :from (if table-alias
                                         [[(keyword table-name) table-alias]]

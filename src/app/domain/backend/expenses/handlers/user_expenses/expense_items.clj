@@ -69,7 +69,7 @@
   "GET /api/v1/expenses/expense-items
 
   Returns expense_items joined with basic expense/supplier/payer/article context,
-  scoped to the current user's expenses.
+  scoped to the current user's expenses and tenant.
 
   Allowed roles: admin/owner.
 
@@ -80,49 +80,51 @@
       (if-let [forbidden (h/ensure-role request power-user-roles
                            "Only admins and owners can access expense items")]
         forbidden
-        (try
-          (let [params (:query-params request)
-                limit (clamp-limit (some-> (h/get-param params :limit) parse-long))
-                offset (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0)))
-                search (some-> (h/get-param params :search) str)
-                order-by (h/parse-order-by params)
-                order-dir (or (h/parse-order-dir params) :desc)
-                order-col (get allowed-expense-items-order-by order-by :ei.created_at)
-                ;; Stable tie-breaker to prevent jumping rows when values match.
-                order-by-clause [[order-col order-dir]
-                                 [:ei.id :asc]]
-                search* (when (and (string? search) (not (str/blank? search)))
-                          (str "%" search "%"))
-                where (cond-> [:and
-                               [:= :e.user_id user-id]]
-                        search*
-                        (conj [:or
-                               [:ilike :aa.raw_label search*]
-                               [:ilike :a.canonical_name search*]]))
-                query {:select [[:ei.*]
-                                [:aa.raw_label :raw_label]
-                                [:aa.raw_label_normalized :raw_label_normalized]
-                                [:e.purchased_at :expense_purchased_at]
-                                [:a.canonical_name :article_canonical_name]]
-                       :from [[:expense_items :ei]]
-                       :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                   [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                   [:articles :a] [:= :a.id :aa.article_id]]
-                       :where where
-                       :order-by order-by-clause
-                       :limit limit
-                       :offset offset}
-                count-query {:select [[[:count :ei.id] :total]]
-                             :from [[:expense_items :ei]]
-                             :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                         [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                         [:articles :a] [:= :a.id :aa.article_id]]
-                             :where where}
-                items (jdbc/execute! db (sql/format query)
-                        {:builder-fn rs/as-unqualified-lower-maps})
-                total (or (:total (jdbc/execute-one! db (sql/format count-query)
-                                    {:builder-fn rs/as-unqualified-lower-maps}))
-                        0)]
+        (let [tenant-id (h/get-tenant-id request)]
+          (try
+            (let [params (:query-params request)
+                  limit (clamp-limit (some-> (h/get-param params :limit) parse-long))
+                  offset (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0)))
+                  search (some-> (h/get-param params :search) str)
+                  order-by (h/parse-order-by params)
+                  order-dir (or (h/parse-order-dir params) :desc)
+                  order-col (get allowed-expense-items-order-by order-by :ei.created_at)
+                  ;; Stable tie-breaker to prevent jumping rows when values match.
+                  order-by-clause [[order-col order-dir]
+                                   [:ei.id :asc]]
+                  search* (when (and (string? search) (not (str/blank? search)))
+                            (str "%" search "%"))
+                  where (cond-> [:and
+                                 [:= :e.user_id user-id]]
+                          tenant-id (conj [:= :e.tenant_id tenant-id])
+                          search*
+                          (conj [:or
+                                 [:ilike :aa.raw_label search*]
+                                 [:ilike :a.canonical_name search*]]))]
+              query {:select [[:ei.*]
+                              [:aa.raw_label :raw_label]
+                              [:aa.raw_label_normalized :raw_label_normalized]
+                              [:e.purchased_at :expense_purchased_at]
+                              [:a.canonical_name :article_canonical_name]]
+                     :from [[:expense_items :ei]]
+                     :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                 [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                 [:articles :a] [:= :a.id :aa.article_id]]
+                     :where where
+                     :order-by order-by-clause
+                     :limit limit
+                     :offset offset}
+              count-query {:select [[[:count :ei.id] :total]]
+                           :from [[:expense_items :ei]]
+                           :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                       [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                       [:articles :a] [:= :a.id :aa.article_id]]
+                           :where where}
+              items (jdbc/execute! db (sql/format query)
+                      {:builder-fn rs/as-unqualified-lower-maps})
+              total (or (:total (jdbc/execute-one! db (sql/format count-query)
+                                  {:builder-fn rs/as-unqualified-lower-maps}))
+                      0))
             (h/json-response {:data (vec items)
                               :total (long total)
                               :limit limit
@@ -138,22 +140,23 @@
     (h/try-parse-uuid (get-in request [:parameters :path :id]))))
 
 (defn- update-expense-item!
-  [db user-id item-id updates]
+  [db user-id item-id updates & {:keys [tenant-id]}]
   (jdbc/execute-one! db
     (sql/format
       {:update [:expense_items :ei]
        :set updates
        :from [[:expenses :e]]
-       :where [:and
-               [:= :ei.id item-id]
-               [:= :e.id :ei.expense_id]
-               [:= :e.user_id user-id]]
+       :where (cond-> [:and
+                       [:= :ei.id item-id]
+                       [:= :e.id :ei.expense_id]
+                       [:= :e.user_id user-id]]
+                tenant-id (conj [:= :e.tenant_id tenant-id]))
        :returning [:ei.*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- fetch-expense-item
   "Fetch a single expense item with alias + article joins."
-  [db user-id item-id]
+  [db user-id item-id & {:keys [tenant-id]}]
   (jdbc/execute-one!
     db
     (sql/format
@@ -166,9 +169,10 @@
        :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
                    [:article_aliases :aa] [:= :aa.id :ei.alias_id]
                    [:articles :a] [:= :a.id :aa.article_id]]
-       :where [:and
-               [:= :ei.id item-id]
-               [:= :e.user_id user-id]]
+       :where (cond-> [:and
+                       [:= :ei.id item-id]
+                       [:= :e.user_id user-id]]
+                tenant-id (conj [:= :e.tenant_id tenant-id]))
        :limit 1})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
@@ -184,33 +188,35 @@
       (if-let [forbidden (h/ensure-role request power-user-roles
                            "Only admins and owners can modify expense items")]
         forbidden
-        (if-let [item-id (expense-item-id request)]
-          (try
-            (let [body (h/read-body-params request)
-                  raw-label (some-> (h/get-param body :raw_label) str str/trim)
-                  raw-label* (when-not (str/blank? raw-label) raw-label)
-                  expense-row (jdbc/execute-one! db
-                                (sql/format {:select [:e.supplier_id]
-                                             :from [[:expense_items :ei]]
-                                             :join [[:expenses :e] [:= :e.id :ei.expense_id]]
-                                             :where [:= :ei.id item-id]})
-                                {:builder-fn rs/as-unqualified-lower-maps})
-                  supplier-id (:supplier_id expense-row)
-                  alias-id (when raw-label*
-                             (:id (aliases/find-or-create-alias! db supplier-id raw-label*)))
-                  updates {:alias_id (or alias-id
-                                       (throw (ex-info "raw_label is required"
-                                                {:status 400
-                                                 :field :raw_label})))
-                           :qty (parse-decimal! :qty (h/get-param body :qty))
-                           :unit_price (parse-decimal! :unit_price (h/get-param body :unit_price))
-                           :line_total (or (parse-decimal! :line_total (h/get-param body :line_total))
-                                         (throw (ex-info "line_total is required"
+        (let [tenant-id (h/get-tenant-id request)]
+          (if-let [item-id (expense-item-id request)]
+            (try
+              (let [body (h/read-body-params request)
+                    raw-label (some-> (h/get-param body :raw_label) str str/trim)
+                    raw-label* (when-not (str/blank? raw-label) raw-label)
+                    expense-row (jdbc/execute-one! db
+                                  (sql/format {:select [:e.supplier_id]
+                                               :from [[:expense_items :ei]]
+                                               :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                                               :where (cond-> [:and [:= :ei.id item-id]]
+                                                        tenant-id (conj [:= :e.tenant_id tenant-id]))})
+                                  {:builder-fn rs/as-unqualified-lower-maps})
+                    supplier-id (:supplier_id expense-row)
+                    alias-id (when raw-label*
+                               (:id (aliases/find-or-create-alias! db supplier-id raw-label*)))
+                    updates {:alias_id (or alias-id
+                                         (throw (ex-info "raw_label is required"
                                                   {:status 400
-                                                   :field :line_total})))}]
-              (if-let [updated (update-expense-item! db user-id item-id updates)]
-                (h/json-response {:data (or (fetch-expense-item db user-id item-id) updated)})
-                (h/not-found-response "Expense item not found or access denied")))
+                                                   :field :raw_label})))
+                             :qty (parse-decimal! :qty (h/get-param body :qty))
+                             :unit_price (parse-decimal! :unit_price (h/get-param body :unit_price))
+                             :line_total (or (parse-decimal! :line_total (h/get-param body :line_total))
+                                           (throw (ex-info "line_total is required"
+                                                    {:status 400
+                                                     :field :line_total})))}]
+                (if-let [updated (update-expense-item! db user-id item-id updates :tenant-id tenant-id)]
+                  (h/json-response {:data (or (fetch-expense-item db user-id item-id :tenant-id tenant-id) updated)})
+                  (h/not-found-response "Expense item not found or access denied"))))
             (catch clojure.lang.ExceptionInfo e
               (let [{:keys [status]} (ex-data e)]
                 (if (number? status)
@@ -225,7 +231,7 @@
       (h/unauthorized-response))))
 
 (defn- delete-expense-item!
-  [db user-id item-id]
+  [db user-id item-id & {:keys [tenant-id]}]
   (jdbc/execute-one! db
     (sql/format
       {:delete-from :expense_items
@@ -233,7 +239,8 @@
                [:= :id item-id]
                [:in :expense_id {:select [:id]
                                  :from [:expenses]
-                                 :where [:= :user_id user-id]}]]
+                                 :where (cond-> [:and [:= :user_id user-id]]
+                                          tenant-id (conj [:= :tenant_id tenant-id]))}]]
        :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 

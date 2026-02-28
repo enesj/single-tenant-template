@@ -20,10 +20,11 @@
     (jdbc/execute-one! db
       (sql/format {:insert-into [:users]
                    :values [{:id id
-                             :email (str "auth-tenant-" suffix "@example.com")
+                             :email (str "auth-tenant-" suffix "-" id "@example.com")
                              :full_name (str "User " suffix)
                              :password_hash "placeholder"
-                             :role "member" :status "active"
+                             :role [:cast "member" :user_role]
+                             :status [:cast "active" :user_status]
                              :auth_provider "password"
                              :email_verified false
                              :created_at now :updated_at now}]
@@ -73,8 +74,8 @@
                    :values [{:id         (java.util.UUID/randomUUID)
                              :tenant_id  tenant2-id
                              :user_id    user-id
-                             :role       "member"
-                             :status     "active"
+                             :role       [:cast "member" :membership_role]
+                             :status     [:cast "active" :membership_status]
                              :created_at (java.time.LocalDateTime/now)
                              :updated_at (java.time.LocalDateTime/now)}]}))
 

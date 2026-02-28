@@ -15,11 +15,11 @@
 
    Returns a map with :action plus relevant data."
   [db config user]
-  (let [user-id     (:id user)
+  (let [user-id     (or (:id user) (:users/id user))
         memberships (tenant-svc/get-user-memberships db user-id)]
     (case (count memberships)
       0 (do
-          (log/info "No memberships for user" (:email user) "— provisioning tenant")
+          (log/info "No memberships for user" (or (:email user) (:users/email user)) "— provisioning tenant")
           (let [{:keys [tenant membership]} (tenant-svc/provision-tenant! db config user)]
             {:tenant     tenant
              :membership membership

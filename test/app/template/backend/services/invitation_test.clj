@@ -20,11 +20,11 @@
     (jdbc/execute-one! db
       (sql/format {:insert-into [:users]
                    :values [{:id id
-                             :email (str "inv-test-" suffix "@example.com")
+                             :email (str "inv-test-" suffix "-" id "@example.com")
                              :full_name (str "User " suffix)
                              :password_hash "placeholder"
-                             :role "member"
-                             :status "active"
+                             :role [:cast "member" :user_role]
+                             :status [:cast "active" :user_status]
                              :auth_provider "password"
                              :email_verified false
                              :created_at now :updated_at now}]

@@ -64,7 +64,7 @@
     (convert-pg-objects
       (jdbc/execute-one! db
         (sql/format {:update [:tenant_memberships]
-                     :set    {:role       new-role
+                     :set    {:role       [:cast new-role :membership_role]
                               :updated_at now}
                      :where  [:= :id target-id]
                      :returning [:*]})))))
@@ -103,13 +103,13 @@
       ;; Target → owner
       (jdbc/execute-one! tx
         (sql/format {:update [:tenant_memberships]
-                     :set    {:role "owner" :updated_at now}
+                     :set    {:role [:cast "owner" :membership_role] :updated_at now}
                      :where  [:= :id target-id]}))
       ;; Actor → admin
       (let [updated-actor (convert-pg-objects
                             (jdbc/execute-one! tx
                               (sql/format {:update [:tenant_memberships]
-                                           :set    {:role "admin" :updated_at now}
+                                           :set    {:role [:cast "admin" :membership_role] :updated_at now}
                                            :where  [:= :id actor-id]
                                            :returning [:*]})))]
         (log/info "Ownership transferred from" actor-id "to" target-id)
@@ -152,7 +152,7 @@
     (convert-pg-objects
       (jdbc/execute-one! db
         (sql/format {:update [:tenant_memberships]
-                     :set    {:status     "suspended"
+                     :set    {:status     [:cast "suspended" :membership_status]
                               :updated_at now}
                      :where  [:= :id target-id]
                      :returning [:*]})))))
