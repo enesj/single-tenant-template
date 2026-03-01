@@ -155,11 +155,23 @@
     :else nil))
 
 (defn get-user-role
+  "Return the effective role string for the current user.
+
+  Priority: tenant membership role > global user role > identity role.
+  The membership role is set by `build-auth-session` (Phase 1) and reflects
+  the user's role within their current tenant."
   [request]
   (normalize-role
-    (or (get-in request [:session :auth-session :user :role])
+    (or (get-in request [:session :auth-session :membership :role])
+      (get-in request [:session :auth-session :user :role])
       (get-in request [:session :user :role])
       (get-in request [:identity :role]))))
+
+(defn tenant-elevated?
+  "True when the user has owner or admin membership role in the current tenant."
+  [request]
+  (let [role (get-user-role request)]
+    (contains? #{"admin" "owner"} role)))
 
 (def reference-data-read-roles
   #{"viewer" "member" "admin" "owner"})

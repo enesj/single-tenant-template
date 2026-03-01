@@ -67,7 +67,8 @@
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-role request h/reference-data-read-roles
+                           "Role assignment required")]
         forbidden
         (try
           (let [qp (:query-params request)

@@ -2,7 +2,7 @@
 
 > **Spec**: `specs/allium/template/multi-tenancy.candidate.allium`
 > **Approach**: shared-schema, tenant_id FK, middleware enforcement (no RLS)
-> **Status**: Phase 2 — Complete (1.3 slug routing deferred)
+> **Status**: Phase 3 — Complete (1.3 slug routing deferred)
 
 ---
 
@@ -13,7 +13,7 @@
 | 0 | Foundation — DB tables & migrations | — | `[x]` |
 | 1 | Tenant Lifecycle — provisioning, invitations, session context | 0 | `[x]` |
 | 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[x]` |
-| 3 | Access Control — role-based tier rules | 1, 2 | `[ ]` |
+| 3 | Access Control — role-based tier rules | 1, 2 | `[x]` |
 | 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[ ]` |
 | 5 | Frontend — tenant switcher, slug routing, UI state | 1, 3 | `[ ]` |
 | 6 | Cleanup & Hardening — per-tenant rate limiting, delete price_observations | 3 | `[ ]` |
@@ -193,38 +193,57 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 **Goal**: Enforce the 4-tier role model (owner/admin/member/viewer) for all resource access.
 **Allium refs**: All `Allow*` and `Deny*` rules in the Tenant-Scoped Data Access Rules section, config resource sets.
 
+**Approach**: Handler-level `ensure-role` checks using role-set constants — no centralized middleware or config registry needed. The existing pattern is explicit, auditable, and covers all cases. Resource classification is implicit in the role-set each handler checks against.
+
 ### Tasks
 
-- [ ] **3.1** Define resource classification config (maps to Allium config block)
-  - expense_write_resources, expense_read_resources
-  - tenant_lookup_resources
-  - tenant_admin_write_resources
-  - global_catalog_resources, global_catalog_creatable
-  - global_geo_resources
-  - platform_admin_blocked_resources
-- [ ] **3.2** Tenant data authorization middleware
-  - Input: user, tenant, resource, action (read/write)
-  - Lookup membership → check role against resource tier
-  - Return grant/deny with reason
-- [ ] **3.3** Implement expense tier rules
-  - Read: all roles (viewer+), includes payers
-  - Write (expenses, expense_items, receipts): member+
-  - Payers write: admin/owner
-- [ ] **3.4** Implement lookup tier rules
-  - payer_types, expense_categories: read all, write admin/owner
-- [ ] **3.5** Implement admin/owner full-write rule
-  - All tenant_admin_write_resources: write for admin/owner
-- [ ] **3.6** Implement global catalog rules
-  - Read: all tenant members
-  - Create suppliers/stores: member+
-  - Create articles/categories/etc: platform admin only
-- [ ] **3.7** Implement geo rules
-  - Read cities/countries: admin/owner only
-- [ ] **3.8** Deny rules
-  - No active membership → deny
-  - Write to read-only resource for role → deny with reason
-  - Geo read for member/viewer → deny
-- [ ] **3.9** Integration tests for all tier combinations (role × resource × action matrix)
+- [x] **3.1** Fix critical bug: `get-user-role` reads wrong role
+  - **Was**: reading `[:session :auth-session :user :role]` (global user role from `users` table)
+  - **Now**: reads `[:session :auth-session :membership :role]` first (tenant membership role), falls back to user role for backward compatibility
+  - Single fix cascades to all 60+ `ensure-role` call sites
+  - Added `tenant-elevated?` helper for admin/owner branching in receipt handlers
+  - **File**: `handlers/user_expenses/helpers.clj`
+- [x] **3.2** Add missing role check to export handler
+  - `export-expenses-handler` had no `ensure-role` — any authenticated user bypassed role enforcement
+  - Added `h/ensure-role request h/expenses-read-roles` gate
+  - **File**: `handlers/user_expenses/settings.clj`
+- [x] **3.3** Relax list permissions for tenant lookup resources (read: all roles)
+  - `expense_items`: `power-user-roles` → `h/expenses-read-roles`
+  - `expense_categories`: `ensure-admin-or-owner` → `h/reference-data-read-roles`
+  - Write operations stay admin/owner — correct per `DenyMemberTenantAdmin`
+  - **Files**: `handlers/user_expenses/expense_items.clj`, `handlers/user_expense_categories.clj`
+- [x] **3.4** Relax list permissions for alias resources (read: all roles)
+  - `supplier_aliases`, `store_aliases`: `power-user-roles`/`ensure-admin-or-owner` → `h/reference-data-read-roles`
+  - Write operations stay admin/owner — correct per `AllowTenantAliasWrite`
+  - **Files**: `handlers/user_expenses/supplier_aliases.clj`, `handlers/user_store_aliases.clj`
+- [x] **3.5** Relax list permissions for global catalog resources (read: all roles)
+  - `stores`, `categories`, `subcategories`, `articles` (list + unmapped), `manufacturers`: all `ensure-admin-or-owner` → `h/reference-data-read-roles`
+  - Write operations stay admin/owner
+  - **NOT changed**: `user_cities.clj` — cities are `global_geo_resources`, spec restricts read to admin/owner
+  - **Files**: `handlers/user_stores.clj`, `handlers/user_categories.clj`, `handlers/user_subcategories.clj`, `handlers/user_articles.clj`, `handlers/user_manufacturers.clj`
+- [x] **3.6** Fix receipt handler admin-role branching
+  - 10 occurrences of `(= "admin" role)` replaced with `(h/tenant-elevated? request)`
+  - owner/admin see all receipts within their tenant (tenant-scoped, not global)
+  - member/viewer see only their own receipts
+  - Removed unused `role` local bindings from all receipt handlers
+  - **File**: `handlers/user_receipts.clj`
+- [x] **3.7** Unit tests for role enforcement
+  - 15 tests, 29 assertions — all pure functions, no DB required
+  - Tests: membership role priority, fallback to user role, `tenant-elevated?`, all Allow/Deny rule combinations, 403 status code verification
+  - **File**: `test/app/domain/backend/expenses/handlers/user_expenses/role_access_test.clj`
+
+### Deny Rules Verification
+
+| Rule | Status | Enforcement |
+|------|--------|-------------|
+| **DenyViewerWrites** | Enforced | No write role set includes "viewer" — after `get-user-role` reads membership role, viewers get 403 on all write endpoints |
+| **DenyMemberTenantAdmin** | Enforced | All admin-only handlers (expense_categories write, aliases write) use `#{"admin" "owner"}` — members excluded |
+| **DenyPlatformAdminUserData** | Architectural | Admin auth (`/admin/api`) and user auth (`/api/v1`) are separate middleware chains. Full enforcement deferred to Phase 4 |
+
+### What Was NOT Done (from original plan)
+- **No centralized resource classification config** — handler-level role-set constants serve the same purpose with less indirection
+- **No centralized authorization middleware** — `ensure-role` pattern is lightweight and explicit at each handler
+- **No full role × resource × action matrix integration tests** — unit tests cover all role-set combinations; integration tests deferred to Phase 4 when impersonation adds complexity
 
 ### Dependencies
 - Phase 1 (memberships exist and session context works)

@@ -22,8 +22,8 @@
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request power-user-roles
-                           "Only admins and owners can view supplier aliases")]
+      (if-let [forbidden (h/ensure-role request h/reference-data-read-roles
+                           "Role assignment required")]
         forbidden
         (try
           (let [params (:query-params request)

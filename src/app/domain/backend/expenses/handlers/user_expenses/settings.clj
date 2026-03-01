@@ -175,56 +175,58 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (let [params (:query-params request)
-            format (or (h/get-param params :format) "csv")
-            tenant-id (h/get-tenant-id request)]
-        (try
-          (let [expenses (->> (if tenant-id
-                                (jdbc/execute! db
-                                  ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
-                                   FROM expenses e
-                                   LEFT JOIN suppliers s ON e.supplier_id = s.id
-                                   LEFT JOIN payers p ON e.payer_id = p.id
-                                   WHERE e.user_id = ? AND e.tenant_id = ?
-                                   ORDER BY e.purchased_at DESC
-                                   LIMIT 1000"
-                                   user-id tenant-id])
-                                (jdbc/execute! db
-                                  ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
-                                   FROM expenses e
-                                   LEFT JOIN suppliers s ON e.supplier_id = s.id
-                                   LEFT JOIN payers p ON e.payer_id = p.id
-                                   WHERE e.user_id = ?
-                                   ORDER BY e.purchased_at DESC
-                                   LIMIT 1000"
-                                   user-id]))
-                           (map db-adapter/to-app))]
-            (if (= format "csv")
-              ;; Return CSV data directly
-              (let [header "id,purchased_at,supplier,payer,total_amount,currency,notes\n"
-                    rows (->> expenses
-                           (map (fn [e]
-                                  (str/join ","
-                                    [(str (:expenses/id e))
-                                     (str (:expenses/purchased-at e))
-                                     (str "\"" (or (:supplier-name e) "") "\"")
-                                     (str "\"" (or (:payer-label e) "") "\"")
-                                     (str (:expenses/total-amount e))
-                                     (str (:expenses/currency e))
-                                     (str "\"" (str/replace (or (:expenses/notes e) "") "\"" "\"\"") "\"")])))
-                           (str/join "\n"))
-                    csv-content (str header rows)]
-                {:status 200
-                 :headers {"Content-Type" "text/csv"
-                           "Content-Disposition" "attachment; filename=\"expenses.csv\""}
-                 :body csv-content})
-              ;; For PDF, return stub message
-              (h/json-response {:message "PDF export not yet implemented"
-                                :format format
-                                :count (count expenses)} 200)))
-          (catch Exception e
-            (log/error e "Failed to export expenses")
-            (h/json-response {:error "Export failed"} 500))))
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role assignment required")]
+        forbidden
+        (let [params  (:query-params request)
+              format  (or (h/get-param params :format) "csv")
+              tenant-id (h/get-tenant-id request)]
+          (try
+            (let [expenses (->> (if tenant-id
+                                  (jdbc/execute! db
+                                    ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+                                      FROM expenses e
+                                      LEFT JOIN suppliers s ON e.supplier_id = s.id
+                                      LEFT JOIN payers p ON e.payer_id = p.id
+                                      WHERE e.user_id = ? AND e.tenant_id = ?
+                                      ORDER BY e.purchased_at DESC
+                                      LIMIT 1000"
+                                     user-id tenant-id])
+                                  (jdbc/execute! db
+                                    ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+                                      FROM expenses e
+                                      LEFT JOIN suppliers s ON e.supplier_id = s.id
+                                      LEFT JOIN payers p ON e.payer_id = p.id
+                                      WHERE e.user_id = ?
+                                      ORDER BY e.purchased_at DESC
+                                      LIMIT 1000"
+                                     user-id]))
+                             (map db-adapter/to-app))]
+              (if (= format "csv")
+                ;; Return CSV data directly
+                (let [header "id,purchased_at,supplier,payer,total_amount,currency,notes\n"
+                      rows   (->> expenses
+                               (map (fn [e]
+                                      (str/join ","
+                                        [(str (:expenses/id e))
+                                         (str (:expenses/purchased-at e))
+                                         (str "\"" (or (:supplier-name e) "") "\"")
+                                         (str "\"" (or (:payer-label e) "") "\"")
+                                         (str (:expenses/total-amount e))
+                                         (str (:expenses/currency e))
+                                         (str "\"" (str/replace (or (:expenses/notes e) "") "\"" "\"\"") "\"")])))
+                               (str/join "\n"))
+                      csv-content (str header rows)]
+                  {:status  200
+                   :headers {"Content-Type"        "text/csv"
+                             "Content-Disposition" "attachment; filename=\"expenses.csv\""}
+                   :body    csv-content})
+                ;; For PDF, return stub message
+                (h/json-response {:message "PDF export not yet implemented"
+                                  :format  format
+                                  :count   (count expenses)} 200)))
+            (catch Exception e
+              (log/error e "Failed to export expenses")
+              (h/json-response {:error "Export failed"} 500)))))
       (h/unauthorized-response))))
 
 ;; ---------------------------------------------------------------------------

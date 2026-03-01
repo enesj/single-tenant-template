@@ -77,8 +77,8 @@
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request power-user-roles
-                           "Only admins and owners can access expense items")]
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles
+                           "Role assignment required")]
         forbidden
         (let [tenant-id (h/get-tenant-id request)]
           (try

@@ -56,7 +56,8 @@
   (fn [request]
     (if-not (h/get-user request)
       (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-role request h/reference-data-read-roles
+                           "Role assignment required")]
         forbidden
         (try
           (let [qp (:query-params request)
