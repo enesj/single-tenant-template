@@ -159,14 +159,16 @@
 
     (let [{:keys [storage_key bytes original_filename content_type file_size]} (store-uploaded-file! file)
           user-id (h/get-user-id request)
+          tenant-id (h/get-tenant-id request)
           payer-id (parse-uuid-param :payer-id (:payer-id params))
-          result (receipt-storage/upload-receipt! db {:user_id user-id
-                                                      :payer_id payer-id
-                                                      :storage_key storage_key
-                                                      :bytes bytes
-                                                      :original_filename original_filename
-                                                      :content_type content_type
-                                                      :file_size file_size})]
+          result (receipt-storage/upload-receipt! db (cond-> {:user_id user-id
+                                                              :payer_id payer-id
+                                                              :storage_key storage_key
+                                                              :bytes bytes
+                                                              :original_filename original_filename
+                                                              :content_type content_type
+                                                              :file_size file_size}
+                                                       tenant-id (assoc :tenant_id tenant-id)))]
       ;; If the receipt is a duplicate, delete the just-uploaded file so we don't
       ;; accumulate orphaned files under upload/stripes/.
       (when (:duplicate? result)

@@ -163,13 +163,15 @@
         (if-let [forbidden (h/ensure-role request receipts-read-roles "Role assignment required")]
           forbidden
           (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)
                 qp (:query-params request)
                 status (parse-status-param (or (:status qp) (get qp "status")))
-                opts {:status status
-                      :limit (parse-long-param qp :limit 50)
-                      :offset (parse-long-param qp :offset 0)
-                      :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
-                      :order-by (or (:order-by qp) (get qp "order-by"))}
+                opts (cond-> {:status status
+                              :limit (parse-long-param qp :limit 50)
+                              :offset (parse-long-param qp :offset 0)
+                              :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
+                              :order-by (or (:order-by qp) (get qp "order-by"))}
+                       tenant-id (assoc :tenant-id tenant-id))
                 {:keys [rows total limit offset]}
                 (if (= "admin" role)
                   (receipt-queries/list-receipts-page db opts)
@@ -190,11 +192,12 @@
       (if-let [user-id (h/get-user-id request)]
         (if-let [forbidden (h/ensure-role request receipts-read-roles "Role assignment required")]
           forbidden
-          (let [role (h/get-user-role request)]
+          (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)]
             (if-let [id (h/try-parse-uuid (get-in request [:path-params :id]))]
               (if-let [receipt (if (= "admin" role)
                                  (receipt-queries/get-receipt db id)
-                                 (receipt-queries/get-user-receipt db user-id id))]
+                                 (receipt-queries/get-user-receipt db user-id id tenant-id))]
                 (let [receipt0 (to-app receipt)
                       content-type* (some-> (:content-type receipt0) str/trim not-empty)
                       inferred-content-type (or content-type*
@@ -234,11 +237,12 @@
       (if-let [user-id (h/get-user-id request)]
         (if-let [forbidden (h/ensure-role request receipts-read-roles "Role assignment required")]
           forbidden
-          (let [role (h/get-user-role request)]
+          (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (if-let [receipt (if (= "admin" role)
                                  (receipt-queries/get-receipt db id)
-                                 (receipt-queries/get-user-receipt db user-id id))]
+                                 (receipt-queries/get-user-receipt db user-id id tenant-id))]
                 (let [receipt-app (to-app receipt)
                       file (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))]
                   (if-not file
@@ -304,6 +308,7 @@
                              "Only members, admins, and owners can delete receipts")]
           forbidden
           (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)
                 body (h/read-body-params request)
                 raw-ids (or (:ids body)
                           (:receipt_ids body)
@@ -330,12 +335,12 @@
                         (swap! errors conj {:id (str id)
                                             :error "not found"}))
 
-                      (not (receipt-queries/get-user-receipt db user-id id))
+                      (not (receipt-queries/get-user-receipt db user-id id tenant-id))
                       (swap! errors conj {:id (str id)
                                           :error "not found"})
 
                       :else
-                      (if-let [_deleted (receipt-queries/delete-receipt! db id)]
+                      (if-let [_deleted (receipt-queries/delete-receipt! db id tenant-id)]
                         (swap! deleted-ids conj (str id))
                         (swap! errors conj {:id (str id)
                                             :error "not found"})))
@@ -361,15 +366,16 @@
       (if-let [user-id (h/get-user-id request)]
         (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can approve receipts")]
           forbidden
-          (let [role (h/get-user-role request)]
+          (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (let [body (h/read-body-params request)
                     expense (if (= "admin" role)
-                              (receipt-approval/approve-and-post-for-user-any! db user-id id body)
-                              (receipt-approval/approve-and-post-for-user! db user-id id body))
+                              (receipt-approval/approve-and-post-for-user-any! db user-id id body :tenant-id tenant-id)
+                              (receipt-approval/approve-and-post-for-user! db user-id id body :tenant-id tenant-id))
                     receipt (if (= "admin" role)
                               (receipt-queries/get-receipt db id)
-                              (receipt-queries/get-user-receipt db user-id id))]
+                              (receipt-queries/get-user-receipt db user-id id tenant-id))]
                 (h/json-response {:data {:expense (to-app expense)
                                          :receipt (to-app receipt)}}
                   200))
@@ -391,19 +397,20 @@
       (if-let [user-id (h/get-user-id request)]
         (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can review receipts")]
           forbidden
-          (let [role (h/get-user-role request)]
+          (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (let [body (h/read-body-params request)
                     accessible? (if (= "admin" role)
                                   (some? (receipt-queries/get-receipt db id))
-                                  (some? (receipt-queries/get-user-receipt db user-id id)))]
+                                  (some? (receipt-queries/get-user-receipt db user-id id tenant-id)))]
                 (if-not accessible?
                   (h/json-response {:error "Receipt not found"} 404)
                   (do
                     (receipt-approval/save-review! db id body)
                     (let [receipt (if (= "admin" role)
                                     (receipt-queries/get-receipt db id)
-                                    (receipt-queries/get-user-receipt db user-id id))
+                                    (receipt-queries/get-user-receipt db user-id id tenant-id))
                           receipt-app (to-app receipt)
                           download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt-app))
                                          (str "/api/v1/expenses/receipts/" id "/download"))
@@ -429,12 +436,13 @@
       (if-let [user-id (h/get-user-id request)]
         (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
           forbidden
-          (let [role (h/get-user-role request)]
+          (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               ;; Check access: admin can OCR any, users only their own
               (let [receipt (if (= "admin" role)
                               (receipt-queries/get-receipt db id)
-                              (receipt-queries/get-user-receipt db user-id id))]
+                              (receipt-queries/get-user-receipt db user-id id tenant-id))]
                 (if receipt
                   (let [{:keys [enabled? api-key] :as ocr-cfg}
                         (ocr-provider/build-provider app-config)]
@@ -476,6 +484,7 @@
         (if-let [forbidden (h/ensure-role request receipts-write-roles "Only members, admins, and owners can run OCR")]
           forbidden
           (let [role (h/get-user-role request)
+                tenant-id (h/get-tenant-id request)
                 body (h/read-body-params request)
                 raw-ids (or (:receipt_ids body)
                           (:receipt-ids body)
@@ -499,7 +508,7 @@
                                      (filter (fn [id]
                                                (some? (if (= "admin" role)
                                                         (receipt-queries/get-receipt db id)
-                                                        (receipt-queries/get-user-receipt db user-id id)))))
+                                                        (receipt-queries/get-user-receipt db user-id id tenant-id)))))
                                      vec)
                     accessible-id-set (set accessible-ids)
                     skipped-ids (->> ids

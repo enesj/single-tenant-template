@@ -4,6 +4,7 @@
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.expenses.test-helpers :as th]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [next.jdbc :as jdbc]
@@ -14,18 +15,19 @@
 (use-fixtures :each fixtures/with-transaction-rollback)
 
 (defn- insert-receipt!
-  [db {:keys [id status total-amount-guess]}]
+  [db {:keys [id status total-amount-guess tenant-id]}]
   (let [file-hash (str (UUID/randomUUID) (UUID/randomUUID))
         file-hash (-> file-hash (str/replace "-" "") (subs 0 64))]
     (jdbc/execute-one!
       db
-      ["insert into receipts (id, storage_key, file_hash, status, total_amount_guess)
-        values (?, ?, ?, ?::receipt_status, ?::numeric)"
+      ["insert into receipts (id, storage_key, file_hash, status, total_amount_guess, tenant_id)
+        values (?, ?, ?, ?::receipt_status, ?::numeric, ?)"
        id
        (str "test/" id ".png")
        file-hash
        status
-       total-amount-guess]
+       total-amount-guess
+       tenant-id]
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (deftest store-extraction-results-patch-style-and-casts
@@ -64,12 +66,15 @@
 (deftest save-review-parses-datetime-local-validates-currency-and-does-not-mutate-total-guess
   (testing "datetime-local purchased_at is parsed; invalid currency yields 400; saving a review does not overwrite total_amount_guess"
     (let [db fixtures/*test-db*
+          user (th/ensure-test-user! db)
+          {:keys [tenant-id]} (th/ensure-test-tenant! db user)
           create-supplier! (:create! suppliers/service)
           supplier (create-supplier! db {:display_name (str "Test Supplier " (UUID/randomUUID))})
           receipt-id (UUID/randomUUID)
           _receipt (insert-receipt! db {:id receipt-id
                                         :status "review_required"
-                                        :total-amount-guess "10.00"})
+                                        :total-amount-guess "10.00"
+                                        :tenant-id tenant-id})
           items [{:raw_label "Line 1" :line-total "12.00"}]]
 
       (testing "valid review saves reviewed items and keeps total_amount_guess unchanged"

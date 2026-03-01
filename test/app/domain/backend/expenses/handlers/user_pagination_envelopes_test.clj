@@ -92,7 +92,7 @@
           (is (= 3 (get-in resp [:body :limit])))
           (is (= 4 (get-in resp [:body :offset])))
           (is (= {:limit 3 :offset 4 :search "cash"} @payers-opts))
-          (is (= {:search "cash"} @payers-count-opts))))
+          (is (= {:search "cash" :tenant-id nil} @payers-count-opts))))
 
       (testing "payer types clamps non-positive limit/offset and includes envelope"
         (let [handler (reference-data/list-payer-types-handler db)
@@ -104,7 +104,7 @@
           (is (= 1 (get-in resp [:body :limit])))
           (is (= 0 (get-in resp [:body :offset])))
           (is (= {:limit 1 :offset 0 :search "type"} @payer-types-opts))
-          (is (= {:search "type"} @payer-types-count-opts)))))))
+          (is (= {:search "type" :tenant-id nil} @payer-types-count-opts)))))))
 
 (deftest supplier-detail-and-supplier-aliases-list-handlers-return-standard-envelope
   (let [article-aliases-opts (atom nil)

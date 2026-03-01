@@ -100,38 +100,38 @@
                           search*
                           (conj [:or
                                  [:ilike :aa.raw_label search*]
-                                 [:ilike :a.canonical_name search*]]))]
-              query {:select [[:ei.*]
-                              [:aa.raw_label :raw_label]
-                              [:aa.raw_label_normalized :raw_label_normalized]
-                              [:e.purchased_at :expense_purchased_at]
-                              [:a.canonical_name :article_canonical_name]]
-                     :from [[:expense_items :ei]]
-                     :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                 [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                 [:articles :a] [:= :a.id :aa.article_id]]
-                     :where where
-                     :order-by order-by-clause
-                     :limit limit
-                     :offset offset}
-              count-query {:select [[[:count :ei.id] :total]]
-                           :from [[:expense_items :ei]]
-                           :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                       [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                       [:articles :a] [:= :a.id :aa.article_id]]
-                           :where where}
-              items (jdbc/execute! db (sql/format query)
-                      {:builder-fn rs/as-unqualified-lower-maps})
-              total (or (:total (jdbc/execute-one! db (sql/format count-query)
-                                  {:builder-fn rs/as-unqualified-lower-maps}))
-                      0))
-            (h/json-response {:data (vec items)
-                              :total (long total)
-                              :limit limit
-                              :offset offset}))
-          (catch Exception e
-            (log/error e "Error listing expense items" {:user-id user-id})
-            (h/json-response {:error "Failed to list expense items"} 500))))
+                                 [:ilike :a.canonical_name search*]]))
+                  query {:select [[:ei.*]
+                                  [:aa.raw_label :raw_label]
+                                  [:aa.raw_label_normalized :raw_label_normalized]
+                                  [:e.purchased_at :expense_purchased_at]
+                                  [:a.canonical_name :article_canonical_name]]
+                         :from [[:expense_items :ei]]
+                         :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                     [:articles :a] [:= :a.id :aa.article_id]]
+                         :where where
+                         :order-by order-by-clause
+                         :limit limit
+                         :offset offset}
+                  count-query {:select [[[:count :ei.id] :total]]
+                               :from [[:expense_items :ei]]
+                               :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                           [:articles :a] [:= :a.id :aa.article_id]]
+                               :where where}
+                  items (jdbc/execute! db (sql/format query)
+                          {:builder-fn rs/as-unqualified-lower-maps})
+                  total (or (:total (jdbc/execute-one! db (sql/format count-query)
+                                      {:builder-fn rs/as-unqualified-lower-maps}))
+                          0)]
+              (h/json-response {:data (vec items)
+                                :total (long total)
+                                :limit limit
+                                :offset offset}))
+            (catch Exception e
+              (log/error e "Error listing expense items" {:user-id user-id})
+              (h/json-response {:error "Failed to list expense items"} 500)))))
       (h/unauthorized-response))))
 
 (defn- expense-item-id
@@ -216,18 +216,18 @@
                                                      :field :line_total})))}]
                 (if-let [updated (update-expense-item! db user-id item-id updates :tenant-id tenant-id)]
                   (h/json-response {:data (or (fetch-expense-item db user-id item-id :tenant-id tenant-id) updated)})
-                  (h/not-found-response "Expense item not found or access denied"))))
-            (catch clojure.lang.ExceptionInfo e
-              (let [{:keys [status]} (ex-data e)]
-                (if (number? status)
-                  (h/json-response {:error (.getMessage e)} status)
-                  (do
-                    (log/error e "Error updating expense item (ex-info)" {:user-id user-id :item-id item-id})
-                    (h/json-response {:error "Failed to update expense item"} 500)))))
-            (catch Exception e
-              (log/error e "Error updating expense item" {:user-id user-id :item-id item-id})
-              (h/json-response {:error "Failed to update expense item"} 500)))
-          (h/json-response {:error "Invalid expense item ID"} 400)))
+                  (h/not-found-response "Expense item not found or access denied")))
+              (catch clojure.lang.ExceptionInfo e
+                (let [{:keys [status]} (ex-data e)]
+                  (if (number? status)
+                    (h/json-response {:error (.getMessage e)} status)
+                    (do
+                      (log/error e "Error updating expense item (ex-info)" {:user-id user-id :item-id item-id})
+                      (h/json-response {:error "Failed to update expense item"} 500)))))
+              (catch Exception e
+                (log/error e "Error updating expense item" {:user-id user-id :item-id item-id})
+                (h/json-response {:error "Failed to update expense item"} 500)))
+            (h/json-response {:error "Invalid expense item ID"} 400))))
       (h/unauthorized-response))))
 
 (defn- delete-expense-item!
@@ -245,7 +245,7 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn batch-delete-expense-items-handler
-  "Batch delete expense items scoped to the current user's expenses.
+  "Batch delete expense items scoped to the current user's expenses and tenant.
 
   Allowed roles: admin/owner.
 
@@ -260,37 +260,38 @@
       (if-let [forbidden (h/ensure-role request power-user-roles
                            "Only admins and owners can modify expense items")]
         forbidden
-        (try
-          (let [body (h/read-body-params request)
-                raw-ids (or (:ids body)
-                          (:expense_item_ids body)
-                          (:expense-item-ids body)
-                          (:expenseItemIds body)
-                          [])
-                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
-            (cond
-              (empty? raw-ids)
-              (h/json-response {:error "No expense item ids provided"} 400)
+        (let [tenant-id (h/get-tenant-id request)]
+          (try
+            (let [body (h/read-body-params request)
+                  raw-ids (or (:ids body)
+                            (:expense_item_ids body)
+                            (:expense-item-ids body)
+                            (:expenseItemIds body)
+                            [])
+                  ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+              (cond
+                (empty? raw-ids)
+                (h/json-response {:error "No expense item ids provided"} 400)
 
-              (empty? ids)
-              (h/json-response {:error "One or more expense item ids are invalid"} 400)
+                (empty? ids)
+                (h/json-response {:error "One or more expense item ids are invalid"} 400)
 
-              :else
-              (let [deleted-ids (atom [])
-                    errors (atom [])]
-                (doseq [item-id ids]
-                  (try
-                    (if (some? (delete-expense-item! db user-id item-id))
-                      (swap! deleted-ids conj (str item-id))
-                      (swap! errors conj {:id (str item-id)
-                                          :error "not found"}))
-                    (catch Exception e
-                      (swap! errors conj {:id (str item-id)
-                                          :error (.getMessage e)}))))
-                (h/json-response {:data {:deleted-count (count @deleted-ids)
-                                         :deleted-ids (vec @deleted-ids)
-                                         :errors (vec @errors)}}))))
-          (catch Exception e
-            (log/error e "Error batch deleting expense items" {:user-id user-id})
-            (h/json-response {:error "Failed to delete expense items"} 500))))
+                :else
+                (let [deleted-ids (atom [])
+                      errors (atom [])]
+                  (doseq [item-id ids]
+                    (try
+                      (if (some? (delete-expense-item! db user-id item-id :tenant-id tenant-id))
+                        (swap! deleted-ids conj (str item-id))
+                        (swap! errors conj {:id (str item-id)
+                                            :error "not found"}))
+                      (catch Exception e
+                        (swap! errors conj {:id (str item-id)
+                                            :error (.getMessage e)}))))
+                  (h/json-response {:data {:deleted-count (count @deleted-ids)
+                                           :deleted-ids (vec @deleted-ids)
+                                           :errors (vec @errors)}}))))
+            (catch Exception e
+              (log/error e "Error batch deleting expense items" {:user-id user-id})
+              (h/json-response {:error "Failed to delete expense items"} 500)))))
       (h/unauthorized-response))))

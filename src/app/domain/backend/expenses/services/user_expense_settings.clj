@@ -79,8 +79,8 @@
           (if has-tenant?
             [(str
                "INSERT INTO user_expense_settings "
-               "(tenant_id, user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled) "
-               "VALUES (?, ?, ?::currency, ?, ?, ?, ?) "
+               "(id, tenant_id, user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled) "
+               "VALUES (?, ?, ?, ?::currency, ?, ?, ?, ?) "
                "ON CONFLICT (tenant_id, user_id) DO UPDATE SET "
                "default_currency = EXCLUDED.default_currency, "
                "default_payer_id = EXCLUDED.default_payer_id, "
@@ -88,6 +88,7 @@
                "auto_post_after_upload_enabled = EXCLUDED.auto_post_after_upload_enabled, "
                "receipt_refine_enabled = EXCLUDED.receipt_refine_enabled "
                "RETURNING default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled")
+             (UUID/randomUUID)
              tenant-id
              user-id
              default-currency
@@ -97,8 +98,8 @@
              receipt-refine-enabled]
             [(str
                "INSERT INTO user_expense_settings "
-               "(user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled) "
-               "VALUES (?, ?::currency, ?, ?, ?, ?) "
+               "(id, user_id, default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled) "
+               "VALUES (?, ?, ?::currency, ?, ?, ?, ?) "
                "ON CONFLICT (user_id) DO UPDATE SET "
                "default_currency = EXCLUDED.default_currency, "
                "default_payer_id = EXCLUDED.default_payer_id, "
@@ -106,6 +107,7 @@
                "auto_post_after_upload_enabled = EXCLUDED.auto_post_after_upload_enabled, "
                "receipt_refine_enabled = EXCLUDED.receipt_refine_enabled "
                "RETURNING default_currency, default_payer_id, notifications_enabled, auto_post_after_upload_enabled, receipt_refine_enabled")
+             (UUID/randomUUID)
              user-id
              default-currency
              default-payer-id

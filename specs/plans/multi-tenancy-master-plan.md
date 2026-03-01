@@ -2,7 +2,7 @@
 
 > **Spec**: `specs/allium/template/multi-tenancy.candidate.allium`
 > **Approach**: shared-schema, tenant_id FK, middleware enforcement (no RLS)
-> **Status**: Phase 1 — Complete (1.3 slug routing deferred to Phase 2)
+> **Status**: Phase 2 — Complete (1.3 slug routing deferred)
 
 ---
 
@@ -12,7 +12,7 @@
 |---|-------|-----------|--------|
 | 0 | Foundation — DB tables & migrations | — | `[x]` |
 | 1 | Tenant Lifecycle — provisioning, invitations, session context | 0 | `[x]` |
-| 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[ ]` |
+| 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[x]` |
 | 3 | Access Control — role-based tier rules | 1, 2 | `[ ]` |
 | 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[ ]` |
 | 5 | Frontend — tenant switcher, slug routing, UI state | 1, 3 | `[ ]` |
@@ -141,33 +141,43 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ### Tasks
 
-- [ ] **2.1** Tenant-aware request context extraction
-  - Update `routes/utils.clj` `extract-common-data` to always extract `tenant-id` from session
-  - Require non-nil `tenant-id` for tenant-scoped resource access (return 400 if missing)
-- [ ] **2.2** Update generic CRUD service to thread tenant_id
-  - `entity_access.clj`: expand allowlist with tenant-scoped entities (expenses, payers, etc.)
-  - CRUD handlers: inject `tenant_id` into WHERE for list/get, into INSERT data for create
-- [ ] **2.3** Update expense service to accept and thread tenant_id
-  - `create-expense!`: add tenant_id to expense row + expense_items rows
-  - `update-expense!`: verify tenant_id matches
-  - User expense wrapper: extract tenant_id from request, pass to service
-- [ ] **2.4** Update receipt service to thread tenant_id
-  - Receipt creation (upload): include tenant_id
-  - Receipt approval/posting: pass tenant_id to expense creation
-  - Receipt queries: filter by tenant_id
-- [ ] **2.5** Update payer/payer_types/expense_categories services for tenant_id
-  - All CRUD operations: filter + inject tenant_id
-  - Default payer logic: per-tenant default, not global
-- [ ] **2.6** Update user_expense_settings for tenant_id
-- [ ] **2.7** Verify global services pass through WITHOUT tenant filtering
-  - suppliers, stores: no tenant_id (global catalog, no change)
-  - articles, categories, subcategories, manufacturers: no change
-  - supplier_aliases, store_aliases, article_aliases: no change (stay global)
-  - cities, countries: no change
-- [ ] **2.8** Integration tests: verify tenant isolation
-  - User in tenant A cannot see tenant B's expenses/receipts/payers
-  - Global catalog visible to both tenants
-  - Aliases shared across tenants
+- [x] **2.1** Tenant-aware request context extraction
+  - Added `get-tenant-id` to `handlers/user_expenses/helpers.clj`
+  - `routes/utils.clj` `extract-common-data` already extracts `tenant-id` (done in Phase 1)
+  - All user handlers extract tenant-id and pass to service calls
+- [x] **2.2** Update generic CRUD service to thread tenant_id
+  - `services_factory.clj`: all build-* functions accept optional `:tenant-id` in opts
+  - `config_maps.clj`: added `:tenant-scoped? true` to payer, payer-type, expense-category, expense, expense-item, receipt configs
+  - Factory auto-injects `[:= :tenant_id tenant-id]` into WHERE and validates tenant_id on create
+- [x] **2.3** Update expense service to accept and thread tenant_id
+  - `expenses.clj`: `create-expense!` includes tenant_id in expense row + expense_items
+  - `user_expenses.clj`: all functions take `tenant-id` param after `db`, thread to admin service
+  - Handlers: `crud.clj`, `summary.clj`, `batch.clj` extract and pass tenant-id
+- [x] **2.4** Update receipt service to thread tenant_id
+  - `receipts/queries.clj`: all queries accept optional tenant-id
+  - `receipts/approval.clj`: reads tenant_id from receipt row, passes to expense creation
+  - `receipt_upload.clj`: includes tenant_id in INSERT
+  - `user_receipts.clj`: all handlers extract and pass tenant-id
+- [x] **2.5** Update payer/payer_types/expense_categories services for tenant_id
+  - `payers.clj`: `get-default-payer`, `set-default-payer-in-tx!` scoped by tenant
+  - `payer_types.clj`: same pattern for default payer types
+  - `reference_data.clj`: all payer/payer-type handlers pass tenant-id
+  - Expense categories: handled via factory `:tenant-scoped? true`
+- [x] **2.6** Update user_expense_settings for tenant_id
+  - `get-user-expense-settings`: scopes by (tenant_id, user_id) when tenant-id present
+  - `upsert-user-expense-settings!`: ON CONFLICT (tenant_id, user_id), includes id in INSERT
+  - `settings.clj` handler: extracts and passes tenant-id
+- [x] **2.7** Verify global services pass through WITHOUT tenant filtering
+  - suppliers, stores: no tenant_id (global catalog, confirmed no change)
+  - articles, categories, subcategories, manufacturers: confirmed no change
+  - supplier_aliases, store_aliases, article_aliases: confirmed no change (stay global)
+  - cities: confirmed no change
+  - `expense_items.clj`: raw SQL queries scope via expenses.tenant_id JOIN
+- [x] **2.8** Integration tests: verify tenant isolation
+  - `tenant_isolation_test.clj`: 6 tests (payers, default-payer, payer-types, settings, expenses, global-catalog)
+  - Updated `test_helpers.clj`: `ensure-test-tenant!`, `ensure-test-user!`, tenant-aware `create-payer!`
+  - Updated `payers_test.clj`, `receipts_test.clj`, `user_expenses_test.clj` for tenant_id
+  - Updated `user_pagination_envelopes_test.clj` for tenant-id in count opts
 
 ### Dependencies
 - Phase 0 complete (tenant_id columns exist)
