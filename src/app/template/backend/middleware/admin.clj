@@ -17,17 +17,19 @@
         :token-present (boolean token)
         :token-preview (when token (str (subs token 0 (min 8 (count token))) "...")))
       (if token
-        (if-let [admin-raw (admin-auth/get-admin-by-session db token)]
-          (let [admin {:id (:id admin-raw)
-                       :email (:email admin-raw)
-                       :role (:role admin-raw)
-                       :full_name (:full_name admin-raw)
-                       :status (:status admin-raw)}]
-            (log/info "✅ ADMIN AUTH SUCCESS:" {:admin-id (:id admin) :admin-role (:role admin)})
+        (if-let [{:keys [admin impersonation-context]}
+                 (admin-auth/get-admin-by-session-with-context db token)]
+          (let [admin-map {:id (:id admin)
+                           :email (:email admin)
+                           :role (:role admin)
+                           :full_name (:full_name admin)
+                           :status (:status admin)}]
+            (log/info "✅ ADMIN AUTH SUCCESS:" {:admin-id (:id admin-map) :admin-role (:role admin-map)})
             ;; Update session activity
             (admin-auth/update-session-activity! db token)
-            ;; Add normalized admin info to request
-            (handler (assoc request :admin admin)))
+            ;; Add normalized admin info + optional impersonation context to request
+            (handler (cond-> (assoc request :admin admin-map)
+                       impersonation-context (assoc :impersonation impersonation-context))))
           (do
             (log/warn "❌ ADMIN AUTH FAILED: Invalid or expired session" {:token-preview (str (subs token 0 (min 8 (count token))) "...")})
             (utils/error-response "Invalid or expired admin session" :status 401)))

@@ -109,6 +109,22 @@
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :waiting-room)}))
 
+(rf/reg-event-db
+  :page/init-tenant-select
+  common-interceptors
+  (fn [db _]
+    (assoc-in db (paths/current-page) :tenant-select)))
+
+(rf/reg-event-fx
+  :page/init-tenant-members
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :tenant-members)
+       :fx [[:dispatch [:app.template.frontend.events.tenant/fetch-members]]
+            [:dispatch [:app.template.frontend.events.tenant/fetch-invitations]]]})))
+
 (rf/reg-event-fx
   :page/init-expenses-dashboard
   common-interceptors

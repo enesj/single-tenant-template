@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.routes.route-configs
   "Configuration maps for expenses domain route generation."
   (:require
+    [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
     [app.domain.backend.expenses.services.service-configs :as svc-configs]
     [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
@@ -140,6 +141,7 @@
    :required-fields [:payer-type-id :label]
    :has-count? true
    :has-search? false
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :custom-query-params (fn [_qp] {})})
 
 (def payer-type-config
@@ -152,8 +154,9 @@
    :required-fields [:label]
    :has-count? true
    :has-search? false
-   ;; Require at least :admin role; owner also passes. Support is blocked.
-   :route-middleware [(fn [handler] (admin-mw/wrap-admin-role handler :admin))]
+   ;; Impersonation required + at least :admin role
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))
+                      (fn [handler] (admin-mw/wrap-admin-role handler :admin))]
    :custom-query-params (fn [_qp] {})})
 
 (def article-config
@@ -179,6 +182,7 @@
    :required-fields []
    :has-count? false
    :has-search? false
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :custom-query-params (fn [qp]
                           {:from (:from qp)
                            :to (:to qp)
@@ -199,6 +203,7 @@
    :required-fields [:expense-id :line-total]
    :has-count? true
    :has-search? true
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :custom-query-params search-query-params})
 
 (def article-alias-config
@@ -211,6 +216,7 @@
    :required-fields [:supplier-id :raw-label :raw-label-normalized]
    :has-count? true
    :has-search? false
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :custom-query-params (fn [qp]
                           {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
                            :raw-label (:raw-label qp)
@@ -234,6 +240,7 @@
    :required-fields [:raw-label :raw-label-normalized]
    :has-count? true
    :has-search? false
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :custom-query-params (fn [qp]
                           {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
                            :unmapped-only (utils/parse-boolean-param qp :unmapped-only)
@@ -262,6 +269,7 @@
    :required-fields [:raw-label :raw-label-normalized]
    :has-count? true
    :has-search? false
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :custom-query-params search-query-params
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.

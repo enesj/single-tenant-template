@@ -2,11 +2,12 @@
 
 > **Spec**: `specs/allium/template/multi-tenancy.candidate.allium`
 > **Approach**: shared-schema, tenant_id FK, middleware enforcement (no RLS)
-> **Status**: Phase 3 — Complete (1.3 slug routing deferred)
+> **Status**: Phase 4 — Complete (1.3 slug routing deferred)
 
 ---
 
 ## Phase Overview
+
 
 | # | Phase | Depends On | Status |
 |---|-------|-----------|--------|
@@ -14,7 +15,7 @@
 | 1 | Tenant Lifecycle — provisioning, invitations, session context | 0 | `[x]` |
 | 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[x]` |
 | 3 | Access Control — role-based tier rules | 1, 2 | `[x]` |
-| 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[ ]` |
+| 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[x]` |
 | 5 | Frontend — tenant switcher, slug routing, UI state | 1, 3 | `[ ]` |
 | 6 | Cleanup & Hardening — per-tenant rate limiting, delete price_observations | 3 | `[ ]` |
 
@@ -260,33 +261,43 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ### Tasks
 
-- [ ] **4.1** Update admin authorization middleware
-  - Check resource against `platform_admin_blocked_resources`
-  - If blocked → return 403 with "requires impersonation" message
-  - If not blocked → allow (existing admin auth flow)
-- [ ] **4.2** Superpower CRUD for users and tenant_memberships
-  - Admin API endpoints for user management across tenants
-  - Admin API endpoints for membership management across tenants
-  - Bypasses tenant rule chains (direct DB access via admin auth)
-  - Cannot: change owner roles, remove owners, force-add memberships (invitation only)
-  - Admin `owner` role required for superpower operations
-- [ ] **4.3** Impersonation grant management
-  - Endpoint for tenant owner to create grant (tenant, admin, role)
-  - Guard: only one active grant per admin per tenant
-  - Endpoint for tenant owner to revoke grant
-  - Endpoint for platform admin to end their own impersonation
-- [ ] **4.4** Impersonation session flow
-  - Admin activates impersonation → session gains synthetic tenant context
-  - All tenant data rules evaluate against the granted role
-  - Actions audit-logged with both admin and impersonated context
-- [ ] **4.5** Audit logging for impersonation
-  - Log: grant creation, grant revocation, every data access during impersonation
-  - Include: admin identity, tenant, effective role, action, resource
-- [ ] **4.6** Integration tests
-  - Admin blocked from expenses without impersonation
-  - Admin can access expenses with active impersonation grant
-  - Impersonation respects granted role (not admin's own role)
-  - Revocation immediately ends access
+- [x] **4.1** Update admin authorization middleware
+  - Added `impersonation_context` jsonb column to `admin_sessions` (migration 0100)
+  - `get-admin-by-session-with-context` in `admin/auth.clj` loads impersonation context in single JOIN
+  - `wrap-admin-authentication` in `middleware/admin.clj` attaches `:impersonation` to request
+  - `wrap-require-impersonation` in `domain/expenses/routes/middleware.clj` returns 403 for blocked resources
+  - Applied to 7 entity configs in `route_configs.clj` + receipts custom routes
+  - **Files**: `admin/auth.clj`, `middleware/admin.clj`, `expenses/routes/middleware.clj`, `route_configs.clj`, `receipts.clj`, `models.edn`
+- [x] **4.2** Superpower CRUD for users and tenant_memberships
+  - Admin tenant routes: `routes/admin/tenants.clj` — list/detail/members at `/admin/api/tenants`
+  - Membership management: change role (`PUT /:id/members/:member-id/role`), remove (`DELETE /:id/members/:member-id`)
+  - Write ops guarded by `wrap-admin-role :owner` — only platform admin owners
+  - Guards: cannot change owner role, cannot remove owner
+  - User detail enrichment: `GET /admin/api/users/:id` now includes `:memberships` array
+  - No force-add memberships (spec: "Cannot force-add users to tenants")
+  - **Files**: `routes/admin/tenants.clj` (new), `routes/admin/users.clj` (modified), `routes/admin_api.clj` (modified)
+  - **Tests**: `test/routes/admin/tenants_test.clj` — 11 tests (listing, detail, members, role change, removal, search, enrichment)
+- [x] **4.3** Impersonation grant management
+  - Service: `services/impersonation.clj` — create, revoke (by owner/admin), find, list grants
+  - User-side routes: `routes/impersonation.clj` — GET/POST/DELETE at `/api/v1/tenant/impersonation-grants` (owner only)
+  - Admin-side routes: `routes/admin/impersonation.clj` — status, grants list, activate, deactivate, self-revoke at `/admin/api/impersonation`
+  - Guard: one active grant per admin+tenant; rejects duplicate
+  - **Files**: `services/impersonation.clj`, `routes/impersonation.clj`, `routes/admin/impersonation.clj`, `routes/tenant.clj`, `routes/admin_api.clj`
+- [x] **4.4** Impersonation session flow
+  - `activate-impersonation!` validates grant active + admin match → writes context to `admin_sessions.impersonation_context` jsonb
+  - `deactivate-impersonation!` clears context from all admin sessions
+  - Revoke (by owner or admin) auto-calls `deactivate-impersonation!`
+  - Context stored as `{"tenant-id": "...", "role": "...", "grant-id": "..."}`
+  - **File**: `services/impersonation.clj`
+- [x] **4.5** Audit logging for impersonation
+  - All grant operations audit-logged: `impersonation_granted`, `impersonation_revoked_by_owner`, `impersonation_revoked_by_admin`, `impersonation_activated`, `impersonation_deactivated`
+  - Uses existing `audit/log-audit!` with entity-type `"impersonation_grant"` or `"admin_session"`
+  - **File**: `services/impersonation.clj`
+- [x] **4.6** Integration tests
+  - `impersonation_test.clj`: 8 service tests (create, duplicate rejection, unknown admin, revoke by owner/admin, activate/deactivate context, list grants) — 8 tests, 13 assertions
+  - `blocked_resources_test.clj`: 3 middleware unit tests (blocks without context, allows with context, blocks nil context) — 3 tests, 5 assertions
+  - End-to-end REPL verification: 403 → activate → 200 → deactivate → 403
+  - **Files**: `test/services/impersonation_test.clj`, `test/routes/blocked_resources_test.clj`
 
 ### Dependencies
 - Phase 3 (role-based access rules exist to evaluate against)

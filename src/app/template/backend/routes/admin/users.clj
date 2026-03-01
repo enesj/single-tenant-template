@@ -5,6 +5,7 @@
     [app.admin.backend.services.admin.users :as admin-users]
     [app.admin.backend.services.admin.users.deletion :as user-deletion]
     [app.shared.adapters.database :as shared-db]
+    [app.template.backend.services.tenant :as tenant-svc]
     [taoensso.timbre :as log]))
 
 (defn list-users-handler
@@ -29,15 +30,21 @@
     "Failed to retrieve users"))
 
 (defn get-user-details-handler
-  "Get detailed user information"
+  "Get detailed user information, enriched with tenant memberships."
   [db]
   (utils/with-error-handling
     (fn [request]
       (utils/handle-uuid-request request :id
         (fn [user-id _request]
           (if-let [user (admin-users/get-user-details db user-id)]
-            (let [converted-user (shared-db/to-app user)]
-              (utils/json-response {:user converted-user}))
+            (let [converted-user (shared-db/to-app user)
+                  memberships    (try
+                                   (tenant-svc/get-user-memberships db user-id)
+                                   (catch Exception e
+                                     (log/warn "Failed to fetch memberships for user" user-id (.getMessage e))
+                                     []))]
+              (utils/json-response {:user converted-user
+                                    :memberships memberships}))
             (utils/error-response "User not found" :status 404)))))
     "Failed to retrieve user details"))
 

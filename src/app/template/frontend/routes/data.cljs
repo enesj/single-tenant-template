@@ -4,7 +4,8 @@
     [app.template.frontend.routes.controllers :as controllers]
     [app.admin.frontend.routes :as admin-routes]
     ;; Domain registry for user-facing domain routes
-    [app.domain.frontend.registry :as domain-registry]))
+    [app.domain.frontend.registry :as domain-registry]
+    [re-frame.core :as rf]))
 
 (defn generate-entity-routes
   "Generate generic entity routes that accept entity name as parameter"
@@ -103,7 +104,25 @@
        ["/entities/"
         {:name :entities-slash
          :view :entities
-         :controllers (controllers/user-guarded-start :page/init-entities)}]]
+         :controllers (controllers/user-guarded-start :page/init-entities)}]
+
+       ["/tenant-select"
+        {:name :tenant-select
+         :view :tenant-select
+         :controllers (controllers/make-simple-controller :page/init-tenant-select)}]
+
+       ["/tenant/members"
+        {:name :tenant-members
+         :view :tenant-members
+         :controllers (controllers/user-guarded-start :page/init-tenant-members)}]
+
+       ["/invitation/accept"
+        {:name :invitation-accept
+         :view :invitation-accept
+         :controllers [{:start (fn [match]
+                                 (let [token (get-in match [:query-params :token])]
+                                   (when token
+                                     (rf/dispatch [:app.template.frontend.events.tenant/accept-invitation-init token]))))}]}]]
       ;; Domain user routes from registry (decoupled from template)
       (domain-registry/all-user-routes)
       (generate-entity-routes)

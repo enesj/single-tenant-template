@@ -91,8 +91,9 @@
          ["/reset-password" {:get {:handler render-page}}]
          ["/change-password" {:get {:handler render-page}}]
 
-         ;; Tenant selection & invitation acceptance (SPA fallback)
+         ;; Tenant selection, invitation acceptance & member management (SPA fallback)
          ["/tenant-select" {:get {:handler render-page}}]
+         ["/tenant/members" {:get {:handler render-page}}]
          ["/invitation/accept" {:get {:handler render-page}}]
 
          ;; OAuth routes (only included when OAuth is enabled)

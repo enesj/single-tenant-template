@@ -1,6 +1,7 @@
 (ns app.admin.backend.services.admin.auth
   "Admin auth orchestration; bridge auth service to routes."
   (:require
+    [app.shared.adapters.database :as shared-db]
     [app.shared.type-conversion :as tc]
     [buddy.hashers :as hashers]
     [honey.sql :as hsql]
@@ -134,6 +135,24 @@
                   {:builder-fn rs/as-unqualified-lower-maps})]
     (when session
       (find-admin-by-id db (:admin_id session)))))
+
+(defn get-admin-by-session-with-context
+  "Get admin + impersonation context by session token.
+   Returns {:admin <map>, :impersonation-context <map-or-nil>} or nil."
+  [db token]
+  (let [now (time/instant)
+        row (jdbc/execute-one! db
+              (hsql/format {:select [:a.* :s.impersonation_context]
+                            :from   [[:admin_sessions :s]]
+                            :join   [[:admins :a] [:= :s.admin_id :a.id]]
+                            :where  [:and
+                                     [:= :s.token token]
+                                     [:> :s.expires_at now]]})
+              {:builder-fn rs/as-unqualified-lower-maps})]
+    (when row
+      {:admin (dissoc row :impersonation_context :password_hash)
+       :impersonation-context (some-> (:impersonation_context row)
+                                shared-db/convert-pg-objects)})))
 
 (defn update-session-activity!
   "Update last activity timestamp for a session"

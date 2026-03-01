@@ -53,9 +53,9 @@
 
 (rf/reg-sub
   :user-role
-  :<- [:current-user]
-  (fn [user _]
-    (:role user)))
+  (fn [db _]
+    (or (get-in db [:session :membership-role])
+      (get-in db [:session :user :role]))))
 
 (rf/reg-sub
   :is-tenant-owner?
@@ -67,7 +67,17 @@
   :tenant-name
   :<- [:current-tenant]
   (fn [tenant _]
-    (:name tenant)))
+    (or (:name tenant) (:tenants/name tenant))))
+
+(rf/reg-sub
+  :available-tenants
+  (fn [db _]
+    (get-in db [:session :available-tenants])))
+
+(rf/reg-sub
+  :tenant-selection-required?
+  (fn [db _]
+    (get-in db [:session :tenant-selection-required] false)))
 
 ;; Models metadata
 (rf/reg-sub

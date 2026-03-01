@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.routes.receipts
   "Admin API routes for receipt ingestion and approval."
   (:require
+    [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
     [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
@@ -341,6 +342,7 @@
   "Admin receipts routes. Mounted under /admin/api/expenses/receipts."
   [db & [app-config]]
   ["/receipts"
+   {:middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]}
    ["" {:get (list-receipts-handler db)}]
    ["/:id/download" {:get (download-receipt-handler db)}]
    ["/:id" {:get (get-receipt-handler db)

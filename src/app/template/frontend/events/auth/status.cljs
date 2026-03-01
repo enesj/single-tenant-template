@@ -29,12 +29,12 @@
   ids/fetch-auth-status-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-        (let [authenticated? (get response :authenticated false)
+    (let [authenticated? (get response :authenticated false)
           session-valid? (get response :session-valid true)
           user (get response :user)
           provider (or (get response :provider)
-             (:auth-provider user)
-             (:auth_provider user))
+                     (:auth-provider user)
+                     (:auth_provider user))
           tenant (get response :tenant)
           permissions (get response :permissions)
           permissions* (cond
@@ -43,12 +43,18 @@
                          (sequential? permissions) (set permissions)
                          (coll? permissions) (set permissions)
                          :else #{permissions})
+          ;; Multi-tenant fields from auth status response
+          membership-role (get response :membership-role)
+          tenant-selection-required (get response :tenant-selection-required)
+          available-tenants (get response :available-tenants)
           current-page (get-in db (paths/current-page))
-          user-role (:role user)]
+          ;; Prefer membership role over global user role
+          user-role (or membership-role (:role user))]
 
       ;; Log authentication details
       (when user
-        (log/debug "User session:" (:full-name user) "tenant:" (:name tenant) "role:" user-role))
+        (log/debug "User session:" (:full-name user) "tenant:" (:name tenant) "role:" user-role
+          "membership-role:" membership-role "tenant-selection-required:" tenant-selection-required))
 
       (let [updated-db (-> db
                          ;; Clear loading state
@@ -69,12 +75,21 @@
                          ;; Set user permissions (new for multi-tenant)
                          (assoc-in [:session :permissions] permissions*)
 
+                         ;; Store membership role for current tenant
+                         (assoc-in [:session :membership-role] membership-role)
+
+                         ;; Store tenant selection state
+                         (assoc-in [:session :tenant-selection-required] tenant-selection-required)
+                         (assoc-in [:session :available-tenants] available-tenants)
+
                          ;; Clear any previous errors
                          (update :session dissoc :error))
-            ;; Determine redirect based on role
+            ;; Determine redirect based on role and tenant state
             redirect-path (cond
                             ;; Unassigned users go to waiting room
                             (= user-role "unassigned") "/waiting-room"
+                            ;; Users with multiple tenants and no active tenant
+                            tenant-selection-required "/tenant-select"
                             ;; Members and above go to expense dashboard
                             (contains? #{"member" "admin" "owner"} user-role) "/dashboard"
                             ;; Viewers or other roles go to entities

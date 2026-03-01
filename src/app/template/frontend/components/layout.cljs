@@ -13,11 +13,14 @@
                                                     payers-icon
                                                     receipts-icon
                                                     suppliers-icon
-                                                    unmapped-items-icon]]
+                                                    unmapped-items-icon
+                                                    users-icon]]
     [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
+    [app.template.frontend.events.tenant :as tenant]
+    [re-frame.core :as rf]
     [reitit.frontend.easy :as rtfe]
-    [uix.core :refer [$ defui]]
+    [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- stop-and-push! [e route href]
@@ -48,6 +51,79 @@
     (keyword? role) (name role)
     (string? role) role
     :else nil))
+
+(defui tenant-switcher []
+  (let [tenant (use-subscribe [:current-tenant])
+        memberships (use-subscribe [:tenant/memberships])
+        loading? (use-subscribe [:tenant/loading?])
+        [open? set-open!] (use-state false)
+        tenant-name (or (:name tenant) (:tenants/name tenant) "No workspace")
+        tenant-id (or (:id tenant) (:tenants/id tenant))
+        has-multiple? (and (seq memberships) (> (count memberships) 1))]
+    (when tenant
+      ($ :div {:class "mb-2 relative"
+               :id "tenant-switcher"}
+        ;; Current tenant button
+        ($ :button {:class (str "w-full flex items-center justify-between px-2 py-1.5 "
+                             "rounded-lg text-sm hover:bg-base-300 transition-colors")
+                    :id "tenant-switcher-btn"
+                    :on-click (fn []
+                                (set-open! (not open?))
+                                (when-not memberships
+                                  (rf/dispatch [::tenant/fetch-memberships])))}
+          ($ :span {:class "font-medium truncate"} tenant-name)
+          (when has-multiple?
+            ;; Swap icon
+            ($ :svg {:class "w-4 h-4 flex-shrink-0 ml-1 text-base-content/50"
+                     :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+              ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                        :d "M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"}))))
+
+        ;; Dropdown
+        (when (and open? (seq memberships) has-multiple?)
+          ($ :div {:class (str "absolute bottom-full left-0 w-full mb-1 "
+                            "bg-base-100 border border-base-300 rounded-lg shadow-lg z-50")}
+            (for [m memberships]
+              (let [m-tenant-id (or (:tenant-id m) (:tenant_id m) (:tenants/id m) (:id m))
+                    m-name (or (:tenant-name m) (:tenant_name m) (:tenants/name m) (:name m) "Unnamed")
+                    m-role (or (:role m) (:tenant_memberships/role m))
+                    is-current? (= (str m-tenant-id) (str tenant-id))]
+                ($ :button {:key m-tenant-id
+                            :class (str "w-full flex items-center justify-between px-3 py-2 "
+                                     "text-sm hover:bg-base-200 first:rounded-t-lg last:rounded-b-lg "
+                                     (when is-current? "bg-base-200 font-medium"))
+                            :disabled (or is-current? loading?)
+                            :on-click (fn []
+                                        (when-not is-current?
+                                          (rf/dispatch [::tenant/switch-tenant {:tenant-id m-tenant-id}]))
+                                        (set-open! false))}
+                  ($ :span {:class "truncate"} m-name)
+                  ($ :span {:class "ds-badge ds-badge-xs ds-badge-ghost ml-1"} m-role))))))))))
+
+(defui sidebar-footer [{:keys [user-display-name role is-owner? route-name]}]
+  ($ :div {:class "p-3 border-t border-base-300"}
+    ;; Tenant switcher
+    ($ tenant-switcher)
+    ;; User info
+    ($ :div {:class "flex items-center justify-between mb-2"}
+      ($ :div {:class "flex flex-col min-w-0"}
+        ($ :span {:class "text-sm font-medium truncate"
+                  :id "sidebar-user-name"}
+          user-display-name)
+        (when role
+          ($ :span {:class (str "ds-badge ds-badge-xs mt-1 "
+                             (if is-owner? "ds-badge-primary" "ds-badge-secondary"))
+                    :id "sidebar-user-role"}
+            role))))
+    ;; Logout link
+    ($ :a {:id "user-sidebar-logout"
+           :href "/logout"
+           :on-click (fn [e] (stop-and-push! e :logout "/logout"))
+           :class (str "flex items-center gap-2 text-sm py-2 px-2 rounded-lg "
+                    "hover:bg-base-200 transition-colors "
+                    (when (= route-name :logout) "bg-base-200 font-medium"))}
+      ($ logout-icon {:class "w-4 h-4"})
+      "Log Out")))
 
 (defui user-sidebar []
   (let [current-route (use-subscribe [:current-route])
@@ -198,33 +274,27 @@
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-store-aliases})})])))
 
-        sections [{:title "Expenses" :items expense-items}
-                  {:title "Operations" :items operations-items}
-                  {:title "Reference" :items reference-items}]]
+        workspace-items (vec
+                          (when power-user?
+                            [(nav-item {:id "user-sidebar-members"
+                                        :label "Members"
+                                        :href "/tenant/members"
+                                        :route :tenant-members
+                                        :icon ($ users-icon {:class "w-6 h-6"})
+                                        :active? (active? #{:tenant-members})})]))
+
+        sections (cond-> [{:title "Expenses" :items expense-items}
+                          {:title "Operations" :items operations-items}
+                          {:title "Reference" :items reference-items}]
+                   (seq workspace-items)
+                   (conj {:title "Workspace" :items workspace-items}))]
     ($ sidebar
       {:title "Expenses"
        :sections sections
-       :footer ($ :div {:class "p-3 border-t border-base-300"}
-                 ;; User info
-                 ($ :div {:class "flex items-center justify-between mb-2"}
-                   ($ :div {:class "flex flex-col min-w-0"}
-                     ($ :span {:class "text-sm font-medium truncate"
-                               :id "sidebar-user-name"}
-                       user-display-name)
-                     (when role
-                       ($ :span {:class (str "ds-badge ds-badge-xs mt-1 "
-                                          (if is-owner? "ds-badge-primary" "ds-badge-secondary"))
-                                 :id "sidebar-user-role"}
-                         role))))
-                 ;; Logout link
-                 ($ :a {:id "user-sidebar-logout"
-                        :href "/logout"
-                        :on-click (fn [e] (stop-and-push! e :logout "/logout"))
-                        :class (str "flex items-center gap-2 text-sm py-2 px-2 rounded-lg "
-                                 "hover:bg-base-200 transition-colors "
-                                 (if (= route-name :logout) "bg-base-200 font-medium" ""))}
-                   ($ logout-icon {:class "w-4 h-4"})
-                   "Log Out"))})))
+       :footer ($ sidebar-footer {:user-display-name user-display-name
+                                  :role role
+                                  :is-owner? is-owner?
+                                  :route-name route-name})})))
 
 (defui user-header []
   ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}

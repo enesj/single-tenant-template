@@ -232,7 +232,8 @@
                               ;; Resolve tenant context (provision / auto-set / selection)
                               oauth-db        (or db (get-in req [:service-container :db]))
                               tenant-ctx      (tenant-auth/resolve-tenant-context oauth-db config user-raw)
-                              auth-session    (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx)
+                              auth-session    (sanitize-for-serialization
+                                                (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                               ;; Redirect to tenant-select when multiple tenants, else normal path
                               redirect-url    (if (= :selection-required (:action tenant-ctx))
                                                 "/tenant-select"

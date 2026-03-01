@@ -102,7 +102,8 @@
 
             ;; User registered successfully without verification — provision tenant now
             (let [tenant-ctx   (tenant-auth/resolve-tenant-context db config user)
-                  auth-session (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx)
+                  auth-session (sanitize-for-serialization
+                                 (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                   new-session  (assoc existing-session :auth-session auth-session)]
               (-> (json-response {:success true
                                   :verification-required false
@@ -138,7 +139,8 @@
                 ;; Resolve tenant context (provision / auto-set / selection)
                 config       (get-in req [:service-container :config])
                 tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw)
-                auth-session (tenant-auth/build-auth-session {:user user-safe} tenant-ctx)
+                auth-session (sanitize-for-serialization
+                               (tenant-auth/build-auth-session {:user user-safe} tenant-ctx))
                 new-session  (assoc existing-session :auth-session auth-session)
                 ;; Build response body with tenant info
                 response-body (cond-> {:success true :user user-safe}

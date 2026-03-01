@@ -2,8 +2,8 @@
   "Tenant management API routes mounted at /api/v1/tenant.
    All routes require user authentication."
   (:require
-    [app.shared.http :as http :refer [json-response]]
     [app.template.backend.auth.tenant :as tenant-auth]
+    [app.template.backend.routes.impersonation :as impersonation-routes]
     [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.services.invitation :as invitation-svc]
     [app.template.backend.services.invitation-email :as invitation-email]
@@ -69,12 +69,13 @@
                      {:type :forbidden
                       :errors {:tenant-id ["You are not a member of this tenant"]}})))
           (let [tenant       (tenant-svc/find-tenant-by-id db tenant-id)
-                auth-session (tenant-auth/build-auth-session
-                               {:user user}
-                               {:tenant tenant :membership membership :action :auto-set})
+                auth-session (sanitize
+                               (tenant-auth/build-auth-session
+                                 {:user user}
+                                 {:tenant tenant :membership membership :action :auto-set}))
                 existing     (or (:session req) {})]
-            (-> (json-response {:success true
-                                :tenant (sanitize tenant)})
+            (-> (response/response {:success true
+                                    :tenant (sanitize tenant)})
               (assoc :session (assoc existing :auth-session auth-session)))))))))
 
 (defn- list-memberships-handler
@@ -84,7 +85,7 @@
     (route-utils/with-error-handling "tenant-memberships"
       (let [user (get-user req)
             memberships (tenant-svc/get-user-memberships db (:id user))]
-        (json-response {:memberships (sanitize memberships)})))))
+        (response/response {:memberships (sanitize memberships)})))))
 
 (defn- list-members-handler
   "GET /tenant/members — list members of the active tenant."
@@ -96,7 +97,7 @@
           (throw (ex-info "No active tenant" {:type :validation-error
                                               :errors {:tenant ["No active tenant in session"]}})))
         (let [members (tenant-svc/get-tenant-members db (or (:id tenant) (:tenants/id tenant)))]
-          (json-response {:members (sanitize members)}))))))
+          (response/response {:members (sanitize members)}))))))
 
 (defn- create-invitation-handler
   "POST /tenant/invitations — invite a user to the current tenant."
@@ -132,7 +133,7 @@
                  :role         (or role "member")}))
             (catch Exception e
               (log/warn "Failed to send invitation email:" (.getMessage e)))))
-        (json-response {:success true :invitation (sanitize invitation)})))))
+        (response/response {:success true :invitation (sanitize invitation)})))))
 
 (defn- list-invitations-handler
   "GET /tenant/invitations — list pending invitations."
@@ -148,7 +149,7 @@
             actor-m   (tenant-svc/get-membership db tenant-id (:id user))
             _         (require-role! actor-m ["owner" "admin"])
             invitations (invitation-svc/list-pending-invitations db tenant-id)]
-        (json-response {:invitations (sanitize invitations)})))))
+        (response/response {:invitations (sanitize invitations)})))))
 
 (defn- accept-invitation-handler
   "POST /tenant/invitations/accept — accept an invitation by token."
@@ -169,13 +170,14 @@
                 ;; Auto-switch to the newly joined tenant
                 tenant-id  (or (:tenant_id invitation) (:tenant_invitations/tenant_id invitation))
                 tenant     (tenant-svc/find-tenant-by-id db tenant-id)
-                auth-session (tenant-auth/build-auth-session
-                               {:user user}
-                               {:tenant tenant :membership membership :action :auto-set})
+                auth-session (sanitize
+                               (tenant-auth/build-auth-session
+                                 {:user user}
+                                 {:tenant tenant :membership membership :action :auto-set}))
                 existing   (or (:session req) {})]
-            (-> (json-response {:success true
-                                :tenant (sanitize tenant)
-                                :membership (sanitize membership)})
+            (-> (response/response {:success true
+                                    :tenant (sanitize tenant)
+                                    :membership (sanitize membership)})
               (assoc :session (assoc existing :auth-session auth-session)))))))))
 
 (defn- revoke-invitation-handler
@@ -193,7 +195,7 @@
             _         (require-role! actor-m ["owner" "admin"])
             inv-id    (get-in req [:path-params :id])]
         (invitation-svc/revoke-invitation! db inv-id)
-        (json-response {:success true})))))
+        (response/response {:success true})))))
 
 (defn- change-role-handler
   "PUT /tenant/members/:id/role — change a member's role."
@@ -223,7 +225,7 @@
           (let [result (member-svc/change-role! db {:actor-membership  actor-m
                                                     :target-membership target-membership
                                                     :new-role          new-role})]
-            (json-response {:success true :membership (sanitize result)})))))))
+            (response/response {:success true :membership (sanitize result)})))))))
 
 (defn- transfer-ownership-handler
   "POST /tenant/transfer-ownership — transfer ownership to an admin."
@@ -243,7 +245,7 @@
           (throw (ex-info "Target user is not a member" {:type :entity-not-found})))
         (let [result (member-svc/transfer-ownership! db {:actor-membership  actor-m
                                                          :target-membership target-m})]
-          (json-response {:success true :membership (sanitize result)}))))))
+          (response/response {:success true :membership (sanitize result)}))))))
 
 (defn- remove-member-handler
   "DELETE /tenant/members/:id — remove a member from the tenant."
@@ -266,7 +268,7 @@
           (throw (ex-info "Member not found" {:type :entity-not-found})))
         (let [result (member-svc/remove-member! db {:actor-membership  actor-m
                                                     :target-membership target-membership})]
-          (json-response {:success true :membership (sanitize result)}))))))
+          (response/response {:success true :membership (sanitize result)}))))))
 
 ;; ============================================================================
 ;; Route Tree
@@ -287,7 +289,8 @@
                           :post {:handler (create-invitation-handler db email-service base-url)}}]
    ["/invitations/accept" {:post {:handler (accept-invitation-handler db)}}]
    ["/invitations/:id"    {:delete {:handler (revoke-invitation-handler db)}}]
-   ["/transfer-ownership" {:post {:handler (transfer-ownership-handler db)}}]])
+   ["/transfer-ownership" {:post {:handler (transfer-ownership-handler db)}}]
+   (impersonation-routes/routes db)])
 
 (comment
   ;; (require 'app.template.backend.routes.tenant :reload)

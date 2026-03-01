@@ -56,7 +56,7 @@
             ;; Tenant info for multi-tenant sessions
             (when current-tenant
               ($ :span {:class "text-xs text-gray-600"}
-                (str (:name current-tenant)))))
+                (str (or (:name current-tenant) (:tenants/name current-tenant))))))
 
           ;; Role badge
           (when current-user

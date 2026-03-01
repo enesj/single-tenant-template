@@ -310,7 +310,8 @@
    [:last_activity :timestamptz {:null false}]
    [:expires_at :timestamptz {:null false}]
    [:ip_address :text]
-   [:user_agent :text]],
+   [:user_agent :text]
+   [:impersonation_context :jsonb]],
   :indexes
   [[:idx_admin_sessions_token :btree {:fields [:token], :unique true}]
    [:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}]

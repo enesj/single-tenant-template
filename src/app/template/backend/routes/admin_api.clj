@@ -3,10 +3,12 @@
   (:require
     [app.template.backend.middleware.admin :as admin-middleware]
     [app.template.backend.routes.admin.admins :as admin-admins]
+    [app.template.backend.routes.admin.tenants :as admin-tenants]
     [app.template.backend.routes.admin.audit :as admin-audit]
     [app.template.backend.routes.admin.auth :as admin-auth]
     [app.template.backend.routes.admin.dashboard :as admin-dashboard]
     [app.template.backend.routes.admin.entities :as admin-entities]
+    [app.template.backend.routes.admin.impersonation :as admin-impersonation]
     [app.template.backend.routes.admin.login-events :as admin-login-events]
     [app.template.backend.routes.admin.password :as admin-password]
     [app.template.backend.routes.admin.settings :as admin-settings]
@@ -54,9 +56,15 @@
       ;; Protected password routes
       ["/auth" (admin-password/protected-routes db email-service base-url)]
 
+      ;; Impersonation management
+      (admin-impersonation/routes db)
+
       ;; Domain routes (from registry)
       ;; Each domain provides routes under its own path prefix (e.g., /expenses)
       (into [] (filter some? domain-routes))
+
+      ;; Tenant management (superpower CRUD)
+      (admin-tenants/routes db)
 
       ;; Admin management (owner operations)
       (admin-admins/routes db)

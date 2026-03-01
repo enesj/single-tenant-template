@@ -9,6 +9,9 @@
     [app.template.frontend.pages.about :refer [about-page]]
     [app.template.frontend.pages.entities :refer [entities-page]]
     [app.template.frontend.pages.home :refer [home-page]]
+    [app.template.frontend.pages.invitation-accept :refer [invitation-accept-page]]
+    [app.template.frontend.pages.tenant-members :refer [tenant-members-page]]
+    [app.template.frontend.pages.tenant-select :refer [tenant-select-page]]
     [app.template.frontend.pages.waiting-room :refer [waiting-room-page]]
     ;; Domain pages via aggregator (not registry - to avoid circular deps)
     [app.domain.frontend.pages :as domain-pages]
@@ -154,7 +157,9 @@
                                 :email-verified
                                 :forgot-password
                                 :reset-password
-                                :waiting-room}
+                                :waiting-room
+                                :tenant-select
+                                :invitation-accept}
                      view-key)
         page-el (if is-admin-route?
                   ;; For admin routes, render the view when it's a function; otherwise fallback by route-name
@@ -185,6 +190,9 @@
                       :change-password ($ change-password-page)
 
                       :waiting-room ($ waiting-room-page)
+                      :tenant-select ($ tenant-select-page)
+                      :tenant-members ($ tenant-members-page)
+                      :invitation-accept ($ invitation-accept-page)
                       ;; If no matching route, default to home page instead of showing 'not found'
                       ($ :div {:class "ds-container p-4"} ($ home-page)))))]
 

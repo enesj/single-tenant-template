@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :impersonation-context,
+  :model-name :admin_sessions,
+  :options {:type :jsonb}})
