@@ -94,7 +94,11 @@
          ;; Tenant selection, invitation acceptance & member management (SPA fallback)
          ["/tenant-select" {:get {:handler render-page}}]
          ["/tenant/members" {:get {:handler render-page}}]
+         ["/tenant/impersonation" {:get {:handler render-page}}]
          ["/invitation/accept" {:get {:handler render-page}}]
+
+         ;; Tenant-slug URL prefix — cosmetic only, session is source of truth
+         ["/t/:slug/*path" {:get {:handler render-page}}]
 
          ;; OAuth routes (only included when OAuth is enabled)
          ;; (Launch URIs like /login/google are handled directly by wrap-oauth2)

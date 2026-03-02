@@ -2,7 +2,7 @@
 
 > **Spec**: `specs/allium/template/multi-tenancy.candidate.allium`
 > **Approach**: shared-schema, tenant_id FK, middleware enforcement (no RLS)
-> **Status**: Phase 4 — Complete (1.3 slug routing deferred)
+> **Status**: Phase 5 — Complete (5a essential flow + 5b impersonation UI, admin tenants, slug display, role gating)
 
 ---
 
@@ -16,7 +16,7 @@
 | 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[x]` |
 | 3 | Access Control — role-based tier rules | 1, 2 | `[x]` |
 | 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[x]` |
-| 5 | Frontend — tenant switcher, slug routing, UI state | 1, 3 | `[ ]` |
+| 5 | Frontend — tenant switcher, member mgmt, UI state | 1, 3 | `[x]` |
 | 6 | Cleanup & Hardening — per-tenant rate limiting, delete price_observations | 3 | `[ ]` |
 
 ```
@@ -304,47 +304,80 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ---
 
-## Phase 5: Frontend — Tenant Switcher, Slug Routing, UI State
+## Phase 5: Frontend — Tenant Switcher, Member Management, UI State
 
-**Goal**: SPA supports multi-tenant navigation with slug URLs, tenant switcher, and role-aware UI.
+**Goal**: SPA supports multi-tenant navigation, tenant switcher, member management, and role-aware UI.
 **Allium refs**: Surfaces (TenantManagementBoundary, TenantMembersView, TenantSwitcher, PlatformTenantAdminView), hybrid routing rules.
 
 **Pre-wired**: App-db has `:session :tenant`. Auth status returns `:tenant`. Two Shadow-CLJS builds (`:app`, `:admin`).
 
-### Tasks
+### Phase 5a — Essential Multi-Tenant Flow (COMPLETE ✅)
 
-- [ ] **5.1** Backend SPA fallback for `/t/*`
-  - Add `/t/*` catch-all route → `render-page` in `routes.clj`
-  - Must come before the generic catch-all but after API routes
-- [ ] **5.2** Frontend router prefix handling
-  - reitit-frontend router: parse `/t/{slug}` prefix, pass slug as route parameter
-  - Strip prefix before matching inner routes (expenses, receipts, etc.)
-  - Update domain route descriptors in `expenses_user.cljc` for prefix awareness
-- [ ] **5.3** Tenant context in re-frame app-db
-  - Populate `:active-tenant` (id, name, slug), `:active-membership` (id, role) from auth status
-  - `:available-tenants` (list for switcher) — new field
-  - Load on app init / after login
-- [ ] **5.4** Tenant switcher component
-  - Dropdown/modal showing tenant name + role for each membership
-  - On select: POST to switch endpoint, update app-db, navigate to `/t/{new-slug}/...`
-  - Show when user has multiple tenants
-- [ ] **5.5** Member management UI (tenant admin/owner)
-  - Invite user form (email + role picker, no owner option)
-  - Members list with role badges
+- [x] **5.3** Tenant context in re-frame app-db
+  - Auth status stores `membership-role`, `tenant-selection-required`, `available-tenants`
+  - `:user-role` subscription reads membership role (not global user role)
+  - `:available-tenants`, `:tenant-selection-required?` subscriptions added
+  - Load on app init via `fetch-auth-status`
+- [x] **5.4** Tenant switcher component
+  - Sidebar footer dropdown showing tenant name + role for each membership
+  - On select: POST to `/api/v1/tenant/switch`, update app-db + session, reload page
+  - Shows swap icon when user has multiple tenants; hidden for single-tenant users
+- [x] **5.5** Member management UI (tenant admin/owner)
+  - Members page at `/tenant/members`: table with name, email, role, joined date
+  - Invite user form (email + role picker: viewer/member/admin)
+  - Revoke invitation with confirmation dialog
   - Change role / remove member / transfer ownership actions
-- [ ] **5.6** Impersonation management UI (tenant owner)
-  - List active impersonation grants
-  - Create grant form (select platform admin + role)
-  - Revoke grant action
-- [ ] **5.7** Role-aware UI gating
-  - Hide write actions from viewers
-  - Hide admin-only sections from member/viewer
-  - Hide geo sections from member/viewer
-- [ ] **5.8** Platform admin tenant view
-  - Tenant list with stats
-  - User/membership management across tenants
-  - Impersonation activation/deactivation
-- [ ] **5.9** Frontend tests (ClojureScript)
+  - Role badges (owner=primary, admin=secondary, member=accent, viewer=ghost)
+- [x] **5.10** Tenant selection page
+  - Full-page tenant selection at `/tenant-select` for users with multiple tenants
+  - Centered card layout with tenant cards + role badges + click-to-select
+  - Shown after OAuth/login when `tenant-selection-required: true`
+- [x] **5.11** Invitation accept page
+  - At `/invitation/accept?token=...` — accepts invitation, auto-switches to joined tenant
+- [x] **5.7** Role-aware UI gating (partial)
+  - Sidebar sections visible based on membership role (owner sees all, viewer sees minimal)
+  - Members page gated to admin/owner
+
+#### Bug fixes applied during 5a:
+- **Fix 8**: OAuth callback EDN serialization — wrapped `build-auth-session` in `sanitize-for-serialization`
+- **Fix 9**: Muuntaja conflict — replaced `json-response` with `response/response` in tenant routes
+- **Fix 10**: Namespaced keys — added `(or (:key x) (:ns/key x))` fallbacks in frontend
+- **Fix 11**: SQL JOIN alias keys — added `user_full_name`/`user_email` to member helpers
+- **Fix 12**: Auth component role badge — switched to `:user-role` subscription
+- **Fix 13**: `session-expired?` nil handling — return `false` when no `:expires-at`
+- **Fix 14**: Password hash leak — `dissoc` password hash keys in auth status
+- **Fix 15**: `java.time.Instant` in `tenant.clj` sanitize — caused 500 on tenant switch
+- **Fix 16**: Namespaced keys in session tenant map — `build-auth-session` now normalizes tenant via `normalize-tenant`; `get-tenant-id` fallbacks added to 3 call sites
+
+### Phase 5b — Impersonation UI, Admin Tenants, Slug Display, Role Gating (COMPLETE ✅)
+
+- [x] **5.1** Backend SPA fallback for `/t/*` (slug routing)
+  - Added `/t/:slug/*path` catch-all → `render-page` in `routes.clj`
+  - Added `/tenant/impersonation` SPA fallback
+- [x] **5.2** Frontend router prefix handling (slug routing)
+  - Lightweight slug display: `/t/{slug}/...` in URL bar for context, session stays source of truth
+  - `strip-slug-prefix` in `routes.cljs` strips prefix before reitit matches
+  - `tenant-href` helper in layout prepends slug to sidebar links
+  - `replaceState` updates URL bar after `push-state` for cosmetic slug display
+  - Slug set on auth status load + tenant switch success
+- [x] **5.6** Impersonation management UI (tenant owner)
+  - Events: `events/impersonation.cljs` — fetch/create/revoke grants + subs
+  - Page: `pages/impersonation_grants.cljs` — owner guard, grants table, create form, inline revoke confirm
+  - Wired: route `/tenant/impersonation`, page init event, sidebar link (owner only)
+- [x] **5.7** Role-aware UI gating (complete)
+  - Settings page: read-only banner + disabled inputs for non-writers
+  - Receipt approval: already gated by `:expenses/receipts.approve` capability
+  - Upload page: already gated by `:expenses/upload` capability
+  - Dashboard quick actions: already uses `can?` checks
+- [x] **5.8** Platform admin tenant view
+  - Events: `admin/frontend/events/tenants.cljs` — list/search/detail/members/role-change/remove
+  - Page: `admin/frontend/pages/tenants.cljs` — list view (search + status filter + table) + detail view (tenant info + members)
+  - Wired: admin route `/tenants`, admin sidebar link
+  - Write ops gated by admin `:owner` role in UI
+- [x] **5.9** Frontend tests (ClojureScript)
+  - `test/app/template/frontend/events/tenant_test.cljs` — 11 tests (switch, memberships, members, invite, role change, remove, slug, subscriptions)
+  - `test/app/template/frontend/events/impersonation_test.cljs` — 7 tests (fetch/create/revoke grants, clear messages)
+  - `test/app/admin/frontend/events/tenants_test.cljs` — 10 tests (fetch/search/detail/members, role change, remove)
 
 ### Dependencies
 - Phase 1 (session context + switching works)

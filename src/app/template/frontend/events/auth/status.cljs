@@ -72,6 +72,10 @@
                          ;; Set tenant information (new for multi-tenant)
                          (assoc-in [:session :tenant] tenant)
 
+                         ;; Set URL slug from tenant (for /t/{slug}/... display)
+                         (assoc-in [:tenant :url-slug]
+                           (or (:slug tenant) (:tenants/slug tenant)))
+
                          ;; Set user permissions (new for multi-tenant)
                          (assoc-in [:session :permissions] permissions*)
 

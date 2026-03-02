@@ -122,7 +122,12 @@
          :controllers [{:start (fn [match]
                                  (let [token (get-in match [:query-params :token])]
                                    (when token
-                                     (rf/dispatch [:app.template.frontend.events.tenant/accept-invitation-init token]))))}]}]]
+                                     (rf/dispatch [:app.template.frontend.events.tenant/accept-invitation-init token]))))}]}]
+
+       ["/tenant/impersonation"
+        {:name :tenant-impersonation
+         :view :tenant-impersonation
+         :controllers (controllers/user-guarded-start :page/init-tenant-impersonation)}]]
       ;; Domain user routes from registry (decoupled from template)
       (domain-registry/all-user-routes)
       (generate-entity-routes)

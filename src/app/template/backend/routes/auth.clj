@@ -197,9 +197,10 @@
       (cond
         ;; New session format (from our auth service)
         auth-session
-        (let [body (cond-> {:authenticated true
+        (let [safe-user (dissoc user :password_hash :password-hash :users/password_hash)
+              body (cond-> {:authenticated true
                             :session-valid (not (shared-date/session-expired? auth-session))
-                            :user user
+                            :user safe-user
                             :tenant (:tenant auth-session)
                             :permissions (shared-auth/get-user-permissions user)}
                      provider

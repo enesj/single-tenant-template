@@ -126,6 +126,15 @@
             [:dispatch [:app.template.frontend.events.tenant/fetch-invitations]]]})))
 
 (rf/reg-event-fx
+  :page/init-tenant-impersonation
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (if (unassigned? db)
+      (redirect-to-waiting-room db)
+      {:db (assoc-in db (paths/current-page) :tenant-impersonation)
+       :fx [[:dispatch [:app.template.frontend.events.impersonation/fetch-grants]]]})))
+
+(rf/reg-event-fx
   :page/init-expenses-dashboard
   common-interceptors
   (fn [{:keys [db]} _]

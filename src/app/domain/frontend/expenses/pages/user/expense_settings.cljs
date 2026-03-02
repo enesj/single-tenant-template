@@ -118,6 +118,13 @@
                          :on-click handle-save}
                 "Save Changes")))))
 
+      ;; Read-only banner for viewers
+      (when-not can-write?
+        ($ :div {:class "max-w-4xl mx-auto px-4 pt-4"
+                 :id "settings-read-only-banner"}
+          ($ :div {:class "ds-alert ds-alert-info"}
+            ($ :span "You are viewing settings in read-only mode. Only members, admins, and owners can modify settings."))))
+
       ;; Content
       ($ :main {:class "max-w-4xl mx-auto px-4 py-6 space-y-6"}
         (if loading?
@@ -135,6 +142,7 @@
                   ($ :select {:id "settings-currency-select"
                               :class "ds-select ds-select-sm ds-select-bordered"
                               :value default-currency
+                              :disabled (not can-write?)
                               :on-change #(set-default-currency! (.. % -target -value))}
                     ($ :option {:value "BAM"} "BAM - Convertible Mark")
                     ($ :option {:value "EUR"} "EUR - Euro")
@@ -145,6 +153,7 @@
                   ($ :select {:id "settings-payer-select"
                               :class "ds-select ds-select-sm ds-select-bordered"
                               :value (or default-payer "")
+                              :disabled (not can-write?)
                               :on-change #(let [v (.. % -target -value)]
                                             (set-default-payer! (when (seq v) v)))}
                     ($ :option {:value ""} "None")
@@ -161,6 +170,7 @@
                            :type "checkbox"
                            :class "ds-toggle ds-toggle-primary"
                            :checked notifications
+                           :disabled (not can-write?)
                            :on-change #(set-notifications! (.. % -target -checked))})))
 
              ;; Receipts
@@ -172,6 +182,7 @@
                            :type "checkbox"
                            :class "ds-toggle ds-toggle-primary"
                            :checked auto-post-after-upload-enabled
+                           :disabled (not can-write?)
                            :on-change #(set-auto-post-after-upload-enabled! (.. % -target -checked))}))
               ($ setting-row {:label "AI receipt refinement"
                               :description "Improve receipt extraction accuracy (may take a bit longer)."}
@@ -179,6 +190,7 @@
                            :type "checkbox"
                            :class "ds-toggle ds-toggle-primary"
                            :checked receipt-refine-enabled
+                           :disabled (not can-write?)
                            :on-change #(set-receipt-refine-enabled! (.. % -target -checked))})))
 
             ;; Account Info

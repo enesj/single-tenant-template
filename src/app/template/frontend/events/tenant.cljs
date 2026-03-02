@@ -47,6 +47,11 @@
   (fn [db _]
     (get-in db [:tenant :accept-token])))
 
+(rf/reg-sub
+  :tenant/url-slug
+  (fn [db _]
+    (get-in db [:tenant :url-slug])))
+
 ;; ============================================================================
 ;; Switch Tenant
 ;; ============================================================================
@@ -69,17 +74,19 @@
   ::switch-tenant-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [tenant (:tenant response)]
+    (let [tenant (:tenant response)
+          slug (or (:slug tenant) (:tenants/slug tenant))]
       (log/info "Switched to tenant:" (:name tenant))
       {:db (-> db
              (assoc-in [:tenant :loading?] false)
+             (assoc-in [:tenant :url-slug] slug)
              (assoc-in [:session :tenant] tenant)
              (assoc-in [:session :tenant-selection-required] nil)
              (assoc-in [:session :available-tenants] nil))
        :fx [;; Re-fetch auth status to get updated membership-role and permissions
             [:dispatch [auth-ids/fetch-auth-status]]
-            ;; Navigate to dashboard (handles both tenant-select page and sidebar switch)
-            [:dispatch [:navigate-to "/dashboard"]]]})))
+            ;; Navigate to dashboard with slug prefix
+            [:dispatch [:navigate-to (if slug (str "/t/" slug "/dashboard") "/dashboard")]]]})))
 
 (rf/reg-event-db
   ::switch-tenant-failure
@@ -404,6 +411,16 @@
         (or (get-in response [:response :errors :token 0])
           (get-in response [:response :message])
           "Failed to accept invitation")))))
+
+;; ============================================================================
+;; URL Slug
+;; ============================================================================
+
+(rf/reg-event-db
+  :tenant/set-url-slug
+  common-interceptors
+  (fn [db [slug]]
+    (assoc-in db [:tenant :url-slug] slug)))
 
 ;; ============================================================================
 ;; Clear messages

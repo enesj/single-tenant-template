@@ -14,6 +14,18 @@
 
 (def routes routes-data/app-routes)
 
+;; ============================================================================
+;; Slug prefix helpers — /t/{slug}/... is cosmetic, session is source of truth
+;; ============================================================================
+
+(def ^:private slug-prefix-re #"^/t/([^/]+)(/.*)$")
+
+(defn strip-slug-prefix
+  "If path starts with /t/{slug}/, return [slug inner-path]. Otherwise nil."
+  [path]
+  (when-let [m (re-matches slug-prefix-re path)]
+    [(nth m 1) (nth m 2)]))
+
 (defn- prefer-literal-route-conflicts
   "Resolve reitit path conflicts by preferring literal segments over parameterised ones.
   This lets routes like /expenses/new win over /expenses/:id without blowing up the router."
@@ -94,6 +106,16 @@
 (defn init-routes! []
   ;; Register the router with the utility namespace so routing events can match paths
   (router-util/set-router! router)
+
+  ;; Detect /t/{slug}/... prefix on initial load. Strip it before the router sees
+  ;; the path, and store the slug in app-db for link generation.
+  (when-let [[slug inner-path] (strip-slug-prefix (.-pathname js/window.location))]
+    (let [search (.-search js/window.location)]
+      (log/info "Slug prefix detected, stripping" {:slug slug :inner-path inner-path})
+      ;; Store slug for link generation
+      (rf/dispatch-sync [:tenant/set-url-slug slug])
+      ;; Replace URL so reitit sees the real path, preserving query string
+      (.replaceState js/history nil "" (str inner-path search))))
 
   (rtfe/start!
     router

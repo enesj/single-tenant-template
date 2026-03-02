@@ -73,7 +73,8 @@
                (log/debug "Session expiration check - current:" (time/local-date-time) "expires:" expires-time "expired?" (time/after? (time/local-date-time) expires-time))
                (time/after? (time/local-date-time) expires-time))
              true))
-         true))))
+         ;; No expires-at set — session has no expiration, treat as valid
+         false))))
 
 ;; ClojureScript-specific utilities
 #?(:cljs

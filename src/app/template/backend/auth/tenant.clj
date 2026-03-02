@@ -36,6 +36,19 @@
       {:tenants memberships
        :action  :selection-required})))
 
+(defn- normalize-tenant
+  "Normalize a tenant map from next.jdbc namespaced keys to plain keys.
+   Ensures downstream code can always read :id, :name, etc. without
+   needing (or (:id t) (:tenants/id t)) fallbacks everywhere."
+  [t]
+  (when t
+    {:id         (or (:id t) (:tenants/id t))
+     :name       (or (:name t) (:tenants/name t))
+     :slug       (or (:slug t) (:tenants/slug t))
+     :status     (or (:status t) (:tenants/status t))
+     :created_at (or (:created_at t) (:tenants/created_at t))
+     :updated_at (or (:updated_at t) (:tenants/updated_at t))}))
+
 (defn build-auth-session
   "Merge tenant context into the auth-session map returned to Ring.
 
@@ -45,7 +58,7 @@
   (case (:action tenant-ctx)
     :provisioned
     (assoc base-session
-      :tenant     (:tenant tenant-ctx)
+      :tenant     (normalize-tenant (:tenant tenant-ctx))
       :membership {:id   (or (get-in tenant-ctx [:membership :id])
                            (get-in tenant-ctx [:membership :tenant_memberships/id]))
                    :role (or (get-in tenant-ctx [:membership :role])
@@ -53,7 +66,7 @@
 
     :auto-set
     (assoc base-session
-      :tenant     (:tenant tenant-ctx)
+      :tenant     (normalize-tenant (:tenant tenant-ctx))
       :membership {:id   (or (get-in tenant-ctx [:membership :id])
                            (get-in tenant-ctx [:membership :tenant_memberships/id]))
                    :role (or (get-in tenant-ctx [:membership :role])

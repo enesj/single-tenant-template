@@ -65,6 +65,7 @@
           uri (:uri request)
           is-admin? (some? (:admin request))
           tenant-id (or (get-in request [:session :auth-session :tenant :id])
+                      (get-in request [:session :auth-session :tenant :tenants/id])
                       (get-in request [:session :tenant :id])
                       (get-in request [:session :tenant-id]))
           user-id (or (get-in request [:session :auth-session :user :id])

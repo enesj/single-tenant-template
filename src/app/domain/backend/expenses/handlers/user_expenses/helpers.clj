@@ -115,9 +115,12 @@
 (defn get-tenant-id
   "Extract tenant-id from request session and normalize to UUID.
    Mirrors `get-user-id` but reads from the tenant context populated by
-   Phase 1 auth middleware."
+   Phase 1 auth middleware.
+   Handles both unqualified (:id) and namespaced (:tenants/id) keys
+   since next.jdbc returns qualified keys from queries."
   [request]
   (let [raw-id (or (get-in request [:session :auth-session :tenant :id])
+                 (get-in request [:session :auth-session :tenant :tenants/id])
                  (get-in request [:session :tenant-id]))]
     (cond
       (instance? UUID raw-id) raw-id

@@ -17,7 +17,7 @@
     "ds-badge-ghost"))
 
 (defui tenant-card [{:keys [tenant on-select loading?]}]
-  (let [tenant-name (or (:name tenant) (:tenants/name tenant) "Unnamed")
+  (let [tenant-name (or (:tenant-name tenant) (:name tenant) (:tenants/name tenant) "Unnamed")
         role (or (:role tenant) (:tenant_memberships/role tenant) "member")
         tenant-id (or (:tenant-id tenant) (:tenant_id tenant)
                     (:tenants/id tenant) (:id tenant))]

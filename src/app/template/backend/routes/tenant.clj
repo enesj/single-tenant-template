@@ -24,10 +24,16 @@
     (fn [x]
       (cond
         (instance? java.util.UUID x) (str x)
+        (instance? java.time.Instant x) (str x)
         (instance? java.time.LocalDateTime x) (str x)
         (instance? java.time.OffsetDateTime x) (str x)
+        (instance? java.time.ZonedDateTime x) (str x)
+        (instance? java.time.LocalDate x) (str x)
+        (instance? java.time.LocalTime x) (str x)
         (instance? java.sql.Timestamp x) (str x)
+        (instance? java.sql.Date x) (str x)
         (instance? java.math.BigDecimal x) (str x)
+        (instance? java.math.BigInteger x) (str x)
         :else x))
     obj))
 

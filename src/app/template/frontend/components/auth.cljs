@@ -13,6 +13,7 @@
   (let [auth-status (use-subscribe [:auth-status])
         current-user (use-subscribe [:current-user])
         current-tenant (use-subscribe [:current-tenant])
+        user-role (use-subscribe [:user-role])
         is-owner? (use-subscribe [:is-tenant-owner?])]
 
     (if (and auth-status (:authenticated auth-status))
@@ -58,11 +59,11 @@
               ($ :span {:class "text-xs text-gray-600"}
                 (str (or (:name current-tenant) (:tenants/name current-tenant))))))
 
-          ;; Role badge
-          (when current-user
+          ;; Role badge — use membership role (not global user role)
+          (when user-role
             ($ :span {:class (str "ds-badge ds-badge-sm "
                                (if is-owner? "ds-badge-primary" "ds-badge-secondary"))}
-              (str (name (:role current-user)))))))
+              (str (if (keyword? user-role) (name user-role) user-role))))))
 
       ;; User is not authenticated
       ($ :div {:class "flex items-center space-x-2"}

@@ -94,6 +94,7 @@
                      :admin admin
                      :is-admin? true}
                     {:tenant-id (or (get-in request [:session :auth-session :tenant :id])
+                                  (get-in request [:session :auth-session :tenant :tenants/id])
                                   (get-in request [:session :tenant-id]))
                      :user-id (or (get-in request [:session :auth-session :user :id])
                                 (get-in request [:session :user :id]))

@@ -23,6 +23,7 @@
     [app.admin.frontend.pages.domain.expenses.subcategories :as subcategories]
     [app.admin.frontend.pages.domain.expenses.supplier-aliases :as supplier-aliases]
     [app.admin.frontend.pages.domain.expenses.suppliers :as suppliers]
+    [app.admin.frontend.pages.tenants :as tenants]
     [app.admin.frontend.pages.unified-settings.page :as unified-settings-page]
     [app.admin.frontend.pages.domain.expenses.unmapped-aliases :as unmapped-aliases]
     [app.admin.frontend.pages.users :as users]
@@ -168,6 +169,12 @@
            :view login-events/admin-login-events-page
            :controllers [{:start (fn [params]
                                    ((:start (guarded-start [[:admin/load-login-events]])) params))}]}]
+
+         ;; Tenants (platform admin management)
+         ["/tenants"
+          {:name :admin-tenants
+           :view tenants/admin-tenants-page
+           :controllers [(guarded-start [:app.admin.frontend.events.tenants/fetch-tenants])]}]
 
          ;; Admin Management (owner only)
          ["/admins"
