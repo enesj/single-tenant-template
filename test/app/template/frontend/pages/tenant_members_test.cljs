@@ -60,11 +60,18 @@
           protected-owner-state (tenant-members-page/member-row-action-state "admin" false owner-target)]
       (is (= true (:show-edit? manageable-state)))
       (is (= true (:show-delete? manageable-state)))
+      (is (= false (:edit-disabled? manageable-state)))
+      (is (= false (:delete-disabled? manageable-state)))
       (is (= true (:can-transfer? manageable-state)))
+
       (is (= false (:show-edit? hidden-state)))
       (is (= false (:show-delete? hidden-state)))
-      (is (= false (:show-edit? protected-owner-state)))
-      (is (= false (:show-delete? protected-owner-state))))))
+
+      (is (= true (:show-edit? protected-owner-state)))
+      (is (= true (:show-delete? protected-owner-state)))
+      (is (= true (:edit-disabled? protected-owner-state)))
+      (is (= true (:delete-disabled? protected-owner-state)))
+      (is (= false (:can-transfer? protected-owner-state))))))
 
 (deftest tenant-member-list-props-use-canonical-list-view-contract
   (testing "tenant members page passes canonical list-view props with modal edit/delete controls and member rows as overrides"

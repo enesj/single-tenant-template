@@ -86,13 +86,39 @@
 
 (defn member-row-action-state
   [current-role is-owner? member]
-  (let [{:keys [can-change-role? can-remove? can-transfer?] :as capabilities}
-        (member-management-capabilities current-role is-owner? member)]
+  (let [{:keys [role can-change-role? can-remove? can-transfer?] :as capabilities}
+        (member-management-capabilities current-role is-owner? member)
+        policy-show-edit? (not (false? (:show-edit? member)))
+        policy-show-delete? (not (false? (:show-delete? member)))
+        edit-disabled? (or (true? (:edit-disabled? member)) (not can-change-role?))
+        delete-disabled? (or (true? (:delete-disabled? member)) (not can-remove?))
+        edit-disabled-reason (when (and policy-show-edit? edit-disabled?)
+                               (cond
+                                 (true? (:edit-disabled? member))
+                                 "Editing disabled"
+
+                                 (= role "owner")
+                                 "Owner role cannot be changed"
+
+                                 :else
+                                 "You don't have permission to edit this member"))
+        delete-disabled-reason (when (and policy-show-delete? delete-disabled?)
+                                 (cond
+                                   (true? (:delete-disabled? member))
+                                   "Deletion disabled"
+
+                                   (= role "owner")
+                                   "Owner cannot be removed"
+
+                                   :else
+                                   "You don't have permission to remove this member"))]
     (assoc capabilities
-      :show-edit? (and can-change-role? (not (false? (:show-edit? member))))
-      :show-delete? (and can-remove? (not (false? (:show-delete? member))))
-      :edit-disabled? (true? (:edit-disabled? member))
-      :delete-disabled? (true? (:delete-disabled? member))
+      :show-edit? policy-show-edit?
+      :show-delete? policy-show-delete?
+      :edit-disabled? edit-disabled?
+      :delete-disabled? delete-disabled?
+      :edit-disabled-reason edit-disabled-reason
+      :delete-disabled-reason delete-disabled-reason
       :can-transfer? can-transfer?)))
 
 (defui member-transfer-action
@@ -172,7 +198,13 @@
   [current-role is-owner? member]
   (let [mid (member-id member)
         mid-str (some-> mid str)
-        {:keys [show-edit? show-delete? edit-disabled? delete-disabled? can-transfer?]}
+        {:keys [show-edit?
+                show-delete?
+                edit-disabled?
+                delete-disabled?
+                edit-disabled-reason
+                delete-disabled-reason
+                can-transfer?]}
         (member-row-action-state current-role is-owner? member)
         on-edit-click (:on-edit-click member)
         item-data (dissoc member
@@ -188,17 +220,20 @@
            :btn-type :primary
            :shape "circle"
            :disabled edit-disabled?
+           :title (or edit-disabled-reason "Edit member")
            :on-click (fn [e]
                        (.stopPropagation e)
                        (when (and (not edit-disabled?) on-edit-click)
                          (on-edit-click item-data)))}
           ($ edit-icon)))
+
       (when show-delete?
         ($ button
           {:id (str "btn-delete-tenant-members-" mid-str)
            :btn-type :danger
            :shape "circle"
            :disabled delete-disabled?
+           :title (or delete-disabled-reason "Remove member")
            :on-click (fn [e]
                        (.stopPropagation e)
                        (when-not delete-disabled?
@@ -208,6 +243,7 @@
                             :confirm-text "Remove"
                             :on-confirm #(rf/dispatch [::tenant/remove-member {:member-id mid}])})))}
           ($ delete-icon)))
+
       ($ member-transfer-action
         {:member member
          :can-transfer? can-transfer?}))))
