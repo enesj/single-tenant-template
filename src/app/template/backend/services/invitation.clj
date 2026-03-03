@@ -191,6 +191,38 @@
                             [:= :id inv-id]
                             [:= :status [:cast "pending" :invitation_status]]]}))))
 
+(defn find-invitation-by-id
+  "Lookup an invitation by its UUID."
+  [db invitation-id]
+  (let [inv-id (if (string? invitation-id) (java.util.UUID/fromString invitation-id) invitation-id)]
+    (convert-pg-objects
+      (jdbc/execute-one! db
+        (sql/format {:select [:*]
+                     :from   [:tenant_invitations]
+                     :where  [:= :id inv-id]})
+        {:builder-fn rs/as-unqualified-maps}))))
+
+(defn resend-invitation!
+  "Refresh the expiry of a pending invitation and return it (so the caller can re-send the email).
+   Throws if the invitation is not pending."
+  [db invitation-id]
+  (let [inv (find-invitation-by-id db invitation-id)]
+    (when-not inv
+      (throw (ex-info "Invitation not found" {:type :entity-not-found})))
+    (when (not= "pending" (:status inv))
+      (throw (ex-info "Only pending invitations can be resent"
+               {:type :validation-error
+                :errors {:status ["This invitation is no longer pending"]}})))
+    (let [now (java.time.LocalDateTime/now)
+          new-expires (time/plus (time/local-date-time) (time/days 7))]
+      (jdbc/execute-one! db
+        (sql/format {:update [:tenant_invitations]
+                     :set    {:expires_at new-expires
+                              :updated_at now}
+                     :where  [:= :id (:id inv)]}))
+      ;; Return the invitation with the refreshed expiry
+      (assoc inv :expires_at new-expires :updated_at now))))
+
 (defn list-pending-invitations
   "List all pending invitations for a tenant."
   [db tenant-id]

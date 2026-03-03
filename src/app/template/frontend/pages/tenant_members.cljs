@@ -299,10 +299,15 @@
             ($ button {:btn-type :ghost :class "ds-btn-xs"
                        :on-click #(set-confirming! false)}
               "Cancel"))
-          ($ button {:btn-type :ghost :class "ds-btn-xs text-error"
-                     :id (str "revoke-btn-" inv-id)
-                     :on-click #(set-confirming! true)}
-            "Revoke"))))))
+          ($ :div {:class "flex gap-2"}
+            ($ button {:btn-type :ghost :class "ds-btn-xs text-info"
+                       :id (str "resend-btn-" inv-id)
+                       :on-click #(rf/dispatch [::tenant/resend-invitation {:id inv-id}])}
+              "Resend")
+            ($ button {:btn-type :ghost :class "ds-btn-xs text-error"
+                       :id (str "revoke-btn-" inv-id)
+                       :on-click #(set-confirming! true)}
+              "Revoke")))))))
 
 ;; ============================================================================
 ;; Invite Form Component

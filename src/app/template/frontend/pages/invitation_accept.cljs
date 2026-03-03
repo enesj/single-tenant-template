@@ -15,9 +15,9 @@
         token (use-subscribe [:tenant/accept-token])
         tenant-loading? (use-subscribe [:tenant/loading?])
         ;; Extract token from URL if not yet stored
-        url-token (some-> js/window.location.search
-                    (js/URLSearchParams.)
-                    (.get "token"))]
+        url-token (some-> (re-find #"[?&]token=([^&]*)" js/window.location.search)
+                    second
+                    js/decodeURIComponent)]
 
     ;; Store token from URL on mount
     (use-effect

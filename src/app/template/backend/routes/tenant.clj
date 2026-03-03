@@ -11,7 +11,9 @@
     [app.template.backend.services.tenant :as tenant-svc]
     [clojure.walk :as walk]
     [ring.util.response :as response]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import
+    [java.net URLEncoder]))
 
 ;; ============================================================================
 ;; Helpers
@@ -36,6 +38,9 @@
         (instance? java.math.BigInteger x) (str x)
         :else x))
     obj))
+
+(defn- build-accept-url [base-url token]
+  (str base-url "/invitation/accept?token=" (URLEncoder/encode token "UTF-8")))
 
 (defn- get-user [req]
   (or (get-in req [:session :auth-session :user])
@@ -129,7 +134,7 @@
         (when email-service
           (try
             (let [token      (or (:token invitation) (:tenant_invitations/token invitation))
-                  accept-url (str base-url "/invitation/accept?token=" token)]
+                  accept-url (build-accept-url base-url token)]
               (invitation-email/send-invitation-email!
                 email-service
                 {:to-email     email
@@ -185,6 +190,37 @@
                                     :tenant (sanitize tenant)
                                     :membership (sanitize membership)})
               (assoc :session (assoc existing :auth-session auth-session)))))))))
+
+(defn- resend-invitation-handler
+  "POST /tenant/invitations/:id/resend — resend a pending invitation email."
+  [db email-service base-url]
+  (fn [req]
+    (route-utils/with-error-handling "tenant-invitation-resend"
+      (let [user      (get-user req)
+            tenant    (get-tenant req)
+            _         (when-not tenant
+                        (throw (ex-info "No active tenant" {:type :validation-error
+                                                            :errors {:tenant ["No active tenant in session"]}})))
+            tenant-id (or (:id tenant) (:tenants/id tenant))
+            actor-m   (tenant-svc/get-membership db tenant-id (:id user))
+            _         (require-role! actor-m ["owner" "admin"])
+            inv-id    (get-in req [:path-params :id])
+            invitation (invitation-svc/resend-invitation! db inv-id)]
+        ;; Re-send the email
+        (when email-service
+          (try
+            (let [token      (:token invitation)
+                  accept-url (build-accept-url base-url token)]
+              (invitation-email/send-invitation-email!
+                email-service
+                {:to-email     (:email invitation)
+                 :inviter-name (or (:full_name user) (:email user))
+                 :tenant-name  (or (:name tenant) (:tenants/name tenant))
+                 :accept-url   accept-url
+                 :role         (:role invitation)}))
+            (catch Exception e
+              (log/warn "Failed to resend invitation email:" (.getMessage e)))))
+        (response/response {:success true :invitation (sanitize invitation)})))))
 
 (defn- revoke-invitation-handler
   "DELETE /tenant/invitations/:id — revoke a pending invitation."
@@ -295,6 +331,7 @@
                           :post {:handler (create-invitation-handler db email-service base-url)}}]
    ["/invitations/accept" {:post {:handler (accept-invitation-handler db)}}]
    ["/invitations/:id"    {:delete {:handler (revoke-invitation-handler db)}}]
+   ["/invitations/:id/resend" {:post {:handler (resend-invitation-handler db email-service base-url)}}]
    ["/transfer-ownership" {:post {:handler (transfer-ownership-handler db)}}]
    (impersonation-routes/routes db)])
 

@@ -270,6 +270,40 @@
     (assoc-in db [:tenant :error] "Failed to revoke invitation")))
 
 ;; ============================================================================
+;; Resend Invitation
+;; ============================================================================
+
+(rf/reg-event-fx
+  ::resend-invitation
+  common-interceptors
+  (fn [{:keys [db]} [{:keys [id]}]]
+    {:db (-> db
+           (assoc-in [:tenant :error] nil)
+           (assoc-in [:tenant :success-message] nil))
+     :http-xhrio (http/api-request
+                   {:method :post
+                    :uri (str "/api/v1/tenant/invitations/" id "/resend")
+                    :params {}
+                    :on-success [::resend-invitation-success]
+                    :on-failure [::resend-invitation-failure]})}))
+
+(rf/reg-event-fx
+  ::resend-invitation-success
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db [:tenant :success-message] "Invitation resent successfully")
+     :fx [[:dispatch [::fetch-invitations]]]}))
+
+(rf/reg-event-db
+  ::resend-invitation-failure
+  common-interceptors
+  (fn [db [response]]
+    (log/error "Failed to resend invitation:" response)
+    (assoc-in db [:tenant :error]
+              (or (get-in response [:response :message])
+                "Failed to resend invitation"))))
+
+;; ============================================================================
 ;; Change Member Role
 ;; ============================================================================
 
