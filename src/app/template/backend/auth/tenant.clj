@@ -4,6 +4,7 @@
    Encapsulates the 'check memberships → provision or set context' logic so
    that login/register/OAuth handlers stay lean."
   (:require
+    [app.template.backend.middleware.rate-limiting :as rate-limiting]
     [app.template.backend.services.tenant :as tenant-svc]
     [taoensso.timbre :as log]))
 
@@ -13,28 +14,36 @@
      1  → auto-select that tenant
      >1 → return the list so the frontend can ask the user to choose
 
-   Returns a map with :action plus relevant data."
-  [db config user]
-  (let [user-id     (or (:id user) (:users/id user))
-        memberships (tenant-svc/get-user-memberships db user-id)]
-    (case (count memberships)
-      0 (do
-          (log/info "No memberships for user" (or (:email user) (:users/email user)) "— provisioning tenant")
-          (let [{:keys [tenant membership]} (tenant-svc/provision-tenant! db config user)]
-            {:tenant     tenant
-             :membership membership
-             :action     :provisioned}))
+   Returns a map with :action plus relevant data.
+   Optional `opts` map supports `:client-ip` for provisioning rate limiting."
+  ([db config user] (resolve-tenant-context db config user {}))
+  ([db config user {:keys [client-ip]}]
+   (let [user-id     (or (:id user) (:users/id user))
+         memberships (tenant-svc/get-user-memberships db user-id)]
+     (case (count memberships)
+       0 (do
+           ;; Check provisioning rate limit before creating a new tenant
+           (when client-ip
+             (when-let [rate-limit-resp (rate-limiting/check-provisioning-rate-limit! client-ip)]
+               (throw (ex-info "Tenant provisioning rate limited"
+                        {:status 429
+                         :response rate-limit-resp}))))
+           (log/info "No memberships for user" (or (:email user) (:users/email user)) "— provisioning tenant")
+           (let [{:keys [tenant membership]} (tenant-svc/provision-tenant! db config user)]
+             {:tenant     tenant
+              :membership membership
+              :action     :provisioned}))
 
-      1 (let [m      (first memberships)
-              t-id   (or (:tenant_id m) (:tenant_memberships/tenant_id m))
-              tenant (tenant-svc/find-tenant-by-id db t-id)]
-          {:tenant     tenant
-           :membership m
-           :action     :auto-set})
+       1 (let [m      (first memberships)
+               t-id   (or (:tenant_id m) (:tenant_memberships/tenant_id m))
+               tenant (tenant-svc/find-tenant-by-id db t-id)]
+           {:tenant     tenant
+            :membership m
+            :action     :auto-set})
 
       ;; >1
-      {:tenants memberships
-       :action  :selection-required})))
+       {:tenants memberships
+        :action  :selection-required}))))
 
 (defn- normalize-tenant
   "Normalize a tenant map from next.jdbc namespaced keys to plain keys.

@@ -2,7 +2,7 @@
   "Entity configuration maps for expenses services."
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
-    [app.domain.backend.expenses.services.price-history :as price-history]
+
     [app.domain.backend.expenses.services.service-configs.normalization :as normalize]
     [clojure.string :as str])
   (:import
@@ -73,30 +73,6 @@
    :field-transformers {:raw_label_normalized normalize/normalize-store-key}
    :has-search? true
    :has-count? true})
-
-(def price-observation-config
-  {:table-name "price_observations"
-   :table-alias :po
-   :primary-key :po/id
-   :required-fields [:article_id :supplier_id :observed_at :qty :unit_price]
-   :allowed-order-by {:article-canonical-name :a/canonical_name
-                      :supplier-display-name :s/display_name
-                      :observed-at :po/observed_at
-                      :created-at :po/created_at
-                      :unit-price :po/unit_price
-                      :line-total :po/line_total
-                      :qty :po/qty
-                      :currency :po/currency}
-   :default-order-by :po/observed_at
-   :search-fields [:a/canonical_name :s/display_name]
-   :joins [[:articles :a] [:= :a/id :po/article_id]
-           [:suppliers :s] [:= :s/id :po/supplier_id]]
-   :select-fields [[:po.*]
-                   [:a/canonical_name :article_canonical_name]
-                   [:s/display_name :supplier_display_name]]
-   :has-count? true
-   :custom-create-fn (fn [db data]
-                       (price-history/record-observation! db data))})
 
 (def supplier-config
   {:table-name "suppliers"
@@ -461,29 +437,6 @@
                       (update :status #(vector :cast % :receipt_status))))
    :has-count? true
    :custom-service? true})
-
-(def price-history-config
-  {:table-name "price_observations"
-   :table-alias :po
-   :primary-key :id
-   :required-fields [:article_id :supplier_id :observed_at :line_total]
-   :allowed-order-by {:observed-at :observed_at
-                      :created-at :created_at
-                      :unit-price :unit_price
-                      :line-total :line_total}
-   :default-order-by :observed_at
-   :search-fields [:a/canonical_name :s/display_name]
-   :joins [[:articles :a] [:= :a/id :po/article_id]
-           [:suppliers :s] [:= :s/id :po/supplier_id]]
-   :select-fields [[:po.*]
-                   [:a/canonical_name :article_canonical_name]
-                   [:s/display_name :supplier_display_name]]
-   :before-insert (fn [data]
-                    (-> data
-                      (assoc :id (UUID/randomUUID))
-                      (update :currency #(when % [:cast % :currency]))
-                      (update :observed_at #(or % [:now]))))
-   :has-count? true})
 
 (def report-config
   {:table-name "reports"

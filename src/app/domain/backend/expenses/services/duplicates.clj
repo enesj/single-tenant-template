@@ -27,14 +27,12 @@
                    :fk-tables {:expenses {:col :supplier_id}
                                :stores {:col :supplier_id}
                                :supplier_aliases {:col :supplier_id}
-                               :article_aliases {:col :supplier_id}
-                               :price_observations {:col :supplier_id}}}
+                               :article_aliases {:col :supplier_id}}}
    :articles      {:table "articles"
                    :name-col :canonical_name
                    :key-col :normalized_key
                    :fk-tables {:expense_items {:col :article_id}
-                               :article_aliases {:col :article_id}
-                               :price_observations {:col :article_id}}}
+                               :article_aliases {:col :article_id}}}
    :stores        {:table "stores"
                    :name-col :display_name
                    :key-col :normalized_key

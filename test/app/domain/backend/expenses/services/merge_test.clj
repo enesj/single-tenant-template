@@ -44,15 +44,13 @@
                                             (str/includes? sql-str "stores") {:cnt 1}
                                             (str/includes? sql-str "supplier_aliases") {:cnt 2}
                                             (str/includes? sql-str "article_aliases") {:cnt 0}
-                                            (str/includes? sql-str "price_observations") {:cnt 5}
                                             :else {:cnt 0})))]
         (let [preview (merge/merge-preview :db :suppliers primary-id [secondary-id])]
           (is (map? preview))
           (is (= 3 (:expenses preview)))
           (is (= 1 (:stores preview)))
           (is (= 2 (:supplier_aliases preview)))
-          (is (= 0 (:article_aliases preview)))
-          (is (= 5 (:price_observations preview))))))))
+          (is (= 0 (:article_aliases preview))))))))
 
 ;; ============================================================================
 ;; Merge Execution (mocked)

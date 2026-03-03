@@ -3,18 +3,21 @@
   (:require
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [app.template.backend.services.postmark-email :as postmark-email]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 (defn create-base-url
-  "Create base URL from webserver configuration.
-   Requires :webserver :host and :webserver :port to be present in config."
+  "Create base URL from configuration.
+   Prefers explicit `:base-url`, otherwise builds from `:webserver` host/port."
   [config]
-  (let [host (or (get-in config [:webserver :host])
-               (throw (ex-info "webserver :host is required in config" {:config-key [:webserver :host]})))
-        port (or (get-in config [:webserver :port])
-               (throw (ex-info "webserver :port is required in config" {:config-key [:webserver :port]})))
-        protocol (if (or (= port 443) (contains? config :https)) "https" "http")]
-    (str protocol "://" host ":" port)))
+  (if-let [base-url (some-> (:base-url config) str str/trim not-empty)]
+    base-url
+    (let [host (or (get-in config [:webserver :host])
+                 (throw (ex-info "webserver :host is required in config" {:config-key [:webserver :host]})))
+          port (or (get-in config [:webserver :port])
+                 (throw (ex-info "webserver :port is required in config" {:config-key [:webserver :port]})))
+          protocol (if (or (= port 443) (contains? config :https)) "https" "http")]
+      (str protocol "://" host ":" port))))
 
 ;; Email service supports both Postmark API and Gmail SMTP - configurable via :type
 

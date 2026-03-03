@@ -3,7 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
-    [app.domain.backend.expenses.services.price-history :as price-history]
+
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -345,6 +345,24 @@
                :offset offset}]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
+(defn- lookup-tenant-id
+  [db table-name entity-id]
+  (when entity-id
+    (some-> (jdbc/execute-one!
+              db
+              (sql/format {:select [:tenant_id]
+                           :from [table-name]
+                           :where [:= :id entity-id]
+                           :limit 1})
+              {:builder-fn rs/as-unqualified-lower-maps})
+      :tenant_id)))
+
+(defn- infer-expense-tenant-id
+  [db {:keys [tenant_id receipt_id payer_id]}]
+  (or tenant_id
+    (lookup-tenant-id db :receipts receipt_id)
+    (lookup-tenant-id db :payers payer_id)))
+
 (defn create-expense!
   "Create an expense and its line items.
 
@@ -355,7 +373,8 @@
   Behavior:
   - Stores each line item's raw label via `article_aliases` when the label is valid.
   - Skips alias creation for blank/short/punctuation-only labels.
-  - Records a price observation for each inserted item whose alias is mapped to an article."
+  - Falls back to inferring `:tenant_id` from the linked receipt or payer when
+    older callers omit it."
   ([db {:keys [items] :as body}]
    (create-expense! db (dissoc body :items) items))
   ([db expense-data items]
@@ -376,6 +395,9 @@
                                               {:builder-fn rs/as-unqualified-lower-maps})]
                                (assoc expense-data* :supplier_id (:supplier_id store))
                                expense-data*)
+                             expense-data*)
+             expense-data* (if-let [inferred-tenant-id (infer-expense-tenant-id tx expense-data*)]
+                             (assoc expense-data* :tenant_id inferred-tenant-id)
                              expense-data*)
              _ (require-keys! expense-data* [:supplier_id :payer_id :purchased_at :total_amount])
              expense-id (UUID/randomUUID)
@@ -427,18 +449,6 @@
                                            :values item-rows
                                            :returning [:*]})
                               {:builder-fn rs/as-unqualified-lower-maps})]
-
-         (doseq [[item resolved] (map vector inserted-items resolved-items)]
-           (let [article-id (:resolved_article_id resolved)]
-             (when (and (:supplier_id expense) article-id)
-               (price-history/record-observation!
-                 tx {:article_id article-id
-                     :supplier_id (:supplier_id expense)
-                     :expense_item_id (:id item)
-                     :unit_price (:unit_price item)
-                     :currency (:currency expense)
-                     :observed_at (:purchased_at expense)}))))
-
          (get-expense-with-items tx expense-id))))))
 
 (defn update-expense!
@@ -556,19 +566,7 @@
                                                    :values item-rows
                                                    :returning [:*]})
                                       {:builder-fn rs/as-unqualified-lower-maps})
-                                    [])]
-
-              ;; Record price observations for newly inserted items with an article.
-               (doseq [[item resolved] (map vector inserted-items resolved-inserts)]
-                 (let [article-id (:resolved_article_id resolved)]
-                   (when (and (:supplier_id expense) article-id)
-                     (price-history/record-observation!
-                       tx {:article_id article-id
-                           :supplier_id (:supplier_id expense)
-                           :expense_item_id (:id item)
-                           :unit_price (:unit_price item)
-                           :currency (:currency expense)
-                           :observed_at (:purchased_at expense)})))))))
+                                    [])])))
 
          (get-expense-with-items tx id*))))))
 

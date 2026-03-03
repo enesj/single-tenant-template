@@ -95,7 +95,8 @@
                    :tenant {:id "t1" :name "Test"}
                    :membership {:id "m1" :role "owner"}})]
     (testing "includes tenant and membership"
-      (is (= {:id "t1" :name "Test"} (:tenant session)))
+      (is (= {:id "t1" :name "Test" :slug nil :status nil :created_at nil :updated_at nil}
+            (:tenant session)))
       (is (= "owner" (get-in session [:membership :role]))))))
 
 (deftest build-auth-session-selection-required

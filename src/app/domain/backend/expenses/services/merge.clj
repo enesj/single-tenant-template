@@ -34,15 +34,13 @@
      :unique-col :raw_label_normalized}
     {:table :article_aliases     :col :supplier_id  :conflict-strategy :exclude-then-delete
      :unique-col :raw_label_normalized
-     :child-fks [{:table :expense_items :col :alias_id}]}
-    {:table :price_observations  :col :supplier_id}]
+     :child-fks [{:table :expense_items :col :alias_id}]}]
 
    :articles
    [{:table :expense_items       :col :article_id}
     {:table :article_aliases     :col :article_id   :conflict-strategy :exclude-then-delete
      :unique-col :raw_label_normalized
-     :child-fks [{:table :expense_items :col :alias_id}]}
-    {:table :price_observations  :col :article_id}]
+     :child-fks [{:table :expense_items :col :alias_id}]}]
 
    :stores
    [{:table :expenses            :col :store_id}

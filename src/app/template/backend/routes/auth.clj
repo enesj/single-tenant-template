@@ -101,7 +101,8 @@
                 (assoc :session new-session)))
 
             ;; User registered successfully without verification — provision tenant now
-            (let [tenant-ctx   (tenant-auth/resolve-tenant-context db config user)
+            (let [tenant-ctx   (tenant-auth/resolve-tenant-context db config user
+                                 {:client-ip (:remote-addr req)})
                   auth-session (sanitize-for-serialization
                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                   new-session  (assoc existing-session :auth-session auth-session)]
@@ -138,7 +139,8 @@
                 user-id   (:id user-raw)
                 ;; Resolve tenant context (provision / auto-set / selection)
                 config       (get-in req [:service-container :config])
-                tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw)
+                tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw
+                               {:client-ip (:remote-addr req)})
                 auth-session (sanitize-for-serialization
                                (tenant-auth/build-auth-session {:user user-safe} tenant-ctx))
                 new-session  (assoc existing-session :auth-session auth-session)

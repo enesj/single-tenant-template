@@ -4,7 +4,7 @@
    Features:
    - In-memory rate limiting with configurable windows
    - Different limits for admin vs regular routes
-   - IP-based and user-based limiting
+   - IP-based, tenant-based, and user-based limiting
    - Automatic cleanup of expired entries
    - Detailed logging for security monitoring"
   (:require
@@ -23,7 +23,8 @@
   {:admin-login      {:max-attempts 200 :window-minutes 1 :block-minutes 0.017}  ; ~1 second
    :admin-api        {:max-attempts 1000 :window-minutes 1 :block-minutes 0.017} ; ~1 second
    :regular-api      {:max-attempts 2000 :window-minutes 1 :block-minutes 0.017} ; ~1 second
-   :auth-endpoints   {:max-attempts 500 :window-minutes 5 :block-minutes 0.017}}) ; ~1 second
+   :auth-endpoints   {:max-attempts 500 :window-minutes 5 :block-minutes 0.017}  ; ~1 second
+   :tenant-provisioning {:max-attempts 5 :window-minutes 60 :block-minutes 60}})
 
 (defn- get-client-ip
   "Extract client IP from request, handling proxies and load balancers."
@@ -35,9 +36,11 @@
     "unknown"))
 
 (defn- get-rate-limit-key
-  "Generate unique key for rate limiting based on IP, route type, and optional user ID."
-  [ip route-type user-id]
-  (str route-type ":" ip (when user-id (str ":" user-id))))
+  "Generate unique key for rate limiting based on IP, route type, tenant, and optional user ID."
+  [ip route-type tenant-id user-id]
+  (str route-type ":" ip
+    (when tenant-id (str ":t:" tenant-id))
+    (when user-id (str ":u:" user-id))))
 
 (defn- cleanup-expired-entries!
   "Remove expired entries from rate limiting storage to prevent memory leaks."
@@ -86,9 +89,9 @@
 
 (defn- is-rate-limited?
   "Check if client should be rate limited and update counters."
-  [ip route-type user-id]
+  [ip route-type tenant-id user-id]
   (let [config (get rate-limits route-type)
-        key (get-rate-limit-key ip route-type user-id)
+        key (get-rate-limit-key ip route-type tenant-id user-id)
         now (time/instant)
         window-start (time/minus now (time/minutes (:window-minutes config)))
 
@@ -168,6 +171,11 @@
         (if route-type
           (let [ip (get-client-ip request)
                 user-id (get-in request [:session :user-id])  ; Optional user-based limiting
+                ;; Include tenant-id for regular API routes so tenants get independent buckets.
+                ;; Admin routes stay global (IP-only) since admins operate cross-tenant.
+                tenant-id (when (= route-type :regular-api)
+                            (or (get-in request [:session :tenant-id])
+                              (get-in request [:session :auth-session :tenant :id])))
 
                 ;; Skip rate limiting for local development
                 is-local-dev (or (= ip "127.0.0.1")
@@ -181,7 +189,7 @@
                                (System/getProperty "DISABLE_RATE_LIMITING"))]
 
             (if (and (not is-local-dev)
-                  (is-rate-limited? ip route-type user-id))
+                  (is-rate-limited? ip route-type tenant-id user-id))
               ;; Return rate limit response
               (let [config (get rate-limits route-type)
                     retry-after (* (:block-minutes config) 60)]
@@ -197,6 +205,13 @@
         {:status 503
          :headers {"Content-Type" "application/json"}
          :body "{\"error\":\"Service unavailable\",\"message\":\"Rate limiting system failure. Please try again shortly.\"}"}))))
+
+(defn check-provisioning-rate-limit!
+  "Check tenant provisioning rate limit for an IP.
+  Returns nil if OK, or a 429 response map if rate limited."
+  [ip]
+  (when (is-rate-limited? ip :tenant-provisioning nil nil)
+    (create-rate-limit-response :tenant-provisioning 3600)))
 
 (defn get-rate-limit-stats
   "Get current rate limiting statistics for monitoring."

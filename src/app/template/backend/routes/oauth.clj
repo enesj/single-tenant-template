@@ -231,7 +231,8 @@
                               sanitized-user  (sanitize-for-serialization user-raw)
                               ;; Resolve tenant context (provision / auto-set / selection)
                               oauth-db        (or db (get-in req [:service-container :db]))
-                              tenant-ctx      (tenant-auth/resolve-tenant-context oauth-db config user-raw)
+                              tenant-ctx      (tenant-auth/resolve-tenant-context oauth-db config user-raw
+                                                {:client-ip (:remote-addr req)})
                               auth-session    (sanitize-for-serialization
                                                 (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                               ;; Redirect to tenant-select when multiple tenants, else normal path

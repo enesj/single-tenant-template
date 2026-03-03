@@ -67,6 +67,13 @@
        (cond-> {:label label :is_default false}
          tenant-id (assoc :tenant_id tenant-id))))))
 
+(defn- ensure-default-tenant-id!
+  "Provision a lightweight tenant for tests that still create tenant-scoped
+  payers without explicitly threading a tenant id."
+  [db]
+  (let [user (ensure-test-user! db {:email (str "payer-helper-" (UUID/randomUUID) "@example.com")})]
+    (:tenant-id (ensure-test-tenant! db user))))
+
 (defn create-payer!
   "Create a payer, accepting either:
 
@@ -74,14 +81,18 @@
   - legacy `:type` (string) which is mapped to a payer type label.
 
   Accepts optional `:tenant_id` in payer-data for tenant-scoped payers.
+  When omitted, provisions a lightweight default tenant for backwards-compatible
+  test setup.
 
   Returns the created payer row."
   [db {:keys [type payer_type_id tenant_id] :as payer-data}]
-  (let [payer-type-id (or payer_type_id
-                        (:id (ensure-payer-type! db (payer-type-label type) tenant_id)))]
+  (let [resolved-tenant-id (or tenant_id (ensure-default-tenant-id! db))
+        payer-type-id (or payer_type_id
+                        (:id (ensure-payer-type! db (payer-type-label type) resolved-tenant-id)))]
     (payers/create-payer!
       db
       (-> payer-data
         (dissoc :type)
-        (assoc :payer_type_id payer-type-id))
-      (when tenant_id {:tenant-id tenant_id}))))
+        (assoc :tenant_id resolved-tenant-id
+          :payer_type_id payer-type-id))
+      {:tenant-id resolved-tenant-id})))

@@ -8,7 +8,7 @@
   {:article-alias config-maps/article-alias-config
    :supplier-alias config-maps/supplier-alias-config
    :store-alias config-maps/store-alias-config
-   :price-observation config-maps/price-observation-config
+
    :supplier config-maps/supplier-config
    :store config-maps/store-config
    :manufacturer config-maps/manufacturer-config
@@ -22,7 +22,7 @@
    :expense config-maps/expense-config
    :expense-item config-maps/expense-item-config
    :receipt config-maps/receipt-config
-   :price-history config-maps/price-history-config
+
    :report config-maps/report-config})
 
 (defn get-entity-config

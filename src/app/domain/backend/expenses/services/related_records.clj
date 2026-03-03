@@ -18,15 +18,13 @@
   - :manufacturer                        -> :manufacturers
   - :subcategory                         -> :subcategories
 
-  Throws when related-type is not a keyword or string."
+  Returns nil for nil/blank/unsupported input shapes."
   [related-type]
   (let [raw (cond
               (keyword? related-type) (name related-type)
               (string? related-type) related-type
-              :else (throw (ex-info "normalize-related-type expects a keyword or string"
-                             {:related-type related-type
-                              :type (type related-type)})))
-        kw (some-> raw str/trim str/lower-case keyword)]
+              :else nil)
+        kw (some-> raw str/trim not-empty str/lower-case keyword)]
     (case kw
       :supplier :providers
       :suppliers :providers

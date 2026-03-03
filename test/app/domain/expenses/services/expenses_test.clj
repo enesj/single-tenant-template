@@ -8,42 +8,13 @@
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]]
-    [honey.sql :as hsql]
     [next.jdbc :as jdbc])
   (:import
     (java.util UUID)))
 
 (use-fixtures :each fixtures/with-transaction-rollback)
 
-(defn- count-table [db table]
-  (:count (jdbc/execute-one! db
-            (hsql/format {:select [[[:count :*] :count]]
-                          :from [table]}))))
-
 (defn- now [] (java.time.Instant/now))
-
-(deftest expenses-price-observation-recorded-when-article-present
-  (when-let [db fixtures/*test-db*]
-    (let [supplier-result (suppliers/find-or-create-supplier! db "DM" {})
-          supplier (:supplier supplier-result)
-          payer (th/create-payer! db {:type "cash" :label "Cash"})
-          article-name (str "Toothpaste-" (UUID/randomUUID))
-          article (articles/create-article! db {:canonical_name article-name})
-          _ (articles/create-alias! db (:id supplier) "TP" (:id article))
-          before (count-table db :price_observations)
-          expense (expenses/create-expense! db
-                    {:supplier_id (:id supplier)
-                     :payer_id (:id payer)
-                     :purchased_at (now)
-                     :total_amount (bigdec "5.50")
-                     :currency "BAM"}
-                    [{:raw_label "TP"
-                      :line_total (bigdec "5.50")}])
-          after (count-table db :price_observations)]
-      (is (:id expense))
-      (is (= 1 (count (:items expense))))
-      (is (= article-name (-> expense :items first :article_canonical_name)))
-      (is (= (inc before) after)))))
 
 (deftest expenses-auto-links-article-when-alias-exists
   (when-let [db fixtures/*test-db*]
