@@ -1,11 +1,14 @@
 (ns app.admin.frontend.components.user-actions
   "Refactored admin user management actions using shared components"
   (:require
-    [app.template.frontend.components.action-components :as shared-actions]
     [app.shared.field-metadata :as field-meta]
-    [app.template.frontend.utils.id :as id-utils]
+    [app.template.frontend.components.action-components :as shared-actions]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.dropdown.action :as dropdown]
+    [app.template.frontend.events.config :as config-events]
+    [app.template.frontend.events.form :as form-events]
+    [app.template.frontend.events.list.crud :as crud-events]
+    [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui]]
@@ -21,10 +24,19 @@
 
 (defn create-user-action-handlers
   "Factory function to create all action handlers for a user"
-  [user-id user-email]
+  [user user-id user-email]
   (merge
     (shared-actions/create-status-action-handlers user-id user-email "user" :admin/update-user-status)
-    {:view-details (fn [e]
+    {:edit-user (fn [e]
+                  (.stopPropagation e)
+                  (log/info "Editing user" user-id user-email)
+                  (rf/dispatch [::crud-events/clear-error :users])
+                  (rf/dispatch [::form-events/clear-form-errors :users])
+                  (if-let [on-edit-click (:on-edit-click user)]
+                    (on-edit-click user)
+                    (rf/dispatch [::config-events/set-editing user-id])))
+
+     :view-details (fn [e]
                      (.stopPropagation e)
                      (log/info "Viewing user details" user-id user-email)
                      (rf/dispatch [:admin/view-user-details user-id]))
@@ -103,9 +115,9 @@
         models-data (use-subscribe [:models-data])
         role-options (->> (or (when models-data
                                 (field-meta/get-enum-choices models-data :users :role))
-                              ["admin" "member" "viewer" "unassigned"])
-                          (keep #(when % (keyword (str %))))
-                          vec)
+                            ["admin" "member" "viewer" "unassigned"])
+                       (keep #(when % (keyword (str %))))
+                       vec)
         role-key (cond
                    (keyword? user-role) user-role
                    (string? user-role) (keyword user-role)
@@ -131,7 +143,7 @@
         loading-user-details? (use-subscribe [:admin/loading-user-details?])
 
         ;; Create action handlers
-        action-handlers (create-user-action-handlers user-id user-email)
+        action-handlers (create-user-action-handlers user user-id user-email)
         confirmation-handlers (create-user-confirmation-handlers action-handlers user-email)
 
         ;; Deletion constraints are now checked in batch at the page level
@@ -141,7 +153,11 @@
                            ;; View actions group
                         (conj (shared-actions/create-view-action-group
                                 (:view-details action-handlers)
-                                [{:id "view-activity"
+                                [{:id "edit-user"
+                                  :icon "✏️"
+                                  :label "Edit User"
+                                  :on-click (:edit-user action-handlers)}
+                                 {:id "view-activity"
                                   :icon "📊"
                                   :label "View Activity"
                                   :on-click (:view-activity action-handlers)}]))

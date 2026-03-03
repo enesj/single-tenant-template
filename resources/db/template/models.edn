@@ -94,6 +94,9 @@
                       :types [[:membership-role :enum {:choices ["owner" "admin" "member" "viewer"]}]
                               [:membership-status :enum {:choices ["active" "suspended"]}]]
                       :indexes [[:uniq_tenant_memberships_tenant_user :btree {:fields [:tenant_id :user_id] :unique true}]
+                                [:uniq_tenant_memberships_active_owner :btree {:fields [:tenant_id]
+                                                                               :unique true
+                                                                               :where [:raw "((role = 'owner'::membership_role) AND (status = 'active'::membership_status))"]}]
                                 [:idx_tenant_memberships_user :btree {:fields [:user_id]}]
                                 [:idx_tenant_memberships_status :btree {:fields [:status]}]]}
 

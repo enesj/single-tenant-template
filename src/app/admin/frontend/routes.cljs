@@ -174,7 +174,7 @@
          ["/tenants"
           {:name :admin-tenants
            :view tenants/admin-tenants-page
-           :controllers [(guarded-start [:app.admin.frontend.events.tenants/fetch-tenants])]}]
+           :controllers [(guarded-start nil)]}]
 
          ;; Admin Management (owner only)
          ["/admins"

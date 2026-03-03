@@ -1,0 +1,92 @@
+-- FORWARD
+CREATE OR REPLACE FUNCTION enforce_tenant_single_active_owner()
+       RETURNS TRIGGER AS $$
+       DECLARE
+         affected_tenant_ids UUID[] := ARRAY[]::UUID[];
+         affected_tenant_id UUID;
+         active_owner_count INTEGER;
+       BEGIN
+         IF TG_TABLE_NAME = 'tenants' THEN
+           IF TG_OP = 'DELETE' THEN
+             affected_tenant_ids := array_append(affected_tenant_ids, OLD.id);
+           ELSE
+             affected_tenant_ids := array_append(affected_tenant_ids, NEW.id);
+           END IF;
+         ELSE
+           IF TG_OP = 'DELETE' THEN
+             affected_tenant_ids := array_append(affected_tenant_ids, OLD.tenant_id);
+           ELSIF TG_OP = 'INSERT' THEN
+             affected_tenant_ids := array_append(affected_tenant_ids, NEW.tenant_id);
+           ELSE
+             affected_tenant_ids := array_append(affected_tenant_ids, OLD.tenant_id);
+             affected_tenant_ids := array_append(affected_tenant_ids, NEW.tenant_id);
+           END IF;
+         END IF;
+
+         FOR affected_tenant_id IN
+           SELECT DISTINCT tenant_id
+           FROM unnest(affected_tenant_ids) AS tenant_id
+           WHERE tenant_id IS NOT NULL
+         LOOP
+           IF EXISTS (SELECT 1 FROM tenants t WHERE t.id = affected_tenant_id) THEN
+             SELECT COUNT(*)
+               INTO active_owner_count
+             FROM tenant_memberships tm
+             WHERE tm.tenant_id = affected_tenant_id
+               AND tm.role = 'owner'
+               AND tm.status = 'active';
+
+             IF active_owner_count <> 1 THEN
+               RAISE EXCEPTION 'Tenant % must have exactly one active owner (found %)', affected_tenant_id, active_owner_count
+                 USING ERRCODE = '23514';
+             END IF;
+           END IF;
+         END LOOP;
+
+         RETURN NULL;
+       END;
+       $$ LANGUAGE plpgsql;
+
+       WITH ownerless_admins AS (
+         SELECT DISTINCT ON (tm.tenant_id)
+                tm.tenant_id,
+                tm.id AS membership_id
+         FROM tenant_memberships tm
+         JOIN (
+           SELECT tenant_id
+           FROM tenant_memberships
+           GROUP BY tenant_id
+           HAVING COUNT(*) FILTER (WHERE role = 'owner' AND status = 'active') = 0
+              AND COUNT(*) FILTER (WHERE role = 'admin' AND status = 'active') = 1
+         ) candidates
+           ON candidates.tenant_id = tm.tenant_id
+         WHERE tm.role = 'admin'
+           AND tm.status = 'active'
+         ORDER BY tm.tenant_id, tm.created_at, tm.id
+       )
+       UPDATE tenant_memberships tm
+       SET role = 'owner'::membership_role,
+           updated_at = CURRENT_TIMESTAMP
+       FROM ownerless_admins oa
+       WHERE tm.id = oa.membership_id;
+
+       DO $$
+       BEGIN
+         IF EXISTS (
+           SELECT 1
+           FROM tenants t
+           LEFT JOIN LATERAL (
+             SELECT COUNT(*) FILTER (WHERE tm.role = 'owner' AND tm.status = 'active') AS active_owner_count
+             FROM tenant_memberships tm
+             WHERE tm.tenant_id = t.id
+           ) owners ON TRUE
+           WHERE COALESCE(owners.active_owner_count, 0) <> 1
+         ) THEN
+           RAISE EXCEPTION 'Cannot enable tenant owner invariant until every tenant has exactly one active owner'
+             USING ERRCODE = '23514';
+         END IF;
+       END;
+       $$;
+
+-- BACKWARD
+DROP FUNCTION IF EXISTS enforce_tenant_single_active_owner();

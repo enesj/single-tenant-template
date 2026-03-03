@@ -45,6 +45,24 @@
         full-inv (invitation-svc/find-invitation-by-token db token)]
     (invitation-svc/accept-invitation! db invitee full-inv)))
 
+(defn- insert-membership!
+  [db {:keys [tenant-id user-id role status]}]
+  (let [now (java.time.LocalDateTime/now)]
+    (jdbc/execute-one! db
+      (sql/format {:insert-into [:tenant_memberships]
+                   :values [{:id         (java.util.UUID/randomUUID)
+                             :tenant_id  tenant-id
+                             :user_id    user-id
+                             :role       [:cast role :membership_role]
+                             :status     [:cast (or status "active") :membership_status]
+                             :created_at now
+                             :updated_at now}]
+                   :returning [:*]}))))
+
+(defn- force-constraint-check!
+  [db]
+  (jdbc/execute! db ["SET CONSTRAINTS ALL IMMEDIATE"]))
+
 ;; ============================================================================
 ;; change-role!
 ;; ============================================================================
@@ -63,6 +81,22 @@
 
     (testing "changes the role"
       (is (= "viewer" (or (:role result) (:tenant_memberships/role result)))))))
+
+(deftest superpower-change-role-happy-path
+  (let [db       fixtures/*test-db*
+        owner    (create-user! db "sp-cr-owner")
+        member   (create-user! db "sp-cr-member")
+        {:keys [tenant membership]} (provision! db owner)
+        tenant-id (or (:id tenant) (:tenants/id tenant))
+        owner-id  (or (:id owner) (:users/id owner))
+        member-m  (add-member! db tenant-id owner-id member "member")
+        result    (member-svc/superpower-change-role!
+                    db
+                    {:target-membership member-m
+                     :new-role          "admin"})]
+
+    (testing "platform-admin flow can promote a member to admin"
+      (is (= "admin" (or (:role result) (:tenant_memberships/role result)))))))
 
 (deftest change-role-cannot-change-own
   (let [db    fixtures/*test-db*
@@ -147,6 +181,52 @@
 
     (testing "sets status to suspended"
       (is (= "suspended" (or (:status result) (:tenant_memberships/status result)))))))
+
+(deftest superpower-remove-member-happy-path
+  (let [db       fixtures/*test-db*
+        owner    (create-user! db "sp-rm-owner")
+        member   (create-user! db "sp-rm-member")
+        {:keys [tenant membership]} (provision! db owner)
+        tenant-id (or (:id tenant) (:tenants/id tenant))
+        owner-id  (or (:id owner) (:users/id owner))
+        member-m  (add-member! db tenant-id owner-id member "member")
+        result    (member-svc/superpower-remove-member!
+                    db
+                    {:target-membership member-m})]
+
+    (testing "platform-admin flow can suspend a non-owner membership"
+      (is (= "suspended" (or (:status result) (:tenant_memberships/status result)))))))
+
+(deftest db-forbids-suspending-or-demoting-the-last-owner
+  (let [db    fixtures/*test-db*
+        owner (create-user! db "db-last-owner")
+        {:keys [membership]} (provision! db owner)
+        owner-membership-id (or (:id membership) (:tenant_memberships/id membership))]
+
+    (testing "forcing the only owner away from owner fails when deferred constraints are checked"
+      (is (thrown-with-msg?
+            org.postgresql.util.PSQLException
+            #"exactly one active owner"
+            (do
+              (jdbc/execute-one! db
+                (sql/format {:update [:tenant_memberships]
+                             :set    {:role [:cast "admin" :membership_role]}
+                             :where  [:= :id owner-membership-id]}))
+              (force-constraint-check! db)))))))
+
+(deftest db-forbids-two-active-owners-for-one-tenant
+  (let [db       fixtures/*test-db*
+        owner    (create-user! db "db-owner")
+        admin    (create-user! db "db-admin")
+        {:keys [tenant membership]} (provision! db owner)
+        tenant-id (or (:id tenant) (:tenants/id tenant))
+        admin-id  (or (:id admin) (:users/id admin))]
+
+    (testing "partial unique index blocks a second active owner"
+      (is (thrown? org.postgresql.util.PSQLException
+            (insert-membership! db {:tenant-id tenant-id
+                                    :user-id   admin-id
+                                    :role      "owner"}))))))
 
 (deftest remove-member-cannot-remove-owner
   (let [db       fixtures/*test-db*

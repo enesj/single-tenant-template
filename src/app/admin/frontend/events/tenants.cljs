@@ -2,6 +2,8 @@
   "Admin tenant management events — list, detail, members, role changes."
   (:require
     [app.template.frontend.api.http :as http]
+    [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.events.list.ui-state :as list-ui-state]
     [re-frame.core :as rf]
     [re-frame.db :as rf-db]
     [taoensso.timbre :as log]))
@@ -20,6 +22,34 @@
     (http/api-request
       (cond-> opts
         token (assoc :headers {"x-admin-token" token})))))
+
+(def ^:private tenants-entity-key :tenants)
+
+(defn- current-list-pagination
+  [db]
+  (let [ui-state (get-in db (paths/list-ui-state tenants-entity-key))
+        per-page (or (:per-page ui-state)
+                   (get-in ui-state [:pagination :per-page])
+                   25)
+        current-page (or (:current-page ui-state)
+                       (get-in ui-state [:pagination :current-page])
+                       1)]
+    {:limit per-page
+     :offset (* (max 0 (dec current-page)) per-page)}))
+
+(defn- tenants->entity-state
+  [tenants]
+  (let [normalized (->> (or tenants [])
+                     (keep (fn [tenant]
+                             (when-let [tenant-id (or (:id tenant) (:tenants/id tenant))]
+                               [(str tenant-id) tenant]))))]
+    {:ids (mapv first normalized)
+     :entities-by-id (into {} normalized)}))
+
+(rf/reg-event-fx
+  ::load-list
+  (fn [_cofx _]
+    {:dispatch [::fetch-tenants {}]}))
 
 ;; ============================================================================
 ;; Subscriptions
@@ -77,11 +107,18 @@
 (rf/reg-event-fx
   ::fetch-tenants
   (fn [{:keys [db]} [_ params]]
-    (let [search (or (:search params) (get-in db [:admin :tenants :search] ""))
-          status (or (:status params) (get-in db [:admin :tenants :status-filter]))
-          limit  (or (:limit params) 25)
-          offset (or (:offset params) 0)]
-      {:db (assoc-in db [:admin :tenants :loading?] true)
+    (let [{:keys [limit offset]} (merge (current-list-pagination db) params)
+          search (if (contains? params :search)
+                   (:search params)
+                   (get-in db [:admin :tenants :search] ""))
+          status (if (contains? params :status)
+                   (:status params)
+                   (get-in db [:admin :tenants :status-filter]))]
+      {:db (-> db
+             (assoc-in [:admin :tenants :loading?] true)
+             (assoc-in [:admin :tenants :error] nil)
+             (assoc-in (paths/entity-loading? tenants-entity-key) true)
+             (assoc-in (paths/entity-error tenants-entity-key) nil))
        :http-xhrio (admin-request
                      {:method :get
                       :uri "/admin/api/tenants"
@@ -94,18 +131,30 @@
 (rf/reg-event-db
   ::fetch-tenants-success
   (fn [db [_ response]]
-    (-> db
-      (assoc-in [:admin :tenants :loading?] false)
-      (assoc-in [:admin :tenants :data] (:tenants response))
-      (assoc-in [:admin :tenants :total] (:total response)))))
+    (let [tenants (vec (or (:tenants response) []))
+          total (or (:total response) (count tenants))
+          {:keys [ids entities-by-id]} (tenants->entity-state tenants)]
+      (-> db
+        (assoc-in [:admin :tenants :loading?] false)
+        (assoc-in [:admin :tenants :error] nil)
+        (assoc-in [:admin :tenants :data] tenants)
+        (assoc-in [:admin :tenants :total] total)
+        (assoc-in (paths/entity-loading? tenants-entity-key) false)
+        (assoc-in (paths/entity-error tenants-entity-key) nil)
+        (assoc-in (paths/entity-data tenants-entity-key) entities-by-id)
+        (assoc-in (paths/entity-ids tenants-entity-key) ids)
+        (assoc-in (paths/list-total-items tenants-entity-key) total)))))
 
 (rf/reg-event-db
   ::fetch-tenants-failure
   (fn [db [_ response]]
     (log/error "Failed to fetch tenants:" response)
-    (-> db
-      (assoc-in [:admin :tenants :loading?] false)
-      (assoc-in [:admin :tenants :error] "Failed to fetch tenants"))))
+    (let [error-message "Failed to fetch tenants"]
+      (-> db
+        (assoc-in [:admin :tenants :loading?] false)
+        (assoc-in [:admin :tenants :error] error-message)
+        (assoc-in (paths/entity-loading? tenants-entity-key) false)
+        (assoc-in (paths/entity-error tenants-entity-key) error-message)))))
 
 ;; ============================================================================
 ;; Search & Filter
@@ -115,13 +164,13 @@
   ::set-search
   (fn [{:keys [db]} [_ search]]
     {:db (assoc-in db [:admin :tenants :search] search)
-     :fx [[:dispatch [::fetch-tenants {:search search :offset 0}]]]}))
+     :fx [[:dispatch [::list-ui-state/set-current-page tenants-entity-key 1]]]}))
 
 (rf/reg-event-fx
   ::set-status-filter
   (fn [{:keys [db]} [_ status]]
     {:db (assoc-in db [:admin :tenants :status-filter] status)
-     :fx [[:dispatch [::fetch-tenants {:status status :offset 0}]]]}))
+     :fx [[:dispatch [::list-ui-state/set-current-page tenants-entity-key 1]]]}))
 
 ;; ============================================================================
 ;; Tenant Detail

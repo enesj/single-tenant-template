@@ -3,6 +3,9 @@
    Shows current members with role management and pending invitations."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.confirm-dialog :as confirm-dialog]
+    [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
+    [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.tenant :as tenant]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -43,76 +46,190 @@
     (when d
       (subs (str d) 0 (min 10 (count (str d)))))))
 
+(defn- normalize-role
+  [role]
+  (cond
+    (keyword? role) (name role)
+    (string? role) role
+    (some? role) (str role)
+    :else nil))
+
+(def tenant-members-entity-spec
+  {:fields [{:id "member_name" :label "Name" :type :text}
+            {:id "member_email" :label "Email" :type :text :input-type "email"}
+            {:id "member_role" :label "Role" :type :text}
+            {:id "joined_on" :label "Joined" :type :text}]})
+
+(defn member-management-capabilities
+  [current-role is-owner? member]
+  (let [current-role* (normalize-role current-role)
+        role (normalize-role (member-role member))
+        is-target-owner? (= role "owner")]
+    {:role role
+     :can-change-role? (and (contains? #{"owner" "admin"} current-role*)
+                         (not is-target-owner?))
+     :can-remove? (and (contains? #{"owner" "admin"} current-role*)
+                    (not is-target-owner?))
+     :can-transfer? (and is-owner? (= role "admin"))}))
+
+(defn tenant-member-row
+  [member]
+  (assoc member
+    :member_name (member-name member)
+    :member_email (member-email member)
+    :member_role (member-role member)
+    :joined_on (member-joined member)))
+
 ;; ============================================================================
 ;; Member Row Component
 ;; ============================================================================
 
-(defui member-row [{:keys [member current-role is-owner?]}]
+(defn member-row-action-state
+  [current-role is-owner? member]
+  (let [{:keys [can-change-role? can-remove? can-transfer?] :as capabilities}
+        (member-management-capabilities current-role is-owner? member)]
+    (assoc capabilities
+      :show-edit? (and can-change-role? (not (false? (:show-edit? member))))
+      :show-delete? (and can-remove? (not (false? (:show-delete? member))))
+      :edit-disabled? (true? (:edit-disabled? member))
+      :delete-disabled? (true? (:delete-disabled? member))
+      :can-transfer? can-transfer?)))
+
+(defui member-transfer-action
+  [{:keys [member can-transfer?]}]
   (let [mid (member-id member)
-        role (member-role member)
-        is-target-owner? (= role "owner")
-        can-change-role? (and (contains? #{"owner" "admin"} current-role)
-                           (not is-target-owner?))
-        can-remove? (and (contains? #{"owner" "admin"} current-role)
-                      (not is-target-owner?))
-        can-transfer? (and is-owner? (= role "admin"))
-        [confirming? set-confirming!] (use-state nil)]
-    ($ :tr {:id (str "member-row-" mid)}
-      ($ :td {:class "font-medium"} (member-name member))
-      ($ :td (member-email member))
-      ($ :td
-        ($ :span {:class (str "ds-badge ds-badge-sm " (role-badge-class role))}
-          role))
-      ($ :td {:class "text-sm text-base-content/60"} (member-joined member))
-      ($ :td {:class "flex gap-2 items-center"}
-        ;; Role change dropdown
-        (when can-change-role?
-          ($ :select {:class "ds-select ds-select-xs ds-select-bordered w-24"
-                      :id (str "role-select-" mid)
-                      :value role
-                      :on-change (fn [e]
-                                   (let [new-role (.. e -target -value)]
-                                     (when (not= new-role role)
-                                       (rf/dispatch [::tenant/change-member-role
-                                                     {:member-id mid :role new-role}]))))}
-            ($ :option {:value "viewer"} "viewer")
-            ($ :option {:value "member"} "member")
-            ($ :option {:value "admin"} "admin")))
+        [confirming? set-confirming!] (use-state false)]
+    (when can-transfer?
+      (if confirming?
+        ($ :div {:class "flex gap-1"}
+          ($ button {:btn-type :warning
+                     :class "ds-btn-xs"
+                     :on-click (fn []
+                                 (rf/dispatch [::tenant/transfer-ownership
+                                               {:user-id (member-user-id member)}])
+                                 (set-confirming! false))}
+            "Confirm")
+          ($ button {:btn-type :ghost
+                     :class "ds-btn-xs"
+                     :on-click #(set-confirming! false)}
+            "Cancel"))
+        ($ button {:btn-type :outline
+                   :class "ds-btn-xs"
+                   :id (str "transfer-btn-" mid)
+                   :on-click #(set-confirming! true)}
+          "Transfer")))))
 
-        ;; Transfer ownership
-        (when can-transfer?
-          (if (= confirming? :transfer)
-            ($ :div {:class "flex gap-1"}
-              ($ button {:btn-type :warning :class "ds-btn-xs"
-                         :on-click (fn []
-                                     (rf/dispatch [::tenant/transfer-ownership
-                                                   {:user-id (member-user-id member)}])
-                                     (set-confirming! nil))}
-                "Confirm")
-              ($ button {:btn-type :ghost :class "ds-btn-xs"
-                         :on-click #(set-confirming! nil)}
-                "Cancel"))
-            ($ button {:btn-type :outline :class "ds-btn-xs"
-                       :id (str "transfer-btn-" mid)
-                       :on-click #(set-confirming! :transfer)}
-              "Transfer")))
+(defui member-edit-form
+  [{:keys [member on-success on-cancel]}]
+  (let [mid (member-id member)
+        current-role (normalize-role (member-role member))
+        [selected-role set-selected-role!] (use-state current-role)]
+    ($ :form {:class "space-y-4"
+              :id (str "tenant-member-edit-form-" mid)
+              :on-submit (fn [e]
+                           (.preventDefault e)
+                           (when (not= selected-role current-role)
+                             (rf/dispatch [::tenant/change-member-role
+                                           {:member-id mid :role selected-role}]))
+                           (when on-success
+                             (on-success)))}
+      ($ :div {:class "space-y-1"}
+        ($ :h3 {:class "text-lg font-semibold"}
+          (member-name member))
+        ($ :p {:class "text-sm text-base-content/60"}
+          (member-email member)))
+      ($ :div {:class "space-y-2"}
+        ($ :label {:class "ds-label"
+                   :for (str "tenant-member-role-select-" mid)}
+          ($ :span {:class "ds-label-text"} "Role"))
+        ($ :select {:class "ds-select ds-select-bordered w-full"
+                    :id (str "tenant-member-role-select-" mid)
+                    :value selected-role
+                    :on-change #(set-selected-role! (.. % -target -value))}
+          ($ :option {:value "viewer"} "Viewer")
+          ($ :option {:value "member"} "Member")
+          ($ :option {:value "admin"} "Admin")))
+      ($ :div {:class "flex justify-end gap-2 pt-2"}
+        ($ button {:btn-type :ghost
+                   :type "button"
+                   :id (str "btn-cancel-tenant-member-edit-" mid)
+                   :on-click on-cancel}
+          "Cancel")
+        ($ button {:btn-type :primary
+                   :type "submit"
+                   :id (str "btn-save-tenant-member-edit-" mid)
+                   :disabled (= selected-role current-role)}
+          "Save changes")))))
 
-        ;; Remove member
-        (when can-remove?
-          (if (= confirming? :remove)
-            ($ :div {:class "flex gap-1"}
-              ($ button {:btn-type :error :class "ds-btn-xs"
-                         :on-click (fn []
-                                     (rf/dispatch [::tenant/remove-member {:member-id mid}])
-                                     (set-confirming! nil))}
-                "Confirm")
-              ($ button {:btn-type :ghost :class "ds-btn-xs"
-                         :on-click #(set-confirming! nil)}
-                "Cancel"))
-            ($ button {:btn-type :ghost :class "ds-btn-xs text-error"
-                       :id (str "remove-btn-" mid)
-                       :on-click #(set-confirming! :remove)}
-              "Remove")))))))
+(defn- render-member-edit-form
+  [member {:keys [on-success on-cancel]}]
+  ($ member-edit-form
+    {:member member
+     :on-success on-success
+     :on-cancel on-cancel}))
+
+(defn- render-member-row-actions
+  [current-role is-owner? member]
+  (let [mid (member-id member)
+        mid-str (some-> mid str)
+        {:keys [show-edit? show-delete? edit-disabled? delete-disabled? can-transfer?]}
+        (member-row-action-state current-role is-owner? member)
+        on-edit-click (:on-edit-click member)
+        item-data (dissoc member
+                    :show-edit?
+                    :show-delete?
+                    :edit-disabled?
+                    :delete-disabled?
+                    :on-edit-click)]
+    ($ :div {:class "flex items-center justify-end gap-2 flex-wrap"}
+      (when show-edit?
+        ($ button
+          {:id (str "btn-edit-tenant-members-" mid-str)
+           :btn-type :primary
+           :shape "circle"
+           :disabled edit-disabled?
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (when (and (not edit-disabled?) on-edit-click)
+                         (on-edit-click item-data)))}
+          ($ edit-icon)))
+      (when show-delete?
+        ($ button
+          {:id (str "btn-delete-tenant-members-" mid-str)
+           :btn-type :danger
+           :shape "circle"
+           :disabled delete-disabled?
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (when-not delete-disabled?
+                         (confirm-dialog/show-confirm
+                           {:title "Remove member"
+                            :message (str "Remove " (member-name member) " from this tenant?")
+                            :confirm-text "Remove"
+                            :on-confirm #(rf/dispatch [::tenant/remove-member {:member-id mid}])})))}
+          ($ delete-icon)))
+      ($ member-transfer-action
+        {:member member
+         :can-transfer? can-transfer?}))))
+
+(defn tenant-member-list-props
+  [members current-role is-owner?]
+  {:entity-name :tenant-members
+   :entity-spec tenant-members-entity-spec
+   :title "Current Members"
+   :rows-override (mapv tenant-member-row (or members []))
+   :per-page 25
+   :form-display :modal
+   :allow-add? false
+   :allow-edit? true
+   :allow-delete? true
+   :display-settings {:show-add-button? false
+                      :show-filtering? false
+                      :show-select? false
+                      :show-batch-edit? false
+                      :show-batch-delete? false}
+   :render-edit-form render-member-edit-form
+   :render-actions #(render-member-row-actions current-role is-owner? %)})
 
 ;; ============================================================================
 ;; Invitation Row Component
@@ -199,22 +316,21 @@
 
 (defui tenant-members-page []
   (let [members (use-subscribe [:tenant/members])
+        members-loading? (use-subscribe [:tenant/members-loading?])
         invitations (use-subscribe [:tenant/invitations])
         error (use-subscribe [:tenant/error])
         success (use-subscribe [:tenant/success-message])
-        role (use-subscribe [:user-role])
+        current-role (use-subscribe [:user-role])
         tenant (use-subscribe [:current-tenant])
-        is-owner? (= role "owner")]
+        is-owner? (= (normalize-role current-role) "owner")]
 
     ($ :div {:class "p-6 max-w-4xl mx-auto"}
-      ;; Page header
       ($ :div {:class "mb-6"}
         ($ :h1 {:class "text-2xl font-bold"} "Members")
         (when tenant
           ($ :p {:class "text-base-content/60 mt-1"}
             (str "Manage members of " (or (:name tenant) (:tenants/name tenant) "your workspace")))))
 
-      ;; Alerts
       (when error
         ($ :div {:class "ds-alert ds-alert-error mb-4"
                  :id "tenant-error-alert"}
@@ -231,38 +347,28 @@
                       :on-click #(rf/dispatch [::tenant/clear-messages])}
             "Dismiss")))
 
-      ;; Section 1: Current Members
-      ($ :div {:class "ds-card bg-base-100 shadow-sm border border-base-200 mb-6"}
-        ($ :div {:class "ds-card-body"}
-          ($ :h2 {:class "ds-card-title text-lg mb-4"} "Current Members")
-          (if (seq members)
-            ($ :div {:class "overflow-x-auto"}
-              ($ :table {:class "ds-table ds-table-sm"
-                         :id "members-table"}
-                ($ :thead
-                  ($ :tr
-                    ($ :th "Name")
-                    ($ :th "Email")
-                    ($ :th "Role")
-                    ($ :th "Joined")
-                    ($ :th "Actions")))
-                ($ :tbody
-                  (for [m members]
-                    ($ member-row {:key (member-id m)
-                                   :member m
-                                   :current-role role
-                                   :is-owner? is-owner?})))))
-            ($ :p {:class "text-base-content/60"} "No members yet."))))
+      ($ :div {:class "mb-6"}
+        (cond
+          members-loading?
+          ($ :div {:class "ds-card bg-base-100 shadow-sm border border-base-200"}
+            ($ :div {:class "ds-card-body py-12 flex items-center justify-center"}
+              ($ :div {:class "ds-loading ds-loading-spinner ds-loading-lg"})))
 
-      ;; Section 2: Invitations
+          (seq members)
+          ($ list-view (tenant-member-list-props members current-role is-owner?))
+
+          :else
+          ($ :div {:class "ds-card bg-base-100 shadow-sm border border-base-200"}
+            ($ :div {:class "ds-card-body"}
+              ($ :h2 {:class "ds-card-title text-lg mb-4"} "Current Members")
+              ($ :p {:class "text-base-content/60"} "No members yet.")))))
+
       ($ :div {:class "ds-card bg-base-100 shadow-sm border border-base-200"}
         ($ :div {:class "ds-card-body"}
           ($ :h2 {:class "ds-card-title text-lg mb-4"} "Invitations")
 
-          ;; Invite form
           ($ invite-form)
 
-          ;; Pending invitations table
           (when (seq invitations)
             ($ :div {:class "overflow-x-auto mt-4"}
               ($ :table {:class "ds-table ds-table-sm"

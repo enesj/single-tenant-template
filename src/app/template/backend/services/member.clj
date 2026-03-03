@@ -20,6 +20,28 @@
   (or (:status membership)
     (:tenant_memberships/status membership)))
 
+(defn- active-membership?
+  [membership]
+  (= "active" (membership-status membership)))
+
+(defn- ensure-active-membership!
+  [membership {:keys [message field status] :or {status 400}}]
+  (when-not (active-membership? membership)
+    (throw (ex-info message
+             {:type :validation-error
+              :status status
+              :errors {(or field :membership) [message]}})))
+  membership)
+
+(defn- ensure-not-owner-target!
+  [target-membership message]
+  (when (= "owner" (role-name target-membership))
+    (throw (ex-info message
+             {:type :forbidden
+              :status 403
+              :errors {:membership [message]}})))
+  target-membership)
+
 ;; ============================================================================
 ;; Role Changes
 ;; ============================================================================
@@ -69,13 +91,61 @@
                      :where  [:= :id target-id]
                      :returning [:*]})))))
 
+(defn superpower-change-role!
+  "Platform-admin role change that still preserves tenant ownership invariants."
+  [db {:keys [target-membership new-role]}]
+  (when-not (contains? valid-assignable-roles new-role)
+    (throw (ex-info "Invalid role"
+             {:type :validation-error
+              :status 400
+              :errors {:role [(str "Role must be one of: " (pr-str valid-assignable-roles))]}})))
+
+  (ensure-active-membership!
+    target-membership
+    {:message "Target membership must be active"
+     :status 400})
+  (ensure-not-owner-target!
+    target-membership
+    "Cannot change the owner's role directly — use transfer-ownership")
+
+  (let [target-id (membership-id target-membership)
+        now       (java.time.LocalDateTime/now)]
+    (convert-pg-objects
+      (jdbc/execute-one! db
+        (sql/format {:update [:tenant_memberships]
+                     :set    {:role       [:cast new-role :membership_role]
+                              :updated_at now}
+                     :where  [:= :id target-id]
+                     :returning [:*]})))))
+
+(defn superpower-remove-member!
+  "Platform-admin member removal that still preserves tenant ownership invariants."
+  [db {:keys [target-membership]}]
+  (ensure-active-membership!
+    target-membership
+    {:message "Target membership must be active"
+     :status 400})
+  (ensure-not-owner-target!
+    target-membership
+    "Cannot remove the tenant owner")
+
+  (let [target-id (membership-id target-membership)
+        now       (java.time.LocalDateTime/now)]
+    (convert-pg-objects
+      (jdbc/execute-one! db
+        (sql/format {:update [:tenant_memberships]
+                     :set    {:status     [:cast "suspended" :membership_status]
+                              :updated_at now}
+                     :where  [:= :id target-id]
+                     :returning [:*]})))))
+
 ;; ============================================================================
 ;; Ownership Transfer
 ;; ============================================================================
 
 (defn transfer-ownership!
   "Transfer ownership from actor (must be owner) to target (must be admin).
-   Atomically swaps: target → owner, actor → admin."
+   Atomically swaps: actor → admin, target → owner."
   [db {:keys [actor-membership target-membership]}]
   ;; Guard: actor must be owner
   (when (not= "owner" (role-name actor-membership))
@@ -100,18 +170,20 @@
         target-id (membership-id target-membership)
         now       (java.time.LocalDateTime/now)]
     (jdbc/with-transaction [tx db]
-      ;; Target → owner
-      (jdbc/execute-one! tx
-        (sql/format {:update [:tenant_memberships]
-                     :set    {:role [:cast "owner" :membership_role] :updated_at now}
-                     :where  [:= :id target-id]}))
-      ;; Actor → admin
+      ;; Actor → admin first so the partial unique owner index never sees two active owners.
       (let [updated-actor (convert-pg-objects
                             (jdbc/execute-one! tx
                               (sql/format {:update [:tenant_memberships]
-                                           :set    {:role [:cast "admin" :membership_role] :updated_at now}
+                                           :set    {:role [:cast "admin" :membership_role]
+                                                    :updated_at now}
                                            :where  [:= :id actor-id]
                                            :returning [:*]})))]
+        ;; Target → owner
+        (jdbc/execute-one! tx
+          (sql/format {:update [:tenant_memberships]
+                       :set    {:role [:cast "owner" :membership_role]
+                                :updated_at now}
+                       :where  [:= :id target-id]}))
         (log/info "Ownership transferred from" actor-id "to" target-id)
         updated-actor))))
 

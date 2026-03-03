@@ -192,4 +192,20 @@
        BEFORE UPDATE ON users
        FOR EACH ROW
        EXECUTE FUNCTION update_updated_at_column();"
-  :down "DROP TRIGGER IF EXISTS users_updated_at ON users;"}}
+  :down "DROP TRIGGER IF EXISTS users_updated_at ON users;"}
+
+ :tenants-require-active-owner-trigger
+ {:up "CREATE CONSTRAINT TRIGGER tenants_require_active_owner
+       AFTER INSERT ON tenants
+       DEFERRABLE INITIALLY DEFERRED
+       FOR EACH ROW
+       EXECUTE FUNCTION enforce_tenant_single_active_owner();"
+  :down "DROP TRIGGER IF EXISTS tenants_require_active_owner ON tenants;"}
+
+ :tenant-memberships-require-active-owner-trigger
+ {:up "CREATE CONSTRAINT TRIGGER tenant_memberships_require_active_owner
+       AFTER INSERT OR DELETE OR UPDATE OF tenant_id, role, status ON tenant_memberships
+       DEFERRABLE INITIALLY DEFERRED
+       FOR EACH ROW
+       EXECUTE FUNCTION enforce_tenant_single_active_owner();"
+  :down "DROP TRIGGER IF EXISTS tenant_memberships_require_active_owner ON tenant_memberships;"}}

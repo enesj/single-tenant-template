@@ -33,6 +33,11 @@
     (get-in db [:tenant :loading?] false)))
 
 (rf/reg-sub
+  :tenant/members-loading?
+  (fn [db _]
+    (get-in db [:tenant :members-loading?] false)))
+
+(rf/reg-sub
   :tenant/error
   (fn [db _]
     (get-in db [:tenant :error])))

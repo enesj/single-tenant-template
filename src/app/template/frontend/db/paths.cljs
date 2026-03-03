@@ -16,8 +16,18 @@
   "Returns true when the current route stored in db is an admin route.
   Admin routes have names that start with \"admin\" (e.g. :admin/users)."
   [db]
-  (let [route-name (get-in db (current-route-name))]
-    (boolean (and route-name (str/starts-with? (name route-name) "admin")))))
+  (let [route-name (get-in db (current-route-name))
+        route-str (cond
+                    (keyword? route-name)
+                    (if-let [route-ns (namespace route-name)]
+                      (str route-ns "/" (name route-name))
+                      (name route-name))
+
+                    (string? route-name)
+                    route-name
+
+                    :else nil)]
+    (boolean (and route-str (str/starts-with? route-str "admin")))))
 
 (defn current-page
   "Returns [:ui :current-page] path vector for the current page in the UI state."

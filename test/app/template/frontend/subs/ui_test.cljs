@@ -1,6 +1,8 @@
 (ns app.template.frontend.subs.ui-test
   "Tests for UI subscriptions"
   (:require
+    [app.admin.frontend.config.preload]
+    [app.admin.frontend.system.entity-registry :as admin-entity-registry]
     [app.template.frontend.settings.resolver :as resolver]
     [app.template.frontend.subs.ui :as ui-subs]
     [cljs.test :refer [deftest is testing]]
@@ -169,6 +171,20 @@
       (is (= kebab snake-kw))
       (is (= kebab snake-str))
       (is (= false (:show-edit? kebab))))))
+
+(deftest admin-entity-display-settings-use-preloaded-registry-config-test
+  (testing "admin routes resolve users display defaults from the preloaded entity registry"
+    (reset-db! {:current-route {:data {:name :admin/users}}
+                :admin {:config {:view-options {}}}
+                :ui {}})
+    (let [users-config (get @admin-entity-registry/registered-entities :users)
+          settings @(rf/subscribe [::ui-subs/entity-display-settings :users])]
+      (is (= true (get-in users-config [:display-settings :show-edit?])))
+      (is (= true (get-in users-config [:display-settings :show-delete?])))
+      (is (= true (get-in users-config [:display-settings :show-batch-delete?])))
+      (is (= true (:show-edit? settings)))
+      (is (= true (:show-delete? settings)))
+      (is (= true (:show-batch-delete? settings))))))
 
 (deftest filterable-fields-vector-config-test
   (testing "filterable-fields reads from app-db config"

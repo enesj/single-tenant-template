@@ -21,6 +21,7 @@
    4. Entity config defaults from entities.edn
    5. Fallback defaults (in-code)"
   (:require
+    [app.admin.frontend.system.entity-registry :as admin-entity-registry]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
@@ -74,13 +75,16 @@
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
         config-view-options   (get-in db [:admin :config :view-options entity-kw])
         domain-view-options   (get-in db [:domain :config :view-options entity-kw])
+        registered-config     (get @admin-entity-registry/registered-entities entity-kw)
 
         view-options   (if admin-route?
                          (merge config-view-options settings-view-options)
                          domain-view-options)
 
         entity-config  (if admin-route?
-                         (or (get-in db [:admin :entity-registry entity-kw]) {})
+                         (or (get-in db [:admin :config :entities entity-kw])
+                           registered-config
+                           {})
                          (or (get-in db [:domain :config :entities entity-kw]) {}))
 
         user-prefs   (get-in db (paths/entity-prefs-display entity-kw))

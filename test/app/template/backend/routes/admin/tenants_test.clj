@@ -91,6 +91,36 @@
           detail (detail-fn db (UUID/randomUUID))]
       (is (nil? detail) "Should return nil for unknown tenant ID"))))
 
+(deftest update-tenant-persists-editable-fields
+  (testing "update-tenant! persists name, slug, and status changes"
+    (let [db fixtures/*test-db*
+          user (th/ensure-test-user! db {:email "owner@tenant-update.test"})
+          {:keys [tenant-id]} (th/ensure-test-tenant! db user)
+          update-fn @(resolve 'app.template.backend.routes.admin.tenants/update-tenant!)
+          updated (update-fn db tenant-id {:name "Updated Tenant"
+                                           :slug "updated-tenant"
+                                           :status [:cast "suspended" :tenant_status]
+                                           :updated_at (java.time.LocalDateTime/now)})]
+      (is (= "Updated Tenant" (:name updated)))
+      (is (= "updated-tenant" (:slug updated)))
+      (is (= "suspended" (str (:status updated)))))))
+
+(deftest delete-tenants-removes-tenant-records
+  (testing "delete-tenants! deletes tenants and returns deleted ids"
+    (let [db fixtures/*test-db*
+          user-a (th/ensure-test-user! db {:email "owner-a@tenant-delete.test"})
+          user-b (th/ensure-test-user! db {:email "owner-b@tenant-delete.test"})
+          tenant-a (th/ensure-test-tenant! db user-a)
+          tenant-b (th/ensure-test-tenant! db user-b)
+          tenant-id-a (:tenant-id tenant-a)
+          tenant-id-b (:tenant-id tenant-b)
+          delete-fn @(resolve 'app.template.backend.routes.admin.tenants/delete-tenants!)
+          detail-fn @(resolve 'app.template.backend.routes.admin.tenants/get-tenant-detail)
+          deleted-ids (set (delete-fn db [tenant-id-a tenant-id-b]))]
+      (is (= #{(str tenant-id-a) (str tenant-id-b)} deleted-ids))
+      (is (nil? (detail-fn db tenant-id-a)))
+      (is (nil? (detail-fn db tenant-id-b))))))
+
 ;; ============================================================================
 ;; Member Listing Tests
 ;; ============================================================================

@@ -55,10 +55,11 @@
   :adapter-init-fn app.admin.frontend.adapters.users/init-users-adapter!
   :display-settings {:show-select? true
                      :show-edit? true
-                     :show-delete? false
+                     :show-delete? true
                      :show-filtering? true
                      :show-pagination? true
                      :show-add-button? true
+                     :show-batch-delete? true
                      :per-page 25}
   :features {:batch-operations? true
              :deletion-constraints? true

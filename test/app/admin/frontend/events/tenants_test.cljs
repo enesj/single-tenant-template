@@ -1,6 +1,7 @@
 (ns app.admin.frontend.events.tenants-test
   (:require
     [app.admin.frontend.events.tenants :as tenants]
+    [app.template.frontend.db.paths :as paths]
     [cljs.test :refer [deftest is testing]]
     [re-frame.core :as rf]
     [re-frame.db :as rf-db]))
@@ -66,17 +67,40 @@
       (is (= 10 (:limit params)))
       (is (= 20 (:offset params))))))
 
+(deftest fetch-tenants-reads-current-list-pagination
+  (testing "fetch-tenants reads pagination and filters from list/admin state"
+    (reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-ui-state :tenants)
+      {:per-page 10
+       :current-page 3
+       :pagination {:per-page 10
+                    :current-page 3}})
+    (swap! rf-db/app-db assoc-in [:admin :tenants :search] "acme")
+    (swap! rf-db/app-db assoc-in [:admin :tenants :status-filter] "active")
+    (rf/dispatch-sync [::tenants/fetch-tenants {}])
+    (let [req (last-request)
+          params (req-params req)]
+      (is (= 10 (:limit params)))
+      (is (= 20 (:offset params)))
+      (is (= "acme" (:search params)))
+      (is (= "active" (:status params))))))
+
 (deftest fetch-tenants-success-stores-data
-  (testing "fetch-tenants-success stores tenants and total"
+  (testing "fetch-tenants-success stores tenants in admin and canonical list state"
     (reset-db!)
     (rf/dispatch-sync [::tenants/fetch-tenants])
     (let [req (last-request)
-          on-success (:on-success req)]
-      (rf/dispatch-sync (conj on-success {:tenants [{:id "t1" :name "Acme Corp" :slug "acme"}]
+          on-success (:on-success req)
+          tenant {:id "t1" :name "Acme Corp" :slug "acme"}]
+      (rf/dispatch-sync (conj on-success {:tenants [tenant]
                                           :total 1})))
     (let [db @rf-db/app-db]
-      (is (= 1 (count (get-in db [:admin :tenants :data]))))
+      (is (= ["t1"] (mapv :id (get-in db [:admin :tenants :data]))))
       (is (= 1 (get-in db [:admin :tenants :total])))
+      (is (= ["t1"] (get-in db (paths/entity-ids :tenants))))
+      (is (= {"t1" {:id "t1" :name "Acme Corp" :slug "acme"}}
+            (get-in db (paths/entity-data :tenants))))
+      (is (= 1 (get-in db (paths/list-total-items :tenants))))
       (is (false? (get-in db [:admin :tenants :loading?]))))))
 
 ;; ============================================================================

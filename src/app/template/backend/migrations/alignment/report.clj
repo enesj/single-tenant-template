@@ -63,7 +63,13 @@
         policies-edn (utils/read-hierarchical-edn db-root "policies.edn")
 
         expected-functions (fetchers/expected-extended-object-definitions :function functions-edn)
-        expected-triggers (fetchers/expected-extended-object-definitions :trigger triggers-edn)
+        expected-triggers (let [parsed (fetchers/expected-extended-object-definitions :trigger triggers-edn)]
+                            (update parsed :expected
+                              (fn [defs]
+                                (into {}
+                                  (filter (fn [[_ {:keys [table]}]]
+                                            (contains? (:tables expected) table))
+                                    defs)))))
         expected-views (fetchers/expected-extended-object-definitions :view views-edn)
         expected-policies (fetchers/expected-extended-object-definitions :policy policies-edn)
 
@@ -73,13 +79,13 @@
         db-policies (fetchers/fetch-policy-definitions db)
 
         functions-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-functions)
-                            :actual db-functions})
+                                                                      :actual db-functions})
         triggers-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-triggers)
-                           :actual db-triggers})
+                                                                     :actual db-triggers})
         views-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-views)
-                        :actual db-views})
+                                                                  :actual db-views})
         policies-diff (fetchers/compare-extended-object-definitions {:expected (:expected expected-policies)
-                           :actual db-policies})]
+                                                                     :actual db-policies})]
 
     {:timestamp (utils/now-iso)
      :config {:jdbc-url jdbc-url
@@ -102,10 +108,10 @@
               :index-definition-duplicates (:index-definition-duplicates expected)
               :enums enums-diff
               :foreign-keys foreign-keys-diff}
-         :extended {:functions (assoc functions-diff :unparseable (:unparseable expected-functions))
-        :triggers (assoc triggers-diff :unparseable (:unparseable expected-triggers))
-        :views (assoc views-diff :unparseable (:unparseable expected-views))
-        :policies (assoc policies-diff :unparseable (:unparseable expected-policies))}}))
+     :extended {:functions (assoc functions-diff :unparseable (:unparseable expected-functions))
+                :triggers (assoc triggers-diff :unparseable (:unparseable expected-triggers))
+                :views (assoc views-diff :unparseable (:unparseable expected-views))
+                :policies (assoc policies-diff :unparseable (:unparseable expected-policies))}}))
 
 (defn diff?
   "Return true if a report contains any differences."

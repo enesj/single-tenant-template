@@ -22,7 +22,17 @@
   "Return true when the current runtime indicates the admin UI context."
   [db]
   (let [route-name (get-in db (paths/current-route-name))
-        admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
+        route-str (cond
+                    (keyword? route-name)
+                    (if-let [route-ns (namespace route-name)]
+                      (str route-ns "/" (name route-name))
+                      (name route-name))
+
+                    (string? route-name)
+                    route-name
+
+                    :else nil)
+        admin-route? (and route-str (str/starts-with? route-str "admin"))
         pathname (when (exists? js/window)
                    (some-> js/window .-location .-pathname))]
     (boolean (or admin-route?

@@ -11,7 +11,7 @@
       "function\\s+(?:public\\.)?([a-zA-Z0-9_]+)\\s*\\(")))
 
 (def ^:private re-create-trigger
-  (re-pattern "(?is)\\bcreate\\s+trigger\\s+([a-zA-Z0-9_]+)\\b"))
+  (re-pattern "(?is)\\bcreate\\s+(?:constraint\\s+)?trigger\\s+([a-zA-Z0-9_]+)\\b"))
 
 (def ^:private re-create-policy
   (re-pattern "(?is)\\bcreate\\s+policy\\s+([a-zA-Z0-9_]+)\\b"))
@@ -127,7 +127,7 @@
 
 (def ^:private re-create-trigger+table
   (re-pattern
-    "(?is)\\bcreate\\s+trigger\\s+([a-zA-Z0-9_]+)\\b.*?\\bon\\s+(?:only\\s+)?(?:public\\.)?([a-zA-Z0-9_]+)\\b"))
+    "(?is)\\bcreate\\s+(?:constraint\\s+)?trigger\\s+([a-zA-Z0-9_]+)\\b.*?\\bon\\s+(?:only\\s+)?(?:public\\.)?([a-zA-Z0-9_]+)\\b"))
 
 (def ^:private re-create-policy+table
   (re-pattern
@@ -191,7 +191,7 @@
           {:id vname
            :name vname
            :definition-normalized (or (some-> (extract-create-view-body sql) normalize-ddl-sql)
-                                   (normalize-ddl-sql sql))}))
+                                    (normalize-ddl-sql sql))}))
 
       nil)))
 
@@ -334,10 +334,10 @@
               pname (str/lower-case (or policy_name ""))
               id (str table "." pname)
               normalized (normalize-policy-definition {:permissive permissive
-                                                      :cmd cmd
-                                                      :roles roles
-                                                      :qual qual
-                                                      :with-check with_check})
+                                                       :cmd cmd
+                                                       :roles roles
+                                                       :qual qual
+                                                       :with-check with_check})
               repr (str "permissive=" (boolean permissive)
                      " cmd=" (some-> cmd str/lower-case)
                      " roles=" (pr-str (roles->vec roles))
