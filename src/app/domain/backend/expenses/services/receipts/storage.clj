@@ -50,14 +50,19 @@
   (some-> bytes hash/sha256 codecs/bytes->hex))
 
 (defn check-duplicate
-  "Return existing receipt with the same file_hash, if any."
-  [db file-hash]
+  "Return existing receipt with the same file_hash scoped to tenant_id, if any.
+   When tenant_id is nil (single-tenant mode), falls back to a global hash check."
+  [db file-hash tenant-id]
   (when file-hash
     (jdbc/execute-one!
       db
       (sql/format {:select [:*]
                    :from [:receipts]
-                   :where [:= :file_hash file-hash]
+                   :where (if tenant-id
+                            [:and
+                             [:= :file_hash file-hash]
+                             [:= :tenant_id tenant-id]]
+                            [:= :file_hash file-hash])
                    :limit 1})
       {:builder-fn rs/as-unqualified-lower-maps})))
 
@@ -129,7 +134,7 @@
     (when-not hash
       (throw (ex-info "file_hash or bytes required" {:data data})))
 
-    (if-let [existing (check-duplicate db hash)]
+    (if-let [existing (check-duplicate db hash tenant_id)]
       {:duplicate? true :receipt existing}
       (let [row (cond-> {:id (UUID/randomUUID)
                          :user_id user_id
