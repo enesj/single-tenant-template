@@ -217,7 +217,6 @@
 (deftest routes-test
   (testing "routes function returns route definitions"
     (let [db (h/mock-db)
-          service-container {:models-data mock-models}
-          routes (user-ops/routes db service-container)]
+          routes (user-ops/routes db {})]
       (is (vector? routes))
       (is (= "" (first routes))))))

@@ -113,7 +113,10 @@
         (is (= [:admin/delete-user-success user-id] (:on-success req)))
         (is (= [:admin/delete-user-failure user-id] (:on-failure req))))
 
-      (setup/respond-success! {:success true :message "Deleted"})
+      (setup/respond-success!
+        {:data {:deleted-count 1
+                :deleted-ids [user-id]
+                :errors []}})
 
       (let [db @rf-db/app-db]
         (is (= [] (:admin/users db)))

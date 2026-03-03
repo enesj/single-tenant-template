@@ -74,7 +74,7 @@
                              :email (str "test-" id "@example.com")
                              :full_name "Test User"
                              :password_hash "placeholder"
-                             :role [:cast "member" :user_role]
+
                              :status [:cast "active" :user_status]
                              :auth_provider "password"
                              :email_verified false
@@ -145,7 +145,41 @@
     (testing "returns the owner as a member with user info"
       (is (= 1 (count members)))
       (is (some? (or (:user_email (first members))
-                   (:tenant_memberships/user_email (first members))))))))
+                   (:tenant_memberships/user_email (first members)))))
+      (is (= "active" (or (:user_status (first members))
+                        (:tenant_memberships/user_status (first members))))))))
+
+(deftest get-tenant-members-include-suspended-test
+  (let [db        fixtures/*test-db*
+        owner     (create-test-user! db)
+        config    {:tenant-defaults {:payer-types [] :expense-categories []}}
+        result    (tenant-svc/provision-tenant! db config owner)
+        tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
+        user2     (create-test-user! db)
+        user2-id  (or (:id user2) (:users/id user2))
+        now       (java.time.LocalDateTime/now)]
+
+    ;; Insert a suspended membership row
+    (jdbc/execute-one! db
+      (sql/format {:insert-into [:tenant_memberships]
+                   :values [{:id (java.util.UUID/randomUUID)
+                             :tenant_id tenant-id
+                             :user_id user2-id
+                             :role [:cast "member" :membership_role]
+                             :status [:cast "suspended" :membership_status]
+                             :created_at now
+                             :updated_at now}]}))
+
+    (let [active-only (tenant-svc/get-tenant-members db tenant-id)
+          with-suspended (tenant-svc/get-tenant-members db tenant-id {:include-suspended? true})]
+      (testing "defaults to active memberships only"
+        (is (= 1 (count active-only))))
+
+      (testing "includes suspended memberships when requested"
+        (is (= 2 (count with-suspended)))
+        (is (some #(= "suspended" (or (:status %)
+                                    (:tenant_memberships/status %)))
+              with-suspended))))))
 
 (deftest get-membership-test
   (let [db     fixtures/*test-db*

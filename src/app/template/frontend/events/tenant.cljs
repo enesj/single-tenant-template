@@ -354,17 +354,45 @@
   ::remove-member-success
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db [:tenant :success-message] "Member removed")
+    {:db (assoc-in db [:tenant :success-message] "Member disabled")
      :fx [[:dispatch [::fetch-members]]]}))
 
 (rf/reg-event-db
   ::remove-member-failure
   common-interceptors
   (fn [db [response]]
-    (log/error "Failed to remove member:" response)
+    (log/error "Failed to disable member:" response)
     (assoc-in db [:tenant :error]
               (or (get-in response [:response :message])
-                "Failed to remove member"))))
+                "Failed to disable member"))))
+
+(rf/reg-event-fx
+  ::set-member-status
+  common-interceptors
+  (fn [{:keys [db]} [{:keys [member-id status]}]]
+    {:db (assoc-in db [:tenant :error] nil)
+     :http-xhrio (http/api-request
+                   {:method :put
+                    :uri (str "/api/v1/tenant/members/" member-id "/status")
+                    :params {:status status}
+                    :on-success [::set-member-status-success]
+                    :on-failure [::set-member-status-failure]})}))
+
+(rf/reg-event-fx
+  ::set-member-status-success
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db [:tenant :success-message] "Member enabled")
+     :fx [[:dispatch [::fetch-members]]]}))
+
+(rf/reg-event-db
+  ::set-member-status-failure
+  common-interceptors
+  (fn [db [response]]
+    (log/error "Failed to enable member:" response)
+    (assoc-in db [:tenant :error]
+              (or (get-in response [:response :message])
+                "Failed to enable member"))))
 
 ;; ============================================================================
 ;; Transfer Ownership

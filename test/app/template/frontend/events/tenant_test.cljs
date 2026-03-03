@@ -138,6 +138,15 @@
       (is (= :delete (req-method req)))
       (is (= "/api/v1/tenant/members/m-1" (req-uri req))))))
 
+(deftest set-member-status-dispatches-put
+  (testing "set-member-status sends PUT to /api/v1/tenant/members/:id/status"
+    (reset-db!)
+    (rf/dispatch-sync [::tenant/set-member-status {:member-id "m-1" :status "active"}])
+    (let [req (last-request)]
+      (is (= :put (req-method req)))
+      (is (= "/api/v1/tenant/members/m-1/status" (req-uri req)))
+      (is (= "active" (:status (req-params req)))))))
+
 ;; ============================================================================
 ;; URL Slug
 ;; ============================================================================

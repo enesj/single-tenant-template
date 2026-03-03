@@ -8,5 +8,12 @@
                      :kaocha.hooks/after  [app.backend.fixtures/reset-test-system!]
                      :source-paths              ["src" "test" "vendor"]
                      :test-paths                ["test"]
-                     :ns-patterns               ["-test$"]}]
+                     :ns-patterns               ["^(?!app\\.e2e).*-test$"]}
+
+                    {:id                        :e2e
+                     :kaocha.hooks/before [app.e2e.fixtures/start-e2e-system]
+                     :kaocha.hooks/after  [app.e2e.fixtures/stop-e2e-system]
+                     :source-paths              ["src" "test" "vendor"]
+                     :test-paths                ["test"]
+                     :ns-patterns               ["app\\.e2e\\."]}]
   :capture-output? false}

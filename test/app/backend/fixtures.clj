@@ -74,57 +74,75 @@
 
 (defn start-test-system
   "Kaocha before-suite hook: Start full test system using dev infrastructure.
-   
+
    Kaocha hooks receive [suite test-plan] and must return suite.
-   
+
    Reuses `with-test-system` which provides:
    - :test profile config (port 8086, db 55433)
    - Full DI container with all services
    - Running webserver for integration tests"
   [suite _test-plan]
   (log/info "🧪 Starting test system (reusing dev infrastructure)...")
-  (let [;; Wrap state publishing like dev/system/core.clj does
-        publish-state (fn [system-state]
-                        (reset! state/state system-state)
-                        ;; Block until cancelled (like in dev)
-                        (try
-                          (loop [] (Thread/sleep 60000) (recur))
-                          (catch InterruptedException _
-                            (log/info "Test system interrupted"))))
-        ;; Start the test system in a future
-        instance (future
-                   (try
-                     (backend/with-test-system publish-state)
-                     (catch Exception e
-                       (log/error e "Test system startup failed")
-                       (throw e))))]
-    (reset! test-instance instance)
-    ;; Wait for system to be ready
-    (loop [attempts 0]
-      (cond
-        (>= attempts 50)
-        (throw (ex-info "Test system failed to start within 5 seconds"
-                 {:attempts attempts}))
 
-        (nil? @state/state)
-        (do (Thread/sleep 100) (recur (inc attempts)))
+  ;; Avoid double-starts within the same JVM (e.g. when multiple Kaocha suites
+  ;; run back-to-back). If a previous suite already started the system and it's
+  ;; still running, re-use it instead of trying to bind the port again.
+  (if (and @test-instance
+        (not (future-done? @test-instance))
+        (some? (get-test-db)))
+    (do
+      (log/info "♻️ Test system already running; reusing existing instance")
+      (ensure-test-schema!)
+      suite)
 
-        (nil? (get-test-db))
-        (do (Thread/sleep 100) (recur (inc attempts)))
+    (do
+      ;; Clear stale instance refs (if any) before starting a fresh system.
+      (when (and @test-instance (future-done? @test-instance))
+        (reset! test-instance nil))
 
-        :else
-        (do
-          (log/info "✅ Test system ready"
-            {:database (some? (get-test-db))
-             :service-container (some? (get-test-service-container))
-             :config (some? (get-test-config))})
-          (ensure-test-schema!)))))
-  ;; Return suite unchanged
-  suite)
+      (let [;; Wrap state publishing like dev/system/core.clj does
+            publish-state (fn [system-state]
+                            (reset! state/state system-state)
+                            ;; Block until cancelled (like in dev)
+                            (try
+                              (loop [] (Thread/sleep 60000) (recur))
+                              (catch InterruptedException _
+                                (log/info "Test system interrupted"))))
+            ;; Start the test system in a future
+            instance (future
+                       (try
+                         (backend/with-test-system publish-state)
+                         (catch Exception e
+                           (log/error e "Test system startup failed")
+                           (throw e))))]
+        (reset! test-instance instance)
+        ;; Wait for system to be ready
+        (loop [attempts 0]
+          (cond
+            (>= attempts 50)
+            (throw (ex-info "Test system failed to start within 5 seconds"
+                     {:attempts attempts}))
+
+            (nil? @state/state)
+            (do (Thread/sleep 100) (recur (inc attempts)))
+
+            (nil? (get-test-db))
+            (do (Thread/sleep 100) (recur (inc attempts)))
+
+            :else
+            (do
+              (log/info "✅ Test system ready"
+                {:database (some? (get-test-db))
+                 :service-container (some? (get-test-service-container))
+                 :config (some? (get-test-config))})
+              (ensure-test-schema!)))))
+
+      ;; Return suite unchanged
+      suite)))
 
 (defn reset-test-system!
   "Kaocha after-suite hook: Shutdown test system cleanly.
-   
+
    Kaocha hooks receive [suite test-plan] and must return suite."
   [suite _test-plan]
   (log/info "🧹 Stopping test system...")
@@ -134,7 +152,13 @@
       @instance
       (catch java.util.concurrent.CancellationException _
         ;; Expected when future is cancelled
-        nil)))
+        nil)
+      (catch java.util.concurrent.ExecutionException e
+        ;; Can happen if a double-start attempt failed (e.g. port already in use).
+        ;; We still want teardown to be best-effort and not fail the whole test run.
+        (log/warn e "Test system future ended with an exception during shutdown"))
+      (catch Exception e
+        (log/warn e "Unexpected error while stopping test system"))))
   (reset! test-instance nil)
   (reset! state/state nil)
   (log/info "✅ Test system stopped")

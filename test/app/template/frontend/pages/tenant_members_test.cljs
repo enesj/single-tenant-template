@@ -34,15 +34,19 @@
     (let [member {:id "m-42"
                   :user_email "member@example.com"
                   :role "admin"
+                  :status "suspended"
+                  :user_status "inactive"
                   :created_at "2026-03-03T10:20:30Z"}
           row (tenant-members-page/tenant-member-row member)]
       (is (= "member@example.com" (:member_name row)))
       (is (= "member@example.com" (:member_email row)))
       (is (= "admin" (:member_role row)))
+      (is (= "suspended" (:membership_status row)))
+      (is (= "inactive" (:account_status row)))
       (is (= "2026-03-03" (:joined_on row))))))
 
 (deftest member-row-action-state-respects-guardrails-and-table-visibility
-  (testing "edit/delete visibility follows both management permissions and table settings"
+  (testing "edit/delete/enable visibility follows both management permissions, account state, and table settings"
     (let [manageable-member {:id "m-2"
                              :role "admin"
                              :show-edit? true
@@ -55,9 +59,22 @@
                         :role "owner"
                         :show-edit? true
                         :show-delete? true}
+          suspended-member {:id "m-5"
+                            :role "member"
+                            :status "suspended"
+                            :show-edit? true
+                            :show-delete? true}
+          inactive-account-member {:id "m-6"
+                                   :role "admin"
+                                   :status "active"
+                                   :user_status "suspended"
+                                   :show-edit? true
+                                   :show-delete? true}
           manageable-state (tenant-members-page/member-row-action-state "owner" true manageable-member)
           hidden-state (tenant-members-page/member-row-action-state "owner" true hidden-by-settings)
-          protected-owner-state (tenant-members-page/member-row-action-state "admin" false owner-target)]
+          protected-owner-state (tenant-members-page/member-row-action-state "admin" false owner-target)
+          suspended-state (tenant-members-page/member-row-action-state "owner" true suspended-member)
+          inactive-account-state (tenant-members-page/member-row-action-state "owner" true inactive-account-member)]
       (is (= true (:show-edit? manageable-state)))
       (is (= true (:show-delete? manageable-state)))
       (is (= false (:edit-disabled? manageable-state)))
@@ -71,7 +88,13 @@
       (is (= true (:show-delete? protected-owner-state)))
       (is (= true (:edit-disabled? protected-owner-state)))
       (is (= true (:delete-disabled? protected-owner-state)))
-      (is (= false (:can-transfer? protected-owner-state))))))
+      (is (= false (:can-transfer? protected-owner-state)))
+
+      (is (= false (:show-edit? suspended-state)))
+      (is (= false (:show-delete? suspended-state)))
+      (is (= true (:show-enable? suspended-state)))
+
+      (is (= false (:can-transfer? inactive-account-state))))))
 
 (deftest tenant-member-list-props-use-canonical-list-view-contract
   (testing "tenant members page passes canonical list-view props with modal edit/delete controls and member rows as overrides"

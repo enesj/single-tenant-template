@@ -3,9 +3,10 @@
   (:require
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
-    [app.template.backend.utils.query-builders :as qb]
     [app.shared.type-conversion :as tc]
+    [app.template.backend.utils.query-builders :as qb]
     [cheshire.core :as json]
+    [clojure.string :as str]
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -55,6 +56,27 @@
                       base-with-aliases)]
       converted)))
 
+(defn- maybe-uuid
+  "Coerce an ID value to a UUID.
+
+   Accepts:
+   - UUID values (passthrough)
+   - UUID strings
+
+   Returns nil when the value is nil/blank or not a valid UUID string.
+
+   This keeps audit logging from blowing up when upstream code provides
+   string IDs (common at HTTP/session boundaries)."
+  [v]
+  (cond
+    (nil? v) nil
+    (instance? UUID v) v
+    (string? v) (when-not (str/blank? v)
+                  (try
+                    (UUID/fromString v)
+                    (catch Exception _ nil)))
+    :else (maybe-uuid (str v))))
+
 (defn log-audit!
   "Log an admin or user action to the audit log.
 
@@ -67,12 +89,19 @@
   [db {:keys [user_id admin_id action entity-type entity-id changes ip-address user-agent]}]
   (try
     (let [actor-id (or admin_id user_id)
+          actor-id-uuid (maybe-uuid actor-id)
+          target-id-uuid (maybe-uuid entity-id)
           actor-type (cond
                        admin_id "admin"
                        user_id "user"
                        :else nil)
           _ (when (nil? actor-id)
               (log/warn "log-audit! called without actor id" {:action action :entity-type entity-type}))
+          _ (when (and actor-id (nil? actor-id-uuid))
+              (log/warn "log-audit! received non-UUID actor id; skipping audit entry"
+                {:action action
+                 :entity-type entity-type
+                 :actor-id actor-id}))
           ;; For admin-initiated actions, embed initiator info in changes
           changes-with-initiator (cond-> changes
                                    admin_id (assoc :initiator {:type "admin" :admin-id (str admin_id)}))
@@ -84,16 +113,16 @@
           ;; Cast actor_type to the enum type used by :audit_logs.actor_type
           actor-type-db (when actor-type
                           (tc/cast-for-database :audit-actor-type actor-type))]
-      (when actor-id
+      (when actor-id-uuid
         (jdbc/execute-one! db
           (hsql/format
             {:insert-into :audit_logs
              :values [{:id (UUID/randomUUID)
                        :actor_type actor-type-db
-                       :actor_id actor-id
+                       :actor_id actor-id-uuid
                        :action action
                        :target_type safe-target-type
-                       :target_id entity-id
+                       :target_id target-id-uuid
                        :metadata metadata-value
                        :ip ip-address
                        :user_agent user-agent

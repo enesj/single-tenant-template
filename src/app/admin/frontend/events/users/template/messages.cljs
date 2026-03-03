@@ -41,6 +41,15 @@
   (fn [db _]
     (dissoc db :admin/error-message)))
 
+(rf/reg-event-db
+  :admin/clear-entity-error
+  (fn [db [_ entity-name]]
+    ;; Admin pages track entity-level errors as keywords like :admin/users-error.
+    ;; The admin page wrapper needs a generic way to clear those.
+    (if (some? entity-name)
+      (dissoc db (keyword "admin" (str (name entity-name) "-error")))
+      db)))
+
 (rf/reg-sub
   :admin/error-message
   (fn [db _]

@@ -16,16 +16,15 @@
 
 (defn- create-user! [db suffix]
   (let [id (java.util.UUID/randomUUID)
-        now (java.time.LocalDateTime/now)]
+        now (java.time.Instant/now)]
     (jdbc/execute-one! db
       (sql/format {:insert-into [:users]
                    :values [{:id id
                              :email (str "auth-tenant-" suffix "-" id "@example.com")
                              :full_name (str "User " suffix)
                              :password_hash "placeholder"
-                             :role [:cast "member" :user_role]
                              :status [:cast "active" :user_status]
-                             :auth_provider "password"
+                             :auth_provider "email"
                              :email_verified false
                              :created_at now :updated_at now}]
                    :returning [:*]}))))

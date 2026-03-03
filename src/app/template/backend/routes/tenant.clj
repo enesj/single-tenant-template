@@ -99,16 +99,28 @@
         (response/response {:memberships (sanitize memberships)})))))
 
 (defn- list-members-handler
-  "GET /tenant/members — list members of the active tenant."
+  "GET /tenant/members — list members of the active tenant.
+
+   Owners/admins see suspended memberships; everyone else sees active only."
   [db]
   (fn [req]
     (route-utils/with-error-handling "tenant-members"
-      (let [tenant (get-tenant req)]
+      (let [user   (get-user req)
+            tenant (get-tenant req)]
         (when-not tenant
           (throw (ex-info "No active tenant" {:type :validation-error
                                               :errors {:tenant ["No active tenant in session"]}})))
-        (let [members (tenant-svc/get-tenant-members db (or (:id tenant) (:tenants/id tenant)))]
-          (response/response {:members (sanitize members)}))))))
+        (let [tenant-id (or (:id tenant) (:tenants/id tenant))
+              actor-m   (tenant-svc/get-membership db tenant-id (:id user))]
+          (when-not actor-m
+            (throw (ex-info "Not a member of this tenant"
+                     {:type :forbidden
+                      :errors {:tenant ["You are not a member of this tenant"]}})))
+          (let [actor-role (or (:role actor-m) (:tenant_memberships/role actor-m))
+                include-suspended? (contains? #{"owner" "admin"} (str actor-role))
+                members (tenant-svc/get-tenant-members db tenant-id
+                          {:include-suspended? include-suspended?})]
+            (response/response {:members (sanitize members)})))))))
 
 (defn- create-invitation-handler
   "POST /tenant/invitations — invite a user to the current tenant."
@@ -312,6 +324,44 @@
                                                     :target-membership target-membership})]
           (response/response {:success true :membership (sanitize result)}))))))
 
+(defn- set-member-status-handler
+  "PUT /tenant/members/:id/status — set a member's membership status.
+
+   Currently supports re-enabling a suspended membership (status = \"active\")."
+  [db]
+  (fn [req]
+    (route-utils/with-error-handling "tenant-set-member-status"
+      (let [user   (get-user req)
+            tenant (get-tenant req)]
+        (when-not tenant
+          (throw (ex-info "No active tenant" {:type :validation-error
+                                              :errors {:tenant ["No active tenant in session"]}})))
+        (let [tenant-id (or (:id tenant) (:tenants/id tenant))
+              actor-m   (tenant-svc/get-membership db tenant-id (:id user))
+              _         (require-role! actor-m ["owner" "admin"])
+              member-id (get-in req [:path-params :id])
+              new-status-raw (get-in req [:body-params :status])
+              new-status (cond
+                           (keyword? new-status-raw) (name new-status-raw)
+                           (string? new-status-raw) new-status-raw
+                           (some? new-status-raw) (str new-status-raw)
+                           :else nil)]
+          (when-not (= "active" new-status)
+            (throw (ex-info "Invalid status"
+                     {:type :validation-error
+                      :errors {:status ["Only 'active' is supported"]}})))
+          (let [target-membership (first
+                                    (filter #(= (str (or (:id %) (:tenant_memberships/id %))) (str member-id))
+                                      (tenant-svc/get-tenant-members db tenant-id
+                                        {:include-suspended? true})))]
+            (when-not target-membership
+              (throw (ex-info "Member not found" {:type :entity-not-found})))
+            (let [result (member-svc/reinstate-member! db
+                           {:actor-membership  actor-m
+                            :target-membership target-membership})]
+              (response/response {:success true
+                                  :membership (sanitize result)}))))))))
+
 ;; ============================================================================
 ;; Route Tree
 ;; ============================================================================
@@ -326,6 +376,7 @@
    ["/memberships"  {:get  {:handler (list-memberships-handler db)}}]
    ["/members"      {:get {:handler (list-members-handler db)}}]
    ["/members/:id"       {:delete {:handler (remove-member-handler db)}}]
+   ["/members/:id/status" {:put {:handler (set-member-status-handler db)}}]
    ["/members/:id/role"  {:put    {:handler (change-role-handler db)}}]
    ["/invitations"       {:get  {:handler (list-invitations-handler db)}
                           :post {:handler (create-invitation-handler db email-service base-url)}}]

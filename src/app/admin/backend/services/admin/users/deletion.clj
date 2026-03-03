@@ -3,6 +3,7 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.users.validation :as validation]
+    [clojure.string :as str]
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -126,11 +127,33 @@
 
       (catch Exception e
         ;; Handle unexpected database errors
-        (log/error e "Unexpected error during user deletion:"
-          "user-id:" user-id
-          "admin-id:" admin-id)
-        (throw (ex-info "Database error during user deletion"
-                 {:status 500
-                  :user-id user-id
-                  :original-error (.getMessage e)}
-                 e))))))
+        (let [psql-ex (cond
+                        (instance? org.postgresql.util.PSQLException e) e
+                        (instance? org.postgresql.util.PSQLException (.getCause e)) (.getCause e)
+                        :else nil)
+              sql-state (when psql-ex (.getSQLState ^org.postgresql.util.PSQLException psql-ex))
+              msg (or (.getMessage e) "")
+              tenant-owner-constraint? (and (= "23514" sql-state)
+                                         (str/includes? (str/lower-case msg)
+                                           "must have exactly one active owner"))]
+          (when tenant-owner-constraint?
+            ;; This happens when deleting a user would remove the only active owner membership.
+            ;; The UI commonly reports this as “can’t delete even if suspended”, because user
+            ;; status != membership status and the DB invariant is enforced at commit time.
+            (throw (ex-info "Cannot delete this user because it would leave a tenant without exactly one active owner. Transfer ownership to another member first."
+                     {:status 400
+                      :reason :tenant-active-owner-invariant
+                      :user-id user-id
+                      :sql-state sql-state
+                      :original-error msg}
+                     e)))
+
+          (log/error e "Unexpected error during user deletion:"
+            "user-id:" user-id
+            "admin-id:" admin-id)
+          (throw (ex-info "Database error during user deletion"
+                   {:status 500
+                    :user-id user-id
+                    :original-error msg
+                    :sql-state sql-state}
+                   e)))))))

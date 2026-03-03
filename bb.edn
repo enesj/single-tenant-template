@@ -204,6 +204,19 @@
            (flush)
            (shell "clj -X:test"))},
 
+  e2e-test
+  {:doc "Run E2E tests (Playwright + headless Chromium against test system on port 8086). Usage: bb e2e-test [--focus NS]",
+   :task (do
+           (printf "\033]0;🌐 E2E Tests\007")
+           (flush)
+           (let [args *command-line-args*
+                 focus-ns (when (and (seq args) (= "--focus" (first args)))
+                            (second args))
+                 cmd (if focus-ns
+                       (str "clj -M:test -m kaocha.runner --focus " focus-ns " :e2e")
+                       "clj -M:test -m kaocha.runner :e2e")]
+             (shell cmd)))},
+
   fe-test
   {:doc "Alias for frontend tests (same as fe-test-node). Usage: bb fe-test [start] [lines]",
    :task (apply shell "bb" "fe-test-node" *command-line-args*)},

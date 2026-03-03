@@ -229,6 +229,42 @@
                      :where  [:= :id target-id]
                      :returning [:*]})))))
 
+(defn reinstate-member!
+  "Reinstate a suspended membership (set status to active)."
+  [db {:keys [actor-membership target-membership]}]
+  ;; Guard: actor must be active
+  (when (not= "active" (membership-status actor-membership))
+    (throw (ex-info "Actor membership must be active"
+             {:type :validation-error
+              :errors {:membership ["Actor membership must be active"]}})))
+
+  ;; Guard: target must be suspended
+  (when (not= "suspended" (membership-status target-membership))
+    (throw (ex-info "Target membership is not suspended"
+             {:type :validation-error
+              :errors {:membership ["Target membership is not suspended"]}})))
+
+  ;; Guard: cannot reinstate an owner membership
+  (ensure-not-owner-target!
+    target-membership
+    "Cannot reinstate the tenant owner")
+
+  ;; Guard: actor must have manage rights (owner or admin)
+  (when-not (#{"owner" "admin"} (role-name actor-membership))
+    (throw (ex-info "Insufficient permissions to reinstate members"
+             {:type :forbidden
+              :errors {:membership ["Only owners and admins can reinstate members"]}})))
+
+  (let [target-id (membership-id target-membership)
+        now       (java.time.LocalDateTime/now)]
+    (convert-pg-objects
+      (jdbc/execute-one! db
+        (sql/format {:update [:tenant_memberships]
+                     :set    {:status     [:cast "active" :membership_status]
+                              :updated_at now}
+                     :where  [:= :id target-id]
+                     :returning [:*]})))))
+
 (comment
   ;; (require 'app.template.backend.services.member :reload)
   :rcf)

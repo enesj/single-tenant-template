@@ -99,7 +99,39 @@
     (fn [request]
       (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
             body (:body request)
-            raw-ids (or (:ids body) (:user_ids body) (:user-ids body) (:userIds body) [])
+            request-params (:params request)
+            query-params (:query-params request)
+            raw-ids* (or (:ids body)
+                       (:user_ids body)
+                       (:user-ids body)
+                       (:userIds body)
+                       (get body "ids")
+                       (get body "user_ids")
+                       (get body "user-ids")
+                       (get body "userIds")
+
+                       (:ids request-params)
+                       (:user_ids request-params)
+                       (:user-ids request-params)
+                       (:userIds request-params)
+                       (get request-params "ids")
+                       (get request-params "user_ids")
+                       (get request-params "user-ids")
+                       (get request-params "userIds")
+
+                       (:ids query-params)
+                       (:user_ids query-params)
+                       (:user-ids query-params)
+                       (:userIds query-params)
+                       (get query-params "ids")
+                       (get query-params "user_ids")
+                       (get query-params "user-ids")
+                       (get query-params "userIds"))
+            raw-ids (cond
+                      (nil? raw-ids*) []
+                      (sequential? raw-ids*) raw-ids*
+                      (string? raw-ids*) [raw-ids*]
+                      :else [raw-ids*])
             user-ids (->> raw-ids (map utils/parse-uuid-custom) (filter some?) vec)
             force-delete (boolean (:force-delete body))
             dry-run (boolean (:dry-run body))]

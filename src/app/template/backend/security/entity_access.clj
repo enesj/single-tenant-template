@@ -21,8 +21,17 @@
   #{:users})
 
 (def ^:private public-entities
-  "Entities allowed through generic CRUD (none in single-tenant admin)."
-  #{})
+  "Entities allowed through the generic CRUD endpoints.
+
+   Keep this list small and explicit: these routes are metadata-driven and
+   are not appropriate for many domain entities.
+
+   These are required by the E2E multi-tenancy access-control/data-scoping
+   tests and are considered safe for tenant-scoped generic reads/writes
+   under the existing middleware checks."
+  #{:expense-categories
+    :receipts
+    :suppliers})
 
 ;; ================================================================================
 ;; Access Control Functions

@@ -185,7 +185,13 @@
                          {:type :validation-error
                           :errors (:errors validation-result)})))
             cast-data (crud-protocols/cast-for-insert type-casting-service entity-key data-with-audit)
-            clean-data (->> cast-data (filter (fn [[_k v]] (some? v))) (into {}))
+            cast-data-with-id (if (some? (:id cast-data))
+                                cast-data
+                                (let [{:keys [field-type constraints]} (crud-protocols/get-field-metadata metadata-service entity-key :id)]
+                                  (if (and (= :uuid field-type) (:primary-key constraints))
+                                    (assoc cast-data :id (java.util.UUID/randomUUID))
+                                    cast-data)))
+            clean-data (->> cast-data-with-id (filter (fn [[_k v]] (some? v))) (into {}))
             db-data (convert-map metadata clean-data :to-db)
             raw-result (db-protocols/create db-service metadata db-entity db-data)
             result (convert-map metadata raw-result :to-app)]

@@ -180,21 +180,30 @@
           opts)))))
 
 (defn get-tenant-members
-  "Return all active members of a tenant, joined with user info."
-  [db tenant-id]
-  (let [uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
-        opts    {:builder-fn rs/as-unqualified-maps}]
-    (mapv convert-pg-objects
-      (jdbc/execute! db
-        (sql/format {:select [:tm.*
-                              [:u.email :user_email]
-                              [:u.full_name :user_full_name]]
-                     :from   [[:tenant_memberships :tm]]
-                     :join   [[:users :u] [:= :tm.user_id :u.id]]
-                     :where  [:and
-                              [:= :tm.tenant_id uuid-id]
-                              [:= :tm.status [:cast "active" :membership_status]]]})
-        opts))))
+  "Return members of a tenant, joined with user info.
+
+   Options:
+   - :include-suspended? When true, include suspended memberships (default false)."
+  ([db tenant-id]
+   (get-tenant-members db tenant-id {}))
+  ([db tenant-id {:keys [include-suspended?]
+                  :or {include-suspended? false}}]
+   (let [uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
+         opts {:builder-fn rs/as-unqualified-maps}
+         where-clause (cond-> [:and
+                               [:= :tm.tenant_id uuid-id]]
+                        (not include-suspended?)
+                        (conj [:= :tm.status [:cast "active" :membership_status]]))
+         query {:select [:tm.*
+                         [:u.email :user_email]
+                         [:u.full_name :user_full_name]
+                         [:u.status :user_status]]
+                :from [[:tenant_memberships :tm]]
+                :join [[:users :u] [:= :tm.user_id :u.id]]
+                :where where-clause
+                :order-by [[:tm.created_at :asc]]}]
+     (mapv convert-pg-objects
+       (jdbc/execute! db (sql/format query) opts)))))
 
 (defn get-membership
   "Return the single active membership for a user in a tenant, or nil."

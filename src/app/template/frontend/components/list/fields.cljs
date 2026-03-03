@@ -197,7 +197,12 @@
                            (name display-value)
                            (or display-value "")))
          value-lower (some-> display-value str str/trim str/lower-case)
+         formatter-id (normalize-formatter-id (:formatter field))
          formatter-badge (resolve-backlog-badge (:formatter field) display-value)
+         status-badge (when (= formatter-id "status-badge")
+                        (when-let [value-str (some-> display-value str str/trim not-empty)]
+                          {:label (titleize-status value-str)
+                           :variant (status->badge-variant (some-> value-str str/lower-case))}))
          status-field-id? (or (= field-id :status)
                             (= field-id "status")
                             (= (name field-id) "status"))
@@ -278,6 +283,9 @@
 
        backlog-badge-fallback
        (render-badge backlog-badge-fallback)
+
+       status-badge
+       (render-badge status-badge)
 
        status-str
        (render-badge {:label (titleize-status status-str)

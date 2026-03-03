@@ -42,6 +42,35 @@
     (when tenant-id (str ":t:" tenant-id))
     (when user-id (str ":u:" user-id))))
 
+(defn- local-dev-ip?
+  "Return true when the client IP represents localhost / private networks.
+
+  Note: Some servers report IPv6 loopback as the expanded form
+  `0:0:0:0:0:0:0:1` instead of `::1`."
+  [ip]
+  (let [ip (-> (str ip)
+             (str/split #",")
+             first
+             str/trim)]
+    (or (= ip "127.0.0.1")
+      (= ip "localhost")
+      (= ip "::1")
+      (= ip "0:0:0:0:0:0:0:1")
+      (str/starts-with? ip "192.168.")
+      (str/starts-with? ip "10.")
+      (str/starts-with? ip "172.16.")
+      (= ip "146.255.154.27"))))
+
+(defn- rate-limiting-disabled?
+  "Return true when rate limiting should be skipped.
+
+  Used for local development + automated tests where we intentionally make many
+  provisioning/auth requests quickly."
+  [ip]
+  (or (local-dev-ip? ip)
+    (System/getenv "DISABLE_RATE_LIMITING")
+    (System/getProperty "DISABLE_RATE_LIMITING")))
+
 (defn- cleanup-expired-entries!
   "Remove expired entries from rate limiting storage to prevent memory leaks."
   []
@@ -175,20 +204,9 @@
                 ;; Admin routes stay global (IP-only) since admins operate cross-tenant.
                 tenant-id (when (= route-type :regular-api)
                             (or (get-in request [:session :tenant-id])
-                              (get-in request [:session :auth-session :tenant :id])))
+                              (get-in request [:session :auth-session :tenant :id])))]
 
-                ;; Skip rate limiting for local development
-                is-local-dev (or (= ip "127.0.0.1")
-                               (= ip "localhost")
-                               (= ip "::1")  ; IPv6 localhost
-                               (str/starts-with? (str ip) "192.168.")  ; Private network
-                               (str/starts-with? (str ip) "10.")  ; Private network
-                               (str/starts-with? (str ip) "172.16.")  ; Private network
-                               (= ip "146.255.154.27")  ; Current user IP
-                               (System/getenv "DISABLE_RATE_LIMITING")
-                               (System/getProperty "DISABLE_RATE_LIMITING"))]
-
-            (if (and (not is-local-dev)
+            (if (and (not (rate-limiting-disabled? ip))
                   (is-rate-limited? ip route-type tenant-id user-id))
               ;; Return rate limit response
               (let [config (get rate-limits route-type)
@@ -208,10 +226,15 @@
 
 (defn check-provisioning-rate-limit!
   "Check tenant provisioning rate limit for an IP.
-  Returns nil if OK, or a 429 response map if rate limited."
+
+  Returns nil if OK, or a 429 response map if rate limited.
+
+  IMPORTANT: For localhost / dev / tests we skip this entirely (otherwise
+  running E2E suites quickly will trip the 5-per-hour limit)."
   [ip]
-  (when (is-rate-limited? ip :tenant-provisioning nil nil)
-    (create-rate-limit-response :tenant-provisioning 3600)))
+  (when-not (rate-limiting-disabled? ip)
+    (when (is-rate-limited? ip :tenant-provisioning nil nil)
+      (create-rate-limit-response :tenant-provisioning 3600))))
 
 (defn get-rate-limit-stats
   "Get current rate limiting statistics for monitoring."

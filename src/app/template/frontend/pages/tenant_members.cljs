@@ -58,6 +58,14 @@
   {:fields [{:id "member_name" :label "Name" :type :text}
             {:id "member_email" :label "Email" :type :text :input-type "email"}
             {:id "member_role" :label "Role" :type :text}
+            {:id "membership_status"
+             :label "Membership"
+             :type :text
+             :formatter "status-badge"}
+            {:id "account_status"
+             :label "Account"
+             :type :text
+             :formatter "status-badge"}
             {:id "joined_on" :label "Joined" :type :text}]})
 
 (defn member-management-capabilities
@@ -78,6 +86,15 @@
     :member_name (member-name member)
     :member_email (member-email member)
     :member_role (member-role member)
+    :membership_status (normalize-role
+                         (or (:status member)
+                           (:tenant_memberships/status member)
+                           (:membership_status member)))
+    :account_status (normalize-role
+                      (or (:user_status member)
+                        (:user-status member)
+                        (:users/status member)
+                        (:account_status member)))
     :joined_on (member-joined member)))
 
 ;; ============================================================================
@@ -88,11 +105,34 @@
   [current-role is-owner? member]
   (let [{:keys [role can-change-role? can-remove? can-transfer?] :as capabilities}
         (member-management-capabilities current-role is-owner? member)
+        membership-status (normalize-role
+                            (or (:status member)
+                              (:tenant_memberships/status member)
+                              (:membership_status member)))
+        account-status (normalize-role
+                         (or (:user_status member)
+                           (:user-status member)
+                           (:users/status member)
+                           (:account_status member)))
+        membership-active? (or (nil? membership-status)
+                             (= membership-status "active"))
+        account-active? (or (nil? account-status)
+                          (= account-status "active"))
+        can-enable? (and can-remove?
+                      (= membership-status "suspended"))
+        can-disable? (and can-remove? membership-active?)
+        can-transfer? (and can-transfer? membership-active? account-active?)
         policy-show-edit? (not (false? (:show-edit? member)))
         policy-show-delete? (not (false? (:show-delete? member)))
-        edit-disabled? (or (true? (:edit-disabled? member)) (not can-change-role?))
-        delete-disabled? (or (true? (:delete-disabled? member)) (not can-remove?))
-        edit-disabled-reason (when (and policy-show-edit? edit-disabled?)
+        show-edit? (and policy-show-edit? membership-active?)
+        show-delete? (and policy-show-delete? membership-active?)
+        show-enable? (and policy-show-delete? can-enable?)
+        edit-disabled? (or (true? (:edit-disabled? member))
+                         (not can-change-role?)
+                         (not membership-active?))
+        delete-disabled? (or (true? (:delete-disabled? member))
+                           (not can-disable?))
+        edit-disabled-reason (when (and show-edit? edit-disabled?)
                                (cond
                                  (true? (:edit-disabled? member))
                                  "Editing disabled"
@@ -100,9 +140,12 @@
                                  (= role "owner")
                                  "Owner role cannot be changed"
 
+                                 (not membership-active?)
+                                 "Membership is disabled"
+
                                  :else
                                  "You don't have permission to edit this member"))
-        delete-disabled-reason (when (and policy-show-delete? delete-disabled?)
+        delete-disabled-reason (when (and show-delete? delete-disabled?)
                                  (cond
                                    (true? (:delete-disabled? member))
                                    "Deletion disabled"
@@ -110,11 +153,21 @@
                                    (= role "owner")
                                    "Owner cannot be removed"
 
+                                   (not membership-active?)
+                                   "Membership is disabled"
+
                                    :else
                                    "You don't have permission to remove this member"))]
     (assoc capabilities
-      :show-edit? policy-show-edit?
-      :show-delete? policy-show-delete?
+      :membership-status membership-status
+      :account-status account-status
+      :membership-active? membership-active?
+      :account-active? account-active?
+      :can-enable? can-enable?
+      :can-disable? can-disable?
+      :show-enable? show-enable?
+      :show-edit? show-edit?
+      :show-delete? show-delete?
       :edit-disabled? edit-disabled?
       :delete-disabled? delete-disabled?
       :edit-disabled-reason edit-disabled-reason
@@ -200,6 +253,7 @@
         mid-str (some-> mid str)
         {:keys [show-edit?
                 show-delete?
+                show-enable?
                 edit-disabled?
                 delete-disabled?
                 edit-disabled-reason
@@ -227,22 +281,41 @@
                          (on-edit-click item-data)))}
           ($ edit-icon)))
 
+      ;; Disable membership (sets tenant_memberships.status = suspended)
       (when show-delete?
         ($ button
-          {:id (str "btn-delete-tenant-members-" mid-str)
+          {:id (str "btn-disable-tenant-members-" mid-str)
            :btn-type :danger
            :shape "circle"
            :disabled delete-disabled?
-           :title (or delete-disabled-reason "Remove member")
+           :title (or delete-disabled-reason "Disable member")
            :on-click (fn [e]
                        (.stopPropagation e)
                        (when-not delete-disabled?
                          (confirm-dialog/show-confirm
-                           {:title "Remove member"
-                            :message (str "Remove " (member-name member) " from this tenant?")
-                            :confirm-text "Remove"
+                           {:title "Disable member"
+                            :message (str "Disable " (member-name member) " for this tenant? They will lose access, but can be re-enabled later.")
+                            :confirm-text "Disable"
                             :on-confirm #(rf/dispatch [::tenant/remove-member {:member-id mid}])})))}
           ($ delete-icon)))
+
+      ;; Enable membership (sets tenant_memberships.status = active)
+      (when show-enable?
+        ($ button
+          {:id (str "btn-enable-tenant-members-" mid-str)
+           :btn-type :success
+           :shape "circle"
+           :title "Enable member"
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (confirm-dialog/show-confirm
+                         {:title "Enable member"
+                          :message (str "Re-enable " (member-name member) " for this tenant?")
+                          :confirm-text "Enable"
+                          :on-confirm #(rf/dispatch [::tenant/set-member-status
+                                                     {:member-id mid
+                                                      :status "active"}])}))}
+          "✓"))
 
       ($ member-transfer-action
         {:member member

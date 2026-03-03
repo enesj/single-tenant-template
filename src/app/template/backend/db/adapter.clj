@@ -119,8 +119,9 @@
     (try
       ;;(log/debug "🔍 DB DEBUG: list-with-filters called for table:" table "filters:" filters)
       (let [start-time (System/currentTimeMillis)
-            where-clauses (for [[field value] filters]
-                            [:= field value])
+            where-clauses (for [[field value] filters
+                                :let [value* (or (type-conv/try-parse-uuid value) value)]]
+                            [:= field value*])
             ;;_ (log/debug "🔍 DB DEBUG: Generated where-clauses:" where-clauses)
             where-clause  (cond
                             (empty? where-clauses) nil

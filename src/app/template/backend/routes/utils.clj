@@ -33,6 +33,18 @@
     (response/bad-request {:error (or (:message error-data) "Validation failed")
                            :details (:errors error-data)})
 
+    :unauthorized
+    (response/status
+      (response/response {:error (or (:message error-data) (.getMessage e) "Unauthorized")
+                          :details (:errors error-data)})
+      401)
+
+    :forbidden
+    (response/status
+      (response/response {:error (or (:message error-data) (.getMessage e) "Forbidden")
+                          :details (:errors error-data)})
+      403)
+
     :foreign-key-constraint
     (response/status
       (response/response {:error (:message error-data)})

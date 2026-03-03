@@ -6,11 +6,14 @@
     [app.shared.date :as shared-date]
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.auth.tenant :as tenant-auth]
-    [app.template.backend.routes.utils :as route-utils :refer [get-service-container]]
+    [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
-    [app.shared.http :as http :refer [json-response]]
+    [app.template.backend.services.tenant :as tenant-svc]
     [cheshire.core :as json]
     [clojure.walk :as walk]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
@@ -58,6 +61,104 @@
         :else x))
     obj))
 
+(defn- clear-user-auth-session
+  "Remove user auth keys from session while preserving other session state."
+  [session]
+  (let [existing-session (or session {})
+        new-session (-> existing-session
+                      (dissoc :auth-session :user :tenant :tenant-id :user-id))]
+    (when (seq new-session) new-session)))
+
+(defn- normalize-status
+  [value]
+  (when (some? value)
+    (cond
+      (keyword? value) (name value)
+      :else (str value))))
+
+(defn- ->uuid
+  [value]
+  (cond
+    (instance? java.util.UUID value) value
+    (string? value) (try
+                      (java.util.UUID/fromString value)
+                      (catch Exception _ nil))
+    :else nil))
+
+(defn- resolve-db
+  "Best-effort DB connection for request-time session validation."
+  [req]
+  (or (get-in req [:service-container :db])
+    (some-> (get-in req [:service-container :db-adapter]) :connection)))
+
+(defn- fetch-user-status
+  [db user-id]
+  (when (and db user-id)
+    (when-let [u-id (->uuid user-id)]
+      (let [opts {:builder-fn rs/as-unqualified-maps}
+            row  (jdbc/execute-one! db
+                   (sql/format {:select [:status]
+                                :from   [:users]
+                                :where  [:= :id u-id]})
+                   opts)]
+        (normalize-status (:status row))))))
+
+(defn- fetch-tenant-status
+  [db tenant-id]
+  (when (and db tenant-id)
+    (when-let [t-id (->uuid tenant-id)]
+      (let [opts {:builder-fn rs/as-unqualified-maps}
+            row  (jdbc/execute-one! db
+                   (sql/format {:select [:status]
+                                :from   [:tenants]
+                                :where  [:= :id t-id]})
+                   opts)]
+        (normalize-status (:status row))))))
+
+(defn- fetch-owner-user-status
+  [db tenant-id]
+  (when (and db tenant-id)
+    (when-let [t-id (->uuid tenant-id)]
+      (let [opts {:builder-fn rs/as-unqualified-maps}
+            row  (jdbc/execute-one! db
+                   (sql/format {:select [[:u.status :owner_user_status]]
+                                :from   [[:tenant_memberships :tm]]
+                                :join   [[:users :u] [:= :tm.user_id :u.id]]
+                                :where  [:and
+                                         [:= :tm.tenant_id t-id]
+                                         [:= :tm.status [:cast "active" :membership_status]]
+                                         [:= :tm.role [:cast "owner" :membership_role]]]
+                                :limit  1})
+                   opts)]
+        (normalize-status (:owner_user_status row))))))
+
+(defn- invalid-auth-session-message
+  "Return nil when the auth session is valid, otherwise an error message."
+  [db {:keys [user tenant]}]
+  (let [user-id (->uuid (or (:id user) (:users/id user)))
+        tenant-id (->uuid (or (:id tenant) (:tenants/id tenant)))
+        user-status (fetch-user-status db user-id)]
+    (cond
+      (not= "active" user-status)
+      "Account is not active"
+
+      tenant-id
+      (let [tenant-status (fetch-tenant-status db tenant-id)]
+        (cond
+          (not= "active" tenant-status)
+          "Tenant is not active"
+
+          (nil? (tenant-svc/get-membership db tenant-id user-id))
+          "You are not an active member of this tenant"
+
+          (not= "active" (fetch-owner-user-status db tenant-id))
+          "Tenant owner account is not active"
+
+          :else nil))
+
+      :else
+      nil)))
+
 (defn register-handler
   "Handler for user registration"
   [auth-service]
@@ -71,45 +172,48 @@
         (log/info "Body params keys:" (keys (:body-params req)))
 
         ;; Use a more robust check for password presence
-        (when (or (empty? email) (empty? password))
-          (log/warn "Missing email or password in registration request")
-          (http/bad-request-response "Email and password are required"))
+        (if (or (empty? email) (empty? password))
+          (do
+            (log/warn "Missing email or password in registration request")
+            ;; IMPORTANT: don't set Content-Type here; let reitit/muuntaja encode the body.
+            (response/bad-request {:error "Email and password are required"}))
 
-        ;; Debug params if needed
-        (log/debug "Email present:" (not (empty? email)))
-        (log/debug "Password present:" (not (empty? password)))
+          (do
+            ;; Debug params if needed
+            (log/debug "Email present:" (not (empty? email)))
+            (log/debug "Password present:" (not (empty? password)))
 
-        ;; Call registration service (handles validation, email verification and email sending)
-        (let [{:keys [db]} (get-service-container req)
-              config (get-in req [:service-container :config])
-              result (auth-service/register-user-with-password!
-                       auth-service
-                       {:email email
-                        :full-name full-name
-                        :password password})
-              {:keys [user verification-required]} result
-              sanitized-user (sanitize-for-serialization user)]
-
-          (if verification-required
-            ;; User created but needs email verification — no tenant provisioning yet
-            (let [new-session (assoc existing-session :auth-session {:user sanitized-user})]
-              (-> (json-response
-                    {:success true
-                     :verification-required true
-                     :message "Registration successful. Please check your email for verification."})
-                ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
-                (assoc :session new-session)))
-
-            ;; User registered successfully without verification — provision tenant now
-            (let [tenant-ctx   (tenant-auth/resolve-tenant-context db config user
-                                 {:client-ip (:remote-addr req)})
+            ;; Call registration service (handles validation, email verification and email sending)
+            (let [db (resolve-db req)
+                  config (get-in req [:service-container :config])
+                  result (auth-service/register-user-with-password! auth-service
+                           {:email email
+                            :full-name full-name
+                            :password password})
+                  {:keys [user verification-required]} result
+                  sanitized-user (sanitize-for-serialization user)
+                  ;; NOTE: Multi-tenancy spec + E2E flows expect tenant provisioning at registration.
+                  ;; Even when email verification is required, we still provision and set tenant context.
+                  tenant-ctx (tenant-auth/resolve-tenant-context db config user
+                               {:client-ip (:remote-addr req)})
                   auth-session (sanitize-for-serialization
                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
-                  new-session  (assoc existing-session :auth-session auth-session)]
-              (-> (json-response {:success true
-                                  :verification-required false
-                                  :user sanitized-user
-                                  :tenant (sanitize-for-serialization (:tenant auth-session))})
+                  new-session (assoc existing-session :auth-session auth-session)
+                  response-body (cond-> {:success true
+                                         :verification-required (boolean verification-required)
+                                         :user sanitized-user}
+                                  (:tenant auth-session)
+                                  (assoc :tenant (sanitize-for-serialization (:tenant auth-session)))
+
+                                  (:tenant-selection-required auth-session)
+                                  (assoc :tenant-selection-required true
+                                    :available-tenants (sanitize-for-serialization
+                                                         (:available-tenants auth-session)))
+
+                                  verification-required
+                                  (assoc :message "Registration successful. Please check your email for verification."))]
+              (-> (response/response response-body)
+                ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
                 (assoc :session new-session)))))))))
 
 ;; NEW: Email/password login endpoint
@@ -117,7 +221,7 @@
   [auth-service]
   (fn [req]
     (route-utils/with-error-handling "user-login"
-      (let [{:keys [db]} (get-service-container req)
+      (let [db (resolve-db req)
             {:keys [email password]} (:body-params req)
             ;; Ring already provides remote-addr and headers on the request
             remote-addr (:remote-addr req)
@@ -127,64 +231,73 @@
             existing-session (or (:session req) {})]
 
         ;; Validate required fields
-        (when (or (empty? email) (empty? password))
-          (http/bad-request-response "Email and password are required"))
+        (if (or (empty? email) (empty? password))
+          (response/bad-request {:error "Email and password are required"})
 
-        ;; Attempt authentication - wrap in try/catch since it throws on failure
-        (try
-          (let [auth-result (auth-service/login-with-password
-                              auth-service {:email email :password password})
-                user-raw  (:user auth-result)
-                user-safe (sanitize-for-serialization user-raw)
-                user-id   (:id user-raw)
-                ;; Resolve tenant context (provision / auto-set / selection)
-                config       (get-in req [:service-container :config])
-                tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw
-                               {:client-ip (:remote-addr req)})
-                auth-session (sanitize-for-serialization
-                               (tenant-auth/build-auth-session {:user user-safe} tenant-ctx))
-                new-session  (assoc existing-session :auth-session auth-session)
-                ;; Build response body with tenant info
-                response-body (cond-> {:success true :user user-safe}
-                                (:tenant auth-session)
-                                (assoc :tenant (sanitize-for-serialization (:tenant auth-session)))
+          ;; Attempt authentication - wrap in try/catch since it throws on failure
+          (try
+            (let [auth-result (auth-service/login-with-password
+                                auth-service {:email email :password password})
+                  user-raw  (:user auth-result)
+                  user-safe (sanitize-for-serialization user-raw)
+                  user-id   (:id user-raw)
+                  ;; Resolve tenant context (provision / auto-set / selection)
+                  config       (get-in req [:service-container :config])
+                  tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw
+                                 {:client-ip (:remote-addr req)})
+                  auth-session (sanitize-for-serialization
+                                 (tenant-auth/build-auth-session {:user user-safe} tenant-ctx))
+                  new-session  (assoc existing-session :auth-session auth-session)
+                  ;; Build response body with tenant info
+                  response-body (cond-> {:success true :user user-safe}
+                                  (:tenant auth-session)
+                                  (assoc :tenant (sanitize-for-serialization (:tenant auth-session)))
 
-                                (:tenant-selection-required auth-session)
-                                (assoc :tenant-selection-required true
-                                  :available-tenants (sanitize-for-serialization
-                                                       (:available-tenants auth-session))))]
+                                  (:tenant-selection-required auth-session)
+                                  (assoc :tenant-selection-required true
+                                    :available-tenants (sanitize-for-serialization
+                                                         (:available-tenants auth-session))))]
 
-            ;; Record successful login
-            (login-monitoring/record-login-event! db
-              {:principal-type :user
-               :principal-id user-id
-               :success true
-               :reason nil
-               :ip ip
-               :user-agent ua})
-
-            ;; Return success response with session
-            (-> (json-response response-body)
-              ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
-              (assoc :session new-session)))
-
-          (catch clojure.lang.ExceptionInfo e
-            ;; Handle authentication failure
-            (let [ex-data (ex-data e)]
+              ;; Record successful login
               (login-monitoring/record-login-event! db
                 {:principal-type :user
-                 :principal-id nil
-                 :success false
-                 :reason "invalid_credentials"
+                 :principal-id user-id
+                 :success true
+                 :reason nil
                  :ip ip
                  :user-agent ua})
 
-              ;; Return appropriate error based on exception type
-              (case (:type ex-data)
-                :validation-error (http/unauthorized-response "Invalid email or password")
-                :forbidden (http/forbidden-response "Account is not active")
-                ;; Default error
-                (http/unauthorized-response "Invalid email or password")))))))))
+              ;; Return success response with session.
+              ;; IMPORTANT: don't set Content-Type here; let reitit/muuntaja encode the body.
+              (-> (response/response response-body)
+                ;; IMPORTANT: merge with existing session (e.g. :admin-token) instead of overwriting.
+                (assoc :session new-session)))
+
+            (catch clojure.lang.ExceptionInfo e
+              ;; Handle authentication failure
+              (let [ex-data (ex-data e)
+                    error-type (:type ex-data)
+                    message (case error-type
+                              :forbidden "Account is not active"
+                              "Invalid email or password")
+                    status (case error-type
+                             :forbidden 403
+                             401)
+                    reason (case error-type
+                             :forbidden "account_inactive"
+                             "invalid_credentials")]
+
+                (login-monitoring/record-login-event! db
+                  {:principal-type :user
+                   :principal-id nil
+                   :success false
+                   :reason reason
+                   :ip ip
+                   :user-agent ua})
+
+                (response/status
+                  (response/response {:error message})
+                  status)))))))))
 
 (defn auth-status-handler
   "Handle authentication status check"
@@ -195,8 +308,24 @@
           user (:user auth-session)
           provider (or (:provider auth-session)
                      (:auth_provider user)
-                     (:auth-provider user))]
+                     (:auth-provider user))
+          db (resolve-db req)
+          invalid-message (when (and auth-session db)
+                            (invalid-auth-session-message db auth-session))]
       (cond
+        ;; Auth session exists but is no longer valid (user/tenant/membership status changed)
+        (and auth-session invalid-message)
+        (do
+          (log/warn "Auth session invalid; clearing session"
+            {:reason invalid-message
+             :user-id (or (:id user) (:users/id user))
+             :tenant-id (or (get-in auth-session [:tenant :id])
+                          (get-in auth-session [:tenant :tenants/id]))})
+          {:status 200
+           :headers {"Content-Type" "application/json"}
+           :body (json/generate-string {:authenticated false})
+           :session (clear-user-auth-session (:session req))})
+
         ;; New session format (from our auth service)
         auth-session
         (let [safe-user (dissoc user :password_hash :password-hash :users/password_hash)

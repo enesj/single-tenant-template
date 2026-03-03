@@ -40,7 +40,9 @@
     :or {show-selection-counter? true
          class ""}}]
 
-  (let [{:keys [error success-message selected-ids]} (template-utils/use-entity-state entity-name :admin)
+    (let [{:keys [error success-message selected-ids]} (template-utils/use-entity-state entity-name :admin)
+      global-error (use-subscribe [:admin/error-message])
+      displayed-error (or global-error error)
         {:keys [entity-spec display-settings]} (template-utils/use-entity-spec entity-name :admin)
         registry-init-fn (get-in entity-registry/entity-registry [entity-name :init-fn])]
 
@@ -103,10 +105,12 @@
               ;; Message display using template component with admin theme
               ($ message-display
                 {:success-message success-message
-                 :error error
+                 :error displayed-error
                  :variant :admin
                  :on-clear-success #(dispatch [:admin/clear-success-message])
-                 :on-clear-error #(dispatch [:admin/clear-error-message])})
+                 :on-clear-error #(do
+                                    (dispatch [:admin/clear-error-message])
+                                    (dispatch [:admin/clear-entity-error entity-name]))})
 
               ;; Selection counter using template component with admin theme
               (when show-selection-counter?

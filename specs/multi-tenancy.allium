@@ -1,0 +1,798 @@
+-- allium: 1
+-- Multi-tenancy behavioural specification
+-- Derived from: MANUAL-TESTING-multi-tenant.md (46 items)
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity Email { to: String, template: String }
+external entity AuditLog { action: String, entity_type: String, details: String }
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value SeedData {
+    expense_categories: List<String>
+    payer_types: List<String>
+}
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity User {
+    email: String
+    name: String
+    password_hash: String
+
+    -- Relationships
+    memberships: TenantMembership with user = this
+
+    -- Projections
+    active_memberships: memberships where status = active
+    owned_tenants: active_memberships where role = owner
+
+    -- Derived
+    is_multi_tenant: active_memberships.count > 1
+    needs_tenant_selection: active_memberships.count > 1
+}
+
+entity Tenant {
+    name: String
+    slug: String
+    status: active | suspended | deleted
+
+    -- Relationships
+    memberships: TenantMembership with tenant = this
+    invitations: TenantInvitation with tenant = this
+    impersonation_grants: ImpersonationGrant with tenant = this
+    expenses: Expense with tenant = this
+    receipts: Receipt with tenant = this
+    expense_categories: ExpenseCategory with tenant = this
+    payer_types: PayerType with tenant = this
+
+    -- Projections
+    active_members: memberships where status = active
+    pending_invitations: invitations where status = pending
+    owner: active_members where role = owner
+
+    -- Derived
+    member_count: active_members.count
+}
+
+entity TenantMembership {
+    user: User
+    tenant: Tenant
+    role: owner | admin | member | viewer
+    status: active | suspended
+
+    -- Derived
+    is_elevated: role in {owner, admin}
+    can_manage_members: role in {owner, admin}
+    can_write_expenses: role in {owner, admin, member}
+    can_write_receipts: role in {owner, admin, member}
+    can_write_reference_data: role in {owner, admin}
+    can_read: role in {owner, admin, member, viewer}
+    can_see_all_receipts: role in {owner, admin}
+}
+
+entity TenantInvitation {
+    tenant: Tenant
+    email: String
+    role: admin | member | viewer       -- cannot invite as owner
+    invited_by: User
+    token: String
+    status: pending | accepted | revoked | expired
+
+    -- Derived
+    is_valid: status = pending
+}
+
+entity ImpersonationGrant {
+    tenant: Tenant
+    admin_user: User                     -- platform admin
+    granted_by: User                     -- tenant owner
+    status: active | revoked
+    role: viewer                         -- always read-only
+}
+
+-- Tenant-scoped domain entities
+entity Expense {
+    tenant: Tenant
+    created_by: User
+    description: String
+    amount: Decimal
+}
+
+entity Receipt {
+    tenant: Tenant
+    uploaded_by: User
+    status: pending | approved | rejected
+}
+
+entity ExpenseCategory {
+    tenant: Tenant
+    name: String
+}
+
+entity PayerType {
+    tenant: Tenant
+    name: String
+    is_default: Boolean
+}
+
+entity UserExpenseSettings {
+    tenant: Tenant
+    user: User
+    default_payer: String?
+}
+
+-- Global catalog (NOT tenant-scoped)
+entity Supplier {
+    name: String
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    max_tenants_per_ip_per_hour: Integer = 5
+    default_seed_data: SeedData = {
+        expense_categories: ["Groceries", "Transport", "Utilities", "Dining",
+                             "Healthcare", "Entertainment", "Shopping", "Other"],
+        payer_types: ["Cash", "Credit Card", "Debit Card", "Bank Transfer"]
+    }
+}
+
+------------------------------------------------------------
+-- Defaults
+------------------------------------------------------------
+
+default PayerType cash_default = { name: "Cash", is_default: true }
+
+------------------------------------------------------------
+-- Rules: Tenant Provisioning (Manual S2)
+------------------------------------------------------------
+
+rule RegisterAndProvision {
+    when: UserRegisters(email, name, password)
+
+    requires: not exists User{email: email}
+
+    ensures:
+        let user = User.created(
+            email: email, name: name,
+            password_hash: hash(password)
+        )
+        let tenant = Tenant.created(
+            name: slug_from_email(email),
+            slug: slug_from_email(email),
+            status: active
+        )
+        TenantMembership.created(
+            user: user, tenant: tenant,
+            role: owner, status: active
+        )
+        for cat_name in config.default_seed_data.expense_categories:
+            ExpenseCategory.created(tenant: tenant, name: cat_name)
+        for pt_name in config.default_seed_data.payer_types:
+            PayerType.created(tenant: tenant, name: pt_name,
+                              is_default: pt_name = "Cash")
+}
+
+rule OAuthRegisterAndProvision {
+    when: UserOAuthRegisters(email, name, provider)
+
+    requires: not exists User{email: email}
+
+    ensures:
+        -- Same as RegisterAndProvision but via OAuth
+        let user = User.created(email: email, name: name)
+        let tenant = Tenant.created(
+            name: slug_from_email(email),
+            slug: slug_from_email(email),
+            status: active
+        )
+        TenantMembership.created(
+            user: user, tenant: tenant,
+            role: owner, status: active
+        )
+        for cat_name in config.default_seed_data.expense_categories:
+            ExpenseCategory.created(tenant: tenant, name: cat_name)
+        for pt_name in config.default_seed_data.payer_types:
+            PayerType.created(tenant: tenant, name: pt_name,
+                              is_default: pt_name = "Cash")
+}
+
+------------------------------------------------------------
+-- Rules: Session & Auth (Manual S3)
+------------------------------------------------------------
+
+rule LoginSingleTenant {
+    when: UserLogsIn(email, password)
+
+    let user = User{email}
+
+    requires: exists user
+    requires: not user.is_multi_tenant
+    requires: verify(password, user.password_hash)
+
+    ensures: SessionEstablished(
+        user: user,
+        tenant: user.active_memberships.first.tenant,
+        membership_role: user.active_memberships.first.role,
+        tenant_selection_required: false
+    )
+}
+
+rule LoginMultiTenant {
+    when: UserLogsIn(email, password)
+
+    let user = User{email}
+
+    requires: exists user
+    requires: user.is_multi_tenant
+    requires: verify(password, user.password_hash)
+
+    ensures: SessionEstablished(
+        user: user,
+        tenant: null,
+        membership_role: null,
+        tenant_selection_required: true,
+        available_tenants: user.active_memberships
+    )
+}
+
+rule SelectTenant {
+    when: UserSelectsTenant(user, tenant)
+
+    let membership = TenantMembership{user: user, tenant: tenant, status: active}
+
+    requires: exists membership
+
+    ensures: TenantContextSet(
+        user: user, tenant: tenant,
+        membership_role: membership.role
+    )
+}
+
+------------------------------------------------------------
+-- Rules: Tenant Data Scoping (Manual S4)
+------------------------------------------------------------
+
+rule TenantDataIsolation {
+    -- Cross-tenant access returns 404 (not 403)
+    when: UserAccessesResource(user, tenant, resource_id, resource_type)
+
+    let membership = TenantMembership{user: user, tenant: tenant, status: active}
+
+    requires: exists membership
+
+    ensures:
+        -- Only resources belonging to this tenant are visible
+        if resource_type in {expense, receipt, expense_category, payer_type, user_expense_settings}:
+            resource.tenant = tenant
+}
+
+rule GlobalCatalogShared {
+    -- Suppliers are visible across all tenants
+    when: UserAccessesCatalog(user, tenant, resource_type)
+
+    requires: resource_type = supplier
+
+    ensures: AllSuppliersVisible()
+}
+
+------------------------------------------------------------
+-- Rules: Invitations (Manual S5)
+------------------------------------------------------------
+
+rule InviteMember {
+    when: OwnerInvitesMember(actor, tenant, email, role)
+
+    let actor_membership = TenantMembership{user: actor, tenant: tenant}
+
+    requires: actor_membership.can_manage_members
+    requires: role in {admin, member, viewer}          -- cannot invite as owner
+    requires: not exists TenantInvitation{tenant: tenant, email: email, status: pending}
+
+    ensures: TenantInvitation.created(
+        tenant: tenant, email: email, role: role,
+        invited_by: actor, token: generate_token(),
+        status: pending
+    )
+}
+
+rule AcceptInvitation {
+    when: UserAcceptsInvitation(invitation, user)
+
+    requires: invitation.is_valid
+    requires: user.email = invitation.email
+
+    ensures: invitation.status = accepted
+    ensures: TenantMembership.created(
+        user: user, tenant: invitation.tenant,
+        role: invitation.role, status: active
+    )
+}
+
+rule RevokeInvitation {
+    when: OwnerRevokesInvitation(actor, invitation)
+
+    let actor_membership = TenantMembership{user: actor, tenant: invitation.tenant}
+
+    requires: actor_membership.can_manage_members
+    requires: invitation.status = pending
+
+    ensures: invitation.status = revoked
+}
+
+rule ResendInvitation {
+    when: OwnerResendsInvitation(actor, invitation)
+
+    let actor_membership = TenantMembership{user: actor, tenant: invitation.tenant}
+
+    requires: actor_membership.can_manage_members
+    requires: invitation.status = pending
+
+    ensures: Email.created(to: invitation.email, template: invitation_resent)
+}
+
+------------------------------------------------------------
+-- Rules: Member Management (Manual S6)
+------------------------------------------------------------
+
+rule ChangeMemberRole {
+    when: ChangeMemberRole(actor, tenant, target_user, new_role)
+
+    let actor_membership = TenantMembership{user: actor, tenant: tenant}
+    let target_membership = TenantMembership{user: target_user, tenant: tenant}
+
+    requires: actor_membership.can_manage_members
+    requires: exists target_membership
+    requires: target_membership.role != owner     -- cannot change owner's role directly
+
+    ensures: target_membership.role = new_role
+}
+
+rule RemoveMember {
+    when: RemoveMember(actor, tenant, target_user)
+
+    let actor_membership = TenantMembership{user: actor, tenant: tenant}
+    let target_membership = TenantMembership{user: target_user, tenant: tenant}
+
+    requires: actor_membership.can_manage_members
+    requires: exists target_membership
+    requires: target_membership.role != owner     -- cannot remove owner
+
+    ensures: target_membership.status = suspended
+}
+
+rule TransferOwnership {
+    when: TransferOwnership(actor, tenant, new_owner)
+
+    let actor_membership = TenantMembership{user: actor, tenant: tenant}
+    let target_membership = TenantMembership{user: new_owner, tenant: tenant}
+
+    requires: actor_membership.role = owner
+    requires: exists target_membership
+    requires: target_membership.role in {admin, member}
+
+    ensures: actor_membership.role = admin
+    ensures: target_membership.role = owner
+}
+
+------------------------------------------------------------
+-- Rules: Tenant Switching (Manual S7)
+------------------------------------------------------------
+
+rule SwitchTenant {
+    when: UserSwitchesTenant(user, new_tenant)
+
+    let membership = TenantMembership{user: user, tenant: new_tenant, status: active}
+
+    requires: exists membership
+    requires: user.is_multi_tenant
+
+    ensures: TenantContextSet(
+        user: user, tenant: new_tenant,
+        membership_role: membership.role
+    )
+}
+
+------------------------------------------------------------
+-- Rules: Access Control (Manual S8)
+------------------------------------------------------------
+
+rule OwnerAccess {
+    when: UserPerformsAction(user, tenant, action, resource_type)
+
+    let membership = TenantMembership{user: user, tenant: tenant}
+
+    requires: membership.role = owner
+
+    ensures: ActionPermitted()
+    -- owner can: expenses CRUD, receipts CRUD + approve,
+    -- categories CRUD, members page, impersonation grants, settings R/W
+}
+
+rule AdminAccess {
+    when: UserPerformsAction(user, tenant, action, resource_type)
+
+    let membership = TenantMembership{user: user, tenant: tenant}
+
+    requires: membership.role = admin
+
+    ensures:
+        if action in {read, create, update, delete} and resource_type in {expense, receipt, expense_category, payer_type}:
+            ActionPermitted()
+        if action = read and resource_type = settings:
+            ActionPermitted()
+        if action = write and resource_type = settings:
+            ActionPermitted()
+        if action = manage and resource_type = members:
+            ActionPermitted()
+}
+
+rule MemberAccess {
+    when: UserPerformsAction(user, tenant, action, resource_type)
+
+    let membership = TenantMembership{user: user, tenant: tenant}
+
+    requires: membership.role = member
+
+    ensures:
+        if action in {read, create, update} and resource_type in {expense, receipt}:
+            ActionPermitted()
+        if action = read and resource_type in {expense_category, payer_type, settings}:
+            ActionPermitted()
+        if action in {create, update, delete} and resource_type in {expense_category, payer_type}:
+            ActionDenied()      -- 403
+        if action = manage and resource_type = members:
+            ActionDenied()      -- members page hidden
+}
+
+rule ViewerAccess {
+    when: UserPerformsAction(user, tenant, action, resource_type)
+
+    let membership = TenantMembership{user: user, tenant: tenant}
+
+    requires: membership.role = viewer
+
+    ensures:
+        if action = read:
+            ActionPermitted()
+        if action in {create, update, delete}:
+            ActionDenied()      -- all writes 403
+}
+
+rule ReceiptVisibilityScoping {
+    when: UserListsReceipts(user, tenant)
+
+    let membership = TenantMembership{user: user, tenant: tenant}
+
+    ensures:
+        if membership.can_see_all_receipts:
+            AllTenantReceiptsVisible()
+        else:
+            OnlyOwnReceiptsVisible(user)
+}
+
+------------------------------------------------------------
+-- Rules: Platform Admin (Manual S9)
+------------------------------------------------------------
+
+rule AdminBlockedFromTenantData {
+    when: PlatformAdminAccessesTenantData(admin, resource_type)
+
+    requires: not exists ImpersonationGrant{admin_user: admin, status: active}
+
+    ensures: ActionDenied()     -- 403 on expense-related admin APIs
+}
+
+rule ActivateImpersonation {
+    when: PlatformAdminActivatesGrant(admin, grant)
+
+    requires: grant.status = active
+    requires: grant.admin_user = admin
+
+    ensures: ImpersonationContextSet(admin: admin, tenant: grant.tenant)
+    ensures: AuditLog.created(action: "impersonation_activated", entity_type: "admin_session")
+}
+
+rule DeactivateImpersonation {
+    when: PlatformAdminDeactivatesGrant(admin)
+
+    ensures: ImpersonationContextCleared(admin: admin)
+    ensures: AuditLog.created(action: "impersonation_deactivated", entity_type: "admin_session")
+}
+
+rule CreateImpersonationGrant {
+    when: TenantOwnerCreatesGrant(owner, tenant, admin_user)
+
+    let owner_membership = TenantMembership{user: owner, tenant: tenant}
+
+    requires: owner_membership.role = owner
+
+    ensures: ImpersonationGrant.created(
+        tenant: tenant, admin_user: admin_user,
+        granted_by: owner, status: active, role: viewer
+    )
+    ensures: AuditLog.created(action: "impersonation_granted", entity_type: "impersonation_grant")
+}
+
+rule RevokeImpersonationGrant {
+    when: TenantOwnerRevokesGrant(owner, grant)
+
+    let owner_membership = TenantMembership{user: owner, tenant: grant.tenant}
+
+    requires: owner_membership.role = owner
+    requires: grant.status = active
+
+    ensures: grant.status = revoked
+    ensures: AuditLog.created(action: "impersonation_revoked_by_owner", entity_type: "impersonation_grant")
+}
+
+------------------------------------------------------------
+-- Rules: Rate Limiting (Manual S12)
+------------------------------------------------------------
+
+rule TenantScopedRateLimit {
+    when: UserAPIRequest(user, tenant, ip)
+
+    ensures: RateLimitKeyFormat(
+        key: "regular-api:{ip}:t:{tenant.id}:u:{user.id}"
+    )
+}
+
+rule AdminGlobalRateLimit {
+    when: AdminAPIRequest(admin, ip)
+
+    ensures: RateLimitKeyFormat(
+        key: "admin-api:{ip}"
+    )
+}
+
+rule ProvisioningRateLimit {
+    when: UserRegisters(email, name, password)
+
+    requires: provisioning_count_for_ip(ip) < config.max_tenants_per_ip_per_hour
+
+    ensures: ProvisioningCountIncremented(ip)
+}
+
+------------------------------------------------------------
+-- Actors
+------------------------------------------------------------
+
+actor TenantOwner {
+    within: Tenant
+    identified_by: User where TenantMembership{user: this, tenant: within, role: owner, status: active}
+}
+
+actor TenantAdmin {
+    within: Tenant
+    identified_by: User where TenantMembership{user: this, tenant: within}.is_elevated = true
+}
+
+actor TenantMemberActor {
+    within: Tenant
+    identified_by: User where TenantMembership{user: this, tenant: within, status: active}
+}
+
+actor PlatformAdmin {
+    identified_by: User where is_platform_admin(this)
+}
+
+------------------------------------------------------------
+-- Surfaces (Manual S10)
+------------------------------------------------------------
+
+surface Authentication {
+    facing visitor: User
+
+    provides:
+        UserRegisters(email, name, password)
+        UserLogsIn(email, password)
+
+    guarantee: NoSessionRequired
+    guarantee: NoPasswordHashInResponse
+        -- password_hash is never returned in auth-status
+}
+
+surface TenantSelect {
+    facing user: User
+
+    requires: user.is_multi_tenant
+
+    exposes:
+        for m in user.active_memberships:
+            m.tenant.name
+            m.tenant.slug
+            m.role
+
+    provides:
+        for m in user.active_memberships:
+            UserSelectsTenant(user, m.tenant)
+
+    guidance:
+        -- Show tenant cards with role badges
+}
+
+surface TenantMembers {
+    facing admin: TenantAdmin
+
+    context tenant: Tenant
+
+    exposes:
+        tenant.active_members
+        tenant.pending_invitations
+        for m in tenant.active_members:
+            m.user.name
+            m.user.email
+            m.role
+
+    provides:
+        OwnerInvitesMember(admin, tenant, email, role)
+        for m in tenant.active_members:
+            ChangeMemberRole(admin, tenant, m.user, new_role)
+                when m.role != owner
+            RemoveMember(admin, tenant, m.user)
+                when m.role != owner
+        TransferOwnership(admin, tenant, target_user)
+            when admin is TenantOwner
+        for inv in tenant.pending_invitations:
+            OwnerRevokesInvitation(admin, inv)
+            OwnerResendsInvitation(admin, inv)
+
+    guarantee: OwnerProtection
+        -- Owner cannot be removed. Owner role not in invite picker.
+    guarantee: SingleOwner
+        -- Only one owner per tenant at any time.
+}
+
+surface ExpenseManagement {
+    facing member: TenantMemberActor
+
+    context tenant: Tenant
+
+    let membership = TenantMembership{user: member, tenant: tenant}
+
+    exposes:
+        tenant.expenses
+        tenant.expense_categories
+
+    provides:
+        UserPerformsAction(member, tenant, create, expense)
+            when membership.can_write_expenses
+        UserPerformsAction(member, tenant, update, expense)
+            when membership.can_write_expenses
+        UserPerformsAction(member, tenant, delete, expense)
+            when membership.is_elevated
+}
+
+surface ReceiptManagement {
+    facing member: TenantMemberActor
+
+    context tenant: Tenant
+
+    let membership = TenantMembership{user: member, tenant: tenant}
+
+    exposes:
+        if membership.can_see_all_receipts:
+            tenant.receipts
+        else:
+            tenant.receipts where uploaded_by = member
+
+    provides:
+        UserPerformsAction(member, tenant, create, receipt)
+            when membership.can_write_receipts
+
+    guidance:
+        -- Owner/admin see all tenant receipts
+        -- Member/viewer see only own receipts
+}
+
+surface Settings {
+    facing member: TenantMemberActor
+
+    context tenant: Tenant
+
+    let membership = TenantMembership{user: member, tenant: tenant}
+
+    exposes:
+        tenant.name
+        UserExpenseSettings{tenant: tenant, user: member}
+
+    provides:
+        UserPerformsAction(member, tenant, write, settings)
+            when membership.is_elevated
+
+    guidance:
+        -- Show read-only banner for member/viewer
+        -- Disable inputs for non-writers
+}
+
+surface TenantSwitcher {
+    facing user: User
+
+    requires: user.is_multi_tenant
+
+    exposes:
+        user.active_memberships
+
+    provides:
+        UserSwitchesTenant(user, new_tenant)
+
+    guidance:
+        -- Show swap icon in sidebar footer only when user.is_multi_tenant
+        -- Single-tenant users see tenant name without swap icon
+        -- URL updates to /t/{slug}/... after switch
+}
+
+surface SidebarNavigation {
+    facing member: TenantMemberActor
+
+    context tenant: Tenant
+
+    let membership = TenantMembership{user: member, tenant: tenant}
+
+    exposes:
+        -- Sections visible based on role
+        if membership.can_manage_members:
+            "Members" under "Workspace"
+        if membership.is_elevated:
+            "Impersonation Grants"
+
+    guidance:
+        -- Hide members section for member/viewer roles
+        -- Hide admin-only sections for non-elevated roles
+}
+
+surface PlatformAdminPanel {
+    facing admin: PlatformAdmin
+
+    exposes:
+        -- Non-blocked resources always visible
+        all_users
+        all_tenants
+        all_admins
+
+    provides:
+        -- Tenant management
+        AdminListsTenants()
+        AdminViewsTenantDetail(tenant)
+        -- Impersonation
+        PlatformAdminActivatesGrant(admin, grant)
+        PlatformAdminDeactivatesGrant(admin)
+
+    guarantee: TenantDataBlocked
+        -- Expense-related admin APIs return 403 unless impersonating
+}
+
+surface InvitationAccept {
+    facing visitor: User
+
+    context invitation: TenantInvitation
+
+    exposes:
+        invitation.tenant.name
+        invitation.role
+        invitation.is_valid
+
+    provides:
+        UserAcceptsInvitation(invitation, user)
+            when invitation.is_valid
+
+    guarantee: NoSessionRequired
+}
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "Should E2E tests for OAuth flows be mocked or use a real OAuth provider?"
+open question "Should rate limiting E2E tests use REPL verification or API-level testing?"
