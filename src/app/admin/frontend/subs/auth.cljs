@@ -38,9 +38,4 @@
   (fn [db _]
     (:admin/token db)))
 
-;; Success message subscription moved to app.admin.frontend.events.users.template.messages
-
-(rf/reg-sub
-  :admin/error-message
-  (fn [db _]
-    (:admin/error-message db)))
+;; Success and error message subscriptions moved to app.admin.frontend.events.users.template.messages

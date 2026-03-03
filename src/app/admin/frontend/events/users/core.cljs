@@ -209,28 +209,38 @@
 
 (rf/reg-event-fx
   :admin/delete-user-success
-  (fn [{:keys [db]} [_ user-id _response]]
-    (utils/log-user-operation "User deleted successfully" user-id)
-    (let [db' (-> (utils/clear-loading-db-state db :admin/updating-user)
-                (update :admin/users
-                  (fn [users]
-                    (->> users
-                      (remove (fn [u]
-                                (= (or (:users/id u) (:id u)) user-id)))
-                      vec)))
-                (update-in (paths/entity-data :users)
-                  (fn [data] (dissoc (or data {}) user-id)))
-                (update-in (paths/entity-ids :users)
-                  (fn [ids] (->> (or ids [])
-                              (remove #(= % user-id))
-                              vec)))
-                (update-in (paths/entity-selected-ids :users)
-                  (fn [selected] (when selected (disj selected user-id))))
-                (dissoc :admin/user-update-error :admin/error-message))]
-      {:db db'
-       :dispatch-n [[:admin/hide-delete-confirmation]
-                    [:admin/show-success-message "User deleted successfully"]
-                    [:admin/load-users]]})))
+  (fn [{:keys [db]} [_ user-id response]]
+    (let [data (:data response)
+          deleted-count (or (:deleted-count data) (:deleted_count data) 0)
+          errors (:errors data [])]
+      (if (pos? deleted-count)
+        (do
+          (utils/log-user-operation "User deleted successfully" user-id)
+          (let [db' (-> (utils/clear-loading-db-state db :admin/updating-user)
+                      (update :admin/users
+                        (fn [users]
+                          (->> users
+                            (remove (fn [u]
+                                      (= (or (:users/id u) (:id u)) user-id)))
+                            vec)))
+                      (update-in (paths/entity-data :users)
+                        (fn [data] (dissoc (or data {}) user-id)))
+                      (update-in (paths/entity-ids :users)
+                        (fn [ids] (->> (or ids [])
+                                    (remove #(= % user-id))
+                                    vec)))
+                      (update-in (paths/entity-selected-ids :users)
+                        (fn [selected] (when selected (disj selected user-id))))
+                      (dissoc :admin/user-update-error :admin/error-message))]
+            {:db db'
+             :dispatch-n [[:admin/hide-delete-confirmation]
+                          [:admin/show-success-message "User deleted successfully"]
+                          [:admin/load-users]]}))
+        (do
+          (log/error "User deletion failed" {:user-id user-id :errors errors})
+          (let [error-msg (or (-> errors first :error) "Failed to delete user")]
+            {:db (utils/clear-loading-db-state db :admin/updating-user)
+             :dispatch [:admin/show-error-message error-msg]}))))))
 
 (rf/reg-event-fx
   :admin/delete-user-failure

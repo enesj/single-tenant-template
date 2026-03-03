@@ -91,13 +91,9 @@
     "Failed to create user"))
 
 (defn batch-delete-users-handler
-  "Batch delete users.
-
-  Expects JSON body like:
-  {:ids [<uuid-str> ...] :force-delete <boolean?>}
-
-  Returns:
-  {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
+  "Batch delete users; validates each and collects per-user results.
+  Returns {:data {:deleted-count n :deleted-ids [...] :errors [...]}}
+  or 400 when all deletions failed."
   [db]
   (utils/with-error-handling
     (fn [request]
@@ -161,10 +157,13 @@
                            :dry-run dry-run
                            :ids (vec @deleted-ids)})
 
-            (utils/success-response
-              {:data {:deleted-count (count @deleted-ids)
-                      :deleted-ids (vec @deleted-ids)
-                      :errors (vec @errors)}})))))
+            (if (and (empty? @deleted-ids) (seq @errors))
+              (utils/error-response (-> @errors first :error) :status 400
+                :details {:errors (vec @errors)})
+              (utils/success-response
+                {:data {:deleted-count (count @deleted-ids)
+                        :deleted-ids (vec @deleted-ids)
+                        :errors (vec @errors)}}))))))
     "Failed to batch delete users"))
 
 ;; Route definitions
