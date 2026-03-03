@@ -7,8 +7,7 @@
     [app.domain.shared.routes.contract :as route-contract]))
 
 (def route-descriptors
-  [{:id :waiting-room :path "/waiting-room" :spa-fallback? true}
-   {:id :expenses-dashboard :path "/expenses" :spa-fallback? true}
+  [{:id :expenses-dashboard :path "/expenses" :spa-fallback? true}
    {:id :user-dashboard :path "/dashboard" :spa-fallback? true}
    {:id :unmapped-items :path "/unmapped-items" :spa-fallback? true}
    {:id :expenses-dashboard-alias :path "/expenses/dashboard" :spa-fallback? true}

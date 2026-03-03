@@ -1,17 +1,12 @@
 (ns app.domain.frontend.expenses.routes.user
   "User-facing expense tracking routes.
-   These routes are role-gated - users without proper role see waiting room."
+   These routes are role-gated via tenant membership roles."
   (:require
     [app.domain.shared.routes.expenses-user :as expenses-user-routes]
     [app.template.frontend.routes.controllers :as controllers]))
 
 (def ^:private route-options-by-id
-  {:waiting-room
-   {:name :waiting-room
-    :view :waiting-room
-    :controllers (controllers/user-guarded-start :page/init-waiting-room)}
-
-   :expenses-dashboard
+  {:expenses-dashboard
    {:name :expenses-dashboard
     :view :expenses-dashboard
     :controllers (controllers/user-guarded-start :page/init-expenses-dashboard)}

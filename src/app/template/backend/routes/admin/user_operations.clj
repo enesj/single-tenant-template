@@ -1,37 +1,10 @@
 (ns app.template.backend.routes.admin.user-operations
   "Admin advanced user operations handlers"
   (:require
-  [app.template.backend.routes.admin.utils :as utils]
-  [app.admin.backend.services.admin.users :as admin-users]
-  [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
-  [app.admin.backend.services.admin.users.management :as user-management]
-  [app.admin.backend.services.admin.users.security :as user-security]
-   [app.shared.field-metadata :as field-meta]
-   [clojure.string :as str]))
-
-(defn update-user-role-handler
-  "Update user role"
-  [db models]
-  (utils/with-error-handling
-    (fn [request]
-      (utils/handle-uuid-request request :id
-        (fn [user-id request]
-          (let [{:keys [role]} (:body request)
-                role-str (some-> role str)
-                allowed-roles (set (field-meta/get-enum-choices models :users :role))
-                {:keys [ip-address user-agent admin]} (utils/extract-request-context request)]
-            (if (or (nil? role-str) (str/blank? role-str))
-              (utils/error-response "Missing role" :status 400 :details {:allowed (vec allowed-roles)})
-              (if-not (contains? allowed-roles role-str)
-                (utils/error-response "Invalid role value" :status 400 :details {:allowed (vec allowed-roles) :value role-str})
-                (do
-                  (user-management/update-user-role! db user-id role-str (:id admin) ip-address user-agent)
-
-                  (utils/log-admin-action "update_user_role" (:id admin)
-                    "user" user-id {:role role-str})
-
-                  (utils/success-response))))))))
-    "Failed to update user role"))
+    [app.template.backend.routes.admin.utils :as utils]
+    [app.admin.backend.services.admin.users :as admin-users]
+    [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
+    [app.admin.backend.services.admin.users.security :as user-security]))
 
 (defn force-verify-email-handler
   "Force verify user email"
@@ -124,7 +97,6 @@
             filters {:search (:search params)
                      :status (:status params)
                      :email-verified (utils/parse-boolean-param params :email-verified)
-                     :role (:role params)
                      :auth-provider (:auth-provider params)
                      :sort-by (:sort-by params)
                      :sort-order (when (:sort-order params)
@@ -136,12 +108,10 @@
 ;; Route definitions
 (defn routes
   "Advanced user operations route definitions"
-  [db service-container]
-  (let [models (:models-data service-container)]
-    [""
-     ["/role/:id" {:put (update-user-role-handler db models)}]
-     ["/verify-email/:id" {:post (force-verify-email-handler db)}]
-     ["/reset-password/:id" {:post (reset-user-password-handler db)}]
-     ["/activity/:id" {:get (get-user-activity-handler db)}]
-     ["/impersonate/:id" {:post (impersonate-user-handler db)}]
-     ["/search" {:get (advanced-user-search-handler db)}]]))
+  [db _service-container]
+  [""
+   ["/verify-email/:id" {:post (force-verify-email-handler db)}]
+   ["/reset-password/:id" {:post (reset-user-password-handler db)}]
+   ["/activity/:id" {:get (get-user-activity-handler db)}]
+   ["/impersonate/:id" {:post (impersonate-user-handler db)}]
+   ["/search" {:get (advanced-user-search-handler db)}]])

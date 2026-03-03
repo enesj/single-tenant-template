@@ -1,7 +1,6 @@
 (ns app.admin.frontend.components.user-actions
   "Refactored admin user management actions using shared components"
   (:require
-    [app.shared.field-metadata :as field-meta]
     [app.template.frontend.components.action-components :as shared-actions]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.dropdown.action :as dropdown]
@@ -60,9 +59,7 @@
 
      :delete-user (fn []
                     (log/info "Deleting user" user-id user-email)
-                    (rf/dispatch [:admin/delete-user user-id]))
-
-     :update-role (shared-actions/create-update-handlers user-id user-email "user" :admin/update-user-role "role")}))
+                    (rf/dispatch [:admin/delete-user user-id]))}))
 
 (defn create-user-confirmation-handlers
   "Factory function to create confirmation handlers that wrap action handlers"
@@ -109,33 +106,7 @@
         ;; Use shared utilities to extract entity data
         user-status (shared-actions/get-entity-status user :user)
         user-email (shared-actions/get-entity-name user :user)
-        user-role (or (:users/role user) (:role user))
         email-verified (or (:users/email-verified user) (:email-verified user))
-        ;; Enum options from models-data (fallback keeps previous hardcoded values)
-        models-data (use-subscribe [:models-data])
-        role-options (->> (or (when models-data
-                                (field-meta/get-enum-choices models-data :users :role))
-                            ["admin" "member" "viewer" "unassigned"])
-                       (keep #(when % (keyword (str %))))
-                       vec)
-        role-key (cond
-                   (keyword? user-role) user-role
-                   (string? user-role) (keyword user-role)
-                   :else nil)
-
-        ;; Local guard: immediately block delete for active admin
-        role-str (cond
-                   (keyword? user-role) (name user-role)
-                   (string? user-role) user-role
-                   :else (str user-role))
-        status-str (cond
-                     (keyword? user-status) (name user-status)
-                     (string? user-status) user-status
-                     :else (str user-status))
-        local-admin-protection? (and (some? role-str)
-                                  (some? status-str)
-                                  (= "admin" role-str)
-                                  (= "active" status-str))
 
         ;; Subscribe to loading states
         updating-user? (use-subscribe [:admin/updating-user?])
@@ -166,14 +137,6 @@
                         (conj (shared-actions/create-status-action-group
                                 user-status
                                 confirmation-handlers
-                                :updating-user?))
-
-                           ;; Role actions group
-                        (conj (shared-actions/create-property-action-group
-                                "Role"
-                                role-key
-                                role-options
-                                (:update-role action-handlers)
                                 :updating-user?))
 
                            ;; Verification group (only if email not verified)
@@ -210,10 +173,7 @@
                                          :label "Delete User"
                                          :variant :error
                                          :loading-key :updating-user?
-                                         :disabled? local-admin-protection?
-                                         :tooltip (or (when local-admin-protection?
-                                                        "Cannot delete active admin user")
-                                                    "Delete this user")
+                                         :tooltip "Delete this user"
                                          :on-click (:delete-user confirmation-handlers)}))))
 
                            ;; Filter out empty groups

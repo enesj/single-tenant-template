@@ -33,16 +33,12 @@
   "Validate user update data against business rules and constraints"
   [updates]
   (let [allowed-keys #{:email :full_name :avatar_url :auth_provider
-                       :role :status :last_login_at}
+                       :status :last_login_at}
         models @models-data-cache
-        role-enum-set (if-let [choices (and models (field-meta/get-enum-choices models :users :role))]
-                        (set choices)
-                        #{"admin" "member" "viewer" "unassigned"})
         status-enum-set (if-let [choices (and models (field-meta/get-enum-choices models :users :status))]
                           (set choices)
                           #{"active" "inactive" "suspended"})
-        enum-sets {:role role-enum-set
-                   :status status-enum-set
+        enum-sets {:status status-enum-set
                    :auth_provider #{"google" "email" "apple"}}]
 
     ;; Check for disallowed keys

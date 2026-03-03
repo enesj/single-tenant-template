@@ -26,7 +26,6 @@
                         (fn [m k v]
                           (assoc m k
                             (case k
-                              :role (tc/cast-for-database :user-role (str v))
                               :status (tc/cast-for-database :user-status (str v))
                               :auth_provider (tc/cast-for-database :text (str v))
                               :last_login_at (tc/cast-for-database :timestamptz v)
@@ -39,25 +38,9 @@
                           :from [:users]
                           :where [:= :id user-id]})))))))
 
-(defn update-user-role!
-  "Update user role as admin (single-tenant)."
-  [db user-id new-role _admin-id _ip-address _user-agent]
-  (jdbc/with-transaction [tx db]
-    (let [old-user (jdbc/execute-one! tx
-                     (hsql/format {:select [:*]
-                                   :from [:users]
-                                   :where [:= :id user-id]}))]
-      (when-not old-user
-        (throw (ex-info (str "User not found with ID: " user-id)
-                 {:status 404 :user-id user-id})))
-      (jdbc/execute-one! tx
-        (hsql/format {:update :users
-                      :set {:role (tc/cast-for-database :user-role new-role)}
-                      :where [:= :id user-id]})))))
-
 (defn create-user!
   "Create a new user (single-tenant)."
-  [db {:keys [email full_name role status auth_provider]} _admin-id _ip-address _user-agent]
+  [db {:keys [email full_name status auth_provider]} _admin-id _ip-address _user-agent]
   (let [user-id (UUID/randomUUID)
         now (time/instant)]
     (jdbc/with-transaction [tx db]
@@ -66,7 +49,6 @@
                       :values [{:id user-id
                                 :email email
                                 :full_name full_name
-                                :role (tc/cast-for-database :user-role (or role "member"))
                                 :status (tc/cast-for-database :user-status (or status "active"))
                                 :auth_provider (tc/cast-for-database :text (or auth_provider "email"))
                                 :created_at now}]}))

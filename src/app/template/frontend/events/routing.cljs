@@ -85,30 +85,6 @@
 
 ;; User expense tracking page events
 
-(defn- role-str
-  [db]
-  (let [role (or (get-in db [:session :auth-session :user :role])
-               (get-in db [:session :user :role]))]
-    (cond
-      (keyword? role) (name role)
-      (string? role) role
-      :else nil)))
-
-(defn- unassigned?
-  [db]
-  (= (role-str db) "unassigned"))
-
-(defn- redirect-to-waiting-room
-  [db]
-  {:db (assoc-in db (paths/current-page) :waiting-room)
-   :dispatch [:navigate-to "/waiting-room"]})
-
-(rf/reg-event-fx
-  :page/init-waiting-room
-  common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :waiting-room)}))
-
 (rf/reg-event-db
   :page/init-tenant-select
   common-interceptors
@@ -119,224 +95,168 @@
   :page/init-tenant-members
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :tenant-members)
-       :fx [[:dispatch [:app.template.frontend.events.tenant/fetch-members]]
-            [:dispatch [:app.template.frontend.events.tenant/fetch-invitations]]]})))
+    {:db (assoc-in db (paths/current-page) :tenant-members)
+     :fx [[:dispatch [:app.template.frontend.events.tenant/fetch-members]]
+          [:dispatch [:app.template.frontend.events.tenant/fetch-invitations]]]}))
 
 (rf/reg-event-fx
   :page/init-tenant-impersonation
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :tenant-impersonation)
-       :fx [[:dispatch [:app.template.frontend.events.impersonation/fetch-grants]]]})))
+    {:db (assoc-in db (paths/current-page) :tenant-impersonation)
+     :fx [[:dispatch [:app.template.frontend.events.impersonation/fetch-grants]]]}))
 
 (rf/reg-event-fx
   :page/init-expenses-dashboard
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expenses-dashboard)
-       :dispatch [:user-expenses/init-dashboard]})))
+    {:db (assoc-in db (paths/current-page) :expenses-dashboard)
+     :dispatch [:user-expenses/init-dashboard]}))
 
 (rf/reg-event-fx
   :page/init-expenses-list
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expenses-list)
-       ;; Ensure we don't accidentally show the generic CRUD add-form in the
-       ;; user expenses list (it's driven by a global template flag).
-       :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
-                    [:app.template.frontend.events.config/set-editing nil]]})))
+    {:db (assoc-in db (paths/current-page) :expenses-list)
+     ;; Ensure we don't accidentally show the generic CRUD add-form in the
+     ;; user expenses list (it's driven by a global template flag).
+     :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
+                  [:app.template.frontend.events.config/set-editing nil]]}))
 
 (rf/reg-event-fx
   :page/init-expense-upload
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-upload)})))
+    {:db (assoc-in db (paths/current-page) :expense-upload)}))
 
 (rf/reg-event-fx
   :page/init-receipts-list
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :receipts-list)
-       :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]})))
+    {:db (assoc-in db (paths/current-page) :receipts-list)
+     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]}))
 
 (rf/reg-event-fx
   :page/init-receipt-detail
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :receipt-detail)})))
+    {:db (assoc-in db (paths/current-page) :receipt-detail)}))
 
 (rf/reg-event-fx
   :page/init-expense-new
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-new)
-       :dispatch-n [[:user-expenses/fetch-suppliers {:limit 100}]
-                    [:user-expenses/fetch-payers {:limit 100}]]})))
+    {:db (assoc-in db (paths/current-page) :expense-new)
+     :dispatch-n [[:user-expenses/fetch-suppliers {:limit 100}]
+                  [:user-expenses/fetch-payers {:limit 100}]]}))
 
 (rf/reg-event-fx
   :page/init-expense-detail
   common-interceptors
   (fn [{:keys [db]} [_ expense-id]]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (-> db
-             (assoc-in (paths/current-page) :expense-detail)
-             (assoc-in [:ui :current-expense-id] expense-id))
-       :dispatch (when expense-id [:user-expenses/fetch-expense expense-id])})))
+    {:db (-> db
+           (assoc-in (paths/current-page) :expense-detail)
+           (assoc-in [:ui :current-expense-id] expense-id))
+     :dispatch (when expense-id [:user-expenses/fetch-expense expense-id])}))
 
 (rf/reg-event-fx
   :page/init-expense-reports
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-reports)
-       :dispatch [:user-expenses/init-reports]})))
+    {:db (assoc-in db (paths/current-page) :expense-reports)
+     :dispatch [:user-expenses/init-reports]}))
 
 (rf/reg-event-fx
   :page/init-expense-settings
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-settings)
-       :dispatch-n [[:user-expenses/fetch-settings]
-                    [:user-expenses/fetch-payers {:limit 100}]]})))
+    {:db (assoc-in db (paths/current-page) :expense-settings)
+     :dispatch-n [[:user-expenses/fetch-settings]
+                  [:user-expenses/fetch-payers {:limit 100}]]}))
 
 (rf/reg-event-fx
   :page/init-expense-suppliers
   common-interceptors
   (fn [{:keys [db]} _]
-    (let [role (get-in db [:session :user :role])
-          role-str (if (keyword? role) (name role) role)
-          unassigned? (= role-str "unassigned")]
-      (if unassigned?
-        {:db (assoc-in db (paths/current-page) :waiting-room)
-         :dispatch [:navigate-to "/waiting-room"]}
-        {:db (assoc-in db (paths/current-page) :expense-suppliers)
-         :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
-                      [:app.template.frontend.events.config/set-editing nil]
-                      [:user-expenses/fetch-suppliers]]}))))
+    {:db (assoc-in db (paths/current-page) :expense-suppliers)
+     :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
+                  [:app.template.frontend.events.config/set-editing nil]
+                  [:user-expenses/fetch-suppliers]]}))
 
 (rf/reg-event-fx
   :page/init-expense-payers
   common-interceptors
   (fn [{:keys [db]} _]
-    (let [role (get-in db [:session :user :role])
-          role-str (if (keyword? role) (name role) role)
-          unassigned? (= role-str "unassigned")]
-      (if unassigned?
-        {:db (assoc-in db (paths/current-page) :waiting-room)
-         :dispatch [:navigate-to "/waiting-room"]}
-        {:db (assoc-in db (paths/current-page) :expense-payers)
-         :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
-                      [:app.template.frontend.events.config/set-editing nil]
-                      [:user-expenses/fetch-payers]]}))))
+    {:db (assoc-in db (paths/current-page) :expense-payers)
+     :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
+                  [:app.template.frontend.events.config/set-editing nil]
+                  [:user-expenses/fetch-payers]]}))
 
 (rf/reg-event-fx
   :page/init-expense-stores
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-stores)})))
+    {:db (assoc-in db (paths/current-page) :expense-stores)}))
 
 (rf/reg-event-fx
   :page/init-expense-store-aliases
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-store-aliases)})))
+    {:db (assoc-in db (paths/current-page) :expense-store-aliases)}))
 
 (rf/reg-event-fx
   :page/init-expense-items
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-items)})))
+    {:db (assoc-in db (paths/current-page) :expense-items)}))
 
 (rf/reg-event-fx
   :page/init-expense-articles
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-articles)})))
+    {:db (assoc-in db (paths/current-page) :expense-articles)}))
 
 (rf/reg-event-fx
   :page/init-expense-manufacturers
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-manufacturers)})))
+    {:db (assoc-in db (paths/current-page) :expense-manufacturers)}))
 
 (rf/reg-event-fx
   :page/init-expense-categories
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-categories)})))
+    {:db (assoc-in db (paths/current-page) :expense-categories)}))
 
 (rf/reg-event-fx
   :page/init-expense-categories-catalog
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-categories-catalog)})))
+    {:db (assoc-in db (paths/current-page) :expense-categories-catalog)}))
 
 (rf/reg-event-fx
   :page/init-expense-cities
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-cities)})))
+    {:db (assoc-in db (paths/current-page) :expense-cities)}))
 
 (rf/reg-event-fx
   :page/init-expense-subcategories
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-subcategories)})))
+    {:db (assoc-in db (paths/current-page) :expense-subcategories)}))
 
 (rf/reg-event-fx
   :page/init-expense-article-aliases
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-article-aliases)})))
+    {:db (assoc-in db (paths/current-page) :expense-article-aliases)}))
 
 (rf/reg-event-fx
   :page/init-expense-supplier-aliases
   common-interceptors
   (fn [{:keys [db]} _]
-    (if (unassigned? db)
-      (redirect-to-waiting-room db)
-      {:db (assoc-in db (paths/current-page) :expense-supplier-aliases)})))
+    {:db (assoc-in db (paths/current-page) :expense-supplier-aliases)}))
 
 (rf/reg-event-fx
   :page/init-unmapped-items

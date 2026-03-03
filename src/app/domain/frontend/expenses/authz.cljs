@@ -2,7 +2,7 @@
   "Expenses domain authorization module.
    
    Centralizes role-based access control for the Expenses domain.
-   Roles (ascending privilege): unassigned < viewer < member < admin < owner
+   Roles (ascending privilege): viewer < member < admin < owner
    
    Usage:
      (authz/power-user? role)           ; admin or owner?
@@ -12,8 +12,7 @@
 
 (def ^:private role-hierarchy
   "Role privilege levels (higher = more privileged)"
-  {"unassigned" 0
-   "viewer"     1
+  {"viewer"     1
    "member"     2
    "admin"      3
    "owner"      4})
@@ -62,7 +61,7 @@
   (>= (role-level role) 3))
 
 (defn assigned?
-  "Returns true if user has any assigned role (not unassigned)."
+  "Returns true if user has any known role."
   [role]
   (>= (role-level role) 1))
 

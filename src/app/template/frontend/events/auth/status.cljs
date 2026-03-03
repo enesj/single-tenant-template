@@ -48,8 +48,7 @@
           tenant-selection-required (get response :tenant-selection-required)
           available-tenants (get response :available-tenants)
           current-page (get-in db (paths/current-page))
-          ;; Prefer membership role over global user role
-          user-role (or membership-role (:role user))]
+          user-role membership-role]
 
       ;; Log authentication details
       (when user
@@ -90,8 +89,6 @@
                          (update :session dissoc :error))
             ;; Determine redirect based on role and tenant state
             redirect-path (cond
-                            ;; Unassigned users go to waiting room
-                            (= user-role "unassigned") "/waiting-room"
                             ;; Users with multiple tenants and no active tenant
                             tenant-selection-required "/tenant-select"
                             ;; Members and above go to expense dashboard

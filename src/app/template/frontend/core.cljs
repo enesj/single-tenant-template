@@ -13,7 +13,6 @@
     [app.template.frontend.pages.impersonation-grants :refer [impersonation-grants-page]]
     [app.template.frontend.pages.tenant-members :refer [tenant-members-page]]
     [app.template.frontend.pages.tenant-select :refer [tenant-select-page]]
-    [app.template.frontend.pages.waiting-room :refer [waiting-room-page]]
     ;; Domain pages via aggregator (not registry - to avoid circular deps)
     [app.domain.frontend.pages :as domain-pages]
     [app.template.frontend.routes :as routes]
@@ -158,7 +157,6 @@
                                 :email-verified
                                 :forgot-password
                                 :reset-password
-                                :waiting-room
                                 :tenant-select
                                 :invitation-accept}
                      view-key)
@@ -190,7 +188,6 @@
                       :reset-password ($ reset-password-page)
                       :change-password ($ change-password-page)
 
-                      :waiting-room ($ waiting-room-page)
                       :tenant-select ($ tenant-select-page)
                       :tenant-members ($ tenant-members-page)
                       :tenant-impersonation ($ impersonation-grants-page)

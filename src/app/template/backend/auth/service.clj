@@ -5,7 +5,6 @@
     [app.template.backend.auth.email-verification :as email-verification]
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.protocols :as core-protocols]
-    [app.shared.auth :as shared-auth]
     [app.shared.patterns.email :as email-patterns]
     [buddy.hashers :as hashers]
     [clojure.string :as str]
@@ -198,7 +197,6 @@
                          :email email
                          :full_name full-name
                          :password_hash password-hash
-                         :role shared-auth/role-member
                          :status "active"
                          :auth_provider "password"
                          :email_verified false
@@ -326,7 +324,6 @@
                                              :full_name (:full-name normalized)
                                              :avatar_url (:avatar-url normalized)
                                              :password_hash placeholder-password
-                                             :role shared-auth/role-admin    ;; highest available user role in this starter
                                              :status "active"
                                              :auth_provider (name provider)
                                              :created_at now}]

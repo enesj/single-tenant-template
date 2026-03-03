@@ -54,8 +54,7 @@
 (rf/reg-sub
   :user-role
   (fn [db _]
-    (or (get-in db [:session :membership-role])
-      (get-in db [:session :user :role]))))
+    (get-in db [:session :membership-role])))
 
 (rf/reg-sub
   :is-tenant-owner?

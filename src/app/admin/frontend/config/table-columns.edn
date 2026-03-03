@@ -463,7 +463,6 @@
    "email"
    "full-name"
    "status"
-   "role"
    "last-login-at"
    "created-at"
    "updated-at"
@@ -471,15 +470,14 @@
    "email-verified"
    "avatar-url"
    "auth-provider"],
-  :default-visible-columns ["id" "status" "role" "created-at"],
+  :default-visible-columns ["id" "status" "created-at"],
   :filterable-columns
-  ["status" "role" "last-login-at" "created-at" "updated-at"],
+  ["status" "last-login-at" "created-at" "updated-at"],
   :sortable-columns ["status" "created-at"],
   :always-visible ["id" "email"],
   :computed-fields {},
   :column-config
-  {:role {:width "100px", :formatter "role-badge"},
-   :updated-at {:width "140px", :formatter "date"},
+  {:updated-at {:width "140px", :formatter "date"},
    :email {:width "200px", :formatter "email-link"},
    :last-login-at {:width "160px", :formatter "date"},
    :status {:width "100px", :formatter "status-badge"},

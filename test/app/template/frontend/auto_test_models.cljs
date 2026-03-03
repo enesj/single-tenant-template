@@ -5,12 +5,10 @@
   {:users {:fields [[:id :uuid {:primary-key true :default [:gen_random_uuid]}]
                     [:email [:varchar 255] {:null false}]
                     [:full_name [:varchar 255]]
-                    [:role [:enum :user-role] {:null false :default "member"}]
                     [:status [:enum :user-status] {:null false :default "active"}]
                     [:created_at :timestamptz {:default [:now]}]
                     [:updated_at :timestamptz {:default [:now]}]]
-           :types [[:user-role :enum {:choices ["admin" "member" "viewer" "unassigned"]}]
-                   [:user-status :enum {:choices ["active" "inactive" "suspended"]}]]}
+           :types [[:user-status :enum {:choices ["active" "inactive" "suspended"]}]]}
 
    :suppliers {:fields [[:id :uuid {:primary-key true :default [:gen_random_uuid]}]
                         [:display_name [:varchar 255] {:null false}]

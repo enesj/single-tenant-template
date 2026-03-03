@@ -661,7 +661,6 @@
       :ui {:input-type "email", :placeholder "Enter email"}}}]
    [:full_name [:varchar 255]]
    [:password_hash :text {:null false}]
-   [:role [:enum :user-role] {:null false, :default "unassigned"}]
    [:status [:enum :user-status] {:null false, :default "active"}]
    [:email_verified :boolean {:default false, :null false}]
    [:last_login_at :timestamptz]
@@ -670,10 +669,7 @@
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :types
-  [[:user-role
-    :enum
-    {:choices ["admin" "member" "viewer" "unassigned"]}]
-   [:user-status :enum {:choices ["active" "inactive" "suspended"]}]
+  [[:user-status :enum {:choices ["active" "inactive" "suspended"]}]
    [:audit-actor-type :enum {:choices ["user" "admin"]}]
    [:login-principal-type :enum {:choices ["user" "admin"]}]],
   :indexes

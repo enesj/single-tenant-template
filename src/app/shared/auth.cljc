@@ -13,15 +13,14 @@
 
 (def role-owner "owner")
 (def role-viewer "viewer")
-(def role-unassigned "unassigned")
 
 ;; Keyword roles (UI-friendly)
 (def core-roles
-  #{:owner :admin :member :viewer :unassigned})
+  #{:owner :admin :member :viewer})
 
 ;; Lower index = fewer permissions, higher index = more permissions
 (def core-role-hierarchy
-  [:unassigned :viewer :member :admin :owner])
+  [:viewer :member :admin :owner])
 
 (defn role->keyword
   "Normalize a role value to a keyword.

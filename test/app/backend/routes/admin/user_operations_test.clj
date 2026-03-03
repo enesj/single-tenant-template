@@ -1,8 +1,7 @@
 (ns app.backend.routes.admin.user-operations-test
   "Tests for admin advanced user operations routes.
-   
+
    Tests cover:
-   - Update user role
    - Force verify email
    - Reset user password
    - Get user activity
@@ -12,10 +11,8 @@
     [app.template.backend.routes.admin.user-operations :as user-ops]
     [app.admin.backend.services.admin.users :as admin-users]
     [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
-    [app.admin.backend.services.admin.users.management :as user-management]
     [app.admin.backend.services.admin.users.security :as user-security]
     [app.backend.test-helpers :as h]
-    [app.shared.field-metadata :as field-meta]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================================
@@ -37,88 +34,35 @@
    :full_name "Test Admin"
    :role "owner"})
 
-(def mock-models
-  {:users {:fields [{:name :role
-                     :type :enum
-                     :choices ["user" "premium" "admin"]}]}})
-
 ;; ============================================================================
 ;; Handler Creation Tests
 ;; ============================================================================
 
 (deftest handler-creation-test
-  (testing "update-user-role-handler returns a function"
-    (let [db (h/mock-db)
-          handler (user-ops/update-user-role-handler db mock-models)]
-      (is (fn? handler))))
-  
   (testing "force-verify-email-handler returns a function"
     (let [db (h/mock-db)
           handler (user-ops/force-verify-email-handler db)]
       (is (fn? handler))))
-  
+
   (testing "reset-user-password-handler returns a function"
     (let [db (h/mock-db)
           handler (user-ops/reset-user-password-handler db)]
       (is (fn? handler))))
-  
+
   (testing "get-user-activity-handler returns a function"
     (let [db (h/mock-db)
           handler (user-ops/get-user-activity-handler db)]
       (is (fn? handler))))
-  
+
   (testing "impersonate-user-handler returns a function"
     (let [db (h/mock-db)
           handler (user-ops/impersonate-user-handler db)]
       (is (fn? handler))))
-  
+
   (testing "advanced-user-search-handler returns a function"
     (let [db (h/mock-db)
           handler (user-ops/advanced-user-search-handler db)]
       (is (fn? handler)))))
-
-;; ============================================================================
-;; Update User Role Tests
-;; ============================================================================
-
-(deftest update-user-role-handler-test
-  (testing "update-user-role updates role successfully"
-    (let [db (h/mock-db)
-          handler (user-ops/update-user-role-handler db mock-models)
-          request (h/mock-admin-request :put (str "/admin/api/users/role/" test-user-id) mock-admin
-                    {:path-params {:id (str test-user-id)}
-                     :body {:role "premium"}})]
-      (with-redefs [field-meta/get-enum-choices
-                    (constantly ["user" "premium" "admin"])
-                    user-management/update-user-role!
-                    (fn [_db user-id role _admin-id _ip _ua]
-                      (is (= test-user-id user-id))
-                      (is (= "premium" role))
-                      {:success true})]
-        (let [response (handler request)]
-          (is (= 200 (:status response)))))))
-  
-  (testing "update-user-role returns error for invalid role"
-    (let [db (h/mock-db)
-          handler (user-ops/update-user-role-handler db mock-models)
-          request (h/mock-admin-request :put (str "/admin/api/users/role/" test-user-id) mock-admin
-                    {:path-params {:id (str test-user-id)}
-                     :body {:role "invalid-role"}})]
-      (with-redefs [field-meta/get-enum-choices
-                    (constantly ["user" "premium" "admin"])]
-        (let [response (handler request)]
-          (is (= 400 (:status response)))))))
-  
-  (testing "update-user-role returns error when role missing"
-    (let [db (h/mock-db)
-          handler (user-ops/update-user-role-handler db mock-models)
-          request (h/mock-admin-request :put (str "/admin/api/users/role/" test-user-id) mock-admin
-                    {:path-params {:id (str test-user-id)}
-                     :body {}})]
-      (with-redefs [field-meta/get-enum-choices
-                    (constantly ["user" "premium" "admin"])]
-        (let [response (handler request)]
-          (is (= 400 (:status response))))))))
 
 ;; ============================================================================
 ;; Force Verify Email Tests
@@ -157,7 +101,7 @@
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (:success body))))))
-  
+
   (testing "reset-user-password handles failure"
     (let [db (h/mock-db)
           handler (user-ops/reset-user-password-handler db)
@@ -197,7 +141,7 @@
     (let [db (h/mock-db)
           handler (user-ops/impersonate-user-handler db)
           request (-> (h/mock-admin-request :post (str "/admin/api/users/impersonate/" test-user-id) mock-admin
-                       {:path-params {:id (str test-user-id)}})
+                        {:path-params {:id (str test-user-id)}})
                     (assoc :session {:admin-token "existing-admin-token"
                                      :other "keep"}))
           auth-session {:user {:id (str test-user-id)
@@ -222,7 +166,7 @@
     (let [db (h/mock-db)
           handler (user-ops/impersonate-user-handler db)
           request (-> (h/mock-admin-request :post (str "/admin/api/users/impersonate/" test-user-id) mock-admin
-                       {:path-params {:id (str test-user-id)}})
+                        {:path-params {:id (str test-user-id)}})
                     (assoc :session {:admin-token "existing-admin-token"}))]
       (with-redefs [admin-users-bulk/create-user-impersonation-session!
                     (fn [_db _user-id _admin-id _ip _ua]
@@ -252,7 +196,7 @@
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (vector? (:users body)))))))
-  
+
   (testing "advanced-user-search handles pagination"
     (let [db (h/mock-db)
           handler (user-ops/advanced-user-search-handler db)
