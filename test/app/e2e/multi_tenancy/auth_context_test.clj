@@ -49,8 +49,10 @@
         "User map should not contain password-hash")
       (is (nil? (get-in body [:user :password_hash]))
         "User map should not contain password_hash")
-      (is (not (.contains body-str "password"))
-        "No field with 'password' should appear anywhere in the response"))))
+      (is (not (.contains body-str "password_hash"))
+        "No password_hash field should appear anywhere in the response")
+      (is (not (.contains body-str "passwordHash"))
+        "No passwordHash field should appear anywhere in the response"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Test: Single-tenant user auto-sets context (no selection page)

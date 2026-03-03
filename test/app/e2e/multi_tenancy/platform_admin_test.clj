@@ -5,6 +5,7 @@
                  CreateImpersonationGrant, RevokeImpersonationGrant
    Covers: admin blocked from expenses, tenant management, impersonation flow, owner revoke, audit trail."
   (:require
+    [app.admin.backend.services.admin.auth :as admin-auth]
     [app.e2e.fixtures :as fixtures]
     [app.e2e.helpers :as h]
     [cheshire.core :as json]
@@ -24,22 +25,17 @@
   {:email "admin@example.com" :password "admin123"})
 
 (defn- seed-admin!
-  "Ensure a platform admin exists in the test DB."
+  "Ensure a platform admin exists in the test DB with a valid password hash.
+   Uses the app's own hash-password to guarantee compatibility with verify."
   []
-  (let [existing (first (h/query-db "SELECT id FROM admins WHERE email = ?" (:email admin-creds)))]
-    (when-not existing
-      (let [admin-id (java.util.UUID/randomUUID)]
-        ;; Insert a minimal admin.
-        ;; IMPORTANT: keep hash format aligned with app's admin auth service (bcrypt+sha512).
-        (h/query-db
-          "INSERT INTO admins (id, email, full_name, password_hash, role, status)
-           VALUES (?, ?, 'Platform Admin',
-                   'bcrypt+sha512$604531f02285a11cf0d3612b67bcb199$12$a8924fc3552ff2cb30d6743f13fa7d053cf86d2c2e025806',
-                   'admin',
-                   'active')
-           ON CONFLICT (email) DO NOTHING"
-          admin-id
-          (:email admin-creds))))))
+  (let [password-hash (admin-auth/hash-password (:password admin-creds))]
+    (h/query-db
+      "INSERT INTO admins (id, email, full_name, password_hash, role, status, created_at, updated_at)
+       VALUES (?::uuid, ?, 'Platform Admin', ?, 'admin'::admin_role, 'active'::admin_status, now(), now())
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, updated_at = now()"
+      (str (java.util.UUID/randomUUID))
+      (:email admin-creds)
+      password-hash)))
 
 (defn- admin-login!
   "Login as platform admin via API. Returns response with token."
@@ -93,8 +89,9 @@
           (is (some? token) "Admin should receive a token")
 
           ;; Try to access expense-related admin APIs — should get 403
+          ;; The impersonation middleware is on /expenses/entries (the route-segment)
           (when token
-            (let [{:keys [status]} (admin-api-get admin-ctx "/admin/api/expenses" token)]
+            (let [{:keys [status]} (admin-api-get admin-ctx "/admin/api/expenses/entries" token)]
               (is (= 403 status) "Admin should be blocked from expense data"))))
         (finally
           (.close admin-ctx))))))
@@ -222,10 +219,10 @@
     (h/api-post "/api/v1/tenant/impersonation-grants"
       {:admin-email (:email admin-creds) :role "viewer"})
 
-    ;; Check audit logs
+    ;; Check audit logs — DB column is target_type (not entity_type)
     (let [logs (h/get-audit-logs 10)
           impersonation-logs (filter #(contains? #{"impersonation_grant" "admin_session"}
-                                        (:entity_type %)) logs)]
+                                        (:target_type %)) logs)]
       (is (>= (count impersonation-logs) 1)
         "At least one audit log entry for impersonation should exist")
       (let [actions (set (map :action impersonation-logs))]
