@@ -7,6 +7,7 @@
    - [:ui :entity-prefs <entity> :columns :visible-order]  Vector for ordering
   - [:ui :entity-prefs <entity> :columns :visible]        Map for quick lookup"
   (:require
+    [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.config.loader :as config-loader]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
@@ -47,8 +48,8 @@
                          (get-in db [:admin :config :view-options entity-key :column-locks])
                          (get-in db [:admin :settings :view-options entity-key :column-locks]))
           locked? (and (map? policy-locks)
-                   (contains? (into #{} (keep normalize (keys policy-locks)))
-                     (normalize column-name)))
+                    (contains? (into #{} (keep normalize (keys policy-locks)))
+                      (normalize column-name)))
           current-visible (->> (or (get-in db [:admin :config :table-columns entity-key :visible-columns])
                                  (get-in db [:admin :config :table-columns entity-key :default-visible-columns])
                                  [])
@@ -132,6 +133,8 @@
   :admin/load-ui-configs
   (fn [{:keys [db]} [_ opts]]
     (let [admin-path? (str/starts-with? (or (.-pathname js/window.location) "") "/admin")
+          token (or (:admin/token db)
+                  (auth-persist/get-persisted-token))
           force? (boolean (:force? opts))
           preloaded-configs (config-loader/load-all-configs)
           bootstrap (get-in db [:admin :config :bootstrap])
@@ -139,26 +142,46 @@
           inflight? (:in-flight? bootstrap)
           now-ts (now)
           within-window? (< (- now-ts last-started) bootstrap-throttle-ms)]
-      (if-not admin-path?
+      (cond
+        (not admin-path?)
         {:db db}
-        (if (and (not force?) (boolean (:admin/config-loaded? db)))
-          {:db db}
-          (if (and inflight? within-window?)
-            {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
-            {:db (-> db
-                   (assoc-in [:admin :config] preloaded-configs)
-                   ;; Only mark config as loaded when we actually have config data.
-                   ;; This flag is used to switch list/table rendering into vector-config mode.
-                   (assoc :admin/config-loaded? (boolean (seq (get preloaded-configs :table-columns))))
-                   (assoc :admin/config-loading? true)
-                   (assoc-in [:admin :config :bootstrap]
-                     (-> bootstrap
-                       (assoc :in-flight? true)
-                       (assoc :last-started-at now-ts)
-                       (assoc :last-requested-at now-ts)
-                       (dissoc :last-error))))
-               :fx [[:dispatch [::async-load-configs]]
-                 [:dispatch [::load-entity-configs]]]}))))))
+
+        (and (not force?) (boolean (:admin/config-loaded? db)))
+        {:db db}
+
+        (nil? token)
+        {:db (-> db
+               (assoc-in [:admin :config] preloaded-configs)
+               ;; Only mark config as loaded when we actually have config data.
+               ;; This flag is used to switch list/table rendering into vector-config mode.
+               (assoc :admin/config-loaded? (boolean (seq (get preloaded-configs :table-columns))))
+               (assoc :admin/config-loading? false)
+               (assoc-in [:admin :config :bootstrap]
+                 (-> bootstrap
+                   (assoc :awaiting-auth? true)
+                   (assoc :in-flight? false)
+                   (assoc :last-requested-at now-ts)
+                   (dissoc :last-error))))}
+
+        (and inflight? within-window?)
+        {:db (assoc-in db [:admin :config :bootstrap :last-requested-at] now-ts)}
+
+        :else
+        {:db (-> db
+               (assoc-in [:admin :config] preloaded-configs)
+               ;; Only mark config as loaded when we actually have config data.
+               ;; This flag is used to switch list/table rendering into vector-config mode.
+               (assoc :admin/config-loaded? (boolean (seq (get preloaded-configs :table-columns))))
+               (assoc :admin/config-loading? true)
+               (assoc-in [:admin :config :bootstrap]
+                 (-> bootstrap
+                   (assoc :awaiting-auth? false)
+                   (assoc :in-flight? true)
+                   (assoc :last-started-at now-ts)
+                   (assoc :last-requested-at now-ts)
+                   (dissoc :last-error))))
+         :fx [[:dispatch [::async-load-configs]]
+              [:dispatch [::load-entity-configs]]]}))))
 
 (rf/reg-event-fx
   ::load-entity-configs

@@ -65,7 +65,7 @@
           count-fn @(resolve 'app.template.backend.routes.admin.tenants/count-tenants)
           list-fn  @(resolve 'app.template.backend.routes.admin.tenants/list-tenants)
           total  (count-fn db {})
-          all    (list-fn db {:limit 1000 :offset 0})]
+          all    (list-fn db {:limit total :offset 0})]
       (is (= total (count all)) "Count should match list length"))))
 
 ;; ============================================================================

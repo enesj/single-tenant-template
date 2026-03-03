@@ -41,12 +41,14 @@
             delete-handler (user-manu/delete-manufacturer-handler db)
             uri "/api/v1/expenses/manufacturers"]
 
-        ;; 403 for viewer on list
+        ;; 200 for viewer on list (reference-data reads are allowed for all tenant roles)
         (let [resp (list-handler (req {:method :get
                                        :uri uri
                                        :session (user-session "viewer")
-                                       :query-params {:limit "2"}}))]
-          (is (= 403 (:status resp))))
+                                       :query-params {:limit "2"}}))
+              body (parse-body resp)]
+          (is (= 200 (:status resp)))
+          (is (vector? (:data body))))
 
         ;; 200 for admin on list
         (let [resp (list-handler (req {:method :get

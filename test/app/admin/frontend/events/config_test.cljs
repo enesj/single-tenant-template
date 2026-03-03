@@ -1,7 +1,9 @@
 (ns app.admin.frontend.events.config-test
   (:require
-    [app.admin.frontend.events.config] ;; ensure events are registered
+    [app.admin.frontend.core :as admin-core]
+    [app.admin.frontend.events.config]
     [app.admin.frontend.test-setup :as setup]
+    [app.domain.frontend.registry :as domain-registry]
     [cljs.test :refer [deftest is testing]]
     [re-frame.core :as rf]
     [re-frame.db :as rf-db]))
@@ -37,3 +39,34 @@
 
       (is (= #{:id :email :role} (set (keys visible-map)))
         "Visibility map should cover all available columns (true/false)"))))
+
+(deftest load-ui-configs-waits-for-authentication
+  (testing "Admin login bootstrap skips protected config fetches until a token exists"
+    (setup/reset-db!)
+    (swap! rf-db/app-db dissoc :admin/token :admin/authenticated?)
+    (.clear js/localStorage)
+    (.replaceState js/window.history nil "" "/admin/login")
+
+    (rf/dispatch-sync [:admin/load-ui-configs])
+
+    (is (false? (:admin/config-loading? @rf-db/app-db))
+      "Login bootstrap should not start protected config fetches without a token")
+
+    (is (true? (get-in @rf-db/app-db [:admin :config :bootstrap :awaiting-auth?]))
+      "Bootstrap state should remember that config loading is deferred until auth succeeds")))
+
+(deftest init-admin-skips-ui-config-bootstrap-without-session
+  (testing "Admin startup does not dispatch protected config loads before a session exists"
+    (setup/reset-db!)
+    (.clear js/localStorage)
+    (.replaceState js/window.history nil "" "/admin/login")
+    (reset! @#'app.admin.frontend.core/admin-initialized? false)
+    (let [dispatches (atom [])]
+      (with-redefs [re-frame.core/dispatch (fn [event] (swap! dispatches conj event))
+                    re-frame.core/dispatch-sync (fn [event] (swap! dispatches conj event))
+                    app.domain.frontend.registry/init-all-domains! (fn [] nil)]
+        (admin-core/init-admin!))
+      (is (some #(= [:admin/init-auth-persistence] %) @dispatches)
+        "Admin init should still restore auth persistence")
+      (is (not-any? #(= [:admin/load-ui-configs] %) @dispatches)
+        "Admin init should not request protected UI configs before a valid session exists"))))

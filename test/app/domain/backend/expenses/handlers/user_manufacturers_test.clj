@@ -23,16 +23,7 @@
           resp (handler (request :get "/api/v1/expenses/manufacturers"))]
       (is (= 401 (:status resp)))))
 
-  (testing "403 for non-admin roles"
-    (let [handler (user-manu/list-manufacturers-handler db)
-          req (request :get "/api/v1/expenses/manufacturers"
-                {:auth-session {:user {:id (java.util.UUID/randomUUID)
-                                       :role "viewer"}}}
-                nil)
-          resp (handler req)]
-      (is (= 403 (:status resp)))))
-
-  (testing "200 for admin role with stubbed service and pagination envelope"
+  (testing "200 for viewer/admin roles with stubbed service and pagination envelope"
     (with-redefs [manufacturers/service
                   {:list (fn [_db opts]
                            (repeat (or (:limit opts) 1) {:id (java.util.UUID/randomUUID)
@@ -41,21 +32,22 @@
                             (is (= "ac" (:search opts)))
                             17)}
                   h/json-response (fn [body & [status]] {:status (or status 200) :body body})]
-      (let [handler (user-manu/list-manufacturers-handler db)
-            req (-> (request :get "/api/v1/expenses/manufacturers"
-                      {:auth-session {:user {:id (java.util.UUID/randomUUID)
-                                             :role "admin"}}}
-                      nil)
-                  (assoc :query-params {:limit "2"
-                                        :offset "3"
-                                        :search "ac"}))
-            resp (handler req)]
-        (is (= 200 (:status resp)))
-        (is (map? (:body resp)))
-        (is (vector? (get-in resp [:body :data])))
-        (is (= 17 (get-in resp [:body :total])))
-        (is (= 2 (get-in resp [:body :limit])))
-        (is (= 3 (get-in resp [:body :offset])))))))
+      (doseq [role ["viewer" "admin"]]
+        (let [handler (user-manu/list-manufacturers-handler db)
+              req (-> (request :get "/api/v1/expenses/manufacturers"
+                        {:auth-session {:user {:id (java.util.UUID/randomUUID)
+                                               :role role}}}
+                        nil)
+                    (assoc :query-params {:limit "2"
+                                          :offset "3"
+                                          :search "ac"}))
+              resp (handler req)]
+          (is (= 200 (:status resp)))
+          (is (map? (:body resp)))
+          (is (vector? (get-in resp [:body :data])))
+          (is (= 17 (get-in resp [:body :total])))
+          (is (= 2 (get-in resp [:body :limit])))
+          (is (= 3 (get-in resp [:body :offset]))))))))
 
 (deftest create-manufacturer-validation
   (testing "400 when display_name missing"

@@ -30,12 +30,12 @@
       (is (= "Authentication required" (:error body))))))
 
 (deftest user-articles-forbidden-when-role-missing-even-with-identity
-  (testing "user articles handlers accept :identity but require admin/owner role"
+  (testing "user articles handlers accept :identity but still require a membership role"
     (let [handler (user-articles/list-articles-handler nil)
           resp (handler {:identity {:id (UUID/randomUUID)}})
           body (parse-json-body resp)]
       (is (= 403 (:status resp)))
-      (is (= "Only admins and owners can access this page." (:error body))))))
+      (is (= "Role assignment required" (:error body))))))
 
 (deftest user-receipts-forbidden-when-role-missing-even-with-identity
   (testing "user receipts handlers accept :identity for user-id extraction but still role-gate"

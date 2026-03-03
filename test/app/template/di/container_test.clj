@@ -109,7 +109,9 @@
   (testing "Authentication service creation"
     (let [mock-db (create-mock-db-connection)
           db-adapter (di-config/create-database-adapter mock-db)
-          email-service (email-service/create-email-service {:type :postmark :postmark {:api-key "test-key" :from-email "test@example.com"}})
+          email-service (email-service/create-email-service {:type :postmark
+                                                             :base-url "http://localhost:8086"
+                                                             :postmark {:api-key "test-key" :from-email "test@example.com"}})
           auth-service (di-config/create-authentication-service test-config db-adapter test-models-data email-service)]
 
       (is (not (nil? auth-service)))
@@ -141,7 +143,9 @@
           validation-service (di-config/create-validation-service test-models-data db-adapter)
           query-builder (di-config/create-query-builder test-models-data)
           crud-service (di-config/create-crud-service db-adapter test-models-data)
-          email-service (email-service/create-email-service {:type :postmark :postmark {:api-key "test-key" :from-email "test@example.com"}})
+          email-service (email-service/create-email-service {:type :postmark
+                                                             :base-url "http://localhost:8086"
+                                                             :postmark {:api-key "test-key" :from-email "test@example.com"}})
           auth-service (di-config/create-authentication-service test-config db-adapter test-models-data email-service)
           crud-routes (di-config/create-crud-routes crud-service)]
 
@@ -250,7 +254,9 @@
                           :google-client-secret "test"}
           mock-db (create-mock-db-connection)
           db-adapter (di-config/create-database-adapter mock-db)
-          email-service (email-service/create-email-service {:type :postmark :postmark {:api-key "test-key" :from-email "test@example.com"}})
+          email-service (email-service/create-email-service {:type :postmark
+                                                             :base-url "http://localhost:8086"
+                                                             :postmark {:api-key "test-key" :from-email "test@example.com"}})
           auth-service (di-config/create-authentication-service minimal-config db-adapter test-models-data email-service)]
 
       (is (not (nil? auth-service))))
@@ -262,7 +268,9 @@
                        :github-client-secret "github-secret"}
           mock-db (create-mock-db-connection)
           db-adapter (di-config/create-database-adapter mock-db)
-          email-service (email-service/create-email-service {:type :postmark :postmark {:api-key "test-key" :from-email "test@example.com"}})
+          email-service (email-service/create-email-service {:type :postmark
+                                                             :base-url "http://localhost:8086"
+                                                             :postmark {:api-key "test-key" :from-email "test@example.com"}})
           auth-service (di-config/create-authentication-service full-config db-adapter test-models-data email-service)]
 
       (is (not (nil? auth-service))))))

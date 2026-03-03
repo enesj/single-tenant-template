@@ -2,6 +2,7 @@
   "Admin SPA bootstrap; integrate admin routes and layout."
   (:require
     [app.admin.frontend.adapters.users]
+    [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.config.preload]
     [app.admin.frontend.events.config]
     [app.admin.frontend.events.auth]
@@ -97,15 +98,18 @@
   Safe to call multiple times; runs only once per page load."
   []
   (when (compare-and-set! admin-initialized? false true)
-    (when ^boolean goog.DEBUG
-      (install-unified-settings-debug!))
-    ;; Initialize authentication persistence first (before any auth checks)
-    (rf/dispatch [:admin/init-auth-persistence])
-    ;; Initialize the theme when admin module loads
-    (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
-    ;; Load config and models-data if not already loaded
-    (rf/dispatch [:app.template.frontend.events.config/fetch-config])
-    ;; Load admin UI configurations (hits /admin/api/*)
-    (rf/dispatch [:admin/load-ui-configs])
-    ;; Initialize all enabled domains (loads events/subs)
-    (domain-registry/init-all-domains!)))
+    (let [has-valid-session? (auth-persist/has-valid-session?)]
+      (when ^boolean goog.DEBUG
+        (install-unified-settings-debug!))
+      ;; Initialize authentication persistence first (before any auth checks)
+      (rf/dispatch [:admin/init-auth-persistence])
+      ;; Initialize the theme when admin module loads
+      (rf/dispatch-sync [:app.template.frontend.events.bootstrap/initialize-theme])
+      ;; Load config and models-data if not already loaded
+      (rf/dispatch [:app.template.frontend.events.config/fetch-config])
+      ;; Only bootstrap protected admin UI configs when a valid admin session is already present.
+      ;; Public routes such as /admin/login should not hit /admin/api/settings* before auth.
+      (when has-valid-session?
+        (rf/dispatch [:admin/load-ui-configs]))
+      ;; Initialize all enabled domains (loads events/subs)
+      (domain-registry/init-all-domains!))))

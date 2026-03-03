@@ -78,9 +78,12 @@
                :admin/authenticated? true
                :admin/current-user-role role)
              (dissoc :admin/login-loading? :admin/login-error :admin/auth-checking?))
-       ;; Use router-aware SPA navigation so the route match updates immediately
-       ;; (avoids rendering the public home page until a manual refresh).
-       :dispatch [:admin/navigate-client "/admin/dashboard"]})))
+       ;; Refresh admin UI configs only after auth succeeds so the login page
+       ;; does not hit protected /admin/api/settings* endpoints unauthenticated.
+       :dispatch-n [[:admin/load-ui-configs]
+                    ;; Use router-aware SPA navigation so the route match updates immediately
+                    ;; (avoids rendering the public home page until a manual refresh).
+                    [:admin/navigate-client "/admin/dashboard"]]})))
 
 (rf/reg-event-db
   :admin/login-failure
@@ -95,14 +98,14 @@
   (fn [{:keys [db]} _]
     ;; Clear persisted auth state
     (auth-persist/clear-auth-state!)
-        {:db (dissoc db
-          :admin/current-user
-          :admin/token
-          :admin/authenticated?
-          :admin/current-user-role
-          :admin/auth-checking?
-          :admin/login-loading?
-          :admin/login-error)
+    {:db (dissoc db
+           :admin/current-user
+           :admin/token
+           :admin/authenticated?
+           :admin/current-user-role
+           :admin/auth-checking?
+           :admin/login-loading?
+           :admin/login-error)
      :http-xhrio (admin-http/auth-request
                    {:uri "/admin/api/logout"
                     :on-success [:admin/logout-success]

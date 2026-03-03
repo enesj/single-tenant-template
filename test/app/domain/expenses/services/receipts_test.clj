@@ -22,33 +22,26 @@
 
 (defn- now [] (java.time.Instant/now))
 
-(defn- create-test-user!
-  "Insert a minimal user row and return its UUID id."
-  [db role]
-  (let [user-id (UUID/randomUUID)
-        t (now)
-        email (str "user-" (UUID/randomUUID) "@test.com")]
-    (jdbc/execute!
-      db
-      (hsql/format {:insert-into :users
-                    :values [{:id user-id
-                              :email email
-                              :full_name "Test User"
-                              :password_hash "test-hash-not-real"
-                              :role [:cast (or role "member") :user_role]
-                              :status [:cast "active" :user_status]
-                              :email_verified false
-                              :auth_provider "password"
-                              :created_at t
-                              :updated_at t}]}))
-    user-id))
+(defn- create-test-context!
+  "Create a minimal user plus tenant context for receipt tests."
+  ([db] (create-test-context! db "receipt-user"))
+  ([db label]
+   (let [user (th/ensure-test-user! db {:email (str label "-" (UUID/randomUUID) "@test.com")
+                                        :name "Receipt Test User"})
+         {:keys [tenant-id]} (th/ensure-test-tenant! db user)]
+     {:user-id (:id user)
+      :tenant-id tenant-id})))
 
 (deftest receipts-approve-creates-expense-and-links
   (when-let [db fixtures/*test-db*]
-    (let [supplier-result (suppliers/find-or-create-supplier! db "Konzum" {})
+    (let [{:keys [tenant-id]} (create-test-context! db "approve-links")
+          supplier-result (suppliers/find-or-create-supplier! db "Konzum" {})
           supplier (:supplier supplier-result)
-          payer (th/create-payer! db {:type "card" :label "Visa"})
-          upload (receipt-storage/upload-receipt! db {:storage_key "s3://bucket/r1.jpg"
+          payer (th/create-payer! db {:type "card"
+                                      :label "Visa"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key "s3://bucket/r1.jpg"
                                                       :bytes (.getBytes "hello world")})
           receipt-id (:id (:receipt upload))
           _ (receipt-status/update-status! db receipt-id "extracted")
@@ -67,9 +60,13 @@
 
 (deftest receipts-delete-expense-reverts-receipt
   (when-let [db fixtures/*test-db*]
-    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier" {}))
-          payer (th/create-payer! db {:type "cash" :label "Cash"})
-          upload (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
+    (let [{:keys [tenant-id]} (create-test-context! db "delete-reverts")
+          supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier" {}))
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "del-" (UUID/randomUUID)))})
           receipt-id (:id (:receipt upload))
           _ (receipt-status/update-status! db receipt-id "extracted")
@@ -92,9 +89,13 @@
 
 (deftest receipts-delete-expense-clears-link-even-if-receipt-already-reverted
   (when-let [db fixtures/*test-db*]
-    (let [supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier (reverted receipt)" {}))
-          payer (th/create-payer! db {:type "cash" :label "Cash"})
-          upload (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
+    (let [{:keys [tenant-id]} (create-test-context! db "delete-clears-link")
+          supplier (:supplier (suppliers/find-or-create-supplier! db "DeleteExpense Supplier (reverted receipt)" {}))
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key (str "s3://bucket/r-del-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "del-" (UUID/randomUUID)))})
           receipt-id (:id (:receipt upload))
           _ (receipt-status/update-status! db receipt-id "extracted")
@@ -130,9 +131,13 @@
           dest-file (io/file base-dir "exported" storage-key)]
       (try
         (Files/write (.toPath src-file) bytes (into-array java.nio.file.OpenOption []))
-        (let [supplier (:supplier (suppliers/find-or-create-supplier! db "Konzum" {}))
-              payer (th/create-payer! db {:type "card" :label "Visa"})
-              upload (receipt-storage/upload-receipt! db {:storage_key storage-key
+        (let [{:keys [tenant-id]} (create-test-context! db "local-file")
+              supplier (:supplier (suppliers/find-or-create-supplier! db "Konzum" {}))
+              payer (th/create-payer! db {:type "card"
+                                          :label "Visa"
+                                          :tenant_id tenant-id})
+              upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                          :storage_key storage-key
                                                           :bytes bytes})
               receipt-id (:id (:receipt upload))
               _ (receipt-status/update-status! db receipt-id "extracted")
@@ -157,24 +162,29 @@
 
 (deftest receipts-approve-for-user-sets-expense-user-id-and-scopes
   (when-let [db fixtures/*test-db*]
-    (let [user-1 (create-test-user! db "member")
-          user-2 (create-test-user! db "member")
+    (let [{user-1 :user-id tenant-1 :tenant-id} (create-test-context! db "member-one")
+          {user-2 :user-id tenant-2 :tenant-id} (create-test-context! db "member-two")
           supplier-result (suppliers/find-or-create-supplier! db "UserReceipt Supplier" {})
           supplier (:supplier supplier-result)
-          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id tenant-1})
 
           upload-owned (receipt-storage/upload-receipt! db {:user_id user-1
+                                                            :tenant_id tenant-1
                                                             :storage_key (str "s3://bucket/u1-" (UUID/randomUUID) ".jpg")
                                                             :bytes (.getBytes (str "u1-" (UUID/randomUUID)))})
           receipt-owned (:id (:receipt upload-owned))
           _ (receipt-status/update-status! db receipt-owned "extracted")
 
-          upload-unassigned (receipt-storage/upload-receipt! db {:storage_key (str "s3://bucket/unassigned-" (UUID/randomUUID) ".jpg")
+          upload-unassigned (receipt-storage/upload-receipt! db {:tenant_id tenant-1
+                                                                 :storage_key (str "s3://bucket/unassigned-" (UUID/randomUUID) ".jpg")
                                                                  :bytes (.getBytes (str "unassigned-" (UUID/randomUUID)))})
           receipt-unassigned (:id (:receipt upload-unassigned))
           _ (receipt-status/update-status! db receipt-unassigned "extracted")
 
           upload-other (receipt-storage/upload-receipt! db {:user_id user-2
+                                                            :tenant_id tenant-2
                                                             :storage_key (str "s3://bucket/u2-" (UUID/randomUUID) ".jpg")
                                                             :bytes (.getBytes (str "u2-" (UUID/randomUUID)))})
           receipt-other (:id (:receipt upload-other))
@@ -186,13 +196,13 @@
                   :currency "BAM"
                   :items [{:raw_label "Item" :line_total (bigdec "7.77")}]}
 
-          expense-owned (receipt-approval/approve-and-post-for-user! db user-1 receipt-owned review)
-          stored-owned (receipt-queries/get-receipt db receipt-owned)
+          expense-owned (receipt-approval/approve-and-post-for-user! db user-1 receipt-owned review :tenant-id tenant-1)
+          stored-owned (receipt-queries/get-receipt db receipt-owned tenant-1)
 
-          expense-unassigned (receipt-approval/approve-and-post-for-user! db user-1 receipt-unassigned review)
-          stored-unassigned (receipt-queries/get-receipt db receipt-unassigned)
+          expense-unassigned (receipt-approval/approve-and-post-for-user! db user-1 receipt-unassigned review :tenant-id tenant-1)
+          stored-unassigned (receipt-queries/get-receipt db receipt-unassigned tenant-1)
 
-          scoped (receipt-queries/list-user-receipts db user-1 {:limit 200})
+          scoped (receipt-queries/list-user-receipts db user-1 {:limit 200 :tenant-id tenant-1})
           scoped-ids (set (map :id scoped))]
       (is (= user-1 (:user_id expense-owned)))
       (is (= "posted" (:status stored-owned)))
@@ -208,20 +218,23 @@
       (is (not (contains? scoped-ids receipt-other)))
 
       (try
-        (receipt-approval/approve-and-post-for-user! db user-1 receipt-other review)
+        (receipt-approval/approve-and-post-for-user! db user-1 receipt-other review :tenant-id tenant-1)
         (is false "Expected non-owned receipt approval to throw")
         (catch clojure.lang.ExceptionInfo e
           (is (= 404 (:status (ex-data e)))))))))
 
 (deftest receipts-approve-for-admin-user-can-approve-any-receipt
   (when-let [db fixtures/*test-db*]
-    (let [admin-user (create-test-user! db "admin")
-          member-user (create-test-user! db "member")
+    (let [{admin-user :user-id} (create-test-context! db "admin-user")
+          {member-user :user-id member-tenant-id :tenant-id} (create-test-context! db "member-user")
           supplier-result (suppliers/find-or-create-supplier! db "AdminReceipt Supplier" {})
           supplier (:supplier supplier-result)
-          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id member-tenant-id})
 
           upload (receipt-storage/upload-receipt! db {:user_id member-user
+                                                      :tenant_id member-tenant-id
                                                       :storage_key (str "s3://bucket/member-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "member-" (UUID/randomUUID)))})
           receipt-id (:id (:receipt upload))
@@ -233,8 +246,8 @@
                   :total_amount (bigdec "3.33")
                   :currency "BAM"
                   :items [{:raw_label "Item" :line_total (bigdec "3.33")}]}
-          expense (receipt-approval/approve-and-post-for-user-any! db admin-user receipt-id review)
-          stored (receipt-queries/get-receipt db receipt-id)]
+          expense (receipt-approval/approve-and-post-for-user-any! db admin-user receipt-id review :tenant-id member-tenant-id)
+          stored (receipt-queries/get-receipt db receipt-id member-tenant-id)]
       (is (= admin-user (:user_id expense)))
       (is (= "posted" (:status stored)))
       (is (= (:id expense) (:expense_id stored)))

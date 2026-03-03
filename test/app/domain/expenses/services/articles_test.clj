@@ -20,14 +20,19 @@
 (defn- now [] (java.time.Instant/now))
 
 (defn- insert-receipt!
-  [db {:keys [original-filename supplier-alias-id store-alias-id created-at]}]
+  [db {:keys [original-filename supplier-alias-id store-alias-id created-at tenant-id]}]
   (let [receipt-id (UUID/randomUUID)
         file-hash (str (UUID/randomUUID))
-        storage-key (str "test/receipts/" receipt-id)]
+        storage-key (str "test/receipts/" receipt-id)
+        resolved-tenant-id (or tenant-id
+                             (:tenant-id (th/ensure-test-tenant!
+                                           db
+                                           (th/ensure-test-user! db {:email (str "article-receipt-" (UUID/randomUUID) "@example.com")}))))]
     (jdbc/execute-one!
       db
-      ["insert into receipts (id, storage_key, file_hash, original_filename, supplier_alias_id, store_alias_id, created_at) values (?, ?, ?, ?, ?, ?, coalesce(?, now()))"
+      ["insert into receipts (id, tenant_id, storage_key, file_hash, original_filename, supplier_alias_id, store_alias_id, created_at) values (?, ?, ?, ?, ?, ?, ?, coalesce(?, now()))"
        receipt-id
+       resolved-tenant-id
        storage-key
        file-hash
        original-filename

@@ -189,9 +189,9 @@
                     (reset! articles-opts opts)
                     [{:id (UUID/randomUUID)}])
                   articles/count-articles
-                  (fn [_db search]
-                    (reset! articles-search search)
-                    6)
+                  (fn [_db search-opts]
+                    (reset! articles-search search-opts)
+                    {:total 6})
                   article-aliases/list-unmapped-aliases
                   (fn [_db opts]
                     (reset! unmapped-opts opts)
@@ -212,7 +212,7 @@
           (is (= 500 (get-in resp [:body :limit])))
           (is (= 0 (get-in resp [:body :offset])))
           (is (= {:limit 500 :offset 0 :search "abc"} @articles-opts))
-          (is (= "abc" @articles-search))))
+          (is (= {:search "abc"} @articles-search))))
 
       (testing "unmapped aliases list includes envelope and supplier filter"
         (let [handler (user-articles/list-unmapped-aliases-handler db)
