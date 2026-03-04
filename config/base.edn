@@ -3,23 +3,33 @@
                  {}]
 
  :database  {:dbtype   "postgresql"
-             :host     "localhost"
-             :user     "app_user"
+             :host     #profile {:dev  "localhost"
+                                 :test "localhost"
+                                 :prod #or [#env DB_HOST "localhost"]}
+             :user     #profile {:dev  "app_user"
+                                 :test "app_user"
+                                 :prod #or [#env DB_USER "app_user"]}
              :password #profile
                         {:dev  #or [#env DB_DEV_PASSWORD
                                     #ref [:secrets :db :dev-password]]
                          :test #or [#env DB_TEST_PASSWORD
-                                    #ref [:secrets :db :test-password]]}
+                                    #ref [:secrets :db :test-password]]
+                         :prod #env DB_PASSWORD}
             ;; Profile-specific settings
              :port     #profile {:dev  55432
-                                 :test 55433}
+                                 :test 55433
+                                 :prod #or [#env DB_PORT 5432]}
              :dbname   #profile {:dev  "multi_tenant_pos"
-                                 :test "multi_tenant_pos_test"}
+                                 :test "multi_tenant_pos_test"
+                                 :prod #or [#env DB_NAME "multi_tenant_pos"]}
              :jdbc-url #profile
                         {:dev  #join ["jdbc:postgresql://localhost:55432/multi_tenant_pos?user=app_user&password="
                                       #or [#env DB_DEV_PASSWORD #ref [:secrets :db :dev-password]]]
                          :test #join ["jdbc:postgresql://localhost:55433/multi_tenant_pos_test?user=app_user&password="
-                                      #or [#env DB_TEST_PASSWORD #ref [:secrets :db :test-password]]]}}
+                                      #or [#env DB_TEST_PASSWORD #ref [:secrets :db :test-password]]]
+                         ;; In prod, prefer DATABASE_URL env var (see core.clj);
+                         ;; this is a fallback if DATABASE_URL is not set.
+                         :prod #env DATABASE_URL}}
 
  ;; HikariCP Connection Pool Configuration
  :hikari-cp {:maximum-pool-size        20
@@ -37,9 +47,12 @@
              :prometheus {:enabled true
                           :port    9190}}
 
- :webserver {:host "localhost"
+ :webserver {:host #profile {:dev  "localhost"
+                             :test "localhost"
+                             :prod #or [#env HOST "0.0.0.0"]}
              :port #profile {:dev  8085
-                             :test 8086}}
+                             :test 8086
+                             :prod #or [#env PORT 8080]}}
 
  :cache     {:size 1000
              :ttl  3600}
@@ -55,7 +68,7 @@
                       :user-info-uri     "https://www.googleapis.com/oauth2/v3/userinfo"
                       :redirect-uri      #profile {:dev  "http://localhost:8085/oauth/google/callback"
                                                    :test "http://localhost:8086/oauth/google/callback"
-                                                   :prod #ref [:secrets :oauth :google :redirect-uri]}
+                                                   :prod #env GOOGLE_OAUTH_REDIRECT_URI}
                       :launch-uri        "/login/google"
                       :landing-uri       "/"
                       :basic-auth?       false}
@@ -69,7 +82,7 @@
                       :user-info-uri     "https://api.github.com/user"
                       :redirect-uri      #profile {:dev  "http://localhost:8085/oauth2/github/callback"
                                                    :test "http://localhost:8086/oauth2/github/callback"
-                                                   :prod #ref [:secrets :oauth :github :redirect-uri]}
+                                                   :prod #env GITHUB_OAUTH_REDIRECT_URI}
                       :launch-uri        "/oauth2/github"
                       :landing-uri       "/"
                       :basic-auth?       false}}

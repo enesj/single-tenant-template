@@ -78,6 +78,11 @@
         static-routes
         [["/" {:get {:handler render-page}}]
 
+         ;; Health check for load balancers / Railway
+         ["/health" {:get {:handler (fn [_] {:status 200
+                                             :headers {"Content-Type" "application/json"}
+                                             :body "{\"status\":\"ok\"}"})}}]
+
          ;; Add explicit /home route to match frontend routing
          ["/home" {:get {:handler render-page}}]
 
