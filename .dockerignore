@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+.claude
+.clj-kondo
+.lsp
+.shadow-cljs
+.cpcache
+.nrepl-port
+target
+node_modules
+tmp
+dev
+test
+docs
+*.md
+config/.secrets.edn

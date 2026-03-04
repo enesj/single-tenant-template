@@ -55,7 +55,12 @@
                 (io/resource "config/base.edn") (aero/read-config (io/resource "config/base.edn") {:profile profile})
                 (io/resource "base.edn") (aero/read-config (io/resource "base.edn") {:profile profile})
                 :else nil)
-         env-url (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
+         env-url (some-> (System/getenv "DATABASE_URL") str/trim not-empty
+                   ;; PaaS providers (Railway, Heroku) use postgresql:// but JDBC needs jdbc:
+                   (as-> u (if (and (not (str/starts-with? u "jdbc:"))
+                                 (str/starts-with? u "postgresql"))
+                             (str "jdbc:" u)
+                             u)))
          db-cfg  (:database cfg)
          redact-db-cfg (fn [m]
                          (when (map? m)

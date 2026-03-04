@@ -143,7 +143,12 @@
                                 (str/replace #"(?i)(password=)[^&]*" "$1REDACTED")
                                 (str/replace #"(?i)(user=)[^&]*" "$1REDACTED")
                                 (str/replace #"(?i)://([^:/?#]+):([^@/?#]+)@" "://REDACTED:REDACTED@"))))
-        env-url          (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
+        env-url          (some-> (System/getenv "DATABASE_URL") str/trim not-empty
+                           ;; PaaS providers (Railway, Heroku) use postgresql:// but HikariCP needs jdbc:
+                           (as-> u (if (and (not (str/starts-with? u "jdbc:"))
+                                         (str/starts-with? u "postgresql"))
+                                     (str "jdbc:" u)
+                                     u)))
         base-jdbc-url    (or env-url
                            (:jdbc-url db-config)
                            (when (every? db-config [:host :port :dbname])
@@ -241,33 +246,34 @@
 
 (defn- validate-config!
   "Fail fast if required secrets are absent.
-  Called after load-config but before other resources are opened."
+  Called after load-config but before other resources are opened.
+  Hard errors: database credentials. Warnings: optional integrations (email, OAuth)."
   [config profile]
   (let [db-url-override (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
-        problems        (cond-> []
+        errors          (cond-> []
                           (and (not db-url-override)
                             (nil? (get-in config [:database :password])))
-                          (conj "[:database :password] — set DB_DEV_PASSWORD or DB_TEST_PASSWORD env var")
-
+                          (conj "[:database :password] — set DB_PASSWORD (prod) or DB_DEV_PASSWORD/DB_TEST_PASSWORD env var"))
+        warnings        (cond-> []
                           (and (= :prod profile)
                             (nil? (get-in config [:oauth :google :client-secret])))
-                          (conj "[:oauth :google :client-secret] — set GOOGLE_OAUTH_CLIENT_SECRET env var")
-
-                          (and (= :prod profile)
-                            (nil? (get-in config [:stripe :api-key])))
-                          (conj "[:stripe :api-key] — set STRIPE_LIVE_API_KEY env var")
+                          (conj "[:oauth :google :client-secret] — Google OAuth disabled (set GOOGLE_OAUTH_CLIENT_SECRET to enable)")
 
                           (and (= :prod profile)
                             (nil? (get-in config [:email :smtp :pass]))
                             (nil? (get-in config [:email :postmark :api-key])))
-                          (conj "[:email] — set SMTP_PASS or POSTMARK_API_KEY env var"))]
-    (when (seq problems)
+                          (conj "[:email] — email sending disabled (set SMTP_PASS or POSTMARK_API_KEY to enable)"))]
+    (when (seq warnings)
+      (log/warn {:event :config/missing-optional-secrets
+                 :profile profile
+                 :warnings warnings}))
+    (when (seq errors)
       (throw
         (ex-info
           (str "Missing required configuration secrets. "
             "See config/.secrets.edn.template or .env.example.\n"
-            (str/join "\n" (map #(str "  " %) problems)))
-          {:profile profile :missing problems})))))
+            (str/join "\n" (map #(str "  " %) errors)))
+          {:profile profile :missing errors})))))
 
 (defn my-system [config-options]
   (let [profile (resolve-profile config-options)]

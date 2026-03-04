@@ -57,7 +57,7 @@
     (b/compile-clj {:basis      @basis
                     :src-dirs   ["src"]
                     :class-dir  class-dir
-                    :ns-compile '[app.main]})
+                    :ns-compile '[app.main app.migrate]})
 
     (println "🗜️  Assembling uberjar →" out "...")
     (b/uber {:class-dir class-dir
