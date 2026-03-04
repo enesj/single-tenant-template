@@ -9,6 +9,7 @@
      [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
      [app.template.frontend.components.list :refer [list-view]]
      [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+     [app.template.frontend.i18n :refer [use-t]]
      [app.template.frontend.utils.id :as id-utils]
      [re-frame.core :as rf]
      [uix.core :refer [$ defui use-callback use-effect]]
@@ -16,7 +17,8 @@
      app.domain.frontend.expenses.subs.user-expenses))
 
 (defui payer-types-page []
-  (let [role (use-subscribe [:expenses/user-role])
+  (let [t (use-t)
+        role (use-subscribe [:expenses/user-role])
         can-modify? (authz/power-user? role)
         entity-name :payer-types
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -82,8 +84,8 @@
                                  (.stopPropagation e)
                                  (when-not delete-disabled?
                                    (confirm-dialog/show-confirm
-                                     {:title "Delete payer type"
-                                      :message "Do you want to delete this payer type?"
+                                     {:title (t :payer-types/delete-title)
+                                      :message (t :payer-types/delete-msg)
                                       :on-confirm #(rf/dispatch [:user-expenses/delete-payer-type payer-type-id-str])
                                       :on-cancel nil})))}
                     ($ delete-icon))))))]
@@ -95,20 +97,20 @@
              ($ :div {:class "w-full px-4 py-4 sm:py-6"}
                ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                  ($ :div
-                   ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Payer Types")
+                   ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :payer-types/title))
                    ($ :p {:class "text-sm text-base-content/70"}
-                     "Manage available payer types and default"))
+                     (t :payer-types/subtitle)))
                  ($ :div {:class "flex gap-2"}
                    ($ button {:id "btn-back-expenses-dashboard-payer-types"
                               :btn-type :ghost
                               :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                     "Dashboard")))))
+                     (t :payer-types/btn-dashboard))))))
 
            ($ :main {:class "w-full px-4 py-6"}
              ($ list-view
                {:entity-name entity-name
                 :entity-spec entity-spec
-                :title "Payer Types"
+                :title (t :payer-types/title)
                 :form-display :modal
                 :disallowed-action-mode :disable
                 :allow-add? can-modify?

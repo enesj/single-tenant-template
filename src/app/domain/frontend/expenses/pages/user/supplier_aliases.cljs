@@ -11,6 +11,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -25,7 +26,7 @@
      :on-cancel on-cancel}))
 
 (defn- render-actions
-  [item]
+  [t item]
   (let [supplier-alias-id (id-utils/extract-entity-id item)
         supplier-alias-id-str (some-> supplier-alias-id str)
         on-edit-click (:on-edit-click item)
@@ -51,14 +52,15 @@
            :on-click (fn [e]
                        (.stopPropagation e)
                        (confirm-dialog/show-confirm
-                         {:title "Delete supplier alias"
-                          :message "Do you want to delete this supplier alias?"
+                         {:title (t :supplier-aliases/delete-title)
+                          :message (t :supplier-aliases/delete-msg)
                           :on-confirm #(rf/dispatch [:user-expenses/delete-supplier-alias supplier-alias-id-str])
                           :on-cancel nil}))}
           ($ delete-icon))))))
 
 (defui supplier-aliases-page []
-  (let [entity-name :supplier-aliases
+  (let [t (use-t)
+        entity-name :supplier-aliases
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
                        (fn []
@@ -80,25 +82,25 @@
            ($ :div {:class "w-full px-4 py-4 sm:py-6"}
              ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                ($ :div
-                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Supplier Aliases")
+                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :supplier-aliases/title))
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user alias catalog for supplier normalization"))
+                   (t :supplier-aliases/subtitle)))
                ($ :div {:class "flex gap-2 flex-wrap"}
                  ($ button {:id "btn-back-expenses-dashboard-supplier-aliases"
                             :btn-type :ghost
                             :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")
+                   (t :supplier-aliases/btn-dashboard))
                  ($ button {:id "btn-go-suppliers-supplier-aliases"
                             :btn-type :primary
                             :on-click #(rf/dispatch [:navigate-to "/suppliers"])}
-                   "Suppliers")))))
+                   (t :supplier-aliases/btn-suppliers))))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title "Supplier Aliases"
+              :title (t :supplier-aliases/title)
               :form-display :modal
               :allow-add? false
               :render-edit-form render-edit-form
-              :render-actions render-actions})))})))
+              :render-actions (fn [item] (render-actions t item))})))})))

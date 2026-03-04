@@ -11,6 +11,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -25,7 +26,7 @@
      :on-cancel on-cancel}))
 
 (defn- render-actions
-  [item]
+  [t item]
   (let [article-alias-id (id-utils/extract-entity-id item)
         article-alias-id-str (some-> article-alias-id str)
         on-edit-click (:on-edit-click item)
@@ -51,14 +52,15 @@
            :on-click (fn [e]
                        (.stopPropagation e)
                        (confirm-dialog/show-confirm
-                         {:title "Delete article alias"
-                          :message "Do you want to delete this article alias?"
+                         {:title (t :article-aliases/delete-title)
+                          :message (t :article-aliases/delete-msg)
                           :on-confirm #(rf/dispatch [:user-expenses/delete-article-alias article-alias-id-str])
                           :on-cancel nil}))}
           ($ delete-icon))))))
 
 (defui article-aliases-page []
-  (let [entity-name :article-aliases
+  (let [t (use-t)
+        entity-name :article-aliases
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
                        (fn []
@@ -80,26 +82,26 @@
            ($ :div {:class "w-full px-4 py-4 sm:py-6"}
              ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                ($ :div
-                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Article Aliases")
+                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :article-aliases/title))
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user alias catalog (mapping is managed via Unmapped Aliases)"))
+                   (t :article-aliases/subtitle)))
                ($ :div {:class "flex gap-2 flex-wrap"}
                  ($ button {:id "btn-back-expenses-dashboard-article-aliases"
                             :btn-type :ghost
                             :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")
+                   (t :article-aliases/btn-dashboard))
                  ($ button {:id "btn-go-unmapped-items-article-aliases"
                             :btn-type :primary
                             :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}
-                   "Unmapped Aliases")))))
+                   (t :article-aliases/btn-unmapped))))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title "Article Aliases"
+              :title (t :article-aliases/title)
               :form-display :modal
               :allow-add? false
               :render-edit-form render-edit-form
-              :render-actions render-actions})))})))
+              :render-actions (fn [item] (render-actions t item))})))})))
 

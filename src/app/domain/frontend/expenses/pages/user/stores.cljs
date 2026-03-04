@@ -12,6 +12,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -32,7 +33,7 @@
      :on-cancel on-cancel}))
 
 (defn- render-actions
-  [item]
+  [t item]
   (let [store-id (id-utils/extract-entity-id item)
         store-id-str (some-> store-id str)
         on-edit-click (:on-edit-click item)
@@ -65,15 +66,16 @@
                        (.stopPropagation e)
                        (when-not delete-disabled?
                          (confirm-dialog/show-confirm
-                           {:title "Delete store"
-                            :message "Do you want to delete this store?"
+                           {:title (t :stores/delete-title)
+                            :message (t :stores/delete-msg)
                             :on-confirm #(rf/dispatch [:user-expenses/delete-store store-id-str])
                             :on-cancel nil})))}
           ($ delete-icon))))))
 
 (defui stores-page
   []
-  (let [role (use-subscribe [:expenses/user-role])
+  (let [t (use-t)
+        role (use-subscribe [:expenses/user-role])
         can-manage? (authz/can? role :expenses/stores.manage)
         entity-name :stores
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -101,18 +103,18 @@
              ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                ($ :div
                  ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"}
-                   "Stores")
+                   (t :stores/title))
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user store catalog (used for normalization and store aliases)."))
+                   (t :stores/subtitle)))
                ($ :div {:class "flex gap-2 flex-wrap"}
                  ($ button {:id "btn-back-expenses-dashboard-stores"
                             :btn-type :ghost
                             :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")
+                   (t :stores/btn-dashboard))
                  ($ button {:id "btn-go-store-aliases-stores"
                             :btn-type :primary
                             :on-click #(rf/dispatch [:navigate-to "/store-aliases"])}
-                   "Store Aliases")))))
+                   (t :stores/btn-store-aliases))))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view
@@ -128,4 +130,4 @@
               :render-edit-form render-edit-form
               :on-add-success refresh-list
               :on-edit-success refresh-list
-              :render-actions render-actions})))})))
+              :render-actions (fn [item] (render-actions t item))})))})))

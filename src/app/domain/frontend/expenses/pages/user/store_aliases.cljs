@@ -11,6 +11,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -25,7 +26,7 @@
      :on-cancel on-cancel}))
 
 (defn- render-actions
-  [item]
+  [t item]
   (let [store-alias-id (id-utils/extract-entity-id item)
         store-alias-id-str (some-> store-alias-id str)
         on-edit-click (:on-edit-click item)
@@ -58,15 +59,16 @@
                        (.stopPropagation e)
                        (when-not delete-disabled?
                          (confirm-dialog/show-confirm
-                           {:title "Delete store alias"
-                            :message "Do you want to delete this store alias?"
+                           {:title (t :store-aliases/delete-title)
+                            :message (t :store-aliases/delete-msg)
                             :on-confirm #(rf/dispatch [:user-expenses/delete-store-alias store-alias-id-str])
                             :on-cancel nil})))}
           ($ delete-icon))))))
 
 (defui store-aliases-page
   []
-  (let [role (use-subscribe [:expenses/user-role])
+  (let [t (use-t)
+        role (use-subscribe [:expenses/user-role])
         can-manage? (authz/can? role :expenses/store-aliases.manage)
         entity-name :store-aliases
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -96,24 +98,24 @@
              ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                ($ :div
                  ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"}
-                   "Store Aliases")
+                   (t :store-aliases/title))
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user alias catalog for store normalization"))
+                   (t :store-aliases/subtitle)))
                ($ :div {:class "flex gap-2 flex-wrap"}
                  ($ button {:id "btn-back-expenses-dashboard-store-aliases"
                             :btn-type :ghost
                             :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")
+                   (t :store-aliases/btn-dashboard))
                  ($ button {:id "btn-go-stores-store-aliases"
                             :btn-type :primary
                             :on-click #(rf/dispatch [:navigate-to "/stores"])}
-                   "Stores")))))
+                   (t :store-aliases/btn-stores))))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title "Store Aliases"
+              :title (t :store-aliases/title)
               :form-display :modal
               :disallowed-action-mode :disable
               :allow-add? false
@@ -121,6 +123,6 @@
               :allow-delete? can-manage?
               :render-edit-form render-edit-form
               :on-edit-success refresh-aliases
-              :render-actions render-actions
+              :render-actions (fn [item] (render-actions t item))
               :on-batch-delete (fn [ids]
                                  (rf/dispatch [:user-expenses/batch-delete-store-aliases ids]))})))})))

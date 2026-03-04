@@ -10,6 +10,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -30,7 +31,7 @@
      :on-cancel on-cancel}))
 
 (defn- render-actions
-  [item]
+  [t item]
   (let [expense-category-id (id-utils/extract-entity-id item)
         expense-category-id-str (some-> expense-category-id str)
         on-edit-click (:on-edit-click item)
@@ -63,15 +64,16 @@
                        (.stopPropagation e)
                        (when-not delete-disabled?
                          (confirm-dialog/show-confirm
-                           {:title "Delete expense category"
-                            :message "Do you want to delete this expense category?"
+                           {:title (t :expense-categories/delete-title)
+                            :message (t :expense-categories/delete-msg)
                             :on-confirm #(rf/dispatch [:user-expenses/delete-expense-category expense-category-id-str])
                             :on-cancel nil})))}
           ($ delete-icon))))))
 
 (defui expense-categories-page
   []
-  (let [role (use-subscribe [:expenses/user-role])
+  (let [t (use-t)
+        role (use-subscribe [:expenses/user-role])
         can-manage? (authz/can? role :expenses/expense-categories.manage)
         entity-name :expense-categories
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -95,14 +97,14 @@
            ($ :div {:class "w-full px-4 py-4 sm:py-6"}
              ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
                ($ :div
-                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Expense Categories")
+                 ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :expense-categories/title))
                  ($ :p {:class "text-sm text-base-content/70"}
-                   "Power-user expense category catalog (used for Expenses)."))
+                   (t :expense-categories/subtitle)))
                ($ :div {:class "flex gap-2 flex-wrap"}
                  ($ button {:id "btn-back-expenses-dashboard-expense-categories"
                             :btn-type :ghost
                             :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                   "Dashboard")))))
+                   (t :expense-categories/btn-dashboard))))))
 
          ($ :main {:class "w-full px-4 py-6"}
            ($ list-view
@@ -118,4 +120,4 @@
               :render-edit-form render-edit-form
               :on-add-success refresh-list
               :on-edit-success refresh-list
-              :render-actions render-actions})))})))
+              :render-actions (fn [item] (render-actions t item))})))})))

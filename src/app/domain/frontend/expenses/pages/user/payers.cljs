@@ -8,6 +8,7 @@
     [app.template.frontend.components.icons :refer [delete-icon edit-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -31,7 +32,8 @@
      :on-cancel on-cancel}))
 
 (defui payers-page []
-  (let [role (use-subscribe [:expenses/user-role])
+  (let [t (use-t)
+        role (use-subscribe [:expenses/user-role])
         can-modify? (authz/can? role :expenses/reference.write)
         entity-name :payers
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -93,8 +95,8 @@
                                  (.stopPropagation e)
                                  (when-not delete-disabled?
                                    (confirm-dialog/show-confirm
-                                     {:title "Delete payer"
-                                      :message "Do you want to delete this payer?"
+                                     {:title (t :payers/delete-title)
+                                      :message (t :payers/delete-msg)
                                       :on-confirm #(rf/dispatch [:user-expenses/delete-payer payer-id-str])
                                       :on-cancel nil})))}
                     ($ delete-icon))))))]
@@ -104,19 +106,19 @@
           ($ :div {:class "w-full px-4 py-4 sm:py-6"}
             ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
               ($ :div
-                ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Payers")
+                ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :payers/title))
                 ($ :p {:class "text-sm text-base-content/70"}
-                  "Shared payment methods for your household"))
+                  (t :payers/subtitle)))
               ($ :div {:class "flex gap-2"}
                 ($ button {:id "btn-back-expenses-dashboard-payers"
                            :btn-type :ghost
                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                  "Dashboard")))))
+                  (t :payers/btn-dashboard))))))
 
         (when (not can-modify?)
           ($ :div {:class "w-full px-4 mt-4"}
             ($ :div {:class "ds-alert"}
-              ($ :span "Read-only access. Ask a household member to update payers."))))
+              ($ :span (t :payers/read-only-notice)))))
 
         ($ :main {:class "w-full px-4 py-6"}
           ($ list-view

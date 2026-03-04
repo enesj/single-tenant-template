@@ -10,6 +10,7 @@
     [app.domain.frontend.expenses.pages.user.expense-reports.sections.providers-stores :refer [providers-stores-tab]]
     [app.domain.frontend.expenses.pages.user.expense-reports.utils :as report-utils]
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -57,7 +58,8 @@
       vec)))
 
 (defui expense-reports-page []
-  (let [summary (or (use-subscribe [:user-expenses/summary]) {})
+  (let [t (use-t)
+        summary (or (use-subscribe [:user-expenses/summary]) {})
         summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
         by-month (or (use-subscribe [:user-expenses/by-month]) [])
         by-supplier (or (use-subscribe [:user-expenses/by-supplier]) [])
@@ -224,11 +226,11 @@
                          manufacturers-fallback*)
         supplier-name-by-id (into {} (map (juxt :id :name) suppliers*))
         selected-supplier-name (cond
-                                 (> (count selected-supplier-ids) 1) (str (count selected-supplier-ids) " suppliers")
+                                 (> (count selected-supplier-ids) 1) (t :expense-reports/n-suppliers (count selected-supplier-ids))
                                  selected-supplier-id (or (get supplier-name-by-id (some-> selected-supplier-id str))
                                                         (:supplier-name supplier-deep-dive)
-                                                        "Selected supplier")
-                                 :else "All suppliers")
+                                                        (t :expense-reports/selected-supplier))
+                                 :else (t :expense-reports/all-suppliers-scope))
 
         month-options* (report-utils/month-options by-month month-a month-b)
 
@@ -292,17 +294,17 @@
             ($ :div {:class "flex-shrink-0 space-y-1"}
               ($ :div {:class "flex items-center gap-2 mb-1"}
                 ($ :span {:class "w-2 h-2 rounded-full bg-primary animate-pulse"})
-                ($ :span {:class "text-xs font-bold text-primary uppercase tracking-widest"} "Analytics Dashboard"))
-              ($ :h1 {:class "text-2xl sm:text-3xl font-black text-base-content tracking-tight"} "Expense Reports")
+                ($ :span {:class "text-xs font-bold text-primary uppercase tracking-widest"} (t :expense-reports/analytics-badge)))
+              ($ :h1 {:class "text-2xl sm:text-3xl font-black text-base-content tracking-tight"} (t :expense-reports/title))
               ($ :p {:class "text-sm text-base-content/60 max-w-md font-medium"}
-                "Start by selecting a time range and filters below to analyze spending patterns."))
+                (t :expense-reports/subtitle)))
 
             ($ :div {:class "w-full rounded-2xl border border-primary/20 bg-gradient-to-br from-white via-primary/5 to-secondary/10 p-4 sm:p-6 space-y-4 shadow-sm backdrop-blur-sm"}
               ($ :div {:class "flex items-center justify-between mb-3"}
                 ($ :div {:class "flex items-center gap-2"}
-                  ($ :span {:class "text-xs font-extrabold uppercase text-base-content/40 tracking-wider"} "Global Filters")
+                  ($ :span {:class "text-xs font-extrabold uppercase text-base-content/40 tracking-wider"} (t :expense-reports/global-filters))
                   (when has-global-filters?
-                    ($ :span {:class "ds-badge bg-primary/10 text-primary border-primary/20 font-bold ds-badge-xs uppercase tracking-wide"} "Active")))
+                    ($ :span {:class "ds-badge bg-primary/10 text-primary border-primary/20 font-bold ds-badge-xs uppercase tracking-wide"} (t :expense-reports/active))))
 
                 ($ :div {:class "flex items-center gap-2"}
                   ($ button {:id "btn-reports-refresh"
@@ -310,7 +312,7 @@
                              :size :sm
                              :class "text-base-content/60 hover:text-primary hover:bg-primary/5 font-medium transition-colors"
                              :on-click #(rf/dispatch [:user-expenses/reports-refresh])}
-                    "Refresh Data")
+                    (t :expense-reports/refresh-data))
 
                   (when has-global-filters?
                     ($ button {:id "btn-reports-clear-local-filters"
@@ -318,29 +320,29 @@
                                :size :sm
                                :class "text-error/70 hover:text-error hover:bg-error/10 font-medium transition-colors"
                                :on-click #(rf/dispatch [:user-expenses/reports-clear-local-filters])}
-                      "Clear All filters"))))
+                      (t :expense-reports/clear-filters)))))
 
               ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3"}
                 ($ :div {:class "space-y-1.5 col-span-1 sm:col-span-2 lg:col-span-1 xl:col-span-1"}
-                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-months-back"} "Time Range")
+                  ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5" :for "reports-filter-months-back"} (t :expense-reports/filter-time-range))
                   ($ :select {:id "reports-filter-months-back"
                               :class "ds-select ds-select-sm ds-select-bordered w-full bg-white font-medium focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all rounded-lg text-xs shadow-sm"
                               :value months-back
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :months-back
                                                         (js/parseInt (.. % -target -value) 10)])}
-                    ($ :option {:value 3} "Last 3 months")
-                    ($ :option {:value 6} "Last 6 months")
-                    ($ :option {:value 12} "Last 12 months")
-                    ($ :option {:value 24} "Last 24 months")))
+                    ($ :option {:value 3} (t :expense-reports/time-3mo))
+                    ($ :option {:value 6} (t :expense-reports/time-6mo))
+                    ($ :option {:value 12} (t :expense-reports/time-12mo))
+                    ($ :option {:value 24} (t :expense-reports/time-24mo))))
 
                 ($ :div {:class "space-y-1.5"}
                   ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5"
                              :for "reports-filter-supplier-toggle"}
-                    "Supplier")
+                    (t :expense-reports/filter-supplier))
                   ($ report-multi-select {:id "reports-filter-supplier"
-                                          :field-label "Supplier"
-                                          :all-label "All suppliers"
+                                          :field-label (t :expense-reports/filter-supplier)
+                                          :all-label (t :expense-reports/all-suppliers)
                                           :options suppliers*
                                           :selected-ids selected-supplier-ids
                                           :on-change #(rf/dispatch [:user-expenses/reports-set-filter
@@ -350,10 +352,10 @@
                 ($ :div {:class "space-y-1.5"}
                   ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5"
                              :for "reports-filter-category-toggle"}
-                    "Category")
+                    (t :expense-reports/filter-category))
                   ($ report-multi-select {:id "reports-filter-category"
-                                          :field-label "Category"
-                                          :all-label "All categories"
+                                          :field-label (t :expense-reports/filter-category)
+                                          :all-label (t :expense-reports/all-categories)
                                           :options categories*
                                           :selected-ids selected-category-ids
                                           :on-change #(rf/dispatch [:user-expenses/reports-set-filter
@@ -363,10 +365,10 @@
                 ($ :div {:class "space-y-1.5"}
                   ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5"
                              :for "reports-filter-subcategory-toggle"}
-                    "Subcategory")
+                    (t :expense-reports/filter-subcategory))
                   ($ report-multi-select {:id "reports-filter-subcategory"
-                                          :field-label "Subcategory"
-                                          :all-label "All subcategories"
+                                          :field-label (t :expense-reports/filter-subcategory)
+                                          :all-label (t :expense-reports/all-subcategories)
                                           :options subcategories*
                                           :selected-ids selected-subcategory-ids
                                           :on-change #(rf/dispatch [:user-expenses/reports-set-filter
@@ -376,10 +378,10 @@
                 ($ :div {:class "space-y-1.5"}
                   ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5"
                              :for "reports-filter-expense-category-toggle"}
-                    "Expense Type")
+                    (t :expense-reports/filter-expense-type))
                   ($ report-multi-select {:id "reports-filter-expense-category"
-                                          :field-label "Expense Type"
-                                          :all-label "All expense types"
+                                          :field-label (t :expense-reports/filter-expense-type)
+                                          :all-label (t :expense-reports/all-expense-types)
                                           :options expense-categories*
                                           :selected-ids selected-expense-category-ids
                                           :on-change #(rf/dispatch [:user-expenses/reports-set-filter
@@ -389,10 +391,10 @@
                 ($ :div {:class "space-y-1.5"}
                   ($ :label {:class "text-[10px] font-bold text-base-content/50 uppercase tracking-widest px-0.5"
                              :for "reports-filter-manufacturer-toggle"}
-                    "Manufacturer")
+                    (t :expense-reports/filter-manufacturer))
                   ($ report-multi-select {:id "reports-filter-manufacturer"
-                                          :field-label "Manufacturer"
-                                          :all-label "All manufacturers"
+                                          :field-label (t :expense-reports/filter-manufacturer)
+                                          :all-label (t :expense-reports/all-manufacturers)
                                           :options manufacturers*
                                           :selected-ids selected-manufacturer-ids
                                           :on-change #(rf/dispatch [:user-expenses/reports-set-filter
@@ -401,24 +403,24 @@
 
       ($ :main {:class "max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8"}
         ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"}
-          ($ stat-card {:title "Total Spent"
+          ($ stat-card {:title (t :expense-reports/stat-total-spent)
                         :value (report-utils/format-money total-sum primary-currency)
-                        :subtitle "In selected period"
+                        :subtitle (t :expense-reports/stat-total-desc)
                         :icon "💰"
                         :loading? summary-loading?})
-          ($ stat-card {:title "Transaction Volume"
+          ($ stat-card {:title (t :expense-reports/stat-volume)
                         :value (report-utils/format-int total-expenses)
-                        :subtitle "Recorded expenses"
+                        :subtitle (t :expense-reports/stat-volume-desc)
                         :icon "📋"
                         :loading? summary-loading?})
-          ($ stat-card {:title "Average Expense"
+          ($ stat-card {:title (t :expense-reports/stat-average)
                         :value (if average-spend (report-utils/format-money average-spend primary-currency) "—")
-                        :subtitle "Per transaction"
+                        :subtitle (t :expense-reports/stat-average-desc)
                         :icon "📊"
                         :loading? summary-loading?})
-          ($ stat-card {:title "Active Scope"
+          ($ stat-card {:title (t :expense-reports/stat-scope)
                         :value selected-supplier-name
-                        :subtitle "Supplier filter context"
+                        :subtitle (t :expense-reports/stat-scope-desc)
                         :icon "🏪"
                         :loading? false}))
 

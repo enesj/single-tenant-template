@@ -17,6 +17,7 @@
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
@@ -55,7 +56,7 @@
   "Row action dropdown (admin-style) for user expenses.
 
    Supports an optional :on-view callback for opening a custom modal."
-  [item {:keys [on-view]}]
+  [t item {:keys [on-view]}]
   (let [expense-id (id-utils/extract-entity-id item)
         on-edit-click (:on-edit-click item)
         show-edit? (not (false? (:show-edit? item)))
@@ -88,8 +89,8 @@
                        (.stopPropagation e)
                        (when-not delete-disabled?
                          (confirm-dialog/show-confirm
-                           {:title "Delete expense"
-                            :message "Do you want to delete this expense?"
+                           {:title (t :expenses-list/delete-title)
+                            :message (t :expenses-list/delete-msg)
                             :on-confirm #(rf/dispatch [:user-expenses/delete-expense expense-id])
                             :on-cancel nil})))
            :title (when delete-disabled? "Delete not available")}
@@ -100,10 +101,10 @@
          :trigger-label "⋯"
          :position :portal
          :actions
-         [{:group-title "View"
+         [{:group-title (t :common/view)
            :items [{:id "view"
-                    :icon ($ view-icon {:title "View"})
-                    :label "View Details"
+                    :icon ($ view-icon {:title (t :expenses-list/view-details)})
+                    :label (t :expenses-list/view-details)
                     :on-click (fn [e]
                                 (.stopPropagation e)
                                 (if on-view
@@ -116,7 +117,8 @@
 
 (defui expenses-list-page
   []
-  (let [entity-name :expenses
+  (let [t (use-t)
+        entity-name :expenses
         [viewing-id set-viewing-id!] (use-state nil)
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
@@ -149,13 +151,13 @@
         ($ :div {:class "w-full px-4 py-4 sm:py-6"}
           ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
             ($ :div
-              ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "My Expenses")
+              ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :expenses-list/title))
               ($ :p {:class "text-sm text-base-content/70"}
-                "View and manage your expense history"))
+                (t :expenses-list/subtitle)))
             ($ :div {:class "flex gap-2"}
               ($ button {:btn-type :ghost
                          :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                "Dashboard")))))
+                (t :expenses-list/btn-dashboard))))))
 
       ;; Main content: list-view backed by shared entity store
       ($ :main {:class "w-full px-4 py-6"}
@@ -173,7 +175,7 @@
            :on-add-success refresh-list
            :on-edit-success refresh-list
            :render-actions (fn [item]
-                             (render-actions item
+                             (render-actions t item
                                {:on-view #(set-viewing-id! (id-utils/extract-entity-id %))}))}))
 
       (when viewing-id

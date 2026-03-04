@@ -7,6 +7,7 @@
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
@@ -105,13 +106,13 @@
       status)))
 
 (defn- receipt-actions
-  [can-ocr? receipt]
+  [t can-ocr? receipt]
   (let [receipt-id (id-utils/extract-entity-id receipt)
         ocr-allowed? (receipt-ocr-allowed? receipt)
-        action-groups (cond-> [{:group-title "View"
+        action-groups (cond-> [{:group-title (t :common/view)
                                 :items [{:id "view-details"
                                          :icon ($ view-details-icon)
-                                         :label "View Details"
+                                         :label (t :receipts/view-details)
                                          :on-click (fn [e]
                                                      (.stopPropagation e)
                                                      (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id]))}]}]
@@ -120,8 +121,8 @@
                         (conj {:group-title "OCR"
                                :items [{:id "parse-ocr"
                                         :icon "🔍"
-                                        :label "Parse (OCR)"
-                                        :tooltip "Run OCR to extract receipt data. Status will update asynchronously."
+                                        :label (t :receipts/parse-ocr-label)
+                                        :tooltip (t :receipts/ocr-tooltip)
                                         :on-click (fn [e]
                                                     (.stopPropagation e)
                                                     (rf/dispatch [:user-expenses/ocr-receipt receipt-id]))}]}))]
@@ -132,7 +133,8 @@
 
 (defui receipts-list-page
   []
-  (let [title "Receipts"
+  (let [t (use-t)
+        title "Receipts"
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
@@ -148,7 +150,7 @@
                          (filter receipt-refine-pending?)
                          count)
         processing? (or (pos? processing-count) (pos? refining-count))
-        processing-label (if (pos? processing-count) "Processing" "Refining")
+        processing-label (if (pos? processing-count) (t :receipts/processing) (t :receipts/refining))
         processing-total (if (pos? processing-count) processing-count refining-count)
         [processing-started-at set-processing-started-at!] (use-state nil)
         [last-checked set-last-checked!] (use-state nil)
@@ -249,41 +251,41 @@
                          :class "flex items-center gap-2"}
                   ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
                   ($ :span {:class "text-sm"}
-                    (str processing-label " " processing-total " receipt" (when (not= 1 processing-total) "s") "…"))
+                    (str processing-label " " (t :receipts/receipts processing-total) "…"))
                   (when-let [duration (format-duration processing-started-at last-checked)]
                     ($ :span {:class "text-xs text-base-content/60"}
-                      (str "Duration: " duration)))
+                      (str (t :receipts/duration) ": " duration)))
                   ($ :button {:id "btn-refresh-user-receipts"
                               :class "ds-btn ds-btn-ghost ds-btn-xs"
                               :type "button"
                               :on-click (fn [e]
                                           (.preventDefault e)
                                           (refresh!))}
-                    "Refresh")))
+                    (t :receipts/refresh))))
 
               ($ :div {:class "flex items-center gap-2"}
                 ($ :button {:id "btn-batch-parse-user-receipts"
                             :class "ds-btn ds-btn-outline ds-btn-sm"
                             :type "button"
                             :title (cond
-                                     (not can-ocr?) "Only members, admins, and owners can run OCR"
-                                     (pos? selected-count) "Run OCR for selected receipts"
-                                     :else "Select at least one receipt to parse")
+                                     (not can-ocr?) (t :receipts/tooltip-no-ocr)
+                                     (pos? selected-count) (t :receipts/tooltip-ocr-selected)
+                                     :else (t :receipts/tooltip-select-first))
                             :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
                             :on-click parse-selected!}
-                  (str "Parse Selected (OCR)"
+                  (str (t :receipts/parse-selected)
                     (when (pos? selected-count)
                       (str " (" selected-count ")"))))
                 ($ :button {:id "btn-batch-post-user-receipts"
                             :class "ds-btn ds-btn-primary ds-btn-sm"
                             :type "button"
                             :title (cond
-                                     (not can-ocr?) "Only members, admins, and owners can post receipts"
-                                     (pos? selected-count) "Post selected receipts to expenses"
-                                     :else "Select at least one receipt to post")
+                                     (not can-ocr?) (t :receipts/tooltip-no-post)
+                                     (pos? selected-count) (t :receipts/tooltip-post-selected)
+                                     :else (t :receipts/tooltip-select-first-post))
                             :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
                             :on-click post-selected!}
-                  (str "Post Selected (to Expense)"
+                  (str (t :receipts/post-selected)
                     (when (pos? selected-count)
                       (str " (" selected-count ")"))))))
 
@@ -294,6 +296,6 @@
                  :title title
                  :display-settings display-settings
                  :custom-actions (fn [receipt]
-                                   (receipt-actions can-ocr? receipt))
+                                   (receipt-actions t can-ocr? receipt))
                  :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])})))))
       ($ receipt-detail-modal))))

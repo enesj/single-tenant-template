@@ -2,6 +2,7 @@
   "User-facing expense settings page."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -32,7 +33,8 @@
 ;; ========================================================================
 
 (defui expense-settings-page []
-  (let [user (use-subscribe [:current-user])
+  (let [t (use-t)
+        user (use-subscribe [:current-user])
         settings (or (use-subscribe [:user-expenses/settings]) {})
         loading? (boolean (use-subscribe [:user-expenses/settings-loading?]))
         saving? (boolean (use-subscribe [:user-expenses/settings-saving?]))
@@ -103,27 +105,27 @@
             ($ :div
               ($ :div {:class "text-sm ds-breadcrumbs"}
                 ($ :ul
-                  ($ :li ($ :a {:href "/expenses"} "Expenses"))
-                  ($ :li "Settings")))
-              ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Expense Settings"))
+                  ($ :li ($ :a {:href "/expenses"} (t :expense-settings/breadcrumb-expenses)))
+                  ($ :li (t :expense-settings/breadcrumb-settings))))
+              ($ :h1 {:class "text-xl sm:text-2xl font-bold"} (t :expense-settings/title)))
             ($ :div {:class "flex gap-2"}
               ($ button {:btn-type :ghost
                          :id "btn-cancel-settings"
                          :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                "Cancel")
+                (t :expense-settings/cancel))
               ($ button {:btn-type :primary
                          :id "btn-save-settings"
                          :loading saving?
                          :disabled (or (not can-write?) (not dirty?) loading?)
                          :on-click handle-save}
-                "Save Changes")))))
+                (t :expense-settings/save))))))
 
       ;; Read-only banner for viewers
       (when-not can-write?
         ($ :div {:class "max-w-4xl mx-auto px-4 pt-4"
                  :id "settings-read-only-banner"}
           ($ :div {:class "ds-alert ds-alert-info"}
-            ($ :span "You are viewing settings in read-only mode. Only members, admins, and owners can modify settings."))))
+            ($ :span (t :expense-settings/read-only-notice)))))
 
       ;; Content
       ($ :main {:class "max-w-4xl mx-auto px-4 py-6 space-y-6"}
@@ -134,11 +136,11 @@
 
           ($ :<>
             ;; Default preferences
-            ($ setting-section {:title "Default Preferences"
-                                :description "Set your default values for new expenses."}
+            ($ setting-section {:title (t :expense-settings/section-preferences)
+                                :description (t :expense-settings/section-pref-desc)}
               ($ :div {:class "space-y-1"}
-                ($ setting-row {:label "Default Currency"
-                                :description "Currency used for new expenses"}
+                ($ setting-row {:label (t :expense-settings/currency-label)
+                                :description (t :expense-settings/currency-desc)}
                   ($ :select {:id "settings-currency-select"
                               :class "ds-select ds-select-sm ds-select-bordered"
                               :value default-currency
@@ -148,24 +150,24 @@
                     ($ :option {:value "EUR"} "EUR - Euro")
                     ($ :option {:value "USD"} "USD - US Dollar")))
 
-                ($ setting-row {:label "Default Payer"
-                                :description "Payer automatically selected for new expenses"}
+                ($ setting-row {:label (t :expense-settings/payer-label)
+                                :description (t :expense-settings/payer-desc)}
                   ($ :select {:id "settings-payer-select"
                               :class "ds-select ds-select-sm ds-select-bordered"
                               :value (or default-payer "")
                               :disabled (not can-write?)
                               :on-change #(let [v (.. % -target -value)]
                                             (set-default-payer! (when (seq v) v)))}
-                    ($ :option {:value ""} "None")
+                    ($ :option {:value ""} (t :expense-settings/payer-none))
                     (for [p payers]
                       ($ :option {:key (:id p) :value (:id p)}
                         (:label p)))))))
 
             ;; Notifications
-            ($ setting-section {:title "Notifications"
-                                :description "Manage how you receive updates about your expenses."}
-              ($ setting-row {:label "Email Notifications"
-                              :description "Receive weekly expense summaries"}
+            ($ setting-section {:title (t :expense-settings/section-notif)
+                                :description (t :expense-settings/section-notif-desc)}
+              ($ setting-row {:label (t :expense-settings/email-notif)
+                              :description (t :expense-settings/email-notif-desc)}
                 ($ :input {:id "settings-notifications-toggle"
                            :type "checkbox"
                            :class "ds-toggle ds-toggle-primary"
@@ -174,18 +176,18 @@
                            :on-change #(set-notifications! (.. % -target -checked))})))
 
              ;; Receipts
-            ($ setting-section {:title "Receipts"
-                                :description "Control how receipt uploads are processed."}
-              ($ setting-row {:label "Auto-post after upload"
-                              :description "Automatically post receipts after extraction when data is complete."}
+            ($ setting-section {:title (t :expense-settings/section-receipts)
+                                :description (t :expense-settings/section-receipts-desc)}
+              ($ setting-row {:label (t :expense-settings/auto-post-label)
+                              :description (t :expense-settings/auto-post-desc)}
                 ($ :input {:id "settings-auto-post-after-upload-toggle"
                            :type "checkbox"
                            :class "ds-toggle ds-toggle-primary"
                            :checked auto-post-after-upload-enabled
                            :disabled (not can-write?)
                            :on-change #(set-auto-post-after-upload-enabled! (.. % -target -checked))}))
-              ($ setting-row {:label "AI receipt refinement"
-                              :description "Improve receipt extraction accuracy (may take a bit longer)."}
+              ($ setting-row {:label (t :expense-settings/refine-label)
+                              :description (t :expense-settings/refine-desc)}
                 ($ :input {:id "settings-receipt-refine-toggle"
                            :type "checkbox"
                            :class "ds-toggle ds-toggle-primary"
@@ -194,8 +196,8 @@
                            :on-change #(set-receipt-refine-enabled! (.. % -target -checked))})))
 
             ;; Account Info
-            ($ setting-section {:title "Account Information"
-                                :description "Your account details for expense tracking."}
+            ($ setting-section {:title (t :expense-settings/section-account)
+                                :description (t :expense-settings/section-account-desc)}
               ($ :div {:class "space-y-3"}
                 ($ :div {:class "flex items-center gap-4 p-3 bg-base-200 rounded-lg"}
                   ($ :div {:class "w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center"}
@@ -206,39 +208,39 @@
                     ($ :p {:class "text-sm text-base-content/60"}
                       (:email user))))
                 ($ :p {:class "text-sm text-base-content/60"}
-                  "To update your account information, please visit your profile settings.")))
+                  (t :expense-settings/account-update-note))))
 
             ;; Data Management (export + danger zone)
-            ($ setting-section {:title "Data Management"
-                                :description "Export or manage your expense data."}
+            ($ setting-section {:title (t :expense-settings/section-data)
+                                :description (t :expense-settings/section-data-desc)}
               ($ :div {:class "space-y-3"}
                 ($ :div {:class "flex items-center justify-between"}
                   ($ :div
-                    ($ :p {:class "font-medium text-sm"} "Export All Data")
+                    ($ :p {:class "font-medium text-sm"} (t :expense-settings/export-label))
                     ($ :p {:class "text-xs text-base-content/60"}
-                      "Download all your expense records as CSV"))
+                      (t :expense-settings/export-desc)))
                   ($ button {:btn-type :outline
                              :id "btn-export-data"
                              :size :sm
                              :on-click #(rf/dispatch [:user-expenses/export {:format :csv :all true}])}
-                    "Export"))
+                    (t :expense-settings/export-btn)))
 
                 ;; Danger Zone - only for admin/owner
                 (when power-user?
                   ($ :div {:class "border-t pt-3 mt-3"}
                     ($ :div {:class "flex items-center justify-between"}
                       ($ :div
-                        ($ :p {:class "font-medium text-sm text-error"} "Delete All Expenses")
+                        ($ :p {:class "font-medium text-sm text-error"} (t :expense-settings/delete-all-label))
                         ($ :p {:class "text-xs text-base-content/60"}
-                          "Permanently remove all your expense records"))
+                          (t :expense-settings/delete-all-desc)))
                       ($ button {:btn-type :error
                                  :id "btn-delete-all-expenses"
                                  :size :sm
                                  :on-click (fn []
                                              (rf/dispatch [:confirm-dialog/show
-                                                           {:title "Delete All Expenses?"
-                                                            :message "This action cannot be undone. All your expense records will be permanently deleted."
-                                                            :confirm-text "Delete All"
+                                                           {:title (t :expense-settings/delete-all-confirm-title)
+                                                            :message (t :expense-settings/delete-all-confirm-msg)
+                                                            :confirm-text (t :expense-settings/delete-all-confirm-btn)
                                                             :on-confirm (fn []
                                                                           (rf/dispatch [:user-expenses/delete-all "DELETE_ALL_EXPENSES"]))}]))}
-                        "Delete All"))))))))))))
+                        (t :expense-settings/delete-all-btn)))))))))))))

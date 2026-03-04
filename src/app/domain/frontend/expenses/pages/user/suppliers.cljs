@@ -14,6 +14,7 @@
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.messages :refer [error-alert]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
@@ -46,7 +47,8 @@
 
 (defui user-supplier-detail-body
   [{:keys [supplier-id]}]
-  (let [supplier (use-subscribe [:user-expenses/supplier-detail supplier-id])
+  (let [t (use-t)
+        supplier (use-subscribe [:user-expenses/supplier-detail supplier-id])
         loading? (use-subscribe [:user-expenses/supplier-detail-loading?])
         error (use-subscribe [:user-expenses/supplier-detail-error])
         expenses (use-subscribe [:user-expenses/supplier-detail-expenses])
@@ -69,42 +71,43 @@
 
         (nil? supplier)
         ($ :div {:class "ds-alert"}
-          ($ :span "Supplier not found."))
+          ($ :span (t :suppliers/not-found)))
 
         :else
         ($ :div {:class "space-y-6"}
           ($ :div {:class "grid gap-3 md:grid-cols-3"}
-            (detail-utils/label-value "Name" (:display-name supplier))
-            (detail-utils/label-value "Normalized Key" (:normalized-key supplier))
-            (detail-utils/label-value "Address" (:address supplier))
-            (detail-utils/label-value "Created At" (shared/format-date (:created-at supplier)))
-            (detail-utils/label-value "ID" (or (:id supplier) (some-> supplier-id str))))
+            (detail-utils/label-value (t :suppliers/col-name) (:display-name supplier))
+            (detail-utils/label-value (t :suppliers/col-normalized-key) (:normalized-key supplier))
+            (detail-utils/label-value (t :suppliers/col-address) (:address supplier))
+            (detail-utils/label-value (t :suppliers/col-created) (shared/format-date (:created-at supplier)))
+            (detail-utils/label-value (t :suppliers/col-id) (or (:id supplier) (some-> supplier-id str))))
 
           ($ :div {:class "grid gap-4 lg:grid-cols-3"}
             ($ detail-utils/related-table
-              {:title "Recent Expenses"
+              {:title (t :suppliers/recent-expenses-title)
                :rows expenses
-               :columns [{:label "Purchased" :value-fn #(shared/format-date (:purchased-at %))}
-                         {:label "Total" :value-fn #(detail-utils/format-money (:total-amount %) (or (:currency %) (:currency-code %)))}
-                         {:label "Payer" :value-fn #(or (:payer-label %) (:payer %) (:payers/label %))}
-                         {:label "Status" :value-fn #(or (:status %) (:receipt-status %) (:expense-status %))}]
-               :empty-label "No expenses for this supplier yet."
+               :columns [{:label (t :suppliers/col-purchased) :value-fn #(shared/format-date (:purchased-at %))}
+                         {:label (t :suppliers/col-total) :value-fn #(detail-utils/format-money (:total-amount %) (or (:currency %) (:currency-code %)))}
+                         {:label (t :suppliers/col-payer) :value-fn #(or (:payer-label %) (:payer %) (:payers/label %))}
+                         {:label (t :suppliers/col-status) :value-fn #(or (:status %) (:receipt-status %) (:expense-status %))}]
+               :empty-label (t :suppliers/recent-expenses-empty)
                :view-all-href nil
                :view-all-id (when supplier-id
                               (str "btn-view-expenses-supplier-" supplier-id))})
             ($ detail-utils/related-table
-              {:title "Article Aliases"
+              {:title (t :suppliers/aliases-title)
                :rows aliases
-               :columns [{:label "Raw Label" :value-fn #(:raw-label %)}
-                         {:label "Article" :value-fn #(:article-canonical-name %)}
-                         {:label "Normalized" :value-fn #(:raw-label-normalized %)}]
-               :empty-label "No article aliases for this supplier."
+               :columns [{:label (t :suppliers/col-raw-label) :value-fn #(:raw-label %)}
+                         {:label (t :suppliers/col-article) :value-fn #(:article-canonical-name %)}
+                         {:label (t :suppliers/col-normalized) :value-fn #(:raw-label-normalized %)}]
+               :empty-label (t :suppliers/aliases-empty)
                :view-all-href nil
                :view-all-id (when supplier-id
                               (str "btn-view-article-aliases-supplier-" supplier-id))})))))))
 
 (defui suppliers-page []
-  (let [role (use-subscribe [:expenses/user-role])
+  (let [t (use-t)
+        role (use-subscribe [:expenses/user-role])
         can-modify? (authz/can? role :expenses/reference.write)
         form-error (use-subscribe [:user-expenses/form-error])
         entity-name :suppliers
@@ -179,16 +182,16 @@
                                  (.stopPropagation e)
                                  (when-not delete-disabled?
                                    (confirm-dialog/show-confirm
-                                     {:title "Delete supplier"
-                                      :message "Do you want to delete this supplier?"
+                                     {:title (t :suppliers/delete-title)
+                                      :message (t :suppliers/delete-msg)
                                       :on-confirm #(rf/dispatch [:user-expenses/delete-supplier supplier-id-str])
                                       :on-cancel nil})))}
                     ($ delete-icon)))
                 (when (seq supplier-id-str)
-                  (let [actions [{:group-title "View"
+                  (let [actions [{:group-title (t :common/view)
                                   :items [{:id "view-details"
                                            :icon ($ action-components/view-details-icon)
-                                           :label "View Details"
+                                           :label (t :expenses-list/view-details)
                                            :on-click (fn [e]
                                                        (.stopPropagation e)
                                                        (when debug?
@@ -204,19 +207,19 @@
           ($ :div {:class "w-full px-4 py-4 sm:py-6"}
             ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
               ($ :div
-                ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} "Suppliers")
+                ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :suppliers/title))
                 ($ :p {:class "text-sm text-base-content/70"}
-                  "Shared supplier catalog for your household"))
+                  (t :suppliers/subtitle)))
               ($ :div {:class "flex gap-2"}
                 ($ button {:id "btn-back-expenses-dashboard-suppliers"
                            :btn-type :ghost
                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                  "Dashboard")))))
+                  (t :suppliers/btn-dashboard))))))
 
         (when (not can-modify?)
           ($ :div {:class "w-full px-4 mt-4"}
             ($ :div {:class "ds-alert"}
-              ($ :span "Read-only access. Ask a household member to update suppliers."))))
+              ($ :span (t :suppliers/read-only-notice)))))
 
         (when form-error
           ($ :div {:class "w-full px-4 mt-4"}
@@ -240,7 +243,7 @@
               ($ modal-wrapper
                 {:id "user-supplier-detail-modal"
                  :visible? true
-                 :title "Supplier Details"
+                 :title (t :suppliers/detail-title)
                  :size :extra-large
                  :draggable? true
                  :resizable? true
@@ -248,7 +251,7 @@
                  :close-button-id "btn-close-user-supplier-detail-modal"}
 
                 ;; Keep the rich header style inside the modal body.
-                (detail-header {:title "Supplier Details"
+                (detail-header {:title (t :suppliers/detail-title)
                                 :subtitle subtitle
                                 :icon "S"})
 

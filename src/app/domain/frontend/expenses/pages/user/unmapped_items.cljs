@@ -2,12 +2,14 @@
   (:require
     [app.domain.frontend.expenses.components.unmapped-items :refer [unmapped-items-panel]]
     [app.domain.frontend.expenses.components.page-guard :as page-guard]
+    [app.template.frontend.i18n :refer [use-t]]
     [uix.core :refer [$ defui]]))
 
 (defui unmapped-items-page
   []
-  ($ page-guard/power-user-guard
-    {:children ($ unmapped-items-panel
-                 {:breadcrumbs [{:label "Dashboard" :href "/dashboard"}
-                                {:label "Unmapped Aliases"}]
-                  :title "Unmapped Aliases"})}))
+  (let [t (use-t)]
+    ($ page-guard/power-user-guard
+      {:children ($ unmapped-items-panel
+                   {:breadcrumbs [{:label (t :unmapped-items/breadcrumb-dashboard) :href "/dashboard"}
+                                  {:label (t :unmapped-items/title)}]
+                    :title (t :unmapped-items/title)})})))

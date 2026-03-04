@@ -5,6 +5,7 @@
     [app.template.frontend.components.auth-guard :refer [auth-guard]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.file-drop-zone :refer [file-drop-zone]]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -26,53 +27,55 @@
       (:id (first payers)))))
 
 (defui recent-uploads [{:keys [receipts]}]
-  (when (seq receipts)
-    ($ :div {:class "mt-8"}
-      ($ :h3 {:class "font-semibold mb-4"} "Recent Uploads")
-      ($ :div {:class "space-y-2"}
-        (for [{:keys [id status
-                      original_filename original-filename
-                      created_at created-at
-                      error_message error-message]} receipts]
-          (let [name (or original-filename original_filename "Receipt")
-                created (timestamp/format-timestamp-string (or created-at created_at)
-                          {:nil-text ""})
-                err (or error-message error_message)
-                icon (case status
-                       "uploaded" "📤"
-                       "parsing" "⏳"
-                       "parsed" "📝"
-                       "extracting" "⏳"
-                       "extracted" "✅"
-                       "refining" "🔄"
-                       "review_required" "🟡"
-                       "posted" "📌"
-                       "failed" "❌"
-                       "📄")
-                badge (case status
-                        "extracted" "ds-badge-success"
-                        "posted" "ds-badge-primary"
-                        "refining" "ds-badge-secondary"
-                        "review_required" "ds-badge-warning"
-                        "failed" "ds-badge-error"
-                        "ds-badge-ghost")]
-            ($ :div {:key id
-                     :class "flex items-center justify-between p-3 bg-base-200 rounded-lg"}
-              ($ :div {:class "flex items-center gap-3"}
-                ($ :span {:class "text-2xl"} icon)
-                ($ :div
-                  ($ :p {:class "font-medium text-sm"} name)
-                  ($ :p {:class "text-xs text-base-content/60"} created)
-                  (when (and (= status "failed") err)
-                    ($ :p {:class "text-xs text-error"} err))))
-              ($ :span {:class (str "ds-badge ds-badge-sm " badge)} status))))))))
+  (let [t (use-t)]
+    (when (seq receipts)
+      ($ :div {:class "mt-8"}
+        ($ :h3 {:class "font-semibold mb-4"} (t :expense-upload/recent-uploads))
+        ($ :div {:class "space-y-2"}
+          (for [{:keys [id status
+                        original_filename original-filename
+                        created_at created-at
+                        error_message error-message]} receipts]
+            (let [name (or original-filename original_filename "Receipt")
+                  created (timestamp/format-timestamp-string (or created-at created_at)
+                            {:nil-text ""})
+                  err (or error-message error_message)
+                  icon (case status
+                         "uploaded" "📤"
+                         "parsing" "⏳"
+                         "parsed" "📝"
+                         "extracting" "⏳"
+                         "extracted" "✅"
+                         "refining" "🔄"
+                         "review_required" "🟡"
+                         "posted" "📌"
+                         "failed" "❌"
+                         "📄")
+                  badge (case status
+                          "extracted" "ds-badge-success"
+                          "posted" "ds-badge-primary"
+                          "refining" "ds-badge-secondary"
+                          "review_required" "ds-badge-warning"
+                          "failed" "ds-badge-error"
+                          "ds-badge-ghost")]
+              ($ :div {:key id
+                       :class "flex items-center justify-between p-3 bg-base-200 rounded-lg"}
+                ($ :div {:class "flex items-center gap-3"}
+                  ($ :span {:class "text-2xl"} icon)
+                  ($ :div
+                    ($ :p {:class "font-medium text-sm"} name)
+                    ($ :p {:class "text-xs text-base-content/60"} created)
+                    (when (and (= status "failed") err)
+                      ($ :p {:class "text-xs text-error"} err))))
+                ($ :span {:class (str "ds-badge ds-badge-sm " badge)} status)))))))))
 
 ;; ========================================================================
 ;; Main Page
 ;; ========================================================================
 
 (defui expense-upload-page []
-  (let [auth-status (use-subscribe [:auth-status])
+  (let [t (use-t)
+        auth-status (use-subscribe [:auth-status])
         authenticated? (boolean (:authenticated auth-status))
         auth-loading? (boolean (:loading? auth-status))
         auth-error (:error auth-status)
@@ -124,7 +127,7 @@
        :error auth-error
        :auth-type :customer
        :login-redirect-path "/login?redirect=/expenses/upload"
-       :login-message "Please sign in to upload a receipt."
+       :login-message (t :expense-upload/login-message)
        :children
        ($ page-guard/expenses-page-guard
          {:capability :expenses/upload
@@ -139,18 +142,18 @@
                       ($ :ul
                         ($ :li ($ :a {:id "link-expenses-breadcrumb-upload-receipt"
                                       :href "/expenses"}
-                                 "Expenses"))
-                        ($ :li "Upload Receipt")))
-                    ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Upload Receipt"))
+                                 (t :expense-upload/breadcrumb-expenses)))
+                        ($ :li (t :expense-upload/breadcrumb-upload))))
+                    ($ :h1 {:class "text-xl sm:text-2xl font-bold"} (t :expense-upload/title)))
                   ($ :div {:class "flex gap-2"}
                     ($ button {:id "btn-dashboard-expense-upload"
                                :btn-type :ghost
                                :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                      "Dashboard")
+                      (t :expense-upload/btn-dashboard))
                     ($ button {:id "btn-manual-entry-expense-upload"
                                :btn-type :outline
                                :on-click handle-manual}
-                      "Manual Entry")))))
+                      (t :expense-upload/btn-manual-entry))))))
 
             ;; Notice
             (when (seq upload-notice)
@@ -181,7 +184,7 @@
                 ($ :div {:class "mb-6"}
                   ($ :label {:id "label-payer-expense-upload"
                              :class "ds-label"}
-                    ($ :span {:class "ds-label-text font-medium"} "Payer"))
+                    ($ :span {:class "ds-label-text font-medium"} (t :expense-upload/payer-label)))
                   ($ :select {:id "select-payer-expense-upload"
                               :class "ds-select ds-select-bordered w-full max-w-md"
                               :disabled uploading?
@@ -189,12 +192,12 @@
                               :on-change (fn [e]
                                            (let [v (-> e .-target .-value)]
                                              (rf/dispatch [:user-expenses/set-upload-payer-id v])))}
-                    ($ :option {:value ""} "Select payer")
+                    ($ :option {:value ""} (t :expense-upload/payer-select))
                     (for [{:keys [id label]} payers]
                       ($ :option {:key (str id) :value (str id)} (or label (str id)))))
                   ($ :div {:id "help-payer-expense-upload"
                            :class "text-xs text-base-content/60 mt-2"}
-                    "This applies only to the receipts you're uploading now and does not change your default payer."))
+                    (t :expense-upload/payer-note)))
 
                 ;; Upload zone
                 ($ file-drop-zone {:dropzone-id "dropzone-receipt-upload"
@@ -202,23 +205,23 @@
                                    :choose-button-id "btn-choose-receipt-upload"
                                    :on-files-select handle-files-select
                                    :uploading? uploading?
-                                   :uploading-label (or uploading-label "Processing receipts...")
+                                   :uploading-label (or uploading-label (t :expense-upload/processing))
                                    :accept "image/*,.pdf"
                                    :multiple? true
-                                   :title "Drop your receipts here"
-                                   :subtitle "or click to browse"
-                                   :choose-label "Choose Files"
+                                   :title (t :expense-upload/drop-title)
+                                   :subtitle (t :expense-upload/drop-subtitle)
+                                   :choose-label (t :expense-upload/choose-label)
                                    :icon "📷"
-                                   :help-text "Supports: JPG, PNG, PDF (max 10MB)"})
+                                   :help-text (t :expense-upload/help-text)})
 
                 ;; Tips
                 ($ :div {:class "mt-6 bg-base-200 rounded-lg p-4"}
-                  ($ :h4 {:class "font-medium text-sm mb-2"} "📌 Tips for best results:")
+                  ($ :h4 {:class "font-medium text-sm mb-2"} (t :expense-upload/tips-title))
                   ($ :ul {:class "text-sm text-base-content/70 space-y-1 list-disc list-inside"}
-                    ($ :li "Make sure the receipt is well-lit and in focus")
-                    ($ :li "Include the entire receipt in the frame")
-                    ($ :li "Avoid wrinkled or damaged receipts when possible")
-                    ($ :li "PDF receipts from email work great too!")))
+                    ($ :li (t :expense-upload/tip-1))
+                    ($ :li (t :expense-upload/tip-2))
+                    ($ :li (t :expense-upload/tip-3))
+                    ($ :li (t :expense-upload/tip-4))))
 
                 ;; Recent uploads
                 ($ recent-uploads {:receipts recent-receipts}))
@@ -226,8 +229,8 @@
               ;; Alternative action
               ($ :div {:class "mt-6 text-center"}
                 ($ :p {:class "text-sm text-base-content/60"}
-                  "Don't have a receipt? ")
+                  (t :expense-upload/no-receipt-text))
                 ($ :a {:id "link-expense-new-from-upload"
                        :href "/expenses/new"
                        :class "text-sm text-primary hover:underline"}
-                  "Enter expense manually →"))))})})))
+                  (t :expense-upload/enter-manually)))))})})))

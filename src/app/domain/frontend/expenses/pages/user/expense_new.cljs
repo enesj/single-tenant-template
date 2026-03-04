@@ -3,6 +3,7 @@
   (:require
     [app.domain.frontend.expenses.components.page-guard :as page-guard]
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -92,12 +93,13 @@
 (def ^:private form-id "expense-new-form")
 
 (defui line-item-row [{:keys [item on-change on-remove]}]
-  (let [{:keys [id raw_label qty unit_price line_total]} item]
+  (let [t (use-t)
+        {:keys [id raw_label qty unit_price line_total]} item]
     ($ :div {:class "grid grid-cols-12 gap-2 items-center"}
       ($ :input {:type "text"
                  :id (str form-id "-item-" id "-raw-label")
                  :class "ds-input ds-input-sm ds-input-bordered col-span-5"
-                 :placeholder "Item description"
+                 :placeholder (t :expense-new/item-description-ph)
                  :value (or raw_label "")
                  :on-change #(on-change id :raw_label (.. % -target -value))})
       ($ :input {:type "number"
@@ -105,21 +107,21 @@
                  :step "0.001"
                  :min "0"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
-                 :placeholder "Qty"
+                 :placeholder (t :expense-new/item-qty-ph)
                  :value (or qty "")
                  :on-change #(on-change id :qty (.. % -target -value))})
       ($ :input {:type "number"
                  :id (str form-id "-item-" id "-unit-price")
                  :step "0.01"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
-                 :placeholder "Unit price"
+                 :placeholder (t :expense-new/item-unit-price-ph)
                  :value (or unit_price "")
                  :on-change #(on-change id :unit_price (.. % -target -value))})
       ($ :input {:type "number"
                  :id (str form-id "-item-" id "-line-total")
                  :step "0.01"
                  :class "ds-input ds-input-sm ds-input-bordered col-span-2"
-                 :placeholder "Total"
+                 :placeholder (t :expense-new/item-total-ph)
                  :value (or line_total "")
                  :on-change #(on-change id :line_total (.. % -target -value))})
       ($ :button {:type "button"
@@ -133,7 +135,8 @@
 ;; ========================================================================
 
 (defui expense-new-page-content []
-  (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
+  (let [t (use-t)
+        suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         loading? (use-subscribe [:user-expenses/form-loading?])
         form-error (use-subscribe [:user-expenses/form-error])
@@ -177,13 +180,13 @@
                               (or (str/blank? (str supplier-id))
                                 (str/blank? (str payer-id))
                                 (str/blank? purchased-at))
-                              (set-validation-error! "Supplier, payer, and date are required.")
+                              (set-validation-error! (t :expense-new/err-required))
 
                               (not has-items?)
-                              (set-validation-error! "Add at least one line item with a label and total.")
+                              (set-validation-error! (t :expense-new/err-no-items))
 
                               (or (nil? effective-total) (<= effective-total 0))
-                              (set-validation-error! "Enter a total amount greater than 0.")
+                              (set-validation-error! (t :expense-new/err-no-total))
 
                               (and (pos? computed-total) (> (or total-diff 0) amount-tolerance))
                               (set-validation-error!
@@ -212,19 +215,19 @@
                   ($ :ul
                     ($ :li ($ :a {:id "link-expenses-breadcrumb-expense-new"
                                   :href "/expenses"}
-                             "Expenses"))
-                    ($ :li "New Expense")))
-                ($ :h1 {:class "text-xl sm:text-2xl font-bold"} "Add Expense"))
+                             (t :expense-new/breadcrumb-expenses)))
+                    ($ :li (t :expense-new/breadcrumb-new))))
+                ($ :h1 {:class "text-xl sm:text-2xl font-bold"} (t :expense-new/title)))
               ($ :div {:class "flex gap-2"}
                 ($ button {:id "btn-cancel-expense-new"
                            :btn-type :ghost
                            :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                  "Cancel")
+                  (t :expense-new/cancel))
                 ($ button {:id "btn-save-expense-new"
                            :btn-type :primary
                            :loading? loading?
                            :on-click handle-submit}
-                  "Save Expense")))))
+                  (t :expense-new/save))))))
 
         ;; Errors
         (when (or validation-error form-error)
@@ -241,12 +244,12 @@
               ;; Supplier
               ($ :div
                 ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} "Supplier *"))
+                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/supplier-label)))
                 ($ :select {:id (str form-id "-supplier-select")
                             :class "ds-select ds-select-bordered w-full"
                             :value (or supplier-id "")
                             :on-change #(set-supplier-id! (.. % -target -value))}
-                  ($ :option {:value ""} "Select supplier...")
+                  ($ :option {:value ""} (t :expense-new/supplier-select))
                   (for [s suppliers]
                     ($ :option {:key (:id s) :value (:id s)}
                       (:display_name s)))))
@@ -254,12 +257,12 @@
               ;; Payer
               ($ :div
                 ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} "Payer *"))
+                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/payer-label)))
                 ($ :select {:id (str form-id "-payer-select")
                             :class "ds-select ds-select-bordered w-full"
                             :value (or payer-id "")
                             :on-change #(set-payer-id! (.. % -target -value))}
-                  ($ :option {:value ""} "Select payer...")
+                  ($ :option {:value ""} (t :expense-new/payer-select))
                   (for [p payers]
                     ($ :option {:key (:id p) :value (:id p)}
                       (:label p)))))
@@ -267,7 +270,7 @@
               ;; Date
               ($ :div
                 ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} "Purchase Date *"))
+                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/date-label)))
                 ($ :input {:id (str form-id "-purchased-at")
                            :type "datetime-local"
                            :class "ds-input ds-input-bordered w-full"
@@ -277,7 +280,7 @@
               ;; Currency
               ($ :div
                 ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} "Currency"))
+                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/currency-label)))
                 ($ :select {:id (str form-id "-currency-select")
                             :class "ds-select ds-select-bordered w-full"
                             :value currency
@@ -288,19 +291,19 @@
             ;; Line items section
             ($ :div {:class "border-t pt-6"}
               ($ :div {:class "flex items-center justify-between mb-4"}
-                ($ :h3 {:class "font-semibold"} "Line Items")
+                ($ :h3 {:class "font-semibold"} (t :expense-new/line-items))
                 ($ :button {:type "button"
                             :id "btn-add-expense-new-item"
                             :class "ds-btn ds-btn-ghost ds-btn-sm"
                             :on-click #(set-line-items! (conj line-items (new-line-item)))}
-                  "+ Add Item"))
+                  (t :expense-new/add-item)))
 
               ;; Column headers
               ($ :div {:class "grid grid-cols-12 gap-2 text-xs text-base-content/70 font-medium mb-2"}
-                ($ :span {:class "col-span-5"} "Description")
-                ($ :span {:class "col-span-2"} "Qty")
-                ($ :span {:class "col-span-2"} "Unit Price")
-                ($ :span {:class "col-span-2"} "Total")
+                ($ :span {:class "col-span-5"} (t :expense-new/col-description))
+                ($ :span {:class "col-span-2"} (t :expense-new/col-qty))
+                ($ :span {:class "col-span-2"} (t :expense-new/col-unit-price))
+                ($ :span {:class "col-span-2"} (t :expense-new/col-total))
                 ($ :span {:class "col-span-1"}))
 
               ;; Items
@@ -318,7 +321,7 @@
               ;; Computed total
               (when (pos? computed-total)
                 ($ :div {:class "flex justify-end mt-4 text-sm"}
-                  ($ :span {:class "text-base-content/70 mr-2"} "Line items total:")
+                  ($ :span {:class "text-base-content/70 mr-2"} (t :expense-new/line-items-total))
                   ($ :span {:class (str "font-mono font-medium "
                                      (when total-mismatch? "text-warning"))}
                     (format-decimal computed-total) " " currency))))
@@ -327,7 +330,7 @@
             ($ :div {:class "border-t pt-6 grid grid-cols-1 md:grid-cols-2 gap-4"}
               ($ :div
                 ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} "Total Amount *"))
+                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/total-amount-label)))
                 ($ :input {:id (str form-id "-total-amount")
                            :type "number"
                            :step "0.01"
@@ -339,12 +342,12 @@
 
               ($ :div
                 ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} "Notes"))
+                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/notes-label)))
                 ($ :textarea {:id (str form-id "-notes")
                               :class "ds-textarea ds-textarea-bordered w-full"
                               :rows 2
                               :value notes
-                              :placeholder "Optional notes..."
+                              :placeholder (t :expense-new/notes-placeholder)
                               :on-change #(set-notes! (.. % -target -value))})))))))))
 
 (defui expense-new-page []
