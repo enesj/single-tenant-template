@@ -4,7 +4,7 @@
 FROM eclipse-temurin:21-jdk-jammy AS builder
 
 # Install Node.js 22 LTS
-RUN apt-get update && apt-get install -y curl bash rlwrap && \
+RUN apt-get update && apt-get install -y curl bash rlwrap libatomic1 && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
