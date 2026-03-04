@@ -1,9 +1,0 @@
-({:action :alter-column,
-  :field-name :supplier-id,
-  :model-name :expenses,
-  :options
-  {:foreign-key :suppliers/id,
-   :null false,
-   :on-delete :restrict,
-   :type :uuid},
-  :changes {:on-delete {:from :EMPTY, :to :restrict}}})

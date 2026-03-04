@@ -1,6 +1,0 @@
-({:action :drop-column,
-  :field-name :qty,
-  :model-name :price_observations}
- {:action :drop-column,
-  :field-name :line-total,
-  :model-name :price_observations})

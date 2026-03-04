@@ -1,5 +1,0 @@
-({:action :add-column,
-  :field-name :payer-id,
-  :model-name :receipts,
-  :options
-  {:foreign-key :payers/id, :on-delete :set-null, :type :uuid}})

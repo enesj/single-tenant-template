@@ -1,6 +1,6 @@
 (ns app.backend.fixtures
   "Test fixtures for Kaocha hooks - reuses dev system lifecycle.
-   
+
    This namespace provides:
    - Kaocha before/after suite hooks for test system lifecycle
    - Access to test database and service container
@@ -8,6 +8,7 @@
   (:require
     [app.template.backend.core :as backend]
     [app.template.backend.migrations.simple-repl :as mig]
+    [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [automigrate.core :as am]
     [next.jdbc :as jdbc]
     [system.state :as state]
@@ -83,6 +84,9 @@
    - Running webserver for integration tests"
   [suite _test-plan]
   (log/info "🧪 Starting test system (reusing dev infrastructure)...")
+
+  ;; Ensure no test run ever attempts real SMTP; tests can inspect the outbox.
+  (gmail-smtp/clear-outbox!)
 
   ;; Avoid double-starts within the same JVM (e.g. when multiple Kaocha suites
   ;; run back-to-back). If a previous suite already started the system and it's

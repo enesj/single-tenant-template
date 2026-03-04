@@ -39,13 +39,13 @@ Tests run with `-Daero.profile=test`, which provides:
 |---------|-------|---------|
 | Web port | 8086 | Avoid conflicts with dev (8085) |
 | DB port | 55433 | Separate test database |
-| DB name | `single_tenant_pos_test` | Isolated test data |
+| DB name | `multi_tenant_pos_test` | Isolated test data |
 
 ### Test Database
 
 ```bash
 # Start test database
-docker-compose up -d postgres-test
+docker compose up -d db-test
 
 # After any schema/migration change, keep both DBs in sync
 clj -X:migrations       # dev DB

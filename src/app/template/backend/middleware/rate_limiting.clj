@@ -122,7 +122,10 @@
   (let [config (get rate-limits route-type)
         key (get-rate-limit-key ip route-type tenant-id user-id)
         now (time/instant)
-        window-start (time/minus now (time/minutes (:window-minutes config)))
+        ;; Support fractional windows/blocks (we use tiny blocks in dev).
+        window-ms (long (Math/ceil (* 60000.0 (double (:window-minutes config)))))
+        block-ms  (long (Math/ceil (* 60000.0 (double (:block-minutes config)))))
+        window-start (time/minus now (time/millis window-ms))
 
         ;; Get or create entry
         entry (.computeIfAbsent rate-limit-storage key
@@ -152,7 +155,7 @@
 
         (if (>= attempt-count (:max-attempts config))
           ;; Block client
-          (let [block-until (time/plus now (time/minutes (:block-minutes config)))
+          (let [block-until (time/plus now (time/millis block-ms))
                 updated-entry (assoc entry
                                 :blocked-until block-until
                                 :attempts (conj recent-attempts now))]
@@ -187,42 +190,62 @@
 
    Automatically detects route types and applies appropriate limits.
    Cleans up expired entries periodically to prevent memory leaks.
-   Any internal error returns 503 rather than silently allowing the request."
+
+   IMPORTANT: This middleware must never swallow exceptions from downstream
+   handlers/middleware. If our internal rate limiter fails, we return 503.
+   If the application handler fails, we let it fail normally so the real error
+   is visible in logs and error handling upstream can do its job."
   [handler]
   (fn [request]
-    (try
-      (let [route-type (get-route-type request)]
+    (let [route-type (get-route-type request)]
 
-        ;; Periodically cleanup expired entries (every ~100 requests)
-        (when (zero? (mod (rand-int 100) 100))
-          (try (cleanup-expired-entries!) (catch Exception _ nil)))
+      ;; Periodically cleanup expired entries (every ~100 requests)
+      (when (zero? (mod (rand-int 100) 100))
+        (try
+          (cleanup-expired-entries!)
+          (catch Exception _ nil)))
 
-        (if route-type
-          (let [ip (get-client-ip request)
-                user-id (get-in request [:session :user-id])  ; Optional user-based limiting
-                ;; Include tenant-id for regular API routes so tenants get independent buckets.
-                ;; Admin routes stay global (IP-only) since admins operate cross-tenant.
-                tenant-id (when (= route-type :regular-api)
-                            (or (get-in request [:session :tenant-id])
-                              (get-in request [:session :auth-session :tenant :id])))]
+      (if-not route-type
+        ;; No rate limiting for this route
+        (handler request)
 
-            (if (and (not (rate-limiting-disabled? ip))
-                  (is-rate-limited? ip route-type tenant-id user-id))
-              ;; Return rate limit response
-              (let [config (get rate-limits route-type)
-                    retry-after (* (:block-minutes config) 60)]
-                (create-rate-limit-response route-type retry-after))
+        (let [ip (get-client-ip request)
+              user-id (get-in request [:session :user-id])
+              ;; Include tenant-id for regular API routes so tenants get independent buckets.
+              ;; Admin routes stay global (IP-only) since admins operate cross-tenant.
+              tenant-id (when (= route-type :regular-api)
+                          (or (get-in request [:session :tenant-id])
+                            (get-in request [:session :auth-session :tenant :id])))]
 
-              ;; Allow request to proceed
-              (handler request)))
+          (if (rate-limiting-disabled? ip)
+            (handler request)
 
-          ;; No rate limiting for this route
-          (handler request)))
-      (catch Exception e
-        (log/error e "Rate limiting middleware failed, returning 503")
-        {:status 503
-         :headers {"Content-Type" "application/json"}
-         :body "{\"error\":\"Service unavailable\",\"message\":\"Rate limiting system failure. Please try again shortly.\"}"}))))
+            (let [limited?
+                  (try
+                    (is-rate-limited? ip route-type tenant-id user-id)
+                    (catch Exception e
+                      (log/error e "Rate limiting middleware failed, returning 503"
+                        {:route-type route-type
+                         :uri (:uri request)
+                         :method (:request-method request)
+                         :ip ip
+                         :tenant-id tenant-id
+                         :user-id user-id})
+                      ::rate-limiter-error))]
+
+              (cond
+                (= limited? ::rate-limiter-error)
+                {:status 503
+                 :headers {"Content-Type" "application/json"}
+                 :body "{\"error\":\"Service unavailable\",\"message\":\"Rate limiting system failure. Please try again shortly.\"}"}
+
+                limited?
+                (let [config (get rate-limits route-type)
+                      retry-after (long (Math/ceil (* 60.0 (double (:block-minutes config)))))]
+                  (create-rate-limit-response route-type retry-after))
+
+                :else
+                (handler request)))))))))
 
 (defn check-provisioning-rate-limit!
   "Check tenant provisioning rate limit for an IP.

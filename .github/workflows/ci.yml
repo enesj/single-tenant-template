@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: multi_tenant_pos_test
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: ci_password
+        ports:
+          # Map to port 55433 to match the :test profile JDBC URL in base.edn
+          - 55433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Aero profile — the :test alias in deps.edn also sets -Daero.profile=test,
+      # but this env var makes the profile explicit for any tooling that reads it.
+      AERO_PROFILE: test
+      # DB password for the test Postgres service container above.
+      # No .secrets.edn file is needed because base.edn now reads DB_TEST_PASSWORD first.
+      DB_TEST_PASSWORD: ci_password
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Clojure CLI
+        uses: DeLaGuardo/setup-clojure@12
+        with:
+          cli: latest
+
+      - name: Set up Babashka
+        uses: turtlequeue/setup-babashka@v1.6.0
+        with:
+          babashka-version: latest
+
+      - name: Cache Clojure dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.clojure
+            ~/.cpcache
+          key: ${{ runner.os }}-clojure-${{ hashFiles('deps.edn', 'bb.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-clojure-
+
+      - name: Run backend tests
+        run: bb be-test

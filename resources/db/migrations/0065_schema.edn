@@ -1,3 +1,0 @@
-({:action :drop-column,
-  :field-name :raw-label-id,
-  :model-name :expense_items})

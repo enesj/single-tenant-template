@@ -1,51 +1,4 @@
 ({:action :create-type,
-  :type-name :user-status,
-  :model-name :users,
-  :options {:choices ["active" "inactive" "suspended"], :type :enum}}
- {:action :create-type,
-  :type-name :user-role,
-  :model-name :users,
-  :options {:choices ["admin" "member" "viewer"], :type :enum}}
- {:action :create-table,
-  :model-name :users,
-  :fields
-  {:role {:null false, :default "member", :type [:enum :user-role]},
-   :updated-at {:default "NOW()", :type :timestamptz},
-   :email
-   {:null false,
-    :unique true,
-    :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"],
-    :type [:varchar 255]},
-   :avatar-url {:type :text},
-   :password-hash {:null false, :type :text},
-   :provider-user-id {:type :text},
-   :last-login-at {:type :timestamptz},
-   :status
-   {:null false, :default "active", :type [:enum :user-status]},
-   :id {:primary-key true, :type :uuid},
-   :full-name {:type [:varchar 255]},
-   :auth-provider {:default "password", :type :text},
-   :created-at {:default "NOW()", :type :timestamptz}}}
- {:action :create-table,
-  :model-name :email_verification_tokens,
-  :fields
-  {:id {:primary-key true, :type :uuid},
-   :user-id
-   {:foreign-key :users/id,
-    :null false,
-    :on-delete :cascade,
-    :type :uuid},
-   :token {:null false, :unique true, :type [:varchar 255]},
-   :expires-at {:null false, :type :timestamptz},
-   :attempts {:default 0, :type :integer},
-   :last-attempted-at {:type :timestamptz},
-   :used-at {:type :timestamptz},
-   :created-at {:default "NOW()", :type :timestamptz}}}
- {:action :create-index,
-  :index-name :idx-email-tokens-token,
-  :model-name :email_verification_tokens,
-  :options {:fields [:token], :unique true, :type :btree}}
- {:action :create-type,
   :type-name :admin-status,
   :model-name :admins,
   :options {:choices ["active" "suspended"], :type :enum}}
@@ -57,7 +10,7 @@
   :model-name :admins,
   :fields
   {:role {:null false, :default "admin", :type [:enum :admin-role]},
-   :updated-at {:default "NOW()", :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz},
    :email
    {:null false,
     :unique true,
@@ -69,47 +22,558 @@
    {:null false, :default "active", :type [:enum :admin-status]},
    :id {:primary-key true, :type :uuid},
    :full-name {:type [:varchar 255]},
-   :created-at {:default "NOW()", :type :timestamptz}}}
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :admin_sessions,
+  :fields
+  {:updated-at {:null false, :default [:now], :type :timestamptz},
+   :expires-at {:null false, :type :timestamptz},
+   :user-agent {:type :text},
+   :last-activity {:null false, :type :timestamptz},
+   :admin-id
+   {:foreign-key :admins/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :token {:null false, :unique true, :type [:varchar 255]},
+   :id {:primary-key true, :type :uuid},
+   :impersonation-context {:type :jsonb},
+   :created-at {:null false, :default [:now], :type :timestamptz},
+   :ip-address {:type :text}}}
+ {:action :create-index,
+  :index-name :idx-admin-sessions-token,
+  :model-name :admin_sessions,
+  :options {:fields [:token], :unique true, :type :btree}}
+ {:action :create-type,
+  :type-name :user-status,
+  :model-name :users,
+  :options {:choices ["active" "inactive" "suspended"], :type :enum}}
+ {:action :create-table,
+  :model-name :users,
+  :fields
+  {:updated-at {:default [:now], :type :timestamptz},
+   :email
+   {:null false,
+    :unique true,
+    :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"],
+    :type [:varchar 255]},
+   :avatar-url {:type :text},
+   :password-hash {:null false, :type :text},
+   :last-login-at {:type :timestamptz},
+   :status
+   {:null false, :default "active", :type [:enum :user-status]},
+   :id {:primary-key true, :type :uuid},
+   :email-verified {:default false, :null false, :type :boolean},
+   :full-name {:type [:varchar 255]},
+   :auth-provider {:default "password", :type :text},
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-type,
+  :type-name :invitation-status,
+  :model-name :tenant_invitations,
+  :options
+  {:choices ["pending" "accepted" "expired" "revoked"], :type :enum}}
+ {:action :create-type,
+  :type-name :tenant-status,
+  :model-name :tenants,
+  :options {:choices ["active" "suspended" "archived"], :type :enum}}
+ {:action :create-table,
+  :model-name :tenants,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :name {:null false, :type [:varchar 255]},
+   :slug {:null false, :type [:varchar 255]},
+   :status
+   {:null false, :default "active", :type [:enum :tenant-status]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-type,
+  :type-name :invitation-role,
+  :model-name :tenant_invitations,
+  :options {:choices ["admin" "member" "viewer"], :type :enum}}
+ {:action :create-table,
+  :model-name :tenant_invitations,
+  :fields
+  {:role {:null false, :type [:enum :invitation-role]},
+   :updated-at {:default [:now], :type :timestamptz},
+   :email {:null false, :type :text},
+   :expires-at {:null false, :type :timestamptz},
+   :invited-by
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :token {:null false, :type [:varchar 255]},
+   :status
+   {:null false, :default "pending", :type [:enum :invitation-status]},
+   :id {:primary-key true, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid}}}
+ {:action :create-index,
+  :index-name :idx-tenant-invitations-status,
+  :model-name :tenant_invitations,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-table,
+  :model-name :suppliers,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :display-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :address {:type :text},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :countries,
+  :fields
+  {:country {:primary-key true, :type [:varchar 255]},
+   :code {:null false, :type [:varchar 2]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :cities,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :zip {:type [:varchar 20]},
+   :country
+   {:foreign-key :countries/country,
+    :null false,
+    :default "Bosnia and Herzegovina",
+    :on-delete :restrict,
+    :on-update :cascade,
+    :type [:varchar 255]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :stores,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :supplier-id
+   {:foreign-key :suppliers/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :display-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :address {:type :text},
+   :city-id
+   {:foreign-key :cities/id, :on-delete :set-null, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :store_aliases,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :raw-label {:type :text},
+   :raw-label-normalized {:null false, :type [:varchar 255]},
+   :store-id
+   {:foreign-key :stores/id, :on-delete :set-null, :type :uuid},
+   :confidence {:default 100, :type :integer},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-type,
+  :type-name :membership-role,
+  :model-name :tenant_memberships,
+  :options {:choices ["owner" "admin" "member" "viewer"], :type :enum}}
+ {:action :create-type,
+  :type-name :membership-status,
+  :model-name :tenant_memberships,
+  :options {:choices ["active" "suspended"], :type :enum}}
+ {:action :create-table,
+  :model-name :tenant_memberships,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :user-id
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :role {:null false, :type [:enum :membership-role]},
+   :status
+   {:null false, :default "active", :type [:enum :membership-status]},
+   :invited-by
+   {:foreign-key :users/id, :on-delete :set-null, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-tenant-memberships-active-owner,
+  :model-name :tenant_memberships,
+  :options
+  {:fields [:tenant_id],
+   :unique true,
+   :where
+   [:raw
+    "((role = 'owner'::membership_role) AND (status = 'active'::membership_status))"],
+   :type :btree}}
+ {:action :create-table,
+  :model-name :payer_types,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :label {:null false, :type [:varchar 255]},
+   :is-default {:null false, :default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-type,
+  :type-name :receipt-status,
+  :model-name :receipts,
+  :options
+  {:choices
+   ["uploaded"
+    "parsing"
+    "parsed"
+    "extracting"
+    "extracted"
+    "review_required"
+    "approved"
+    "posted"
+    "failed"],
+   :type :enum}}
+ {:action :create-table,
+  :model-name :supplier_aliases,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :raw-label {:type :text},
+   :raw-label-normalized {:null false, :type [:varchar 255]},
+   :supplier-id
+   {:foreign-key :suppliers/id, :on-delete :set-null, :type :uuid},
+   :confidence {:default 100, :type :integer},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-type,
+  :type-name :currency,
+  :model-name :expenses,
+  :options {:choices ["BAM" "EUR" "USD"], :type :enum}}
+ {:action :create-table,
+  :model-name :payers,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :payer-type-id
+   {:foreign-key :payer_types/id, :on-delete :set-null, :type :uuid},
+   :label {:null false, :type [:varchar 255]},
+   :is-default {:default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :receipts,
+  :fields
+  {:original-filename {:type [:varchar 255]},
+   :raw-extract-json {:type :jsonb},
+   :updated-at {:default [:now], :type :timestamptz},
+   :total-amount-guess {:type [:decimal 12 2]},
+   :purchased-at-guess {:type :timestamptz},
+   :user-id
+   {:foreign-key :users/id, :on-delete :set-null, :type :uuid},
+   :file-size {:type :integer},
+   :store-alias-id
+   {:foreign-key :store_aliases/id, :on-delete :set-null, :type :uuid},
+   :currency-guess {:type [:enum :currency]},
+   :store-guess {:type [:varchar 255]},
+   :expense-id {:type :uuid},
+   :status
+   {:null false, :default "uploaded", :type [:enum :receipt-status]},
+   :file-hash {:null false, :type [:varchar 64]},
+   :payer-id
+   {:foreign-key :payers/id, :on-delete :set-null, :type :uuid},
+   :id {:primary-key true, :type :uuid},
+   :content-type {:type [:varchar 100]},
+   :supplier-alias-id
+   {:foreign-key :supplier_aliases/id,
+    :on-delete :set-null,
+    :type :uuid},
+   :error-details {:type :jsonb},
+   :storage-key {:null false, :type :text},
+   :error-message {:type :text},
+   :supplier-guess {:type [:varchar 255]},
+   :retry-count {:default 0, :type :integer},
+   :created-at {:default [:now], :type :timestamptz},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :parsed-markdown {:type :text}}}
+ {:action :create-index,
+  :index-name :idx-receipts-tenant,
+  :model-name :receipts,
+  :options {:fields [:tenant_id], :type :btree}}
+ {:action :create-type,
+  :type-name :impersonation-role,
+  :model-name :impersonation_grants,
+  :options {:choices ["owner" "admin" "member" "viewer"], :type :enum}}
+ {:action :create-type,
+  :type-name :impersonation-status,
+  :model-name :impersonation_grants,
+  :options {:choices ["active" "revoked"], :type :enum}}
+ {:action :create-table,
+  :model-name :impersonation_grants,
+  :fields
+  {:role {:null false, :type [:enum :impersonation-role]},
+   :updated-at {:default [:now], :type :timestamptz},
+   :revoked-by-admin
+   {:foreign-key :admins/id, :on-delete :set-null, :type :uuid},
+   :admin-id
+   {:foreign-key :admins/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :revoked-by-user
+   {:foreign-key :users/id, :on-delete :set-null, :type :uuid},
+   :status
+   {:null false,
+    :default "active",
+    :type [:enum :impersonation-status]},
+   :id {:primary-key true, :type :uuid},
+   :granted-by
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid}}}
+ {:action :create-index,
+  :index-name :idx-impersonation-grants-status,
+  :model-name :impersonation_grants,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-table,
+  :model-name :expense_categories,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :name {:null false, :type [:varchar 255]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :expenses,
+  :fields
+  {:purchased-at {:null false, :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz},
+   :store-id
+   {:foreign-key :stores/id, :on-delete :set-null, :type :uuid},
+   :is-posted {:default true, :null false, :type :boolean},
+   :expense-category-id
+   {:foreign-key :expense_categories/id,
+    :on-delete :set-null,
+    :type :uuid},
+   :user-id
+   {:foreign-key :users/id, :on-delete :set-null, :type :uuid},
+   :currency {:null false, :default "BAM", :type [:enum :currency]},
+   :supplier-id
+   {:foreign-key :suppliers/id,
+    :null false,
+    :on-delete :restrict,
+    :type :uuid},
+   :payer-id {:foreign-key :payers/id, :null false, :type :uuid},
+   :id {:primary-key true, :type :uuid},
+   :notes {:type :text},
+   :total-amount {:null false, :type [:decimal 12 2]},
+   :receipt-id
+   {:foreign-key :receipts/id, :on-delete :set-null, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid}}}
+ {:action :create-table,
+  :model-name :email_verification_tokens,
+  :fields
+  {:updated-at {:default [:now], :type :timestamptz},
+   :expires-at {:null false, :type :timestamptz},
+   :last-attempted-at {:type :timestamptz},
+   :attempts {:default 0, :type :integer},
+   :user-id
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :token {:null false, :unique true, :type [:varchar 255]},
+   :id {:primary-key true, :type :uuid},
+   :used-at {:type :timestamptz},
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-email-tokens-token,
+  :model-name :email_verification_tokens,
+  :options {:fields [:token], :unique true, :type :btree}}
+ {:action :create-table,
+  :model-name :manufacturers,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :display-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :categories,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :name {:null false, :type [:varchar 255]},
+   :description {:type :text},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :subcategories,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :category-id
+   {:foreign-key :categories/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :name {:null false, :type [:varchar 255]},
+   :description {:type :text},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :articles,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :canonical-name {:null false, :type [:varchar 255]},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :subcategory-id
+   {:foreign-key :subcategories/id, :on-delete :set-null, :type :uuid},
+   :link {:type :text},
+   :manufacturer-id
+   {:foreign-key :manufacturers/id, :on-delete :set-null, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-articles-manufacturer-id,
+  :model-name :articles,
+  :options {:fields [:manufacturer_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-users-email-verified,
+  :model-name :users,
+  :options {:fields [:email_verified], :type :btree}}
+ {:action :create-index,
+  :index-name :uniq-cities-country-zip,
+  :model-name :cities,
+  :options {:fields [:country :zip], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-supplier-aliases-supplier-id,
+  :model-name :supplier_aliases,
+  :options {:fields [:supplier_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-categories-name,
+  :model-name :categories,
+  :options {:fields [:name], :unique true, :type :btree}}
+ {:action :create-table,
+  :model-name :article_aliases,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :supplier-id
+   {:foreign-key :suppliers/id, :on-delete :cascade, :type :uuid},
+   :raw-label {:type :text},
+   :raw-label-normalized {:null false, :type [:varchar 255]},
+   :article-id
+   {:foreign-key :articles/id, :on-delete :set-null, :type :uuid},
+   :confidence {:default 100, :type :integer},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :expense_items,
+  :fields
+  {:updated-at {:default [:now], :type :timestamptz},
+   :line-total {:null false, :type [:decimal 12 2]},
+   :alias-id {:foreign-key :article_aliases/id, :type :uuid},
+   :article-id
+   {:foreign-key :articles/id, :on-delete :set-null, :type :uuid},
+   :unit-price {:type [:decimal 12 2]},
+   :expense-id
+   {:foreign-key :expenses/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :id {:primary-key true, :type :uuid},
+   :qty {:type [:decimal 10 3]},
+   :created-at {:default [:now], :type :timestamptz},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid}}}
+ {:action :create-index,
+  :index-name :idx-payers-payer-type,
+  :model-name :payers,
+  :options {:fields [:payer_type_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expense-categories-tenant-name,
+  :model-name :expense_categories,
+  :options {:fields [:tenant_id :name], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-tenant-memberships-user,
+  :model-name :tenant_memberships,
+  :options {:fields [:user_id], :type :btree}}
+ {:action :create-table,
+  :model-name :dedup_ignored_clusters,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :admin-id
+   {:foreign-key :admins/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :entity-type {:null false, :type [:varchar 32]},
+   :cluster-id {:null false, :type [:varchar 64]},
+   :member-ids {:null false, :type :jsonb},
+   :note {:type :text},
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-dedup-ignored-clusters-admin-entity-cluster,
+  :model-name :dedup_ignored_clusters,
+  :options
+  {:fields [:admin_id :entity_type :cluster_id],
+   :unique true,
+   :type :btree}}
  {:action :create-index,
   :index-name :idx-admins-email,
   :model-name :admins,
   :options {:fields [:email], :unique true, :type :btree}}
  {:action :create-index,
-  :index-name :idx-users-auth-provider-provider-user-id-external,
-  :model-name :users,
-  :options
-  {:fields [:auth_provider :provider_user_id],
-   :unique true,
-   :where [:<> :auth_provider "password"],
-   :type :btree}}
- {:action :create-type,
-  :type-name :audit-actor-type,
-  :model-name :users,
-  :options {:choices ["user" "admin"], :type :enum}}
- {:action :create-table,
-  :model-name :audit_logs,
-  :fields
-  {:ip {:type :text},
-   :user-agent {:type :text},
-   :actor-type {:null false, :type [:enum :audit-actor-type]},
-   :actor-id {:null false, :type :uuid},
-   :target-id {:type :uuid},
-   :target-type {:type :text},
-   :id {:primary-key true, :type :uuid},
-   :action {:null false, :type :text},
-   :created-at {:default "NOW()", :type :timestamptz},
-   :metadata {:type :jsonb}}}
+  :index-name :idx-articles-normalized-key,
+  :model-name :articles,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
  {:action :create-index,
-  :index-name :idx-audit-logs-created-at,
-  :model-name :audit_logs,
+  :index-name :idx-receipts-supplier-alias-id,
+  :model-name :receipts,
+  :options {:fields [:supplier_alias_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-tenant-memberships-status,
+  :model-name :tenant_memberships,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-created-at,
+  :model-name :receipts,
   :options {:fields [:created_at], :type :btree}}
  {:action :create-index,
-  :index-name :idx-users-email,
-  :model-name :users,
-  :options {:fields [:email], :unique true, :type :btree}}
- {:action :create-index,
-  :index-name :idx-admins-status,
-  :model-name :admins,
+  :index-name :idx-tenants-status,
+  :model-name :tenants,
   :options {:fields [:status], :type :btree}}
  {:action :create-type,
   :type-name :login-principal-type,
@@ -118,38 +582,370 @@
  {:action :create-table,
   :model-name :login_events,
   :fields
-  {:id {:primary-key true, :type :uuid},
-   :principal-type {:null false, :type [:enum :login-principal-type]},
-   :principal-id {:null false, :type :uuid},
-   :success {:null false, :type :boolean},
-   :reason {:type :text},
+  {:updated-at {:default [:now], :type :timestamptz},
    :ip {:type :text},
    :user-agent {:type :text},
-   :created-at {:default "NOW()", :type :timestamptz}}}
+   :principal-type {:null false, :type [:enum :login-principal-type]},
+   :reason {:type :text},
+   :success {:null false, :type :boolean},
+   :id {:primary-key true, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz},
+   :principal-id {:null false, :type :uuid}}}
+ {:action :create-table,
+  :model-name :user_expense_settings,
+  :fields
+  {:updated-at {:default [:now], :type :timestamptz},
+   :receipt-refine-enabled
+   {:null false, :default false, :type :boolean},
+   :receipt-ocr-provider
+   {:null false, :default "mistral", :type :text},
+   :default-currency
+   {:null false, :default "BAM", :type [:enum :currency]},
+   :auto-post-after-upload-enabled
+   {:null false, :default false, :type :boolean},
+   :user-id
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :id {:primary-key true, :type :uuid},
+   :default-payer-id
+   {:foreign-key :payers/id, :on-delete :set-null, :type :uuid},
+   :notifications-enabled {:null false, :default true, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid}}}
+ {:action :create-index,
+  :index-name :uniq-user-expense-settings-tenant-user,
+  :model-name :user_expense_settings,
+  :options {:fields [:tenant_id :user_id], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expense-items-alias,
+  :model-name :expense_items,
+  :options {:fields [:alias_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expense-items-article,
+  :model-name :expense_items,
+  :options {:fields [:article_id], :type :btree}}
+ {:action :create-table,
+  :model-name :user_sessions,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :session-key {:null false, :type [:varchar 255]},
+   :data {:null false, :type :jsonb},
+   :expires-at {:null false, :type :timestamptz},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-user-sessions-expires,
+  :model-name :user_sessions,
+  :options {:fields [:expires_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-dedup-ignored-clusters-admin-entity,
+  :model-name :dedup_ignored_clusters,
+  :options {:fields [:admin_id :entity_type], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-status,
+  :model-name :receipts,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admin-sessions-admin-id,
+  :model-name :admin_sessions,
+  :options {:fields [:admin_id], :type :btree}}
+ {:action :create-type,
+  :type-name :audit-actor-type,
+  :model-name :users,
+  :options {:choices ["user" "admin"], :type :enum}}
+ {:action :create-table,
+  :model-name :audit_logs,
+  :fields
+  {:updated-at {:default [:now], :type :timestamptz},
+   :ip {:type :text},
+   :user-agent {:type :text},
+   :actor-type {:null false, :type [:enum :audit-actor-type]},
+   :actor-id {:null false, :type :uuid},
+   :target-id {:type :uuid},
+   :target-type {:type :text},
+   :id {:primary-key true, :type :uuid},
+   :action {:null false, :type :text},
+   :created-at {:default [:now], :type :timestamptz},
+   :metadata {:type :jsonb}}}
+ {:action :create-index,
+  :index-name :idx-audit-logs-created-at,
+  :model-name :audit_logs,
+  :options {:fields [:created_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-article-aliases-article,
+  :model-name :article_aliases,
+  :options {:fields [:article_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-store-alias-id,
+  :model-name :receipts,
+  :options {:fields [:store_alias_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-manufacturers-display-name,
+  :model-name :manufacturers,
+  :options {:fields [:display_name], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-subcategories-category-name,
+  :model-name :subcategories,
+  :options {:fields [:category_id :name], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-impersonation-grants-admin,
+  :model-name :impersonation_grants,
+  :options {:fields [:admin_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-users-email,
+  :model-name :users,
+  :options {:fields [:email], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-tenant,
+  :model-name :expenses,
+  :options {:fields [:tenant_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admins-status,
+  :model-name :admins,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-article-aliases-supplier-label,
+  :model-name :article_aliases,
+  :options
+  {:fields [:supplier_id :raw_label_normalized],
+   :unique true,
+   :type :btree}}
+ {:action :create-index,
+  :index-name :idx-subcategories-category-id,
+  :model-name :subcategories,
+  :options {:fields [:category_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-tenants-slug,
+  :model-name :tenants,
+  :options {:fields [:slug], :unique true, :type :btree}}
  {:action :create-index,
   :index-name :idx-login-events-principal,
   :model-name :login_events,
   :options {:fields [:principal_type :principal_id], :type :btree}}
  {:action :create-index,
+  :index-name :idx-impersonation-grants-tenant,
+  :model-name :impersonation_grants,
+  :options {:fields [:tenant_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-user-sessions-key,
+  :model-name :user_sessions,
+  :options {:fields [:session_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-articles-subcategory-id,
+  :model-name :articles,
+  :options {:fields [:subcategory_id], :type :btree}}
+ {:action :create-index,
   :index-name :idx-email-tokens-user,
   :model-name :email_verification_tokens,
   :options {:fields [:user_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-supplier-aliases-raw-label-normalized,
+  :model-name :supplier_aliases,
+  :options
+  {:fields [:raw_label_normalized], :unique true, :type :btree}}
  {:action :create-index,
   :index-name :idx-audit-logs-actor,
   :model-name :audit_logs,
   :options {:fields [:actor_type :actor_id], :type :btree}}
  {:action :create-index,
+  :index-name :idx-expense-items-tenant,
+  :model-name :expense_items,
+  :options {:fields [:tenant_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-payers-tenant,
+  :model-name :payers,
+  :options {:fields [:tenant_id], :type :btree}}
+ {:action :create-table,
+  :model-name :password_reset_tokens,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :principal-type {:null false, :type [:enum :login-principal-type]},
+   :principal-id {:null false, :type :uuid},
+   :token {:null false, :unique true, :type [:varchar 255]},
+   :expires-at {:null false, :type :timestamptz},
+   :used-at {:type :timestamptz},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-password-reset-tokens-expires,
+  :model-name :password_reset_tokens,
+  :options {:fields [:expires_at], :type :btree}}
+ {:action :create-index,
   :index-name :idx-login-events-created-at,
   :model-name :login_events,
   :options {:fields [:created_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-stores-supplier-normalized-key,
+  :model-name :stores,
+  :options
+  {:fields [:supplier_id :normalized_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-user,
+  :model-name :receipts,
+  :options {:fields [:user_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-payer-types-tenant-label,
+  :model-name :payer_types,
+  :options {:fields [:tenant_id :label], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-tenant-invitations-tenant,
+  :model-name :tenant_invitations,
+  :options {:fields [:tenant_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-store-aliases-store-id,
+  :model-name :store_aliases,
+  :options {:fields [:store_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admin-sessions-expires,
+  :model-name :admin_sessions,
+  :options {:fields [:expires_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-supplier,
+  :model-name :expenses,
+  :options {:fields [:supplier_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-receipts-tenant-file-hash,
+  :model-name :receipts,
+  :options
+  {:fields [:tenant_id :file_hash], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-is-posted,
+  :model-name :expenses,
+  :options {:fields [:is_posted], :type :btree}}
+ {:action :create-type,
+  :type-name :backlog-status,
+  :model-name :backlog,
+  :options
+  {:choices ["Waiting" "In progres" "Completed" "Need improvments"],
+   :type :enum}}
+ {:action :create-index,
+  :index-name :idx-password-reset-tokens-principal,
+  :model-name :password_reset_tokens,
+  :options {:fields [:principal_type :principal_id], :type :btree}}
+ {:action :create-type,
+  :type-name :backlog-type,
+  :model-name :backlog,
+  :options
+  {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvment"],
+   :type :enum}}
+ {:action :create-table,
+  :model-name :backlog,
+  :fields
+  {:number {:primary-key true, :type :integer},
+   :description {:null false, :type :text},
+   :status
+   {:null false, :default "Waiting", :type [:enum :backlog-status]},
+   :type {:null false, :type [:enum :backlog-type]},
+   :priority
+   {:null false,
+    :default 1,
+    :check [:raw "priority BETWEEN 1 AND 5"],
+    :type :integer},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-expense-items-expense,
+  :model-name :expense_items,
+  :options {:fields [:expense_id], :type :btree}}
  {:action :create-index,
   :index-name :idx-email-tokens-expires,
   :model-name :email_verification_tokens,
   :options {:fields [:expires_at], :type :btree}}
  {:action :create-index,
+  :index-name :idx-password-reset-tokens-token,
+  :model-name :password_reset_tokens,
+  :options {:fields [:token], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-suppliers-normalized-key,
+  :model-name :suppliers,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-expense-category,
+  :model-name :expenses,
+  :options {:fields [:expense_category_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-countries-code,
+  :model-name :countries,
+  :options {:fields [:code], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-manufacturers-normalized-key,
+  :model-name :manufacturers,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-stores-supplier,
+  :model-name :stores,
+  :options {:fields [:supplier_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-user,
+  :model-name :expenses,
+  :options {:fields [:user_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-stores-city-id,
+  :model-name :stores,
+  :options {:fields [:city_id], :type :btree}}
+ {:action :create-index,
+  :index-name :uniq-tenant-memberships-tenant-user,
+  :model-name :tenant_memberships,
+  :options {:fields [:tenant_id :user_id], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-tenant-invitations-token,
+  :model-name :tenant_invitations,
+  :options {:fields [:token], :unique true, :type :btree}}
+ {:action :create-index,
   :index-name :idx-users-status,
   :model-name :users,
   :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-cities-normalized-key,
+  :model-name :cities,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
+ {:action :create-table,
+  :model-name :raw_labels,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :raw-label {:null false, :type :text},
+   :normalized-key {:null false, :type [:varchar 255]},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-raw-labels-normalized-key,
+  :model-name :raw_labels,
+  :options {:fields [:normalized_key], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :uniq-payer-types-tenant-default,
+  :model-name :payer_types,
+  :options
+  {:fields [:tenant_id :is_default],
+   :unique true,
+   :where [:= :is_default true],
+   :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-store,
+  :model-name :expenses,
+  :options {:fields [:store_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-tenant-invitations-email,
+  :model-name :tenant_invitations,
+  :options {:fields [:email], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-payer,
+  :model-name :expenses,
+  :options {:fields [:payer_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-expenses-purchased-at,
+  :model-name :expenses,
+  :options {:fields [:purchased_at], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-store-aliases-raw-label-normalized,
+  :model-name :store_aliases,
+  :options
+  {:fields [:raw_label_normalized], :unique true, :type :btree}}
  {:action :create-index,
   :index-name :idx-users-created-at,
   :model-name :users,

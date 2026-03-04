@@ -1,3 +1,0 @@
-({:action :drop-column,
-  :field-name :payment-hints,
-  :model-name :receipts})

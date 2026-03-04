@@ -1,3 +1,0 @@
-({:action :drop-column,
-  :field-name :provider-user-id,
-  :model-name :users})

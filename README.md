@@ -16,8 +16,8 @@ This template expects a secrets file for DB credentials:
   - `:db {:dev-password "...", :test-password "..."}`
 
 By default, `bb run-app` uses `docker compose` to start two Postgres containers:
-- Dev DB: `single_tenant_pos` on `localhost:55432`
-- Test DB: `single_tenant_pos_test` on `localhost:55433`
+- Dev DB: `multi_tenant_pos` on `localhost:55432`
+- Test DB: `multi_tenant_pos_test` on `localhost:55433`
 
 ### 2. Project Setup
 

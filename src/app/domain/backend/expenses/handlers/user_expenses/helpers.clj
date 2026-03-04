@@ -160,11 +160,15 @@
 (defn get-user-role
   "Return the effective role string for the current user.
 
-  Reads the tenant membership role set by `build-auth-session` (Phase 1).
-  Falls back to `:identity :role` for Buddy-based middleware."
+  Priority order:
+  1) Tenant membership role (Phase 1 sessions)
+  2) Global user role (legacy/pre-tenant sessions)
+  3) Identity role (Buddy/OAuth middleware)"
   [request]
   (normalize-role
     (or (get-in request [:session :auth-session :membership :role])
+      (get-in request [:session :auth-session :user :role])
+      (get-in request [:session :user :role])
       (get-in request [:identity :role]))))
 
 (defn tenant-elevated?

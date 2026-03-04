@@ -1,4 +1,0 @@
-({:action :add-column,
-  :field-name :city,
-  :model-name :stores,
-  :options {:type [:varchar 255]}})

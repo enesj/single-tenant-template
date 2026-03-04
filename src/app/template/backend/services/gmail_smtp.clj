@@ -3,8 +3,21 @@
   (:require
     [app.template.backend.auth.email-verification :as email-verification]
     [clojure.string :as str]
+    [java-time.api :as time]
     [postal.core :as postal]
     [taoensso.timbre :as log]))
+
+(defonce ^:private outbox* (atom []))
+
+(defn clear-outbox!
+  "Clear the in-memory email outbox (used in :test)."
+  []
+  (reset! outbox* []))
+
+(defn outbox
+  "Return all captured emails in the in-memory outbox (used in :test)."
+  []
+  @outbox*)
 
 (defn create-verification-email-body
   "Create email body for verification email"
@@ -136,31 +149,44 @@
              "</div></body></html>")}))
 
 (defn send-smtp-email
-  "Send email via SMTP using postal library"
+  "Send email via SMTP using postal library.
+
+  When `smtp-config` includes `{:transport :in-memory}`, no email is sent.
+  Instead the message is appended to an in-memory outbox for test assertions."
   [smtp-config from-email to-email subject text-body html-body]
-  (try
-    (let [message {:from from-email
-                   :to [to-email]
-                   :subject subject
-                   :body [{:type "text/plain; charset=utf-8"
-                           :content text-body}
-                          {:type "text/html; charset=utf-8"
-                           :content html-body}]}
-          result (postal/send-message smtp-config message)]
+  (if (= :in-memory (:transport smtp-config))
+    (let [captured {:from from-email
+                    :to to-email
+                    :subject subject
+                    :text text-body
+                    :html html-body
+                    :sent-at (time/instant)}]
+      (swap! outbox* conj captured)
+      {:success true
+       :transport :in-memory})
+    (try
+      (let [message {:from from-email
+                     :to [to-email]
+                     :subject subject
+                     :body [{:type "text/plain; charset=utf-8"
+                             :content text-body}
+                            {:type "text/html; charset=utf-8"
+                             :content html-body}]}
+            result (postal/send-message smtp-config message)]
 
-      (log/info "SMTP send result:" result)
+        (log/info "SMTP send result:" result)
 
-      (if (= :SUCCESS (:error result))
-        (do
-          (log/info "Email sent successfully via SMTP to:" to-email)
-          {:success true :message-id (:id result)})
-        (do
-          (log/error "Failed to send email via SMTP. Error:" (:message result))
-          {:success false :error :smtp-error :details result})))
+        (if (= :SUCCESS (:error result))
+          (do
+            (log/info "Email sent successfully via SMTP to:" to-email)
+            {:success true :message-id (:id result)})
+          (do
+            (log/error "Failed to send email via SMTP. Error:" (:message result))
+            {:success false :error :smtp-error :details result})))
 
-    (catch Exception e
-      (log/error e "Exception occurred while sending email via SMTP")
-      {:success false :error :smtp-exception :message (.getMessage e)})))
+      (catch Exception e
+        (log/error e "Exception occurred while sending email via SMTP")
+        {:success false :error :smtp-exception :message (.getMessage e)}))))
 
 ;; ============================================================================
 ;; Password Reset Email Functions (standalone, not protocol-based)

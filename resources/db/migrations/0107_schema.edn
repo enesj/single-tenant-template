@@ -1,2 +1,0 @@
-({:action :drop-column, :field-name :role, :model-name :users}
- {:action :drop-type, :type-name :user-role, :model-name :users})

@@ -35,7 +35,18 @@
     [clojure.string :as str]))
 
 (defn get-jdbc-url
-  "Return JDBC URL for profile (default :dev) from config. Falls back to env."
+  "Return a JDBC URL suitable for migration tooling.
+
+  Precedence:
+  1) `DATABASE_URL` env var (verbatim)
+  2) `:database :jdbc-url` from Aero config
+  3) Construct from `:database :host/:port/:dbname`
+
+  Notes:
+  - Migration tooling expects credentials to be present in the JDBC URL.
+    If the configured URL does not contain credentials, we will append
+    `?user=...&password=...` using `:database :user` / `:database :password`.
+  - Errors must never include plaintext secrets; ex-data is redacted."
   ([] (get-jdbc-url :dev))
   ([profile]
    (let [file (io/file "config/base.edn")
@@ -44,16 +55,42 @@
                 (io/resource "config/base.edn") (aero/read-config (io/resource "config/base.edn") {:profile profile})
                 (io/resource "base.edn") (aero/read-config (io/resource "base.edn") {:profile profile})
                 :else nil)
-         env-url (System/getenv "DATABASE_URL")
-         db-cfg  (:database cfg)]
-     (or env-url
-       (:jdbc-url db-cfg)
-       (when (and db-cfg (every? db-cfg [:host :port :dbname :user]))
-         (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
-           (:host db-cfg) (:port db-cfg) (:dbname db-cfg) (:user db-cfg)
-           (if-let [pwd (:password db-cfg)] (str "&password=" pwd) "")))
-       (throw (ex-info "DATABASE_URL or database config (jdbc-url/host/port/dbname/user) is required"
-                {:config db-cfg}))))))
+         env-url (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
+         db-cfg  (:database cfg)
+         redact-db-cfg (fn [m]
+                         (when (map? m)
+                           (-> m
+                             (dissoc :password)
+                             (update :jdbc-url (fn [s]
+                                                 (when (string? s)
+                                                   (-> s
+                                                     (str/replace #"(?i)(password=)[^&]*" "$1REDACTED")
+                                                     (str/replace #"(?i)(user=)[^&]*" "$1REDACTED")
+                                                     (str/replace #"(?i)://([^:/?#]+):([^@/?#]+)@" "://REDACTED:REDACTED@"))))))))
+         base-url (or env-url
+                    (:jdbc-url db-cfg)
+                    (when (and db-cfg (every? db-cfg [:host :port :dbname]))
+                      (format "jdbc:postgresql://%s:%s/%s"
+                        (:host db-cfg) (:port db-cfg) (:dbname db-cfg)))
+                    (throw (ex-info "DATABASE_URL or database config (jdbc-url/host/port/dbname) is required"
+                             {:database (redact-db-cfg db-cfg)})))
+         has-credentials? (fn [^String s]
+                            (boolean (re-find #"(?i)(password=|user=|://[^/]+:[^@]+@)" s)))]
+     (cond
+       ;; PaaS-style URLs usually already include credentials.
+       (has-credentials? base-url)
+       base-url
+
+       :else
+       (let [user (:user db-cfg)
+             pwd (:password db-cfg)
+             _ (when-not (some-> user str/trim not-empty)
+                 (throw (ex-info "Database user missing in config; required to construct migration JDBC URL"
+                          {:database (redact-db-cfg db-cfg)})))
+             ;; password may be nil for local peer/trust setups, but in most cases it should be set.
+             qs (str "?user=" user (when (some-> pwd str/trim not-empty)
+                                     (str "&password=" pwd)))]
+         (str base-url qs))))))
 
 (def ^:private resources-dir "resources")
 (def ^:private migrations-dir "db/migrations")
@@ -559,7 +596,6 @@
   ;;     (explain 42)
   (make-all-migrations!)
   (migrate!)
-
 
 ;;
   ;; 4) One-time capture of existing DB objects to EDN

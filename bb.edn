@@ -9,6 +9,26 @@
                        :exclusions [metosin/spec-tools]}
         rewrite-clj/rewrite-clj {:mvn/version "1.1.47"}
         aero/aero {:mvn/version "1.1.6"}}
+ :init (do
+         (require '[clojure.java.io :as io])
+         (require '[clojure.string :as str])
+         (defn dotenv
+           "Parse .env in project root; returns a {\"KEY\" \"val\"} map.
+           Skips blank lines and # comments. Safe when .env does not exist."
+           []
+           (let [f (io/file ".env")]
+             (if (.exists f)
+               (->> (str/split-lines (slurp f))
+                 (remove (fn [line]
+                           (or (str/blank? line)
+                             (str/starts-with? (str/trim line) "#"))))
+                 (keep (fn [line]
+                         (let [idx (str/index-of line "=")]
+                           (when (and idx (pos? idx))
+                             [(str/trim (subs line 0 idx))
+                              (subs line (inc idx))]))))
+                 (into {}))
+               {}))))
  :tasks
  {;; iTerm2 session renaming helper
   iterm-rename
@@ -104,11 +124,11 @@
 
   config-audit
   {:doc "Audit frontend config EDN keys for potential unused settings. Usage: bb config-audit [--strict] [--allowlist <path>]",
-   :task (apply shell "bb" "scripts/bb/config_audit.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/config_audit.clj" *command-line-args*)},
 
   validate-frontend-config
   {:doc "Validate frontend config EDN files against Malli specs + DB schema alignment. Usage: bb validate-frontend-config [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
-   :task (apply shell "bb" "scripts/bb/validate_frontend_config.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/validate_frontend_config.clj" *command-line-args*)},
 
   legacy-inventory
   {:doc "Generate a machine-readable inventory of legacy patterns. Writes to resources/legacy-inventory.edn.",
@@ -120,11 +140,11 @@
 
   sync-frontend-config
   {:doc "Sync frontend config EDNs with DB schema (dry-run by default). Usage: bb sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
-   :task (apply shell "bb" "scripts/bb/sync_frontend_config.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/sync_frontend_config.clj" *command-line-args*)},
 
   migrate-and-sync-frontend-config
   {:doc "Run migrations, apply frontend config sync, then validate. Usage: bb migrate-and-sync-frontend-config [--profile <profile>] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
-   :task (apply shell "bb" "scripts/bb/migrate_and_sync_frontend_config.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/migrate_and_sync_frontend_config.clj" *command-line-args*)},
 
   guard-no-concrete-domain
   {:doc "Fail if template/admin/shared contain concrete domain coupling. Usage: bb guard-no-concrete-domain [--strict]",
@@ -202,7 +222,7 @@
    :task (do
            (printf "\033]0;🧪 Backend Tests\007")
            (flush)
-           (shell "clj -X:test"))},
+           (shell {:extra-env (dotenv)} "clj -M:test -m kaocha.runner :app.backend"))},
 
   e2e-test
   {:doc "Run E2E tests (Playwright + headless Chromium against test system on port 8086). Usage: bb e2e-test [--focus NS]",
@@ -215,7 +235,7 @@
                  cmd (if focus-ns
                        (str "clj -M:test -m kaocha.runner --focus " focus-ns " :e2e")
                        "clj -M:test -m kaocha.runner :e2e")]
-             (shell cmd)))},
+             (shell {:extra-env (dotenv)} cmd)))},
 
   fe-test
   {:doc "Alias for frontend tests (same as fe-test-node). Usage: bb fe-test [start] [lines]",
@@ -332,7 +352,7 @@
 
   receipt-ocr-worker
   {:doc "Process pending receipts through OCR (one-shot by default). Usage: bb receipt-ocr-worker [dev|test] [--max-receipts N] [--loop]",
-   :task (apply shell "scripts/bb/expenses/receipt_ocr_worker.sh" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "scripts/bb/expenses/receipt_ocr_worker.sh" *command-line-args*)},
 
   backup-db
   {:doc "Create a backup of dev or test database. Usage: bb backup-db --dev or bb backup-db --test",
@@ -342,7 +362,7 @@
                      (some #{"--test"} args) "test"
                      :else nil)]
            (if env
-             (shell "clj" "-M" "scripts/bb/database/backup_db.clj" env)
+             (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/backup_db.clj" env)
              (do (println "Usage: bb backup-db --dev or bb backup-db --test")
                (println "  --dev   Backup development database")
                (println "  --test  Backup test database"))))},
@@ -357,7 +377,7 @@
                non-flag-args (filter (fn [arg] (not (.startsWith arg "--"))) args)
                backup-file (last non-flag-args)]
            (if (and env backup-file)
-             (shell "clj" "-M" "scripts/bb/database/restore_db_legacy.clj" env backup-file)
+             (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/restore_db_legacy.clj" env backup-file)
              (do (println "Usage: bb restore-db --dev backup_file.sql or bb restore-db --test backup_file.sql")
                (println "  --dev   Restore to development database")
                (println "  --test  Restore to test database")
@@ -375,11 +395,11 @@
                non-flag-args (filter (fn [arg] (not (.startsWith arg "--"))) args)
                backup-file (last non-flag-args)]
            (if (and env backup-file)
-             (do
+             (let [process-env (dotenv)]
                (println "🔄 Step 1/2: Cleaning database...")
-               (shell "clj" "-M" "scripts/bb/database/clean-db.clj" env)
+               (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/clean-db.clj" env)
                (println "🔄 Step 2/2: Restoring from backup...")
-               (shell "clj" "-M" "scripts/bb/database/restore-db.clj" env backup-file))
+               (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/restore-db.clj" env backup-file))
              (do (println "Usage: bb clean-restore-db --dev backup_file.sql or bb clean-restore-db --test backup_file.sql")
                (println "  --dev   Clean restore to development database")
                (println "  --test  Clean restore to test database")
@@ -428,22 +448,22 @@
                      (some #{"--test"} args) "test"
                      :else nil)]
            (if env
-             (shell "clj" "-M" "scripts/bb/database/clean-db.clj" env)
+             (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/clean-db.clj" env)
              (do (println "Usage: bb clean-db --dev or bb clean-db --test")
                (println "  --dev   Clean development database")
                (println "  --test  Clean test database"))))},
 
   delete-articles
   {:doc "Delete ALL articles (and cascades) from the database. Dry-run by default. Usage: bb delete-articles [--dev|--test|dev|test] [--apply] [--yes]",
-   :task (apply shell "clj" "-M" "scripts/bb/database/delete_articles.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/delete_articles.clj" *command-line-args*)},
 
   delete-stores
   {:doc "Delete ALL stores from the database and unmap store_aliases. Dry-run by default. Usage: bb delete-stores [--dev|--test|dev|test] [--apply] [--yes]",
-   :task (apply shell "clj" "-M" "scripts/bb/database/delete_stores.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/delete_stores.clj" *command-line-args*)},
 
   empty-stores-suppliers-receipts
   {:doc "Empty suppliers/stores/aliases/receipts (and dependent expenses + expense_items). Dry-run by default. Usage: bb empty-stores-suppliers-receipts [--dev|--test|dev|test] [--apply] [--yes]",
-   :task (apply shell "clj" "-M" "scripts/bb/database/empty_stores_suppliers_receipts.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/empty_stores_suppliers_receipts.clj" *command-line-args*)},
 
   spellcheck-article-names
   {:doc "Spellcheck `articles.canonical_name` using the JSpell Checker MCP server (RapidAPI via mcp-remote) and write suggestions to an EDN file in the project root.\n\nRequires: Node/npx + a RapidAPI key in env (JSPELL_RAPIDAPI_KEY preferred, or RAPIDAPI_KEY).\n\nUsage: bb spellcheck-article-names [--dev|--test|dev|test] [--out <path>] [--lang <bs|hr|sr|...>] [--limit N] [--max-suggestions N]",
@@ -455,58 +475,59 @@
 
   list-review-required-receipts
   {:doc "List receipts in review_required status with lines-total mismatch diagnosis.\n\nUsage:\n  bb list-review-required-receipts [dev|test] [--full] [--pretty]",
-   :task (apply shell "bb" "scripts/bb/articles/list_review_required_receipts.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/list_review_required_receipts.clj" *command-line-args*)},
 
   list-categories
   {:doc "List article categories (optionally with subcategories) from the DB.\n\nUsage:\n  bb list-categories [dev|test] [--with-subcategories] [--pretty]",
-   :task (apply shell "bb" "scripts/bb/articles/list_categories.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/list_categories.clj" *command-line-args*)},
 
   group-aliases-by-brand
   {:doc "Group unmapped article aliases by detected brand/product family.\n\nShows size tokens and supplier type (restaurant vs retail) to help spot variant\nconflicts BEFORE creating articles.\n\nUsage:\n  bb group-aliases-by-brand [dev|test] [--mapped] [--min-group N] [--json]",
-   :task (apply shell "bb" "scripts/bb/expenses/group_aliases_by_brand.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/expenses/group_aliases_by_brand.clj" *command-line-args*)},
 
   articles-phase1-triage
   {:doc "Build Phase 1 triage summary from pre-generated backlog + brand grouping artifacts.\n\nInputs (must exist):\n  - tmp/phase1-backlog.edn (from list_unmapped_aliases)\n  - tmp/phase1-variant-groups.json (from group-aliases-by-brand --json)\n\nOutputs:\n  - tmp/phase1-triage-summary.edn\n\nUsage:\n  bb articles-phase1-triage",
-   :task (apply shell "bb" "scripts/bb/articles/phase1_triage.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/phase1_triage.clj" *command-line-args*)},
 
   articles-phase1-triage-report
   {:doc "Render Phase 1 triage report Markdown.\n\nInputs (must exist):\n  - tmp/phase1-triage-summary.edn\n\nOutputs:\n  - tmp/phase1-triage-report.md\n\nUsage:\n  bb articles-phase1-triage-report",
-   :task (apply shell "bb" "scripts/bb/articles/phase1_triage_report.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/phase1_triage_report.clj" *command-line-args*)},
 
   validate-article-mappings
   {:doc "Validate existing article alias mappings for suspicious patterns.\n\nDetects size conflicts (different sizes mapped to same article),\nrestaurant/retail mix, and single-alias articles.\n\nUsage:\n  bb validate-article-mappings [dev|test] [--json] [--fix-suggestions]",
-   :task (apply shell "bb" "scripts/bb/expenses/validate_article_mappings.clj" *command-line-args*)},
+   :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/expenses/validate_article_mappings.clj" *command-line-args*)},
 
   check-migrations
   {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "-e" (format "(do (require '[app.template.backend.migrations.alignment.report :as al]) (System/exit (al/exit-code-for-profile :%s)))" env)))},
+           (shell {:extra-env (dotenv)} "clj" "-M" "-e" (format "(do (require '[app.template.backend.migrations.alignment.report :as al]) (System/exit (al/exit-code-for-profile :%s)))" env)))},
 
   seed-admin
   {:doc "Seed or refresh the admin user (default env: dev). Usage: bb seed-admin [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "scripts/bb/database/seed_admin.clj" env))},
+           (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/seed_admin.clj" env))},
 
   seed-categories
   {:doc "Seed or refresh the article categories (default env: dev). Usage: bb seed-categories [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "scripts/bb/database/seed_categories.clj" env))},
+           (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/seed_categories.clj" env))},
 
   seed-countries
   {:doc "Seed global countries reference list (idempotent). Usage: bb seed-countries [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "scripts/bb/database/seed_countries.clj" env))},
+           (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/seed_countries.clj" env))},
 
   seed-bh-cities
   {:doc "Seed Bosnia & Herzegovina cities (~450) from resources/db/seeds/bh_cities.sql. Usage: bb seed-bh-cities [dev|test]",
    :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
+           (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
 
   seed-geo-reference
   {:doc "Seed reference geo data (countries + BH cities). Usage: bb seed-geo-reference [dev|test]",
-   :task (let [env (or (first *command-line-args*) "dev")]
-           (shell "clj" "-M" "scripts/bb/database/seed_countries.clj" env)
-           (shell "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
+   :task (let [env         (or (first *command-line-args*) "dev")
+               process-env (dotenv)]
+           (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/seed_countries.clj" env)
+           (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
 
   clear-rate-limits
   {:doc "Clear all rate limiting data (for development and testing).

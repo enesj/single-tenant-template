@@ -1,2 +1,0 @@
-({:action :drop-column, :field-name :tax-id, :model-name :suppliers}
- {:action :drop-column, :field-name :barcode, :model-name :articles})

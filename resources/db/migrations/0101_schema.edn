@@ -1,8 +1,0 @@
-({:action :create-index,
-  :index-name :uniq-tenant-memberships-active-owner,
-  :model-name :tenant_memberships,
-  :options
-  {:fields [:tenant_id],
-   :unique true,
-   :where [:and [:= :role "owner"] [:= :status "active"]],
-   :type :btree}})

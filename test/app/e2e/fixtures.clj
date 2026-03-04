@@ -10,6 +10,7 @@
    Reuses `app.backend.fixtures/start-test-system` for the backend system."
   (:require
     [app.backend.fixtures :as backend-fixtures]
+    [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
     [system.state :as state]
@@ -123,6 +124,8 @@
 
    Kaocha hooks receive [suite test-plan] and must return suite."
   [suite test-plan]
+  ;; Always keep E2E hermetic with respect to outgoing emails.
+  (gmail-smtp/clear-outbox!)
   ;; 1. Start the backend test system (port 8086, test DB)
   (backend-fixtures/start-test-system suite test-plan)
   ;; 2. Clean the DB for a fresh E2E run
@@ -154,6 +157,7 @@
      (use-fixtures :each fixtures/with-browser-context)"
   [f]
   ;; Keep each test hermetic (DB state) even when running the full :e2e suite.
+  (gmail-smtp/clear-outbox!)
   (truncate-e2e-tables!)
   (let [browser (get-browser)]
     (if browser

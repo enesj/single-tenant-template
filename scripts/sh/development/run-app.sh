@@ -116,7 +116,7 @@ docker compose up -d
 echo "Waiting for Postgres to be ready..."
 MAX_RETRIES=30
 COUNT=0
-until pg_isready -h localhost -p 55432 -U app_user -d single_tenant_pos > /dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
+until pg_isready -h localhost -p 55432 -U app_user -d multi_tenant_pos > /dev/null 2>&1 || [ $COUNT -eq $MAX_RETRIES ]; do
   echo -n "."
   sleep 1
   ((COUNT++))

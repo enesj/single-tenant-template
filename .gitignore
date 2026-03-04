@@ -63,6 +63,7 @@ slips/
 
 # API Credentials - never commit these
 .env
+/.postgres.env
 /test-results/
 
 # Local test output artifacts
@@ -85,6 +86,7 @@ project-templates/
 config/.secrets.edn
 config/secrets.edn
 config/*secrets*
+!config/.secrets.edn.template
 *.key
 *.pem
 api-keys/

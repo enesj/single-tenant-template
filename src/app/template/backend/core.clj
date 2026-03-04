@@ -2,12 +2,14 @@
   "Backend entry point; adjust system startup wiring and lifecycle only."
   (:require
     [aero.core :as aero]
+    [app.admin.backend.services.admin.auth :as admin-auth]
     [app.template.backend.webserver :as webserver]
     [app.template.backend.utils.json-config :as json-config]
     [app.shared.model-naming :as model-naming]
     [app.template.di.config :as template-di]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [clojure.tools.namespace.repl :as tools-repl]
     [hikari-cp.core :as cp]
     [next.jdbc]
@@ -54,21 +56,48 @@
 ;; Replacement Functions for Deleted Dependencies
 ;; ============================================================================
 
+(defn- normalize-profile [p]
+  (cond
+    (keyword? p) p
+    (string? p)
+    (let [s (-> p str str/trim str/lower-case)]
+      (case s
+        ("dev") :dev
+        ("test") :test
+        ("prod" "production") :prod
+        (keyword s)))
+    :else nil))
+
+(defn- resolve-profile [config-options]
+  (or (normalize-profile (:profile config-options))
+    (normalize-profile (System/getProperty "aero.profile"))
+    (normalize-profile (System/getenv "AERO_PROFILE"))
+    :dev))
+
 (defn load-config
-  "Load configuration using Aero - replacement for components/config-component"
+  "Load configuration using Aero.
+
+  Profile resolution order:
+  1) Explicit `:profile` in `config-options`
+  2) JVM system property `aero.profile`
+  3) Environment variable `AERO_PROFILE`
+  4) Default `:dev`
+
+  Notes:
+  - Accepts `prod` and `production` as synonyms (normalized to `:prod`)."
   [config-options]
-  (closeable-data
-    (try
-      (let [profile         (get config-options :profile :dev)        ; Allow profile override, default to :dev
-            config-resource (io/resource "base.edn")]
-        (if config-resource
-          (aero/read-config config-resource {:profile profile})
-          ;; Fallback: try direct file path
-          (let [config-file (io/file "config/base.edn")]
-            (aero/read-config config-file {:profile profile})))) ; Use correct port for tests
-      (catch Exception e
-        (log/error e "Error loading config with Aero, using fallback")
-        (throw e)))))
+  (let [profile (resolve-profile config-options)]
+    (closeable-data
+      (try
+        (let [config-resource (io/resource "base.edn")]
+          (if config-resource
+            (aero/read-config config-resource {:profile profile})
+            ;; Fallback: try direct file path
+            (let [config-file (io/file "config/base.edn")]
+              (aero/read-config config-file {:profile profile}))))
+        (catch Exception e
+          (log/error e "Error loading config with Aero")
+          (throw e))))))
 
 (defn load-models-data
   "Load models data from resources and attach kebab-case metadata for runtime use."
@@ -91,37 +120,57 @@
         (throw e)))))
 
 (defn create-conn-pool
-  "Create database connection pool - replacement for db/create-conn-pool"
+  "Create database connection pool.
+
+  Security notes:
+  - Avoid embedding credentials in the JDBC URL. Provide credentials via
+    `:username` / `:password` (Hikari properties) instead.
+  - Never include raw JDBC URLs in exception data unless sanitized.
+
+  Supported sources:
+  - `DATABASE_URL` env var (highest priority; commonly provided in PaaS)
+  - `:database :jdbc-url` from app config
+  - `:database :host/:port/:dbname` from app config"
   [config]
-  (let [db-config       (:database config)
-        hikari-defaults (:hikari-cp config)
-
-        ;; Build JDBC URL strictly from provided config (or environment)
-        db-name         (or (:dbname db-config)
-                          (throw (ex-info "Database name missing in config" {:database db-config})))
-        jdbc-url        (or (:jdbc-url db-config)
-                          (when (every? db-config [:host :port :dbname :user])
-                            (format "jdbc:postgresql://%s:%s/%s?user=%s%s"
-                              (:host db-config) (:port db-config) db-name (:user db-config)
-                              (if-let [pwd (:password db-config)] (str "&password=" pwd) "")))
-                          (throw (ex-info "Provide :jdbc-url or host/port/dbname/user in :database config"
-                                   {:database db-config})))
-
-        ;; Validate that we're not using the system username as database name
-        _               (when (re-find #"database.*enes" (str jdbc-url))
-                          (throw (ex-info "Configuration error: database name defaulting to system username"
-                                   {:jdbc-url jdbc-url
-                                    :user     (System/getProperty "user.name")})))
-
-        hikari-config   (merge hikari-defaults
-                          {:pool-name     "db-pool"
-                           :adapter       "postgresql"
-                           :jdbc-url      jdbc-url
-                           :database-name db-name
-                           :server-name   (:host db-config)
-                           :port-number   (:port db-config)
-                           :username      (:user db-config)
-                           :password      (:password db-config)})]
+  (let [db-config        (:database config)
+        hikari-defaults  (:hikari-cp config)
+        db-name          (or (:dbname db-config)
+                           (throw (ex-info "Database name missing in config" {:config-key [:database :dbname]})))
+        system-user      (System/getProperty "user.name")
+        sanitize-jdbc-url (fn [s]
+                            (when (string? s)
+                              (-> s
+                                (str/replace #"(?i)(password=)[^&]*" "$1REDACTED")
+                                (str/replace #"(?i)(user=)[^&]*" "$1REDACTED")
+                                (str/replace #"(?i)://([^:/?#]+):([^@/?#]+)@" "://REDACTED:REDACTED@"))))
+        env-url          (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
+        base-jdbc-url    (or env-url
+                           (:jdbc-url db-config)
+                           (when (every? db-config [:host :port :dbname])
+                             (format "jdbc:postgresql://%s:%s/%s"
+                               (:host db-config) (:port db-config) db-name))
+                           (throw (ex-info "Provide DATABASE_URL or :database jdbc-url/host/port/dbname"
+                                    {:database (dissoc db-config :password)})))
+        hikari-config    (merge hikari-defaults
+                           {:pool-name     "db-pool"
+                            :adapter       "postgresql"
+                            :jdbc-url      base-jdbc-url
+                            :database-name db-name
+                            :server-name   (:host db-config)
+                            :port-number   (:port db-config)
+                            :username      (:user db-config)
+                            :password      (:password db-config)})
+        ;; Guardrail: if someone provided a URL with credentials, ensure we don't leak it in errors.
+        _                (when (and (string? base-jdbc-url)
+                                 (re-find #"(?i)password=" base-jdbc-url))
+                           (log/warn {:event :db/jdbc-url-contains-password
+                                      :hint "Prefer setting password via :database :password (or env vars) instead of embedding it in DATABASE_URL/:jdbc-url"}))
+        ;; Validate that we're not using the system username as database name (common misconfig).
+        _                (when (= db-name system-user)
+                           (throw (ex-info "Configuration error: suspicious database name (looks like system username)"
+                                    {:database-name db-name
+                                     :jdbc-url      (sanitize-jdbc-url base-jdbc-url)
+                                     :user          system-user})))]
     (cp/make-datasource hikari-config)))
 
 (defn new-scheduler
@@ -154,29 +203,99 @@
   (let [services (template-di/create-service-container config database models-data nil)]
     (closeable-data services #(template-di/stop-services! services))))
 
-(defn my-system [config-options]
-  (fn [do-with-state]
-    (with-open [config            (load-config config-options)
-                models-data       (load-models-data)
-                database          (create-conn-pool @config)
-                service-container (try
-                                    (create-service-container database @models-data @config)
-                                    (catch Exception e
-                                      (log/error e "Service container creation failed:" (.getMessage e))
-                                      nil))
-                webserver         (webserver/create-webserver
-                                    (-> @config :webserver :host)
-                                    (-> @config :webserver :port)
-                                    database
-                                    @service-container)]
+(def ^:private default-dev-admin
+  {:email "admin@example.com"
+   :password "admin123"
+   :full_name "System Administrator"
+   :role "owner"})
 
-      (log/info "🚀 Starting system - host:" (-> @config :webserver :host) ", port:" (-> @config :webserver :port) "- Auto-restart works!")
-      (json-config/init!)
-      (do-with-state {:config            @config
-                      :database          database
-                      :models-data       @models-data
-                      :service-container @service-container
-                      :ws                webserver}))))
+(defn- ensure-default-dev-admin!
+  "Best-effort dev-only admin seed.
+
+  Ensures a default admin exists on a fresh dev database so `/admin/api/login`
+  works out-of-the-box.
+
+  Never overwrites existing admins or passwords."
+  [db]
+  (try
+    (let [{:keys [email password full_name role]} default-dev-admin]
+      (when-not (admin-auth/find-admin-by-email db email)
+        (try
+          (admin-auth/create-admin! db {:email email
+                                        :password password
+                                        :full_name full_name
+                                        :role role})
+          (log/info "Seeded default dev admin" {:email email :role role})
+          (catch Exception e
+            (log/warn e "Failed to seed default dev admin with preferred role; retrying with role=admin" {:email email})
+            (try
+              (admin-auth/create-admin! db {:email email
+                                            :password password
+                                            :full_name full_name
+                                            :role "admin"})
+              (log/info "Seeded default dev admin" {:email email :role "admin"})
+              (catch Exception e2
+                (log/warn e2 "Failed to seed default dev admin" {:email email})))))))
+    (catch Exception e
+      (log/warn e "Skipping default dev admin seed (DB not ready?)"))))
+
+(defn- validate-config!
+  "Fail fast if required secrets are absent.
+  Called after load-config but before other resources are opened."
+  [config profile]
+  (let [db-url-override (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
+        problems        (cond-> []
+                          (and (not db-url-override)
+                            (nil? (get-in config [:database :password])))
+                          (conj "[:database :password] — set DB_DEV_PASSWORD or DB_TEST_PASSWORD env var")
+
+                          (and (= :prod profile)
+                            (nil? (get-in config [:oauth :google :client-secret])))
+                          (conj "[:oauth :google :client-secret] — set GOOGLE_OAUTH_CLIENT_SECRET env var")
+
+                          (and (= :prod profile)
+                            (nil? (get-in config [:stripe :api-key])))
+                          (conj "[:stripe :api-key] — set STRIPE_LIVE_API_KEY env var")
+
+                          (and (= :prod profile)
+                            (nil? (get-in config [:email :smtp :pass]))
+                            (nil? (get-in config [:email :postmark :api-key])))
+                          (conj "[:email] — set SMTP_PASS or POSTMARK_API_KEY env var"))]
+    (when (seq problems)
+      (throw
+        (ex-info
+          (str "Missing required configuration secrets. "
+            "See config/.secrets.edn.template or .env.example.\n"
+            (str/join "\n" (map #(str "  " %) problems)))
+          {:profile profile :missing problems})))))
+
+(defn my-system [config-options]
+  (let [profile (resolve-profile config-options)]
+    (fn [do-with-state]
+      (with-open [config (load-config config-options)]
+        (validate-config! @config profile)
+        (with-open [models-data       (load-models-data)
+                    database          (let [db (create-conn-pool @config)]
+                                        (when (= :dev profile)
+                                          (ensure-default-dev-admin! db))
+                                        db)
+                    service-container (try
+                                        (create-service-container database @models-data @config)
+                                        (catch Exception e
+                                          (log/error e "Service container creation failed:" (.getMessage e))
+                                          (throw e)))
+                    webserver         (webserver/create-webserver
+                                        (-> @config :webserver :host)
+                                        (-> @config :webserver :port)
+                                        database
+                                        @service-container)]
+          (log/info "🚀 Starting system - host:" (-> @config :webserver :host) ", port:" (-> @config :webserver :port) "- Auto-restart works!")
+          (json-config/init!)
+          (do-with-state {:config            @config
+                          :database          database
+                          :models-data       @models-data
+                          :service-container @service-container
+                          :ws                webserver}))))))
 
 (def with-my-system
   (my-system {:interval "every now and then"}))

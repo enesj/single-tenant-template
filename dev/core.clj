@@ -1,13 +1,14 @@
 (ns core
   (:require
-   [app.template.backend.core :as backend]
-   [nrepl.server :as nrepl]
-   [shadow.cljs.devtools.api :as shadow.api]
-   [shadow.cljs.devtools.server :as shadow.server]
-   [system.core :refer [restart-system start-system]]
-   [system.state :as system-state]
-   [system.watchers :as watchers]
-   [taoensso.timbre :as log]))
+    [app.template.backend.core :as backend]
+    [clojure.java.io :as io]
+    [nrepl.server :as nrepl]
+    [shadow.cljs.devtools.api :as shadow.api]
+    [shadow.cljs.devtools.server :as shadow.server]
+    [system.core :refer [restart-system start-system]]
+    [system.state :as system-state]
+    [system.watchers :as watchers]
+    [taoensso.timbre :as log]))
 
 (defn suppress-stderr []
   (let [env (System/getenv "DEV_SUPPRESS_STDERR")
@@ -28,17 +29,25 @@
              :file-path file-path})
   (restart-system file-path))
 
-(defn write-postgres-env-file []
+(defn write-postgres-env-file
+  "Write a local Postgres env file for tooling (MCP, scripts, etc).
+
+  Security/UX notes:
+  - This file contains credentials; keep it out of git.
+  - We intentionally write under `tmp/` to avoid accidental commits."
+  []
   (let [config (backend/load-config {})
         {:keys [host port dbname user password]} (:database @config)
+        env-file "tmp/.postgres.env"
         env-content (str "POSTGRES_HOST=" host "\n"
                       "POSTGRES_PORT=" port "\n"
                       "POSTGRES_DATABASE=" dbname "\n"
                       "POSTGRES_USER=" user "\n"
                       "POSTGRES_PASSWORD=" password "\n")]
-    (spit ".postgres.env" env-content)
+    (io/make-parents env-file)
+    (spit env-file env-content)
     (log/info {:event :dev/postgres-env-written
-               :file ".postgres.env"
+               :file env-file
                :host host
                :port port
                :dbname dbname

@@ -1,3 +1,0 @@
-({:action :drop-index,
-  :index-name :idx-users-auth-provider-provider-user-id-external,
-  :model-name :users})

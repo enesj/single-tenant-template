@@ -23,7 +23,7 @@
                              :email (str "inv-test-" suffix "-" id "@example.com")
                              :full_name (str "User " suffix)
                              :password_hash "placeholder"
-                             :role [:cast "member" :user_role]
+
                              :status [:cast "active" :user_status]
                              :auth_provider "password"
                              :email_verified false

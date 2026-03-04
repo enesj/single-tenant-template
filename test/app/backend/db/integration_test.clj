@@ -7,17 +7,17 @@
    
    Tests use transaction rollback for isolation - no data persists."
   (:require
-   [app.backend.fixtures :as fixtures]
-   [app.admin.backend.services.admin.audit :as audit-service]
-   [app.admin.backend.services.admin.auth :as admin-auth]
-   [app.admin.backend.services.admin.users :as user-service]
+    [app.backend.fixtures :as fixtures]
+    [app.admin.backend.services.admin.audit :as audit-service]
+    [app.admin.backend.services.admin.auth :as admin-auth]
+    [app.admin.backend.services.admin.users :as user-service]
     [clojure.set :as set]
-   [clojure.test :refer [deftest is testing use-fixtures]]
-   [honey.sql :as hsql]
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [honey.sql :as hsql]
     [java-time.api :as jt]
     [next.jdbc :as jdbc])
   (:import
-   [java.util UUID]))
+    [java.util UUID]))
 
 ;; ============================================================================
 ;; Test Fixtures - Transaction Rollback for Isolation
@@ -42,19 +42,18 @@
 
 (defn- create-test-user!
   "Create a test user within the current transaction"
-  [db _admin-id & [{:keys [email full_name role status] :as _opts}]]
-  (let [user-id (UUID/randomUUID)
-      now (jt/instant)
-        user-email (or email (str "user-" (UUID/randomUUID) "@test.com"))]
+  [db _admin-id & [{:keys [email full_name status] :as _opts}]]
+  (let [user-id     (UUID/randomUUID)
+        now         (jt/instant)
+        user-email  (or email (str "user-" (UUID/randomUUID) "@test.com"))]
     ;; Insert user directly with all required fields
-    ;; Note: PostgreSQL enum types use snake_case (user_role, user_status)
+    ;; Note: PostgreSQL enum types use snake_case (user_status)
     (jdbc/execute! db
       (hsql/format {:insert-into :users
                     :values [{:id user-id
                               :email user-email
                               :full_name (or full_name "Test User")
                               :password_hash "test-hash-not-real"
-                              :role [:cast (or role "member") :user_role]
                               :status [:cast (or status "active") :user_status]
                               :email_verified false
                               :auth_provider "email"
@@ -105,9 +104,9 @@
     (when-let [db fixtures/*test-db*]
       (let [email (str "test-" (UUID/randomUUID) "@example.com")
             _ (admin-auth/create-admin! db {:email email
-                                             :password "secure-password-123"
-                                             :full_name "Test Admin"
-                                             :role "admin"})
+                                            :password "secure-password-123"
+                                            :full_name "Test Admin"
+                                            :role "admin"})
             admin (admin-auth/find-admin-by-email db email)
             admin-plain (plain-keys admin)]
         (is (some? admin))
@@ -120,9 +119,9 @@
       (let [email (str "auth-" (UUID/randomUUID) "@example.com")
             password "correct-password-123"
             _ (admin-auth/create-admin! db {:email email
-                                             :password password
-                                             :full_name "Auth Test"
-                                             :role "admin"})
+                                            :password password
+                                            :full_name "Auth Test"
+                                            :role "admin"})
             authenticated (admin-auth/authenticate-admin db email password)
             authenticated-plain (plain-keys authenticated)]
         (is (some? authenticated))
@@ -132,9 +131,9 @@
     (when-let [db fixtures/*test-db*]
       (let [email (str "wrongpw-" (UUID/randomUUID) "@example.com")
             _ (admin-auth/create-admin! db {:email email
-                                             :password "correct-password"
-                                             :full_name "Wrong PW Test"
-                                             :role "admin"})
+                                            :password "correct-password"
+                                            :full_name "Wrong PW Test"
+                                            :role "admin"})
             authenticated (admin-auth/authenticate-admin db email "wrong-password")]
         (is (nil? authenticated))))))
 
@@ -142,10 +141,10 @@
   (testing "can find admin by ID"
     (when-let [db fixtures/*test-db*]
       (let [created-admin (create-test-admin! db)
-        created-admin-plain (plain-keys created-admin)
-        admin-id (:id created-admin-plain)
-        found-admin (admin-auth/find-admin-by-id db admin-id)
-        found-admin-plain (plain-keys found-admin)]
+            created-admin-plain (plain-keys created-admin)
+            admin-id (:id created-admin-plain)
+            found-admin (admin-auth/find-admin-by-id db admin-id)
+            found-admin-plain (plain-keys found-admin)]
         (is (some? found-admin))
         (is (= admin-id (:id found-admin-plain)))))))
 
@@ -157,13 +156,12 @@
   (testing "can create user with valid data"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-        admin-plain (plain-keys admin)
-        admin-id (:id admin-plain)
-        email (str "user-" (UUID/randomUUID) "@example.com")
-        created-user (create-test-user! db admin-id {:email email
-                         :full_name "Test User"
-                         :role "member"})
-        created-user-plain (plain-keys created-user)]
+            admin-plain (plain-keys admin)
+            admin-id (:id admin-plain)
+            email (str "user-" (UUID/randomUUID) "@example.com")
+            created-user (create-test-user! db admin-id {:email email
+                                                         :full_name "Test User"})
+            created-user-plain (plain-keys created-user)]
         (is (some? created-user))
         (is (= email (:email created-user-plain)))))))
 
@@ -171,8 +169,8 @@
   (testing "can list users"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-        admin-plain (plain-keys admin)
-        admin-id (:id admin-plain)
+            admin-plain (plain-keys admin)
+            admin-id (:id admin-plain)
             ;; Create some test users
             _ (create-test-user! db admin-id {:email (str "list1-" (UUID/randomUUID) "@test.com")})
             _ (create-test-user! db admin-id {:email (str "list2-" (UUID/randomUUID) "@test.com")})
@@ -183,13 +181,13 @@
   (testing "can search users by email"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-        admin-plain (plain-keys admin)
-        admin-id (:id admin-plain)
+            admin-plain (plain-keys admin)
+            admin-id (:id admin-plain)
             unique-prefix (str "searchable-" (UUID/randomUUID))
             email (str unique-prefix "@test.com")
             _ (create-test-user! db admin-id {:email email :full_name "Searchable User"})
-        results (user-service/list-all-users db {:search unique-prefix})
-        result-plain (plain-keys (first results))]
+            results (user-service/list-all-users db {:search unique-prefix})
+            result-plain (plain-keys (first results))]
         (is (= 1 (count results)))
         (is (= email (:email result-plain)))))))
 
@@ -202,8 +200,8 @@
     (when-let [db fixtures/*test-db*]
       ;; First create admin and user to generate audit logs
       (let [admin (create-test-admin! db)
-        admin-plain (plain-keys admin)
-        admin-id (:id admin-plain)
+            admin-plain (plain-keys admin)
+            admin-id (:id admin-plain)
             _ (create-test-user! db admin-id)
             logs (audit-service/get-audit-logs db {:limit 10})]
         ;; Should be able to retrieve logs (may be empty if audit not triggered)
@@ -219,9 +217,9 @@
       ;; Create some data
       (let [email (str "rollback-test-" (UUID/randomUUID) "@example.com")
             _ (admin-auth/create-admin! db {:email email
-                                             :password "test-pw"
-                                             :full_name "Rollback Test"
-                                             :role "admin"})
+                                            :password "test-pw"
+                                            :full_name "Rollback Test"
+                                            :role "admin"})
             admin (admin-auth/find-admin-by-email db email)]
         ;; Admin should exist within this transaction
         (is (some? admin))
@@ -238,15 +236,15 @@
     (when-let [db fixtures/*test-db*]
       (let [email (str "unique-" (UUID/randomUUID) "@example.com")
             _ (admin-auth/create-admin! db {:email email
-                                             :password "test-pw"
-                                             :full_name "First Admin"
-                                             :role "admin"})]
+                                            :password "test-pw"
+                                            :full_name "First Admin"
+                                            :role "admin"})]
         ;; Second admin with same email should fail
         (is (thrown? Exception
               (admin-auth/create-admin! db {:email email
-                                             :password "test-pw-2"
-                                             :full_name "Duplicate Admin"
-                                             :role "admin"})))))))
+                                            :password "test-pw-2"
+                                            :full_name "Duplicate Admin"
+                                            :role "admin"})))))))
 
 (deftest password-hash-stored-test
   (testing "password is hashed, not stored in plain text"
@@ -254,9 +252,9 @@
       (let [email (str "hash-" (UUID/randomUUID) "@example.com")
             plain-password "my-secret-password"
             _ (admin-auth/create-admin! db {:email email
-                                             :password plain-password
-                                             :full_name "Hash Test"
-                                             :role "admin"})
+                                            :password plain-password
+                                            :full_name "Hash Test"
+                                            :role "admin"})
             admin (admin-auth/find-admin-by-email db email)
             admin-plain (plain-keys admin)
             stored-hash (:password_hash admin-plain)]
@@ -281,11 +279,11 @@
   (testing "pagination works correctly"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
-        admin-plain (plain-keys admin)
-        admin-id (:id admin-plain)
+            admin-plain (plain-keys admin)
+            admin-id (:id admin-plain)
             ;; Create 5 users
             _ (dotimes [i 5]
-                (create-test-user! db admin-id 
+                (create-test-user! db admin-id
                   {:email (str "page-" i "-" (UUID/randomUUID) "@test.com")}))
             ;; Get first page
             page1 (user-service/list-all-users db {:limit 2 :offset 0})

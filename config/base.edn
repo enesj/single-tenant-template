@@ -1,20 +1,25 @@
 {:secrets   #or [#include ".secrets.edn"
-                 #include #join [#env HOME "/.secrets.edn"]]
+                 #include #join [#env HOME "/.secrets.edn"]
+                 {}]
 
  :database  {:dbtype   "postgresql"
              :host     "localhost"
              :user     "app_user"
              :password #profile
-                        {:dev  #ref [:secrets :db :dev-password]
-                         :test #ref [:secrets :db :test-password]}
+                        {:dev  #or [#env DB_DEV_PASSWORD
+                                    #ref [:secrets :db :dev-password]]
+                         :test #or [#env DB_TEST_PASSWORD
+                                    #ref [:secrets :db :test-password]]}
             ;; Profile-specific settings
              :port     #profile {:dev  55432
                                  :test 55433}
              :dbname   #profile {:dev  "multi_tenant_pos"
                                  :test "multi_tenant_pos_test"}
              :jdbc-url #profile
-                        {:dev  #join ["jdbc:postgresql://localhost:55432/multi_tenant_pos?user=app_user&password=" #ref [:secrets :db :dev-password]]
-                         :test #join ["jdbc:postgresql://localhost:55433/multi_tenant_pos_test?user=app_user&password=" #ref [:secrets :db :test-password]]}}
+                        {:dev  #join ["jdbc:postgresql://localhost:55432/multi_tenant_pos?user=app_user&password="
+                                      #or [#env DB_DEV_PASSWORD #ref [:secrets :db :dev-password]]]
+                         :test #join ["jdbc:postgresql://localhost:55433/multi_tenant_pos_test?user=app_user&password="
+                                      #or [#env DB_TEST_PASSWORD #ref [:secrets :db :test-password]]]}}
 
  ;; HikariCP Connection Pool Configuration
  :hikari-cp {:maximum-pool-size        20
@@ -40,8 +45,10 @@
              :ttl  3600}
 
  ;; OAuth Configuration (optional)
- :oauth     {:google {:client-id         #ref [:secrets :oauth :google :client-id]
-                      :client-secret     #ref [:secrets :oauth :google :client-secret]
+ :oauth     {:google {:client-id         #or [#env GOOGLE_OAUTH_CLIENT_ID
+                                              #ref [:secrets :oauth :google :client-id]]
+                      :client-secret     #or [#env GOOGLE_OAUTH_CLIENT_SECRET
+                                              #ref [:secrets :oauth :google :client-secret]]
                       :scopes            ["email" "profile" "openid"]
                       :authorize-uri     "https://accounts.google.com/o/oauth2/auth"
                       :access-token-uri  "https://oauth2.googleapis.com/token"
@@ -52,8 +59,10 @@
                       :launch-uri        "/login/google"
                       :landing-uri       "/"
                       :basic-auth?       false}
-             :github {:client-id         #ref [:secrets :oauth :github :client-id]
-                      :client-secret     #ref [:secrets :oauth :github :client-secret]
+             :github {:client-id         #or [#env GITHUB_OAUTH_CLIENT_ID
+                                              #ref [:secrets :oauth :github :client-id]]
+                      :client-secret     #or [#env GITHUB_OAUTH_CLIENT_SECRET
+                                              #ref [:secrets :oauth :github :client-secret]]
                       :scopes            ["user:email"]
                       :authorize-uri     "https://github.com/login/oauth/authorize"
                       :access-token-uri  "https://github.com/login/oauth/access_token"
@@ -67,13 +76,19 @@
 
  ;; Stripe Configuration (optional for template)
  :stripe    {:api-key                 #profile
-                                       {:dev  #ref [:secrets :stripe :test-api-key]
-                                        :test #ref [:secrets :stripe :test-api-key]
-                                        :prod #ref [:secrets :stripe :live-api-key]}
+                                       {:dev  #or [#env STRIPE_TEST_API_KEY
+                                                   #ref [:secrets :stripe :test-api-key]]
+                                        :test #or [#env STRIPE_TEST_API_KEY
+                                                   #ref [:secrets :stripe :test-api-key]]
+                                        :prod #or [#env STRIPE_LIVE_API_KEY
+                                                   #ref [:secrets :stripe :live-api-key]]}
              :webhook-endpoint-secret #profile
-                                       {:dev  #ref [:secrets :stripe :test-webhook-secret]
-                                        :test #ref [:secrets :stripe :test-webhook-secret]
-                                        :prod #ref [:secrets :stripe :live-webhook-secret]}
+                                       {:dev  #or [#env STRIPE_TEST_WEBHOOK_SECRET
+                                                   #ref [:secrets :stripe :test-webhook-secret]]
+                                        :test #or [#env STRIPE_TEST_WEBHOOK_SECRET
+                                                   #ref [:secrets :stripe :test-webhook-secret]]
+                                        :prod #or [#env STRIPE_LIVE_WEBHOOK_SECRET
+                                                   #ref [:secrets :stripe :live-webhook-secret]]}
              :api-version             "2024-12-18"
              :max-network-retries     3
              :timeout                 80000
@@ -84,64 +99,74 @@
                                        :insecure?         false}}
 
  ;; Email Configuration - Choose between :postmark or :gmail-smtp
- :email     {:type :gmail-smtp  ; Change to :postmark when you have a domain
-
-             ;; Postmark configuration (for production)
-             :postmark {:api-key    #ref [:secrets :postmark :api-key]
-                        :from-email #ref [:secrets :postmark :from-email]}
-
-             ;; Gmail SMTP configuration (for development)
-             :smtp {:host #ref [:secrets :gmail :smtp-host]
-                    :port #ref [:secrets :gmail :smtp-port]
-                    :user #ref [:secrets :gmail :smtp-user]
-                    :pass #ref [:secrets :gmail :smtp-pass]
-                    :tls  true}
-             :from-email #ref [:secrets :gmail :from-email]}
+ :email {:type :gmail-smtp
+         :postmark {:api-key    #or [#env POSTMARK_API_KEY
+                                     #ref [:secrets :postmark :api-key]]
+                    :from-email #or [#env POSTMARK_FROM_EMAIL
+                                     #ref [:secrets :postmark :from-email]]}
+         :smtp #profile {:dev  {:host #or [#env SMTP_HOST #ref [:secrets :gmail :smtp-host]]
+                                :port #or [#ref [:secrets :gmail :smtp-port] 587]
+                                :user #or [#env SMTP_USER #ref [:secrets :gmail :smtp-user]]
+                                :pass #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
+                                :tls  true}
+                         :test {:transport :in-memory}
+                         :prod {:host #or [#env SMTP_HOST #ref [:secrets :gmail :smtp-host]]
+                                :port #or [#ref [:secrets :gmail :smtp-port] 587]
+                                :user #or [#env SMTP_USER #ref [:secrets :gmail :smtp-user]]
+                                :pass #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
+                                :tls  true}}
+         :from-email #profile {:dev  #or [#env SMTP_FROM_EMAIL
+                                          #ref [:secrets :gmail :from-email]]
+                               :test "test@example.com"
+                               :prod #or [#env SMTP_FROM_EMAIL
+                                          #ref [:secrets :gmail :from-email]]}}
 
  ;; Google Places API configuration (optional)
- ;; - Keep secrets (API keys) in config/.secrets.edn
- :places {:api-key #ref [:secrets :places :api-key]
-          :region-code "BA"
+ ;; - Keep secrets (API keys) in config/.secrets.edn or env vars
+ :places {:api-key       #or [#env GOOGLE_PLACES_API_KEY
+                              #ref [:secrets :places :api-key]]
+          :region-code   "BA"
           :language-code "bs"
-          :timeout-ms 3000
-          :max-results 5
+          :timeout-ms    3000
+          :max-results   5
           :currency-region-map {"BAM" "BA"
                                 "EUR" "HR"
                                 "USD" "US"}
           ;; Optional bias for short/ambiguous queries
-          :location-bias {:circle {:lat 43.8563
-                                   :lng 18.4131
+          :location-bias {:circle {:lat      43.8563
+                                   :lng      18.4131
                                    :radius-m 50000.0}}}
 
  ;; Serper.dev configuration (optional)
- :serper {:api-key #ref [:secrets :serper :api-key]
-          :base-url "https://google.serper.dev"
-          :endpoint "/search"
+ :serper {:api-key    #or [#env SERPER_API_KEY
+                           #ref [:secrets :serper :api-key]]
+          :base-url   "https://google.serper.dev"
+          :endpoint   "/search"
           :timeout-ms 4000
-          :gl "ba"
-          :hl "bs"}
+          :gl         "ba"
+          :hl         "bs"}
 
  ;; Cerebras configuration (optional)
  ;; - Keep secrets (API keys) in env / config/.secrets.edn
  ;; - Receipt refinement is controlled per-user via the Expenses Settings toggle.
  ;; - The Cerebras integration is considered available when a Cerebras API key is present.
- :cerebras  {:base-url "https://api.cerebras.ai/v1"
-             :model "zai-glm-4.7"
+ :cerebras  {:base-url           "https://api.cerebras.ai/v1"
+             :model              "zai-glm-4.7"
              :refine-concurrency 5
-             :refine-timeout-ms 60000
+             :refine-timeout-ms  60000
              ;; Prevent structured-output truncation (e.g. finish_reason=length)
              ;; by explicitly budgeting completion tokens for the refine step.
-             :refine-max-tokens 32000
-             :conn-timeout-ms 5000
-             :socket-timeout-ms 60000}
+             :refine-max-tokens  32000
+             :conn-timeout-ms    5000
+             :socket-timeout-ms  60000}
 
  ;; Tenant provisioning defaults
  ;; These are copied into each new tenant's lookup tables on creation.
  ;; The first payer_type with :is-default true becomes the tenant's default.
- :tenant-defaults {:payer-types [{:label "Cash"          :is-default true}
-                                 {:label "Credit Card"   :is-default false}
-                                 {:label "Debit Card"    :is-default false}
-                                 {:label "Bank Transfer" :is-default false}]
+ :tenant-defaults {:payer-types        [{:label "Cash"          :is-default true}
+                                        {:label "Credit Card"   :is-default false}
+                                        {:label "Debit Card"    :is-default false}
+                                        {:label "Bank Transfer" :is-default false}]
                    :expense-categories [{:name "Groceries"}
                                         {:name "Transport"}
                                         {:name "Utilities"}
