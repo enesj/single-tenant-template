@@ -47,7 +47,7 @@ __pycache__/
 /resources/public/
 !resources/public/index.html
 resources/public/assets/css/*.css
-package-lock.json
+# package-lock.json tracked for reproducible production builds
 /scripts/dev-frontend-files.txt
 /scripts/frontend-files.txt
 /hosting.iml
