@@ -17,6 +17,8 @@ WORKDIR /build
 # -- Dependency caching layer --
 # Copy dependency descriptors first so npm/clj deps are cached across builds
 COPY package.json package-lock.json ./
+# Increment CACHE_BUST when system-level deps change (e.g. new apt packages)
+ARG CACHE_BUST=2
 RUN npm ci
 
 COPY deps.edn ./
