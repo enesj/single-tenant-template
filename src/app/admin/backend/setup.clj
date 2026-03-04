@@ -51,6 +51,10 @@
         (println "You can now login at http://" host ":" port "/admin/login"))
       (println "You can now login at http://localhost:8085/admin/login"))
     (println "Email: admin@example.com")
-    (println "Password: admin123")))
+    (println "Password: admin123")
+    (println)
+    (println "Optional: seed reference geo data (countries + BH cities):")
+    (println "  bb seed-geo-reference dev")
+    (println "  bb seed-geo-reference test")))
 
 

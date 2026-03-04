@@ -111,6 +111,7 @@
    :default-limit 500
    :default-order-by "country"
    :required-fields [:country :code]
+   :has-count? true
    :parse-id (fn [v]
                (let [s (some-> v str str/trim)]
                  (if (seq s)

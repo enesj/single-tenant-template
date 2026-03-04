@@ -14,28 +14,38 @@
     [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(def ^:private receipts-entity-spec
+(defn- receipts-entity-spec
+  [t]
   {:id :receipts
-   :fields [{:id :original-filename :label "original filename" :type :text}
+   :fields [{:id :original-filename
+             :label (t :common/original-filename)
+             :type :text}
             {:id :status
-             :label "status"
+             :label (t :common/status)
              :type :select
              :input-type "select"
-             :options [{:value "uploaded" :label "Uploaded"}
-                       {:value "parsing" :label "Parsing"}
-                       {:value "parsed" :label "Parsed"}
-                       {:value "extracting" :label "Extracting"}
-                       {:value "extracted" :label "Extracted"}
-                       {:value "refining" :label "Refining"}
-                       {:value "review_required" :label "Review required"}
-                       {:value "approved" :label "Approved"}
-                       {:value "posted" :label "Posted"}
-                       {:value "failed" :label "Failed"}]}
-            {:id :supplier-guess :label "supplier guess" :type :text}
-            ;; Single column: show total; include line total only when it differs.
-            {:id :total-display :label "total" :type :text}
-            {:id :created-at :label "created at" :type :datetime}
-            {:id :updated-at :label "updated at" :type :datetime}]})
+             :options [{:value "uploaded" :label (t :receipts/status-uploaded)}
+                       {:value "parsing" :label (t :receipts/status-parsing)}
+                       {:value "parsed" :label (t :receipts/status-parsed)}
+                       {:value "extracting" :label (t :receipts/status-extracting)}
+                       {:value "extracted" :label (t :receipts/status-extracted)}
+                       {:value "refining" :label (t :receipts/status-refining)}
+                       {:value "review_required" :label (t :receipts/status-review-required)}
+                       {:value "approved" :label (t :receipts/status-approved)}
+                       {:value "posted" :label (t :receipts/status-posted)}
+                       {:value "failed" :label (t :receipts/status-failed)}]}
+            {:id :supplier-guess
+             :label (t :common/supplier-guess)
+             :type :text}
+            {:id :total-display
+             :label (t :common/total)
+             :type :text}
+            {:id :created-at
+             :label (t :common/created-at)
+             :type :datetime}
+            {:id :updated-at
+             :label (t :common/updated-at)
+             :type :datetime}]})
 
 (def ^:private receipt-processing-statuses
   #{"uploaded" "parsing" "parsed" "extracting" "refining"})
@@ -118,7 +128,7 @@
                                                      (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id]))}]}]
                         ;; Add OCR group when allowed
                         (and can-ocr? ocr-allowed?)
-                        (conj {:group-title "OCR"
+                        (conj {:group-title (t :receipts/ocr-group)
                                :items [{:id "parse-ocr"
                                         :icon "🔍"
                                         :label (t :receipts/parse-ocr-label)
@@ -134,7 +144,7 @@
 (defui receipts-list-page
   []
   (let [t (use-t)
-        title "Receipts"
+        title (t :receipts/title)
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
@@ -292,7 +302,7 @@
             ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
               ($ list-view
                 {:entity-name :receipts
-                 :entity-spec receipts-entity-spec
+                 :entity-spec (receipts-entity-spec t)
                  :title title
                  :display-settings display-settings
                  :custom-actions (fn [receipt]

@@ -50,6 +50,20 @@
    :column-metadata
    {"article_canonical_name" {:label "Article"}}})
 
+(def ^:private article-aliases-table-columns-i18n
+  {:available-columns
+   ["supplier_display_name"
+    "article_canonical_name"
+    "raw_label_normalized"
+    "confidence"
+    "created_at"
+    "id"]
+   :computed-fields
+   {"supplier_display_name" {}
+    "article_canonical_name" {}}
+   :column-metadata
+   {"article_canonical_name" {:label-key :common/article}}})
+
 (deftest entity-specs-by-name-normalizes-entity-key
   (testing ":entity-specs/by-name resolves the same spec for snake_case and kebab-case entity identifiers"
     (reset-db! {:models-data models-data})
@@ -105,6 +119,23 @@
               "created-at"
               "id"]
             ids)))))
+
+(deftest entity-specs-by-name-uses-label-key-for-current-locale
+  (testing ":entity-specs/by-name resolves :label-key via the current locale"
+    (doseq [[locale expected] [[:bs "Artikal"]
+                               [:en "Article"]]]
+      (reset-db!
+        {:locale locale
+         :models-data article-aliases-models-data
+         :domain {:config {:table-columns {:article-aliases article-aliases-table-columns-i18n}}}})
+      (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
+
+      (let [spec @(rf/subscribe [:entity-specs/by-name :article-aliases])
+            article-field (some (fn [field]
+                                  (when (= "article-canonical-name" (:id field))
+                                    field))
+                            spec)]
+        (is (= expected (:label article-field)))))))
 
 (deftest entity-specs-by-name-blank-column-metadata-label-falls-back
   (testing "blank :column-metadata labels fall back to default naming"

@@ -4,7 +4,9 @@
   Renders an admin-native list backed by the expenses admin API."
   (:require
     [app.admin.frontend.components.layout :as layout]
+    [app.domain.frontend.expenses.events.countries :as countries-events]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.events.list.ui-state :as ui-state]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
@@ -12,8 +14,7 @@
     ;; Side-effect requires
     app.domain.frontend.expenses.admin.adapters.admin-crud
     app.domain.frontend.expenses.admin.adapters.specs
-    app.domain.frontend.expenses.admin.adapters.sync
-    app.domain.frontend.expenses.events.countries))
+    app.domain.frontend.expenses.admin.adapters.sync))
 
 (defui admin-countries-page
   "Admin route: /admin/countries"
@@ -22,7 +23,11 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch [:app.domain.frontend.expenses.events.countries/load-list {}]))
+                         ;; Enable server paging so lists >25 are navigable.
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
+                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
+                                            [::countries-events/load-list]])
+                         (rf/dispatch [::countries-events/load-list {:page 1 :per-page 25}]))
                        [])]
     (use-effect
       (fn []

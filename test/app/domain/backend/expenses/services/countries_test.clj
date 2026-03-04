@@ -86,6 +86,17 @@
       (is (contains? ids c2) "Created country should be present in list with :id")
       (is (every? some? (map :id rows)) "Every row should include computed :id"))))
 
+(deftest count-countries-returns-number-and-increments
+  (testing "count returns a number and increments after create"
+    (let [db fixtures/*test-db*
+          before (countries/count-countries db {})
+          country (unique-country "Countland")
+          code (unique-code! db)
+          _ (countries/create-country! db {:country country :code code})
+          after (countries/count-countries db {})]
+      (is (number? before))
+      (is (= (inc before) after)))))
+
 (deftest update-country-supports-rename-and-code-change
   (testing "update supports changing :code and/or :country (rename) and returns updated :id"
     (let [db fixtures/*test-db*

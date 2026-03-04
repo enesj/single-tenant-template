@@ -31,7 +31,8 @@
 
 (def ColumnMetadata
   [:map {:closed false}
-   [:label {:optional true} :string]])
+   [:label {:optional true} :string]
+   [:label-key {:optional true} [:or :keyword :string]]])
 
 (def ComputedField
   "Computed field metadata.

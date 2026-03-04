@@ -18,7 +18,7 @@ The single source of truth for display-toggle resolution is `src/app/template/fr
 
 1. **Structural config** (`table-columns.edn`)
    - Defines what columns exist and what they *can* do (available/filterable/sortable/always-visible).
-   - Supports optional `:column-metadata` for per-column display labels (e.g. `{"supplier_display_name" {:label "Supplier"}}`).
+   - Supports optional `:column-metadata` for per-column display labels, including static labels (`{:label "Supplier"}`) and locale-aware translation keys (`{:label-key :common/supplier}`).
    - `:always-visible` is **enforced** (cannot be overridden by policy or user prefs).
 
 2. **Policy** (`view-options.edn`)

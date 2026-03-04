@@ -17,6 +17,8 @@ This folder contains scripts for managing PostgreSQL databases in the single-ten
 - **delete_articles.clj** - Deletes all articles (dry-run by default)
 - **delete_stores.clj** - Deletes all stores and unmaps store aliases (dry-run by default)
 - **empty_stores_suppliers_receipts.clj** - Empties suppliers/stores/aliases/receipts (also deletes dependent expenses)
+- **seed_countries.clj** - Seed global `countries` reference data (idempotent). Run via `bb seed-countries [dev|test]`.
+- **seed_bh_cities.clj** - Seed Bosnia & Herzegovina `cities` reference data from `resources/db/seeds/bh_cities.sql`. Run via `bb seed-bh-cities [dev|test]`.
 
 ### Schema Analysis
 

@@ -15,8 +15,10 @@
     [app.admin.frontend.specs.form-components :as form-components]
     [app.admin.frontend.utils.vector-config :as vector-config]
     [app.shared.field-specs :as field-specs]
+    [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.i18n :as i18n]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -54,22 +56,35 @@
               (when-not (= v sentinel) v)))
       (column-key-candidates column-key))))
 
+(defn- translate-label-key
+  [locale label-key]
+  (when-let [translation-key (some-> label-key kw/ensure-keyword)]
+    (let [translated (try
+                       (i18n/translate locale translation-key)
+                       (catch :default _
+                         nil))
+          translated-str (some-> translated str str/trim)]
+      (when (and (seq translated-str)
+              (not= translated translation-key)
+              (not= translated-str (str translation-key)))
+        translated-str))))
+
 (defn- resolve-column-label-override
-  [column-metadata column-key]
-  (let [label (some-> (lookup-column-entry column-metadata column-key)
-                :label
-                str
-                str/trim)]
-    (when (seq label)
-      label)))
+  [locale column-metadata column-key]
+  (let [{:keys [label label-key]} (lookup-column-entry column-metadata column-key)
+        translated-label (translate-label-key locale label-key)
+        static-label (some-> label str str/trim)]
+    (or translated-label
+      (when (seq static-label)
+        static-label))))
 
 ;; Removed unused normalize-field-key function
 
 (defn- create-column-spec-from-config
   "Create a column spec from vector configuration"
-  [column-key column-config computed-fields column-metadata base-field-spec]
+  [locale column-key column-config computed-fields column-metadata base-field-spec]
   (let [computed-field (lookup-column-entry computed-fields column-key)
-        label-override (resolve-column-label-override column-metadata column-key)
+        label-override (resolve-column-label-override locale column-metadata column-key)
         resolved-type (or (:type column-config)
                         (:type computed-field)
                         (:type base-field-spec)
@@ -112,9 +127,9 @@
 (defn- generate-admin-entity-spec-from-db
   "Generate admin entity spec using vector-based configuration from Re-frame DB"
   [db entity-keyword]
-
   (if-let [table-config (get-in db [:admin :config :table-columns entity-keyword])]
     (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
+          locale (or (:locale db) :bs)
           model-fields (or (get-in db [:entities :specs (model-naming/ensure-app-keyword entity-keyword)])
                          [])
           fields-by-id (into {}
@@ -130,6 +145,7 @@
                                      base-field-spec (lookup-column-entry fields-by-id column-key)
                                      is-always-visible (contains? always-visible-set normalized-column)]
                                  (create-column-spec-from-config
+                                   locale
                                    column-key
                                    (assoc specific-config :always-visible is-always-visible)
                                    computed-fields

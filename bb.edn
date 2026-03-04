@@ -492,6 +492,22 @@
    :task (let [env (or (first *command-line-args*) "dev")]
            (shell "clj" "-M" "scripts/bb/database/seed_categories.clj" env))},
 
+  seed-countries
+  {:doc "Seed global countries reference list (idempotent). Usage: bb seed-countries [dev|test]",
+   :task (let [env (or (first *command-line-args*) "dev")]
+           (shell "clj" "-M" "scripts/bb/database/seed_countries.clj" env))},
+
+  seed-bh-cities
+  {:doc "Seed Bosnia & Herzegovina cities (~450) from resources/db/seeds/bh_cities.sql. Usage: bb seed-bh-cities [dev|test]",
+   :task (let [env (or (first *command-line-args*) "dev")]
+           (shell "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
+
+  seed-geo-reference
+  {:doc "Seed reference geo data (countries + BH cities). Usage: bb seed-geo-reference [dev|test]",
+   :task (let [env (or (first *command-line-args*) "dev")]
+           (shell "clj" "-M" "scripts/bb/database/seed_countries.clj" env)
+           (shell "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
+
   clear-rate-limits
   {:doc "Clear all rate limiting data (for development and testing).
 

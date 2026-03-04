@@ -38,8 +38,13 @@
    :article_canonical_name {}},
   :column-config {},
   :column-metadata
-  {:article_canonical_name {:label "Article"},
-   :expense_purchased_at {:label "Purchaded At"}}},
+  {:expense_purchased_at {:label-key :common/purchased-at},
+   :article_canonical_name {:label-key :common/article},
+   :raw_label {:label-key :common/raw-label},
+   :qty {:label-key :common/qty},
+   :unit_price {:label-key :common/unit-price},
+   :line_total {:label-key :common/line-total},
+   :created_at {:label-key :common/created-at}}},
  :suppliers
  {:available-columns
   ["display_name"
@@ -55,7 +60,13 @@
   :sortable-columns
   ["display_name" "normalized_key" "address" "created_at"],
   :always-visible ["display_name"],
-  :column-metadata {:display_name {:label "Name"}}},
+  :column-metadata
+  {:display_name {:label-key :common/name},
+   :normalized_key {:label-key :common/normalized-key},
+   :address {:label-key :common/address},
+   :created_at {:label-key :common/created-at},
+   :id {:label-key :common/id},
+   :updated_at {:label-key :common/updated-at}}},
  :subcategories
  {:available-columns
   ["category_id" "name" "description" "created_at" "updated_at" "id"],
@@ -64,7 +75,14 @@
   :filterable-columns
   ["name" "category_id" "description" "created_at"],
   :sortable-columns ["name" "category_id" "created_at" "updated_at"],
-  :always-visible ["name"]},
+  :always-visible ["name"],
+  :column-metadata
+  {:category_id {:label-key :common/category},
+   :name {:label-key :common/name},
+   :description {:label-key :common/description},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :cities
  {:available-columns
   ["name"
@@ -80,7 +98,15 @@
   ["name" "normalized_key" "zip" "country" "created_at"],
   :sortable-columns
   ["name" "normalized_key" "zip" "country" "created_at" "updated_at"],
-  :always-visible ["name"]},
+  :always-visible ["name"],
+  :column-metadata
+  {:name {:label-key :common/name},
+   :normalized_key {:label-key :common/normalized-key},
+   :zip {:label-key :common/zip},
+   :country {:label-key :common/country},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :articles
  {:available-columns
   ["canonical_name"
@@ -121,14 +147,32 @@
   {:manufacturer_display_name {:type "string", :label "Manufacturer"},
    :category_name {:type "string", :label "Category"},
    :subcategory_name {:type "string", :label "Subcategory"}},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:manufacturer_display_name {:label-key :common/manufacturer},
+   :manufacturer_id {:label-key :common/manufacturer},
+   :normalized_key {:label-key :common/normalized-key},
+   :updated_at {:label-key :common/updated-at},
+   :category_name {:label-key :common/category},
+   :link {:label-key :common/link},
+   :id {:label-key :common/id},
+   :subcategory_name {:label-key :common/subcategory},
+   :canonical_name {:label-key :common/article},
+   :subcategory_id {:label-key :common/subcategory},
+   :created_at {:label-key :common/created-at}}},
  :payer-types
  {:available-columns
   ["label" "is_default" "created_at" "updated_at" "id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
-  :always-visible ["label"]},
+  :always-visible ["label"],
+  :column-metadata
+  {:label {:label-key :common/label},
+   :is_default {:label-key :common/is-default},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :expenses
  {:available-columns
   ["purchased_at"
@@ -144,13 +188,13 @@
    "updated_at"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
-    :store_display_name {:type "string", :label "Store"},
+   :store_display_name {:type "string", :label "Store"},
    :expense_category_name {:type "string", :label "Expense Category"},
    :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
-    "store_display_name"
+   "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
@@ -158,7 +202,7 @@
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
-    "store_display_name"
+   "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
@@ -168,7 +212,7 @@
   :sortable-columns
   ["purchased_at"
    "supplier_display_name"
-    "store_display_name"
+   "store_display_name"
    "expense_category_name"
    "payer_label"
    "currency"
@@ -176,7 +220,19 @@
    "created_at"
    "updated_at"],
   :always-visible [],
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:expense_category_name {:label-key :common/expense-category},
+   :payer_label {:label-key :common/payer},
+   :supplier_display_name {:label-key :common/supplier},
+   :updated_at {:label-key :common/updated-at},
+   :currency {:label-key :common/currency},
+   :store_display_name {:label-key :common/store},
+   :id {:label-key :common/id},
+   :notes {:label-key :common/notes},
+   :purchased_at {:label-key :common/purchased-at},
+   :total_amount {:label-key :common/total},
+   :created_at {:label-key :common/created-at}}},
  :manufacturers
  {:available-columns
   ["display_name" "normalized_key" "created_at" "updated_at" "id"],
@@ -184,14 +240,26 @@
   ["display_name" "normalized_key" "created_at"],
   :filterable-columns ["display_name" "normalized_key" "created_at"],
   :sortable-columns ["display_name" "normalized_key" "created_at"],
-  :always-visible ["display_name"]},
+  :always-visible ["display_name"],
+  :column-metadata
+  {:display_name {:label-key :common/name},
+   :normalized_key {:label-key :common/normalized-key},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :countries
  {:available-columns ["country" "code" "created_at" "updated_at" "id"],
   :default-visible-columns ["country" "code"],
   :filterable-columns ["country" "code"],
   :sortable-columns ["country" "code" "created_at" "updated_at"],
   :always-visible ["country"],
-  :computed-fields {:id {:type "string"}}},
+  :computed-fields {:id {:type "string"}},
+  :column-metadata
+  {:country {:label-key :common/country},
+   :code {:label-key :common/code},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :payers
  {:available-columns
   ["label"
@@ -203,14 +271,27 @@
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
-  :always-visible ["label"]},
+  :always-visible ["label"],
+  :column-metadata
+  {:label {:label-key :common/label},
+   :payer_type_id {:label-key :common/payer-type},
+   :is_default {:label-key :common/is-default},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :categories
  {:available-columns
   ["name" "description" "created_at" "updated_at" "id"],
   :default-visible-columns ["name" "description" "created_at"],
   :filterable-columns ["name" "description" "created_at"],
   :sortable-columns ["name" "description" "created_at" "updated_at"],
-  :always-visible ["name"]},
+  :always-visible ["name"],
+  :column-metadata
+  {:name {:label-key :common/name},
+   :description {:label-key :common/description},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :supplier-aliases
  {:available-columns
   ["supplier_display_name"
@@ -237,7 +318,16 @@
    "created_at"],
   :always-visible ["raw_label"],
   :computed-fields {:supplier_display_name {}},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:supplier_display_name {:label-key :common/supplier},
+   :raw_label {:label-key :common/raw-label},
+   :raw_label_normalized {:label-key :common/normalized},
+   :confidence {:label-key :common/confidence},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :supplier_id {:label-key :common/supplier},
+   :id {:label-key :common/id}}},
  :receipts
  {:available-columns
   ["original-filename"
@@ -284,7 +374,32 @@
    "updated-at"],
   :always-visible ["original-filename" "status" "purchased-at-guess"],
   :computed-fields {},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:original-filename {:label-key :common/original-filename},
+   :raw-extract-json {:label-key :common/raw-extract-json},
+   :updated-at {:label-key :common/updated-at},
+   :total-amount-guess {:label-key :common/total-amount-guess},
+   :purchased-at-guess {:label-key :common/purchased-at-guess},
+   :user-id {:label-key :common/user},
+   :file-size {:label-key :common/file-size},
+   :store-alias-id {:label-key :common/store-alias},
+   :currency-guess {:label-key :common/currency-guess},
+   :store-guess {:label-key :common/store-guess},
+   :expense-id {:label-key :common/expense},
+   :status {:label-key :common/status},
+   :file-hash {:label-key :common/file-hash},
+   :payer-id {:label-key :common/payer},
+   :id {:label-key :common/id},
+   :content-type {:label-key :common/content-type},
+   :supplier-alias-id {:label-key :common/supplier-alias},
+   :error-details {:label-key :common/error-details},
+   :storage-key {:label-key :common/storage-key},
+   :error-message {:label-key :common/error-message},
+   :supplier-guess {:label-key :common/supplier-guess},
+   :retry-count {:label-key :common/retry-count},
+   :created-at {:label-key :common/created-at},
+   :parsed-markdown {:label-key :common/parsed-markdown}}},
  :stores
  {:available-columns
   ["supplier_id"
@@ -308,7 +423,16 @@
    "updated_at"],
   :always-visible ["display_name"],
   :computed-fields {},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:supplier_id {:label-key :common/supplier},
+   :display_name {:label-key :common/name},
+   :normalized_key {:label-key :common/normalized-key},
+   :address {:label-key :common/address},
+   :city_id {:label-key :common/city},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}},
  :article-aliases
  {:available-columns
   ["supplier_display_name"
@@ -339,7 +463,17 @@
   :always-visible ["raw_label"],
   :computed-fields
   {:supplier_display_name {}, :article_canonical_name {}},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:raw_label {:label-key :common/raw-label},
+   :raw_label_normalized {:label-key :common/normalized},
+   :supplier_display_name {:label-key :common/supplier},
+   :article_id {:label-key :common/article},
+   :supplier_id {:label-key :common/supplier},
+   :id {:label-key :common/id},
+   :article_canonical_name {:label-key :common/article},
+   :confidence {:label-key :common/confidence},
+   :created_at {:label-key :common/created-at}}},
  :store-aliases
  {:available-columns
   ["supplier_display_name"
@@ -379,10 +513,26 @@
   {:supplier_display_name {},
    :store_display_name {},
    :store_address {}},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:store_address {:label-key :common/address},
+   :raw_label {:label-key :common/raw-label},
+   :raw_label_normalized {:label-key :common/normalized},
+   :supplier_display_name {:label-key :common/supplier},
+   :updated_at {:label-key :common/updated-at},
+   :store_display_name {:label-key :common/store},
+   :id {:label-key :common/id},
+   :confidence {:label-key :common/confidence},
+   :store_id {:label-key :common/store},
+   :created_at {:label-key :common/created-at}}},
  :expense-categories
  {:available-columns ["name" "created_at" "updated_at" "id"],
   :default-visible-columns ["name" "created_at"],
   :filterable-columns ["name" "created_at"],
   :sortable-columns ["name" "created_at" "updated_at"],
-  :always-visible ["name"]}}
+  :always-visible ["name"],
+  :column-metadata
+  {:name {:label-key :common/name},
+   :created_at {:label-key :common/created-at},
+   :updated_at {:label-key :common/updated-at},
+   :id {:label-key :common/id}}}}

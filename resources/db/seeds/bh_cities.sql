@@ -308,4 +308,4 @@ INSERT INTO cities (id, name, normalized_key, zip, country, created_at, updated_
 ('70184109-7b2c-4a5c-afad-6921caf2c79c', 'Nevesinje', 'nevesinje', '88280', 'Bosnia and Herzegovina', NOW(), NOW()),
 ('af9396d0-d9ef-410a-af69-e62bc9e0027f', 'Izačić', 'izacic', '77208', 'Bosnia and Herzegovina', NOW(), NOW()),
 ('68d5c0c2-cede-4ae1-adf7-e1be9cf0a2a1', 'Delijaš', 'delijas', '71223', 'Bosnia and Herzegovina', NOW(), NOW())
-ON CONFLICT (country, zip) DO UPDATE SET name=EXCLUDED.name, normalized_key=EXCLUDED.normalized_key;
+ON CONFLICT DO NOTHING;

@@ -3,6 +3,7 @@
     [app.domain.frontend.expenses.events.unmapped-items :as unmapped-events]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-memo use-state]]
@@ -207,7 +208,8 @@
   - :title - optional title string (default: Unmapped Aliases)"
   [{:keys [breadcrumbs title]
     :or {title "Unmapped Aliases"}}]
-  (let [entity-name :unmapped-items
+  (let [t (use-t)
+        entity-name :unmapped-items
         items (use-subscribe [:expenses/unmapped-items])
         loading? (use-subscribe [:expenses/unmapped-items-loading?])
         err (use-subscribe [:expenses/unmapped-items-error])
@@ -223,10 +225,8 @@
                        total-items
                        (count (or items [])))
         total-pages (max 1 (js/Math.ceil (/ total-items* per-page*)))]
-
     (use-effect
       (fn []
-        ;; Make sure lookup lists exist for the modal and enable server-backed pagination wiring.
         (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
         (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [::unmapped-events/refresh-unmapped-items-list]])
         (rf/dispatch [::unmapped-events/load-lookups])
@@ -340,9 +340,9 @@
                 ($ :thead
                   ($ :tr
                     ($ :th "")
-                    ($ :th "Raw Label")
-                    ($ :th "Supplier")
-                    ($ :th "Occurrences")))
+                    ($ :th (t :unmapped-items/col-raw-label))
+                    ($ :th (t :unmapped-items/col-supplier))
+                    ($ :th (t :unmapped-items/col-occurrences))))
                 ($ :tbody
                   (for [it items
                         :let [iid (:id it)

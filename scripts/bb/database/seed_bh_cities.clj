@@ -1,10 +1,9 @@
-#!/usr/bin/env bb
+#!/usr/bin/env clj
 
 (ns scripts.bb.database.seed-bh-cities
   (:require
     [aero.core :as aero]
-    [clojure.java.shell :as shell]
-    [clojure.string :as str]))
+    [next.jdbc :as jdbc]))
 
 (defn get-db-config [profile]
   (let [config (aero/read-config "config/base.edn" {:profile profile})]
@@ -16,27 +15,31 @@
         _ (when-not (.exists (java.io.File. seed-file))
             (println "❌ Seed file not found:" seed-file)
             (System/exit 1))
-        psql-cmd ["psql"
-                  "-h" (:host db)
-                  "-p" (str (:port db))
-                  "-U" (:user db)
-                  "-d" (:dbname db)
-                  "-f" seed-file]
-        env-vars {"PGPASSWORD" (:password db)}]
+        sql (slurp seed-file)
+        ds (jdbc/get-datasource {:dbtype "postgresql"
+                                 :host (:host db)
+                                 :port (:port db)
+                                 :dbname (:dbname db)
+                                 :user (:user db)
+                                 :password (:password db)})]
 
-    (println (format "🚀 Seeding Bosnian cities into %s database (%s)..." 
-                     (name profile) (:dbname db)))
-    
-    (let [result (apply shell/sh (concat psql-cmd [:env env-vars]))]
-      (if (= 0 (:exit result))
-        (do
-          (println "✅ Seeding completed successfully!")
-          (println (:out result)))
-        (do
-          (println "❌ Seeding failed!")
-          (binding [*out* *err*]
-            (println (:err result)))
-          (System/exit 1))))))
+    (println (format "🚀 Seeding Bosnian cities into %s database (%s)..."
+               (name profile) (:dbname db)))
+
+    (try
+      ;; The seed file is one large INSERT ... VALUES ... statement.
+      ;; It is idempotent (uses ON CONFLICT) so re-running is safe.
+      (jdbc/with-transaction [tx ds]
+        (jdbc/execute! tx [sql]))
+
+      (let [{:keys [n]} (jdbc/execute-one! ds ["SELECT COUNT(*)::int AS n FROM cities"])]
+        (println (format "✓ Seeded BH cities (total in DB: %d)" n))
+        (println "Done!"))
+
+      (catch Exception e
+        (println "❌ Seeding failed!")
+        (println (.getMessage e))
+        (System/exit 1)))))
 
 (defn -main [& args]
   (let [env (or (first args) "dev")
@@ -47,5 +50,4 @@
         (println "❌ Invalid environment. Use: dev or test")
         (System/exit 1)))))
 
-(when (= *file* (System/getProperty "babashka.file"))
-  (apply -main *command-line-args*))
+(apply -main *command-line-args*)

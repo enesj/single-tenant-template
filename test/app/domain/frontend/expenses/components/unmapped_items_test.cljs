@@ -115,3 +115,31 @@
 
                             (cleanup!)))))))
                 0))))))))
+
+(deftest unmapped-items-panel-renders-translated-table-headers
+  (testing "Unmapped items panel uses translated header labels"
+    (setup/reset-db!)
+
+    (async done
+      (let [container (.createElement js/document "div")
+            root (rdom/createRoot container)
+            cleanup! (fn []
+                       (.unmount root)
+                       (.removeChild (.-body js/document) container)
+                       (done))]
+        (.appendChild (.-body js/document) container)
+        (swap! rf-db/app-db assoc :locale :bs)
+        (seed-unmapped-items! {:items [{:id 1 :supplier-id "supplier-1" :raw-label "Mlijeko" :occurrence-count 2}]})
+
+        (.render root ($ unmapped-ui/unmapped-items-panel {:title "Unmapped"}))
+
+        (wait-for!
+          #(let [text (some-> container .-textContent)]
+             (when (and text
+                     (.includes text "Originalna oznaka")
+                     (.includes text "Dobavljač")
+                     (.includes text "Ponavljanja"))
+               text))
+          (fn [text]
+            (is (some? text) "Translated Bosnian headers should render in the table")
+            (cleanup!)))))))

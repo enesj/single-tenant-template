@@ -6,6 +6,7 @@
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.i18n :as i18n]
     [clojure.string :as str]
     [re-frame.core :as rf]))
 
@@ -54,18 +55,31 @@
               (when-not (= v sentinel) v)))
       (column-key-candidates column-key))))
 
+(defn- translate-label-key
+  [locale label-key]
+  (when-let [translation-key (some-> label-key kw/ensure-keyword)]
+    (let [translated (try
+                       (i18n/translate locale translation-key)
+                       (catch :default _
+                         nil))
+          translated-str (some-> translated str str/trim)]
+      (when (and (seq translated-str)
+              (not= translated translation-key)
+              (not= translated-str (str translation-key)))
+        translated-str))))
+
 (defn- resolve-column-label-override
-  [table-config column-key]
-  (let [label (some-> (lookup-column-entry (:column-metadata table-config) column-key)
-                :label
-                str
-                str/trim)]
-    (when (seq label)
-      label)))
+  [locale table-config column-key]
+  (let [{:keys [label label-key]} (lookup-column-entry (:column-metadata table-config) column-key)
+        translated-label (translate-label-key locale label-key)
+        static-label (some-> label str str/trim)]
+    (or translated-label
+      (when (seq static-label)
+        static-label))))
 
 (defn- apply-column-label-override
-  [table-config column-key field-spec]
-  (if-let [label (resolve-column-label-override table-config column-key)]
+  [locale table-config column-key field-spec]
+  (if-let [label (resolve-column-label-override locale table-config column-key)]
     (assoc field-spec :label label)
     field-spec))
 
@@ -95,6 +109,7 @@
                          (sequential? base-spec) base-spec
                          (map? base-spec) (vals base-spec)
                          :else [])
+          locale       (or (:locale db) :bs)
           ;; Route-aware table-columns config (admin vs user routes).
           admin-route? (paths/admin-route? db)
           table-config (when entity-kw
@@ -123,7 +138,7 @@
                               (lookup-column-entry (:column-config table-config) col-kw))
           computed-field-spec (fn [col-kw]
                                 (let [m     (computed-meta-for col-kw)
-                                      label (or (resolve-column-label-override table-config col-kw)
+                                      label (or (resolve-column-label-override locale table-config col-kw)
                                               (:label m)
                                               (labels/field-name->label col-kw))]
                                   {:id    (name col-kw)
@@ -148,14 +163,14 @@
                       field-spec*    (if (map? col-cfg)
                                        (merge field-spec col-cfg)
                                        field-spec)]
-                  (apply-column-label-override table-config k field-spec*)))
+                  (apply-column-label-override locale table-config k field-spec*)))
           available-cols)
         ;; Fallback: preserve backend/models-derived field order, and append any
         ;; computed fields not already present.
         (let [base-ids         (set (keep field-id->kw base-fields))
               base-fields*     (mapv (fn [field]
                                        (if-let [field-id (field-id->kw field)]
-                                         (apply-column-label-override table-config field-id field)
+                                         (apply-column-label-override locale table-config field-id field)
                                          field))
                                  base-fields)
               missing-computed (remove base-ids computed-cols)]

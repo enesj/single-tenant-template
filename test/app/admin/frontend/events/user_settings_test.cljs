@@ -197,25 +197,31 @@
       (is (= {:notes {:label "Notes"}} (:column-metadata cfg))))))
 
 (deftest table-column-label-draft-set-and-clear
-  (testing "::set-table-column-label-draft updates and clears :column-metadata labels"
+  (testing "::set-table-column-label-draft updates labels without dropping existing metadata"
     (setup/reset-db!)
     (setup/install-http-stub!)
 
     (rf/dispatch-sync [::user-settings/init])
-    (setup/respond-success! (example-response))
+    (setup/respond-success!
+      (example-response
+        {:table-columns {:expenses {:available-columns [:purchased_at :notes]
+                                    :default-visible-columns [:purchased_at]
+                                    :column-metadata {:purchased_at {:label-key :common/purchased-at}}}}}))
 
     (rf/dispatch-sync [::user-settings/set-table-column-label-draft
                        :expenses
                        :purchased_at
                        "Purchased"])
-    (is (= {:label "Purchased"}
+    (is (= {:label-key :common/purchased-at
+            :label "Purchased"}
           (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata "purchased_at"])))
 
     (rf/dispatch-sync [::user-settings/set-table-column-label-draft
                        :expenses
                        :purchased_at
                        "   "])
-    (is (nil? (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata])))
+    (is (= {:label-key :common/purchased-at}
+          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata "purchased_at"])))
 
     (rf/dispatch-sync [::user-settings/set-table-column-label-draft
                        :expenses
@@ -225,7 +231,8 @@
                        :expenses
                        :purchased_at
                        nil])
-    (is (nil? (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata])))))
+    (is (= {:label-key :common/purchased-at}
+          (get-in @rf-db/app-db [:admin :user-settings :draft :table-columns :expenses :column-metadata "purchased_at"])))))
 
 (deftest save-sends-put-and-updates-state-on-success
   (testing "::save sends PUT and syncs state on success"

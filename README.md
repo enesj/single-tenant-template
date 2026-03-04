@@ -43,6 +43,15 @@ First-time DB setup (new database): in another terminal, run:
 bb migrate-and-sync-frontend-config
 ```
 
+Optional (recommended for the Expenses domain): seed reference geo data:
+```bash
+bb seed-geo-reference dev
+
+# or run individually:
+bb seed-countries dev
+bb seed-bh-cities dev
+```
+
 The application will be available at:
 - **Main App**: http://localhost:8085
 - **Admin Panel**: http://localhost:8085/admin/users (admin auth is simplified for this template)

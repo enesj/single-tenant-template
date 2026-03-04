@@ -6,15 +6,15 @@
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.icons :refer [delete-icon edit-icon
                                                     filter-icon]]
-    ;; Use cells module for reactive selection components
     [app.template.frontend.components.list.cells :as cells]
     [app.template.frontend.events.list.batch :as batch-events]
     [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.utils.column-config :as column-config]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
-    [uix.core :refer [$ defui] :as uix]
+    [uix.core :as uix :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui table-header [{:keys [label sortable? on-click sort-direction filter-on-click filter-active? show-filtering? is-field-filterable? header-id active-inline-filter? field-id column-width]}]
@@ -179,6 +179,9 @@
                         :else [])
 
         ordered-entity-fields (column-config/order-fields entity-fields column-order)
+        locale (or (use-subscribe [:locale]) :bs)
+        t (fn [translation-key]
+            (i18n/translate locale translation-key))
 
         normalize-col (fn [col]
                         ;; Canonicalize to a simple app keyword (no namespace).
@@ -333,14 +336,14 @@
                                  ($ table-header
                                    {:key "header-created-at"
                                     :header-id "header-created-at"
-                                    :label "Created"
+                                    :label (t :common/created)
                                     :sortable? true
                                     :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced created-key)])
                                     :sort-direction (when (= sort-field (namespaced created-key)) sort-direction)
                                     :filter-on-click #(do
                                                         (.stopPropagation %)
                                                         (when on-inline-filter-click
-                                                          (on-inline-filter-click created-key {:id "created-at" :label "Created At" :input-type "datetime"})))
+                                                          (on-inline-filter-click created-key {:id "created-at" :label (t :common/created-at) :input-type "datetime"})))
                                     :filter-active? (filter-active? created-key)
                                     :active-inline-filter? (inline-active? created-key)
                                     :show-filtering? show-filtering?
@@ -351,14 +354,14 @@
                                  ($ table-header
                                    {:key "header-updated-at"
                                     :header-id "header-updated-at"
-                                    :label "Updated"
+                                    :label (t :common/updated)
                                     :sortable? true
                                     :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced updated-key)])
                                     :sort-direction (when (= sort-field (namespaced updated-key)) sort-direction)
                                     :filter-on-click #(do
                                                         (.stopPropagation %)
                                                         (when on-inline-filter-click
-                                                          (on-inline-filter-click updated-key {:id "updated-at" :label "Updated At" :input-type "datetime"})))
+                                                          (on-inline-filter-click updated-key {:id "updated-at" :label (t :common/updated-at) :input-type "datetime"})))
                                     :filter-active? (filter-active? updated-key)
                                     :active-inline-filter? (inline-active? updated-key)
                                     :show-filtering? show-filtering?

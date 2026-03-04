@@ -76,6 +76,16 @@
         rows (jdbc/execute! db (sql/format q) jdbc-opts)]
     (mapv with-id rows)))
 
+(defn count-countries
+  "Return the total number of countries.
+
+  Used by the routes factory when :has-count? is enabled for server pagination."
+  [db _opts]
+  (let [q {:select [[[:count :*] :total]]
+           :from [:countries]}
+        row (jdbc/execute-one! db (sql/format q) jdbc-opts)]
+    (long (or (:total row) 0))))
+
 (defn get-country
   "Return a single country row by country name (string PK)."
   [db id]

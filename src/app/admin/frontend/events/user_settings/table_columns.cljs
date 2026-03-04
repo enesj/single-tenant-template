@@ -137,14 +137,22 @@
           col-str (col->str column-name)
           metadata-path [:admin :user-settings :draft :table-columns entity-kw :column-metadata]
           entity-path [:admin :user-settings :draft :table-columns entity-kw]
-          label' (normalize-label label)]
+          label' (normalize-label label)
+          current-metadata (get-in db metadata-path)
+          current-entry (some (fn [k]
+                                (let [sentinel ::not-found
+                                      value (get current-metadata k sentinel)]
+                                  (when-not (= value sentinel) value)))
+                          (col-key-variants col-str))
+          cleaned (remove-column-metadata-entry current-metadata col-str)
+          preserved-entry (some-> (or current-entry {}) (dissoc :label))]
       (if (or (nil? entity-kw) (str/blank? (or col-str "")))
         db
         (if label'
-          (let [cleaned (remove-column-metadata-entry (get-in db metadata-path) col-str)]
-            (assoc-in db metadata-path (assoc cleaned col-str {:label label'})))
-          (let [db' (update-in db metadata-path remove-column-metadata-entry col-str)
-                metadata' (get-in db' metadata-path)]
+          (assoc-in db metadata-path (assoc cleaned col-str (assoc (or current-entry {}) :label label')))
+          (let [metadata' (cond-> cleaned
+                            (seq preserved-entry) (assoc col-str preserved-entry))
+                db' (assoc-in db metadata-path metadata')]
             (if (seq metadata')
               db'
               (update-in db' entity-path dissoc :column-metadata))))))))

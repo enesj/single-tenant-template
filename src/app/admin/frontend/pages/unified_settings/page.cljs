@@ -216,10 +216,17 @@
                                          normalized-label (some-> label str str/trim)
                                          current-config (get table-columns-config entity-kw {})
                                          metadata (or (:column-metadata current-config) {})
+                                         current-entry (some (fn [k]
+                                                               (let [sentinel ::not-found
+                                                                     value (get metadata k sentinel)]
+                                                                 (when-not (= value sentinel) value)))
+                                                         (col-key-variants col-name))
                                          cleaned-metadata (reduce dissoc metadata (col-key-variants col-name))
+                                         preserved-entry (some-> (or current-entry {}) (dissoc :label))
                                          new-metadata (if (str/blank? (or normalized-label ""))
-                                                        cleaned-metadata
-                                                        (assoc cleaned-metadata (col->str col-name) {:label normalized-label}))
+                                                        (cond-> cleaned-metadata
+                                                          (seq preserved-entry) (assoc (col->str col-name) preserved-entry))
+                                                        (assoc cleaned-metadata (col->str col-name) (assoc (or current-entry {}) :label normalized-label)))
                                          new-config (cond-> (assoc current-config :column-metadata new-metadata)
                                                       (empty? new-metadata) (dissoc :column-metadata))]
                                      (rf/dispatch [::admin-settings-events/update-table-columns-entity
