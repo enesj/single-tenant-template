@@ -3,6 +3,7 @@
    Shows personal expense summary, recent expenses, and quick actions for expense management."
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.timestamp :as timestamp]
     app.domain.frontend.expenses.subs.user-expenses ;; side-effect load for subscriptions
     [re-frame.core :as rf]
@@ -59,7 +60,7 @@
       ($ :div {:class "mt-3 flex items-center text-xs"}
         ($ :span {:class (if (pos? (:change trend)) "text-emerald-600" "text-red-600")}
           (str (when (pos? (:change trend)) "+") (:change trend) "%"))
-        ($ :span {:class "text-slate-500 ml-1"} "vs last month")))))
+        ($ :span {:class "text-slate-500 ml-1"} (:label trend))))))
 
 ;; ========================================================================
 ;; Quick Action Component
@@ -119,7 +120,8 @@
 ;; ========================================================================
 
 (defui expenses-dashboard-page []
-  (let [user (use-subscribe [:current-user])
+  (let [t (use-t)
+        user (use-subscribe [:current-user])
         power-user? (boolean (use-subscribe [:expenses/power-user?]))
         can-upload? (boolean (use-subscribe [:expenses/can? :expenses/upload]))
         can-add-expense? (boolean (use-subscribe [:expenses/can? :expenses/expense.write]))
@@ -150,50 +152,50 @@
           ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
             ($ :div
               ($ :h1 {:class "text-xl sm:text-2xl font-bold text-slate-900"}
-                (str "Hello, " user-name "!"))
-              ($ :p {:class "text-sm text-slate-600"} "Here's your expense overview"))
+                (t :dashboard/greeting user-name))
+              ($ :p {:class "text-sm text-slate-600"} (t :dashboard/subtitle)))
             ($ :div {:class "flex gap-2"}
               (when can-upload?
                 ($ button {:id "btn-expenses-dashboard-upload-receipt"
                            :btn-type :primary
                            :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])}
-                  "📷 Upload Receipt"))
+                  (t :dashboard/upload-receipt)))
               ($ button {:id "btn-expenses-dashboard-view-all"
                          :btn-type :ghost
                          :on-click #(rf/dispatch [:navigate-to "/expenses/list"])}
-                "View All")))))
+                (t :dashboard/view-all))))))
 
       ;; Error banner if needed
       (when (or summary-error recent-error)
         ($ :div {:class "max-w-6xl mx-auto px-4 mt-4"}
           ($ :div {:class "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"}
             ($ :p {:class "text-sm font-medium"}
-              (or summary-error recent-error "Unable to load expense data.")))))
+              (or summary-error recent-error (t :dashboard/load-error))))))
 
       ;; Main content
       ($ :main {:class "max-w-6xl mx-auto px-4 py-6"}
         ;; Stats Grid
         ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"}
-          ($ stat-card {:title "This Month"
+          ($ stat-card {:title (t :dashboard/this-month)
                         :value (format-money this-month-total (or this-month-currency primary-currency-str "USD"))
                         :icon "💰"
                         :loading? (or summary-loading? by-month-loading?)
-                        :subtitle "posted expenses"})
-          ($ stat-card {:title "Total"
+                        :subtitle (t :dashboard/posted-expenses)})
+          ($ stat-card {:title (t :dashboard/total)
                         :value total-expenses
                         :icon "📋"
                         :loading? summary-loading?
-                        :subtitle "all time"})
-          ($ stat-card {:title "Last 30 days"
+                        :subtitle (t :dashboard/all-time)})
+          ($ stat-card {:title (t :dashboard/last-30-days)
                         :value (or last-30-count 0)
                         :icon "⏳"
                         :loading? summary-loading?
-                        :subtitle "expenses created"})
-          ($ stat-card {:title "Avg per expense"
+                        :subtitle (t :dashboard/expenses-created)})
+          ($ stat-card {:title (t :dashboard/avg-per-expense)
                         :value (if avg-spend (format-money avg-spend primary-currency-str) "--")
                         :icon "📊"
                         :loading? summary-loading?
-                        :subtitle (str "currency " (or primary-currency-str "USD"))}))
+                        :subtitle (t :dashboard/currency-label (or primary-currency-str "USD"))}))
 
         ;; Two column layout
         ($ :div {:class "grid grid-cols-1 lg:grid-cols-3 gap-6"}
@@ -201,8 +203,9 @@
           ($ :div {:class "lg:col-span-2"}
             ($ :div {:class "bg-white rounded-xl shadow-sm border border-slate-100"}
               ($ :div {:class "p-4 border-b border-slate-100 flex items-center justify-between"}
-                ($ :h2 {:class "font-semibold text-slate-900"} "Recent Expenses")
-                ($ :a {:href "/expenses/list" :class "text-sm text-blue-600 hover:text-blue-700"} "View all →"))
+                ($ :h2 {:class "font-semibold text-slate-900"} (t :dashboard/recent-expenses))
+                ($ :a {:href "/expenses/list" :class "text-sm text-blue-600 hover:text-blue-700"}
+                  (t :dashboard/view-all-link)))
               ($ :div {:class "p-4"}
                 (cond
                   recent-loading?
@@ -229,31 +232,31 @@
 
                   :else
                   ($ :p {:class "text-sm text-slate-500"}
-                    "No expenses yet. Try adding one!")))))
+                    (t :dashboard/no-expenses))))))
 
           ;; Quick Actions
           ($ :div {:class "space-y-4"}
-            ($ :h2 {:class "font-semibold text-slate-900"} "Quick Actions")
+            ($ :h2 {:class "font-semibold text-slate-900"} (t :dashboard/quick-actions))
             (when can-upload?
               ($ quick-action {:id "btn-quick-upload-receipt"
-                               :title "Upload Receipt"
-                               :description "Scan or upload a receipt"
+                               :title (t :dashboard/upload-receipt)
+                               :description (t :dashboard/upload-receipt-desc)
                                :icon "📷"
                                :on-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))
             (when can-add-expense?
               ($ quick-action {:id "btn-quick-add-expense"
-                               :title "Add Expense"
-                               :description "Manual expense entry"
+                               :title (t :dashboard/add-expense)
+                               :description (t :dashboard/add-expense-desc)
                                :icon "✏️"
                                :on-click #(rf/dispatch [:navigate-to "/expenses/new"])}))
             ($ quick-action {:id "btn-quick-view-reports"
-                             :title "View Reports"
-                             :description "Monthly summaries"
+                             :title (t :dashboard/view-reports)
+                             :description (t :dashboard/view-reports-desc)
                              :icon "📊"
                              :on-click #(rf/dispatch [:navigate-to "/expenses/reports"])})
             (when power-user?
               ($ quick-action {:id "btn-quick-unmapped-items"
-                               :title "Unmapped Aliases"
-                               :description "Bulk-map aliases to articles"
+                               :title (t :dashboard/unmapped-aliases)
+                               :description (t :dashboard/unmapped-aliases-desc)
                                :icon "🧩"
                                :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}))))))))

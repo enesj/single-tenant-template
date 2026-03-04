@@ -4,12 +4,14 @@
   (:require
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.events.tenant :as tenant]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui invitation-accept-page []
-  (let [authenticated? (:authenticated (use-subscribe [:auth-status]))
+  (let [t (use-t)
+        authenticated? (:authenticated (use-subscribe [:auth-status]))
         accept-loading? (get (use-subscribe [:auth-status]) :loading?)
         error (use-subscribe [:tenant/error])
         token (use-subscribe [:tenant/accept-token])
@@ -42,31 +44,31 @@
                         :d "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"})))
 
           ($ :h1 {:class "text-2xl font-bold text-slate-800 mb-2"}
-            "Workspace Invitation")
+            (t :invitation/title))
 
           (cond
             ;; No token in URL
             (and (not token) (not url-token))
             ($ :div
               ($ :p {:class "text-slate-500 mb-4"}
-                "No invitation token found. Please check your invitation link.")
+                (t :invitation/no-token))
               ($ button
                 {:on-click #(rf/dispatch [:navigate-to "/dashboard"])
                  :variant :outline
                  :class "w-full"}
-                "Go to Dashboard"))
+                (t :invitation/go-to-dashboard)))
 
             ;; Not authenticated — redirect to login
             (not authenticated?)
             ($ :div
               ($ :p {:class "text-slate-500 mb-6"}
-                "Please sign in to accept this invitation.")
+                (t :invitation/sign-in-required))
               ($ button
                 {:on-click #(set! (.-href js/window.location)
                               (str "/login?return=" (js/encodeURIComponent (.-href js/window.location))))
                  :btn-type :primary
                  :class "w-full"}
-                "Sign In"))
+                (t :common/sign-in)))
 
             ;; Error state
             error
@@ -74,18 +76,18 @@
               ($ :div {:class "ds-alert ds-alert-error mb-4"}
                 ($ :span error))
               ($ :p {:class "text-slate-500 mb-4"}
-                "The invitation may have expired or already been used.")
+                (t :invitation/expired-or-used))
               ($ button
                 {:on-click #(rf/dispatch [:navigate-to "/dashboard"])
                  :variant :outline
                  :class "w-full"}
-                "Go to Dashboard"))
+                (t :invitation/go-to-dashboard)))
 
             ;; Ready to accept
             :else
             ($ :div
               ($ :p {:class "text-slate-500 mb-6"}
-                "You've been invited to join a workspace. Click below to accept.")
+                (t :invitation/ready-text))
               ($ button
                 {:on-click #(rf/dispatch [::tenant/accept-invitation
                                           {:token (or token url-token)}])
@@ -93,7 +95,7 @@
                  :class "w-full"
                  :loading tenant-loading?
                  :id "accept-invitation-btn"}
-                "Accept Invitation"))))))))
+                (t :invitation/accept)))))))))
 
 (comment
   ;; (require 'app.template.frontend.pages.invitation-accept :reload)

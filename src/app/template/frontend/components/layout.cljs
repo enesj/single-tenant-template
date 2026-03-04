@@ -18,7 +18,9 @@
                                                     users-icon]]
     [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
+    [app.template.frontend.events.i18n :as i18n]
     [app.template.frontend.events.tenant :as tenant]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [reitit.frontend.easy :as rtfe]
     [uix.core :refer [$ defui use-state]]
@@ -115,32 +117,53 @@
                   ($ :span {:class "ds-badge ds-badge-xs ds-badge-ghost ml-1"} m-role))))))))))
 
 (defui sidebar-footer [{:keys [user-display-name role is-owner? route-name]}]
-  ($ :div {:class "p-3 border-t border-base-300"}
-    ;; Tenant switcher
-    ($ tenant-switcher)
-    ;; User info
-    ($ :div {:class "flex items-center justify-between mb-2"}
-      ($ :div {:class "flex flex-col min-w-0"}
-        ($ :span {:class "text-sm font-medium truncate"
-                  :id "sidebar-user-name"}
-          user-display-name)
-        (when role
-          ($ :span {:class (str "ds-badge ds-badge-xs mt-1 "
-                             (if is-owner? "ds-badge-primary" "ds-badge-secondary"))
-                    :id "sidebar-user-role"}
-            role))))
-    ;; Logout link
-    ($ :a {:id "user-sidebar-logout"
-           :href "/logout"
-           :on-click (fn [e] (stop-and-push! e :logout "/logout"))
-           :class (str "flex items-center gap-2 text-sm py-2 px-2 rounded-lg "
-                    "hover:bg-base-200 transition-colors "
-                    (when (= route-name :logout) "bg-base-200 font-medium"))}
-      ($ logout-icon {:class "w-4 h-4"})
-      "Log Out")))
+  (let [t (use-t)
+        locale (use-subscribe [:locale])]
+    ($ :div {:class "p-3 border-t border-base-300"}
+      ;; Tenant switcher
+      ($ tenant-switcher)
+      ;; User info
+      ($ :div {:class "flex items-center justify-between mb-2"}
+        ($ :div {:class "flex flex-col min-w-0"}
+          ($ :span {:class "text-sm font-medium truncate"
+                    :id "sidebar-user-name"}
+            user-display-name)
+          (when role
+            ($ :span {:class (str "ds-badge ds-badge-xs mt-1 "
+                               (if is-owner? "ds-badge-primary" "ds-badge-secondary"))
+                      :id "sidebar-user-role"}
+              role))))
+      ;; Logout link
+      ($ :a {:id "user-sidebar-logout"
+             :href "/logout"
+             :on-click (fn [e] (stop-and-push! e :logout "/logout"))
+             :class (str "flex items-center gap-2 text-sm py-2 px-2 rounded-lg "
+                      "hover:bg-base-200 transition-colors "
+                      (when (= route-name :logout) "bg-base-200 font-medium"))}
+        ($ logout-icon {:class "w-4 h-4"})
+        (t :nav/log-out))
+      ;; Language switcher
+      ($ :div {:class "flex items-center gap-1 mt-2"
+               :id "language-switcher"}
+        ($ :button {:class (str "text-xs px-2 py-0.5 rounded transition-colors "
+                             (if (= locale :bs)
+                               "font-bold bg-base-200 text-base-content"
+                               "text-base-content/50 hover:bg-base-200"))
+                    :id "lang-bs-btn"
+                    :on-click #(rf/dispatch [::i18n/set-locale :bs])}
+          "BS")
+        ($ :span {:class "text-base-content/30 text-xs"} "|")
+        ($ :button {:class (str "text-xs px-2 py-0.5 rounded transition-colors "
+                             (if (= locale :en)
+                               "font-bold bg-base-200 text-base-content"
+                               "text-base-content/50 hover:bg-base-200"))
+                    :id "lang-en-btn"
+                    :on-click #(rf/dispatch [::i18n/set-locale :en])}
+          "EN")))))
 
 (defui user-sidebar []
-  (let [current-route (use-subscribe [:current-route])
+  (let [t (use-t)
+        current-route (use-subscribe [:current-route])
         current-user (use-subscribe [:current-user])
         role (normalize-role (use-subscribe [:user-role]))
         slug (use-subscribe [:tenant/url-slug])
@@ -155,7 +178,7 @@
         expense-items (vec
                         (concat
                           [(nav-item {:id "user-sidebar-dashboard"
-                                      :label "Dashboard"
+                                      :label (t :nav/dashboard)
                                       :href (th "/dashboard")
                                       :route :user-dashboard
                                       :icon ($ dashboard-icon {:class "w-6 h-6"})
@@ -163,13 +186,13 @@
                                                           :expenses-dashboard
                                                           :expenses-dashboard-alias})})
                            (nav-item {:id "user-sidebar-receipts"
-                                      :label "Receipts"
+                                      :label (t :nav/receipts)
                                       :href (th "/receipts")
                                       :route :receipts
                                       :icon ($ receipts-icon {:class "w-6 h-6"})
                                       :active? (active? #{:receipts :receipt-detail})})
                            (nav-item {:id "user-sidebar-expenses-list"
-                                      :label "Expenses"
+                                      :label (t :nav/expenses)
                                       :href (th "/expenses/list")
                                       :route :expenses-list
                                       :icon ($ expenses-icon {:class "w-6 h-6"})
@@ -178,7 +201,7 @@
                                                           :expense-new})})]
                           (when power-user?
                             [(nav-item {:id "user-sidebar-expense-items"
-                                        :label "Expense Items"
+                                        :label (t :nav/expense-items)
                                         :href (th "/expense-items")
                                         :route :expense-items
                                         :icon ($ expense-items-icon {:class "w-6 h-6"})
@@ -188,20 +211,20 @@
                            (concat
                              (when can-upload?
                                [(nav-item {:id "user-sidebar-expenses-upload"
-                                           :label "Upload"
+                                           :label (t :nav/upload)
                                            :href (th "/expenses/upload")
                                            :route :expense-upload
                                            :icon ($ arrow-up {:class "w-6 h-6"})
                                            :active? (active? #{:expense-upload})})])
                              [(nav-item {:id "user-sidebar-expenses-reports"
-                                         :label "Reports"
+                                         :label (t :nav/reports)
                                          :href (th "/expenses/reports")
                                          :route :expense-reports
                                          :icon ($ chart-bar {:class "w-6 h-6"})
                                          :active? (active? #{:expense-reports})})]
                              (when power-user?
                                [(nav-item {:id "user-sidebar-unmapped-items"
-                                           :label "Unmapped Aliases"
+                                           :label (t :nav/unmapped-aliases)
                                            :href (th "/unmapped-items")
                                            :route :unmapped-items
                                            :icon ($ unmapped-items-icon {:class "w-6 h-6"})
@@ -210,81 +233,81 @@
         reference-items (vec
                           (concat
                             [(nav-item {:id "user-sidebar-suppliers"
-                                        :label "Suppliers"
+                                        :label (t :nav/suppliers)
                                         :href (th "/suppliers")
                                         :route :expense-suppliers
                                         :icon ($ suppliers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-suppliers})})
                              (nav-item {:id "user-sidebar-payers"
-                                        :label "Payers"
+                                        :label (t :nav/payers)
                                         :href (th "/payers")
                                         :route :expense-payers
                                         :icon ($ payers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-payers})})]
                             (when power-user?
                               [(nav-item {:id "user-sidebar-payer-types"
-                                          :label "Payer Types"
+                                          :label (t :nav/payer-types)
                                           :href (th "/payer-types")
                                           :route :expense-payer-types
                                           :icon ($ payers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-payer-types})})
                                (nav-item {:id "user-sidebar-articles"
-                                          :label "Articles"
+                                          :label (t :nav/articles)
                                           :href (th "/articles")
                                           :route :expense-articles
                                           :icon ($ articles-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-articles})})
                                (nav-item {:id "user-sidebar-manufacturers"
-                                          :label "Manufacturers"
+                                          :label (t :nav/manufacturers)
                                           :href (th "/manufacturers")
                                           :route :expense-manufacturers
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-manufacturers})})
                                (nav-item {:id "user-sidebar-categories"
-                                          :label "Categories"
+                                          :label (t :nav/categories)
                                           :href (th "/categories")
                                           :route :expense-categories
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-categories})})
                                (nav-item {:id "user-sidebar-expense-categories"
-                                          :label "Expense Categories"
+                                          :label (t :nav/expense-categories)
                                           :href (th "/expense-categories")
                                           :route :expense-categories-catalog
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-categories-catalog})})
                                (nav-item {:id "user-sidebar-subcategories"
-                                          :label "Subcategories"
+                                          :label (t :nav/subcategories)
                                           :href (th "/subcategories")
                                           :route :expense-subcategories
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-subcategories})})
                                (nav-item {:id "user-sidebar-stores"
-                                          :label "Stores"
+                                          :label (t :nav/stores)
                                           :href (th "/stores")
                                           :route :expense-stores
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-stores})})
                                (nav-item {:id "user-sidebar-cities"
-                                          :label "Cities"
+                                          :label (t :nav/cities)
                                           :href (th "/cities")
                                           :route :expense-cities
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-cities})})
 
                                (nav-item {:id "user-sidebar-article-aliases"
-                                          :label "Article Aliases"
+                                          :label (t :nav/article-aliases)
                                           :href (th "/article-aliases")
                                           :route :expense-article-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-article-aliases})})
                                (nav-item {:id "user-sidebar-supplier-aliases"
-                                          :label "Supplier Aliases"
+                                          :label (t :nav/supplier-aliases)
                                           :href (th "/supplier-aliases")
                                           :route :expense-supplier-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-supplier-aliases})})
                                (nav-item {:id "user-sidebar-store-aliases"
-                                          :label "Store Aliases"
+                                          :label (t :nav/store-aliases)
                                           :href (th "/store-aliases")
                                           :route :expense-store-aliases
                                           :icon ($ article-aliases-icon {:class "w-6 h-6"})
@@ -294,26 +317,26 @@
                           (concat
                             (when power-user?
                               [(nav-item {:id "user-sidebar-members"
-                                          :label "Members"
+                                          :label (t :nav/members)
                                           :href (th "/tenant/members")
                                           :route :tenant-members
                                           :icon ($ users-icon {:class "w-6 h-6"})
                                           :active? (active? #{:tenant-members})})])
                             (when is-owner?
                               [(nav-item {:id "user-sidebar-impersonation"
-                                          :label "Impersonation"
+                                          :label (t :nav/impersonation)
                                           :href (th "/tenant/impersonation")
                                           :route :tenant-impersonation
                                           :icon ($ admins-icon {:class "w-6 h-6"})
                                           :active? (active? #{:tenant-impersonation})})])))
 
-        sections (cond-> [{:title "Expenses" :items expense-items}
-                          {:title "Operations" :items operations-items}
-                          {:title "Reference" :items reference-items}]
+        sections (cond-> [{:title (t :nav/section-expenses) :items expense-items}
+                          {:title (t :nav/section-operations) :items operations-items}
+                          {:title (t :nav/section-reference) :items reference-items}]
                    (seq workspace-items)
-                   (conj {:title "Workspace" :items workspace-items}))]
+                   (conj {:title (t :nav/section-workspace) :items workspace-items}))]
     ($ sidebar
-      {:title "Expenses"
+      {:title (t :nav/app-title)
        :sections sections
        :footer ($ sidebar-footer {:user-display-name user-display-name
                                   :role role

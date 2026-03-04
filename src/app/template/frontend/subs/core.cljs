@@ -8,6 +8,11 @@
   (fn [db _]
     (get-in db [:ui :current-entity-type])))
 
+(rf/reg-sub
+  :locale
+  (fn [db _]
+    (get db :locale :bs)))
+
 ;; Auth status subscription
 ;; Auth status subscription - updated for multi-tenant support
 (rf/reg-sub

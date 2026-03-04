@@ -5,6 +5,7 @@
   (:require
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.events.impersonation :as impersonation]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -50,7 +51,8 @@
 ;; ============================================================================
 
 (defui grant-row [{:keys [grant]}]
-  (let [gid (grant-id grant)
+  (let [t (use-t)
+        gid (grant-id grant)
         status (grant-status grant)
         is-active? (= status "active")
         [confirming? set-confirming!] (use-state false)]
@@ -71,21 +73,22 @@
                          :on-click (fn []
                                      (rf/dispatch [::impersonation/revoke-grant {:id gid}])
                                      (set-confirming! false))}
-                "Confirm")
+                (t :impersonation/confirm-revoke))
               ($ button {:btn-type :ghost :class "ds-btn-xs"
                          :on-click #(set-confirming! false)}
-                "Cancel"))
+                (t :common/cancel)))
             ($ button {:btn-type :ghost :class "ds-btn-xs text-error"
                        :id (str "revoke-grant-btn-" gid)
                        :on-click #(set-confirming! true)}
-              "Revoke")))))))
+              (t :impersonation/revoke))))))))
 
 ;; ============================================================================
 ;; Create Grant Form
 ;; ============================================================================
 
 (defui create-grant-form []
-  (let [[email set-email!] (use-state "")
+  (let [t (use-t)
+        [email set-email!] (use-state "")
         [role set-role!] (use-state "viewer")
         loading? (use-subscribe [:impersonation/loading?])]
     ($ :form {:class "flex gap-3 items-end flex-wrap"
@@ -98,7 +101,7 @@
                              (set-email! "")))}
       ($ :div {:class "flex-1 min-w-[200px]"}
         ($ :label {:class "ds-label"}
-          ($ :span {:class "ds-label-text"} "Admin Email"))
+          ($ :span {:class "ds-label-text"} (t :impersonation/admin-email)))
         ($ :input {:class "ds-input ds-input-bordered w-full"
                    :id "grant-admin-email-input"
                    :type "email"
@@ -108,27 +111,28 @@
                    :on-change #(set-email! (.. % -target -value))}))
       ($ :div
         ($ :label {:class "ds-label"}
-          ($ :span {:class "ds-label-text"} "Role"))
+          ($ :span {:class "ds-label-text"} (t :common/role)))
         ($ :select {:class "ds-select ds-select-bordered"
                     :id "grant-role-select"
                     :value role
                     :on-change #(set-role! (.. % -target -value))}
-          ($ :option {:value "viewer"} "Viewer")
-          ($ :option {:value "member"} "Member")
-          ($ :option {:value "admin"} "Admin")))
+          ($ :option {:value "viewer"} (t :tenant/role-viewer))
+          ($ :option {:value "member"} (t :tenant/role-member))
+          ($ :option {:value "admin"} (t :tenant/role-admin))))
       ($ button {:btn-type :primary
                  :type "submit"
                  :class "ds-btn-sm"
                  :id "grant-submit-btn"
                  :loading loading?}
-        "Grant Access"))))
+        (t :impersonation/grant-submit)))))
 
 ;; ============================================================================
 ;; Main Page Component
 ;; ============================================================================
 
 (defui impersonation-grants-page []
-  (let [grants (use-subscribe [:impersonation/grants])
+  (let [t (use-t)
+        grants (use-subscribe [:impersonation/grants])
         loading? (use-subscribe [:impersonation/loading?])
         error (use-subscribe [:impersonation/error])
         success (use-subscribe [:impersonation/success-message])
@@ -139,17 +143,17 @@
     ($ :div {:class "p-6 max-w-4xl mx-auto"}
       ;; Page header
       ($ :div {:class "mb-6"}
-        ($ :h1 {:class "text-2xl font-bold"} "Impersonation Grants")
+        ($ :h1 {:class "text-2xl font-bold"} (t :impersonation/page-title))
         (when tenant
           ($ :p {:class "text-base-content/60 mt-1"}
-            (str "Manage admin access to "
+            (t :impersonation/manage-access
               (or (:name tenant) (:tenants/name tenant) "your workspace")))))
 
       ;; Access denied for non-owners
       (if-not is-owner?
         ($ :div {:class "ds-alert ds-alert-warning"
                  :id "impersonation-access-denied"}
-          ($ :span "Only tenant owners can manage impersonation grants."))
+          ($ :span (t :impersonation/owners-only)))
 
         ($ :<>
           ;; Alerts
@@ -159,7 +163,7 @@
               ($ :span error)
               ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
                           :on-click #(rf/dispatch [::impersonation/clear-messages])}
-                "Dismiss")))
+                (t :impersonation/dismiss))))
 
           (when success
             ($ :div {:class "ds-alert ds-alert-success mb-4"
@@ -167,20 +171,18 @@
               ($ :span success)
               ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
                           :on-click #(rf/dispatch [::impersonation/clear-messages])}
-                "Dismiss")))
+                (t :impersonation/dismiss))))
 
           ;; Explanation card
           ($ :div {:class "ds-card bg-base-200/50 border border-base-200 mb-6"}
             ($ :div {:class "ds-card-body py-3 px-4"}
               ($ :p {:class "text-sm text-base-content/70"}
-                "Impersonation grants allow platform administrators to access your workspace "
-                "with a specific role for support and troubleshooting purposes. "
-                "You can revoke access at any time.")))
+                (t :impersonation/explanation))))
 
           ;; Create grant form
           ($ :div {:class "ds-card bg-base-100 shadow-sm border border-base-200 mb-6"}
             ($ :div {:class "ds-card-body"}
-              ($ :h2 {:class "ds-card-title text-lg mb-4"} "Grant Admin Access")
+              ($ :h2 {:class "ds-card-title text-lg mb-4"} (t :impersonation/grant-access))
               ($ create-grant-form)))
 
           ;; Loading state
@@ -191,23 +193,23 @@
           ;; Grants table
           ($ :div {:class "ds-card bg-base-100 shadow-sm border border-base-200"}
             ($ :div {:class "ds-card-body"}
-              ($ :h2 {:class "ds-card-title text-lg mb-4"} "Active Grants")
+              ($ :h2 {:class "ds-card-title text-lg mb-4"} (t :impersonation/active-grants))
               (if (seq grants)
                 ($ :div {:class "overflow-x-auto"}
                   ($ :table {:class "ds-table ds-table-sm"
                              :id "impersonation-grants-table"}
                     ($ :thead
                       ($ :tr
-                        ($ :th "Admin Email")
-                        ($ :th "Role")
-                        ($ :th "Status")
-                        ($ :th "Created")
-                        ($ :th "Actions")))
+                        ($ :th (t :impersonation/col-admin-email))
+                        ($ :th (t :impersonation/col-role))
+                        ($ :th (t :impersonation/col-status))
+                        ($ :th (t :impersonation/col-created))
+                        ($ :th (t :impersonation/col-actions))))
                     ($ :tbody
                       (for [g grants]
                         ($ grant-row {:key (grant-id g) :grant g})))))
                 ($ :p {:class "text-base-content/60"}
-                  "No impersonation grants yet.")))))))))
+                  (t :impersonation/no-grants))))))))))
 
 (comment
   ;; (require 'app.template.frontend.pages.impersonation-grants :reload)

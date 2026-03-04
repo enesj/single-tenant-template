@@ -6,6 +6,7 @@
     app.template.frontend.events.auth
     app.template.frontend.events.bootstrap
     app.template.frontend.events.config
+    app.template.frontend.events.i18n
     app.template.frontend.events.messages
     app.template.frontend.events.routing
     app.template.frontend.events.tenant

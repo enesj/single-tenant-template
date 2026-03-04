@@ -4,6 +4,7 @@
   (:require
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.events.tenant :as tenant]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -37,7 +38,8 @@
                       :d "M9 5l7 7-7 7"})))))))
 
 (defui tenant-select-page []
-  (let [available-tenants (use-subscribe [:available-tenants])
+  (let [t (use-t)
+        available-tenants (use-subscribe [:available-tenants])
         loading? (use-subscribe [:tenant/loading?])
         error (use-subscribe [:tenant/error])
         user (use-subscribe [:current-user])
@@ -59,10 +61,10 @@
 
           ;; Welcome text
           ($ :h1 {:class "text-2xl font-bold text-slate-800 mb-2"}
-            (str "Welcome, " user-name "!"))
+            (t :tenant/welcome user-name))
 
           ($ :h2 {:class "text-lg font-medium text-slate-600 mb-6"}
-            "Select a Workspace")
+            (t :tenant/select-workspace))
 
           ;; Error
           (when error
@@ -77,10 +79,10 @@
           ;; Tenant list
           (when (and (not loading?) (seq available-tenants))
             ($ :div {:class "space-y-3 text-left"}
-              (for [t available-tenants]
+              (for [t* available-tenants]
                 ($ tenant-card
-                  {:key (or (:tenant-id t) (:tenant_id t) (:id t))
-                   :tenant t
+                  {:key (or (:tenant-id t*) (:tenant_id t*) (:id t*))
+                   :tenant t*
                    :loading? loading?
                    :on-select (fn [tid]
                                 (rf/dispatch [::tenant/switch-tenant {:tenant-id tid}]))}))))
@@ -88,7 +90,7 @@
           ;; No tenants fallback
           (when (and (not loading?) (empty? available-tenants))
             ($ :p {:class "text-slate-500 py-4"}
-              "No workspaces available. Contact your administrator.")))
+              (t :tenant/no-workspaces))))
 
         ;; Footer
         ($ :div {:class "mt-6 text-center"}
@@ -96,7 +98,7 @@
             {:on-click #(rf/dispatch [:app.template.frontend.events.auth/logout])
              :variant :ghost
              :class "text-sm text-slate-500"}
-            "Sign Out"))))))
+            (t :common/sign-out)))))))
 
 (comment
   ;; (require 'app.template.frontend.pages.tenant-select :reload)

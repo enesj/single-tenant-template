@@ -3,6 +3,7 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [default-provider-icon
                                                     github-icon google-icon]]
+    [app.template.frontend.i18n :refer [use-t]]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -10,7 +11,8 @@
 (defui auth-component
   "User info display component (without logout button - logout is in sidebar only)"
   []
-  (let [auth-status (use-subscribe [:auth-status])
+  (let [t (use-t)
+        auth-status (use-subscribe [:auth-status])
         current-user (use-subscribe [:current-user])
         current-tenant (use-subscribe [:current-tenant])
         user-role (use-subscribe [:user-role])
@@ -71,7 +73,7 @@
                    :class "ds-btn-sm"
                    :id "auth-sign-in-btn"
                    :on-click #(set! (.-href js/window.location) "/login/google")}
-          "Sign In")))))
+          (t :common/sign-in))))))
 
 (defui auth-form-container
   "Centered auth form container with gradient background.

@@ -2,6 +2,7 @@
   (:require
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -49,7 +50,8 @@
 (defui confirm-dialog
   "Confirmation dialog component that renders when opened via the show-confirm function"
   []
-  (let [dialog-state (use-subscribe [::confirm-dialog-state])
+  (let [t (use-t)
+        dialog-state (use-subscribe [::confirm-dialog-state])
         ;; Handle both cases: if dialog-state is already a map or if it's a reference
         state-value (if (satisfies? cljs.core/IDeref dialog-state)
                       @dialog-state
@@ -73,7 +75,7 @@
          :class "shadow-2xl"
          :close-button-id "confirm-dialog-close"
          :header ($ :div {:class "w-full text-lg font-semibold text-center"}
-                   (or title "Confirm Action"))
+                   (or title (t :confirm/action-title)))
          :on-close handle-cancel}
 
         ;; Content
@@ -89,11 +91,11 @@
                :btn-type :cancel
                :class "px-6 py-2 rounded-lg hover:bg-gray-200 transition-colors duration-200"
                :on-click handle-cancel}
-              (or cancel-text "Cancel"))
+              (or cancel-text (t :common/cancel)))
 
             ($ button
               {:id "confirm-dialog-confirm"
                :btn-type :primary
                :class "px-6 py-2 rounded-lg hover:opacity-90 transition-colors duration-200 font-medium"
                :on-click handle-confirm}
-              (or confirm-text "Confirm"))))))))
+              (or confirm-text (t :common/confirm)))))))))

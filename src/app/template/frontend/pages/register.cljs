@@ -10,6 +10,7 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [google-icon github-icon]]
     [app.template.frontend.events.auth :as auth-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
@@ -18,37 +19,32 @@
 (defui registration-page
   "User registration form component"
   []
-  (let [auth-status (use-subscribe [:auth-status])
+  (let [t (use-t)
+        auth-status (use-subscribe [:auth-status])
         loading? (get-in auth-status [:loading?] false)
         error (:error auth-status)
         registered? (get-in auth-status [:session :registered?] false)
         registration-message (get-in auth-status [:session :registration-message])
         verification-required? (get-in auth-status [:session :verification-required?] false)
 
-        ;; Form state (used for controlled inputs; the submit handler
-        ;; also reads values directly from the DOM to avoid any hook
-        ;; ordering issues that could mis-map fields).
+        ;; Form state
         [email set-email!] (use-state "")
         [full-name set-full-name!] (use-state "")
         [password set-password!] (use-state "")
         [confirm-password set-confirm-password!] (use-state "")
         [form-errors set-form-errors!] (use-state {})
 
-        ;; Form validation function – takes explicit values so it can be
-        ;; reused by the DOM-based submit handler. We intentionally keep
-        ;; email validation minimal here and rely on the backend for
-        ;; strict format checks.
         validate-form
         (fn [email* full-name* password* confirm-password*]
           (let [email-val (str/trim (or email* ""))
                 full-name-val (str/trim (or full-name* ""))
                 errors (cond-> {}
-                         (str/blank? email-val) (assoc :email "Email is required")
-                         (str/blank? full-name-val) (assoc :full-name "Full name is required")
-                         (< (count full-name-val) 2) (assoc :full-name "Full name must be at least 2 characters")
-                         (str/blank? password*) (assoc :password "Password is required")
-                         (< (count (or password* "")) 10) (assoc :password "Password must be at least 10 characters")
-                         (not= password* confirm-password*) (assoc :confirm-password "Passwords do not match"))]
+                         (str/blank? email-val) (assoc :email (t :validation/email-required))
+                         (str/blank? full-name-val) (assoc :full-name (t :validation/full-name-required))
+                         (< (count full-name-val) 2) (assoc :full-name (t :validation/full-name-min))
+                         (str/blank? password*) (assoc :password (t :validation/password-required))
+                         (< (count (or password* "")) 10) (assoc :password (t :validation/password-min))
+                         (not= password* confirm-password*) (assoc :confirm-password (t :validation/passwords-no-match)))]
             (js/console.log "registration-validate"
               (clj->js {:email email-val
                         :full-name full-name-val
@@ -57,8 +53,6 @@
                         :errors errors}))
             errors))
 
-        ;; Form submission handler – uses controlled state values
-        ;; (email/full-name/password/confirm-password).
         handle-submit
         (fn [e]
           (.preventDefault e)
@@ -69,32 +63,30 @@
                 validation-errors (validate-form email* full-name* password* confirm-password*)]
             (if (empty? validation-errors)
               (do
-                ;; Keep local state in sync for controlled inputs
                 (set-email! (str/trim (or email* "")))
                 (set-full-name! (str/trim (or full-name* "")))
                 (set-password! password*)
                 (set-confirm-password! confirm-password*)
                 (set-form-errors! {})
-                ;; Debug: log the values we are about to submit (stringified)
                 (js/console.log
                   (str "registration-submit "
-                       (js/JSON.stringify
-                         #js {:email email*
-                              :fullName full-name*
-                              :password password*
-                              :confirmPassword confirm-password*})))
+                    (js/JSON.stringify
+                      #js {:email email*
+                           :fullName full-name*
+                           :password password*
+                           :confirmPassword confirm-password*})))
                 (rf/dispatch [::auth-events/register-user
                               {:email email*
                                :full-name full-name*
                                :password password*
                                :confirm-password confirm-password*}]))
-              (set-form-errors! validation-errors))))] 
+              (set-form-errors! validation-errors))))]
 
     ;; If already registered, show success message
     (if registered?
       ($ auth-form-container
-        ($ auth-form-header {:title "Registration Successful"
-                             :subtitle "Your account has been created!"})
+        ($ auth-form-header {:title (t :register/success-title)
+                             :subtitle (t :register/success-subtitle)})
 
         ;; Success message
         (when verification-required?
@@ -103,13 +95,13 @@
               ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                         :d "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"}))
             ($ :div
-              ($ :h3 {:class "font-semibold text-lg mb-2"} "Check Your Email")
+              ($ :h3 {:class "font-semibold text-lg mb-2"} (t :register/check-email))
               ($ :p {:class "text-sm"} registration-message))))
 
         (when (not verification-required?)
           ($ :div {:class "ds-alert ds-alert-success mb-6"}
             ($ :div
-              ($ :h3 {:class "font-semibold text-lg mb-2"} "Registration Complete!")
+              ($ :h3 {:class "font-semibold text-lg mb-2"} (t :register/complete))
               ($ :p {:class "text-sm"} registration-message))))
 
         ;; Action buttons
@@ -118,17 +110,17 @@
                      :class "w-full"
                      :id "registration-continue-btn"
                      :on-click #(set! (.-href js/window.location) "/login")}
-            "Continue to Login")
+            (t :register/continue-login))
           ($ button {:btn-type :outline
                      :class "w-full"
                      :id "registration-home-btn"
                      :on-click #(set! (.-href js/window.location) "/")}
-            "Go to Homepage")))
+            (t :register/go-home))))
 
       ;; Registration form
       ($ auth-form-container
-        ($ auth-form-header {:title "Create Account"
-                             :subtitle "Sign up to get started with your account"})
+        ($ auth-form-header {:title (t :register/title)
+                             :subtitle (t :register/subtitle)})
 
         ;; Error alert
         ($ auth-error-alert {:error error})
@@ -138,9 +130,9 @@
                   :on-submit handle-submit}
 
           ;; Email field
-          ($ auth-form-field {:label "Email Address"
+          ($ auth-form-field {:label (t :common/email-address)
                               :type "email"
-                              :placeholder "Enter your email address"
+                              :placeholder (t :common/email-placeholder)
                               :value email
                               :field-id "registration-email"
                               :required true
@@ -152,9 +144,9 @@
               (:email form-errors)))
 
           ;; Full name field
-          ($ auth-form-field {:label "Full Name"
+          ($ auth-form-field {:label (t :common/full-name)
                               :type "text"
-                              :placeholder "Enter your full name"
+                              :placeholder (t :common/full-name-placeholder)
                               :value full-name
                               :field-id "registration-full-name"
                               :required true
@@ -166,9 +158,9 @@
               (:full-name form-errors)))
 
           ;; Password field
-          ($ auth-form-field {:label "Password"
+          ($ auth-form-field {:label (t :common/password)
                               :type "password"
-                              :placeholder "Enter a secure password (min. 10 characters)"
+                              :placeholder (t :register/password-placeholder)
                               :value password
                               :field-id "registration-password"
                               :required true
@@ -180,9 +172,9 @@
               (:password form-errors)))
 
           ;; Confirm password field
-          ($ auth-form-field {:label "Confirm Password"
+          ($ auth-form-field {:label (t :register/confirm-password)
                               :type "password"
-                              :placeholder "Confirm your password"
+                              :placeholder (t :register/confirm-password-placeholder)
                               :value confirm-password
                               :field-id "registration-confirm-password"
                               :required true
@@ -200,13 +192,13 @@
                                               (empty? full-name)
                                               (empty? password)
                                               (empty? confirm-password))
-                                 :text "Create Account"
-                                 :loading-text "Creating Account..."
+                                 :text (t :register/submit)
+                                 :loading-text (t :register/submitting)
                                  :button-id "registration-submit-btn"}))
 
         ;; Divider
         ($ :div {:class "divider my-6"}
-          ($ :div {:class "divider-text"} "OR"))
+          ($ :div {:class "divider-text"} (t :common/or)))
 
         ;; OAuth options
         ($ :div {:class "space-y-4"}
@@ -215,15 +207,15 @@
                      :id "registration-google-btn"
                      :on-click #(set! (.-href js/window.location) "/login/google")}
             ($ google-icon)
-            "Continue with Google")
+            (t :login/continue-google))
 
           ($ button {:btn-type :outline
                      :class "w-full"
                      :id "registration-github-btn"
                      :on-click #(set! (.-href js/window.location) "/login/github")}
             ($ github-icon)
-            "Continue with GitHub"))
+            (t :login/continue-github)))
 
         ;; Footer
-        ($ auth-form-footer {:message "Already have an account?"
+        ($ auth-form-footer {:message (t :register/have-account)
                              :show-security-badge? true})))))

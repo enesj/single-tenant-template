@@ -80,6 +80,7 @@
 
 (def default-db
   {:current-route nil
+   :locale :bs
    :controllers []
    :entities {}
    :models-data nil
