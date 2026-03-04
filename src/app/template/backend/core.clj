@@ -292,7 +292,8 @@
                                           (throw e)))
                     webserver         (webserver/create-webserver
                                         (-> @config :webserver :host)
-                                        (-> @config :webserver :port)
+                                        (let [p (-> @config :webserver :port)]
+                                          (cond-> p (string? p) Integer/parseInt))
                                         database
                                         @service-container)]
           (log/info "🚀 Starting system - host:" (-> @config :webserver :host) ", port:" (-> @config :webserver :port) "- Auto-restart works!")
@@ -319,7 +320,11 @@
 
 ^{:clojure-lsp/ignore [:clojure-lsp/unused-public-var]}
 (defn main []
-  (reset! init #(with-my-system await-scheduler))
+  (reset! init #(try
+                  (with-my-system await-scheduler)
+                  (catch Throwable t
+                    (log/error t "Fatal startup error - process will exit")
+                    (System/exit 1))))
   (future-call @init))
 
 (comment
