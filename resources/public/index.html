@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{csrf-token}}">
+    <title>Bookkeeping App</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/assets/css/style.css" type="text/css" />
+<!--    <script src="https://cdn.tailwindcss.com"></script>-->
+    <script>
+        // Apply saved theme immediately to prevent flash of default theme
+        (function() {
+            var savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+</head>
+<body>
+    <div id="app"></div>
+    <script src="/js/main/app.js"></script>
+</body>
+</html>

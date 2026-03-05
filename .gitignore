@@ -44,9 +44,10 @@ node_modules
 bih_zip_to_csv.py
 __pycache__/
 *.pyc
-/resources/public/
+/resources/public/*
 !resources/public/index.html
-resources/public/assets/css/*.css
+!resources/public/admin.html
+!resources/public/favicon.ico
 # package-lock.json tracked for reproducible production builds
 /scripts/dev-frontend-files.txt
 /scripts/frontend-files.txt
