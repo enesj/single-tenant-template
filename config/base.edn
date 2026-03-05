@@ -54,6 +54,12 @@
                              :test 8086
                              :prod #or [#env PORT 8080]}}
 
+ ;; Public base URL for links in emails, OAuth callbacks, etc.
+ ;; In production set BASE_URL=https://your-app.railway.app (no trailing slash).
+ :base-url #profile {:dev  nil
+                     :test nil
+                     :prod #or [#env BASE_URL nil]}
+
  :cache     {:size 1000
              :ttl  3600}
 
@@ -123,11 +129,16 @@
                                 :pass #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
                                 :tls  true}
                          :test {:transport :in-memory}
-                         :prod {:host #or [#env SMTP_HOST #ref [:secrets :gmail :smtp-host]]
-                                :port #or [#ref [:secrets :gmail :smtp-port] 587]
-                                :user #or [#env SMTP_USER #ref [:secrets :gmail :smtp-user]]
-                                :pass #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
-                                :tls  true}}
+                         ;; Port 465 (SMTPS/SSL) — Railway blocks 587 (STARTTLS) outbound.
+                         ;; SMTP_PASS must be a Gmail App Password (not your regular password).
+                         ;; Generate one at: myaccount.google.com → Security → App Passwords
+                         :prod {:host              #or [#env SMTP_HOST #ref [:secrets :gmail :smtp-host]]
+                                :port              465
+                                :user              #or [#env SMTP_USER #ref [:secrets :gmail :smtp-user]]
+                                :pass              #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
+                                :ssl               true
+                                :connectiontimeout 15000
+                                :timeout           15000}}
          :from-email #profile {:dev  #or [#env SMTP_FROM_EMAIL
                                           #ref [:secrets :gmail :from-email]]
                                :test "test@example.com"

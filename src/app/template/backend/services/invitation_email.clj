@@ -58,8 +58,11 @@
              :port (:port smtp-config)
              :user (:user smtp-config)
              :tls  (:tls smtp-config)})
-          (gmail-smtp/send-smtp-email smtp-config (:from-email email-service) to-email subject text html)
-          (log/info "Invitation email sent successfully" {:to-email to-email}))
+          (let [result (gmail-smtp/send-smtp-email smtp-config (:from-email email-service) to-email subject text html)]
+            (if (:success result)
+              (log/info "Invitation email sent successfully" {:to-email to-email})
+              (log/error "SMTP send failed — invitation email NOT delivered"
+                {:to-email to-email :details result}))))
         (log/warn "Cannot send invitation email — no SMTP config on email service"
           {:service-type (type email-service)
            :service-keys (keys email-service)})))
