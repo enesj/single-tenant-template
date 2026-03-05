@@ -35,6 +35,13 @@
    `email-service` is a GmailSMTPEmailService or PostmarkEmailService record.
    `params` keys: :to-email, :inviter-name, :tenant-name, :accept-url, :role"
   [email-service {:keys [to-email inviter-name tenant-name accept-url role]}]
+  (log/info "Sending invitation email"
+    {:to-email     to-email
+     :tenant-name  tenant-name
+     :accept-url   accept-url
+     :service-type (type email-service)
+     :has-smtp?    (some? (:smtp-config email-service))
+     :from-email   (:from-email email-service)})
   (try
     (let [subject (str inviter-name " invited you to join " tenant-name)
           {:keys [text html]} (build-invitation-email-body
@@ -45,10 +52,22 @@
       ;; Use gmail-smtp send helper if we can reach its internals,
       ;; otherwise fall through to postal directly.
       (if-let [smtp-config (:smtp-config email-service)]
-        (gmail-smtp/send-smtp-email smtp-config (:from-email email-service) to-email subject text html)
-        (log/warn "Cannot send invitation email — no SMTP config on email service")))
+        (do
+          (log/info "Attempting SMTP send"
+            {:host (:host smtp-config)
+             :port (:port smtp-config)
+             :user (:user smtp-config)
+             :tls  (:tls smtp-config)})
+          (gmail-smtp/send-smtp-email smtp-config (:from-email email-service) to-email subject text html)
+          (log/info "Invitation email sent successfully" {:to-email to-email}))
+        (log/warn "Cannot send invitation email — no SMTP config on email service"
+          {:service-type (type email-service)
+           :service-keys (keys email-service)})))
     (catch Exception e
-      (log/error "Failed to send invitation email to" to-email ":" (.getMessage e)))))
+      (log/error e "Failed to send invitation email"
+        {:to-email to-email
+         :error    (.getMessage e)
+         :cause    (some-> (.getCause e) .getMessage)}))))
 
 (comment
   ;; (require 'app.template.backend.services.invitation-email :reload)
