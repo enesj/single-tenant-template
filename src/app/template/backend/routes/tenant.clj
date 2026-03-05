@@ -143,7 +143,7 @@
                              :role       (or role "member")
                              :invited-by (:id user)})]
         ;; Send invitation email asynchronously (best-effort, must not block HTTP response)
-        (when email-service
+        (if email-service
           (let [token      (or (:token invitation) (:tenant_invitations/token invitation))
                 accept-url (build-accept-url base-url token)]
             (future
@@ -156,7 +156,8 @@
                    :accept-url   accept-url
                    :role         (or role "member")})
                 (catch Exception e
-                  (log/warn "Failed to send invitation email:" (.getMessage e)))))))
+                  (log/warn "Failed to send invitation email:" (.getMessage e))))))
+          (log/warn "Email service not configured — invitation email NOT sent" {:to-email email}))
         (response/response {:success true :invitation (sanitize invitation)})))))
 
 (defn- list-invitations-handler
@@ -220,7 +221,7 @@
             inv-id    (get-in req [:path-params :id])
             invitation (invitation-svc/resend-invitation! db inv-id)]
         ;; Re-send the email asynchronously (must not block HTTP response)
-        (when email-service
+        (if email-service
           (let [token      (:token invitation)
                 accept-url (build-accept-url base-url token)]
             (future
@@ -233,7 +234,8 @@
                    :accept-url   accept-url
                    :role         (:role invitation)})
                 (catch Exception e
-                  (log/warn "Failed to resend invitation email:" (.getMessage e)))))))
+                  (log/warn "Failed to resend invitation email:" (.getMessage e))))))
+          (log/warn "Email service not configured — invitation email NOT resent" {:to-email (:email invitation)}))
         (response/response {:success true :invitation (sanitize invitation)})))))
 
 (defn- revoke-invitation-handler
