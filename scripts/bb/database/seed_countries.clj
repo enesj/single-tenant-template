@@ -3,6 +3,7 @@
 (ns scripts.bb.database.seed-countries
   (:require
     [aero.core :as aero]
+    [clojure.string :as str]
     [next.jdbc :as jdbc]))
 
 (def countries
@@ -208,20 +209,29 @@
    ["Zimbabwe" "ZW"]])
 
 (defn get-db-config [profile]
-  (let [config (aero/read-config "config/base.edn" {:profile profile})]
-    (:database config)))
+  (if (= profile :prod)
+    ;; Prefer DATABASE_PUBLIC_URL (reachable from local machine via `railway run`)
+    ;; over DATABASE_URL (private Railway network, only reachable from Railway services).
+    {:jdbc-url (some-> (or (System/getenv "DATABASE_PUBLIC_URL")
+                         (System/getenv "DATABASE_URL"))
+                 str/trim not-empty
+                 (str/replace #"^postgres://" "jdbc:postgresql://")
+                 (str/replace #"^postgresql://" "jdbc:postgresql://"))}
+    (:database (aero/read-config "config/base.edn" {:profile profile}))))
 
 (defn seed-countries!
   "Upsert the full `countries` reference list.
 
   Uses ON CONFLICT(country) to be idempotent and safe to re-run."
-  [{:keys [host port dbname user password]}]
-  (let [ds (jdbc/get-datasource {:dbtype "postgresql"
-                                 :host host
-                                 :port port
-                                 :dbname dbname
-                                 :user user
-                                 :password password})]
+  [{:keys [jdbc-url host port dbname user password]}]
+  (let [ds (jdbc/get-datasource (if jdbc-url
+                                  {:jdbcUrl jdbc-url}
+                                  {:dbtype "postgresql"
+                                   :host host
+                                   :port port
+                                   :dbname dbname
+                                   :user user
+                                   :password password}))]
     (jdbc/with-transaction [tx ds]
       (jdbc/execute-batch! tx
         "INSERT INTO countries (country, code, created_at, updated_at)
@@ -237,8 +247,11 @@
 (defn -main [& args]
   (let [env (or (first args) "dev")
         profile (keyword env)]
-    (when-not (#{:dev :test} profile)
-      (println "❌ Invalid environment. Use: dev or test")
+    (when-not (#{:dev :test :prod} profile)
+      (println "❌ Invalid environment. Use: dev, test, or prod")
+      (System/exit 1))
+    (when (and (= profile :prod) (empty? (System/getenv "DATABASE_URL")))
+      (println "❌ DATABASE_URL env var is required for prod. Use: railway run clj -M scripts/bb/database/seed_countries.clj prod")
       (System/exit 1))
     (try
       (let [db (get-db-config profile)]

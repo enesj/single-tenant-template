@@ -522,7 +522,7 @@
                   (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
 
          seed-geo-reference
-         {:doc "Seed reference geo data (countries + BH cities). Usage: bb seed-geo-reference [dev|test]",
+         {:doc "Seed reference geo data (countries + BH cities). Usage: bb seed-geo-reference [dev|test|prod]",
           :task (let [env         (or (first *command-line-args*) "dev")
                       process-env (dotenv)]
                   (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/seed_countries.clj" env)
