@@ -42,11 +42,9 @@
         user (create-user! db "zero")
         result (tenant-auth/resolve-tenant-context db test-config user)]
 
-    (testing "provisions a new tenant"
-      (is (= :provisioned (:action result)))
-      (is (some? (:tenant result)))
-      (is (= "owner" (or (get-in result [:membership :role])
-                       (get-in result [:membership :tenant_memberships/role])))))))
+    (testing "returns no-tenant for users without memberships"
+      (is (= :no-tenant (:action result)))
+      (is (nil? (:tenant result))))))
 
 (deftest resolve-one-membership
   (let [db   fixtures/*test-db*
@@ -86,6 +84,15 @@
 ;; ============================================================================
 ;; build-auth-session
 ;; ============================================================================
+
+(deftest build-auth-session-no-tenant
+  (let [session (tenant-auth/build-auth-session
+                  {:user {:id "u0" :email "new@x.com"}}
+                  {:action :no-tenant})]
+    (testing "sets no-tenant flag without tenant or membership"
+      (is (true? (:no-tenant session)))
+      (is (nil? (:tenant session)))
+      (is (nil? (:membership session))))))
 
 (deftest build-auth-session-provisioned
   (let [session (tenant-auth/build-auth-session

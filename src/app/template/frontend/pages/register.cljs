@@ -105,17 +105,24 @@
               ($ :p {:class "text-sm"} registration-message))))
 
         ;; Action buttons
-        ($ :div {:class "space-y-4"}
-          ($ button {:btn-type :primary
-                     :class "w-full"
-                     :id "registration-continue-btn"
-                     :on-click #(set! (.-href js/window.location) "/login")}
-            (t :register/continue-login))
-          ($ button {:btn-type :outline
-                     :class "w-full"
-                     :id "registration-home-btn"
-                     :on-click #(set! (.-href js/window.location) "/")}
-            (t :register/go-home))))
+        (let [return-param (when (and (exists? js/window) (exists? js/URLSearchParams))
+                             (-> js/window .-location .-search
+                               (js/URLSearchParams.)
+                               (.get "return")))
+              login-url (if (seq return-param)
+                          (str "/login?return=" (js/encodeURIComponent return-param))
+                          "/login")]
+          ($ :div {:class "space-y-4"}
+            ($ button {:btn-type :primary
+                       :class "w-full"
+                       :id "registration-continue-btn"
+                       :on-click #(set! (.-href js/window.location) login-url)}
+              (t :register/continue-login))
+            ($ button {:btn-type :outline
+                       :class "w-full"
+                       :id "registration-home-btn"
+                       :on-click #(set! (.-href js/window.location) "/")}
+              (t :register/go-home)))))
 
       ;; Registration form
       ($ auth-form-container

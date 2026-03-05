@@ -173,5 +173,12 @@
                     ($ :a {:href "/privacy" :class "ds-link ds-link-primary"} (t :common/privacy)))
                   ($ :p {:class "text-sm text-base-content/70 mt-4"}
                     (t :login/no-account) " "
-                    ($ :a {:href "/register" :class "ds-link ds-link-primary"}
-                      (t :login/sign-up))))))))))))
+                    (let [return-param (when (and (exists? js/window) (exists? js/URLSearchParams))
+                                         (-> js/window .-location .-search
+                                           (js/URLSearchParams.)
+                                           (.get "return")))]
+                      ($ :a {:href (if (seq return-param)
+                                     (str "/register?return=" (js/encodeURIComponent return-param))
+                                     "/register")
+                             :class "ds-link ds-link-primary"}
+                        (t :login/sign-up)))))))))))))

@@ -236,8 +236,9 @@
                               auth-session    (sanitize-for-serialization
                                                 (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                               ;; Redirect to tenant-select when multiple tenants, else normal path
-                              redirect-url    (if (= :selection-required (:action tenant-ctx))
-                                                "/tenant-select"
+                              redirect-url    (case (:action tenant-ctx)
+                                                :selection-required "/tenant-select"
+                                                :no-tenant          "/tenant-select"
                                                 (domain-registry/get-post-login-path))]
 
                           (log/info "Authentication successful for:" user-email)

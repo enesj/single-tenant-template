@@ -55,7 +55,8 @@
         (log/debug "User session:" (:full-name user) "tenant:" (:name tenant) "role:" user-role
           "membership-role:" membership-role "tenant-selection-required:" tenant-selection-required))
 
-      (let [updated-db (-> db
+      (let [no-tenant? (get response :no-tenant false)
+            updated-db (-> db
                          ;; Clear loading state
                          (assoc-in [:session :loading?] false)
 
@@ -85,10 +86,22 @@
                          (assoc-in [:session :tenant-selection-required] tenant-selection-required)
                          (assoc-in [:session :available-tenants] available-tenants)
 
+                         ;; Store no-tenant state
+                         (assoc-in [:session :no-tenant?] no-tenant?)
+
                          ;; Clear any previous errors
                          (update :session dissoc :error))
-            ;; Determine redirect based on role and tenant state
+            ;; Check for a `return` URL parameter (e.g. from invitation accept flow)
+            return-url (when (and (exists? js/window) (exists? js/URLSearchParams))
+                         (-> js/window .-location .-search
+                           (js/URLSearchParams.)
+                           (.get "return")))
+            ;; Determine redirect based on return URL, role, and tenant state
             redirect-path (cond
+                            ;; Honor return URL (e.g. invitation accept page)
+                            (seq return-url) return-url
+                            ;; Users with no tenant — show tenant select (they can accept invitations)
+                            no-tenant? "/tenant-select"
                             ;; Users with multiple tenants and no active tenant
                             tenant-selection-required "/tenant-select"
                             ;; Members and above go to expense dashboard

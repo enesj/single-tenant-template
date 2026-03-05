@@ -16,10 +16,14 @@
   (fn [{:keys [db]} _]
     (let [current-auth-status (get-in db [:session :authenticated?])
           loading? (get-in db [:session :loading?])]
-      ;; If already authenticated, redirect to entities page
+      ;; If already authenticated, redirect (honor return URL if present)
       (if (and current-auth-status (not loading?))
-        {:db (assoc-in db (paths/current-page) :login)
-         :redirect "/entities"}
+        (let [return-url (when (and (exists? js/window) (exists? js/URLSearchParams))
+                           (-> js/window .-location .-search
+                             (js/URLSearchParams.)
+                             (.get "return")))]
+          {:db (assoc-in db (paths/current-page) :login)
+           :redirect (if (seq return-url) return-url "/entities")})
         ;; Otherwise, fetch auth status and show login page
         {:db (-> db
                (assoc-in (paths/current-page) :login))
@@ -40,10 +44,14 @@
   (fn [{:keys [db]} _]
     (let [current-auth-status (get-in db [:session :authenticated?])
           loading? (get-in db [:session :loading?])]
-      ;; If already authenticated, redirect to entities page
+      ;; If already authenticated, redirect (honor return URL if present)
       (if (and current-auth-status (not loading?))
-        {:db (assoc-in db (paths/current-page) :register)
-         :redirect "/entities"}
+        (let [return-url (when (and (exists? js/window) (exists? js/URLSearchParams))
+                           (-> js/window .-location .-search
+                             (js/URLSearchParams.)
+                             (.get "return")))]
+          {:db (assoc-in db (paths/current-page) :register)
+           :redirect (if (seq return-url) return-url "/entities")})
         ;; Otherwise, clear auth state and show registration page
         {:db (-> db
                (assoc-in (paths/current-page) :register))

@@ -4,35 +4,25 @@
    Encapsulates the 'check memberships → provision or set context' logic so
    that login/register/OAuth handlers stay lean."
   (:require
-    [app.template.backend.middleware.rate-limiting :as rate-limiting]
     [app.template.backend.services.tenant :as tenant-svc]
     [taoensso.timbre :as log]))
 
 (defn resolve-tenant-context
   "Decide what to do after a user authenticates, based on membership count:
-     0  → provision a new tenant (auto-creates owner membership + seed data)
+     0  → :no-tenant (user must accept an invitation or request admin approval)
      1  → auto-select that tenant
      >1 → return the list so the frontend can ask the user to choose
 
-   Returns a map with :action plus relevant data.
-   Optional `opts` map supports `:client-ip` for provisioning rate limiting."
+   Returns a map with :action plus relevant data."
   ([db config user] (resolve-tenant-context db config user {}))
-  ([db config user {:keys [client-ip]}]
+  ([db config user _opts]
    (let [user-id     (or (:id user) (:users/id user))
          memberships (tenant-svc/get-user-memberships db user-id)]
      (case (count memberships)
        0 (do
-           ;; Check provisioning rate limit before creating a new tenant
-           (when client-ip
-             (when-let [rate-limit-resp (rate-limiting/check-provisioning-rate-limit! client-ip)]
-               (throw (ex-info "Tenant provisioning rate limited"
-                        {:status 429
-                         :response rate-limit-resp}))))
-           (log/info "No memberships for user" (or (:email user) (:users/email user)) "— provisioning tenant")
-           (let [{:keys [tenant membership]} (tenant-svc/provision-tenant! db config user)]
-             {:tenant     tenant
-              :membership membership
-              :action     :provisioned}))
+           (log/info "No memberships for user" (or (:email user) (:users/email user))
+             "— no tenant (awaiting invitation or admin approval)")
+           {:action :no-tenant})
 
        1 (let [m      (first memberships)
                t-id   (or (:tenant_id m) (:tenant_memberships/tenant_id m))
@@ -65,6 +55,9 @@
    `tenant-ctx`   is the return value of `resolve-tenant-context`."
   [base-session tenant-ctx]
   (case (:action tenant-ctx)
+    :no-tenant
+    (assoc base-session :no-tenant true)
+
     :provisioned
     (assoc base-session
       :tenant     (normalize-tenant (:tenant tenant-ctx))

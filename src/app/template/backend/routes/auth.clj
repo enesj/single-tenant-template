@@ -342,7 +342,10 @@
 
                      (:tenant-selection-required auth-session)
                      (assoc :tenant-selection-required true
-                       :available-tenants (:available-tenants auth-session)))]
+                       :available-tenants (:available-tenants auth-session))
+
+                     (:no-tenant auth-session)
+                     (assoc :no-tenant true))]
           {:status 200
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string body)})
