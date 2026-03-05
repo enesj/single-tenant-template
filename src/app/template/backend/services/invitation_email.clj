@@ -1,7 +1,8 @@
 (ns app.template.backend.services.invitation-email
   "Standalone invitation email functions — not part of the EmailService protocol.
-   Uses the same SMTP transport as the existing email service."
+   Dispatches to Gmail SMTP (dev) or Gmail API (prod) based on the service record."
   (:require
+    [app.template.backend.services.gmail-api :as gmail-api]
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [taoensso.timbre :as log]))
 
@@ -49,23 +50,35 @@
                                  :tenant-name  tenant-name
                                  :accept-url   accept-url
                                  :role          role})]
-      ;; Use gmail-smtp send helper if we can reach its internals,
-      ;; otherwise fall through to postal directly.
-      (if-let [smtp-config (:smtp-config email-service)]
-        (do
-          (log/info "Attempting SMTP send"
-            {:host (:host smtp-config)
-             :port (:port smtp-config)
-             :user (:user smtp-config)
-             :tls  (:tls smtp-config)})
-          (let [result (gmail-smtp/send-smtp-email smtp-config (:from-email email-service) to-email subject text html)]
-            (if (:success result)
-              (log/info "Invitation email sent successfully" {:to-email to-email})
-              (log/error "SMTP send failed — invitation email NOT delivered"
-                {:to-email to-email :details result}))))
-        (log/warn "Cannot send invitation email — no SMTP config on email service"
-          {:service-type (type email-service)
-           :service-keys (keys email-service)})))
+      (let [result (cond
+                     (:smtp-config email-service)
+                     (do
+                       (log/info "Attempting SMTP send"
+                         {:host (get-in email-service [:smtp-config :host])
+                          :port (get-in email-service [:smtp-config :port])})
+                       (gmail-smtp/send-smtp-email
+                         (:smtp-config email-service)
+                         (:from-email email-service)
+                         to-email subject text html))
+
+                     (:gmail-api-config email-service)
+                     (do
+                       (log/info "Attempting Gmail API send" {:to-email to-email})
+                       (gmail-api/send-gmail-api-email
+                         (:gmail-api-config email-service)
+                         (:from-email email-service)
+                         to-email subject text html))
+
+                     :else
+                     (do
+                       (log/warn "Cannot send invitation email — no transport on email service"
+                         {:service-type (type email-service)
+                          :service-keys (keys email-service)})
+                       {:success false :error :no-transport}))]
+        (if (:success result)
+          (log/info "Invitation email sent successfully" {:to-email to-email})
+          (when-not (= :no-transport (:error result))
+            (log/error "Invitation email NOT delivered" {:to-email to-email :details result})))))
     (catch Exception e
       (log/error e "Failed to send invitation email"
         {:to-email to-email

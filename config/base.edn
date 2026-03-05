@@ -117,28 +117,36 @@
                                        :default-per-route 2
                                        :insecure?         false}}
 
- ;; Email Configuration - Choose between :postmark or :gmail-smtp
- :email {:type :gmail-smtp
+ ;; Email Configuration
+;; - :dev / :test  → Gmail SMTP (SMTP works on local dev; test uses :in-memory)
+;; - :prod         → Gmail REST API over HTTPS (Railway blocks SMTP ports 465/587)
+;;
+;; Required Railway env vars for prod:
+;;   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET  (same as OAuth login)
+;;   GMAIL_REFRESH_TOKEN   — see docs/template/backend/gmail-api-setup.md
+;;   SMTP_FROM_EMAIL       — the Gmail address you send from
+ :email {:type #profile {:dev  :gmail-smtp
+                         :test :gmail-smtp
+                         :prod :gmail-api}
          :postmark {:api-key    #or [#env POSTMARK_API_KEY
                                      #ref [:secrets :postmark :api-key]]
                     :from-email #or [#env POSTMARK_FROM_EMAIL
                                      #ref [:secrets :postmark :from-email]]}
+         ;; Gmail REST API credentials (prod only)
+         :gmail-api {:client-id     #or [#env GOOGLE_OAUTH_CLIENT_ID
+                                         #ref [:secrets :oauth :google :client-id]]
+                     :client-secret #or [#env GOOGLE_OAUTH_CLIENT_SECRET
+                                         #ref [:secrets :oauth :google :client-secret]]
+                     :refresh-token #or [#env GMAIL_REFRESH_TOKEN
+                                         #ref [:secrets :gmail :refresh-token]]}
+         ;; Gmail SMTP (dev only — Railway blocks SMTP outbound)
          :smtp #profile {:dev  {:host #or [#env SMTP_HOST #ref [:secrets :gmail :smtp-host]]
                                 :port #or [#ref [:secrets :gmail :smtp-port] 587]
                                 :user #or [#env SMTP_USER #ref [:secrets :gmail :smtp-user]]
                                 :pass #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
                                 :tls  true}
                          :test {:transport :in-memory}
-                         ;; Port 465 (SMTPS/SSL) — Railway blocks 587 (STARTTLS) outbound.
-                         ;; SMTP_PASS must be a Gmail App Password (not your regular password).
-                         ;; Generate one at: myaccount.google.com → Security → App Passwords
-                         :prod {:host              #or [#env SMTP_HOST #ref [:secrets :gmail :smtp-host]]
-                                :port              465
-                                :user              #or [#env SMTP_USER #ref [:secrets :gmail :smtp-user]]
-                                :pass              #or [#env SMTP_PASS #ref [:secrets :gmail :smtp-pass]]
-                                :ssl               true
-                                :connectiontimeout 15000
-                                :timeout           15000}}
+                         :prod {}}
          :from-email #profile {:dev  #or [#env SMTP_FROM_EMAIL
                                           #ref [:secrets :gmail :from-email]]
                                :test "test@example.com"

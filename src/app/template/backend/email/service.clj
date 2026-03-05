@@ -1,6 +1,7 @@
 (ns app.template.backend.email.service
   "Email service for sending verification and notification emails"
   (:require
+    [app.template.backend.services.gmail-api :as gmail-api]
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [app.template.backend.services.postmark-email :as postmark-email]
     [clojure.string :as str]
@@ -8,9 +9,10 @@
 
 (defn create-base-url
   "Create base URL from configuration.
-   Prefers explicit `:base-url`, otherwise builds from `:webserver` host/port."
+   Prefers explicit `:base-url`, otherwise builds from `:webserver` host/port.
+   Trailing slashes are stripped so callers can safely prefix paths with \"/\"."
   [config]
-  (if-let [base-url (some-> (:base-url config) str str/trim not-empty)]
+  (if-let [base-url (some-> (:base-url config) str str/trim not-empty (str/replace #"/+$" ""))]
     base-url
     (let [host (or (get-in config [:webserver :host])
                  (throw (ex-info "webserver :host is required in config" {:config-key [:webserver :host]})))
@@ -53,11 +55,27 @@
                      {:missing-config {:smtp-config (nil? smtp-config)
                                        :from-email (nil? from-email)}})))))
 
+      :gmail-api
+      (let [api-config (get config :gmail-api)
+            from-email (get config :from-email)]
+        (if (and api-config from-email
+              (:client-id api-config)
+              (:client-secret api-config)
+              (:refresh-token api-config))
+          (do
+            (log/info "Creating Gmail API email service with from-email:" from-email)
+            (gmail-api/create-gmail-api-email-service api-config from-email base-url))
+          (do
+            (log/error "Gmail API configuration missing (need :client-id, :client-secret, :refresh-token).")
+            (throw (ex-info "Gmail API email service configuration missing"
+                     {:missing-config {:api-config (nil? api-config)
+                                       :from-email (nil? from-email)}})))))
+
       ;; Default case
       (do
-        (log/error "Unknown email service type:" email-type "Supported types: :postmark, :gmail-smtp")
+        (log/error "Unknown email service type:" email-type "Supported types: :postmark, :gmail-smtp, :gmail-api")
         (throw (ex-info "Unknown email service type"
-                 {:supported-types [:postmark :gmail-smtp]
+                 {:supported-types [:postmark :gmail-smtp :gmail-api]
                   :provided-type email-type}))))))
 
 ;; Email service component for dependency injection

@@ -6,10 +6,49 @@
    - Change password (protected endpoint)"
   (:require
     [app.template.backend.routes.admin.utils :as utils]
+    [app.template.backend.services.gmail-api :as gmail-api]
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [app.template.backend.auth.password-reset :as pwd-reset]
     [cheshire.core :as json]
     [taoensso.timbre :as log]))
+
+;; ============================================================================
+;; Email dispatch helpers
+;; ============================================================================
+
+(defn- make-send-reset-fn
+  "Build a send-email-fn that dispatches to SMTP or Gmail API."
+  [email-service]
+  (cond
+    (:smtp-config email-service)
+    (fn [to-email token reset-url full-name]
+      (gmail-smtp/send-password-reset-email
+        (:smtp-config email-service)
+        (:from-email email-service)
+        to-email token reset-url full-name))
+
+    (:gmail-api-config email-service)
+    (fn [to-email token reset-url full-name]
+      (gmail-api/send-password-reset-email
+        (:gmail-api-config email-service)
+        (:from-email email-service)
+        to-email token reset-url full-name))))
+
+(defn- send-password-changed!
+  "Send a password-changed confirmation email via the appropriate transport."
+  [email-service to-email full-name base-url]
+  (cond
+    (:smtp-config email-service)
+    (gmail-smtp/send-password-changed-email
+      (:smtp-config email-service)
+      (:from-email email-service)
+      to-email full-name base-url)
+
+    (:gmail-api-config email-service)
+    (gmail-api/send-password-changed-email
+      (:gmail-api-config email-service)
+      (:from-email email-service)
+      to-email full-name base-url)))
 
 ;; ============================================================================
 ;; Public Endpoints (No Auth Required)
@@ -26,15 +65,10 @@
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Email is required"})}
-          
-          (let [send-email-fn (when email-service
-                                (fn [to-email token reset-url full-name]
-                                  (gmail-smtp/send-password-reset-email
-                                    (:smtp-config email-service)
-                                    (:from-email email-service)
-                                    to-email token reset-url full-name)))
-                result (pwd-reset/request-password-reset! 
-                         db email :admin send-email-fn base-url)]
+
+          (let [send-email-fn (when email-service (make-send-reset-fn email-service))
+                result        (pwd-reset/request-password-reset!
+                                db email :admin send-email-fn base-url)]
             {:status 200
              :headers {"Content-Type" "application/json"}
              :body (json/generate-string result)})))
@@ -51,12 +85,12 @@
   (fn [req]
     (try
       (let [token (or (get-in req [:query-params "token"])
-                      (get-in req [:params :token]))]
+                    (get-in req [:params :token]))]
         (if (empty? token)
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Token is required"})}
-          
+
           (let [result (pwd-reset/verify-reset-token db token)]
             {:status 200
              :headers {"Content-Type" "application/json"}
@@ -80,12 +114,12 @@
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Reset token is required"})}
-          
+
           (empty? password)
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "New password is required"})}
-          
+
           :else
           (let [result (pwd-reset/reset-password! db token password)]
             (if (:success result)
@@ -94,16 +128,13 @@
                 (when email-service
                   (try
                     (let [{:keys [principal-id]} result
-                          admin (pwd-reset/find-principal-by-id db :admin principal-id)
-                        email (:email admin)
-                        full-name (:full_name admin)]
-                      (gmail-smtp/send-password-changed-email
-                        (:smtp-config email-service)
-                        (:from-email email-service)
-                        email full-name base-url))
+                          admin     (pwd-reset/find-principal-by-id db :admin principal-id)
+                          email     (:email admin)
+                          full-name (:full_name admin)]
+                      (send-password-changed! email-service email full-name base-url))
                     (catch Exception e
                       (log/warn "Failed to send password changed email:" (.getMessage e)))))
-                
+
                 {:status 200
                  :headers {"Content-Type" "application/json"}
                  :body (json/generate-string {:success true})})
@@ -131,46 +162,43 @@
             ;; Support both naming conventions
             current-pwd (or current-password currentPassword)
             new-pwd (or new-password newPassword)]
-        
+
         (cond
           (nil? admin)
           {:status 401
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Not authenticated"})}
-          
+
           (empty? current-pwd)
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Current password is required"})}
-          
+
           (empty? new-pwd)
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "New password is required"})}
-          
+
           :else
-              (let [admin-id (:id admin)
+          (let [admin-id (:id admin)
                 admin-email (:email admin)
                 admin-name (:full_name admin)
-                result (pwd-reset/change-password! 
+                result (pwd-reset/change-password!
                          db :admin admin-id current-pwd new-pwd)]
             (if (:success result)
               (do
                 ;; Log the action
-                (utils/log-admin-action "change_own_password" admin-id 
-                                        "admin" admin-id
-                                        {:action "password_changed"})
-                
+                (utils/log-admin-action "change_own_password" admin-id
+                  "admin" admin-id
+                  {:action "password_changed"})
+
                 ;; Send password changed confirmation email
                 (when email-service
                   (try
-                    (gmail-smtp/send-password-changed-email
-                      (:smtp-config email-service)
-                      (:from-email email-service)
-                      admin-email admin-name base-url)
+                    (send-password-changed! email-service admin-email admin-name base-url)
                     (catch Exception e
                       (log/warn "Failed to send password changed email:" (.getMessage e)))))
-                
+
                 {:status 200
                  :headers {"Content-Type" "application/json"}
                  :body (json/generate-string {:success true})})
