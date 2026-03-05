@@ -1,11 +1,35 @@
 (ns app.template.backend.routes.email-verification
   "Email verification API routes"
   (:require
+    [app.domain.backend.registry :as domain-registry]
     [app.template.backend.auth.email-verification :as email-verify]
+    [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.services.tenant :as tenant-svc]
+    [app.shared.data :as shared-data]
     [cheshire.core :as json]
     [taoensso.timbre :as log]))
+
+(defn- maybe-build-session-update
+  [req db-conn config result]
+  (let [session-user    (get-in req [:session :auth-session :user])
+        session-user-id (or (:id session-user) (:users/id session-user))
+        verified-user-id (:user-id result)]
+    (when (and session-user verified-user-id
+            (= (str session-user-id) (str verified-user-id)))
+      (let [merged-user  (cond-> session-user
+                           (:email result) (assoc :email (:email result))
+                           (:full_name result) (assoc :full_name (:full_name result))
+                           true (assoc :email_verified true))
+            tenant-ctx   (tenant-auth/resolve-tenant-context db-conn config merged-user)
+            auth-session (shared-data/sanitize-for-serialization
+                           (tenant-auth/build-auth-session {:user merged-user} tenant-ctx))
+            redirect-url (case (:action tenant-ctx)
+                           :selection-required "/tenant-select"
+                           :no-tenant "/tenant-select"
+                           (domain-registry/get-post-login-path))]
+        {:session (assoc (or (:session req) {}) :auth-session auth-session)
+         :redirect-url redirect-url}))))
 
 (defn verify-email-handler
   "Handle email verification from URL token.
@@ -25,7 +49,11 @@
           (let [result         (email-verify/verify-email-token! db token)
                 already-used?  (= :token-already-used (:error result))
                 should-proceed? (or (:success result) already-used?)
-                user-id        (:user-id result)]
+                user-id        (:user-id result)
+                user-email     (or (:email result)
+                                 (get-in req [:session :auth-session :user :email]))
+                user-full-name (or (:full_name result)
+                                 (get-in req [:session :auth-session :user :full_name]))]
             (if should-proceed?
               (do
                 (if already-used?
@@ -34,32 +62,63 @@
 
                 ;; Ensure workspace exists for verified users with no memberships.
                 ;; This makes the verification link idempotent (safe to click again).
-                (when user-id
-                  (let [memberships (tenant-svc/get-user-memberships db-conn user-id)]
-                    (when (empty? memberships)
+                (let [memberships (when user-id
+                                    (tenant-svc/get-user-memberships db-conn user-id))]
+                  (when (and user-id (empty? memberships))
+                    (if-not user-email
+                      (do
+                        (log/error "Cannot provision workspace after email verification: user email missing"
+                          {:user-id user-id})
+                        (throw (ex-info "Verified user email missing"
+                                 {:type :workspace-provisioning-failed
+                                  :user-id user-id})))
                       (try
-                        (let [user {:id user-id :email (:email result)}]
-                          (tenant-svc/provision-tenant! db-conn config user)
-                          (log/info "Provisioned workspace for newly verified user" (:email result)))
+                        (tenant-svc/provision-tenant! db-conn config
+                          {:id user-id
+                           :email user-email
+                           :full_name user-full-name})
+                        (log/info "Provisioned workspace for newly verified user" user-email)
                         (catch Exception e
-                          (log/error e "Failed to provision workspace after email verification"))))))
+                          (log/error e "Failed to provision workspace after email verification")
+                          (throw (ex-info "Workspace provisioning failed"
+                                   {:type :workspace-provisioning-failed
+                                    :user-id user-id}
+                                   e)))))))
 
                 ;; Send success notification email (non-critical) only on first-time verification
-                (when (and (:success result) email-service)
+                (when (and (:success result) email-service user-email)
                   (try
-                    (email-verify/send-verification-success-email
-                      email-service
-                      {:email (:email result)})
-                    (log/info "Success notification email sent")
+                    (let [email-result (email-verify/send-verification-success-email
+                                         email-service
+                                         {:email user-email
+                                          :full_name user-full-name})]
+                      (if (:success email-result)
+                        (log/info "Success notification email sent")
+                        (log/warn "Failed to send verification success email (non-critical)"
+                          email-result)))
                     (catch Exception e
                       (log/warn "Failed to send verification success email (non-critical):" (.getMessage e)))))
 
-                {:status 302
-                 :headers {"Location" "/email-verified?success=true"}})
+                (let [{:keys [session redirect-url]} (maybe-build-session-update req db-conn config
+                                                    (assoc result
+                                                      :email user-email
+                                                      :full_name user-full-name))]
+                  (cond-> {:status 302
+                           :headers {"Location" (or redirect-url "/email-verified?success=true")}}
+                    session (assoc :session session))))
 
               {:status 302
                :headers {"Location" (str "/email-verified?error=" (name (:error result)))}}))))
 
+      (catch clojure.lang.ExceptionInfo e
+        (if (= :workspace-provisioning-failed (:type (ex-data e)))
+          {:status 302
+           :headers {"Location" "/email-verified?error=workspace-provisioning-failed"}}
+          (do
+            (log/error e "Error in verify-email handler")
+            {:status 500
+             :headers {"Content-Type" "application/json"}
+             :body (json/generate-string {:error "Internal server error"})})))
       (catch Exception e
         (log/error e "Error in verify-email handler")
         {:status 500
