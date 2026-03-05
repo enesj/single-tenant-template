@@ -123,8 +123,8 @@
   "Create database connection pool.
 
   Security notes:
-  - Avoid embedding credentials in the JDBC URL. Provide credentials via
-    `:username` / `:password` (Hikari properties) instead.
+  - Credentials are embedded as JDBC URL query parameters (`?user=X&password=Y`)
+    for reliable PostgreSQL JDBC driver compatibility.
   - Never include raw JDBC URLs in exception data unless sanitized.
 
   Supported sources:
@@ -162,18 +162,35 @@
                                (:host db-config) (:port db-config) db-name))
                            (throw (ex-info "Provide DATABASE_URL or :database jdbc-url/host/port/dbname"
                                     {:database (dissoc db-config :password)})))
-        ;; Prefer explicit config/env vars; fall back to credentials extracted from DATABASE_URL
-        effective-user   (or (:user db-config) env-user)
-        effective-pass   (or (:password db-config) env-pass)
+        ;; When DATABASE_URL is the source, its embedded credentials take priority
+        ;; (they are the actual credentials for the provisioned PaaS database).
+        ;; For local dev, fall back to config values.
+        effective-user   (if env-url
+                           (or env-user (:user db-config))
+                           (:user db-config))
+        effective-pass   (if env-url
+                           (or env-pass (:password db-config))
+                           (:password db-config))
+        ;; Embed credentials as JDBC URL query parameters — most reliable
+        ;; method for the PostgreSQL JDBC driver in DriverManager mode
+        ;; (bypasses HikariCP property-passing edge cases).
+        ;; Skip if the URL already contains credentials (e.g. dev/test config jdbc-urls).
+        jdbc-url-final   (if (and (or effective-user effective-pass)
+                               (not (re-find #"[?&]user=" base-jdbc-url)))
+                           (str base-jdbc-url "?"
+                             (str/join "&"
+                               (cond-> []
+                                 effective-user (conj (str "user=" effective-user))
+                                 effective-pass (conj (str "password=" effective-pass)))))
+                           base-jdbc-url)
         hikari-config    (merge hikari-defaults
-                           (cond-> {:pool-name "db-pool"
-                                    :jdbc-url  base-jdbc-url}
-                             effective-user (assoc :username effective-user)
-                             effective-pass (assoc :password effective-pass)))
-        ;; Guardrail: if someone provided a URL with credentials, ensure we don't leak it in errors.
+                           {:pool-name "db-pool"
+                            :jdbc-url  jdbc-url-final})
         _                (log/info {:event  :db/connecting
-                                    :jdbc-url (sanitize-jdbc-url base-jdbc-url)
+                                    :jdbc-url (sanitize-jdbc-url jdbc-url-final)
+                                    :user effective-user
                                     :source (if env-url :DATABASE_URL :config)})
+        ;; Warn if the INPUT URL (before we add our params) already has embedded password
         _                (when (and (string? base-jdbc-url)
                                  (re-find #"(?i)password=" base-jdbc-url))
                            (log/warn {:event :db/jdbc-url-contains-password
