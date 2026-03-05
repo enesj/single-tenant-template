@@ -17,10 +17,17 @@
    Admin routes get priority treatment with immediate redirection."
   [handler]
   (fn [request]
-    (let [scheme (:scheme request)
+    (let [;; Respect x-forwarded-proto from reverse proxies (Railway, Heroku, AWS ELB)
+          ;; that terminate TLS at their edge and forward HTTP to the container.
+          effective-scheme (or (some-> (get-in request [:headers "x-forwarded-proto"])
+                                 str/trim str/lower-case keyword)
+                             (:scheme request))
           server-name (:server-name request)
           uri (:uri request)
           is-admin-route (str/starts-with? uri "/admin")
+
+          ;; Never redirect health checks (used by load balancers / PaaS platforms)
+          is-health-check (= uri "/health")
 
           ;; Check if this is a local development environment
           is-local-dev (or (= server-name "localhost")
@@ -30,8 +37,9 @@
                          (str/starts-with? server-name "172.")  ; Docker networks
                          (System/getenv "DISABLE_HTTPS_REDIRECT"))
 
-          should-redirect (and (= scheme :http)
-                            (not is-local-dev))]
+          should-redirect (and (= effective-scheme :http)
+                            (not is-local-dev)
+                            (not is-health-check))]
 
       (if should-redirect
         (do
