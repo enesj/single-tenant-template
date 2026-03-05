@@ -145,10 +145,10 @@
 
 ;; Email verification routes
          ["/verify-email" {:get {:handler (fn [req]
-                                           ;; Get email service and db adapter from service container
                                             (let [email-service (get service-container :email-service)
-                                                  db-adapter    (get service-container :db-adapter)]
-                                              ((email-verification/verify-email-handler db-adapter email-service) req)))}}]
+                                                  db-adapter    (get service-container :db-adapter)
+                                                  config        (:config service-container)]
+                                              ((email-verification/verify-email-handler db-adapter email-service config) req)))}}]
          ["/email-verified" {:get {:handler render-page}}]
 
          ;; API routes with versioning

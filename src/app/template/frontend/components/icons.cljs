@@ -226,6 +226,15 @@
               :d "M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
               :clip-rule "evenodd"})))
 
+(defui mail [{:keys [class] :or {class "w-5 h-5"}}]
+  ($ :svg {:class class
+           :fill "none"
+           :stroke "currentColor"
+           :viewBox "0 0 24 24"
+           :xmlns "http://www.w3.org/2000/svg"}
+    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+              :d "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"})))
+
 (defui dashboard-icon [{:keys [class] :or {class "w-6 h-6"}}]
   ($ :svg {:class class :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
     ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"

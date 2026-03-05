@@ -203,6 +203,7 @@ Key configuration files:
 - `docs/general/index.md` — General overview, ops, and architecture
 - `docs/template/backend/single-tenant-template.md` — What this template includes and how to extend it
 - `docs/general/operations/README.md` — Dev/startup/testing commands
+- `docs/general/operations/railway-deployment.md` — **Deploying to Railway** (env vars, DB, Gmail API, OAuth setup)
 - `docs/general/migrations/migration-overview.md` — Models/migrations workflow for this template
 - `docs/template/frontend/app-shell.md` — Frontend/app shell overview (with admin bootstrap notes)
 - `docs/general/reference/hosting/` — Hosting/Financial/Integration reference docs

@@ -3,12 +3,14 @@
   (:require
     [app.template.backend.auth.email-verification :as email-verify]
     [app.template.backend.routes.utils :as route-utils]
+    [app.template.backend.services.tenant :as tenant-svc]
     [cheshire.core :as json]
     [taoensso.timbre :as log]))
 
 (defn verify-email-handler
-  "Handle email verification from URL token"
-  [db email-service]
+  "Handle email verification from URL token.
+   On success, provisions a workspace if the user has no existing memberships."
+  [db email-service config]
   (fn [req]
     (try
       (let [token (get-in req [:query-params "token"])]
@@ -20,10 +22,20 @@
           (let [result (email-verify/verify-email-token! db token)]
             (if (:success result)
               (do
-                ;; Log the successful verification
                 (log/info "Email verification successful for user" (:user-id result))
 
-                ;; Try to send success notification email, but don't fail if it doesn't work
+                ;; Provision workspace for newly verified users with no memberships
+                (let [user-id (:user-id result)
+                      memberships (tenant-svc/get-user-memberships db user-id)]
+                  (when (empty? memberships)
+                    (try
+                      (let [user {:id user-id :email (:email result)}]
+                        (tenant-svc/provision-tenant! db config user)
+                        (log/info "Provisioned workspace for newly verified user" (:email result)))
+                      (catch Exception e
+                        (log/error e "Failed to provision workspace after email verification")))))
+
+                ;; Send success notification email (non-critical)
                 (when email-service
                   (try
                     (email-verify/send-verification-success-email
@@ -33,11 +45,9 @@
                     (catch Exception e
                       (log/warn "Failed to send verification success email (non-critical):" (.getMessage e)))))
 
-                ;; Redirect to success page
                 {:status 302
                  :headers {"Location" "/email-verified?success=true"}})
 
-              ;; Redirect to error page with error type
               {:status 302
                :headers {"Location" (str "/email-verified?error=" (name (:error result)))}}))))
 

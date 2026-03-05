@@ -253,8 +253,11 @@
 
     ;; Email verification page
     :email-verification/verified-title    "E-mail potvrđen!"
-    :email-verification/verified-desc     "Vaš e-mail je uspješno potvrđen. Sada imate pun pristup svim funkcijama."
+    :email-verification/verified-desc     "Vaš e-mail je uspješno potvrđen i vaš radni prostor je kreiran. Prijavite se da započnete."
+    :email-verification/sign-in           "Prijavite se"
     :email-verification/continue-to-app  "Nastavi na aplikaciju"
+    :email-verification/pending-title    "Provjerite svoj e-mail"
+    :email-verification/pending-desc     "Poslali smo link za potvrdu na vašu e-mail adresu. Kliknite na link da potvrdite svoj račun i kreirate radni prostor."
     :email-verification/failed-title     "Provjera nije uspjela"
     :email-verification/back-to-login    "Povratak na prijavu"
     :email-verification/request-new-link "Zahtijevajte novi link"
@@ -880,8 +883,11 @@
 
     ;; Email verification page
     :email-verification/verified-title    "Email Verified!"
-    :email-verification/verified-desc     "Your email has been successfully verified. You now have full access to all features."
+    :email-verification/verified-desc     "Your email has been successfully verified and your workspace has been created. Sign in to get started."
+    :email-verification/sign-in           "Sign In"
     :email-verification/continue-to-app  "Continue to App"
+    :email-verification/pending-title    "Check Your Email"
+    :email-verification/pending-desc     "We've sent a verification link to your email address. Click the link to verify your account and create your workspace."
     :email-verification/failed-title     "Verification Failed"
     :email-verification/back-to-login    "Back to Login"
     :email-verification/request-new-link "Request New Link"

@@ -229,24 +229,32 @@
                               user-raw        (:user session-data)
                               user-email      (:email user-raw)
                               sanitized-user  (sanitize-for-serialization user-raw)
-                              ;; Resolve tenant context (provision / auto-set / selection)
-                              oauth-db        (or db (get-in req [:service-container :db]))
-                              tenant-ctx      (tenant-auth/resolve-tenant-context oauth-db config user-raw
-                                                {:client-ip (:remote-addr req)})
-                              auth-session    (sanitize-for-serialization
-                                                (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
-                              ;; Redirect to tenant-select when multiple tenants, else normal path
-                              redirect-url    (case (:action tenant-ctx)
-                                                :selection-required "/tenant-select"
-                                                :no-tenant          "/tenant-select"
-                                                (domain-registry/get-post-login-path))]
+                              new-signup?     (:is-new-signup session-data)
+                              verification-required? (:verification-required session-data)]
 
-                          (log/info "Authentication successful for:" user-email)
-                          (log/info "Redirecting user" user-email "to:" redirect-url)
+                          (if (and new-signup? verification-required?)
+                            ;; New OAuth user: redirect to "check your email" page
+                            (do
+                              (log/info "New OAuth user" user-email "— verification email sent, redirecting to pending page")
+                              (-> (response/redirect "/email-verified?pending=true")
+                                (assoc :session {:auth-session {:user sanitized-user}})))
 
-                          ;; Redirect with tenant-aware session
-                          (-> (response/redirect redirect-url)
-                            (assoc :session {:auth-session auth-session})))
+                            ;; Existing user: resolve tenant context and redirect normally
+                            (let [oauth-db     (or db (get-in req [:service-container :db]))
+                                  tenant-ctx   (tenant-auth/resolve-tenant-context oauth-db config user-raw
+                                                 {:client-ip (:remote-addr req)})
+                                  auth-session (sanitize-for-serialization
+                                                 (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
+                                  redirect-url (case (:action tenant-ctx)
+                                                 :selection-required "/tenant-select"
+                                                 :no-tenant          "/tenant-select"
+                                                 (domain-registry/get-post-login-path))]
+
+                              (log/info "Authentication successful for:" user-email)
+                              (log/info "Redirecting user" user-email "to:" redirect-url)
+
+                              (-> (response/redirect redirect-url)
+                                (assoc :session {:auth-session auth-session})))))
 
                         (catch clojure.lang.ExceptionInfo e
                           (let [ex-data (ex-data e)]

@@ -317,7 +317,7 @@
                                              :auth_provider (name provider)}]
                             (db-protocols/update-record db metadata :users user-id update-data)
                             (db-protocols/find-by-id db :users user-id))
-                          ;; Create new OAuth user
+                          ;; Create new OAuth user (unverified — must verify email first)
                           (let [user-id (java.util.UUID/randomUUID)
                                 create-data {:id user-id
                                              :email user-email
@@ -326,16 +326,31 @@
                                              :password_hash placeholder-password
                                              :status "active"
                                              :auth_provider (name provider)
+                                             :email_verified false
                                              :created_at now}]
                             (db-protocols/create db metadata :users create-data)))
             ;; Convert any namespaced keys (e.g. :users/email) to plain keys
             user-plain (into {}
                          (map (fn [[k v]]
                                 [(keyword (name k)) v])
-                           user-record))]
+                           user-record))
+            ;; For new OAuth users: send verification email before workspace creation
+            verification-required (when new-user?
+                                    (try
+                                      (let [uid   (:id user-plain)
+                                            token (email-verification/create-verification-token! db uid)]
+                                        (when (:email-service auth-service)
+                                          (email-verification/send-verification-email
+                                            (:email-service auth-service) user-plain token))
+                                        true)
+                                      (catch Exception e
+                                        (log/warn "Failed to send verification email for OAuth user"
+                                          user-email ":" (.getMessage e))
+                                        true)))]
 
         {:user user-plain
-         :authenticated true
+         :authenticated (not new-user?)
+         :verification-required (boolean verification-required)
          :provider provider
          :is-new-signup new-user?}))
     (catch Exception e

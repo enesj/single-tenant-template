@@ -136,12 +136,14 @@ entity ImpersonationGrant {
 -- ============================================================
 
 -- Fires for both password registration AND OAuth signup (Google/GitHub).
--- UserAuthenticated is emitted by auth/LoginWithPassword, auth/OAuthCreatesUser,
--- and auth/OAuthUpdatesExistingOAuthUser — so any first-time login creates a tenant.
-rule CreateTenantOnFirstLogin {
-    when: UserAuthenticated(user)
+-- Both paths now require email verification before a workspace is created.
+-- auth/RegisterUserWithPassword and auth/OAuthCreatesUser both emit VerificationEmailDispatched.
+-- auth/VerifyEmailToken marks the user verified and emits EmailVerified.
+-- This rule chains from EmailVerified and provisions the workspace only once verification succeeds.
+rule ProvisionWorkspaceOnEmailVerified {
+    when: EmailVerified(user)
 
-    requires: user.memberships.count = 0                -- first-time user, no tenant yet
+    requires: user.memberships.count = 0                -- new user, no workspace yet
 
     let tenant_name = user.full_name ?? user.email
 
@@ -894,7 +896,10 @@ surface PlatformTenantAdminView {
 -- ============================================================
 
 -- resolved: Tenant members have read access to payers (in expense_read_resources).
--- resolved: OAuth signup auto-creates a tenant (CreateTenantOnFirstLogin chains from UserAuthenticated).
+-- resolved: Workspace provisioned on email verification for both password and OAuth new users.
+--           OAuthCreatesUser now sends a verification email instead of emitting UserAuthenticated.
+--           ProvisionWorkspaceOnEmailVerified (was: CreateTenantOnFirstLogin) chains from EmailVerified,
+--           not UserAuthenticated — so no workspace is created until the email address is confirmed.
 -- resolved: No data migration needed — fresh start, just seed the platform admin.
 -- resolved: Global product catalog stays GLOBAL — suppliers, stores, articles, categories,
 --           subcategories, manufacturers. No tenant_id. Tenant users read + create suppliers/stores.

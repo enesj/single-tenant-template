@@ -192,8 +192,8 @@
                             :password password})
                   {:keys [user verification-required]} result
                   sanitized-user (sanitize-for-serialization user)
-                  ;; NOTE: Multi-tenancy spec + E2E flows expect tenant provisioning at registration.
-                  ;; Even when email verification is required, we still provision and set tenant context.
+                  ;; Resolve tenant context — returns :no-tenant for newly registered users.
+                  ;; Workspace is provisioned later when the user verifies their email.
                   tenant-ctx (tenant-auth/resolve-tenant-context db config user
                                {:client-ip (:remote-addr req)})
                   auth-session (sanitize-for-serialization
