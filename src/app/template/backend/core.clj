@@ -157,14 +157,13 @@
                            (throw (ex-info "Provide DATABASE_URL or :database jdbc-url/host/port/dbname"
                                     {:database (dissoc db-config :password)})))
         hikari-config    (merge hikari-defaults
-                           {:pool-name     "db-pool"
-                            :adapter       "postgresql"
-                            :jdbc-url      base-jdbc-url
-                            :database-name db-name
-                            :server-name   (:host db-config)
-                            :port-number   (:port db-config)
-                            :username      (:user db-config)
-                            :password      (:password db-config)})
+                           ;; Use DriverManager mode (:jdbc-url only, no :adapter).
+                           ;; :adapter forces DataSource class mode which conflicts with :jdbc-url
+                           ;; and causes PropertyElf to crash on nil/empty numeric properties.
+                           (cond-> {:pool-name "db-pool"
+                                    :jdbc-url  base-jdbc-url}
+                             (:user db-config)     (assoc :username (:user db-config))
+                             (:password db-config) (assoc :password (:password db-config))))
         ;; Guardrail: if someone provided a URL with credentials, ensure we don't leak it in errors.
         _                (when (and (string? base-jdbc-url)
                                  (re-find #"(?i)password=" base-jdbc-url))
