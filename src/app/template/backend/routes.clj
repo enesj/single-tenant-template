@@ -10,6 +10,7 @@
     [app.template.backend.routes.oauth :as oauth]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.template.backend.routes.email-verification :as email-verification]
+    [clojure.java.io :as io]
     [clojure.stacktrace :as stacktrace]
     [clojure.string :as str]
     [reitit.ring :as ring]
@@ -21,7 +22,7 @@
 
 (defn- render-page [_]
   (let [;; Render the page with authentication info
-        html-content (slurp "resources/public/index.html")
+        html-content (slurp (io/resource "public/index.html"))
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
         csrf-token (when (bound? #'*anti-forgery-token*)
                      *anti-forgery-token*)
@@ -34,7 +35,7 @@
   "Render the main HTML page for the admin panel - uses the same app as main"
   [_]
   (let [;; Use the same index.html as the main app
-        html-content (slurp "resources/public/index.html")
+        html-content (slurp (io/resource "public/index.html"))
         ;; Only replace CSRF token if it's bound (when anti-forgery is enabled)
         csrf-token (when (bound? #'*anti-forgery-token*)
                      *anti-forgery-token*)
