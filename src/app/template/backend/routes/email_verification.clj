@@ -13,30 +13,39 @@
   [db email-service config]
   (fn [req]
     (try
-      (let [token (get-in req [:query-params "token"])]
+      (let [token   (get-in req [:query-params "token"])
+            ;; `db` is a db-adapter (PostgresAdapter) in DI wiring; tenant service
+            ;; uses raw next.jdbc and needs the underlying DataSource/connection.
+            db-conn (or (:connection db) db)]
         (if (empty? token)
           {:status 400
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Missing verification token"})}
 
-          (let [result (email-verify/verify-email-token! db token)]
-            (if (:success result)
+          (let [result         (email-verify/verify-email-token! db token)
+                already-used?  (= :token-already-used (:error result))
+                should-proceed? (or (:success result) already-used?)
+                user-id        (:user-id result)]
+            (if should-proceed?
               (do
-                (log/info "Email verification successful for user" (:user-id result))
+                (if already-used?
+                  (log/info "Email verification link already used for user" user-id)
+                  (log/info "Email verification successful for user" user-id))
 
-                ;; Provision workspace for newly verified users with no memberships
-                (let [user-id (:user-id result)
-                      memberships (tenant-svc/get-user-memberships db user-id)]
-                  (when (empty? memberships)
-                    (try
-                      (let [user {:id user-id :email (:email result)}]
-                        (tenant-svc/provision-tenant! db config user)
-                        (log/info "Provisioned workspace for newly verified user" (:email result)))
-                      (catch Exception e
-                        (log/error e "Failed to provision workspace after email verification")))))
+                ;; Ensure workspace exists for verified users with no memberships.
+                ;; This makes the verification link idempotent (safe to click again).
+                (when user-id
+                  (let [memberships (tenant-svc/get-user-memberships db-conn user-id)]
+                    (when (empty? memberships)
+                      (try
+                        (let [user {:id user-id :email (:email result)}]
+                          (tenant-svc/provision-tenant! db-conn config user)
+                          (log/info "Provisioned workspace for newly verified user" (:email result)))
+                        (catch Exception e
+                          (log/error e "Failed to provision workspace after email verification"))))))
 
-                ;; Send success notification email (non-critical)
-                (when email-service
+                ;; Send success notification email (non-critical) only on first-time verification
+                (when (and (:success result) email-service)
                   (try
                     (email-verify/send-verification-success-email
                       email-service
@@ -123,5 +132,3 @@
                      {:email-verified (:email-verified status)
                       :verification-status (:verification-status status)
                       :needs-verification (email-verify/user-needs-verification? user)})}))))))
-
-

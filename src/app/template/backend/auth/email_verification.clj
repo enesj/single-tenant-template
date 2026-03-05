@@ -53,7 +53,7 @@
            "SELECT evt.*, u.email, u.full_name
             FROM email_verification_tokens evt
             JOIN users u ON evt.user_id = u.id
-            WHERE evt.token = ? AND evt.used_at IS NULL"
+            WHERE evt.token = ?"
            [token])))
 
 (defn- token-expired?
@@ -110,17 +110,29 @@
       used_at
       (do
         (log/warn "Verification token already used:" token)
-        {:success false :error :token-already-used :message "This verification link has already been used"})
+        {:success false
+         :error :token-already-used
+         :user-id user_id
+         :email email
+         :message "This verification link has already been used"})
 
       (token-expired? expires_at)
       (do
         (log/warn "Verification token expired:" token)
-        {:success false :error :token-expired :message "Verification link has expired"})
+        {:success false
+         :error :token-expired
+         :user-id user_id
+         :email email
+         :message "Verification link has expired"})
 
       (>= attempts max-verification-attempts)
       (do
         (log/warn "Too many verification attempts for token:" token)
-        {:success false :error :too-many-attempts :message "Too many verification attempts"})
+        {:success false
+         :error :too-many-attempts
+         :user-id user_id
+         :email email
+         :message "Too many verification attempts"})
 
       :else
       (try
@@ -198,6 +210,5 @@
   (send-verification-success-email [service user]))
 
 ;; Mock email service for development/testing
-
 
 
