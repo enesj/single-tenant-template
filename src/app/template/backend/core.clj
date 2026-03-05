@@ -143,11 +143,18 @@
                                 (str/replace #"(?i)(password=)[^&]*" "$1REDACTED")
                                 (str/replace #"(?i)(user=)[^&]*" "$1REDACTED")
                                 (str/replace #"(?i)://([^:/?#]+):([^@/?#]+)@" "://REDACTED:REDACTED@"))))
-        env-url          (some-> (System/getenv "DATABASE_URL") str/trim not-empty
-                           ;; PaaS providers use postgres:// or postgresql://; JDBC needs jdbc:postgresql://
-                           (as-> u (-> u
-                                     (str/replace #"^postgresql://" "jdbc:postgresql://")
-                                     (str/replace #"^postgres://" "jdbc:postgresql://"))))
+        env-raw          (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
+        ;; Normalize PaaS prefix (postgres:// or postgresql://) to jdbc:postgresql://
+        env-norm         (some-> env-raw
+                           (str/replace #"^postgresql://" "jdbc:postgresql://")
+                           (str/replace #"^postgres://"   "jdbc:postgresql://"))
+        ;; Extract credentials embedded in the URL authority (user:pass@host).
+        ;; The PostgreSQL JDBC driver does not reliably parse user:pass@host in the URL
+        ;; when credentials are also passed as properties — strip them from the URL
+        ;; and always pass as explicit HikariCP username/password properties instead.
+        env-user         (when env-norm (second (re-find #"jdbc:postgresql://([^:@]+):[^@]+@" env-norm)))
+        env-pass         (when env-norm (second (re-find #"jdbc:postgresql://[^:@]+:([^@]+)@"  env-norm)))
+        env-url          (some-> env-norm (str/replace #"(jdbc:postgresql://)[^@]+@" "$1"))
         base-jdbc-url    (or env-url
                            (:jdbc-url db-config)
                            (when (every? db-config [:host :port :dbname])
@@ -155,14 +162,14 @@
                                (:host db-config) (:port db-config) db-name))
                            (throw (ex-info "Provide DATABASE_URL or :database jdbc-url/host/port/dbname"
                                     {:database (dissoc db-config :password)})))
+        ;; Prefer explicit config/env vars; fall back to credentials extracted from DATABASE_URL
+        effective-user   (or (:user db-config) env-user)
+        effective-pass   (or (:password db-config) env-pass)
         hikari-config    (merge hikari-defaults
-                           ;; Use DriverManager mode (:jdbc-url only, no :adapter).
-                           ;; :adapter forces DataSource class mode which conflicts with :jdbc-url
-                           ;; and causes PropertyElf to crash on nil/empty numeric properties.
                            (cond-> {:pool-name "db-pool"
                                     :jdbc-url  base-jdbc-url}
-                             (:user db-config)     (assoc :username (:user db-config))
-                             (:password db-config) (assoc :password (:password db-config))))
+                             effective-user (assoc :username effective-user)
+                             effective-pass (assoc :password effective-pass)))
         ;; Guardrail: if someone provided a URL with credentials, ensure we don't leak it in errors.
         _                (log/info {:event  :db/connecting
                                     :jdbc-url (sanitize-jdbc-url base-jdbc-url)
