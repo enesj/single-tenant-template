@@ -144,11 +144,10 @@
                                 (str/replace #"(?i)(user=)[^&]*" "$1REDACTED")
                                 (str/replace #"(?i)://([^:/?#]+):([^@/?#]+)@" "://REDACTED:REDACTED@"))))
         env-url          (some-> (System/getenv "DATABASE_URL") str/trim not-empty
-                           ;; PaaS providers (Railway, Heroku) use postgresql:// but HikariCP needs jdbc:
-                           (as-> u (if (and (not (str/starts-with? u "jdbc:"))
-                                         (str/starts-with? u "postgresql"))
-                                     (str "jdbc:" u)
-                                     u)))
+                           ;; PaaS providers use postgres:// or postgresql://; JDBC needs jdbc:postgresql://
+                           (as-> u (-> u
+                                     (str/replace #"^postgresql://" "jdbc:postgresql://")
+                                     (str/replace #"^postgres://" "jdbc:postgresql://"))))
         base-jdbc-url    (or env-url
                            (:jdbc-url db-config)
                            (when (every? db-config [:host :port :dbname])
@@ -165,6 +164,9 @@
                              (:user db-config)     (assoc :username (:user db-config))
                              (:password db-config) (assoc :password (:password db-config))))
         ;; Guardrail: if someone provided a URL with credentials, ensure we don't leak it in errors.
+        _                (log/info {:event  :db/connecting
+                                    :jdbc-url (sanitize-jdbc-url base-jdbc-url)
+                                    :source (if env-url :DATABASE_URL :config)})
         _                (when (and (string? base-jdbc-url)
                                  (re-find #"(?i)password=" base-jdbc-url))
                            (log/warn {:event :db/jdbc-url-contains-password

@@ -3,16 +3,15 @@
    Invoked by Railway's preDeployCommand before the app starts:
      java -cp app.jar clojure.main -m app.migrate"
   (:require [automigrate.core :as am]
-            [clojure.string :as str]))
+    [clojure.string :as str]))
 
 (defn- resolve-jdbc-url
-  "Resolve JDBC URL from DATABASE_URL env var, normalizing the postgresql:// prefix."
+  "Resolve JDBC URL from DATABASE_URL env var.
+  Normalizes both postgres:// and postgresql:// to jdbc:postgresql://."
   []
-  (let [raw (some-> (System/getenv "DATABASE_URL") str/trim)]
-    (when (seq raw)
-      (if (str/starts-with? raw "jdbc:")
-        raw
-        (str "jdbc:" raw)))))
+  (some-> (System/getenv "DATABASE_URL") str/trim not-empty
+    (str/replace #"^postgresql://" "jdbc:postgresql://")
+    (str/replace #"^postgres://" "jdbc:postgresql://")))
 
 (defn -main [& _args]
   (let [jdbc-url (resolve-jdbc-url)]
