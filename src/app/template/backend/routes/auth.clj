@@ -159,6 +159,91 @@
       :else
       nil)))
 
+(defn- fetch-user-record
+  [db user-id]
+  (when (and db user-id)
+    (when-let [u-id (->uuid user-id)]
+      (let [opts {:builder-fn rs/as-unqualified-maps}
+            row  (jdbc/execute-one! db
+                   (sql/format {:select [:id
+                                         :email
+                                         :full_name
+                                         :status
+                                         :auth_provider
+                                         :email_verified
+                                         :avatar_url
+                                         :created_at
+                                         :updated_at]
+                                :from   [:users]
+                                :where  [:= :id u-id]})
+                   opts)]
+        (some->> row
+          (map (fn [[k v]] [(keyword (name k)) v]))
+          (into {}))))))
+
+(defn- incomplete-auth-session?
+  [{:keys [user tenant membership tenant-selection-required no-tenant]}]
+  (and user
+    (nil? tenant)
+    (nil? membership)
+    (not tenant-selection-required)
+    (not no-tenant)))
+
+(defn- build-auth-status-body
+  [auth-session]
+  (let [user     (:user auth-session)
+        provider (or (:provider auth-session)
+                   (:auth_provider user)
+                   (:auth-provider user))
+        safe-user (dissoc user :password_hash :password-hash :users/password_hash)]
+    (cond-> {:authenticated true
+             :session-valid (not (shared-date/session-expired? auth-session))
+             :user safe-user
+             :tenant (:tenant auth-session)
+             :permissions (shared-auth/get-user-permissions user)}
+      provider
+      (assoc :provider (if (keyword? provider) (name provider) (str provider)))
+
+      (:membership auth-session)
+      (assoc :membership-role (get-in auth-session [:membership :role]))
+
+      (:tenant-selection-required auth-session)
+      (assoc :tenant-selection-required true
+        :available-tenants (:available-tenants auth-session))
+
+      (:no-tenant auth-session)
+      (assoc :no-tenant true))))
+
+(defn- repair-incomplete-auth-session
+  [req db auth-session]
+  (when (and db (incomplete-auth-session? auth-session))
+    (let [session-user (get auth-session :user)
+          user-id      (or (:id session-user) (:users/id session-user))
+          fresh-user   (fetch-user-record db user-id)]
+      (cond
+        (nil? fresh-user)
+        {:action :clear
+         :reason :missing-user
+         :body {:authenticated false}}
+
+        (not (:email_verified fresh-user))
+        {:action :clear
+         :reason :verification-pending
+         :body {:authenticated false
+                :verification-required true}}
+
+        :else
+        (let [config            (get-in req [:service-container :config])
+              sanitized-user    (sanitize-for-serialization fresh-user)
+              tenant-ctx        (tenant-auth/resolve-tenant-context db config fresh-user)
+              repaired-session  (sanitize-for-serialization
+                                  (tenant-auth/build-auth-session
+                                    {:user sanitized-user}
+                                    tenant-ctx))]
+          {:action :repair
+           :reason :verified-user-session-refreshed
+           :auth-session repaired-session})))))
+
 (defn register-handler
   "Handler for user registration"
   [auth-service]
@@ -306,12 +391,12 @@
     (let [;; Check for our new auth session first
           auth-session (get-in req [:session :auth-session])
           user (:user auth-session)
-          provider (or (:provider auth-session)
-                     (:auth_provider user)
-                     (:auth-provider user))
           db (resolve-db req)
           invalid-message (when (and auth-session db)
-                            (invalid-auth-session-message db auth-session))]
+                            (invalid-auth-session-message db auth-session))
+          repair-result (when (and auth-session db)
+                          (repair-incomplete-auth-session req db auth-session))
+          effective-auth-session (or (:auth-session repair-result) auth-session)]
       (cond
         ;; Auth session exists but is no longer valid (user/tenant/membership status changed)
         (and auth-session invalid-message)
@@ -326,29 +411,32 @@
            :body (json/generate-string {:authenticated false})
            :session (clear-user-auth-session (:session req))})
 
-        ;; New session format (from our auth service)
-        auth-session
-        (let [safe-user (dissoc user :password_hash :password-hash :users/password_hash)
-              body (cond-> {:authenticated true
-                            :session-valid (not (shared-date/session-expired? auth-session))
-                            :user safe-user
-                            :tenant (:tenant auth-session)
-                            :permissions (shared-auth/get-user-permissions user)}
-                     provider
-                     (assoc :provider (if (keyword? provider) (name provider) (str provider)))
-
-                     (:membership auth-session)
-                     (assoc :membership-role (get-in auth-session [:membership :role]))
-
-                     (:tenant-selection-required auth-session)
-                     (assoc :tenant-selection-required true
-                       :available-tenants (:available-tenants auth-session))
-
-                     (:no-tenant auth-session)
-                     (assoc :no-tenant true))]
+        (= :clear (:action repair-result))
+        (do
+          (log/info "Clearing incomplete auth session"
+            {:reason (:reason repair-result)
+             :user-id (or (:id user) (:users/id user))})
           {:status 200
            :headers {"Content-Type" "application/json"}
-           :body (json/generate-string body)})
+           :body (json/generate-string (:body repair-result))
+           :session (clear-user-auth-session (:session req))})
+
+        ;; New session format (from our auth service)
+        effective-auth-session
+        (do
+          (when (= :repair (:action repair-result))
+            (log/info "Repaired incomplete auth session"
+              {:reason (:reason repair-result)
+               :user-id (or (get-in effective-auth-session [:user :id])
+                          (get-in effective-auth-session [:user :users/id]))
+               :tenant-id (or (get-in effective-auth-session [:tenant :id])
+                           (get-in effective-auth-session [:tenant :tenants/id]))}))
+          (cond-> {:status 200
+                   :headers {"Content-Type" "application/json"}
+                   :body (json/generate-string
+                           (build-auth-status-body effective-auth-session))}
+            (= :repair (:action repair-result))
+            (assoc :session (assoc (or (:session req) {}) :auth-session effective-auth-session))))
 
         ;; Not authenticated
         :else

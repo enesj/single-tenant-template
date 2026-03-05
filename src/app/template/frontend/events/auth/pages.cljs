@@ -3,6 +3,7 @@
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.auth.ids :as ids]
+    [app.template.frontend.events.auth.utils :as auth-utils]
     [re-frame.core :as rf]))
 
 ;; ========================================================================
@@ -23,7 +24,11 @@
                              (js/URLSearchParams.)
                              (.get "return")))]
           {:db (assoc-in db (paths/current-page) :login)
-           :redirect (if (seq return-url) return-url "/entities")})
+           :redirect (auth-utils/post-auth-redirect
+                       {:return-url return-url
+                        :no-tenant? (get-in db [:session :no-tenant?])
+                        :tenant-selection-required (get-in db [:session :tenant-selection-required])
+                        :membership-role (get-in db [:session :membership-role])})})
         ;; Otherwise, fetch auth status and show login page
         {:db (-> db
                (assoc-in (paths/current-page) :login))
@@ -51,7 +56,11 @@
                              (js/URLSearchParams.)
                              (.get "return")))]
           {:db (assoc-in db (paths/current-page) :register)
-           :redirect (if (seq return-url) return-url "/entities")})
+           :redirect (auth-utils/post-auth-redirect
+                       {:return-url return-url
+                        :no-tenant? (get-in db [:session :no-tenant?])
+                        :tenant-selection-required (get-in db [:session :tenant-selection-required])
+                        :membership-role (get-in db [:session :membership-role])})})
         ;; Otherwise, clear auth state and show registration page
         {:db (-> db
                (assoc-in (paths/current-page) :register))

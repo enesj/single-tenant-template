@@ -17,13 +17,48 @@
     [clojure.pprint :as pprint]
     [clojure.string :as str])
   (:import
+    [java.net URI]
     [java.text Normalizer Normalizer$Form]
     [java.util UUID]))
 
+(defn- parse-pg-url
+  "Parse a postgres:// or postgresql:// URL into a psql-compatible connection map.
+
+  Returns {:host :port :dbname :user :password}."
+  [url]
+  (when (some-> url str/trim not-empty)
+    (let [normalized (-> url str/trim
+                       (str/replace #"^postgres://" "postgresql://"))
+          uri        (URI. normalized)
+          user-info  (.getUserInfo uri)
+          [pg-user pg-pass] (when user-info (str/split user-info #":" 2))
+          pg-port    (.getPort uri)
+          pg-path    (.getPath uri)]
+      {:host     (.getHost uri)
+       :port     (if (pos? pg-port) pg-port 5432)
+       :dbname   (str/replace (or pg-path "/railway") #"^/" "")
+       :user     pg-user
+       :password pg-pass})))
+
+(defn- prod-db-config
+  "Return DB connection map for :prod profile, reading DATABASE_PUBLIC_URL then DATABASE_URL."
+  []
+  (let [url (or (System/getenv "DATABASE_PUBLIC_URL")
+              (System/getenv "DATABASE_URL"))]
+    (when-not (some-> url str/trim not-empty)
+      (throw (ex-info "DATABASE_PUBLIC_URL or DATABASE_URL env var is required for the prod profile"
+               {:hint "railway run bb <script> prod  OR  set DATABASE_PUBLIC_URL manually"})))
+    (or (parse-pg-url url)
+      (throw (ex-info "Failed to parse PostgreSQL URL" {:url url})))))
+
 (defn read-config
-  "Read `config/base.edn` for a given Aero profile keyword (typically `:dev` or `:test`)."
+  "Read config for a given Aero profile keyword.
+
+  Supports :dev, :test (reads config/base.edn) and :prod (reads DATABASE_PUBLIC_URL / DATABASE_URL)."
   [profile]
-  (aero/read-config "config/base.edn" {:profile profile}))
+  (if (= profile :prod)
+    {:database (prod-db-config)}
+    (aero/read-config "config/base.edn" {:profile profile})))
 
 (defn db-config
   "Return the `:database` map (host/port/dbname/user/password) for a profile."
@@ -42,7 +77,7 @@
     (catch Exception _ nil)))
 
 (defn parse-profile
-  "Parse the first CLI arg as a profile, supporting `dev|test` and `--dev|--test`.
+  "Parse the first CLI arg as a profile, supporting `dev|test|prod` and `--dev|--test|--prod`.
 
   Returns {:profile <kw> :args <remaining-args>}.
 
@@ -52,12 +87,12 @@
     (cond
       (nil? a) {:profile :dev :args []}
 
-      (#{"dev" "test"} a)
-      {:profile (if (= a "dev") :dev :test)
-       :args more}
+      (#{"dev" "test" "prod"} a)
+      {:profile (keyword a) :args more}
 
-      (= a "--dev") {:profile :dev :args more}
+      (= a "--dev")  {:profile :dev  :args more}
       (= a "--test") {:profile :test :args more}
+      (= a "--prod") {:profile :prod :args more}
 
       :else {:profile :dev :args args})))
 

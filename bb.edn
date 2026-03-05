@@ -496,6 +496,42 @@
          {:doc "Validate existing article alias mappings for suspicious patterns.\n\nDetects size conflicts (different sizes mapped to same article),\nrestaurant/retail mix, and single-alias articles.\n\nUsage:\n  bb validate-article-mappings [dev|test] [--json] [--fix-suggestions]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/expenses/validate_article_mappings.clj" *command-line-args*)},
 
+         railway-articles-run
+         {:doc "Run any articles script against Railway prod DB via public TCP proxy.
+
+  Injects DATABASE_PUBLIC_URL (derived from railway run printenv DATABASE_URL) and
+  automatically passes 'prod' as the profile so scripts target the Railway DB.
+
+  Requires: railway CLI installed and linked (railway login && railway link).
+
+  Usage:
+    bb railway-articles-run scripts/bb/articles/list_categories.clj [extra-args...]
+    bb railway-articles-run scripts/bb/articles/list_unmapped_aliases.clj --limit 50 --pretty
+    bb railway-articles-run scripts/bb/articles/create_articles.clj --canonical-name 'Nescafe' --dry-run
+    bb railway-articles-run scripts/bb/articles/report_progress.clj --pretty
+    bb railway-articles-run scripts/bb/articles/unmapped_aliases_counts.clj --pretty
+    bb railway-articles-run scripts/bb/articles/list_aliases_from_receipts.clj
+    bb railway-articles-run scripts/bb/articles/list_review_required_receipts.clj
+    bb railway-articles-run scripts/bb/articles/ensure_taxonomy.clj --category-name 'Dairy' --dry-run
+    bb railway-articles-run scripts/bb/articles/map_aliases.clj --alias-id UUID --article-key KEY --dry-run
+    bb railway-articles-run scripts/bb/articles/delete_unmapped_aliases.clj --raw-label 'x' (dry-run by default)",
+          :task (let [args              *command-line-args*
+                      [script & script-args] args
+                      _ (when-not script
+                          (println "Usage: bb railway-articles-run scripts/bb/articles/<script>.clj [args...]")
+                          (System/exit 1))
+                      internal-url      (:out (clojure.java.shell/sh "railway" "run" "printenv" "DATABASE_URL"))
+                      public-url        (clojure.string/replace
+                                          (clojure.string/trim internal-url)
+                                          "postgres.railway.internal:5432"
+                                          "gondola.proxy.rlwy.net:12386")
+                      _ (when (clojure.string/blank? public-url)
+                          (println "❌ Could not get DATABASE_URL from Railway. Run: railway login && railway link")
+                          (System/exit 1))
+                      extra             {"DATABASE_URL"        public-url
+                                         "DATABASE_PUBLIC_URL" public-url}]
+                  (apply shell {:extra-env extra} "bb" script "prod" script-args))},
+
          check-migrations
          {:doc "Check if database schema is aligned with migrations and models. Usage: bb check-migrations [dev|test]",
           :task (let [env (or (first *command-line-args*) "dev")]
@@ -527,6 +563,25 @@
                       process-env (dotenv)]
                   (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/seed_countries.clj" env)
                   (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" env))},
+
+         seed-geo-railway
+         {:doc "Seed countries + BH cities into Railway prod DB via public TCP proxy.
+                Requires: railway CLI installed and linked (`railway login && railway link`).
+                Usage: bb seed-geo-railway",
+          :task (let [internal-url  (:out (clojure.java.shell/sh "railway" "run" "printenv" "DATABASE_URL"))
+                      public-url    (clojure.string/replace
+                                      (clojure.string/trim internal-url)
+                                      "postgres.railway.internal:5432"
+                                      "gondola.proxy.rlwy.net:12386")
+                      _             (when (empty? public-url)
+                                      (println "❌ Could not get DATABASE_URL from Railway. Run: railway login && railway link")
+                                      (System/exit 1))
+                      extra         {"DATABASE_URL"        public-url
+                                     "DATABASE_PUBLIC_URL" public-url}]
+                  (println "Seeding Railway prod DB via public proxy...")
+                  (shell {:extra-env extra} "clj" "-M" "scripts/bb/database/seed_countries.clj" "prod")
+                  (shell {:extra-env extra} "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" "prod")
+                  (println "Railway seed complete."))},
 
          clear-rate-limits
          {:doc "Clear all rate limiting data (for development and testing).

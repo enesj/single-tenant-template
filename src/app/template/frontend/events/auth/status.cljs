@@ -5,6 +5,7 @@
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.auth.ids :as ids]
+    [app.template.frontend.events.auth.utils :as auth-utils]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
@@ -96,18 +97,11 @@
                          (-> js/window .-location .-search
                            (js/URLSearchParams.)
                            (.get "return")))
-            ;; Determine redirect based on return URL, role, and tenant state
-            redirect-path (cond
-                            ;; Honor return URL (e.g. invitation accept page)
-                            (seq return-url) return-url
-                            ;; Users with no tenant — show tenant select (they can accept invitations)
-                            no-tenant? "/tenant-select"
-                            ;; Users with multiple tenants and no active tenant
-                            tenant-selection-required "/tenant-select"
-                            ;; Members and above go to expense dashboard
-                            (contains? #{"member" "admin" "owner"} user-role) "/dashboard"
-                            ;; Viewers or other roles go to entities
-                            :else "/entities")
+            redirect-path (auth-utils/post-auth-redirect
+                            {:return-url return-url
+                             :no-tenant? no-tenant?
+                             :tenant-selection-required tenant-selection-required
+                             :membership-role user-role})
             base-effects (cond-> {:db updated-db}
                            (and authenticated? (= current-page :login))
                            (assoc :redirect redirect-path))]
