@@ -2,6 +2,7 @@
   "Tests for tenant provisioning, slug generation, and membership queries."
   (:require
     [app.backend.fixtures :as fixtures]
+    [app.template.backend.db.adapter :as db-adapter]
     [app.template.backend.services.tenant :as tenant-svc]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as sql]
@@ -130,6 +131,20 @@
         memberships (tenant-svc/get-user-memberships db user-id)]
 
     (testing "returns the newly created membership with tenant info"
+      (is (= 1 (count memberships)))
+      (is (some? (or (:tenant_name (first memberships))
+                   (:tenant_memberships/tenant_name (first memberships))))))))
+
+(deftest get-user-memberships-accepts-db-adapter-test
+  (let [db        fixtures/*test-db*
+        adapter   (db-adapter/create-postgres-adapter db)
+        user      (create-test-user! db)
+        config    {:tenant-defaults {:payer-types [] :expense-categories []}}
+        _         (tenant-svc/provision-tenant! db config user)
+        user-id   (or (:id user) (:users/id user))
+        memberships (tenant-svc/get-user-memberships adapter user-id)]
+
+    (testing "accepts the DI db-adapter record as well as raw jdbc connections"
       (is (= 1 (count memberships)))
       (is (some? (or (:tenant_name (first memberships))
                    (:tenant_memberships/tenant_name (first memberships))))))))

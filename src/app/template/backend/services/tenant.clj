@@ -29,10 +29,17 @@
     (str/replace #"[^a-z0-9]+" "-")
     (str/replace #"^-+|-+$" "")))
 
+(defn- ->jdbc-conn
+  "Accept either a raw next.jdbc connectable or the template db-adapter record."
+  [db]
+  (or (when (map? db) (:connection db))
+    db))
+
 (defn ensure-unique-slug
   "Return `base-slug` if available, otherwise append -2, -3, … until unique."
   [db base-slug]
-  (let [taken? (fn [slug]
+  (let [db (->jdbc-conn db)
+        taken? (fn [slug]
                  (some? (jdbc/execute-one! db
                           (sql/format {:select [[:id]]
                                        :from   [:tenants]
@@ -73,7 +80,8 @@
   "Create a new tenant + owner membership + seed lookup tables, all inside a
    single transaction. Returns {:tenant <row> :membership <row>}."
   [db config user]
-  (let [base-slug  (generate-slug (user-email user))
+  (let [db         (->jdbc-conn db)
+        base-slug  (generate-slug (user-email user))
         slug       (ensure-unique-slug db base-slug)
         name       (generate-tenant-name user)
         tenant-id  (java.util.UUID/randomUUID)
@@ -140,7 +148,7 @@
   "Return the active tenant with the given slug, or nil."
   [db slug]
   (convert-pg-objects
-    (jdbc/execute-one! db
+    (jdbc/execute-one! (->jdbc-conn db)
       (sql/format {:select [:*]
                    :from   [:tenants]
                    :where  [:and
@@ -152,7 +160,7 @@
   [db id]
   (let [uuid-id (if (string? id) [:cast id :uuid] id)]
     (convert-pg-objects
-      (jdbc/execute-one! db
+      (jdbc/execute-one! (->jdbc-conn db)
         (sql/format {:select [:*]
                      :from   [:tenants]
                      :where  [:= :id uuid-id]})))))
@@ -164,7 +172,8 @@
 (defn get-user-memberships
   "Return all active memberships for a user, joined with tenant info."
   [db user-id]
-  (let [uuid-id (if (string? user-id) [:cast user-id :uuid] user-id)]
+  (let [db      (->jdbc-conn db)
+        uuid-id (if (string? user-id) [:cast user-id :uuid] user-id)]
     (let [opts {:builder-fn rs/as-unqualified-maps}]
       (mapv convert-pg-objects
         (jdbc/execute! db
@@ -188,7 +197,8 @@
    (get-tenant-members db tenant-id {}))
   ([db tenant-id {:keys [include-suspended?]
                   :or {include-suspended? false}}]
-   (let [uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
+   (let [db (->jdbc-conn db)
+         uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
          opts {:builder-fn rs/as-unqualified-maps}
          where-clause (cond-> [:and
                                [:= :tm.tenant_id uuid-id]]
@@ -208,7 +218,8 @@
 (defn get-membership
   "Return the single active membership for a user in a tenant, or nil."
   [db tenant-id user-id]
-  (let [t-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
+  (let [db (->jdbc-conn db)
+        t-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
         u-id (if (string? user-id) [:cast user-id :uuid] user-id)]
     (convert-pg-objects
       (jdbc/execute-one! db
