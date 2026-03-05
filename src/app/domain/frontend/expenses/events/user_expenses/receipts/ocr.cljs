@@ -34,6 +34,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/" receipt-id "/ocr")
+                    :timeout 30000
                     :on-success [:user-expenses/ocr-receipt-success receipt-id]
                     :on-failure [:user-expenses/ocr-receipt-failure receipt-id]})}))
 
@@ -68,6 +69,7 @@
                        {:method :post
                         :uri (str endpoints/receipts-endpoint "/ocr")
                         :params {:receipt_ids ids}
+                        :timeout 30000
                         :on-success [:user-expenses/ocr-selected-success ids]
                         :on-failure [:user-expenses/ocr-selected-failure]})}
         {:db (-> db
