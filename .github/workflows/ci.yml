@@ -50,6 +50,9 @@ jobs:
         with:
           cli: latest
 
+      - name: Install rlwrap
+        run: sudo apt-get install -y rlwrap
+
       - name: Set up Babashka
         uses: turtlequeue/setup-babashka@v1.6.0
         with:
@@ -89,6 +92,11 @@ jobs:
         with:
           node-version: 25
           cache: npm
+
+      - name: Set up Clojure CLI
+        uses: DeLaGuardo/setup-clojure@13.5.2
+        with:
+          cli: latest
 
       - name: Set up Babashka
         uses: turtlequeue/setup-babashka@v1.6.0
