@@ -2,5 +2,7 @@
 # Multi-tenant property hosting SaaS - Clojure/ClojureScript integration
 
 # Model configuration (project-specific)
-model = "gpt-5.2"
+model = "gpt-5.4"
 model_reasoning_effort = "high"
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000

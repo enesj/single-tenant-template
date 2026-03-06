@@ -1,8 +1,8 @@
 (ns app.admin.frontend.pages.user-settings
   "Admin page for editing domain-owned, user-facing UI defaults.
 
-  These settings are stored in `src/app/domain/frontend/expenses/config/*` via
-  the admin API and are used by the non-admin (user-facing) routes."
+  These settings are seeded from the domain config EDN files and persisted via
+  the admin API for use by the non-admin (user-facing) routes."
   {:clj-kondo/ignore [:unused-namespace :unused-referred-var :unused-private-var]}
   (:require
     [app.admin.frontend.components.tabs :as tabs]

@@ -481,7 +481,7 @@
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/list_categories.clj" *command-line-args*)},
 
          group-aliases-by-brand
-         {:doc "Group unmapped article aliases by detected brand/product family.\n\nShows size tokens and supplier type (restaurant vs retail) to help spot variant\nconflicts BEFORE creating articles.\n\nUsage:\n  bb group-aliases-by-brand [dev|test] [--mapped] [--min-group N] [--json]",
+         {:doc "Group unmapped article aliases by detected brand/product family.\n\nShows size tokens and supplier type (restaurant vs retail) to help spot variant\nconflicts BEFORE creating articles.\n\nUsage:\n  bb group-aliases-by-brand [dev|test|prod] [--mapped] [--min-group N] [--json]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/expenses/group_aliases_by_brand.clj" *command-line-args*)},
 
          articles-phase1-triage
@@ -582,6 +582,69 @@
                   (shell {:extra-env extra} "clj" "-M" "scripts/bb/database/seed_countries.clj" "prod")
                   (shell {:extra-env extra} "clj" "-M" "scripts/bb/database/seed_bh_cities.clj" "prod")
                   (println "Railway seed complete."))},
+
+         railway-seed-categories
+         {:doc "Seed canonical article categories into Railway prod DB via public TCP proxy.
+                Requires: railway CLI installed and linked (`railway login && railway link`).
+                Usage: bb railway-seed-categories",
+          :task (let [internal-url  (:out (clojure.java.shell/sh "railway" "run" "printenv" "DATABASE_URL"))
+                      public-url    (clojure.string/replace
+                                      (clojure.string/trim internal-url)
+                                      "postgres.railway.internal:5432"
+                                      "gondola.proxy.rlwy.net:12386")
+                      _             (when (empty? public-url)
+                                      (println "❌ Could not get DATABASE_URL from Railway. Run: railway login && railway link")
+                                      (System/exit 1))
+                      extra         {"DATABASE_URL"        public-url
+                                     "DATABASE_PUBLIC_URL" public-url}]
+                  (shell {:extra-env extra} "clj" "-M" "scripts/bb/database/seed_categories.clj" "prod"))},
+
+         postgres-mcp-railway
+         {:doc "Switch postgres-mcp to Railway prod DB (writes tmp/.postgres.env).
+
+  After running this, restart the postgres MCP server for changes to take effect.
+  Requires: railway CLI installed and linked (railway login && railway link).
+
+  Usage: bb postgres-mcp-railway",
+          :task (let [internal-url  (:out (clojure.java.shell/sh "railway" "run" "printenv" "DATABASE_URL"))
+                      public-url    (clojure.string/replace
+                                      (clojure.string/trim internal-url)
+                                      "postgres.railway.internal:5432"
+                                      "gondola.proxy.rlwy.net:12386")
+                      _             (when (clojure.string/blank? public-url)
+                                      (println "Could not get DATABASE_URL from Railway. Run: railway login && railway link")
+                                      (System/exit 1))
+                      uri           (java.net.URI. (clojure.string/replace public-url "postgres://" "postgresql://"))
+                      user-info     (.getUserInfo uri)
+                      [pg-user pg-pass] (when user-info (clojure.string/split user-info (re-pattern ":") 2))
+                      pg-port       (let [p (.getPort uri)] (if (pos? p) p 5432))
+                      pg-dbname     (clojure.string/replace (or (.getPath uri) "/railway") (re-pattern "^/") "")
+                      env-content   (str "POSTGRES_HOST=" (.getHost uri) "\n"
+                                      "POSTGRES_PORT=" pg-port "\n"
+                                      "POSTGRES_DATABASE=" pg-dbname "\n"
+                                      "POSTGRES_USER=" pg-user "\n"
+                                      "POSTGRES_PASSWORD=" pg-pass "\n")]
+                  (spit "tmp/.postgres.env" env-content)
+                  (println "Switched postgres-mcp to Railway prod DB:")
+                  (println (str "  host=" (.getHost uri) " port=" pg-port " db=" pg-dbname " user=" pg-user))
+                  (println "")
+                  (println "Restart the postgres MCP server for changes to take effect."))},
+
+         postgres-mcp-dev
+         {:doc "Switch postgres-mcp back to local dev DB (restores tmp/.postgres.env).
+
+  After running this, restart the postgres MCP server for changes to take effect.
+
+  Usage: bb postgres-mcp-dev",
+          :task (do
+                  (spit "tmp/.postgres.env"
+                    (str "POSTGRES_HOST=localhost\n"
+                      "POSTGRES_PORT=55432\n"
+                      "POSTGRES_DATABASE=multi_tenant_pos\n"
+                      "POSTGRES_USER=app_user\n"
+                      "POSTGRES_PASSWORD=password\n"))
+                  (println "Switched postgres-mcp back to local dev DB.")
+                  (println "Restart the postgres MCP server for changes to take effect."))},
 
          clear-rate-limits
          {:doc "Clear all rate limiting data (for development and testing).

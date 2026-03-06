@@ -1,0 +1,21 @@
+({:action :create-table,
+  :model-name :frontend_runtime_configs,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :scope
+   {:null false,
+    :check [:raw "scope IN ('admin', 'user')"],
+    :type [:varchar 32]},
+   :config-key
+   {:null false,
+    :check
+    [:raw
+     "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns')"],
+    :type [:varchar 64]},
+   :config-edn {:null false, :type :text},
+   :created-at {:null false, :default [:now], :type :timestamptz},
+   :updated-at {:null false, :default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-frontend-runtime-configs-scope-key,
+  :model-name :frontend_runtime_configs,
+  :options {:fields [:scope :config_key], :unique true, :type :btree}})

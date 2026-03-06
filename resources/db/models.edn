@@ -1,4 +1,23 @@
-{:email_verification_tokens
+{:frontend_runtime_configs
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:scope
+    [:varchar 32]
+    {:null false, :check [:raw "scope IN ('admin', 'user')"]}]
+   [:config_key
+    [:varchar 64]
+    {:null false,
+     :check
+     [:raw
+      "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns')"]}]
+   [:config_edn :text {:null false}]
+   [:created_at :timestamptz {:null false, :default [:now]}]
+   [:updated_at :timestamptz {:null false, :default [:now]}]],
+  :indexes
+  [[:uniq_frontend_runtime_configs_scope_key
+    :btree
+    {:fields [:scope :config_key], :unique true}]]},
+ :email_verification_tokens
  {:fields
   [[:id :uuid {:primary-key true}]
    [:user_id

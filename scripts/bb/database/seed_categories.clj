@@ -6,6 +6,7 @@
     [clojure.string :as str]
     [next.jdbc :as jdbc])
   (:import
+    [java.net URI]
     [java.util UUID]))
 
 (def categories
@@ -68,11 +69,30 @@
    ["Frozen Foods" "Pakovana hrana i pića"]
    ["Beverages" "Pakovana hrana i pića"]
    ["Coffee & Tea" "Pakovana hrana i pića"]
-   ["Alcohol" "Pakovana hrana i pića"]])
+   ["Alcohol" "Pakovana hrana i pića"]
+
+   ;; Bootstrap remaps: English categories created before canonical seed was run
+   ["Clothing & Accessories" "Odjeća i modni dodaci"]
+   ["Services" "Ostalo"]
+   ["Tobacco" "Ostalo"]])
 
 (defn get-db-config [profile]
-  (let [config (aero/read-config "config/base.edn" {:profile profile})]
-    (:database config)))
+  (if (= profile :prod)
+    (let [url (or (System/getenv "DATABASE_PUBLIC_URL")
+                (System/getenv "DATABASE_URL"))]
+      (when-not (some-> url str/trim not-empty)
+        (throw (ex-info "DATABASE_PUBLIC_URL or DATABASE_URL required for prod" {})))
+      (let [uri       (URI. (str/replace (str/trim url) #"^postgres://" "postgresql://"))
+            user-info (.getUserInfo uri)
+            [pg-user pg-pass] (when user-info (str/split user-info #":" 2))
+            pg-port   (.getPort uri)]
+        {:host     (.getHost uri)
+         :port     (if (pos? pg-port) pg-port 5432)
+         :dbname   (str/replace (or (.getPath uri) "/railway") #"^/" "")
+         :user     pg-user
+         :password pg-pass}))
+    (-> (aero/read-config "config/base.edn" {:profile profile})
+      :database)))
 
 (defn datasource [{:keys [host port dbname user password]}]
   (jdbc/get-datasource {:dbtype "postgresql"
@@ -132,8 +152,8 @@
 (defn -main [& args]
   (let [env (or (first args) "dev")
         profile (keyword env)]
-    (when-not (#{:dev :test} profile)
-      (println "❌ Invalid environment. Use: dev or test")
+    (when-not (#{:dev :test :prod} profile)
+      (println "❌ Invalid environment. Use: dev, test, or prod")
       (System/exit 1))
     (try
       (let [db (get-db-config profile)

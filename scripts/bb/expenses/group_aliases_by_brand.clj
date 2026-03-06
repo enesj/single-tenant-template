@@ -8,7 +8,7 @@
   classic mistake of mapping different sizes to the same article.
 
   Usage:
-    bb group-aliases-by-brand [dev|test] [--mapped] [--min-group N] [--json]
+    bb group-aliases-by-brand [dev|test|prod] [--mapped] [--min-group N] [--json]
 
   Flags:
     --mapped      Include already-mapped aliases (default: unmapped only)
@@ -24,29 +24,53 @@
 ;; DB helpers (psql-based, bb-compatible)
 ;; ---------------------------------------------------------------------------
 
+(defn- parse-pg-url
+  "Parse a postgres:// or postgresql:// URL into a connection map."
+  [url]
+  (when (some-> url str/trim not-empty)
+    (let [normalized (-> url str/trim (str/replace #"^postgres://" "postgresql://"))
+          uri        (java.net.URI. normalized)
+          user-info  (.getUserInfo uri)
+          [pg-user pg-pass] (when user-info (str/split user-info #":" 2))
+          pg-port    (.getPort uri)
+          pg-path    (.getPath uri)]
+      {:host     (.getHost uri)
+       :port     (if (pos? pg-port) pg-port 5432)
+       :dbname   (str/replace (or pg-path "/railway") #"^/" "")
+       :user     pg-user
+       :password pg-pass})))
+
 (defn- db-config [profile]
-  (:database (aero/read-config "config/base.edn" {:profile profile})))
+  (if (= profile :prod)
+    (let [url (or (System/getenv "DATABASE_PUBLIC_URL")
+                (System/getenv "DATABASE_URL"))]
+      (when-not (some-> url str/trim not-empty)
+        (binding [*out* *err*]
+          (println "DATABASE_PUBLIC_URL or DATABASE_URL env var is required for prod profile"))
+        (System/exit 1))
+      (parse-pg-url url))
+    (:database (aero/read-config "config/base.edn" {:profile profile}))))
 
 (defn- psql-query-maps
   "Run SQL via psql, returning vector of maps. Uses header row for keys."
   [{:keys [host port dbname user password]} sql]
   (let [{:keys [out err exit]}
         (sh/sh "psql" "-h" host "-p" (str port) "-U" user "-d" dbname
-               "-F" "\t" "-A" "-c" sql
-               :env (merge (into {} (System/getenv)) {"PGPASSWORD" password}))]
+          "-F" "\t" "-A" "-c" sql
+          :env (merge (into {} (System/getenv)) {"PGPASSWORD" password}))]
     (when (not= 0 exit)
       (binding [*out* *err*]
         (println "psql error:" err))
       (System/exit 1))
     (let [lines (->> (str/split-lines out)
-                     (remove str/blank?)
-                     (remove #(re-matches #"\(\d+ rows?\)" %))
-                     vec)]
+                  (remove str/blank?)
+                  (remove #(re-matches #"\(\d+ rows?\)" %))
+                  vec)]
       (when (>= (count lines) 2)
         (let [headers (mapv keyword (str/split (first lines) #"\t"))]
           (mapv (fn [line]
                   (zipmap headers (str/split line #"\t" -1)))
-                (rest lines)))))))
+            (rest lines)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Size / brand extraction
@@ -93,11 +117,11 @@
   (let [decimal-tokens (filter #(re-find #"\d+\.\d+" %) sizes)
         fraction-tokens
         (->> decimal-tokens
-             (keep (fn [t]
-                     (when-let [[_ _whole frac unit]
-                                (re-matches #"^(\d+)\.(\d+)([a-z]+)$" t)]
-                       (str frac unit))))
-             set)]
+          (keep (fn [t]
+                  (when-let [[_ _whole frac unit]
+                             (re-matches #"^(\d+)\.(\d+)([a-z]+)$" t)]
+                    (str frac unit))))
+          set)]
     (reduce disj (set sizes) fraction-tokens)))
 
 (defn- extract-sizes
@@ -106,19 +130,19 @@
   (when (some? text)
     (let [t (-> text str/lower-case)
           packs (->> (re-seq pack-size-pattern t)
-                     (map (fn [[_ n num unit]] (pack-token n num unit)))
-                     set)
+                  (map (fn [[_ n num unit]] (pack-token n num unit)))
+                  set)
           decimals-space (->> (re-seq decimal-space-size-pattern t)
-                              (map (fn [[_ a b unit]] (size-token (str a "." b) unit)))
-                              set)
+                           (map (fn [[_ a b unit]] (size-token (str a "." b) unit)))
+                           set)
           decimals (->> (re-seq decimal-size-pattern t)
-                        (map (fn [[_ num unit]] (size-token num unit)))
-                        set)
+                     (map (fn [[_ num unit]] (size-token num unit)))
+                     set)
           simples (->> (re-seq simple-size-pattern t)
-                       (map (fn [[_ num unit]] (size-token num unit)))
-                       set)]
+                    (map (fn [[_ num unit]] (size-token num unit)))
+                    set)]
       (-> (into #{} (concat packs decimals-space decimals simples))
-          prune-overlapping-fractions))))
+        prune-overlapping-fractions))))
 
 (defn- extract-sizes-from-normalized
   "Extract sizes from a hyphenated normalized key.
@@ -131,8 +155,8 @@
   [nk]
   (when (some? nk)
     (let [tokens (->> (str/split (str/lower-case nk) #"-+")
-                      (remove str/blank?)
-                      vec)
+                   (remove str/blank?)
+                   vec)
           n (count tokens)]
       (loop [i 0
              sizes #{}]
@@ -142,14 +166,14 @@
                 next (when (< (inc i) n) (nth tokens (inc i)))
                 ;; token like "25l" => ["25" "l"]
                 num+unit (when-let [[_ num unit]
-                                   (re-matches #"^(\d{1,5})(l|ml|g|kg|cl|dl|kom)$" t)]
+                                    (re-matches #"^(\d{1,5})(l|ml|g|kg|cl|dl|kom)$" t)]
                            [num unit])
                 pack (when-let [[_ cnt num unit]
                                 (re-matches #"^(\d+)x(\d+(?:\.\d+)?)(l|ml|g|kg|cl|dl|kom)$" t)]
                        [cnt num unit])
                 decimal-space (when (and (re-matches #"^\d$" t)
-                                         (some? next)
-                                         (re-matches #"^\d{2}(l|ml|g|kg|cl|dl)$" next))
+                                      (some? next)
+                                      (re-matches #"^\d{2}(l|ml|g|kg|cl|dl)$" next))
                                 (let [[_ frac unit] (re-matches #"^(\d{2})([a-z]+)$" next)]
                                   [(str t "." frac) unit]))]
             (cond
@@ -182,37 +206,37 @@
   [raw-label]
   (when raw-label
     (-> raw-label
-        str/lower-case
+      str/lower-case
         ;; Remove size patterns (including spaced decimals like "1 25l")
-        (str/replace pack-size-pattern " ")
-        (str/replace decimal-space-size-pattern " ")
-        (str/replace decimal-size-pattern " ")
-        (str/replace simple-size-pattern " ")
+      (str/replace pack-size-pattern " ")
+      (str/replace decimal-space-size-pattern " ")
+      (str/replace decimal-size-pattern " ")
+      (str/replace simple-size-pattern " ")
         ;; Remove common non-brand words
-        (str/replace common-non-brand-words " ")
+      (str/replace common-non-brand-words " ")
         ;; Remove punctuation
-        (str/replace #"[^a-z0-9\s]" " ")
-        str/trim
-        (str/replace #"\s+" " "))))
+      (str/replace #"[^a-z0-9\s]" " ")
+      str/trim
+      (str/replace #"\s+" " "))))
 
 (defn- strip-trailing-size-tokens
   "Remove obvious trailing size tokens from a normalized key."
   [normalized]
   (let [tokens (->> (str/split (or normalized "") #"-+")
-                    (remove str/blank?)
-                    vec)
+                 (remove str/blank?)
+                 vec)
         size-token? (fn [t]
                       (or (re-matches #"^\d{1,5}(l|ml|g|kg|cl|dl|kom|pcs|tab)$" (str/lower-case t))
-                          (re-matches #"^\d$" (str/lower-case t))
-                          (re-matches #"^\d{2}(l|ml|g|kg|cl|dl)$" (str/lower-case t))
-                          (re-matches #"^\d+x\d+(?:[.,]\d+)?(l|ml|g|kg|cl|dl|kom)$" (str/lower-case t))
-                          (= "pet" (str/lower-case t))))]
+                        (re-matches #"^\d$" (str/lower-case t))
+                        (re-matches #"^\d{2}(l|ml|g|kg|cl|dl)$" (str/lower-case t))
+                        (re-matches #"^\d+x\d+(?:[.,]\d+)?(l|ml|g|kg|cl|dl|kom)$" (str/lower-case t))
+                        (= "pet" (str/lower-case t))))]
     (loop [ts tokens]
       (if (and (seq ts) (size-token? (last ts)))
         (recur (pop ts))
         (-> (str/join "-" ts)
-            (str/replace #"-+" "-")
-            (str/replace #"^-|-$" ""))))))
+          (str/replace #"-+" "-")
+          (str/replace #"^-|-$" ""))))))
 
 (defn- derive-brand-key
   "Derive a grouping key from the raw label and its normalized form."
@@ -239,7 +263,7 @@
       opts
       (let [[a & rest-args] args]
         (cond
-          (#{"dev" "test"} a)
+          (#{"dev" "test" "prod"} a)
           (recur (vec rest-args) (assoc opts :profile (keyword a)))
 
           (= a "--dev")
@@ -247,6 +271,9 @@
 
           (= a "--test")
           (recur (vec rest-args) (assoc opts :profile :test))
+
+          (= a "--prod")
+          (recur (vec rest-args) (assoc opts :profile :prod))
 
           (= a "--mapped")
           (recur (vec rest-args) (assoc opts :mapped? true))
@@ -264,7 +291,7 @@
 
           (or (= a "--help") (= a "-h"))
           (do
-            (println "Usage: bb group-aliases-by-brand [dev|test] [--mapped] [--min-group N] [--json]")
+            (println "Usage: bb group-aliases-by-brand [dev|test|prod] [--mapped] [--min-group N] [--json]")
             (println "")
             (println "Groups article aliases by detected brand/product family.")
             (println "Shows size tokens and supplier type to help spot variant conflicts.")
@@ -282,57 +309,57 @@
   (let [{:keys [profile mapped? min-group json?]} (parse-args args)
         db-cfg (db-config profile)
         sql (str "SELECT aa.id::text, aa.raw_label, aa.raw_label_normalized, "
-                 "COALESCE(s.display_name, '') AS supplier, "
-                 "COALESCE(a.canonical_name, '') AS mapped_article, "
-                 "COALESCE(a.normalized_key, '') AS mapped_article_key "
-                 "FROM article_aliases aa "
-                 "LEFT JOIN suppliers s ON s.id = aa.supplier_id "
-                 "LEFT JOIN articles a ON a.id = aa.article_id "
-                 (if mapped? "" "WHERE aa.article_id IS NULL ")
-                 "ORDER BY aa.raw_label")
+              "COALESCE(s.display_name, '') AS supplier, "
+              "COALESCE(a.canonical_name, '') AS mapped_article, "
+              "COALESCE(a.normalized_key, '') AS mapped_article_key "
+              "FROM article_aliases aa "
+              "LEFT JOIN suppliers s ON s.id = aa.supplier_id "
+              "LEFT JOIN articles a ON a.id = aa.article_id "
+              (if mapped? "" "WHERE aa.article_id IS NULL ")
+              "ORDER BY aa.raw_label")
         aliases (or (psql-query-maps db-cfg sql) [])
-         grouped (->> aliases
-            (map (fn [{:keys [raw_label raw_label_normalized supplier] :as alias}]
-                            (assoc alias
-                                   :brand-key (derive-brand-key raw_label raw_label_normalized)
-                                   :sizes (into (extract-sizes raw_label)
-                                                (extract-sizes-from-normalized raw_label_normalized))
-                                   :restaurant? (restaurant-supplier? supplier))))
-                     (group-by :brand-key)
-                     (map (fn [[brand-key items]]
-                            (let [all-sizes (into #{} (mapcat :sizes) items)
-                                  has-restaurant? (boolean (some :restaurant? items))
-                                  has-retail? (boolean (some (complement :restaurant?) items))
-                                  variant-risk? (or (> (count all-sizes) 1)
-                                                    (and has-restaurant? has-retail?))]
-                              {:brand-key brand-key
-                               :alias-count (count items)
-                               :sizes (vec (sort all-sizes))
-                               :has-restaurant? has-restaurant?
-                               :has-retail? has-retail?
-                               :variant-risk? variant-risk?
-                               :aliases (mapv (fn [{:keys [raw_label raw_label_normalized supplier
-                                                           sizes restaurant? mapped_article]}]
-                                                (cond-> {:raw_label raw_label
-                                                         :normalized raw_label_normalized
-                                                         :supplier supplier
-                                                         :sizes (vec (sort sizes))
-                                                         :restaurant? restaurant?}
-                                                  (and mapped_article (not= mapped_article ""))
-                                                  (assoc :mapped_to mapped_article)))
-                                              items)})))
-                     (filter #(>= (:alias-count %) min-group))
-                     (sort-by (juxt (comp not :variant-risk?) :brand-key))
-                     vec)]
+        grouped (->> aliases
+                  (map (fn [{:keys [raw_label raw_label_normalized supplier] :as alias}]
+                         (assoc alias
+                           :brand-key (derive-brand-key raw_label raw_label_normalized)
+                           :sizes (into (extract-sizes raw_label)
+                                    (extract-sizes-from-normalized raw_label_normalized))
+                           :restaurant? (restaurant-supplier? supplier))))
+                  (group-by :brand-key)
+                  (map (fn [[brand-key items]]
+                         (let [all-sizes (into #{} (mapcat :sizes) items)
+                               has-restaurant? (boolean (some :restaurant? items))
+                               has-retail? (boolean (some (complement :restaurant?) items))
+                               variant-risk? (or (> (count all-sizes) 1)
+                                               (and has-restaurant? has-retail?))]
+                           {:brand-key brand-key
+                            :alias-count (count items)
+                            :sizes (vec (sort all-sizes))
+                            :has-restaurant? has-restaurant?
+                            :has-retail? has-retail?
+                            :variant-risk? variant-risk?
+                            :aliases (mapv (fn [{:keys [raw_label raw_label_normalized supplier
+                                                        sizes restaurant? mapped_article]}]
+                                             (cond-> {:raw_label raw_label
+                                                      :normalized raw_label_normalized
+                                                      :supplier supplier
+                                                      :sizes (vec (sort sizes))
+                                                      :restaurant? restaurant?}
+                                               (and mapped_article (not= mapped_article ""))
+                                               (assoc :mapped_to mapped_article)))
+                                       items)})))
+                  (filter #(>= (:alias-count %) min-group))
+                  (sort-by (juxt (comp not :variant-risk?) :brand-key))
+                  vec)]
 
     (if json?
       (println (json/write-str grouped :indent true))
 
       (do
         (println (str "Found " (count aliases) (if mapped? " total" " unmapped")
-                      " aliases in " (count grouped) " brand groups"
-                      (when (> min-group 1) (str " (min " min-group " aliases)"))
-                      "\n"))
+                   " aliases in " (count grouped) " brand groups"
+                   (when (> min-group 1) (str " (min " min-group " aliases)"))
+                   "\n"))
 
         (let [risky (filter :variant-risk? grouped)
               safe (remove :variant-risk? grouped)]
@@ -341,15 +368,15 @@
             (println (apply str (repeat 72 "-")))
             (doseq [{:keys [brand-key alias-count sizes aliases]} risky]
               (println (str "\n  [!] " brand-key " (" alias-count " aliases, sizes: "
-                            (if (seq sizes) (str/join ", " sizes) "none detected")
-                            ")"))
+                         (if (seq sizes) (str/join ", " sizes) "none detected")
+                         ")"))
               (doseq [{:keys [raw_label normalized supplier sizes restaurant? mapped_to]} aliases]
                 (println (str "      " raw_label
-                              " [" normalized "]"
-                              " -- " supplier
-                              (when restaurant? " [restaurant]")
-                              (when (seq sizes) (str " (" (str/join ", " sizes) ")"))
-                              (when mapped_to (str " -> " mapped_to))))))
+                           " [" normalized "]"
+                           " -- " supplier
+                           (when restaurant? " [restaurant]")
+                           (when (seq sizes) (str " (" (str/join ", " sizes) ")"))
+                           (when mapped_to (str " -> " mapped_to))))))
             (println ""))
 
           (when (seq safe)
@@ -357,11 +384,11 @@
             (println (apply str (repeat 72 "-")))
             (doseq [{:keys [brand-key alias-count sizes aliases]} safe]
               (println (str "\n  " brand-key " (" alias-count " aliases"
-                            (when (seq sizes) (str ", " (str/join ", " sizes)))
-                            ")"))
+                         (when (seq sizes) (str ", " (str/join ", " sizes)))
+                         ")"))
               (doseq [{:keys [raw_label supplier restaurant? mapped_to]} aliases]
                 (println (str "      " raw_label " -- " supplier
-                              (when restaurant? " [restaurant]")
-                              (when mapped_to (str " -> " mapped_to))))))))))))
+                           (when restaurant? " [restaurant]")
+                           (when mapped_to (str " -> " mapped_to))))))))))))
 
 (apply -main *command-line-args*)
