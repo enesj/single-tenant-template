@@ -53,7 +53,7 @@ jobs:
       - name: Set up Babashka
         uses: turtlequeue/setup-babashka@v1.6.0
         with:
-          babashka-version: latest
+          babashka-version: 1.12.216
 
       - name: Cache Clojure dependencies
         uses: actions/cache@v4
@@ -93,7 +93,7 @@ jobs:
       - name: Set up Babashka
         uses: turtlequeue/setup-babashka@v1.6.0
         with:
-          babashka-version: latest
+          babashka-version: 1.12.216
 
       - name: Cache Maven dependencies
         uses: actions/cache@v4
