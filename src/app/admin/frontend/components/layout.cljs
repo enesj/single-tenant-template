@@ -22,7 +22,7 @@
     [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(defui admin-sidebar []
+(defui admin-sidebar [{:keys [open?]}]
   (let [current-route (use-subscribe [:current-route])
         route-name (or (get-in current-route [:data :name]) (:name current-route))
         current-admin-role (use-subscribe [:admin/current-user-role])
@@ -137,6 +137,7 @@
                                   :title "Expenses"
                                   :items expenses-items}]}]]
     ($ sidebar {:title "Admin Panel"
+                :open? open?
                 :sections sections
                 :footer ($ :ul {:class "ds-menu w-full p-0"}
                           ($ :li
@@ -184,7 +185,7 @@
                        :on-click reload-everything!}
               ($ arrow-path {:class "w-4 h-4"}))))))))
 
-(defui admin-header []
+(defui admin-header [{:keys [on-toggle-sidebar]}]
   (let [authenticated? (use-subscribe [:admin/authenticated?])
         current-user (use-subscribe [:admin/current-user])
         current-role (use-subscribe [:admin/current-user-role])
@@ -200,7 +201,14 @@
                          (first (str/split (str admin-email) #"@"))))]
     ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}
       ($ :div {:class "flex-1 px-4 flex justify-between items-center"}
-        ($ :div {:class "flex-1 flex"})
+        ($ :div {:class "flex items-center"}
+          ($ :button {:class "p-2 rounded-lg hover:bg-base-200 transition-colors"
+                      :id "admin-sidebar-toggle"
+                      :on-click on-toggle-sidebar
+                      :aria-label "Toggle sidebar"}
+            ($ :svg {:class "w-6 h-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+              ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                        :d "M4 6h16M4 12h16M4 18h16"}))))
         ($ :div {:class "flex items-center space-x-2"}
           ;; Admin info - only show when actually authenticated (not just cached from localStorage)
           (when (and authenticated? current-user)
@@ -235,7 +243,8 @@
 
 (defui admin-layout [{:keys [children]}]
   (let [authenticated? (use-subscribe [:admin/authenticated?])
-        loading? (use-subscribe [:admin/loading?])]
+        loading? (use-subscribe [:admin/loading?])
+        [sidebar-open? set-sidebar-open!] (use-state true)]
     (when ^boolean js/goog.DEBUG
       (js/console.log "admin-layout state"
         (clj->js {:authenticated? authenticated?
@@ -247,9 +256,9 @@
       ;; Once not loading, always render the admin shell; the inner auth-guard
       ;; component handles whether to show protected content or a login prompt.
       ($ :div {:class "h-screen flex overflow-hidden bg-base-100"}
-        ($ admin-sidebar)
+        ($ admin-sidebar {:open? sidebar-open?})
         ($ :div {:class "flex flex-col w-0 flex-1 overflow-hidden"}
-          ($ admin-header)
+          ($ admin-header {:on-toggle-sidebar #(set-sidebar-open! (not sidebar-open?))})
           ($ :main {:class "flex-1 relative overflow-y-auto focus:outline-none bg-base-100"}
             ;; In UIX, children are in the :children key of props
             children))))))

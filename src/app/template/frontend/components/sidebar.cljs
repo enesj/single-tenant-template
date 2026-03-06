@@ -34,8 +34,8 @@
                 :key (or id href label)
                 :className (str "pl-4" (when className (str " " className)))))))))))
 
-(defui sidebar [{:keys [title sections footer className]}]
-  ($ :div {:class (str "hidden md:flex md:flex-shrink-0 text-base-content " className)}
+(defui sidebar [{:keys [title sections footer className open?]}]
+  ($ :div {:class (str (if open? "flex flex-shrink-0" "hidden") " text-base-content " className)}
     ($ :div {:class "flex flex-col w-64"}
       ;; Sidebar container using base-200 background
       ($ :div {:class "flex flex-col h-0 flex-1 bg-base-200"}

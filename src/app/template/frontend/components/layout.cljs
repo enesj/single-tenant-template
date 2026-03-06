@@ -161,7 +161,7 @@
                     :on-click #(rf/dispatch [::i18n/set-locale :en])}
           "EN")))))
 
-(defui user-sidebar []
+(defui user-sidebar [{:keys [open?]}]
   (let [t (use-t)
         current-route (use-subscribe [:current-route])
         current-user (use-subscribe [:current-user])
@@ -338,24 +338,33 @@
     ($ sidebar
       {:title (t :nav/app-title)
        :sections sections
+       :open? open?
        :footer ($ sidebar-footer {:user-display-name user-display-name
                                   :role role
                                   :is-owner? is-owner?
                                   :route-name route-name})})))
 
-(defui user-header []
+(defui user-header [{:keys [on-toggle-sidebar]}]
   ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}
     ($ :div {:class "flex-1 px-4 flex justify-between items-center"}
-      ($ :div {:class "flex-1 flex"})
+      ($ :div {:class "flex items-center"}
+        ($ :button {:class "p-2 rounded-lg hover:bg-base-200 transition-colors"
+                    :id "user-sidebar-toggle"
+                    :on-click on-toggle-sidebar
+                    :aria-label "Toggle sidebar"}
+          ($ :svg {:class "w-6 h-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+            ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                      :d "M4 6h16M4 12h16M4 18h16"}))))
       ($ :div {:class "flex items-center space-x-2"}
         ($ auth-component)
         ($ settings-panel {:global-settings? true})))))
 
 (defui user-layout
   [{:keys [children]}]
-  ($ :div {:class "h-screen flex overflow-hidden bg-base-100"}
-    ($ user-sidebar)
-    ($ :div {:class "flex flex-col w-0 flex-1 overflow-hidden"}
-      ($ user-header)
-      ($ :main {:class "flex-1 relative overflow-y-auto focus:outline-none bg-base-100"}
-        children))))
+  (let [[sidebar-open? set-sidebar-open!] (use-state false)]
+    ($ :div {:class "h-screen flex overflow-hidden bg-base-100"}
+      ($ user-sidebar {:open? sidebar-open?})
+      ($ :div {:class "flex flex-col w-0 flex-1 overflow-hidden"}
+        ($ user-header {:on-toggle-sidebar #(set-sidebar-open! (not sidebar-open?))})
+        ($ :main {:class "flex-1 relative overflow-y-auto focus:outline-none bg-base-100"}
+          children)))))
