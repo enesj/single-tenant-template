@@ -77,7 +77,8 @@
    "status"
    "last-login-at"
    "created-at"
-   "updated-at"],
+   "updated-at"
+   "password-hash"],
   :filterable-columns
   ["email" "full-name" "role" "status" "last-login-at"],
   :sortable-columns ["email" "full-name" "role" "status" "created-at"],
@@ -470,7 +471,18 @@
    "email-verified"
    "avatar-url"
    "auth-provider"],
-  :default-visible-columns ["id" "status" "created-at"],
+  :default-visible-columns
+  ["id"
+   "email"
+   "full-name"
+   "status"
+   "last-login-at"
+   "created-at"
+   "updated-at"
+   "password-hash"
+   "email-verified"
+   "avatar-url"
+   "auth-provider"],
   :filterable-columns
   ["status" "last-login-at" "created-at" "updated-at"],
   :sortable-columns ["status" "created-at"],
