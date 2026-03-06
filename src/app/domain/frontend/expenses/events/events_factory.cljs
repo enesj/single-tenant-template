@@ -73,21 +73,20 @@
         offset (get params offset-key)
         page (get params page-key)
         per-page (get params per-page-key)
-
+        persisted-per-page (get-in db (conj (paths/entity-prefs-display entity-key) :per-page))
         existing-per-page (or (get-in db (paths/list-per-page entity-key))
                             (get-in db (conj (paths/list-ui-state entity-key) :per-page))
                             (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page))
+                            persisted-per-page
                             default-per-page
                             pagination/default-page-size)
         existing-page (or (get-in db (paths/list-current-page entity-key))
                         (get-in db (conj (paths/list-ui-state entity-key) :current-page))
                         (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page))
                         pagination/default-page-number)
-
         per-page (or limit per-page existing-per-page)
         page (or page (when offset (inc (quot offset (max per-page 1)))) existing-page pagination/default-page-number)
         offset (or offset (* (max 0 (dec page)) per-page))]
-
     {:limit per-page
      :offset offset
      :page page

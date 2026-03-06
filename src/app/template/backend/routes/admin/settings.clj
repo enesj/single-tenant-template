@@ -222,11 +222,24 @@
   [db]
   (utils/with-error-handling
     (fn [_request]
-      (utils/json-response
-        {:entities (settings-io/read-user-entities db)
-         :view-options (settings-io/read-user-view-options db)
-         :form-fields (settings-io/read-user-form-fields db)
-         :table-columns (settings-io/read-user-table-columns db)}))
+      (let [entities (settings-io/read-user-entities db)
+            view-options (settings-io/read-user-view-options db)
+            form-fields (settings-io/read-user-form-fields db)
+            table-columns (settings-io/read-user-table-columns db)]
+        (log/info "Loaded user-ui-config for admin settings"
+          {:entities-count (count entities)
+           :view-options-count (count view-options)
+           :form-fields-count (count form-fields)
+           :table-columns-count (count table-columns)
+           :articles-table-columns? (contains? table-columns :articles)
+           :article-aliases-table-columns? (contains? table-columns :article-aliases)
+           :articles-default-visible-count (count (get-in table-columns [:articles :default-visible-columns]))
+           :article-aliases-default-visible-count (count (get-in table-columns [:article-aliases :default-visible-columns]))})
+        (utils/json-response
+          {:entities entities
+           :view-options view-options
+           :form-fields form-fields
+           :table-columns table-columns})))
     "Failed to read user UI config"))
 
 (defn update-user-ui-config-handler

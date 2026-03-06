@@ -11,6 +11,7 @@
   - If `(empty)`, verify before assuming failure: `mcp__postgres__list_tables` → `SELECT current_database(), current_user;` → `SELECT COUNT(*) FROM <table>;`.
   - VS Code: if results look inconsistent, reconnect/restart the PostgreSQL MCP session and re-run.
 - **Browser**: use `chrome-mcp`; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
+- **Railway (production)**: use `Railway-mcp` tools when the server is configured. Prefer MCP over CLI for structured output. Install once: `claude mcp add Railway npx @railway/mcp-server`. Key tools: `get-logs`, `list-variables`, `list-services`, `deploy`. Full reference: `docs/general/operations/railway-deployment.md#railway-mcp-server-ai-native-debugging`.
 
 ## Entrypoints
 
@@ -122,6 +123,23 @@
   - Optional: Kaocha REPL commands are fine, but the `clojure.test`/`cljs.test` patterns above are preferred.
 - Exploration: `clojure.repl.deps/add-libs` is exploration-only; never commit. Avoid stdin reads in BB/nREPL; pass args.
 - Reload safety: keep top-level code idempotent and side-effect-light so `:reload` is safe.
+
+## Production debugging (Railway)
+
+**Preferred — Railway MCP** (when configured): use MCP tools directly — `get-logs`, `list-variables`, `list-services`, `deploy`. Install once: `claude mcp add Railway npx @railway/mcp-server`.
+
+**Fallback — Railway CLI**: `railway run` spawns a local process with prod env vars injected (runtime Docker image is JRE-only — no Clojure tooling):
+
+```bash
+railway logs                           # tail live production logs
+railway variables                      # list all injected env vars
+railway run clj -M:nrepl               # ⚠ nREPL with live prod DATABASE_URL — reads OK, writes affect prod
+railway run bb seed-geo-reference prod  # run a bb task against prod env
+railway shell                          # bash in running container (JRE-only; no clj/bb/npm)
+```
+
+- Must `railway login` + `railway link` once per machine first.
+- Full reference: `docs/general/operations/railway-deployment.md#production-debugging`.
 
 ## Security middleware toggles
 

@@ -2,7 +2,7 @@
 name: Debugg
 description: Performs evidence-first troubleshooting triage for reported app issues before implementation handoff.
 model: GPT-5.3-Codex (copilot)
-tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-mcp/*']
+tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-mcp/*', 'Railway/*']
 ---
 
 # Debugg Agent
@@ -144,6 +144,27 @@ SELECT COUNT(*) FROM <target_table>;
 ```
 
 Also confirm expected table presence and schema objects via postgres inspection tools before claiming DB mismatch.
+
+### Production log triage (`Railway-mcp` preferred / CLI fallback)
+
+When the issue is in a deployed environment, use Railway MCP tools first (structured output, queryable):
+
+```
+// MCP (preferred — when Railway server is configured)
+get-logs       → retrieve build/service logs with optional line limit and filter
+list-variables → verify env vars (DATABASE_URL, BASE_URL, GOOGLE_OAUTH_CLIENT_ID, etc.)
+list-services  → confirm which services are running and their state
+```
+
+CLI fallback (requires `railway login` + `railway link`):
+
+```bash
+railway logs --tail 200                # last 200 lines of live logs
+railway variables                      # list all injected env vars
+railway run clj -M:nrepl               # ⚠ nREPL with live prod DATABASE_URL — read-only preferred
+```
+
+> The runtime Docker image is JRE-only (no `clj`/`bb`/`npm`). All `railway run` commands execute locally with prod env injected. Writes via the nREPL affect production — use explicit transactions and prefer read-only queries during triage.
 
 ## Handoff contract (required)
 

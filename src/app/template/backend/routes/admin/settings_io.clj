@@ -143,9 +143,21 @@
                 :scope scope
                 :config config-key})))))
 
+(defn- deep-merge
+  [& ms]
+  (letfn [(merge-entry [a b]
+            (merge-with
+              (fn [x y]
+                (if (and (map? x) (map? y))
+                  (merge-entry x y)
+                  y))
+              (or a {})
+              (or b {})))]
+    (reduce merge-entry {} ms)))
+
 (defn- merge-and-validate
   [label validate-fn & maps]
-  (let [merged (apply merge maps)
+  (let [merged (apply deep-merge maps)
         validation (validate-fn merged)]
     (when-not (:valid? validation)
       (log/warn (str label " validation issues")

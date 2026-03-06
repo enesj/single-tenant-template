@@ -20,6 +20,35 @@
     (instance? java.io.File path) path
     :else (io/file path)))
 
+(defn- resource-path-candidates
+  [path]
+  (let [s (cond
+            (nil? path) nil
+            (instance? java.io.File path) (.getPath ^java.io.File path)
+            :else (str path))]
+    (->> [s
+          (some-> s (clojure.string/replace-first #"^src/" ""))
+          (some-> s (clojure.string/replace-first #"^resources/" ""))
+          (some-> s (clojure.string/replace-first #"^config/" ""))
+          (some-> s (clojure.string/replace-first #"^vendor/" ""))]
+      (remove nil?)
+      distinct)))
+
+(defn- read-edn-source
+  [path]
+  (let [f (as-file path)]
+    (cond
+      (and f (.exists f))
+      {:kind :file
+       :path (.getPath f)
+       :value (edn/read-string (slurp f))}
+
+      :else
+      (when-let [resource (some io/resource (resource-path-candidates path))]
+        {:kind :resource
+         :path (str resource)
+         :value (edn/read-string (slurp resource))}))))
+
 (defn read-edn-or-empty
   "Read EDN from `path` and return the parsed value.
 
@@ -35,8 +64,8 @@
           :or {log-message "Failed to read EDN file"}}]
    (let [f (as-file path)]
      (try
-       (if (and f (.exists f))
-         (edn/read-string (slurp f))
+       (if-let [source (read-edn-source path)]
+         (:value source)
          {})
        (catch Exception e
          (log/warn e log-message (merge {:path (some-> f .getPath)} log-context))
@@ -57,8 +86,8 @@
           :or {log-message "Failed to read EDN file"}}]
    (let [f (as-file path)]
      (try
-       (if (and f (.exists f))
-         (edn/read-string (slurp f))
+       (if-let [source (read-edn-source path)]
+         (:value source)
          {})
        (catch Exception e
          (log/error e log-message (merge {:path (some-> f .getPath)} log-context))

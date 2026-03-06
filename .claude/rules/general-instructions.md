@@ -111,6 +111,23 @@ Use these only when MCP tools aren’t available (or you want native diff UI):
 - Exploration: `clojure.repl.deps/add-libs` is exploration-only; never commit. Avoid stdin reads in BB/nREPL; pass args.
 - Reload safety: keep top-level code idempotent and side-effect-light so `:reload` is safe.
 
+## Production debugging (Railway)
+
+**Preferred — Railway MCP** (when configured): use MCP tools directly (`get-logs`, `list-variables`, `list-services`, `deploy`, etc.). Install once with `claude mcp add Railway npx @railway/mcp-server`. Full tool list: `docs/general/operations/railway-deployment.md#railway-mcp-server-ai-native-debugging`.
+
+**Fallback — Railway CLI**: use `railway run` to get a local process with all prod env vars injected (runtime Docker image is JRE-only — no Clojure tooling):
+
+```bash
+railway logs                           # tail live production logs
+railway variables                      # inspect all env vars
+railway run clj -M:nrepl               # ⚠ nREPL with live prod DATABASE_URL — reads OK, writes affect prod
+railway run bb seed-geo-reference prod  # run a bb task against prod env
+railway shell                          # bash in running container (JRE-only; no clj/bb/npm)
+```
+
+- Must `railway login` + `railway link` once per machine first.
+- Full reference: `docs/general/operations/railway-deployment.md#production-debugging`.
+
 ## Security middleware toggles
 
 - `DISABLE_HTTPS_REDIRECT=true` disables HTTPS redirect; `DISABLE_RATE_LIMITING=true` disables rate limiting (see `src/app/template/backend/middleware/security.clj`).

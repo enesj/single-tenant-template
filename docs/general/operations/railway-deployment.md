@@ -146,6 +146,99 @@ Railway blocks outbound SMTP. The app sends email in production via the Gmail RE
 
 ---
 
+## Production Debugging
+
+Use the [Railway CLI](https://docs.railway.app/develop/cli) to inspect and debug the running production service without opening the dashboard.
+
+### Prerequisites
+
+```bash
+# Install (once)
+npm install -g @railway/cli
+
+# Authenticate and link to this project
+railway login
+railway link   # prompts to select project → environment → service
+```
+
+### Stream Production Logs
+
+```bash
+# Tail live logs (Ctrl-C to stop)
+railway logs
+
+# Last N lines only
+railway logs --tail 200
+```
+
+All application output (Timbre logs, Ring request logs, exception traces) appears here.
+
+### Inspect Environment Variables
+
+```bash
+railway variables
+```
+
+Verify required variables (`DATABASE_URL`, `BASE_URL`, `GOOGLE_OAUTH_CLIENT_ID`, etc.) before debugging auth or email issues.
+
+### Run Commands with Production Environment
+
+`railway run <cmd>` spawns a **local** process with every production variable injected — including `DATABASE_URL`. The runtime Docker image contains only the JRE and the uberjar (no Clojure tooling), so run these from your local machine (which has the full dev toolchain):
+
+```bash
+# Interactive nREPL connected to the production database
+railway run clj -M:nrepl
+```
+
+> **⚠ Danger**: This nREPL session connects to the **live production database**. Any eval that writes data affects production. Prefer read-only queries; wrap mutations in explicit transactions you can roll back.
+
+From the production nREPL you can:
+
+- **Run migrations**: `(require 'app.template.backend.migrations.simple-repl :reload)` → `(app.template.backend.migrations.simple-repl/migrate!)`
+- **Query the live DB** with HoneySQL / next.jdbc directly
+- **Inspect config**: `(require 'app.template.backend.core :reload)` and read config maps
+
+```bash
+# Run a Babashka task against the production environment
+railway run bb seed-geo-reference prod
+```
+
+### Shell into the Running Container
+
+```bash
+railway shell
+```
+
+Opens a bash shell inside the live container. Since the runtime image (`eclipse-temurin:21-jre-jammy`) ships only the JRE and the uberjar — no Clojure CLI, no `bb`, no `npm` — use `railway shell` mainly to inspect the filesystem or verify the jar is present. For data or code work, prefer `railway run` above.
+
+### Railway MCP Server (AI-native debugging)
+
+Railway ships an official MCP server that exposes Railway operations as structured tools callable directly from Claude Code and other MCP-compatible AI assistants — no manual CLI commands needed.
+
+**Install into Claude Code (once):**
+
+```bash
+claude mcp add Railway npx @railway/mcp-server
+```
+
+**Prerequisites:** Railway CLI installed and `railway login` completed.
+
+**Available tools:**
+
+| Tool | What it does |
+|---|---|
+| `check-railway-status` | Verify CLI auth |
+| `list-projects` / `list-services` | Inspect project and service state |
+| `get-logs` | Retrieve build/service logs (supports line limits and filtering) |
+| `list-variables` / `set-variables` | Read and write environment variables |
+| `deploy` / `deploy-template` | Deploy a service or Railway template |
+| `create-environment` / `link-environment` | Manage environments |
+| `generate-domain` | Generate a `.railway.app` domain |
+
+Destructive operations (deletes, drops) are intentionally excluded from the MCP surface. Full docs: [docs.railway.com/ai/mcp-server](https://docs.railway.com/ai/mcp-server).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

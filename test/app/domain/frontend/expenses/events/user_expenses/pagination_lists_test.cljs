@@ -1,5 +1,6 @@
 (ns app.domain.frontend.expenses.events.user-expenses.pagination-lists-test
   (:require
+    [app.domain.frontend.expenses.events.events-factory :as events-factory]
     [app.domain.frontend.expenses.events.unmapped-items :as unmapped-items-events]
     [app.domain.frontend.expenses.events.user-expenses.test-support :as sup]
     [app.template.frontend.db.paths :as paths]
@@ -240,6 +241,37 @@
                {:id "um-2"}
                {:id "um-3"}]}])
     (is (= 3 (get-in @rf-db/app-db (paths/list-total-items :unmapped-items))))))
+
+(deftest resolve-pagination-prefers-persisted-per-page-when-list-state-is-empty
+  (testing "stored entity display prefs seed initial list pagination before the first load-list request"
+    (let [db {:ui {:entity-prefs {:categories {:display {:per-page 50}}}
+                   :lists {:categories {:current-page nil
+                                        :per-page nil
+                                        :pagination {:current-page nil
+                                                     :per-page nil}}}}}
+          pagination (events-factory/resolve-pagination
+                       :categories
+                       db
+                       {}
+                       {:default-per-page 25})]
+      (is (= {:limit 50
+              :offset 0
+              :page 1
+              :per-page 50}
+            pagination))))
+
+  (testing "explicit request params still override the persisted browser preference"
+    (let [db {:ui {:entity-prefs {:categories {:display {:per-page 50}}}}}
+          pagination (events-factory/resolve-pagination
+                       :categories
+                       db
+                       {:per-page 20 :page 2}
+                       {:default-per-page 25})]
+      (is (= {:limit 20
+              :offset 20
+              :page 2
+              :per-page 20}
+            pagination)))))
 
 (deftest cities-refresh-list-uses-template-pagination-state
   (testing "cities refresh wrapper derives limit/offset from template list state"

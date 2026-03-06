@@ -65,3 +65,22 @@ npm run test:cljs 2>&1 | tee tmp/ops-fe-test.txt
    and edited via `/admin/admin-settings`.
 - Domain-owned user UI configuration (currently Expenses) lives in `src/app/domain/**/config/*.edn` and is editable via `/admin/user-settings`.
 - Keep `config/base.edn` in sync with docs; update this file if ports/envs change.
+
+## Production Debugging (Railway)
+
+Railway ships an official MCP server — install it once and use MCP tools (`get-logs`, `list-variables`, `deploy`, etc.) directly from Claude Code:
+
+```bash
+claude mcp add Railway npx @railway/mcp-server
+```
+
+For CLI-based debugging (Railway CLI must be installed and `railway login` done):
+
+```bash
+railway logs              # tail live production logs
+railway variables         # list all injected env vars
+railway run clj -M:nrepl  # local nREPL with prod DATABASE_URL injected (⚠ connects to live DB)
+railway shell             # bash in the running container (JRE-only image — no Clojure tooling)
+```
+
+Full reference: [railway-deployment.md](railway-deployment.md#production-debugging).
