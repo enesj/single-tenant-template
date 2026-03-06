@@ -1,13 +1,11 @@
 (ns app.template.frontend.components.button
   (:require
-   [app.template.frontend.events.bootstrap :as bootstrap-events]
-   [app.template.frontend.events.config :as config-events]
-   [app.template.frontend.subs.list :as list-subs]
-   [clojure.string :as str]
-   [re-frame.core :as rf]
-   [reitit.frontend.easy :as rtfe]
-   [uix.core :refer [$ defui]]
-   [uix.re-frame :refer [use-subscribe]]))
+    [app.template.frontend.events.bootstrap :as bootstrap-events]
+    [app.template.frontend.subs.list :as list-subs]
+    [clojure.string :as str]
+    [re-frame.core :as rf]
+    [uix.core :refer [$ defui]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 (def button-props
   {:btn-type {:type :keyword
@@ -121,25 +119,4 @@
         ($ :option {:value "nord"} "🗺️ Nord")
         ($ :option {:value "sunset"} "🌅 Sunset")))))
 
-(def nav-button-props
-  {:entity-type {:type :keyword
-                 :required true}
-   :target-page {:type :keyword
-                 :required true}})
 
-(defui nav-button
-  {:prop-types nav-button-props}
-  [{:keys [entity-type target-page]
-    :as _props}]
-  ($ button
-    {:btn-type (if (= entity-type target-page) :primary :outline)
-     :id (str "nav-btn-" (name target-page))
-     :on-click (fn []
-                 ;; Clear editing and hide add form
-                 (rf/dispatch [::config-events/set-editing nil])
-                 (rf/dispatch [::config-events/set-show-add-form false])
-                 ;; Set the entity type in UI state
-                 (rf/dispatch [::bootstrap-events/set-entity-type target-page])
-                 ;; Update route using Reitit push-state with the new dynamic route name
-                 (rtfe/push-state :entity-detail {:entity-name (name target-page)}))
-     :children (name target-page)}))

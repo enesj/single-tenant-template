@@ -157,6 +157,39 @@
   [entity-type]
   [:ui :lists entity-type :current-page])
 
+(defn parse-positive-int
+  "Parse positive numeric values from numbers or strings, returning nil otherwise."
+  [value]
+  (cond
+    (number? value) (when (pos? value) (long value))
+    (string? value) (let [n (js/parseInt value 10)]
+                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
+                        (long n)))
+    :else nil))
+
+(defn resolved-list-per-page
+  "Resolve an entity list's per-page value from list UI state or persisted entity prefs.
+
+  Order of precedence:
+  1. Canonical list state
+  2. Legacy list state mirrors
+  3. Persisted browser display prefs
+  4. Provided fallback"
+  [db entity-type fallback]
+  (or (parse-positive-int (get-in db (list-per-page entity-type)))
+    (parse-positive-int (get-in db (conj (list-ui-state entity-type) :per-page)))
+    (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :per-page)))
+    (parse-positive-int (get-in db (conj (entity-prefs-display entity-type) :per-page)))
+    fallback))
+
+(defn resolved-list-current-page
+  "Resolve an entity list's current page from canonical or legacy list UI state."
+  [db entity-type]
+  (or (parse-positive-int (get-in db (list-current-page entity-type)))
+    (parse-positive-int (get-in db (conj (list-ui-state entity-type) :current-page)))
+    (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :current-page)))
+    1))
+
 (defn list-total-items
   "Returns [:ui :lists entity-type :total-items] path vector for total items count in a list for a specific entity type."
   [entity-type]

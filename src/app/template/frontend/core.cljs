@@ -7,7 +7,6 @@
     [app.admin.frontend.pages.users :as admin-users]
     [app.template.frontend.events.core] ; Load all event handlers
     [app.template.frontend.pages.about :refer [about-page]]
-    [app.template.frontend.pages.entities :refer [entities-page]]
     [app.template.frontend.pages.home :refer [home-page]]
     [app.template.frontend.pages.invitation-accept :refer [invitation-accept-page]]
     [app.template.frontend.pages.impersonation-grants :refer [impersonation-grants-page]]
@@ -177,8 +176,6 @@
                     (case view-key
                       :home ($ :div {:class "ds-container p-4"} ($ home-page))
                       :about ($ :div {:class "ds-container p-4"} ($ about-page))
-                      :entities ($ :div {:class "ds-container p-4"} ($ entities-page))
-                      :entity-detail ($ :div {:class "ds-container p-4"} ($ entities-page))
                       :login ($ login-page)
                       :register ($ registration-page)
                       :verify-email-success ($ verify-email-success-page)

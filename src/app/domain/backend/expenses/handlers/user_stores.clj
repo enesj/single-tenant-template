@@ -57,13 +57,14 @@
 
 (defn list-stores-handler
   "List stores (admin/owner only).
+   When a tenant-id is present, scopes to stores used in that tenant's expenses.
 
-  Query params:
-  - limit (default 200)
-  - offset (default 0)
-  - search (optional)
-  - order-by (optional)
-  - order-dir (optional)"
+   Query params:
+   - limit (default 200)
+   - offset (default 0)
+   - search (optional)
+   - order-by (optional)
+   - order-dir (optional)"
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
@@ -71,20 +72,31 @@
                            "Role assignment required")]
         forbidden
         (try
-          (let [qp (:query-params request)
+          (let [tenant-id (h/get-tenant-id request)
+                qp (:query-params request)
                 limit (parse-page-limit qp 200)
                 offset (parse-page-offset qp)
                 search (h/get-param qp :search)
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
+                extra-filters (when tenant-id
+                                [[:in :st/id {:select-distinct [:store_id]
+                                              :from [:expenses]
+                                              :where [:and
+                                                      [:= :tenant_id tenant-id]
+                                                      [:is-not :store_id nil]]}]])
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       extra-filters (assoc :extra-filters extra-filters))
                 rows (to-app ((:list stores-service/entity-service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count stores-service/entity-service) db {:search search}) 0))]
+                total (long (or ((:count stores-service/entity-service)
+                                  db (cond-> {:search search}
+                                       extra-filters (assoc :extra-filters extra-filters)))
+                              0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit

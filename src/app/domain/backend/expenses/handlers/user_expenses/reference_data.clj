@@ -40,28 +40,37 @@
      :id)))
 
 (defn list-suppliers-handler
-  "Handler factory for listing suppliers available to users."
+  "Handler factory for listing suppliers available to users.
+   When a tenant-id is present, scopes to suppliers used in that tenant's expenses."
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
       (if-let [forbidden (h/ensure-role request h/reference-data-read-roles "Role assignment required")]
         forbidden
         (try
-          (let [params (:query-params request)
+          (let [tenant-id (h/get-tenant-id request)
+                params (:query-params request)
                 limit (h/parse-page-limit params 100)
                 offset (h/parse-page-offset params)
                 search (h/get-param params :search)
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)
+                extra-filters (when tenant-id
+                                [[:in :id {:select-distinct [:supplier_id]
+                                           :from [:expenses]
+                                           :where [:= :tenant_id tenant-id]}]])
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       extra-filters (assoc :extra-filters extra-filters))
                 suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
                 count-suppliers (requiring-resolve 'app.domain.backend.expenses.services.suppliers/count-suppliers)
                 suppliers (vec (suppliers-svc db opts))
-                total (long (or (count-suppliers db {:search search}) 0))]
+                total (long (or (count-suppliers db (cond-> {:search search}
+                                                      extra-filters (assoc :extra-filters extra-filters)))
+                              0))]
             (h/json-response {:data suppliers
                               :total total
                               :limit limit

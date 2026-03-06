@@ -251,67 +251,18 @@
                                           :route :expense-payer-types
                                           :icon ($ payers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-payer-types})})
-                               (nav-item {:id "user-sidebar-articles"
-                                          :label (t :nav/articles)
-                                          :href (th "/articles")
-                                          :route :expense-articles
-                                          :icon ($ articles-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-articles})})
-                               (nav-item {:id "user-sidebar-manufacturers"
-                                          :label (t :nav/manufacturers)
-                                          :href (th "/manufacturers")
-                                          :route :expense-manufacturers
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-manufacturers})})
-                               (nav-item {:id "user-sidebar-categories"
-                                          :label (t :nav/categories)
-                                          :href (th "/categories")
-                                          :route :expense-categories
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-categories})})
                                (nav-item {:id "user-sidebar-expense-categories"
                                           :label (t :nav/expense-categories)
                                           :href (th "/expense-categories")
                                           :route :expense-categories-catalog
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-categories-catalog})})
-                               (nav-item {:id "user-sidebar-subcategories"
-                                          :label (t :nav/subcategories)
-                                          :href (th "/subcategories")
-                                          :route :expense-subcategories
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-subcategories})})
                                (nav-item {:id "user-sidebar-stores"
                                           :label (t :nav/stores)
                                           :href (th "/stores")
                                           :route :expense-stores
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-stores})})
-                               (nav-item {:id "user-sidebar-cities"
-                                          :label (t :nav/cities)
-                                          :href (th "/cities")
-                                          :route :expense-cities
-                                          :icon ($ suppliers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-cities})})
-
-                               (nav-item {:id "user-sidebar-article-aliases"
-                                          :label (t :nav/article-aliases)
-                                          :href (th "/article-aliases")
-                                          :route :expense-article-aliases
-                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-article-aliases})})
-                               (nav-item {:id "user-sidebar-supplier-aliases"
-                                          :label (t :nav/supplier-aliases)
-                                          :href (th "/supplier-aliases")
-                                          :route :expense-supplier-aliases
-                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-supplier-aliases})})
-                               (nav-item {:id "user-sidebar-store-aliases"
-                                          :label (t :nav/store-aliases)
-                                          :href (th "/store-aliases")
-                                          :route :expense-store-aliases
-                                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-store-aliases})})])))
+                                          :active? (active? #{:expense-stores})})])))
 
         workspace-items (vec
                           (concat

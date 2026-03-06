@@ -41,6 +41,22 @@
       (is (nil? (get-in req [:params :pagination]))
         "Request should not send nested :pagination map"))))
 
+(deftest load-users-request-prefers-persisted-per-page-when-list-state-is-empty
+  (testing ":admin/load-users falls back to persisted browser prefs before hardcoded defaults"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (swap! rf-db/app-db assoc-in (paths/entity-prefs-display :users) {:per-page 50})
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :users) nil)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :users) nil)
+
+    (rf/dispatch-sync [:admin/load-users])
+
+    (let [req (setup/last-http-request)]
+      (is (= :get (:method req)))
+      (is (= "/admin/api/users" (:uri req)))
+      (is (= 50 (get-in req [:params :limit])))
+      (is (= 0 (get-in req [:params :offset]))))))
+
 (deftest load-users-success-stores-server-total-items
   (testing "load-users success stores server :total into template list total-items"
     (setup/reset-db!)

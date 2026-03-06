@@ -7,27 +7,6 @@
     [app.domain.frontend.registry :as domain-registry]
     [re-frame.core :as rf]))
 
-(defn generate-entity-routes
-  "Generate generic entity routes that accept entity name as parameter"
-  []
-  [["/entities/:entity-name/add"
-    {:name :entity-add
-     :view :entity-detail
-     :parameters {:path {:entity-name string?}}
-     :controllers (controllers/make-entity-controller :add)}]
-
-   ["/entities/:entity-name"
-    {:name :entity-detail
-     :view :entity-detail
-     :parameters {:path {:entity-name string?}}
-     :controllers (controllers/make-entity-controller :detail)}]
-
-   ["/entities/:entity-name/update/:item-id"
-    {:name :entity-update
-     :view :entity-detail
-     :parameters {:path {:entity-name string? :item-id string?}}
-     :controllers (controllers/make-entity-controller :update)}]])
-
 (def app-routes
   "Unified vector of all application routes"
   (into []
@@ -96,16 +75,6 @@
         {:name :email-verified
          :view :email-verified}]
 
-       ["/entities"
-        {:name :entities
-         :view :entities
-         :controllers (controllers/user-guarded-start :page/init-entities)}]
-
-       ["/entities/"
-        {:name :entities-slash
-         :view :entities
-         :controllers (controllers/user-guarded-start :page/init-entities)}]
-
        ["/tenant-select"
         {:name :tenant-select
          :view :tenant-select
@@ -130,5 +99,4 @@
          :controllers (controllers/user-guarded-start :page/init-tenant-impersonation)}]]
       ;; Domain user routes from registry (decoupled from template)
       (domain-registry/all-user-routes)
-      (generate-entity-routes)
       admin-routes/admin-routes)))

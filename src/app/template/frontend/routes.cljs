@@ -2,7 +2,6 @@
   "Client routes; update when adding pages."
   (:require
     [app.admin.frontend.core :as admin-core]
-    [app.template.frontend.events.bootstrap :as bootstrap-events]
     [app.template.frontend.routing.router :as router-util]
     [app.template.frontend.routes.data :as routes-data]
     [clojure.string :as str]
@@ -74,32 +73,7 @@
           :home (rf/dispatch [:page/init-home])
           :home-explicit (rf/dispatch [:page/init-home])
 
-          ;; Handle generic entity routes
-          :entity-detail
-          (let [entity-name (get-in new-match [:parameters :path :entity-name])]
-            (when entity-name
-              (rf/dispatch [::bootstrap-events/set-entity-type (keyword entity-name)])))
-
-          :entity-add
-          (let [entity-name (get-in new-match [:parameters :path :entity-name])]
-            (when entity-name
-              (rf/dispatch [::bootstrap-events/set-entity-type (keyword entity-name)])
-              (rf/dispatch [:app.template.frontend.events.config/set-show-add-form true])))
-
-          :entity-update
-          (let [entity-name (get-in new-match [:parameters :path :entity-name])
-                item-id-str (get-in new-match [:parameters :path :item-id])
-                ;; Always attempt to convert to number for consistency
-                item-id (if (and (string? item-id-str) (re-matches #"^\d+$" item-id-str))
-                          (js/parseInt item-id-str)
-                          item-id-str)]
-            (when (and entity-name item-id)
-              (rf/dispatch [::bootstrap-events/set-entity-type (keyword entity-name)])
-              ;; ONLY set the editing ID, don't dispatch init-entity-update here
-              ;; This prevents duplicate fetches since the controller will handle the init
-              (rf/dispatch [:app.template.frontend.events.config/set-editing item-id])))
-
-          ;; Default - do nothing special for non-entity routes
+          ;; Default - do nothing special
           nil)))))
 
 ;; This function must be exported for core.cljs to use

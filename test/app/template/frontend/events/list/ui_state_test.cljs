@@ -23,6 +23,25 @@
 (defn- current-page-path [entity]
   (paths/list-current-page entity))
 
+(deftest resolved-list-pagination-prefers-persisted-display-prefs
+  (testing "per-page falls back to persisted display prefs when list state is empty"
+    (let [db {:ui {:entity-prefs {:items {:display {:per-page 50}}}
+                   :lists {:items {:per-page nil
+                                   :current-page nil
+                                   :pagination {:per-page nil
+                                                :current-page nil}}}}}]
+      (is (= 50 (paths/resolved-list-per-page db :items 25)))
+      (is (= 1 (paths/resolved-list-current-page db :items)))))
+
+  (testing "explicit list state still wins over persisted browser prefs"
+    (let [db {:ui {:entity-prefs {:items {:display {:per-page 50}}}
+                   :lists {:items {:per-page 20
+                                   :current-page 3
+                                   :pagination {:per-page 20
+                                                :current-page 3}}}}}]
+      (is (= 20 (paths/resolved-list-per-page db :items 25)))
+      (is (= 3 (paths/resolved-list-current-page db :items))))))
+
 (deftest set-current-page-test
   (testing "Setting current page syncs all pagination paths"
     (reset! rf-db/app-db {})

@@ -78,14 +78,8 @@
   ([db {:keys [include-status?]
         :or {include-status? true}}]
    (let [entity-key :receipts
-         per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
-                    (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
-                    (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
-                    10)
-         current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
-                        (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
-                        (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
-                        1)
+         per-page (paths/resolved-list-per-page db entity-key 10)
+         current-page (paths/resolved-list-current-page db entity-key)
          active-filters (or (get-in db (paths/list-filters entity-key)) {})
          status (normalize-status-filter (:status active-filters))
          sort-config (or (get-in db (paths/list-sort-config entity-key)) {})

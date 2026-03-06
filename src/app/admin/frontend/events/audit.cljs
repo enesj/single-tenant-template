@@ -42,14 +42,8 @@
                                                 (long n)))
                                 :else nil))
           ;; Read template system pagination first to avoid divergence
-          template-per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
-                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
-                              (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
-                              20)
-          template-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
-                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
-                          (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
-                          1)
+          template-per-page (paths/resolved-list-per-page db entity-key 20)
+          template-page (paths/resolved-list-current-page db entity-key)
 
           current-filters (merge (get-in db [:admin :audit :filters] {})
                             (get-in db (paths/list-filters entity-key) {}))

@@ -73,22 +73,12 @@
 
 (defn default-report-filters
   []
-  (merge
-    {:months-back 6
-     :supplier-id nil
-     :category-id nil
-     :subcategory-id nil
-     :expense-category-id nil
-     :manufacturer-id nil
-     :day-of-week nil
-     :category-key nil
-     :amount-bucket nil
-     :selected-day nil
-     :top-items-limit 20
-     :show-uncategorized? true
-     :expanded-supplier-id nil
-     :expanded-top-item-alias-id nil}
-    (default-month-range)))
+  {:months-back 6
+   :supplier-id nil
+   :expense-category-id nil
+   :day-of-week nil
+   :amount-bucket nil
+   :selected-day nil})
 
 (defn report-range-params
   [months-back]
@@ -105,22 +95,13 @@
   [db]
   (let [{:keys [months-back
                 supplier-id
-                category-id
-                subcategory-id
-                expense-category-id
-                manufacturer-id]} (get-in db (conj reports-path :filters))
+                expense-category-id]} (get-in db (conj reports-path :filters))
         range-params (report-range-params months-back)
         supplier-id* (normalize-id-filter supplier-id)
-        category-id* (normalize-id-filter category-id)
-        subcategory-id* (normalize-id-filter subcategory-id)
-        expense-category-id* (normalize-id-filter expense-category-id)
-        manufacturer-id* (normalize-id-filter manufacturer-id)]
+        expense-category-id* (normalize-id-filter expense-category-id)]
     (cond-> range-params
       supplier-id* (assoc :supplier_id supplier-id*)
-      category-id* (assoc :category_id category-id*)
-      subcategory-id* (assoc :subcategory_id subcategory-id*)
-      expense-category-id* (assoc :expense_category_id expense-category-id*)
-      manufacturer-id* (assoc :manufacturer_id manufacturer-id*))))
+      expense-category-id* (assoc :expense_category_id expense-category-id*))))
 
 (defn finish-failure-message
   [error]

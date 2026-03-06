@@ -27,13 +27,8 @@
 
 (defn- current-list-pagination
   [db]
-  (let [ui-state (get-in db (paths/list-ui-state tenants-entity-key))
-        per-page (or (:per-page ui-state)
-                   (get-in ui-state [:pagination :per-page])
-                   25)
-        current-page (or (:current-page ui-state)
-                       (get-in ui-state [:pagination :current-page])
-                       1)]
+  (let [per-page (paths/resolved-list-per-page db tenants-entity-key 25)
+        current-page (paths/resolved-list-current-page db tenants-entity-key)]
     {:limit per-page
      :offset (* (max 0 (dec current-page)) per-page)}))
 

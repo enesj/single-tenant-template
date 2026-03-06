@@ -70,10 +70,8 @@
 
 (defn- current-list-page-params
   [db entity-key default-limit]
-  (let [per-page (or (parse-pos-int (get-in db [:ui :lists entity-key :per-page]))
-                   default-limit)
-        current-page (or (parse-pos-int (get-in db [:ui :lists entity-key :current-page]))
-                       1)
+  (let [per-page (paths/resolved-list-per-page db entity-key default-limit)
+        current-page (paths/resolved-list-current-page db entity-key)
         sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
         order-dir (let [direction (:direction sort-config)]
                     (when (contains? #{:asc :desc "asc" "desc"} direction)

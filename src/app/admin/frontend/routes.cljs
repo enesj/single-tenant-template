@@ -17,6 +17,7 @@
     [app.admin.frontend.pages.login-events :as login-events]
     [app.admin.frontend.pages.domain.expenses.manufacturers :as manufacturers]
 
+    [app.admin.frontend.pages.domain.expenses.reports :as reports]
     [app.admin.frontend.pages.reset-password :as reset-password]
     [app.admin.frontend.pages.domain.expenses.store-aliases :as store-aliases]
     [app.admin.frontend.pages.domain.expenses.stores :as stores]
@@ -155,6 +156,12 @@
           {:name :admin-duplicates
            :view duplicates/admin-duplicates-page
            :controllers [(guarded-start nil)]}]
+
+         ;; Expense Analytics (reports moved from user space)
+         ["/reports"
+          {:name :admin-reports
+           :view reports/admin-reports-page
+           :controllers [(guarded-start [:admin/load-reports])]}]
 
          ;; Audit Logs
          ["/audit"

@@ -9,10 +9,6 @@
     :desc "Manage users, settings, and entity specs"
     :href "/admin/login"
     :icon "🛠️"}
-   {:title "Entities"
-    :desc "Browse the CRUD scaffolding from the template"
-    :href "/entities"
-    :icon "📄"}
    {:title "Login"
     :desc "Start a session in the single-tenant shell"
     :href "/login"
@@ -60,11 +56,7 @@
             ($ button {:btn-type :primary
                        :class "ds-btn-lg"
                        :on-click #(rf/dispatch [:navigate-to "/admin/login"])}
-              "Open Admin")
-            ($ button {:btn-type :ghost
-                       :class "ds-btn-lg"
-                       :on-click #(rf/dispatch [:navigate-to "/entities"])}
-              "View Entities")))
+              "Open Admin")))
         ($ :div {:class "bg-white shadow-lg rounded-2xl p-6 border border-slate-100"}
           ($ :div {:class "text-sm text-slate-500 mb-3"} "What’s inside")
           ($ :ul {:class "space-y-2 text-sm text-slate-700 list-disc list-inside"}

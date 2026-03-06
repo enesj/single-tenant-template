@@ -43,7 +43,6 @@
 (def initialization-events
   #{:app.template.frontend.events.bootstrap/initialize-db
     :app.template.frontend.events.config/fetch-config-success
-    :page/init-entities
     :page/init-login
     :page/init-logout})
 

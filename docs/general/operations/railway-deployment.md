@@ -74,30 +74,27 @@ In your Railway service → **Variables** tab, add the following.
 
 ---
 
-## Step 4: Run Database Migrations
+## Step 4: Database Migrations (automatic)
 
-After the first successful deploy, run migrations once from your local machine against the production database.
+Migrations run **automatically on every deploy** via Railway's `preDeployCommand` (configured in `railway.json`):
 
-**Option A — Railway CLI (recommended)**
+```
+java -cp /app/app.jar clojure.main -m app.migrate
+```
+
+The standalone migration runner (`src/app/migrate.clj`) reads `DATABASE_URL`, applies all pending migrations using `automigrate.core/migrate`, then exits. If migrations fail, the deploy is aborted and the previous revision stays live.
+
+No manual intervention is needed. Committed migration files under `resources/db/migrations/` are applied automatically on the next deploy.
+
+**Manual migrations (escape hatch):** If you need to run migrations outside a deploy (e.g. rollback, inspect status), use the Railway CLI:
 
 ```bash
-# Install Railway CLI if you haven't
-npm install -g @railway/cli
-
-# Log in and link the project
-railway login
-railway link
-
-# Run migrations via the app's REPL against the production DB
 railway run clj -M:nrepl
 # Then in the REPL:
 # (require 'app.template.backend.migrations.simple-repl :reload)
-# (app.template.backend.migrations.simple-repl/migrate!)
+# (app.template.backend.migrations.simple-repl/migrate!)   ; or (migrate-to! :prod 42)
+# (app.template.backend.migrations.simple-repl/status :prod)
 ```
-
-**Option B — One-shot migration service**
-
-Create a temporary Railway service that runs migrations on start, then remove it after it succeeds. See the [migration overview](../../general/migrations/migration-overview.md) for the full workflow.
 
 ---
 
@@ -194,9 +191,9 @@ railway run clj -M:nrepl
 
 From the production nREPL you can:
 
-- **Run migrations**: `(require 'app.template.backend.migrations.simple-repl :reload)` → `(app.template.backend.migrations.simple-repl/migrate!)`
 - **Query the live DB** with HoneySQL / next.jdbc directly
 - **Inspect config**: `(require 'app.template.backend.core :reload)` and read config maps
+- **Manual migration** (escape hatch — normally automatic via `preDeployCommand`): `(require 'app.template.backend.migrations.simple-repl :reload)` → `(app.template.backend.migrations.simple-repl/status :prod)` / `(migrate! :prod)`
 
 ```bash
 # Run a Babashka task against the production environment
@@ -244,7 +241,7 @@ Destructive operations (deletes, drops) are intentionally excluded from the MCP 
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Build fails at `npm ci` | `package-lock.json` missing | Commit `package-lock.json` and push |
-| App starts but DB errors on boot | Migrations not run | Follow [Step 4](#step-4-run-database-migrations) |
+| App starts but DB errors on boot | Migration failed or `DATABASE_URL` missing | Check deploy logs for `preDeployCommand` output; see [Step 4](#step-4-database-migrations-automatic) |
 | OAuth login fails with redirect mismatch | Redirect URI not added to Google Console | Follow [Step 5](#step-5-configure-oauth-redirect-uris) |
 | Email not sent, no error | `GMAIL_REFRESH_TOKEN` or `SMTP_FROM_EMAIL` missing | Add both Railway variables |
 | Health check fails, container restarts | JVM startup > 30s or missing env vars | Check deploy logs; increase `--start-period` in Dockerfile if needed |

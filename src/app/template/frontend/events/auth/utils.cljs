@@ -11,7 +11,7 @@
     no-tenant? "/tenant-select"
     tenant-selection-required "/tenant-select"
     (contains? #{"member" "admin" "owner"} membership-role) "/dashboard"
-    :else "/entities"))
+    :else "/dashboard"))
 
 ;; ========================================================================
 ;; Utility Events

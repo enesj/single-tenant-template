@@ -67,13 +67,14 @@
     :else [:= column value]))
 
 (defn base-where
-  [user-id {:keys [from to currency supplier-id payer-id expense-category-id]}]
+  [user-id {:keys [tenant-id from to currency supplier-id payer-id expense-category-id]}]
   (let [supplier-clause (id-filter-clause :e.supplier_id supplier-id)
         payer-clause (id-filter-clause :e.payer_id payer-id)
         expense-category-clause (id-filter-clause :e.expense_category_id expense-category-id)]
     (cond-> [:and
-             [:= :e.user_id user-id]
              [:= :e.is_posted true]]
+      user-id (conj [:= :e.user_id user-id])
+      tenant-id (conj [:= :e.tenant_id tenant-id])
       from (conj [:>= :e.purchased_at from])
       to (conj [:<= :e.purchased_at to])
       (seq currency) (conj [:= :e.currency [:cast currency :currency]])

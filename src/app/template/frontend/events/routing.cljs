@@ -1,14 +1,9 @@
 (ns app.template.frontend.events.routing
   "Routing events; update for navigation side effects."
   (:require
-    [app.template.frontend.db.db :as db :refer [common-interceptors]]
+    [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.form :as form-events]
-    [app.template.frontend.events.list.crud :as crud-events]
-    [app.template.frontend.events.list.filters :as filter-events]
-    [app.template.frontend.events.list.selection :as selection-events]
     [app.template.frontend.routing.router :as router-util]
-
     [re-frame.core :as rf]
     [reitit.frontend.controllers :as rtfc]
     [reitit.frontend.easy :as rtfe]
@@ -32,56 +27,6 @@
   common-interceptors
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :about)}))
-
-(rf/reg-event-fx
-  :page/init-entities
-  common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :entities)}))
-
-;; Remove fetch-entities dispatch - the entities component handles this
-;; based on route parameters, not UI state
-
-(rf/reg-event-fx
-  :page/init-entity-detail
-  common-interceptors
-  (fn [{:keys [db]} [_ entity-name]]
-    (if entity-name
-      {:db (-> db
-             (assoc-in (paths/current-page) :entity-detail)
-             (assoc-in [:ui :current-entity-type] (keyword entity-name)))
-       :dispatch-n [[::crud-events/fetch-entities (keyword entity-name)]
-                    [::filter-events/clear-filter-modal]]}
-      {:db (assoc-in db (paths/current-page) :entity-detail)})))
-
-(rf/reg-event-fx
-  :page/init-entity-update
-  common-interceptors
-  (fn [{:keys [db]} [_ entity-name item-id]]
-    {:db (-> db
-           (assoc-in (paths/current-page) :entity-detail)
-           (assoc-in [:ui :current-entity-type] (keyword entity-name))
-           (assoc-in [:ui :editing-id] item-id))
-     :dispatch-n [[::selection-events/fetch-item-by-id (keyword entity-name) item-id]
-                  [::filter-events/clear-filter-modal]]}))
-
-(rf/reg-event-fx
-  :page/init-entity-add
-  common-interceptors
-  (fn [{:keys [db]} [_ entity-name]]
-    (if entity-name
-      {:db (-> db
-             (assoc-in (paths/current-page) :entity-detail)
-             (assoc-in [:ui :current-entity-type] (keyword entity-name))
-             (assoc-in [:ui :show-add-form] true))
-       :dispatch-n
-       [[::crud-events/fetch-entities (keyword entity-name)]
-        [::form-events/clear-form-errors (keyword entity-name)]
-        [:app.template.frontend.events.config/set-show-add-form true]
-        [::filter-events/clear-filter-modal]]}
-      {:db (-> db
-             (assoc-in (paths/current-page) :entity-detail)
-             (assoc-in [:ui :show-add-form] true))})))
 
 ;; User expense tracking page events
 

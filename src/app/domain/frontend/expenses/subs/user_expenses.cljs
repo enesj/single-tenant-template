@@ -234,16 +234,6 @@
     (get-in db [:user-expenses :reports :filters])))
 
 (rf/reg-sub
-  :user-expenses/reports-filter-expanded-supplier-id
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :expanded-supplier-id])))
-
-(rf/reg-sub
-  :user-expenses/reports-filter-expanded-top-item-alias-id
-  (fn [db _]
-    (get-in db [:user-expenses :reports :filters :expanded-top-item-alias-id])))
-
-(rf/reg-sub
   :user-expenses/report-filter-options
   (fn [db _]
     (reports-data db :filter-options :data)))
@@ -252,69 +242,6 @@
   :user-expenses/report-filter-options-loading?
   (fn [db _]
     (boolean (reports-data db :filter-options :loading?))))
-
-;; Supplier deep-dive report
-(rf/reg-sub
-  :user-expenses/report-supplier-deep-dive
-  (fn [db _]
-    (reports-data db :supplier-deep-dive :data)))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-deep-dive-loading?
-  (fn [db _]
-    (boolean (reports-data db :supplier-deep-dive :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-deep-dive-error
-  (fn [db _]
-    (reports-data db :supplier-deep-dive :error)))
-
-;; Top suppliers report
-(rf/reg-sub
-  :user-expenses/report-top-suppliers
-  (fn [db _]
-    (or (reports-data db :top-suppliers :data) [])))
-
-(rf/reg-sub
-  :user-expenses/report-top-suppliers-loading?
-  (fn [db _]
-    (boolean (reports-data db :top-suppliers :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-top-suppliers-error
-  (fn [db _]
-    (reports-data db :top-suppliers :error)))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-stores
-  (fn [db _]
-    (or (reports-data db :supplier-stores :data) [])))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-stores-loading?
-  (fn [db _]
-    (boolean (reports-data db :supplier-stores :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-stores-error
-  (fn [db _]
-    (reports-data db :supplier-stores :error)))
-
-;; Supplier monthly trends report
-(rf/reg-sub
-  :user-expenses/report-supplier-monthly-trends
-  (fn [db _]
-    (or (reports-data db :supplier-monthly-trends :data) [])))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-monthly-trends-loading?
-  (fn [db _]
-    (boolean (reports-data db :supplier-monthly-trends :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-supplier-monthly-trends-error
-  (fn [db _]
-    (reports-data db :supplier-monthly-trends :error)))
 
 ;; Day-of-week report
 (rf/reg-sub
@@ -331,53 +258,6 @@
   :user-expenses/report-day-of-week-error
   (fn [db _]
     (reports-data db :day-of-week :error)))
-
-;; Top-items report
-(rf/reg-sub
-  :user-expenses/report-top-items
-  (fn [db _]
-    (or (reports-data db :top-items :data) [])))
-
-(rf/reg-sub
-  :user-expenses/report-top-items-loading?
-  (fn [db _]
-    (boolean (reports-data db :top-items :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-top-items-error
-  (fn [db _]
-    (reports-data db :top-items :error)))
-
-;; Top-item breakdown report
-(rf/reg-sub
-  :user-expenses/report-top-item-breakdown
-  (fn [db _]
-    (or (reports-data db :top-item-breakdown :data) {:suppliers [] :stores []})))
-
-(rf/reg-sub
-  :user-expenses/report-top-item-breakdown-loading?
-  (fn [db _]
-    (boolean (reports-data db :top-item-breakdown :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-top-item-breakdown-error
-  (fn [db _]
-    (reports-data db :top-item-breakdown :error)))
-
-(rf/reg-sub
-  :user-expenses/report-monthly-comparison
-  (fn [db _]
-    (reports-data db :monthly-comparison :data)))
-
-(rf/reg-sub
-  :user-expenses/report-monthly-comparison-loading?
-  (fn [db _]
-    (boolean (reports-data db :monthly-comparison :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-monthly-comparison-error
-  (fn [db _]
-    (reports-data db :monthly-comparison :error)))
 
 ;; Size distribution report
 (rf/reg-sub
@@ -411,18 +291,3 @@
   (fn [db _]
     (reports-data db :daily-heatmap :error)))
 
-;; Category allocation report
-(rf/reg-sub
-  :user-expenses/report-category-allocation
-  (fn [db _]
-    (or (reports-data db :category-allocation :data) [])))
-
-(rf/reg-sub
-  :user-expenses/report-category-allocation-loading?
-  (fn [db _]
-    (boolean (reports-data db :category-allocation :loading?))))
-
-(rf/reg-sub
-  :user-expenses/report-category-allocation-error
-  (fn [db _]
-    (reports-data db :category-allocation :error)))

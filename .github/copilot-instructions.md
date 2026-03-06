@@ -139,6 +139,7 @@ railway shell                          # bash in running container (JRE-only; no
 ```
 
 - Must `railway login` + `railway link` once per machine first.
+- Migrations run automatically on every deploy via `preDeployCommand` in `railway.json` (`java -cp /app/app.jar clojure.main -m app.migrate`). No manual step needed.
 - Full reference: `docs/general/operations/railway-deployment.md#production-debugging`.
 
 ## Security middleware toggles

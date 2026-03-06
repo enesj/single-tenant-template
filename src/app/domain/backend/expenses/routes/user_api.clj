@@ -40,19 +40,11 @@
    ["/by-month" {:get {:handler (user-expenses-summary/spending-by-month-handler db)}}]
    ["/by-supplier" {:get {:handler (user-expenses-summary/spending-by-supplier-handler db)}}]
 
-   ;; Expanded report endpoints
+   ;; Tenant-scoped report endpoints (reports grouping by global entities are in admin API)
    ["/reports"
-    ["/supplier-deep-dive" {:get {:handler (user-expenses-reports/supplier-deep-dive-handler db)}}]
     ["/day-of-week" {:get {:handler (user-expenses-reports/day-of-week-spending-handler db)}}]
-    ["/top-items" {:get {:handler (user-expenses-reports/top-items-spending-handler db)}}]
-    ["/top-items/:alias-id/breakdown" {:get {:handler (user-expenses-reports/top-item-breakdown-handler db)}}]
-    ["/top-suppliers" {:get {:handler (user-expenses-reports/top-suppliers-handler db)}}]
-    ["/supplier-stores" {:get {:handler (user-expenses-reports/supplier-stores-handler db)}}]
-    ["/supplier-monthly-trends" {:get {:handler (user-expenses-reports/supplier-monthly-trends-handler db)}}]
-    ["/monthly-comparison" {:get {:handler (user-expenses-reports/monthly-comparison-handler db)}}]
     ["/size-distribution" {:get {:handler (user-expenses-reports/expense-size-distribution-handler db)}}]
     ["/daily-heatmap" {:get {:handler (user-expenses-reports/daily-heatmap-handler db)}}]
-    ["/category-allocation" {:get {:handler (user-expenses-reports/category-allocation-handler db)}}]
     ["/filter-options" {:get {:handler (user-expenses-reports/filter-options-handler db)}}]]
 
    ;; Settings endpoints (must come before /:id routes)

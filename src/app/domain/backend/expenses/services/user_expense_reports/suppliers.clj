@@ -10,28 +10,26 @@
   "Top suppliers ranked by total spending grouped by currency."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
-        limit* (-> (or limit default-supplier-report-limit) long (max 1) (min 100))]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:status 400})))
-    (let [supplier-rows (shared/supplier-breakdown-by-currency db user-id opts)
-          totals-by-currency (->> (shared/summary-by-currency db user-id opts)
-                               (map (juxt :currency (comp shared/bd :total_amount)))
-                               (into {}))]
-      (->> supplier-rows
-        (map (fn [row]
-               (let [supplier-total (shared/bd (:total_amount row))
-                     grand-total (get totals-by-currency (:currency row) 0M)
-                     share-pct (if (pos? (compare grand-total 0M))
-                                 (* 100.0 (/ (double supplier-total) (double grand-total)))
-                                 0.0)]
-                 (assoc row :share_pct share-pct))))
-        (sort-by (fn [row]
-                   [(- (double (shared/bd (:total_amount row))))
-                    (or (:supplier_name row) "")
-                    (str (:supplier_id row))
-                    (or (:currency row) "")]))
-        (take limit*)
-        vec))))
+        limit* (-> (or limit default-supplier-report-limit) long (max 1) (min 100))
+        supplier-rows (shared/supplier-breakdown-by-currency db user-id opts)
+        totals-by-currency (->> (shared/summary-by-currency db user-id opts)
+                             (map (juxt :currency (comp shared/bd :total_amount)))
+                             (into {}))]
+    (->> supplier-rows
+      (map (fn [row]
+             (let [supplier-total (shared/bd (:total_amount row))
+                   grand-total (get totals-by-currency (:currency row) 0M)
+                   share-pct (if (pos? (compare grand-total 0M))
+                               (* 100.0 (/ (double supplier-total) (double grand-total)))
+                               0.0)]
+               (assoc row :share_pct share-pct))))
+      (sort-by (fn [row]
+                 [(- (double (shared/bd (:total_amount row))))
+                  (or (:supplier_name row) "")
+                  (str (:supplier_id row))
+                  (or (:currency row) "")]))
+      (take limit*)
+      vec)))
 
 (defn stores
   "Store-level supplier breakdown grouped by currency."
@@ -39,8 +37,6 @@
   (let [user-id (shared/ensure-uuid user-id)
         supplier-id (shared/ensure-uuid supplier-id)
         limit* (-> (or limit default-supplier-report-limit) long (max 1) (min 100))]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:status 400})))
     (when-not supplier-id
       (throw (ex-info "supplier-id is required" {:status 400})))
     (let [opts* (assoc opts :supplier-id supplier-id)
@@ -96,53 +92,49 @@
   "Month-by-month supplier totals for the top suppliers in scope."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
-        limit* (-> (or limit default-monthly-limit) long (max 1) (min 50))]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:status 400})))
-    (let [top-supplier-ids (->> (shared/query-many
-                                  db
-                                  {:select [:e.supplier_id
-                                            [[:sum :e.total_amount] :total_amount]]
-                                   :from [[:expenses :e]]
-                                   :where (conj (shared/base-where user-id opts)
-                                            [:is-not :e.supplier_id nil])
-                                   :group-by [:e.supplier_id]
-                                   :order-by [[[:sum :e.total_amount] :desc]
-                                              [:e.supplier_id :asc]]
-                                   :limit limit*})
-                             (keep :supplier_id)
-                             vec)]
-      (if (empty? top-supplier-ids)
-        []
-        (->> (shared/query-many
-               db
-               {:select [:e.supplier_id
-                         [:s.display_name :supplier_name]
-                         [[:to_char :e.purchased_at [:inline "YYYY-MM"]] :month]
-                         :e.currency
-                         [[:sum :e.total_amount] :total_amount]
-                         [[:count :*] :expense_count]]
-                :from [[:expenses :e]]
-                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
-                :where (conj (shared/base-where user-id opts)
-                         [:in :e.supplier_id top-supplier-ids])
-                :group-by [:e.supplier_id
-                           :s.display_name
-                           [:to_char :e.purchased_at [:inline "YYYY-MM"]]
-                           :e.currency]
-                :order-by [[[:to_char :e.purchased_at [:inline "YYYY-MM"]] :asc]
-                           [[:sum :e.total_amount] :desc]
-                           [:s.display_name :asc]
-                           [:e.currency :asc]]})
-          vec)))))
+        limit* (-> (or limit default-monthly-limit) long (max 1) (min 50))
+        top-supplier-ids (->> (shared/query-many
+                                db
+                                {:select [:e.supplier_id
+                                          [[:sum :e.total_amount] :total_amount]]
+                                 :from [[:expenses :e]]
+                                 :where (conj (shared/base-where user-id opts)
+                                          [:is-not :e.supplier_id nil])
+                                 :group-by [:e.supplier_id]
+                                 :order-by [[[:sum :e.total_amount] :desc]
+                                            [:e.supplier_id :asc]]
+                                 :limit limit*})
+                           (keep :supplier_id)
+                           vec)]
+    (if (empty? top-supplier-ids)
+      []
+      (->> (shared/query-many
+             db
+             {:select [:e.supplier_id
+                       [:s.display_name :supplier_name]
+                       [[:to_char :e.purchased_at [:inline "YYYY-MM"]] :month]
+                       :e.currency
+                       [[:sum :e.total_amount] :total_amount]
+                       [[:count :*] :expense_count]]
+              :from [[:expenses :e]]
+              :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
+              :where (conj (shared/base-where user-id opts)
+                       [:in :e.supplier_id top-supplier-ids])
+              :group-by [:e.supplier_id
+                         :s.display_name
+                         [:to_char :e.purchased_at [:inline "YYYY-MM"]]
+                         :e.currency]
+              :order-by [[[:to_char :e.purchased_at [:inline "YYYY-MM"]] :asc]
+                         [[:sum :e.total_amount] :desc]
+                         [:s.display_name :asc]
+                         [:e.currency :asc]]})
+        vec))))
 
 (defn deep-dive
   "Supplier deep-dive report for a specific supplier."
   [db user-id {:keys [supplier-id alias-limit] :or {alias-limit default-alias-limit} :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
         supplier-id (shared/ensure-uuid supplier-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:status 400})))
     (when-not supplier-id
       (throw (ex-info "supplier-id is required" {:status 400})))
     (let [opts* (assoc opts :supplier-id supplier-id)

@@ -13,8 +13,6 @@
         resolved-store-id-sql [:raw "COALESCE(e.store_id, sa_receipt.store_id)"]
         resolved-item-id-sql [:raw "COALESCE(aa.article_id, ei.alias_id)"]
         item-label-sql [:raw "COALESCE(a.canonical_name, aa.raw_label, 'Unmapped item')"]]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:status 400})))
     (shared/query-many
       db
       {:select [[resolved-item-id-sql :alias_id]
@@ -56,8 +54,6 @@
                        [:or
                         [:= :aa.article_id alias-id]
                         [:= :ei.alias_id alias-id]])]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:status 400})))
     (when-not alias-id
       (throw (ex-info "alias-id is required" {:status 400})))
     {:suppliers

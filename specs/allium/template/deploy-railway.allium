@@ -1,0 +1,293 @@
+-- Railway production deployment workflow.
+--
+-- Covers: CI pipeline (GitHub Actions, parallel backend + frontend jobs);
+--         Docker two-stage build (builder → runtime uberjar);
+--         Railway container deploy; health-check readiness gate;
+--         required env var startup preconditions;
+--         manual migration trigger (never automatic);
+--         production inspection via Railway MCP and CLI.
+--
+-- Sources: .github/workflows/ci.yml, Dockerfile,
+--          docs/general/operations/railway-deployment.md
+
+-- ---------------------------------------------------------------------------
+-- Actors
+-- ---------------------------------------------------------------------------
+
+actor Developer { identified_by: github_username: String }
+
+actor Operator { identified_by: railway_account: String }
+
+external entity Railway {}
+
+-- ---------------------------------------------------------------------------
+-- Entities
+-- ---------------------------------------------------------------------------
+
+entity CodePush {
+    sha: String
+    branch: String
+    repository: String
+    pushed_by: Developer
+}
+
+entity CIPipeline {
+    push: CodePush
+    status: pending | running | passed | failed
+    backend_job: CIJob
+    frontend_job: CIJob
+}
+
+entity CIJob {
+    name: String
+    status: pending | running | passed | failed
+    failure_reason: String?
+}
+
+entity DockerBuild {
+    push: CodePush
+    status: pending | building | succeeded | failed
+    artifact: UberJar?
+}
+
+entity UberJar {
+    -- Produced by Stage 1 (builder: JDK 21 + Node 22 + Clojure CLI):
+    --   npm ci → clj -T:build uber (PostCSS → Shadow CLJS release → AOT uberjar)
+    -- Copied to Stage 2 (runtime: JRE 21 only) at /app/app.jar.
+    -- The runtime image intentionally ships no Clojure CLI, bb, or npm.
+    path: String
+}
+
+entity DeployedRevision {
+    build: DockerBuild
+    status: starting | healthy | unhealthy | replaced
+    port: Integer
+    health_check_failures: Integer
+}
+
+entity SchemaRevision {
+    applied_migrations: List<String>
+    pending_migrations: List<String>
+}
+
+-- Railway config: railway.json
+-- - preDeployCommand runs migrations before the app starts on every deploy
+-- - healthcheckPath: /health, healthcheckTimeout: 300s
+-- - restartPolicyType: ON_FAILURE, maxRetries: 3
+--
+-- Standalone migration runner: src/app/migrate.clj
+-- - AOT-compiled into the uberjar alongside app.main
+-- - Reads DATABASE_URL, calls automigrate.core/migrate, then exits
+
+-- ---------------------------------------------------------------------------
+-- Config
+-- ---------------------------------------------------------------------------
+
+config {
+    health_check_interval: Duration  = 30.seconds
+    health_check_timeout:  Duration  = 5.seconds
+    health_check_start_period: Duration = 30.seconds   -- JVM cold-start grace period
+    health_check_retries:  Integer   = 3
+    default_port:          Integer   = 8080            -- Railway injects PORT at runtime
+}
+
+-- ---------------------------------------------------------------------------
+-- Rules
+-- ---------------------------------------------------------------------------
+
+rule CITriggeredOnMainPush {
+    when: push: CodePush.created
+    requires: push.branch = "main"
+    ensures: CIPipeline.created(push: push, status: running)
+}
+
+rule RailwayBuildTriggeredOnMainPush {
+    when: push: CodePush.created
+    requires: push.branch = "main"
+    ensures: DockerBuild.created(push: push, status: building)
+}
+
+-- CI and Railway build are triggered in parallel by the same GitHub push.
+-- Railway does NOT wait for CI to pass before building and deploying.
+
+open question "Should Railway deployment be gated on CI passing? Currently both
+are triggered independently by the same push to main. A failed CI run does not
+prevent the build from reaching production."
+
+rule DockerBuildSucceeds {
+    when: build: DockerBuild.status becomes building
+    ensures: build.artifact = UberJar.created(path: "/app/app.jar")
+    ensures: build.status = succeeded
+}
+
+rule DockerBuildFails {
+    when: build: DockerBuild.status becomes building
+    requires: build.artifact = null
+    ensures: build.status = failed
+}
+
+rule ServiceStartsAfterSuccessfulBuild {
+    when: build: DockerBuild.status transitions_to succeeded
+    ensures: DeployedRevision.created(
+        build: build,
+        status: starting,
+        port: config.default_port,
+        health_check_failures: 0
+    )
+}
+
+rule ServiceBecomesHealthy {
+    -- Health check: GET /health polled every config.health_check_interval.
+    -- The config.health_check_start_period grace window lets the JVM complete
+    -- its cold start before failures count toward config.health_check_retries.
+    when: revision: DeployedRevision.status becomes starting
+    requires: revision.health_check_failures < config.health_check_retries
+    ensures: revision.status = healthy
+}
+
+rule ServiceBecomesUnhealthy {
+    -- Triggered when required env vars are absent (DATABASE_URL, BASE_URL, etc.)
+    -- or when the JVM fails to bind the port within the start-period grace window.
+    when: revision: DeployedRevision.status becomes starting
+    requires: revision.health_check_failures >= config.health_check_retries
+    ensures: revision.status = unhealthy
+}
+
+rule PreviousRevisionReplaced {
+    when: revision: DeployedRevision.status transitions_to healthy
+    let previous = DeployedRevision where status = healthy and build != revision.build
+    for old in previous:
+        ensures: old.status = replaced
+}
+
+rule MigrationsRunBeforeDeploy {
+    -- Railway's preDeployCommand runs migrations BEFORE the app starts (every deploy).
+    -- Config: railway.json → deploy.preDeployCommand
+    -- Command: java -cp /app/app.jar clojure.main -m app.migrate
+    -- Runner: src/app/migrate.clj — reads DATABASE_URL, calls automigrate.core/migrate.
+    -- If migrations fail, the deploy is aborted (app never starts).
+    when: build: DockerBuild.status transitions_to succeeded
+    ensures: SchemaRevision.created(pending_migrations: {})
+}
+
+rule MigrationsFailAbortsDeploy {
+    -- If the preDeployCommand exits non-zero (e.g. DATABASE_URL missing, migration
+    -- SQL error), Railway aborts the deployment. The previous revision stays live.
+    when: build: DockerBuild.status transitions_to succeeded
+    requires: SchemaRevision.pending_migrations != {}
+    ensures: build.status = failed
+}
+
+-- ---------------------------------------------------------------------------
+-- Surfaces
+-- ---------------------------------------------------------------------------
+
+surface CIPipelineBoundary {
+    facing viewer: Developer
+
+    context pipeline: CIPipeline where push.branch = "main"
+
+    exposes:
+        pipeline.status
+        pipeline.backend_job.status
+        pipeline.frontend_job.status
+        pipeline.backend_job.failure_reason
+        pipeline.frontend_job.failure_reason
+
+    guarantee:
+        pipeline.backend_job runs Java 21 + Clojure CLI + Babashka
+            against a Postgres 13 test DB on port 55433.
+
+    guarantee:
+        pipeline.frontend_job runs Java 21 + Node 25 + npm + Clojure CLI + Babashka.
+
+    guarantee:
+        pipeline.backend_job and pipeline.frontend_job execute in parallel.
+
+    guidance:
+        CI results appear as GitHub commit and PR status checks.
+        A passing CI pipeline does not gate Railway deployment — it is an independent signal.
+}
+
+surface RailwayDeployBoundary {
+    facing operator: Operator
+
+    context revision: DeployedRevision
+
+    exposes:
+        revision.status
+        revision.port
+        revision.health_check_failures
+        revision.build.status
+
+    guarantee:
+        PORT is injected by Railway at runtime; the app must not fall back to a hardcoded default.
+
+    guarantee:
+        DATABASE_URL is injected automatically when a Railway Postgres service is linked.
+
+    guarantee:
+        The following vars must be set manually in Railway → Variables before the first deploy:
+        BASE_URL, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
+        GMAIL_REFRESH_TOKEN, SMTP_FROM_EMAIL, GOOGLE_OAUTH_REDIRECT_URI.
+        Any missing required var causes startup failure and triggers ServiceBecomesUnhealthy.
+}
+
+surface HealthCheckBoundary {
+    facing platform: Railway
+
+    context revision: DeployedRevision
+
+    provides:
+        CheckHealth(platform, revision)
+
+    guarantee:
+        CheckHealth succeeds when GET /health returns HTTP 200.
+
+    guarantee:
+        CheckHealth is polled every config.health_check_interval with a
+        config.health_check_timeout response deadline.
+
+    guarantee:
+        Failures within the first config.health_check_start_period do not count
+        toward config.health_check_retries (JVM cold-start grace).
+
+    guarantee:
+        After config.health_check_retries consecutive failures outside the grace
+        period, the container is restarted.
+
+    timeout: ServiceBecomesUnhealthy
+}
+
+surface ProductionInspectionBoundary {
+    facing operator: Operator
+
+    context revision: DeployedRevision where status = healthy
+
+    provides:
+        InspectLogs(operator, revision)
+        InspectVariables(operator, revision)
+        RunCommandWithProdEnv(operator, revision, command)
+
+    guarantee:
+        RunCommandWithProdEnv executes command locally on the operator's machine
+        with all Railway env vars (including DATABASE_URL) injected.
+        It does NOT execute inside the running container.
+
+    guarantee:
+        The runtime container image is JRE-only: no Clojure CLI, bb, or npm.
+        All interactive tooling must run via RunCommandWithProdEnv.
+
+    guarantee:
+        RunCommandWithProdEnv with command = "clj -M:nrepl" opens a live nREPL
+        session connected to the production database.
+        Writes via that session are production mutations.
+
+    guidance:
+        Preferred path: Railway MCP tools (get-logs, list-variables, list-services)
+            — structured output, queryable by AI agents.
+            Install: claude mcp add Railway npx @railway/mcp-server
+        Fallback:  railway logs, railway variables, railway run clj -M:nrepl (CLI).
+        During triage, prefer read-only queries. Wrap any mutations in explicit
+        transactions that can be rolled back before committing.
+}

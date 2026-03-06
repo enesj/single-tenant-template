@@ -109,14 +109,16 @@
 
 (defn build-list-function
   "Build a generic list function for an entity.
-   When config has :tenant-scoped? true, accepts :tenant-id in opts to scope by tenant."
+   When config has :tenant-scoped? true, accepts :tenant-id in opts to scope by tenant.
+   Accepts :extra-filters in opts — a seq of HoneySQL WHERE clauses to append."
   [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields table-alias base-filters]
     :as config}]
   (fn list-entity
-    [db {:keys [limit offset order-by order-dir search tenant-id]
+    [db {:keys [limit offset order-by order-dir search tenant-id extra-filters]
          :or {limit 50 offset 0 order-dir :asc}}]
     (let [default-order-by (get config :default-order-by primary-key)
-          effective-filters (inject-tenant-filter config tenant-id base-filters)
+          effective-filters (into (vec (inject-tenant-filter config tenant-id base-filters))
+                              (or extra-filters []))
           base-query (build-query-with-filters
                        {:table-name table-name
                         :primary-key primary-key
@@ -257,7 +259,8 @@
 
 (defn build-count-function
   "Build a generic count function for an entity.
-   When config has :tenant-scoped? true, accepts :tenant-id in opts map."
+   When config has :tenant-scoped? true, accepts :tenant-id in opts map.
+   Accepts :extra-filters in opts — a seq of HoneySQL WHERE clauses to append."
   [{:keys [table-name search-fields joins table-alias base-filters]
     :as config}]
   (fn count-entity
@@ -268,7 +271,9 @@
                    (string? opts) opts
                    :else (throw (ex-info "opts must be a map, string, or nil" {:opts opts})))
           tenant-id (when (map? opts) (:tenant-id opts))
-          effective-filters (inject-tenant-filter config tenant-id base-filters)
+          extra-filters (when (map? opts) (:extra-filters opts))
+          effective-filters (into (vec (inject-tenant-filter config tenant-id base-filters))
+                              (or extra-filters []))
           where (build-where-clause effective-filters)
           base-query (cond-> {:select [[[:count :*] :total]]
                               :from (if table-alias

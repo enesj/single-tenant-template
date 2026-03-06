@@ -37,14 +37,8 @@
 (defn- current-unmapped-page-params
   [db]
   (let [entity-key :unmapped-items
-        per-page (or (parse-pos-int (get-in db (paths/list-per-page entity-key)))
-                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :per-page)))
-                   (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :per-page)))
-                   50)
-        current-page (or (parse-pos-int (get-in db (paths/list-current-page entity-key)))
-                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :current-page)))
-                       (parse-pos-int (get-in db (conj (paths/list-ui-state entity-key) :pagination :current-page)))
-                       1)
+        per-page (paths/resolved-list-per-page db entity-key 50)
+        current-page (paths/resolved-list-current-page db entity-key)
         supplier-id (get-in db (conj base-path :filters :supplier-id))]
     (cond-> {:limit per-page
              :offset (* (max 0 (dec current-page)) per-page)}

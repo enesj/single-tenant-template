@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.routes.reports
   "Admin API routes for expense reporting."
   (:require
+    [app.domain.backend.expenses.routes.report-analytics :as analytics]
     [app.template.backend.routes.admin.utils :as utils]
     [app.domain.backend.expenses.services.reports :as reports]
     [app.shared.adapters.database :as shared-db]))
@@ -67,4 +68,5 @@
    ["/suppliers" {:get (supplier-breakdown-handler db)}]
    ["/weekly" {:get (weekly-handler db)}]
    ["/monthly" {:get (monthly-handler db)}]
-   ["/top-suppliers" {:get (top-suppliers-handler db)}]])
+   ["/top-suppliers" {:get (top-suppliers-handler db)}]
+   (analytics/routes db)])

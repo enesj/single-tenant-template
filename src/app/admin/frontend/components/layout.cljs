@@ -9,6 +9,7 @@
                                                     articles-icon
                                                     arrow-path
                                                     audit-icon
+                                                    chart-bar
                                                     dashboard-icon
                                                     login-events-icon
 
@@ -64,7 +65,12 @@
                                      :icon ($ login-events-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-login-events)}]))
 
-        expenses-items [{:id "admin-sidebar-expenses-articles"
+        expenses-items [{:id "admin-sidebar-expenses-reports"
+                         :label "Reports"
+                         :href "/admin/reports"
+                         :icon ($ chart-bar {:class "w-6 h-6"})
+                         :active? (= route-name :admin-reports)}
+                        {:id "admin-sidebar-expenses-articles"
                          :label "Articles"
                          :href "/admin/articles"
                          :icon ($ articles-icon {:class "w-6 h-6"})

@@ -2,12 +2,9 @@
   (:require
     [app.domain.frontend.expenses.pages.user.expense-reports.components :refer [section-shell]]
     [app.domain.frontend.expenses.pages.user.expense-reports.utils :refer [->number
-                                                                           format-amount-only
                                                                            format-int
                                                                            format-money
-                                                                           format-percent
-                                                                           heat-intensity-class
-                                                                           month-label]]
+                                                                           heat-intensity-class]]
     [app.template.frontend.components.button :refer [button]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]))
@@ -19,13 +16,6 @@
            selected-day-of-week
            day-pattern-max
            primary-currency
-           monthly-comparison-loading?
-           monthly-comparison-error
-           month-a
-           month-b
-           month-options*
-           monthly-by-currency
-           monthly-by-supplier
            size-distribution-loading?
            size-distribution-error
            size-buckets
@@ -47,7 +37,7 @@
           ($ :div {:class "space-y-4"}
             ($ :p {:class "text-xs text-base-content/70 bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 p-3 rounded-lg flex items-center gap-2"}
               ($ :span "ℹ️")
-              "Click any row to filter the Calendar Heatmap in this tab by that day of the week.")
+              "Click any row to filter the Calendar Heatmap by that day of the week.")
 
             ($ :div {:class "space-y-3"}
               (mapv
@@ -81,129 +71,36 @@
                         :subtitle "Distribution by transaction amount"
                         :loading? size-distribution-loading?
                         :error size-distribution-error}
-        ($ :div {:class "space-y-4"}
-          ($ :p {:class "text-xs text-base-content/70 bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20 p-3 rounded-lg flex items-center gap-2"}
-            ($ :span "ℹ️")
-            "Click any bucket to filter the Top Global Items report in the Articles tab by amount.")
+        (if (seq size-buckets)
+          ($ :div {:class "space-y-3"}
+            (mapv
+              (fn [row]
+                (let [bucket-key (:bucket_key row)
+                      selected? (= selected-bucket-key bucket-key)
+                      total (or (->number (:total_amount row)) 0)
+                      ratio (if (pos? size-buckets-max) (/ total size-buckets-max) 0)]
+                  ($ :button {:id (str "btn-size-bucket-" bucket-key)
+                              :key (str "bucket-" bucket-key)
+                              :class "w-full text-left group transition-all duration-200"
+                              :on-click #(rf/dispatch [:user-expenses/reports-toggle-amount-bucket bucket-key])}
+                    ($ :div {:class "flex items-end justify-between gap-2 mb-1"}
+                      ($ :div {:class "flex items-baseline gap-2"}
+                        ($ :span {:class (str "font-bold text-sm " (if selected? "text-primary" "text-base-content/80"))} (:bucket_label row))
+                        ($ :span {:class "text-xs text-base-content/50"}
+                          (str (format-int (:expense_count row)) " txs")))
+                      ($ :span {:class "font-mono text-sm font-medium"}
+                        (format-money total primary-currency)))
 
-          (if (seq size-buckets)
-            ($ :div {:class "space-y-3"}
-              (mapv
-                (fn [row]
-                  (let [bucket-key (:bucket_key row)
-                        selected? (= selected-bucket-key bucket-key)
-                        total (or (->number (:total_amount row)) 0)
-                        ratio (if (pos? size-buckets-max) (/ total size-buckets-max) 0)]
-                    ($ :button {:id (str "btn-size-bucket-" bucket-key)
-                                :key (str "bucket-" bucket-key)
-                                :class "w-full text-left group transition-all duration-200"
-                                :on-click #(rf/dispatch [:user-expenses/reports-toggle-amount-bucket bucket-key])}
-                      ($ :div {:class "flex items-end justify-between gap-2 mb-1"}
-                        ($ :div {:class "flex items-baseline gap-2"}
-                          ($ :span {:class (str "font-bold text-sm " (if selected? "text-primary" "text-base-content/80"))} (:bucket_label row))
-                          ($ :span {:class "text-xs text-base-content/50"}
-                            (str (format-int (:expense_count row)) " txs")))
-                        ($ :span {:class "font-mono text-sm font-medium"}
-                          (format-money total primary-currency)))
-
-                      ($ :div {:class (str "h-4 rounded-md overflow-hidden "
-                                        (if selected? "bg-primary/10 ring-2 ring-primary ring-offset-1" "bg-base-100"))}
-                        ($ :div {:class (str "h-full rounded-md transition-all duration-500 "
-                                          (if selected? "bg-primary" "bg-base-content/20 group-hover:bg-primary/60"))
-                                 :style {:width (str (* 100 ratio) "%")}})))))
-                size-buckets))
-            ($ :p {:class "text-center p-8 text-base-content/60"}
-              "No size distribution data available.")))))
+                    ($ :div {:class (str "h-4 rounded-md overflow-hidden "
+                                      (if selected? "bg-primary/10 ring-2 ring-primary ring-offset-1" "bg-base-100"))}
+                      ($ :div {:class (str "h-full rounded-md transition-all duration-500 "
+                                        (if selected? "bg-primary" "bg-base-content/20 group-hover:bg-primary/60"))
+                               :style {:width (str (* 100 ratio) "%")}})))))
+              size-buckets))
+          ($ :p {:class "text-center p-8 text-base-content/60"}
+            "No size distribution data available."))))
 
     ($ :div {:class "space-y-8"}
-      ($ section-shell {:title "Monthly Comparison"
-                        :subtitle "Compare spending between two specific months"
-                        :loading? monthly-comparison-loading?
-                        :error monthly-comparison-error}
-        ($ :div {:class "space-y-6"}
-          ($ :div {:class "bg-gradient-to-r from-primary/10 to-secondary/10 p-4 rounded-xl border border-primary/20 flex flex-wrap gap-4 items-end"}
-            ($ :div {:class "flex-1 min-w-[200px]"}
-              ($ :label {:class "text-xs font-bold uppercase text-base-content/50 mb-1.5 block"
-                         :for "reports-month-a-select"}
-                "Base Month (A)")
-              ($ :select {:id "reports-month-a-select"
-                          :class "ds-select ds-select-sm ds-select-bordered w-full bg-white"
-                          :value (or month-a "")
-                          :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                    :month-a
-                                                    (.. % -target -value)])}
-                (mapv
-                  (fn [month]
-                    ($ :option {:key (str "month-a-" month) :value month}
-                      (month-label month)))
-                  month-options*)))
-
-            ($ :div {:class "flex items-center justify-center pb-1 text-base-content/30"}
-              ($ :span {:class "text-xl"} "VS"))
-
-            ($ :div {:class "flex-1 min-w-[200px]"}
-              ($ :label {:class "text-xs font-bold uppercase text-base-content/50 mb-1.5 block"
-                         :for "reports-month-b-select"}
-                "Comparison Month (B)")
-              ($ :select {:id "reports-month-b-select"
-                          :class "ds-select ds-select-sm ds-select-bordered w-full bg-white"
-                          :value (or month-b "")
-                          :on-change #(rf/dispatch [:user-expenses/reports-set-filter
-                                                    :month-b
-                                                    (.. % -target -value)])}
-                (mapv
-                  (fn [month]
-                    ($ :option {:key (str "month-b-" month) :value month}
-                      (month-label month)))
-                  month-options*)))))
-
-        (if (seq monthly-by-currency)
-          ($ :div {:class "overflow-x-auto rounded-lg border border-base-200/60 shadow-sm"}
-            ($ :table {:class "ds-table ds-table-sm w-full"}
-              ($ :thead {:class "bg-base-200/40 text-base-content/60 border-b border-base-200"}
-                ($ :tr
-                  ($ :th {:class "whitespace-nowrap font-bold"} "Currency")
-                  ($ :th {:class "text-right font-bold whitespace-nowrap"} "A")
-                  ($ :th {:class "text-right font-bold whitespace-nowrap"} "B")
-                  ($ :th {:class "text-right font-bold whitespace-nowrap"} "Cash")
-                  ($ :th {:class "text-right font-bold whitespace-nowrap"} "%")
-                  ($ :th {:class "text-right font-bold whitespace-nowrap"} "Count")))
-              ($ :tbody
-                (mapv
-                  (fn [row]
-                    (let [delta (or (->number (:delta_amount row)) 0)
-                          positive? (>= delta 0)]
-                      ($ :tr {:key (str "monthly-currency-" (:currency row))}
-                        ($ :td {:class "text-xs text-base-content/60"} (str (:currency row)))
-                        ($ :td {:class "text-right font-mono text-base-content/70"}
-                          (format-amount-only (:month_a_total row)))
-                        ($ :td {:class "text-right font-mono text-base-content/70"}
-                          (format-amount-only (:month_b_total row)))
-                        ($ :td {:class (str "text-right font-mono font-bold " (if positive? "text-error" "text-success"))}
-                          (str (if positive? "+" "") (format-amount-only delta)))
-                        ($ :td {:class (str "text-right font-medium " (if positive? "text-error" "text-success"))}
-                          (format-percent (:delta_percent row)))
-                        ($ :td {:class "text-right text-xs"}
-                          (format-int (:delta_count row))))))
-                  monthly-by-currency))))
-          ($ :p {:class "text-center p-4 bg-base-50 rounded-lg text-base-content/60 text-sm"}
-            "Select two different months to compare."))
-
-        (when (seq monthly-by-supplier)
-          ($ :div {:class "mt-6 pt-6 border-t border-base-100"}
-            ($ :h4 {:class "text-sm font-bold uppercase tracking-wider text-base-content/70 mb-3 pl-1"} "Largest Changes by Vendor")
-            ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-2"}
-              (mapv
-                (fn [row]
-                  (let [delta (or (->number (:delta_amount row)) 0)
-                        positive? (>= delta 0)]
-                    ($ :div {:key (str "supplier-delta-" (or (:supplier_id row) (:supplier_name row)) "-" (:currency row))
-                             :class "flex items-center justify-between gap-3 p-3 bg-base-50 rounded-lg border border-base-100 hover:bg-base-100 transition shadow-sm"}
-                      ($ :span {:class "text-sm font-medium truncate"} (or (:supplier_name row) "Unknown supplier"))
-                      ($ :span {:class (str "font-mono font-bold text-sm " (if positive? "text-error" "text-success"))}
-                        (str (if positive? "+" "") (format-money delta (:currency row)))))))
-                (take 6 monthly-by-supplier))))))
-
       ($ section-shell {:title "Calendar Heatmap"
                         :subtitle "Daily spending intensity"
                         :loading? daily-heatmap-loading?
