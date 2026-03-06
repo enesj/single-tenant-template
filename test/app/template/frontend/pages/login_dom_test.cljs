@@ -26,10 +26,11 @@
                                          (case (first sub)
                                            :auth-status {:authenticated true :user {:full-name "User"}}
                                            :current-tenant {:name "Acme"}
+                                           :locale :en
                                            nil))]
       (mount-component! ($ login/login-page)
         (fn [container]
-          (is (re-find #"Welcome" (.-textContent container)))
+          (is (re-find #"Welcome|Dobrodošli" (.-textContent container)))
           (done))))))
 
 (deftest login-unauthenticated-view-test

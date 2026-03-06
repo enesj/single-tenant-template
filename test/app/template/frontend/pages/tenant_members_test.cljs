@@ -1,5 +1,6 @@
 (ns app.template.frontend.pages.tenant-members-test
   (:require
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.pages.tenant-members :as tenant-members-page]
     [app.template.frontend.utils.test-utils :as test-utils]
     [cljs.test :refer [deftest is testing]]))
@@ -70,11 +71,12 @@
                                    :user_status "suspended"
                                    :show-edit? true
                                    :show-delete? true}
-          manageable-state (tenant-members-page/member-row-action-state "owner" true manageable-member)
-          hidden-state (tenant-members-page/member-row-action-state "owner" true hidden-by-settings)
-          protected-owner-state (tenant-members-page/member-row-action-state "admin" false owner-target)
-          suspended-state (tenant-members-page/member-row-action-state "owner" true suspended-member)
-          inactive-account-state (tenant-members-page/member-row-action-state "owner" true inactive-account-member)]
+          t (partial i18n/translate :en)
+          manageable-state (tenant-members-page/member-row-action-state "owner" true manageable-member t)
+          hidden-state (tenant-members-page/member-row-action-state "owner" true hidden-by-settings t)
+          protected-owner-state (tenant-members-page/member-row-action-state "admin" false owner-target t)
+          suspended-state (tenant-members-page/member-row-action-state "owner" true suspended-member t)
+          inactive-account-state (tenant-members-page/member-row-action-state "owner" true inactive-account-member t)]
       (is (= true (:show-edit? manageable-state)))
       (is (= true (:show-delete? manageable-state)))
       (is (= false (:edit-disabled? manageable-state)))
@@ -98,14 +100,16 @@
 
 (deftest tenant-member-list-props-use-canonical-list-view-contract
   (testing "tenant members page passes canonical list-view props with modal edit/delete controls and member rows as overrides"
-    (let [props (tenant-members-page/tenant-member-list-props
+    (let [t (partial i18n/translate :en)
+          props (tenant-members-page/tenant-member-list-props
                   [{:id "m-1"
                     :user_full_name "Ada Lovelace"
                     :user_email "ada@example.com"
                     :role "admin"
                     :created_at "2026-03-03T10:20:30Z"}]
                   "owner"
-                  true)
+                  true
+                  t)
           display-settings (:display-settings props)
           row (first (:rows-override props))]
       (is (= :tenant-members (:entity-name props)))
