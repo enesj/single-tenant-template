@@ -88,3 +88,50 @@
           (is (= [:id]
                 (get-in (settings-io/read-table-columns :mock-db)
                   [:receipts :available-columns]))))))))
+
+(deftest read-table-columns-promotes-legacy-admin-runtime-defaults
+  (testing "legacy persisted users/admins defaults are upgraded to all available columns"
+    (let [dir (temp-dir)
+          admin-path (tmp-path dir "admin-table-columns.edn")]
+      (write-edn! admin-path
+        {:admins {:available-columns ["id" "email" "password-hash"]}
+         :users {:available-columns ["id" "email" "status" "created-at"]}})
+      (clojure.core/with-redefs-fn
+        {#'settings-io/table-columns-path admin-path
+         #'domain-registry/get-admin-ui-config-paths (constantly [])
+         #'settings-io/read-runtime-override
+         (fn [_db _scope _config-key]
+           {:admins {:available-columns ["id"
+                                         "email"
+                                         "full-name"
+                                         "role"
+                                         "status"
+                                         "last-login-at"
+                                         "created-at"
+                                         "updated-at"
+                                         "password-hash"]
+                     :default-visible-columns ["id"
+                                               "email"
+                                               "full-name"
+                                               "role"
+                                               "status"
+                                               "last-login-at"
+                                               "created-at"
+                                               "updated-at"]}
+            :users {:available-columns ["id" "email" "status" "created-at"]
+                    :default-visible-columns ["id" "status" "created-at"]}})
+         #'table-columns-spec/validate-table-columns-strict (constantly {:valid? true})}
+        (fn []
+          (let [resolved (settings-io/read-table-columns :mock-db)]
+            (is (= ["id"
+                    "email"
+                    "full-name"
+                    "role"
+                    "status"
+                    "last-login-at"
+                    "created-at"
+                    "updated-at"
+                    "password-hash"]
+                  (get-in resolved [:admins :default-visible-columns])))
+            (is (= ["id" "email" "status" "created-at"]
+                  (get-in resolved [:users :default-visible-columns])))))))))

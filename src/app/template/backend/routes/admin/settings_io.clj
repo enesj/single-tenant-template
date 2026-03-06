@@ -153,6 +153,35 @@
          :warnings (:warnings validation)}))
     merged))
 
+(def ^:private legacy-admin-default-visible-columns
+  {:admins ["id"
+            "email"
+            "full-name"
+            "role"
+            "status"
+            "last-login-at"
+            "created-at"
+            "updated-at"]
+   :users ["id" "status" "created-at"]})
+
+(defn- promote-legacy-admin-table-columns-override
+  "Upgrade legacy persisted admin table-column defaults for users/admins.
+
+   This is intentionally narrow: we only rewrite the exact historic defaults that
+   shipped before the new all-columns-visible behavior. Future intentional admin
+   edits to different subsets are preserved as-is."
+  [table-columns]
+  (reduce-kv
+    (fn [acc entity-key legacy-defaults]
+      (let [available (get-in acc [entity-key :available-columns])
+            defaults (get-in acc [entity-key :default-visible-columns])]
+        (if (and (seq available)
+              (= (vec defaults) (vec legacy-defaults)))
+          (assoc-in acc [entity-key :default-visible-columns] (vec available))
+          acc)))
+    (or table-columns {})
+    legacy-admin-default-visible-columns))
+
 (defn read-view-options
   "Read admin view-options defaults and merge persisted runtime overrides."
   [db]
@@ -217,7 +246,8 @@
                      "admin table-columns"
                      table-columns-spec/validate-table-columns-strict)
         domain-data (read-domain-admin-configs :table-columns)
-        runtime-override (read-runtime-override db admin-scope :table-columns)]
+        runtime-override (some-> (read-runtime-override db admin-scope :table-columns)
+                           promote-legacy-admin-table-columns-override)]
     (merge-and-validate
       "merged table-columns"
       table-columns-spec/validate-table-columns-strict
