@@ -76,6 +76,16 @@
   (let [id (or (:id user) (:users/id user))]
     (if (string? id) (java.util.UUID/fromString id) id)))
 
+(defn- resolve-label
+  "Return a display string from a seed label. Accepts either a plain string
+  or a locale map {:en \"...\" :bs \"...\"}. Falls back to :en, then string repr."
+  [label-or-map locale]
+  (if (map? label-or-map)
+    (or (get label-or-map locale)
+      (get label-or-map :en)
+      (str label-or-map))
+    label-or-map))
+
 (defn provision-tenant!
   "Create a new tenant + owner membership + seed lookup tables, all inside a
    single transaction. Returns {:tenant <row> :membership <row>}."
@@ -87,7 +97,8 @@
         tenant-id  (java.util.UUID/randomUUID)
         member-id  (java.util.UUID/randomUUID)
         now        (java.time.LocalDateTime/now)
-        defaults   (:tenant-defaults config)]
+        defaults   (:tenant-defaults config)
+        locale     (or (:default-locale config) :bs)]
     (jdbc/with-transaction [tx db]
       ;; 1) Create tenant
       (let [tenant (convert-pg-objects
@@ -113,32 +124,51 @@
                                                   :updated_at now}]
                                         :returning [:*]})))]
 
-        ;; 3) Seed payer_types
-        (doseq [pt (:payer-types defaults)]
-          (jdbc/execute-one! tx
-            (sql/format {:insert-into [:payer_types]
-                         :values [{:id         (java.util.UUID/randomUUID)
-                                   :tenant_id  tenant-id
-                                   :label      (:label pt)
-                                   :is_default (boolean (:is-default pt))
-                                   :created_at now
-                                   :updated_at now}]})))
+        ;; 3) Seed payer_types — capture default type id for owner payer
+        (let [pt-rows (mapv
+                        (fn [pt]
+                          (jdbc/execute-one! tx
+                            (sql/format {:insert-into [:payer_types]
+                                         :values [{:id         (java.util.UUID/randomUUID)
+                                                   :tenant_id  tenant-id
+                                                   :label      (resolve-label (:label pt) locale)
+                                                   :is_default (boolean (:is-default pt))
+                                                   :created_at now
+                                                   :updated_at now}]
+                                         :returning [:id :is_default]})
+                            {:builder-fn rs/as-unqualified-lower-maps}))
+                        (:payer-types defaults))
+              default-pt-id (->> pt-rows (filter :is_default) first :id)]
 
-        ;; 4) Seed expense_categories
-        (doseq [cat (:expense-categories defaults)]
-          (jdbc/execute-one! tx
-            (sql/format {:insert-into [:expense_categories]
-                         :values [{:id         (java.util.UUID/randomUUID)
-                                   :tenant_id  tenant-id
-                                   :name       (:name cat)
-                                   :created_at now
-                                   :updated_at now}]})))
+          ;; 4) Seed owner payer (linked to the default payer type)
+          (when default-pt-id
+            (let [owner-label (or (some-> (user-full-name user) str/trim not-empty)
+                                (first (str/split (user-email user) #"@")))]
+              (jdbc/execute-one! tx
+                (sql/format {:insert-into [:payers]
+                             :values [{:id            (java.util.UUID/randomUUID)
+                                       :tenant_id     tenant-id
+                                       :payer_type_id default-pt-id
+                                       :label         owner-label
+                                       :is_default    true
+                                       :created_at    now
+                                       :updated_at    now}]}))))
 
-        (log/info "Provisioned tenant" slug "for user" (user-email user)
-          "with" (count (:payer-types defaults)) "payer types and"
-          (count (:expense-categories defaults)) "expense categories")
+          ;; 5) Seed expense_categories
+          (doseq [cat (:expense-categories defaults)]
+            (jdbc/execute-one! tx
+              (sql/format {:insert-into [:expense_categories]
+                           :values [{:id         (java.util.UUID/randomUUID)
+                                     :tenant_id  tenant-id
+                                     :name       (resolve-label (:name cat) locale)
+                                     :created_at now
+                                     :updated_at now}]})))
 
-        {:tenant tenant :membership membership}))))
+          (log/info "Provisioned tenant" slug "for user" (user-email user)
+            "with" (count (:payer-types defaults)) "payer types,"
+            (count (:expense-categories defaults)) "expense categories, and owner payer")
+
+          {:tenant tenant :membership membership})))))
 
 ;; ============================================================================
 ;; Lookup

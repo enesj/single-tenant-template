@@ -195,15 +195,17 @@
  ;; Tenant provisioning defaults
  ;; These are copied into each new tenant's lookup tables on creation.
  ;; The first payer_type with :is-default true becomes the tenant's default.
- :tenant-defaults {:payer-types        [{:label "Cash"          :is-default true}
-                                        {:label "Credit Card"   :is-default false}
-                                        {:label "Debit Card"    :is-default false}
-                                        {:label "Bank Transfer" :is-default false}]
-                   :expense-categories [{:name "Groceries"}
-                                        {:name "Transport"}
-                                        {:name "Utilities"}
-                                        {:name "Dining"}
-                                        {:name "Healthcare"}
-                                        {:name "Entertainment"}
-                                        {:name "Shopping"}
-                                        {:name "Other"}]}}
+ ;; Labels/names may be locale maps {:en "..." :bs "..."} — resolved via :default-locale.
+ :default-locale :bs
+
+ :tenant-defaults {:payer-types        [{:label {:en "Household" :bs "Kućanstvo"} :is-default true}
+                                        {:label {:en "Other"     :bs "Ostalo"}    :is-default false}]
+
+                   :expense-categories [{:name {:en "Groceries"     :bs "Namirnice"}}
+                                        {:name {:en "Transport"     :bs "Prijevoz"}}
+                                        {:name {:en "Utilities"     :bs "Komunalije"}}
+                                        {:name {:en "Dining"        :bs "Restorani"}}
+                                        {:name {:en "Healthcare"    :bs "Zdravlje"}}
+                                        {:name {:en "Entertainment" :bs "Zabava"}}
+                                        {:name {:en "Shopping"      :bs "Kupovina"} :is-default true}
+                                        {:name {:en "Other"         :bs "Ostalo"}}]}}
