@@ -34,6 +34,9 @@
                   (= prefix "ve")
                   (boolean (re-find #"(?iu)^ve\b" label*))
 
+                  (= prefix "osn")
+                  (boolean (re-find #"(?iu)^osn\b" label*))
+
                   :else
                   (str/starts-with? label* prefix)))
           summary-prefixes)))))
@@ -391,6 +394,18 @@
 
                     :else
                     (recur (rest remaining) mapping nil items total-lines))
+
+                  ;; Price-continuation row: pending-label set, no label in this row,
+                  ;; price appears in the last column only (e.g. [empty][empty][empty][7,40E]).
+                  (and pending-label
+                    (nil? (some-> (nth cells (:label-idx mapping) nil) text/safe-trim not-empty))
+                    (common/parse-money (last cells)))
+                  (let [line-total (common/parse-money (last cells))
+                        item {:raw_label pending-label
+                              :qty 1M
+                              :unit_price line-total
+                              :line_total line-total}]
+                    (recur (rest remaining) mapping nil (conj items item) total-lines))
 
                   :else
                   (let [item0 (parse-item-row cells mapping)

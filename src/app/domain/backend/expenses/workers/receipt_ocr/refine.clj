@@ -3,6 +3,7 @@
   parallel batch refine, and auto-post logic."
   (:require
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
+    [app.domain.backend.expenses.integrations.llamaparse.receipt-markdown :as receipt-md]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
@@ -82,6 +83,20 @@
   [db receipt extract-result {:keys [cerebras-cfg] :as _opts}]
   (let [receipt-id (:id receipt)
         markdown (:parsed-markdown extract-result)
+        items (get-in extract-result [:extraction :items])
+        items-sum (double (reduce + 0M (keep #(some-> (:line_total %) bigdec) items)))
+        total-guess (some-> (get-in extract-result [:extraction :totals :total]) double)
+        gap? (and total-guess
+               (pos? total-guess)
+               (> (/ (Math/abs (- total-guess items-sum)) total-guess) 0.10))
+        raw-tables (when gap?
+                     (some->> (:raw extract-result)
+                       receipt-md/response->table-markdowns
+                       not-empty))
+        markdown (cond-> markdown
+                   (seq raw-tables)
+                   (str "\n\n---\nRaw OCR table (may contain additional items not captured above):\n\n"
+                     (str/join "\n\n" raw-tables)))
         user-id (:user_id receipt)
         filename (:original_filename receipt)
         user-enabled? (receipt-eligible-for-refine? db receipt _opts)
@@ -115,7 +130,9 @@
             (cond-> {:receipt-id receipt-id
                      :user-id user-id
                      :filename filename
-                     :include-store-context? receipt-refine-include-store-context?}
+                     :include-store-context? receipt-refine-include-store-context?
+                     :gap? gap?
+                     :raw-tables-appended? (boolean (seq raw-tables))}
               supplier-key (assoc :supplier-key supplier-key)
               store-key (assoc :store-key store-key)
               fingerprint (assoc :fingerprint fingerprint)))
