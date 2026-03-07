@@ -29,12 +29,28 @@
   (let [n (if (number? v) v (js/parseInt (str v) 10))]
     (if (js/isNaN n) "—" (.toLocaleString n "en"))))
 
-(defn- parse-sort-val [v]
+(defn- numeric-sort-string?
+  [v]
+  (let [trimmed (.trim (str v))
+        normalized (.replace trimmed "," ".")]
+    (and (seq trimmed)
+      (boolean (re-matches #"[+-]?(?:\d+(?:\.\d+)?|\.\d+)" normalized)))))
+
+(defn- parse-sort-val
+  [v]
   (cond
     (nil? v) nil
     (number? v) v
-    :else (let [n (js/parseFloat (str v))]
-            (if (js/isNaN n) (str v) n))))
+    (numeric-sort-string? v) (js/parseFloat (.replace (.trim (str v)) "," "."))
+    :else (str v)))
+
+(defn- sort-key
+  [v]
+  (let [parsed (parse-sort-val v)]
+    (cond
+      (nil? parsed) [2 ""]
+      (number? parsed) [0 parsed]
+      :else [1 (.toLowerCase (str parsed))])))
 
 (defn- top-item-unit-label
   [row]
@@ -52,17 +68,24 @@
     (when (and (number? total) (number? qty) (pos? qty))
       (/ total qty))))
 
+(defn- top-item-display-name
+  [row]
+  (or (:article-canonical-name row)
+    (:alias-label row)))
+
 (defn- enrich-top-item-row
   [row]
   (assoc row
+    :article-display-name (top-item-display-name row)
     :unit-label (top-item-unit-label row)
     :derived-unit-price (top-item-unit-price row)))
 
-(defn- sort-data [data sort-state]
+(defn- sort-data
+  [data sort-state]
   (if-not (:column sort-state)
     data
     (let [{:keys [column direction]} sort-state
-          sorted (sort-by #(parse-sort-val (get % column)) data)]
+          sorted (sort-by #(sort-key (get % column)) data)]
       (if (= direction :desc)
         (vec (reverse sorted))
         (vec sorted)))))
@@ -351,7 +374,7 @@
               ($ :thead {:class "sticky top-0 z-10 bg-base-100 shadow-sm"}
                 ($ :tr
                   ($ :th {:class "w-12"} "")
-                  ($ sortable-th {:label "Article" :column :article-canonical-name :report-key :top-items})
+                  ($ sortable-th {:label "Article" :column :article-display-name :report-key :top-items})
                   ($ sortable-th {:label "Currency" :column :currency :report-key :top-items :class "text-right"})
                   ($ sortable-th {:label "Price / unit" :column :derived-unit-price :report-key :top-items :class "text-right"})
                   ($ sortable-th {:label "Suppliers" :column :supplier-count :report-key :top-items :class "text-right"})

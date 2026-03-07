@@ -6,6 +6,7 @@
 (def top-item-unit-label @#'reports/top-item-unit-label)
 (def top-item-unit-price @#'reports/top-item-unit-price)
 (def enrich-top-item-row @#'reports/enrich-top-item-row)
+(def sort-data @#'reports/sort-data)
 
 (defn- approx=
   [expected actual]
@@ -28,3 +29,26 @@
                                     :qty-total 0.551})]
       (is (= "kg" (:unit-label row)))
       (is (approx= 40.0 (:derived-unit-price row))))))
+
+(deftest top-items-report-sorts-article-display-labels-safely
+  (testing "article labels that start with quantities still sort as labels"
+    (let [rows (mapv enrich-top-item-row
+                 [{:alias-label "0,5L Coca Cola"}
+                  {:article-canonical-name "Laminiranje obrva + farbanje obrva + botox/kom"}
+                  {:alias-label "Apple Juice"}
+                  {:article-canonical-name "2Fast 2Furious"}])
+          sorted (sort-data rows {:column :article-display-name :direction :asc})]
+      (is (= ["0,5L Coca Cola"
+              "2Fast 2Furious"
+              "Apple Juice"
+              "Laminiranje obrva + farbanje obrva + botox/kom"]
+            (mapv :article-display-name sorted))))))
+
+(deftest top-items-report-sorts-numeric-columns-numerically
+  (testing "numeric columns still sort by numeric value when the backend sends strings"
+    (let [rows [{:total-amount "10,5"}
+                {:total-amount 2}
+                {:total-amount "7"}]
+          sorted (sort-data rows {:column :total-amount :direction :asc})]
+      (is (= [2 "7" "10,5"]
+            (mapv :total-amount sorted))))))
