@@ -324,10 +324,87 @@
 ;; Usage Count Enrichment
 ;; ============================================================================
 
+(defn- derive-price-label
+  [{:keys [unit_price qty line_total currency]}]
+  (let [amount (cond
+                 (some? unit_price) (bigdec unit_price)
+                 (and (some? line_total)
+                   (some? qty)
+                   (not (zero? (bigdec qty))))
+                 (.divide (bigdec line_total) (bigdec qty) 2 java.math.RoundingMode/HALF_UP)
+
+                 (some? line_total) (bigdec line_total)
+                 :else nil)]
+    (when amount
+      (str (.setScale amount 2 java.math.RoundingMode/HALF_UP)
+        (when (seq (str currency))
+          (str " " currency))))))
+
+(defn- article-price-labels-by-id
+  [db all-ids]
+  (let [direct-rows (jdbc/execute!
+                      db
+                      (sql/format {:select [[:ei.article_id :entity_id]
+                                            :ei.unit_price
+                                            :ei.qty
+                                            :ei.line_total
+                                            [:e.currency :currency]]
+                                   :from [[:expense_items :ei]]
+                                   :left-join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                                   :where [:in :ei.article_id all-ids]})
+                      {:builder-fn rs/as-unqualified-lower-maps})
+        alias-rows (jdbc/execute!
+                     db
+                     (sql/format {:select [[:aa.article_id :entity_id]
+                                           :ei.unit_price
+                                           :ei.qty
+                                           :ei.line_total
+                                           [:e.currency :currency]]
+                                  :from [[:article_aliases :aa]]
+                                  :join [[:expense_items :ei] [:= :ei.alias_id :aa.id]]
+                                  :left-join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                                  :where [:in :aa.article_id all-ids]})
+                     {:builder-fn rs/as-unqualified-lower-maps})]
+    (reduce
+      (fn [acc {:keys [entity_id] :as row}]
+        (if-let [label (derive-price-label row)]
+          (update acc entity_id (fnil conj []) label)
+          acc))
+      {}
+      (concat direct-rows alias-rows))))
+
+(defn- store-supplier-names-by-id
+  [db all-ids]
+  (->> (jdbc/execute!
+         db
+         (sql/format {:select [[:st.id :entity_id]
+                               [:s.display_name :supplier_display_name]]
+                      :from [[:stores :st]]
+                      :join [[:suppliers :s] [:= :s.id :st.supplier_id]]
+                      :where [:in :st.id all-ids]})
+         {:builder-fn rs/as-unqualified-lower-maps})
+    (reduce (fn [acc {:keys [entity_id supplier_display_name]}]
+              (assoc acc entity_id {:supplier-display-name supplier_display_name}))
+      {})))
+
+(defn- contextual-info-by-id
+  [db entity-type all-ids]
+  (case entity-type
+    :articles
+    (->> (article-price-labels-by-id db all-ids)
+      (reduce-kv (fn [acc entity-id labels]
+                   (assoc acc entity-id {:price-labels (->> labels distinct sort vec)}))
+        {}))
+
+    :stores
+    (store-supplier-names-by-id db all-ids)
+
+    {}))
+
 (defn enrich-with-usage-counts
   "For each member in each cluster, sum FK reference counts across referencing tables.
 
-  Adds :usage-count to each member map."
+  Adds :usage-count and any entity-specific display context to each member map."
   [db entity-type clusters]
   (let [config (get-entity-config! entity-type)
         fk-tables (:fk-tables config)
@@ -336,32 +413,37 @@
                   (map :id)
                   distinct
                   vec)]
-    (if (or (empty? all-ids) (empty? fk-tables))
+    (if (empty? all-ids)
       clusters
-      (let [;; For each FK table, count references per entity ID
-            counts-by-id
-            (reduce
-              (fn [acc [fk-table {:keys [col]}]]
-                (let [rows (jdbc/execute!
-                             db
-                             (sql/format {:select [[col :entity_id]
-                                                   [[:count :*] :cnt]]
-                                          :from [(keyword (name fk-table))]
-                                          :where [:in col all-ids]
-                                          :group-by [col]})
-                             {:builder-fn rs/as-unqualified-lower-maps})]
-                  (reduce
-                    (fn [a {:keys [entity_id cnt]}]
-                      (update a entity_id (fnil + 0) cnt))
-                    acc
-                    rows)))
+      (let [counts-by-id
+            (if (empty? fk-tables)
               {}
-              fk-tables)]
+              (reduce
+                (fn [acc [fk-table {:keys [col]}]]
+                  (let [rows (jdbc/execute!
+                               db
+                               (sql/format {:select [[col :entity_id]
+                                                     [[:count :*] :cnt]]
+                                            :from [(keyword (name fk-table))]
+                                            :where [:in col all-ids]
+                                            :group-by [col]})
+                               {:builder-fn rs/as-unqualified-lower-maps})]
+                    (reduce
+                      (fn [a {:keys [entity_id cnt]}]
+                        (update a entity_id (fnil + 0) cnt))
+                      acc
+                      rows)))
+                {}
+                fk-tables))
+            context-by-id (contextual-info-by-id db entity-type all-ids)]
         (mapv
           (fn [cluster]
             (update cluster :members
               (fn [members]
-                (mapv #(assoc % :usage-count (get counts-by-id (:id %) 0))
+                (mapv (fn [member]
+                        (merge member
+                          {:usage-count (get counts-by-id (:id member) 0)}
+                          (get context-by-id (:id member) {})))
                   members))))
           clusters)))))
 

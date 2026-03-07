@@ -54,7 +54,46 @@
 ;; Cluster Card
 ;; ============================================================================
 
-(defui cluster-member [{:keys [member cluster-idx is-primary? is-secondary? on-select-primary on-toggle-secondary]}]
+(defn- context-column-label
+  [entity-type]
+  (case entity-type
+    "articles" "Prices"
+    "stores" "Supplier"
+    "Normalized Key"))
+
+(defn- article-price-labels
+  [member]
+  (or (:price-labels member)
+    (:price_labels member)
+    []))
+
+(defn- store-supplier-label
+  [member]
+  (or (:supplier-display-name member)
+    (:supplier_display_name member)
+    "—"))
+
+(defui candidate-context-cell [{:keys [entity-type member normalized-key]}]
+  (case entity-type
+    "articles"
+    (let [prices (seq (article-price-labels member))]
+      ($ :td {:class "p-2"}
+        (if prices
+          ($ :div {:class "flex flex-wrap gap-1"}
+            (for [label prices]
+              ($ :span {:key label
+                        :class "ds-badge ds-badge-sm ds-badge-outline font-mono"}
+                label)))
+          ($ :span {:class "text-base-content/40"} "—"))))
+
+    "stores"
+    ($ :td {:class "p-2 text-sm text-base-content/70"}
+      (store-supplier-label member))
+
+    ($ :td {:class "p-2 text-base-content/60 text-sm font-mono"}
+      normalized-key)))
+
+(defui cluster-member [{:keys [member cluster-idx entity-type is-primary? is-secondary? on-select-primary on-toggle-secondary]}]
   (let [member-id (or (:id member) (str (:id member)))
         display-name (or (:display-name member)
                        (:canonical-name member)
@@ -83,7 +122,9 @@
                      :checked (boolean is-secondary?)
                      :on-change (fn [_] (on-toggle-secondary member-id))})))
       ($ :td {:class "p-2 font-medium"} display-name)
-      ($ :td {:class "p-2 text-base-content/60 text-sm font-mono"} normalized-key)
+      ($ candidate-context-cell {:entity-type entity-type
+                                 :member member
+                                 :normalized-key normalized-key})
       ($ :td {:class "p-2 text-center"}
         ($ :span {:class "ds-badge ds-badge-sm ds-badge-ghost"} (str usage-count))))))
 
@@ -152,7 +193,7 @@
                 ($ :th {:class "p-2 w-16"} "Primary")
                 ($ :th {:class "p-2 w-16"} "Merge")
                 ($ :th {:class "p-2"} "Name")
-                ($ :th {:class "p-2"} "Normalized Key")
+                ($ :th {:class "p-2"} (context-column-label entity-type))
                 ($ :th {:class "p-2 text-center w-24"} "Usage")))
             ($ :tbody
               (for [[i member] (map-indexed vector members)]
@@ -161,6 +202,7 @@
                     {:key (str idx "-" i)
                      :member member
                      :cluster-idx idx
+                     :entity-type entity-type
                      :is-primary? (= primary-id mid)
                      :is-secondary? (contains? secondary-ids mid)
                      :on-select-primary on-select-primary

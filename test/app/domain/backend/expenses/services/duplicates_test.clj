@@ -81,6 +81,67 @@
           (is (pos? count-b))
           (is (> count-a count-b)))))))
 
+(deftest enrich-with-usage-counts-adds-article-price-labels-test
+  (testing "article candidates include distinct sorted price labels from direct and alias-linked items"
+    (let [article-id (UUID/randomUUID)
+          clusters [{:members [{:id article-id}] :count 1}]]
+      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                    (let [sql-str (some-> (first sql-params) str clojure.string/lower-case)]
+                                      (cond
+                                        (and (string? sql-str)
+                                          (re-find #"count\(\*\)" sql-str))
+                                        []
+
+                                        (and (string? sql-str)
+                                          (re-find #"from expense_items" sql-str)
+                                          (re-find #"ei\.article_id" sql-str))
+                                        [{:entity_id article-id
+                                          :unit_price nil
+                                          :qty 2M
+                                          :line_total 10M
+                                          :currency "BAM"}]
+
+                                        (and (string? sql-str)
+                                          (re-find #"from article_aliases" sql-str)
+                                          (re-find #"ei\.alias_id" sql-str))
+                                        [{:entity_id article-id
+                                          :unit_price 4.50M
+                                          :qty 1M
+                                          :line_total 4.50M
+                                          :currency "EUR"}
+                                         {:entity_id article-id
+                                          :unit_price 4.50M
+                                          :qty 1M
+                                          :line_total 4.50M
+                                          :currency "EUR"}]
+
+                                        :else
+                                        [])))]
+        (let [enriched (duplicates/enrich-with-usage-counts :db :articles clusters)
+              member (-> enriched first :members first)]
+          (is (= ["4.50 EUR" "5.00 BAM"] (:price-labels member)))
+          (is (= 0 (:usage-count member))))))))
+
+(deftest enrich-with-usage-counts-adds-store-supplier-name-test
+  (testing "store candidates include supplier display name"
+    (let [store-id (UUID/randomUUID)
+          clusters [{:members [{:id store-id}] :count 1}]]
+      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                    (let [sql-str (some-> (first sql-params) str clojure.string/lower-case)]
+                                      (cond
+                                        (and (string? sql-str)
+                                          (re-find #"from stores" sql-str)
+                                          (re-find #"join suppliers" sql-str))
+                                        [{:entity_id store-id
+                                          :supplier_display_name "Acme Supplier"}]
+
+                                        :else
+                                        [])))]
+        (let [enriched (duplicates/enrich-with-usage-counts :db :stores clusters)
+              member (-> enriched first :members first)]
+          (is (= "Acme Supplier" (:supplier-display-name member)))
+          (is (= 0 (:usage-count member))))))))
+
 (deftest enrich-with-usage-counts-empty-clusters-test
   (testing "empty clusters pass through unchanged"
     (let [enriched (duplicates/enrich-with-usage-counts :db :suppliers [])]
