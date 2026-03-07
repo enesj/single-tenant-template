@@ -172,10 +172,11 @@
       (get-in request [:identity :role]))))
 
 (defn tenant-elevated?
-  "True when the user has owner or admin membership role in the current tenant."
+  "True when the user has member, admin, or owner membership role in the current tenant.
+   Members and above can see all tenant data (receipts, expenses)."
   [request]
   (let [role (get-user-role request)]
-    (contains? #{"admin" "owner"} role)))
+    (contains? #{"member" "admin" "owner"} role)))
 
 (def reference-data-read-roles
   #{"viewer" "member" "admin" "owner"})

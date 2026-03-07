@@ -138,6 +138,7 @@
       {:duplicate? true :receipt existing}
       (let [row (cond-> {:id (UUID/randomUUID)
                          :user_id user_id
+                         :created_by user_id
                          :payer_id payer_id
                          :storage_key storage_key
                          :file_hash hash

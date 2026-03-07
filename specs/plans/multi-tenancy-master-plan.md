@@ -202,7 +202,7 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - **Was**: reading `[:session :auth-session :user :role]` (global user role from `users` table)
   - **Now**: reads `[:session :auth-session :membership :role]` first (tenant membership role), falls back to user role for backward compatibility
   - Single fix cascades to all 60+ `ensure-role` call sites
-  - Added `tenant-elevated?` helper for admin/owner branching in receipt handlers
+  - Added `tenant-elevated?` helper for member/admin/owner branching in receipt and expense handlers
   - **File**: `handlers/user_expenses/helpers.clj`
 - [x] **3.2** Add missing role check to export handler
   - `export-expenses-handler` had no `ensure-role` — any authenticated user bypassed role enforcement
@@ -224,8 +224,8 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - **Files**: `handlers/user_stores.clj`, `handlers/user_categories.clj`, `handlers/user_subcategories.clj`, `handlers/user_articles.clj`, `handlers/user_manufacturers.clj`
 - [x] **3.6** Fix receipt handler admin-role branching
   - 10 occurrences of `(= "admin" role)` replaced with `(h/tenant-elevated? request)`
-  - owner/admin see all receipts within their tenant (tenant-scoped, not global)
-  - member/viewer see only their own receipts
+  - owner/admin/member see all receipts and expenses within their tenant (tenant-scoped, not global)
+  - viewer sees only their own receipts and expenses
   - Removed unused `role` local bindings from all receipt handlers
   - **File**: `handlers/user_receipts.clj`
 - [x] **3.7** Unit tests for role enforcement

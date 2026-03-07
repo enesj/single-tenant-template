@@ -27,8 +27,9 @@
                                 :offset (or (some-> (h/get-param params :offset) parse-long) 0)}
                          order-by (assoc :order-by order-by)
                          order-dir (assoc :order-dir order-dir))
-                  expenses (user-expenses/list-user-expenses db tenant-id user-id opts)
-                  total (user-expenses/count-user-expenses db tenant-id user-id opts)]
+                  uid (when-not (h/tenant-elevated? request) user-id)
+                  expenses (user-expenses/list-user-expenses db tenant-id uid opts)
+                  total (user-expenses/count-user-expenses db tenant-id uid opts)]
               (h/json-response {:data expenses
                                 :total total
                                 :limit (:limit opts)
@@ -54,9 +55,11 @@
                            (h/try-parse-uuid (get-in request [:parameters :path :id])))]
           (if expense-id
             (try
-              (if-let [expense (user-expenses/get-user-expense-with-items db tenant-id user-id expense-id)]
-                (h/json-response {:data expense})
-                (h/not-found-response "Expense not found"))
+              (let [uid (when-not (h/tenant-elevated? request) user-id)
+                    expense (user-expenses/get-user-expense-with-items db tenant-id uid expense-id)]
+                (if expense
+                  (h/json-response {:data expense})
+                  (h/not-found-response "Expense not found")))
               (catch Exception e
                 (log/error e "Error getting user expense" {:expense-id expense-id})
                 (h/json-response {:error "Failed to get expense"} 500)))

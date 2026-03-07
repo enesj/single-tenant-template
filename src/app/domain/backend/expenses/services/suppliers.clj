@@ -18,11 +18,11 @@
 
 (defn list-suppliers
   [db opts]
-  (repo/list-suppliers db opts))
+  ((:list service) db opts))
 
 (defn count-suppliers
   [db opts]
-  (repo/count-suppliers db opts))
+  ((:count service) db opts))
 
 (defn delete-supplier!
   [db supplier-id]

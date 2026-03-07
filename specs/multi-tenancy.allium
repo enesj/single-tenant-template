@@ -75,7 +75,8 @@ entity TenantMembership {
     can_write_receipts: role in {owner, admin, member}
     can_write_reference_data: role in {owner, admin}
     can_read: role in {owner, admin, member, viewer}
-    can_see_all_receipts: role in {owner, admin}
+    can_see_all_receipts: role in {owner, admin, member}
+    can_see_all_expenses: role in {owner, admin, member}
 }
 
 entity TenantInvitation {
@@ -277,13 +278,16 @@ rule TenantDataIsolation {
             resource.tenant = tenant
 }
 
-rule GlobalCatalogShared {
-    -- Suppliers are visible across all tenants
+rule GlobalCatalogTenantFiltered {
+    -- Suppliers and stores are global tables but user-facing lists are
+    -- filtered to those relevant to the current tenant.  The bridge is:
+    --   receipts (tenant-scoped) → supplier_aliases / store_aliases → suppliers / stores
+    -- with a secondary union through expenses for manual entries.
     when: UserAccessesCatalog(user, tenant, resource_type)
 
-    requires: resource_type = supplier
+    requires: resource_type in {supplier, store}
 
-    ensures: AllSuppliersVisible()
+    ensures: OnlyTenantRelevantRowsVisible(tenant)
 }
 
 ------------------------------------------------------------
@@ -662,7 +666,10 @@ surface ExpenseManagement {
     let membership = TenantMembership{user: member, tenant: tenant}
 
     exposes:
-        tenant.expenses
+        if membership.can_see_all_expenses:
+            tenant.expenses
+        else:
+            tenant.expenses where user = member
         tenant.expense_categories
 
     provides:
@@ -672,6 +679,10 @@ surface ExpenseManagement {
             when membership.can_write_expenses
         UserPerformsAction(member, tenant, delete, expense)
             when membership.is_elevated
+
+    guidance:
+        -- Owner/admin/member see all tenant expenses; viewer sees only own
+        -- Write operations (update/delete) still enforce ownership for member role
 }
 
 surface ReceiptManagement {
@@ -692,8 +703,8 @@ surface ReceiptManagement {
             when membership.can_write_receipts
 
     guidance:
-        -- Owner/admin see all tenant receipts
-        -- Member/viewer see only own receipts
+        -- Owner/admin/member see all tenant receipts
+        -- Viewer sees only own receipts
 }
 
 surface Settings {

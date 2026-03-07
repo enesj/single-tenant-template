@@ -207,6 +207,7 @@
     (update-if-present :supplier_id #(parse-uuid! :supplier_id %))
     (update-if-present :payer_id #(parse-uuid! :payer_id %))
     (update-if-present :user_id #(parse-uuid! :user_id %))
+    (update-if-present :created_by #(parse-uuid! :created_by %))
     (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
     (update-if-present :store_id #(parse-uuid! :store_id %))
     (update-if-present :expense_category_id #(parse-uuid! :expense_category_id %))
@@ -333,12 +334,14 @@
                         [:s.normalized_key :supplier_normalized_key]
                         [:p.label :payer_label]
                         [:pt.label :payer_type]
-                        [:ec.name :expense_category_name]]
+                        [:ec.name :expense_category_name]
+                        [[:coalesce :cb.full_name :cb.email] :created_by_name]]
                :from [[:expenses :e]]
                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                            [:payers :p] [:= :p.id :e.payer_id]
                            [:payer_types :pt] [:= :pt.id :p.payer_type_id]
-                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]
+                           [:users :cb] [:= :cb.id :e.created_by]]
                :where base-where
                :order-by [[:e.purchased_at order-dir]]
                :limit limit
@@ -408,6 +411,7 @@
                                          :payer_id
                                          :expense_category_id
                                          :user_id
+                                         :created_by
                                          :receipt_id
                                          :purchased_at
                                          :total_amount

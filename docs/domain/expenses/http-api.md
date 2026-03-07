@@ -135,8 +135,11 @@ All user report endpoints require an authenticated user with an expenses-read ro
 - `GET /api/v1/expenses/export` – export user expenses (currently `format=csv` supported).
 - `DELETE /api/v1/expenses/all` – hard-delete all user expenses (**admin/owner only**; requires confirmation token `DELETE_ALL_EXPENSES`).
 
-### Reference Data (shared catalog)
-- `GET /api/v1/expenses/suppliers` – list suppliers.
+### Reference Data (shared catalog, tenant-filtered)
+
+Suppliers and stores are global tables but user-facing list endpoints filter to rows relevant to the current tenant via `receipts → supplier_aliases/store_aliases` bridge (with secondary union through `expenses`). Admin API sees all.
+
+- `GET /api/v1/expenses/suppliers` – list suppliers (tenant-filtered via receipts/expenses bridge).
 - `POST /api/v1/expenses/suppliers` – create supplier (role-gated to `member|admin`).
 - `GET /api/v1/expenses/suppliers/:id` – fetch supplier.
 - `PUT /api/v1/expenses/suppliers/:id` – update supplier (role-gated to `member|admin`).
@@ -164,6 +167,7 @@ All user report endpoints require an authenticated user with an expenses-read ro
 ### Receipts
 - `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
 - `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit`, `offset`, `order-by`, `order-dir`).
+  - **Visibility**: member/admin/owner see all tenant receipts; viewer sees only own.
   - `status` accepts a single value or multiple values (comma-separated or repeated params).
   - Response includes pagination metadata: `{:data [...], :total n, :limit n, :offset n}`.
   - Each receipt row includes `payer_id` so callers see upload-selected payer without fetching detail again.
@@ -183,7 +187,10 @@ All user report endpoints require an authenticated user with an expenses-read ro
 - `POST /api/v1/expenses/articles/:id/aliases` – batch create aliases (supplier/raw labels) for an article.
 
 ### CRUD Operations
-- `GET /api/v1/expenses` – List user expenses (pagination, `order-by`, `order-dir`).
+
+**Visibility**: member/admin/owner see all tenant expenses; viewer sees only own. Write operations (update/delete) still enforce ownership for member role.
+
+- `GET /api/v1/expenses` – List expenses (pagination, `order-by`, `order-dir`).
 - `POST /api/v1/expenses` – Create new expense.
 - `GET /api/v1/expenses/:id` – Fetch specific expense.
 - `PUT /api/v1/expenses/:id` – Update expense.

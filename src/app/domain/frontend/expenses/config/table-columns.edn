@@ -1,12 +1,6 @@
 {:expense-items
  {:available-columns
-  ["expense_purchased_at"
-   "article_canonical_name"
-   "raw_label"
-   "qty"
-   "unit_price"
-   "line_total"
-   "created_at"],
+  ["expense_purchased_at" "article_canonical_name" "raw_label" "qty" "unit_price" "line_total" "created_at" "id" "tenant_id" "expense_id" "alias_id" "article_id" "updated_at"],
   :default-visible-columns
   ["expense_purchased_at"
    "article_canonical_name"
@@ -162,7 +156,7 @@
    :created_at {:label-key :common/created-at}}},
  :payer-types
  {:available-columns
-  ["label" "is_default" "created_at" "updated_at" "id"],
+  ["label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
@@ -175,22 +169,13 @@
    :id {:label-key :common/id}}},
  :expenses
  {:available-columns
-  ["purchased_at"
-   "supplier_display_name"
-   "store_display_name"
-   "expense_category_name"
-   "payer_label"
-   "currency"
-   "total_amount"
-   "notes"
-   "id"
-   "created_at"
-   "updated_at"],
+  ["purchased_at" "supplier_display_name" "store_display_name" "expense_category_name" "payer_label" "currency" "total_amount" "notes" "id" "created_at" "updated_at" "created_by_name" "tenant_id" "user_id" "created_by" "receipt_id" "store_id" "supplier_id" "payer_id" "expense_category_id" "is_posted"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :store_display_name {:type "string", :label "Store"},
    :expense_category_name {:type "string", :label "Expense Category"},
-   :payer_label {:type "string", :label "Payer"}},
+   :payer_label {:type "string", :label "Payer"},
+   :created_by_name {:type "string", :label "Created By"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
@@ -232,7 +217,8 @@
    :notes {:label-key :common/notes},
    :purchased_at {:label-key :common/purchased-at},
    :total_amount {:label-key :common/total},
-   :created_at {:label-key :common/created-at}}},
+   :created_at {:label-key :common/created-at},
+   :created_by {:label-key :common/created-by}}},
  :manufacturers
  {:available-columns
   ["display_name" "normalized_key" "created_at" "updated_at" "id"],
@@ -262,12 +248,7 @@
    :id {:label-key :common/id}}},
  :payers
  {:available-columns
-  ["label"
-   "payer_type_id"
-   "is_default"
-   "created_at"
-   "updated_at"
-   "id"],
+  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id" "tenant_id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
@@ -330,30 +311,7 @@
    :id {:label-key :common/id}}},
  :receipts
  {:available-columns
-  ["original-filename"
-   "status"
-   "supplier-guess"
-   "created-at"
-   "updated-at"
-   "id"
-   "file-size"
-   "raw-extract-json"
-   "parsed-markdown"
-   "total-amount-guess"
-   "currency-guess"
-   "purchased-at-guess"
-   "error-message"
-   "error-details"
-   "retry-count"
-   "expense-id"
-   "user-id"
-   "payer-id"
-   "storage-key"
-   "file-hash"
-   "content-type"
-   "supplier-alias-id"
-   "store-guess"
-   "store-alias-id"],
+  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "created-by-name" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id" "created-by"],
   :default-visible-columns
   ["original-filename"
    "status"
@@ -373,7 +331,7 @@
    "created-at"
    "updated-at"],
   :always-visible ["original-filename" "status" "purchased-at-guess"],
-  :computed-fields {},
+  :computed-fields {:created-by-name {:type "string", :label "Created By"}},
   :column-config {},
   :column-metadata
   {:original-filename {:label-key :common/original-filename},
@@ -399,6 +357,7 @@
    :supplier-guess {:label-key :common/supplier-guess},
    :retry-count {:label-key :common/retry-count},
    :created-at {:label-key :common/created-at},
+   :created-by {:label-key :common/created-by},
    :parsed-markdown {:label-key :common/parsed-markdown}}},
  :stores
  {:available-columns
@@ -435,15 +394,7 @@
    :id {:label-key :common/id}}},
  :article-aliases
  {:available-columns
-  ["supplier_display_name"
-   "article_canonical_name"
-   "raw_label"
-   "raw_label_normalized"
-   "confidence"
-   "created_at"
-   "supplier_id"
-   "article_id"
-   "id"],
+  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
   :default-visible-columns
   ["supplier_display_name" "raw_label" "article_canonical_name"],
   :filterable-columns
@@ -526,7 +477,7 @@
    :store_id {:label-key :common/store},
    :created_at {:label-key :common/created-at}}},
  :expense-categories
- {:available-columns ["name" "created_at" "updated_at" "id"],
+ {:available-columns ["name" "created_at" "updated_at" "id" "tenant_id"],
   :default-visible-columns ["name" "created_at"],
   :filterable-columns ["name" "created_at"],
   :sortable-columns ["name" "created_at" "updated_at"],

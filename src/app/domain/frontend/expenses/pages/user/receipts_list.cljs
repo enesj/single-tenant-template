@@ -40,6 +40,9 @@
             {:id :total-display
              :label (t :common/total)
              :type :text}
+            {:id :created-by-name
+             :label (t :common/created-by)
+             :type :text}
             {:id :created-at
              :label (t :common/created-at)
              :type :datetime}

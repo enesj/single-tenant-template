@@ -1,17 +1,6 @@
 {:expense-items
  {:available-columns
-  ["expense_purchased_at"
-   "article_canonical_name"
-   "raw_label"
-
-   "alias_id"
-   "qty"
-   "unit_price"
-   "line_total"
-   "article_id"
-   "created_at"
-   "expense_id"
-   "id"],
+  ["expense_purchased_at" "article_canonical_name" "raw_label" "alias_id" "qty" "unit_price" "line_total" "article_id" "created_at" "expense_id" "id" "tenant_id" "updated_at"],
   :default-visible-columns
   ["expense_purchased_at"
    "article_canonical_name"
@@ -137,14 +126,14 @@
   :column-config {}},
  :payer-types
  {:available-columns
-  ["label" "is_default" "created_at" "updated_at" "id"],
+  ["label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
   :always-visible ["label"]},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id"],
+  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id" "tenant_id" "created_by" "expense_category_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :payer_label {:type "string", :label "Payer"}},
@@ -184,7 +173,7 @@
   :always-visible ["display_name"]},
  :payers
  {:available-columns
-  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id"],
+  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id" "tenant_id"],
   :default-visible-columns ["label" "is_default"],
   :filterable-columns ["label" "is_default"],
   :sortable-columns ["label" "is_default"],
@@ -218,19 +207,7 @@
   :column-config {}},
  :audit-logs
  {:available-columns
-  ["action"
-   "entity-name"
-   "admin-email"
-   "admin-name"
-   "user-agent"
-   "id"
-   "actor-type"
-   "actor-id"
-   "target-type"
-   "target-id"
-   "metadata"
-   "ip"
-   "created-at"],
+  ["action" "entity-name" "admin-email" "admin-name" "user-agent" "id" "actor-type" "actor-id" "target-type" "target-id" "metadata" "ip" "created-at" "updated-at"],
   :default-visible-columns
   ["action" "entity-name" "admin-email" "admin-name"],
   :filterable-columns
@@ -259,7 +236,7 @@
    :admin-name {:width "140px"}}},
  :receipts
  {:available-columns
-  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id"],
+  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id" "created-by"],
   :default-visible-columns
   ["original-filename"
    "status"
@@ -283,14 +260,7 @@
   :column-config {}},
  :login-events
  {:available-columns
-  ["created-at"
-   "principal-type"
-   "success"
-   "reason"
-   "user-agent"
-   "id"
-   "principal-id"
-   "ip"],
+  ["created-at" "principal-type" "success" "reason" "user-agent" "id" "principal-id" "ip" "updated-at"],
   :default-visible-columns
   ["created-at" "principal-type" "success" "reason"],
   :filterable-columns
@@ -307,15 +277,7 @@
    :user-agent {:width "260px"}}},
  :article-aliases
  {:available-columns
-  ["supplier_display_name"
-   "article_canonical_name"
-   "raw_label"
-   "raw_label_normalized"
-   "confidence"
-   "created_at"
-   "supplier_id"
-   "article_id"
-   "id"],
+  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
   :default-visible-columns
   ["supplier_display_name"
    "article_canonical_name"
@@ -498,7 +460,7 @@
   :removed-fields {:available-columns ["preferred-name"]}}
 
  :backlog
- {:available-columns ["number" "description" "status" "type" "priority"],
+ {:available-columns ["number" "description" "status" "type" "priority" "created_at" "updated_at"],
   :default-visible-columns ["number" "description" "status" "type" "priority"],
   :filterable-columns ["number" "description" "status" "type" "priority"],
   :sortable-columns ["number" "status" "type" "priority"],

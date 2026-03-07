@@ -38,6 +38,7 @@ entity TenantMembership {
     has_full_tenant_access: role in {owner, admin}
     can_write_expenses: role in {owner, admin, member}
     can_read_expenses: role in {owner, admin, member, viewer}
+    can_see_all_tenant_data: role in {owner, admin, member}  -- member+ sees all receipts/expenses
     can_read_geo: role in {owner, admin}
 }
 
@@ -410,7 +411,8 @@ config {
 
 -- TENANT ISOLATION GUARANTEE
 -- For tenant-scoped resources: all queries MUST filter by tenant_id = session.active_tenant.id.
--- For global catalog: queries return shared rows (no tenant filtering).
+-- For global catalog (suppliers, stores): user-facing lists filter via receipts/expenses bridge
+--   so each tenant sees only its own relevant rows.  Admin API sees all.
 -- Enforcement is at the middleware/service layer (not RLS) for now.
 
 -- == Tenant-scoped grant rules ==
@@ -498,9 +500,12 @@ rule AllowGlobalCatalogReadForAllTenantMembers {
     ensures: TenantDataGranted(request: request, scope: global)
 
     guidance:
-        Global catalog returns shared rows (no tenant_id filtering).
-        All tenant users can browse suppliers, stores, articles, etc.
-        for use in expense creation and OCR review.
+        Global catalog tables have no tenant_id column, but user-facing list
+        endpoints filter suppliers and stores to those relevant to the current
+        tenant.  The bridge is:
+            receipts (tenant-scoped) → supplier_aliases / store_aliases → suppliers / stores
+        with a secondary union through expenses for manual entries.
+        Articles, categories, subcategories, and manufacturers remain unfiltered.
 }
 
 rule AllowGlobalCatalogCreateForMembersAndAbove {

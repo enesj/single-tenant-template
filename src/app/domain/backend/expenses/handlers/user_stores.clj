@@ -80,11 +80,16 @@
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
                 extra-filters (when tenant-id
-                                [[:in :st/id {:select-distinct [:store_id]
-                                              :from [:expenses]
-                                              :where [:and
-                                                      [:= :tenant_id tenant-id]
-                                                      [:is-not :store_id nil]]}]])
+                                [[:or
+                                  [:in :st/id {:select-distinct [:sta/store_id]
+                                               :from [[:receipts :r]]
+                                               :join [[:store_aliases :sta] [:= :sta/id :r/store_alias_id]]
+                                               :where [:and [:= :r/tenant_id tenant-id]
+                                                       [:is-not :r/store_alias_id nil]]}]
+                                  [:in :st/id {:select-distinct [:store_id]
+                                               :from [:expenses]
+                                               :where [:and [:= :tenant_id tenant-id]
+                                                       [:is-not :store_id nil]]}]]])
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}

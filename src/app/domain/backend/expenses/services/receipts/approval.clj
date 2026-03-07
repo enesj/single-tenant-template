@@ -105,7 +105,8 @@
    store_id is resolved automatically from the receipt's store_alias_id when
    not explicitly provided in review-data.
 
-   Reads tenant_id from the receipt row and includes it in the expense data."
+   Reads tenant_id from the receipt row and includes it in the expense data.
+   Sets created_by from the receipt's user_id (admin path has no acting user)."
   [db receipt-id review-data]
   (jdbc/with-transaction [tx db]
     (let [receipt (queries/get-receipt tx receipt-id)]
@@ -119,6 +120,7 @@
             store-id  (:store_id context)
             tenant-id (:tenant_id receipt)
             base      (cond-> {:receipt_id receipt-id
+                               :created_by (:user_id receipt)
                                :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
                         store-id  (assoc :store_id store-id)
                         tenant-id (assoc :tenant_id tenant-id))
@@ -158,6 +160,7 @@
             receipt-tid  (:tenant_id receipt)
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
+                                  :created_by user-id
                                   :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
                            store-id    (assoc :store_id store-id)
                            receipt-tid (assoc :tenant_id receipt-tid))
@@ -199,6 +202,7 @@
             receipt-tid  (:tenant_id receipt)
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
+                                  :created_by user-id
                                   :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
                            store-id    (assoc :store_id store-id)
                            receipt-tid (assoc :tenant_id receipt-tid))

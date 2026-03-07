@@ -102,27 +102,30 @@
   Receipts with refine_pending=true are excluded from the mismatch condition so
   the effective status stays as the raw DB status while Cerebras refinement is
   running. Once refinement completes the flag is cleared and the mismatch check
-  applies normally."
+  applies normally.
+
+  All column references are qualified with `receipts.` to avoid ambiguity when
+  the list queries JOIN the users table."
   []
   (let [lines-total-sql
         (str
           "(select sum("
           "nullif(replace(regexp_replace(coalesce(item->>'line_total', item->>'line-total',''), '[^0-9,.-]', '', 'g'), ',', '.'), '')::numeric"
-          ") from jsonb_array_elements(coalesce(raw_extract_json->'extraction'->'items','[]'::jsonb)) as item)")
+          ") from jsonb_array_elements(coalesce(receipts.raw_extract_json->'extraction'->'items','[]'::jsonb)) as item)")
 
         mismatch-sql
         (str
-          "status = 'extracted'::receipt_status"
-          " and total_amount_guess is not null"
+          "receipts.status = 'extracted'::receipt_status"
+          " and receipts.total_amount_guess is not null"
           " and " lines-total-sql " is not null"
-          " and abs((" lines-total-sql ") - total_amount_guess) > 0.01"
-          " and not coalesce((raw_extract_json->>'refine_pending')::boolean, false)")
+          " and abs((" lines-total-sql ") - receipts.total_amount_guess) > 0.01"
+          " and not coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)")
 
         mismatch-clause [:raw mismatch-sql]
         not-mismatch-clause [:raw (str "not (" mismatch-sql ")")]
 
         effective-status-sql (str
-                               "case when (" mismatch-sql ") then 'review_required'::receipt_status else status end")]
+                               "case when (" mismatch-sql ") then 'review_required'::receipt_status else receipts.status end")]
     {:lines-total-sql lines-total-sql
      :mismatch-sql mismatch-sql
      :mismatch-clause mismatch-clause
@@ -130,22 +133,23 @@
      :effective-status-sql effective-status-sql}))
 
 (defn- build-status-clause
-  "Build WHERE clause for status filtering."
+  "Build WHERE clause for status filtering.
+  Column references are qualified with `receipts.` for JOIN safety."
   [status {:keys [mismatch-clause not-mismatch-clause]}]
   (cond
     (string? status)
     (case status
       "review_required" [:or
-                         [:= :status (storage/receipt-status-cast "review_required")]
+                         [:= :receipts.status (storage/receipt-status-cast "review_required")]
                          mismatch-clause]
       "extracted" [:and
-                   [:= :status (storage/receipt-status-cast "extracted")]
+                   [:= :receipts.status (storage/receipt-status-cast "extracted")]
                    not-mismatch-clause]
-      [:= :status (storage/receipt-status-cast status)])
+      [:= :receipts.status (storage/receipt-status-cast status)])
 
     (sequential? status)
     (let [sset (set status)
-          base [:in :status (mapv storage/receipt-status-cast status)]
+          base [:in :receipts.status (mapv storage/receipt-status-cast status)]
           want-review? (contains? sset "review_required")
           want-extracted? (contains? sset "extracted")]
       (cond
@@ -165,15 +169,17 @@
   - receipts owned by the user, or
   - receipts with no owner (`user_id` is nil).
 
-  When `tenant-id` is provided, scopes to that tenant."
+  When `tenant-id` is provided, scopes to that tenant.
+
+  Column references are qualified with `receipts.` for JOIN safety."
   [status user-id helpers & {:keys [tenant-id]}]
   (let [status-clause (build-status-clause status helpers)
         visibility-clause (when user-id
                             [:or
-                             [:= :user_id user-id]
-                             [:is :user_id nil]])
+                             [:= :receipts.user_id user-id]
+                             [:is :receipts.user_id nil]])
         tenant-clause (when tenant-id
-                        [:= :tenant_id tenant-id])
+                        [:= :receipts.tenant_id tenant-id])
         clauses (remove nil? [tenant-clause visibility-clause status-clause])]
     (case (count clauses)
       0 nil
@@ -210,18 +216,21 @@
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
-        query (cond-> {:select [:id
-                                :original_filename
+        query (cond-> {:select [:receipts.id
+                                :receipts.original_filename
                                 [[:raw effective-status-sql] :status]
-                                :supplier_guess
-                                :total_amount_guess
+                                :receipts.supplier_guess
+                                :receipts.total_amount_guess
                                 [[:raw lines-total-sql] :lines_total_amount_guess]
-                                :currency_guess
-                                :payer_id
-                                [[:raw "coalesce((raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
-                                :created_at
-                                :updated_at]
+                                :receipts.currency_guess
+                                :receipts.payer_id
+                                :receipts.created_by
+                                [[:coalesce :cb.full_name :cb.email] :created_by_name]
+                                [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
+                                :receipts.created_at
+                                :receipts.updated_at]
                        :from [:receipts]
+                       :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                        :order-by [[order-col order-dir]]
                        :limit limit
                        :offset offset}
@@ -250,18 +259,21 @@
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
-        query {:select [:id
-                        :original_filename
+        query {:select [:receipts.id
+                        :receipts.original_filename
                         [[:raw effective-status-sql] :status]
-                        :supplier_guess
-                        :total_amount_guess
+                        :receipts.supplier_guess
+                        :receipts.total_amount_guess
                         [[:raw lines-total-sql] :lines_total_amount_guess]
-                        :currency_guess
-                        :payer_id
-                        [[:raw "coalesce((raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
-                        :created_at
-                        :updated_at]
+                        :receipts.currency_guess
+                        :receipts.payer_id
+                        :receipts.created_by
+                        [[:coalesce :cb.full_name :cb.email] :created_by_name]
+                        [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
+                        :receipts.created_at
+                        :receipts.updated_at]
                :from [:receipts]
+               :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                :where where-clause
                :order-by [[order-col order-dir]]
                :limit limit

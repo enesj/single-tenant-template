@@ -56,9 +56,16 @@
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)
                 extra-filters (when tenant-id
-                                [[:in :id {:select-distinct [:supplier_id]
-                                           :from [:expenses]
-                                           :where [:= :tenant_id tenant-id]}]])
+                                [[:or
+                                  [:in :id {:select-distinct [:sa/supplier_id]
+                                            :from [[:receipts :r]]
+                                            :join [[:supplier_aliases :sa] [:= :sa/id :r/supplier_alias_id]]
+                                            :where [:and [:= :r/tenant_id tenant-id]
+                                                    [:is-not :r/supplier_alias_id nil]]}]
+                                  [:in :id {:select-distinct [:supplier_id]
+                                            :from [:expenses]
+                                            :where [:and [:= :tenant_id tenant-id]
+                                                    [:is-not :supplier_id nil]]}]]])
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)

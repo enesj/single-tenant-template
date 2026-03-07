@@ -78,6 +78,7 @@ entity Receipt {
         else: status
 
     visible_to(actor): owner = actor or owner = null
+                       or actor.membership.role in {member, admin, owner}
 }
 
 external entity Expense {

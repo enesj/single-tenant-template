@@ -1,0 +1,8 @@
+({:action :add-column,
+  :field-name :created-by,
+  :model-name :expenses,
+  :options {:foreign-key :users/id, :on-delete :set-null, :type :uuid}}
+ {:action :add-column,
+  :field-name :created-by,
+  :model-name :receipts,
+  :options {:foreign-key :users/id, :on-delete :set-null, :type :uuid}})

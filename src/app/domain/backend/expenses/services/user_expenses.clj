@@ -35,7 +35,7 @@
     (when-not user-id
       (throw (ex-info "user-id is required" {:data expense-data})))
     (log/debug "Creating expense for user" {:user-id user-id :tenant-id tenant-id})
-    (admin-expenses/create-expense! db (cond-> (assoc expense-data :user_id user-id)
+    (admin-expenses/create-expense! db (cond-> (assoc expense-data :user_id user-id :created_by user-id)
                                          tenant-id (assoc :tenant_id tenant-id))
       items)))
 
@@ -171,16 +171,14 @@
            :errors errors})))))
 
 (defn get-user-expense-with-items
-  "Get a user's own expense with items. Returns nil if not found or not owned by user.
+  "Get an expense with items. When user-id is non-nil, restricts to that user's expenses.
    `tenant-id` scopes the query to a specific tenant."
   [db tenant-id user-id expense-id]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:expense-id expense-id})))
     (let [where (cond-> [:and
-                         [:= :e.id expense-id]
-                         [:= :e.user_id user-id]]
+                         [:= :e.id expense-id]]
+                  user-id (conj [:= :e.user_id user-id])
                   tenant-id (conj [:= :e.tenant_id tenant-id]))
           expense (jdbc/execute-one!
                     db
@@ -247,10 +245,8 @@
         order-by* (model-naming/ensure-app-keyword order-by)
         order-col (get allowed-user-expenses-order-by order-by* :e.purchased_at)
         order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {})))
-    (let [base-where (cond-> [:and
-                              [:= :e.user_id user-id]]
+    (let [base-where (cond-> [:and]
+                       user-id (conj [:= :e.user_id user-id])
                        tenant-id (conj [:= :e.tenant_id tenant-id])
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to])
@@ -279,14 +275,13 @@
 
 (defn count-user-expenses
   "Count total expenses for a specific user with optional filters.
+   When user-id is nil, counts all tenant expenses.
    `tenant-id` scopes the count to a specific tenant."
   [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?]}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {})))
-    (let [base-where (cond-> [:and
-                              [:= :user_id user-id]]
+    (let [base-where (cond-> [:and]
+                       user-id (conj [:= :user_id user-id])
                        tenant-id (conj [:= :tenant_id tenant-id])
                        from (conj [:>= :purchased_at from])
                        to (conj [:<= :purchased_at to])
@@ -304,21 +299,20 @@
 ;; ============================================================================
 
 (defn get-user-expense-summary
-  "Get summary statistics for a user's expenses.
+  "Get summary statistics for expenses.
+   When user-id is nil, aggregates all tenant expenses.
    Returns: {:total-expenses N :total-amount M :currency-totals {...} :recent-count N}
    `tenant-id` scopes the summary to a specific tenant."
   [db tenant-id user-id {:keys [days-back] :or {days-back 30}}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {})))
     (let [;; Total count of all expenses
           total-expenses (count-user-expenses db tenant-id user-id {})
 
           ;; Total amount by currency
           currency-where (cond-> [:and
-                                  [:= :user_id user-id]
                                   [:= :is_posted true]]
+                           user-id (conj [:= :user_id user-id])
                            tenant-id (conj [:= :tenant_id tenant-id]))
           currency-totals (jdbc/execute!
                             db
@@ -346,13 +340,11 @@
   [db tenant-id user-id {:keys [months-back] :or {months-back 6}}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {})))
     (let [where (cond-> [:and
-                         [:= :user_id user-id]
                          [:= :is_posted true]
                          [:>= :purchased_at
                           [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
+                  user-id (conj [:= :user_id user-id])
                   tenant-id (conj [:= :tenant_id tenant-id]))]
       (jdbc/execute!
         db
@@ -372,11 +364,9 @@
   [db tenant-id user-id {:keys [from to limit] :or {limit 10}}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {})))
     (let [base-where (cond-> [:and
-                              [:= :e.user_id user-id]
                               [:= :e.is_posted true]]
+                       user-id (conj [:= :e.user_id user-id])
                        tenant-id (conj [:= :e.tenant_id tenant-id])
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to]))]
