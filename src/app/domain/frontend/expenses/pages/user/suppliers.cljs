@@ -263,11 +263,6 @@
             {:entity-name entity-name
              :entity-spec entity-spec
              :title "Suppliers"
-             :form-display :modal
-             :disallowed-action-mode :disable
-             :allow-add? can-modify?
-             :allow-edit? can-modify?
-             :allow-delete? can-modify?
              :render-add-form render-add-form
              :render-edit-form render-edit-form
              :render-actions render-actions}))))))

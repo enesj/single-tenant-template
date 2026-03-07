@@ -1,9 +1,10 @@
 (ns app.shared.frontend-config.discovery
   "Config discovery and loading utilities.
 
-  Discovers admin and domain config bundles (entities, view-options,
-  form-fields, table-columns) and loads them as EDN."
+  Discovers admin, template-user, and domain config bundles (entities,
+  view-options, form-fields, table-columns) and loads them as EDN."
   (:require
+    [app.shared.frontend-config.template-user :as template-user]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]))
@@ -77,16 +78,18 @@
          vec)))))
 
 (defn config-bundles
-  "Discover admin + domain config bundles.
+  "Discover admin + template-user + domain config bundles.
 
   Options:
-  - :admin-root   (default src/app/admin/frontend/config)
-  - :domain-root  (default src/app/domain/frontend)
-  - :only         (domain allowlist)
-  - :skip         (domain denylist)"
+  - :admin-root          (default src/app/admin/frontend/config)
+  - :template-user-root  (default src/app/template/frontend/config)
+  - :domain-root         (default src/app/domain/frontend)
+  - :only                (domain allowlist)
+  - :skip                (domain denylist)"
   ([] (config-bundles {}))
-  ([{:keys [admin-root domain-root only skip]}]
+  ([{:keys [admin-root template-user-root domain-root only skip]}]
    (let [admin-root (or admin-root "src/app/admin/frontend/config")
+         template-user-root (or template-user-root template-user/root-dir)
          domain-root (or domain-root "src/app/domain/frontend")
          admin-paths (into {}
                        (for [[kind filename] standard-config-files
@@ -97,6 +100,15 @@
                         {:scope :admin
                          :domain nil
                          :paths admin-paths})
+         template-user-paths (into {}
+                               (for [[kind filename] standard-config-files
+                                     :let [path (str (io/file template-user-root filename))]
+                                     :when (file-exists? path)]
+                                 [kind path]))
+         template-user-bundle (when (seq template-user-paths)
+                                {:scope :domain
+                                 :domain "template"
+                                 :paths template-user-paths})
          domains (discover-domain-names domain-root {:only only :skip skip})
          domain-bundles (for [domain domains
                               :let [config-dir (str (io/file domain-root domain "config"))
@@ -109,7 +121,10 @@
                           {:scope :domain
                            :domain domain
                            :paths paths})]
-     (vec (concat (when admin-bundle [admin-bundle]) domain-bundles)))))
+     (vec (concat
+            (when admin-bundle [admin-bundle])
+            (when template-user-bundle [template-user-bundle])
+            domain-bundles)))))
 
 (defn load-bundles
   [bundles]

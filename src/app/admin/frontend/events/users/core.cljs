@@ -3,6 +3,7 @@
   (:require
     [app.admin.frontend.events.users.utils :as utils]
     [app.admin.frontend.utils.http :as admin-http]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.utils.state :as state-utils]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.state.normalize :as normalize]
@@ -33,7 +34,7 @@
                                               (when (and (number? n) (not (js/isNaN n)) (>= n 0))
                                                 (long n)))
                                 :else nil))
-          template-per-page (paths/resolved-list-per-page db entity-key 25)
+          template-per-page (paths/resolved-list-per-page db entity-key pagination/default-page-size)
           template-page (paths/resolved-list-current-page db entity-key)
           limit (or (parse-pos-int (:limit params*))
                   (parse-pos-int (:limit pagination*))
@@ -51,9 +52,12 @@
           param-filters (if (map? (:filters params*))
                           (:filters params*)
                           {})
+          sort-params (merge (paths/resolved-list-sort-query-params db entity-key)
+                        (select-keys params* [:order-by :order-dir]))
           request-params (-> (merge ui-filters
                                param-filters
-                               (dissoc params* :filters :pagination :page :per-page :current-page))
+                               sort-params
+                               (dissoc params* :filters :pagination :page :per-page :current-page :order-by :order-dir))
                            (assoc :limit limit
                              :offset offset))]
       (utils/log-user-operation "Loading users with params" request-params)

@@ -83,6 +83,34 @@
         (vo-helpers/apply-column-visibility-setting
           db [:admin :settings :view-options entity-kw] column-kw kind value)))))
 
+(rf/reg-event-db
+  :app.admin.frontend.events.settings/set-list-config-setting-draft
+  (fn [db [_ entity-name setting-key raw-value]]
+    (let [entity-kw (utils/normalize-kw entity-name)
+          setting-kw (utils/normalize-kw setting-key)
+          value (utils/normalize-kw raw-value)]
+      (if (or (nil? entity-kw) (nil? setting-kw))
+        db
+        (if (nil? value)
+          (update-in db [:admin :settings :view-options entity-kw :list-config] dissoc setting-kw)
+          (assoc-in db [:admin :settings :view-options entity-kw :list-config setting-kw] value))))))
+
+(rf/reg-event-db
+  :app.admin.frontend.events.settings/set-action-gate-draft
+  (fn [db [_ entity-name action-key raw-gate-id]]
+    (let [entity-kw (utils/normalize-kw entity-name)
+          action-kw (utils/normalize-kw action-key)
+          gate-id (utils/normalize-kw raw-gate-id)]
+      (if (or (nil? entity-kw) (nil? action-kw))
+        db
+        (if (nil? gate-id)
+          (let [db' (update-in db [:admin :settings :view-options entity-kw :list-config :action-gates] dissoc action-kw)
+                gates (get-in db' [:admin :settings :view-options entity-kw :list-config :action-gates] {})]
+            (if (seq gates)
+              db'
+              (update-in db' [:admin :settings :view-options entity-kw :list-config] dissoc :action-gates)))
+          (assoc-in db [:admin :settings :view-options entity-kw :list-config :action-gates action-kw] gate-id))))))
+
 ;; =============================================================================
 ;; Bulk helpers: apply tristate to many display settings / columns
 ;; =============================================================================

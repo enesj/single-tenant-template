@@ -80,11 +80,6 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Articles"
-           :form-display :modal
-           :allow-add? false
-           :allow-edit? true
-           :allow-delete? true
-           :disallowed-action-mode :hide
            :render-actions render-article-row-actions})
 
         ($ related-records-wizard/article-related-records-wizard)))))

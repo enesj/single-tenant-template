@@ -2,6 +2,7 @@
   (:require
     [app.domain.backend.registry :as domain-registry]
     [app.shared.frontend-config.io :as frontend-config-io]
+    [app.shared.frontend-config.template-user :as template-user]
     [app.shared.specs.entities :as entities-spec]
     [app.shared.specs.form-fields :as form-fields-spec]
     [app.shared.specs.table-columns :as table-columns-spec]
@@ -47,33 +48,34 @@
        :log-message "Failed to read domain UI config EDN"
        :log-context {:scope :domain-ui-config}})))
 
+(defn- load-config-path-map
+  [paths]
+  (into {}
+    (map (fn [[k path]]
+           [k (safe-read-edn-file k path)]))
+    (or paths {})))
+
 (defn- load-domain-ui-config
-  "Load UI config from all enabled domains.
-   
-   Returns a map like:
-   {:expenses {:entities {...} :view-options {...} :form-fields {...} :table-columns {...}}
-    :other-domain {...}}
-   
-   For backwards compatibility when only one domain is enabled,
-   also merges into a flat structure."
+  "Load user-facing UI config from template defaults plus all enabled domains.
+
+   Single-domain mode returns a flat merged structure for backwards compatibility:
+   template-user defaults < primary domain defaults.
+
+   Multi-domain mode keeps the existing nested domain shape and exposes the template
+   bundle under :template."
   []
-  (let [all-paths (domain-registry/get-ui-config-paths)]
+  (let [template-config (load-config-path-map template-user/paths)
+        all-paths (domain-registry/get-ui-config-paths)]
     (if (= 1 (count all-paths))
-      ;; Single domain - return flat structure for backwards compatibility
-      (let [paths (domain-registry/primary-user-ui-config-paths)]
+      (merge template-config
+        (load-config-path-map (domain-registry/primary-user-ui-config-paths)))
+      (assoc
         (into {}
-          (map (fn [[k path]]
-                 [k (safe-read-edn-file k path)]))
-          paths))
-      ;; Multiple domains - return nested structure
-      (into {}
-        (map (fn [[domain-id paths]]
-               [domain-id
-                (into {}
-                  (map (fn [[k path]]
-                         [k (safe-read-edn-file k path)]))
-                  paths)]))
-        all-paths))))
+          (map (fn [[domain-id paths]]
+                 [domain-id (load-config-path-map paths)]))
+          all-paths)
+        :template
+        template-config))))
 
 (defn- compile-schema
   "A custom schema compiler that ignores the second argument (options)

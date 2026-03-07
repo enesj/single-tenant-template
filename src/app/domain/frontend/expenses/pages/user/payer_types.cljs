@@ -1,7 +1,6 @@
  (ns app.domain.frontend.expenses.pages.user.payer-types
    "Admin/Owner-only Payer Types list."
    (:require
-     [app.domain.frontend.expenses.authz :as authz]
      [app.domain.frontend.expenses.components.page-guard :refer [power-user-guard]]
      [app.domain.frontend.expenses.components.user-reference-forms :refer [user-payer-type-add-form-modal user-payer-type-edit-form-modal]]
      [app.template.frontend.components.button :refer [button]]
@@ -18,8 +17,6 @@
 
 (defui payer-types-page []
   (let [t (use-t)
-        role (use-subscribe [:expenses/user-role])
-        can-modify? (authz/power-user? role)
         entity-name :payer-types
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
@@ -111,11 +108,6 @@
                {:entity-name entity-name
                 :entity-spec entity-spec
                 :title (t :payer-types/title)
-                :form-display :modal
-                :disallowed-action-mode :disable
-                :allow-add? can-modify?
-                :allow-edit? can-modify?
-                :allow-delete? can-modify?
                 :render-add-form render-add-form
                 :render-edit-form render-edit-form
                 :render-actions render-actions})))}))))

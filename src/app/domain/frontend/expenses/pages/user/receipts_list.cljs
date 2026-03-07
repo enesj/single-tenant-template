@@ -186,17 +186,7 @@
                          (fn [e]
                            (.preventDefault e)
                            (rf/dispatch [:user-expenses/post-selected (vec selected-receipt-ids)]))
-                         [selected-receipt-ids])
-        display-settings {:show-select? can-ocr?
-                          :show-edit? false
-                          :show-delete? false
-                          :show-filtering? true
-                          :show-pagination? true
-
-                          :show-highlights? true
-                          :show-add-button? can-ocr?
-                          :show-batch-edit? false
-                          :show-batch-delete? false}]
+                         [selected-receipt-ids])]
 
     ;; Initial load
     (use-effect
@@ -307,7 +297,6 @@
                 {:entity-name :receipts
                  :entity-spec (receipts-entity-spec t)
                  :title title
-                 :display-settings display-settings
                  :custom-actions (fn [receipt]
                                    (receipt-actions t can-ocr? receipt))
                  :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])})))))

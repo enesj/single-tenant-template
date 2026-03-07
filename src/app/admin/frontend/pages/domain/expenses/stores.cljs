@@ -96,11 +96,6 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Stores"
-           :form-display :modal
-           :allow-add? false
-           :allow-edit? true
-           :allow-delete? true
-           :disallowed-action-mode :hide
            :render-actions render-store-row-actions})
 
         ($ rr-wizard/related-records-wizard

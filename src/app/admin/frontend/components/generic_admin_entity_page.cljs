@@ -29,12 +29,9 @@
   "Generic configuration-driven admin entity page"
   [entity-key]
   (let [actual-entity-key (extract-entity-key entity-key)
-        ;; Page-level overrides (optional). This is the recommended way to pass
-        ;; functions (e.g. custom modal form renderers) into the generic pipeline.
+        ;; Page-level overrides are limited to imperative components/handlers.
         page-opts (when (map? entity-key)
                     (dissoc entity-key :children))
-        list-overrides (:list-overrides page-opts)
-        page-opts (dissoc page-opts :list-overrides)
 
         entity-config (use-subscribe [:admin/entity-config actual-entity-key])
         ;; Only merge overrides once the config exists (prevents flicker and
@@ -47,10 +44,7 @@
                             (update :components (fnil merge {}) page-components)
 
                             (and (some? page-components) (not (map? page-components)))
-                            (assoc :components page-components)
-
-                            (map? list-overrides)
-                            (update-in [:components :list] (fnil merge {}) list-overrides))))
+                            (assoc :components page-components))))
 
         ;; Call all hooks at the top level to satisfy Rules of Hooks
         entity-data (use-subscribe [::entity-subs/paginated-entities actual-entity-key])
@@ -75,8 +69,7 @@
         (clj->js {:entity actual-entity-key
                   :has-config? (boolean entity-config)
                   :entity-data-count (count entity-data)
-                  :has-page-overrides? (boolean page-opts)
-                  :has-list-overrides? (boolean list-overrides)})))
+                  :has-page-overrides? (boolean page-opts)})))
 
     (if-not entity-config
       ($ :div {:class "text-sm text-gray-400"}

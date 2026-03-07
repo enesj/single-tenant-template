@@ -47,6 +47,34 @@
         (vo-helpers/apply-column-visibility-setting
           db [:admin :user-settings :draft :view-options entity-kw] column-kw kind value)))))
 
+(rf/reg-event-db
+  :app.admin.frontend.events.user-settings/set-list-config-setting-draft
+  (fn [db [_ entity setting-key raw-value]]
+    (let [entity-kw (u/normalize-kw entity)
+          setting-kw (u/normalize-kw setting-key)
+          value (u/normalize-kw raw-value)]
+      (if (or (nil? entity-kw) (nil? setting-kw))
+        db
+        (if (nil? value)
+          (update-in db [:admin :user-settings :draft :view-options entity-kw :list-config] dissoc setting-kw)
+          (assoc-in db [:admin :user-settings :draft :view-options entity-kw :list-config setting-kw] value))))))
+
+(rf/reg-event-db
+  :app.admin.frontend.events.user-settings/set-action-gate-draft
+  (fn [db [_ entity action-key raw-gate-id]]
+    (let [entity-kw (u/normalize-kw entity)
+          action-kw (u/normalize-kw action-key)
+          gate-id (u/normalize-kw raw-gate-id)]
+      (if (or (nil? entity-kw) (nil? action-kw))
+        db
+        (if (nil? gate-id)
+          (let [db' (update-in db [:admin :user-settings :draft :view-options entity-kw :list-config :action-gates] dissoc action-kw)
+                gates (get-in db' [:admin :user-settings :draft :view-options entity-kw :list-config :action-gates] {})]
+            (if (seq gates)
+              db'
+              (update-in db' [:admin :user-settings :draft :view-options entity-kw :list-config] dissoc :action-gates)))
+          (assoc-in db [:admin :user-settings :draft :view-options entity-kw :list-config :action-gates action-kw] gate-id))))))
+
 ;; =============================================================================
 ;; Bulk helpers: apply tristate to many display settings / columns
 ;; =============================================================================
@@ -82,7 +110,8 @@
           saved-defaults (get-in db [:admin :user-settings :saved :view-options entity-kw :display-defaults])
           saved-locks (get-in db [:admin :user-settings :saved :view-options entity-kw :display-locks])
           saved-col-defaults (get-in db [:admin :user-settings :saved :view-options entity-kw :column-defaults])
-          saved-col-locks (get-in db [:admin :user-settings :saved :view-options entity-kw :column-locks])]
+          saved-col-locks (get-in db [:admin :user-settings :saved :view-options entity-kw :column-locks])
+          saved-list-config (get-in db [:admin :user-settings :saved :view-options entity-kw :list-config])]
       (cond
         (nil? entity-kw)
         db
@@ -115,4 +144,11 @@
             (assoc-in [:admin :user-settings :draft :view-options entity-kw :column-locks] saved-col-locks)
 
             (not (map? saved-col-locks))
-            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :column-locks)))))))
+            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :column-locks))
+
+          (cond->
+            (map? saved-list-config)
+            (assoc-in [:admin :user-settings :draft :view-options entity-kw :list-config] saved-list-config)
+
+            (not (map? saved-list-config))
+            (update-in [:admin :user-settings :draft :view-options entity-kw] dissoc :list-config)))))))

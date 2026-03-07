@@ -42,8 +42,4 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Supplier Aliases"
-           :form-display :modal
-           :allow-add? false
-           :allow-edit? true
-           :allow-delete? true
-           :disallowed-action-mode :hide})))))
+           })))))

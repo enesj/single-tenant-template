@@ -335,16 +335,6 @@
    :entity-spec (tenant-members-entity-spec t)
    :title (t :tenant/current-members)
    :rows-override (mapv tenant-member-row (or members []))
-   :per-page 25
-   :form-display :modal
-   :allow-add? false
-   :allow-edit? true
-   :allow-delete? true
-   :display-settings {:show-add-button? false
-                      :show-filtering? false
-                      :show-select? false
-                      :show-batch-edit? false
-                      :show-batch-delete? false}
    :render-edit-form render-member-edit-form
    :render-actions #(render-member-row-actions current-role is-owner? t %)})
 

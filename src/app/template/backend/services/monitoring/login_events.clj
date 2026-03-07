@@ -2,6 +2,7 @@
   "Simple login events recording and querying for admins and users."
   (:require
     [app.shared.adapters.database :as shared-db]
+    [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as tc]
     [honey.sql :as hsql]
     [java-time.api :as time]
@@ -112,6 +113,14 @@
     (instance? java.time.OffsetDateTime v) (.toEpochMilli (.toInstant ^java.time.OffsetDateTime v))
     :else v))
 
+(def ^:private allowed-login-events-order-by
+  {:created-at :login_events.created_at
+   :principal-type :login_events.principal_type
+   :success :login_events.success
+   :reason :login_events.reason
+   :principal-email [:raw "COALESCE(admins.email, users.email)"]
+   :principal-name [:raw "COALESCE(admins.full_name, users.full_name)"]})
+
 (defn- build-login-events-conditions
   [{:keys [principal-type success?]}]
   (let [principal-type-db (principal-type->db principal-type)]
@@ -120,10 +129,12 @@
       (some? success?) (conj [:= :login_events.success success?]))))
 
 (defn- build-login-events-list-query
-  [{:keys [limit offset] :as opts}]
+  [{:keys [limit offset order-by order-dir] :as opts}]
   (let [limit (or limit 100)
         offset (or offset 0)
-        conditions (build-login-events-conditions opts)]
+        conditions (build-login-events-conditions opts)
+        order-column (get allowed-login-events-order-by order-by :login_events.created_at)
+        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
     (cond-> {:select [[:login_events.id :id]
                       :login_events.principal_type
                       :login_events.principal_id
@@ -139,7 +150,7 @@
              :from [[:login_events]]
              :left-join [[:admins :admins] [:= :admins.id :login_events.principal_id]
                          [:users :users] [:= :users.id :login_events.principal_id]]
-             :order-by [[:login_events.created_at :desc]]
+             :order-by [[order-column order-direction]]
              :limit limit
              :offset offset}
       (seq conditions) (assoc :where (into [:and] conditions)))))

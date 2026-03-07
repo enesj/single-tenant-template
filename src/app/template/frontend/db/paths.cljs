@@ -169,19 +169,37 @@
                         (long n)))
     :else nil))
 
+(defn- configured-view-options
+  [db entity-type]
+  (let [entity-key (if (keyword? entity-type) entity-type (keyword entity-type))]
+    (if (admin-route? db)
+      (merge
+        (get-in db [:admin :config :view-options entity-key])
+        (get-in db [:admin :settings :view-options entity-key]))
+      (get-in db [:domain :config :view-options entity-key]))))
+
+(defn- configured-view-options-per-page
+  [db entity-type]
+  (let [view-options (configured-view-options db entity-type)]
+    (or (parse-positive-int (get-in view-options [:display-defaults :per-page]))
+      (parse-positive-int (get-in view-options [:display-settings :per-page]))
+      (parse-positive-int (get view-options :per-page)))))
+
 (defn resolved-list-per-page
-  "Resolve an entity list's per-page value from list UI state or persisted entity prefs.
+  "Resolve an entity list's per-page value from list UI state, browser prefs, or config.
 
   Order of precedence:
   1. Canonical list state
   2. Legacy list state mirrors
   3. Persisted browser display prefs
-  4. Provided fallback"
+  4. Configured view-options per-page
+  5. Provided fallback"
   [db entity-type fallback]
   (or (parse-positive-int (get-in db (list-per-page entity-type)))
     (parse-positive-int (get-in db (conj (list-ui-state entity-type) :per-page)))
     (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :per-page)))
     (parse-positive-int (get-in db (conj (entity-prefs-display entity-type) :per-page)))
+    (configured-view-options-per-page db entity-type)
     fallback))
 
 (defn resolved-list-current-page
@@ -191,6 +209,38 @@
     (parse-positive-int (get-in db (conj (list-ui-state entity-type) :current-page)))
     (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :current-page)))
     1))
+
+(defn resolved-list-sort-config
+  "Resolve an entity list's current sort config from canonical list UI state."
+  [db entity-type]
+  (let [sort-config (or (get-in db (list-sort-config entity-type)) {})
+        field (:field sort-config)
+        direction (cond
+                    (or (= :asc (:direction sort-config))
+                      (= "asc" (:direction sort-config)))
+                    :asc
+
+                    (or (= :desc (:direction sort-config))
+                      (= "desc" (:direction sort-config)))
+                    :desc
+
+                    :else nil)]
+    (cond-> {}
+      (some? field) (assoc :field field)
+      (some? direction) (assoc :direction direction))))
+
+(defn resolved-list-sort-query-params
+  "Resolve current list sort state to API query params."
+  [db entity-type]
+  (let [{:keys [field direction]} (resolved-list-sort-config db entity-type)
+        order-by (cond
+                   (keyword? field) (name field)
+                   (string? field) field
+                   (some? field) (str field)
+                   :else nil)]
+    (cond-> {}
+      (some? order-by) (assoc :order-by order-by)
+      (some? direction) (assoc :order-dir (name direction)))))
 
 (defn list-total-items
   "Returns [:ui :lists entity-type :total-items] path vector for total items count in a list for a specific entity type."

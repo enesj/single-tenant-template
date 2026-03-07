@@ -161,6 +161,14 @@
       {})))
 
 (rf/reg-sub
+  ::entity-list-config
+  (fn [db [_ entity-name]]
+    (if entity-name
+      (let [entity-kw (model-naming/ensure-app-keyword entity-name)]
+        (resolver/resolve-list-config entity-kw (gather-resolver-sources db entity-kw)))
+      resolver/fallback-list-config)))
+
+(rf/reg-sub
   ::show-add-form
   (fn [db _]
     (get-in db [:ui :show-add-form])))

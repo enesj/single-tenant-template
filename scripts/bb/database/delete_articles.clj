@@ -15,7 +15,6 @@
   - Clears article_aliases.article_id before deleting articles
   - This preserves article_aliases rows without changing schema at runtime
   - Deletes all rows from: articles, manufacturers, categories
-  - Deleting from `articles` will cascade to price_observations
   - expense_items.article_id will be set to NULL"
   (:require
     [aero.core :as aero]
@@ -96,7 +95,6 @@
        "  (SELECT count(*) FROM categories) AS categories,\n"
        "  (SELECT count(*) FROM article_aliases) AS article_aliases,\n"
        "  (SELECT count(*) FROM article_aliases WHERE article_id IS NOT NULL) AS article_aliases_mapped,\n"
-       "  (SELECT count(*) FROM price_observations) AS price_observations,\n"
        "  (SELECT count(*) FROM expense_items WHERE article_id IS NOT NULL) AS expense_items_with_article_id")]
     {:builder-fn rs/as-unqualified-lower-maps}))
 
@@ -135,7 +133,6 @@
     (println "  categories:" (:categories before))
     (println "  article_aliases:" (:article_aliases before))
     (println "  article_aliases (mapped):" (:article_aliases_mapped before))
-    (println "  price_observations:" (:price_observations before))
     (println "  expense_items (with article_id):" (:expense_items_with_article_id before))
     (println "")
 
@@ -169,7 +166,6 @@
       (println "  categories:" (:categories after))
       (println "  article_aliases:" (:article_aliases after))
       (println "  article_aliases (mapped):" (:article_aliases_mapped after))
-      (println "  price_observations:" (:price_observations after))
       (println "  expense_items (with article_id):" (:expense_items_with_article_id after))
       (println "")
       (println "💡 Article aliases remain preserved with article_id cleared.")

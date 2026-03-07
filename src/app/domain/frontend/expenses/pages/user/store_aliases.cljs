@@ -3,7 +3,6 @@
 
   Store aliases help normalize raw store labels into canonical Stores."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
     [app.domain.frontend.expenses.components.user-power-forms :refer [user-store-alias-edit-form-modal]]
     [app.template.frontend.components.button :refer [button]]
@@ -68,8 +67,6 @@
 (defui store-aliases-page
   []
   (let [t (use-t)
-        role (use-subscribe [:expenses/user-role])
-        can-manage? (authz/can? role :expenses/store-aliases.manage)
         entity-name :store-aliases
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-aliases (use-callback
@@ -116,11 +113,6 @@
              {:entity-name entity-name
               :entity-spec entity-spec
               :title (t :store-aliases/title)
-              :form-display :modal
-              :disallowed-action-mode :disable
-              :allow-add? false
-              :allow-edit? can-manage?
-              :allow-delete? can-manage?
               :render-edit-form render-edit-form
               :on-edit-success refresh-aliases
               :render-actions (fn [item] (render-actions t item))

@@ -1,0 +1,11 @@
+{:tenant-members
+ {:display-defaults {:show-add-button? false
+                     :show-filtering? false
+                     :show-select? false
+                     :show-batch-edit? false
+                     :show-batch-delete? false
+                     :per-page 25}
+  :display-locks {}
+  :column-defaults {}
+  :column-locks {}
+  :list-config {:form-display :modal}}}

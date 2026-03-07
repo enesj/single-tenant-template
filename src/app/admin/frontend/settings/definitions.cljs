@@ -40,6 +40,51 @@
   "Combined list of all display and action setting keys."
   (into display-setting-keys action-setting-keys))
 
+(def list-config-select-options
+  {:form-display [{:value :inline :label "Inline"}
+                  {:value :modal :label "Modal"}]
+   :disallowed-action-mode [{:value :hide :label "Hide"}
+                            {:value :disable :label "Disable"}]})
+
+(def action-gate-order [:add :edit :delete :select])
+
+(def action-gate-labels
+  {:add "Add"
+   :edit "Edit"
+   :delete "Delete"
+   :select "Selection"})
+
+(def action-gate-help
+  {:add "Optional runtime gate for showing/enabling add actions."
+   :edit "Optional runtime gate for showing/enabling edit actions."
+   :delete "Optional runtime gate for showing/enabling delete actions."
+   :select "Optional runtime gate for row selection visibility."})
+
+(def action-gate-options
+  [{:value nil :label "No gate"}
+   {:value :expenses/can-write :label "Expenses: can write"}
+   {:value :expenses/power-user :label "Expenses: power user"}
+   {:value :expenses/access :label "Expenses: access"}
+   {:value :expenses/expense.write :label "Expenses: expense write"}
+   {:value :expenses/expense.delete :label "Expenses: expense delete"}
+   {:value :expenses/expense-items.manage :label "Expenses: expense items manage"}
+   {:value :expenses/reference.write :label "Expenses: reference write"}
+   {:value :expenses/unmapped.access :label "Expenses: unmapped access"}
+   {:value :expenses/articles.manage :label "Expenses: articles manage"}
+   {:value :expenses/manufacturers.manage :label "Expenses: manufacturers manage"}
+   {:value :expenses/categories.manage :label "Expenses: categories manage"}
+   {:value :expenses/expense-categories.manage :label "Expenses: expense categories manage"}
+   {:value :expenses/cities.manage :label "Expenses: cities manage"}
+   {:value :expenses/subcategories.manage :label "Expenses: subcategories manage"}
+   {:value :expenses/stores.manage :label "Expenses: stores manage"}
+   {:value :expenses/store-aliases.manage :label "Expenses: store aliases manage"}
+   {:value :expenses/supplier-aliases.manage :label "Expenses: supplier aliases manage"}
+   {:value :expenses/danger.execute :label "Expenses: danger execute"}
+   {:value :expenses/settings.write :label "Expenses: settings write"}
+   {:value :expenses/upload :label "Expenses: upload"}
+   {:value :expenses/reports.export :label "Expenses: reports export"}
+   {:value :expenses/receipts.approve :label "Expenses: receipts approve"}])
+
 ;; =============================================================================
 ;; Setting Definitions - metadata for each setting
 ;; =============================================================================
@@ -100,9 +145,9 @@
     ;; Template/admin groups (core infrastructure)
     {:user-management
      {:title "User Management"
-      :description "Manage users and administrators"
+      :description "Manage users, administrators, and tenants"
       :icon "👥"
-      :entities #{:users :admins}
+      :entities #{:users :admins :tenants}
       :color "primary"
       :scope :admin}
 
@@ -126,8 +171,16 @@
 
 (def user-domain-groups
   "Domain groupings for USER settings scope.
-   Domain-specific user groups are loaded from registry."
-  (domain-registry/all-user-domain-groups))
+   Template user groups are defined here; domain-specific groups are merged from registry."
+  (merge
+    {:workspace
+     {:title "Workspace"
+      :description "Tenant-scoped workspace member views"
+      :icon "🏢"
+      :entities #{:tenant-members}
+      :color "primary"
+      :scope :user}}
+    (domain-registry/all-user-domain-groups)))
 
 (def all-domain-groups
   "Combined domain groups for both scopes."
@@ -156,6 +209,26 @@
   "Get help text for a setting key."
   [setting-key]
   (get-in setting-definitions [setting-key :help]))
+
+(defn action-gate-label
+  [action-key]
+  (or (get action-gate-labels action-key)
+    (-> action-key name str/capitalize)))
+
+(defn action-gate-help-text
+  [action-key]
+  (get action-gate-help action-key))
+
+(defn action-gate-option-label
+  [gate-id]
+  (or (some (fn [{:keys [value label]}]
+              (when (= value gate-id) label))
+        action-gate-options)
+    (cond
+      (nil? gate-id) "No gate"
+      (keyword? gate-id) (name gate-id)
+      (string? gate-id) gate-id
+      :else (str gate-id))))
 
 (defn entity-title
   "Get human-readable title for an entity keyword."

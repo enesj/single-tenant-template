@@ -46,8 +46,4 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Cities"
-           :form-display :modal
-           :disallowed-action-mode :hide
-           :allow-add? true
-           :allow-edit? true
-           :allow-delete? true})))))
+           })))))

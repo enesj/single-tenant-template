@@ -8,6 +8,7 @@
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
@@ -75,7 +76,7 @@
   implement filtering for supported keys."
   [db]
   (let [entity-key :expenses
-        per-page (paths/resolved-list-per-page db entity-key 25)
+        per-page (paths/resolved-list-per-page db entity-key pagination/default-page-size)
         current-page (paths/resolved-list-current-page db entity-key)
         sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
         order-dir (let [direction (:direction sort-config)]

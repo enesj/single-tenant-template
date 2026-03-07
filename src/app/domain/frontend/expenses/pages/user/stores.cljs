@@ -3,7 +3,6 @@
 
   Stores are used to normalize expense sources (e.g. for analytics and aliasing)."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
     [app.domain.frontend.expenses.components.user-power-forms :refer [user-store-add-form-modal
                                                                       user-store-edit-form-modal]]
@@ -75,8 +74,6 @@
 (defui stores-page
   []
   (let [t (use-t)
-        role (use-subscribe [:expenses/user-role])
-        can-manage? (authz/can? role :expenses/stores.manage)
         entity-name :stores
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
@@ -121,11 +118,6 @@
              {:entity-name entity-name
               :entity-spec entity-spec
               :title "Stores"
-              :form-display :modal
-              :disallowed-action-mode :disable
-              :allow-add? can-manage?
-              :allow-edit? can-manage?
-              :allow-delete? can-manage?
               :render-add-form render-add-form
               :render-edit-form render-edit-form
               :on-add-success refresh-list

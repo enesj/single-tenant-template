@@ -7,6 +7,7 @@
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
+    [app.shared.query-builders :as shared-qb]
     [app.template.backend.utils.adapters.persistence :as persist]
     [honey.sql :as hsql]
     [next.jdbc :as jdbc]
@@ -41,12 +42,23 @@
     (when (seq clauses)
       (into [:and] clauses))))
 
+(def ^:private allowed-user-order-by
+  {:created-at :u/created_at
+   :updated-at :u/updated_at
+   :email :u/email
+   :full-name :u/full_name
+   :status :u/status
+   :email-verified :u/email_verified
+   :last-login-at :u/last_login_at})
+
 (defn- build-users-list-query
-  [{:keys [limit offset] :as filters}]
-  (let [where-clause (build-user-list-where-clause filters)]
+  [{:keys [limit offset order-by order-dir] :as filters}]
+  (let [where-clause (build-user-list-where-clause filters)
+        order-column (get allowed-user-order-by order-by :u/created_at)
+        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
     (cond-> {:select [:u.*]
              :from [[:users :u]]
-             :order-by [[:created_at :desc]]}
+             :order-by [[order-column order-direction]]}
       where-clause (assoc :where where-clause)
       limit (assoc :limit limit)
       offset (assoc :offset offset))))

@@ -51,7 +51,10 @@
           admin-pagination (get-in db [:admin :audit :pagination] {})
           current-pagination (merge {:page template-page :per-page template-per-page} admin-pagination)
           ;; Align default sort with adapter default (:timestamp)
-          current-sort (get-in db [:admin :audit :sort] {:field :timestamp :direction :desc})
+          template-sort (paths/resolved-list-sort-config db entity-key)
+          current-sort (merge {:field :timestamp :direction :desc}
+                         (get-in db [:admin :audit :sort] {})
+                         template-sort)
 
           ;; Merge current state with any provided params
           final-filters (merge current-filters filters)
@@ -71,8 +74,20 @@
                                 :per-page limit
                                 :limit limit
                                 :offset offset)
-          request-params (cond-> {:limit limit
-                                  :offset offset}
+          request-sort (let [{:keys [field direction]} final-sort
+                             order-dir (when (contains? #{:asc :desc "asc" "desc"} direction)
+                                         (name (keyword direction)))
+                             order-by (cond
+                                        (keyword? field) (name field)
+                                        (string? field) field
+                                        (some? field) (str field)
+                                        :else nil)]
+                         (cond-> {}
+                           (some? order-by) (assoc :order-by order-by)
+                           (some? order-dir) (assoc :order-dir order-dir)))
+          request-params (cond-> (merge {:limit limit
+                                         :offset offset}
+                                   request-sort)
                            (seq final-filters) (merge final-filters))]
 
       (log/info "AUDIT LOAD →" {:pagination resolved-pagination

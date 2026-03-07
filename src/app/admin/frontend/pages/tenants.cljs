@@ -86,14 +86,6 @@
   {:entity-name :tenants
    :entity-spec tenants-entity-spec
    :title "Tenants"
-   :per-page 25
-   :form-display :modal
-   :allow-add? false
-   :allow-edit? true
-   :allow-delete? true
-   :disallowed-action-mode :hide
-   :display-settings {:show-add-button? false
-                      :show-filtering? false}
    :render-actions #(render-tenant-row-actions on-select %)})
 
 ;; ============================================================================

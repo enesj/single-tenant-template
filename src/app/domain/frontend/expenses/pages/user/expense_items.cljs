@@ -151,8 +151,6 @@
              {:entity-name entity-name
               :entity-spec entity-spec
               :title "Expense Item"
-              :form-display :modal
-              :allow-add? false
               :render-edit-form render-edit-form
               :render-actions (fn [item]
                                 (let [expense-item-id (id-utils/extract-entity-id item)

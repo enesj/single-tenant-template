@@ -1,6 +1,7 @@
 (ns app.admin.frontend.events.tenants
   "Admin tenant management events — list, detail, members, role changes."
   (:require
+    [app.shared.pagination :as pagination]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.list.ui-state :as list-ui-state]
@@ -27,10 +28,14 @@
 
 (defn- current-list-pagination
   [db]
-  (let [per-page (paths/resolved-list-per-page db tenants-entity-key 25)
+  (let [per-page (paths/resolved-list-per-page db tenants-entity-key pagination/default-page-size)
         current-page (paths/resolved-list-current-page db tenants-entity-key)]
     {:limit per-page
      :offset (* (max 0 (dec current-page)) per-page)}))
+
+(defn- current-list-sort-params
+  [db]
+  (paths/resolved-list-sort-query-params db tenants-entity-key))
 
 (defn- tenants->entity-state
   [tenants]
@@ -102,7 +107,10 @@
 (rf/reg-event-fx
   ::fetch-tenants
   (fn [{:keys [db]} [_ params]]
-    (let [{:keys [limit offset]} (merge (current-list-pagination db) params)
+    (let [params (or params {})
+          {:keys [limit offset]} (merge (current-list-pagination db) params)
+          sort-params (merge (current-list-sort-params db)
+                        (select-keys params [:order-by :order-dir]))
           search (if (contains? params :search)
                    (:search params)
                    (get-in db [:admin :tenants :search] ""))
@@ -117,7 +125,7 @@
        :http-xhrio (admin-request
                      {:method :get
                       :uri "/admin/api/tenants"
-                      :params (cond-> {:limit limit :offset offset}
+                      :params (cond-> (merge {:limit limit :offset offset} sort-params)
                                 (seq search) (assoc :search search)
                                 status (assoc :status status))
                       :on-success [::fetch-tenants-success]

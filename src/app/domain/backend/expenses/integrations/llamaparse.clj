@@ -18,13 +18,14 @@
 
 (defn- build-upload-configuration
   [{:keys [tier version ocr-languages agentic-custom-prompt]}]
-  (cond-> {:tier (or tier "agentic")
-           :version (or version "v2")}
-    (seq ocr-languages)
-    (assoc-in [:input_options :pdf :ocr_parameters] {:languages ocr-languages})
+  (let [agentic-tier? (contains? #{"agentic" "agentic_plus"} (some-> tier str/lower-case))]
+    (cond-> {:tier (or tier "agentic")
+             :version (or version "v2")}
+      (seq ocr-languages)
+      (assoc-in [:input_options :pdf :ocr_parameters] {:languages ocr-languages})
 
-    (seq (some-> agentic-custom-prompt str str/trim not-empty))
-    (assoc-in [:agentic_options :custom_prompt] (str/trim (str agentic-custom-prompt)))))
+      (and agentic-tier? (seq (some-> agentic-custom-prompt str str/trim not-empty)))
+      (assoc-in [:agentic_options :custom_prompt] (str/trim (str agentic-custom-prompt))))))
 
 (defn- terminal-status?
   [s]
@@ -39,8 +40,12 @@
   (let [started (System/currentTimeMillis)
         poll-interval-ms (long (max 100 (or (:poll-interval-ms cfg) 1500)))
         timeout-ms (long (max poll-interval-ms (or (:poll-timeout-ms cfg) 120000)))
-        expand (or (http/normalize-expand (:expand cfg))
-                 ["markdown"])]
+        agentic-tier? (contains? #{"agentic" "agentic_plus"} (some-> (:tier cfg) str/lower-case))
+        expand (->> (or (http/normalize-expand (:expand cfg)) ["markdown"])
+                 (remove #(and (not agentic-tier?) (= "markdown" %)))
+                 vec
+                 not-empty
+                 (or ["items" "text"]))]
     (loop []
       (let [resp (http/get-with-retries!
                    cfg

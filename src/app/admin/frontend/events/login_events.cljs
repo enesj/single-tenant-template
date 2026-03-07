@@ -45,8 +45,10 @@
                             (get-in db (paths/list-filters entity-key) {}))
           current-pagination (merge {:page template-page :per-page template-per-page}
                                (get-in db [:admin :login-events :pagination] {}))
-          current-sort (get-in db [:admin :login-events :sort]
-                         {:field :created-at :direction :desc})
+          template-sort (paths/resolved-list-sort-config db entity-key)
+          current-sort (merge {:field :created-at :direction :desc}
+                         (get-in db [:admin :login-events :sort] {})
+                         template-sort)
           final-filters (merge current-filters filters)
           final-pagination (merge current-pagination pagination)
           final-sort (merge current-sort sort)
@@ -63,8 +65,20 @@
                                 :per-page limit
                                 :limit limit
                                 :offset offset)
-          request-params (cond-> {:limit limit
-                                  :offset offset}
+          request-sort (let [{:keys [field direction]} final-sort
+                             order-dir (when (contains? #{:asc :desc "asc" "desc"} direction)
+                                         (name (keyword direction)))
+                             order-by (cond
+                                        (keyword? field) (name field)
+                                        (string? field) field
+                                        (some? field) (str field)
+                                        :else nil)]
+                         (cond-> {}
+                           (some? order-by) (assoc :order-by order-by)
+                           (some? order-dir) (assoc :order-dir order-dir)))
+          request-params (cond-> (merge {:limit limit
+                                         :offset offset}
+                                   request-sort)
                            (seq final-filters) (merge final-filters))]
       (log/info "LOGIN EVENTS LOAD →" {:pagination resolved-pagination
                                        :filters final-filters

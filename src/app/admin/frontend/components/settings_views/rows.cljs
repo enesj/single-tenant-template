@@ -135,6 +135,77 @@
               ""
               (utils/tristate-hint {:kind :lock :current-val lock-val :lock-style lock-style}))))))))
 
+(defui enum-setting-row
+  "Render a select-based setting row for list-config fields."
+  [{:keys [entity-kw setting-key value editing? options help-text on-change]}]
+  (let [editing? (boolean editing?)
+        clickable? (and editing? (fn? on-change))
+        select-id (str (name setting-key) "-" (name entity-kw))
+        current-value (or value "")
+        option-label (or (some (fn [{:keys [value label]}]
+                                 (when (= value current-value) label))
+                           options)
+                       (when (not= current-value "") (str current-value)))]
+    ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
+             :data-tip help-text}
+      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+        ($ :span {:class "text-sm font-medium min-w-[160px]"}
+          (-> setting-key name (str/replace #"-" " ") str/capitalize))
+        (if clickable?
+          ($ :select
+            {:id select-id
+             :class "w-40 px-2 py-1 border border-gray-300 rounded text-sm"
+             :value (if (keyword? current-value) (name current-value) current-value)
+             :on-change (fn [e]
+                          (let [raw (.. e -target -value)]
+                            (on-change entity-kw setting-key (if (str/blank? raw) nil (keyword raw)))))}
+            ($ :option {:value ""} "—")
+            (for [{:keys [value label]} options
+                  :let [option-value (cond
+                                       (keyword? value) (name value)
+                                       (string? value) value
+                                       :else "")]]
+              ($ :option {:key (str setting-key "-" option-value)
+                          :value option-value}
+                label)))
+          ($ :span {:class "ds-badge ds-badge-sm ds-badge-info"}
+            (or option-label "—")))))))
+
+(defui action-gate-row
+  "Render a select-based row for a single runtime action gate."
+  [{:keys [entity-kw action-key gate-id editing? options on-change]}]
+  (let [editing? (boolean editing?)
+        clickable? (and editing? (fn? on-change))
+        current-value (cond
+                        (keyword? gate-id) (name gate-id)
+                        (string? gate-id) gate-id
+                        :else "")]
+    ($ :div {:class "ds-tooltip ds-tooltip-top w-full"
+             :data-tip (defs/action-gate-help-text action-key)}
+      ($ :div {:class "flex items-center gap-2 p-2 rounded-lg bg-base-200 w-full"}
+        ($ :span {:class "text-sm font-medium min-w-[160px]"}
+          (defs/action-gate-label action-key))
+        (if clickable?
+          ($ :select
+            {:id (str "action-gate-" (name entity-kw) "-" (name action-key))
+             :class "w-64 px-2 py-1 border border-gray-300 rounded text-sm"
+             :value current-value
+             :on-change (fn [e]
+                          (let [raw (.. e -target -value)]
+                            (on-change entity-kw action-key (if (str/blank? raw) nil (keyword raw)))))}
+            ($ :option {:value ""} "No gate")
+            (for [{:keys [value label]} options
+                  :let [option-value (cond
+                                       (keyword? value) (name value)
+                                       (string? value) value
+                                       :else "")]
+                  :when (seq option-value)]
+              ($ :option {:key (str action-key "-" option-value)
+                          :value option-value}
+                label)))
+          ($ :span {:class "ds-badge ds-badge-sm ds-badge-info"}
+            (defs/action-gate-option-label gate-id)))))))
+
 ;; =============================================================================
 ;; Column Visibility Policy Row
 ;; =============================================================================

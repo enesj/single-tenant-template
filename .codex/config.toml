@@ -4,5 +4,5 @@
 # Model configuration (project-specific)
 model = "gpt-5.4"
 model_reasoning_effort = "high"
-model_context_window = 1000000
-model_auto_compact_token_limit = 900000
+model_context_window = 500000
+model_auto_compact_token_limit = 400000

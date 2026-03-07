@@ -123,7 +123,6 @@
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
-        can-write? (use-subscribe [:expenses/can-write?])
         ;; Subscribe to current expense being viewed in modal
         current-expense (use-subscribe [:user-expenses/current-expense])
         refresh-list (use-callback
@@ -165,11 +164,6 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Expense"
-           :form-display :modal
-           :disallowed-action-mode :disable
-           :allow-add? can-write?
-           :allow-edit? can-write?
-           :allow-delete? can-write?
            :render-add-form render-add-form
            :render-edit-form render-edit-form
            :on-add-success refresh-list

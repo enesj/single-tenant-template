@@ -30,15 +30,30 @@
 (defn- uuid-cast [id]
   (if (string? id) [:cast id :uuid] id))
 
+(def ^:private allowed-tenant-order-by
+  {:created-at :t/created_at
+   :updated-at :t/updated_at
+   :name :t/name
+   :slug :t/slug
+   :status :t/status
+   :member-count :member_count
+   :owner-email :owner_u/email
+   :owner-name :owner_u/full_name})
+
+(defn- normalize-order-dir [order-dir]
+  (if (= :asc order-dir) :asc :desc))
+
 (defn- list-tenants
-  "List tenants with pagination, search, and status filters."
-  [db {:keys [search status limit offset]}]
+  "List tenants with pagination, search, status filters, and sorting."
+  [db {:keys [search status limit offset order-by order-dir]}]
   (let [base-where (cond-> []
                      status (conj [:= :t.status [:cast status :tenant_status]])
                      search (conj [:or
                                    [:ilike :t.name (str "%" search "%")]
                                    [:ilike :t.slug (str "%" search "%")]]))
         where-clause (when (seq base-where) (into [:and] base-where))
+        order-column (get allowed-tenant-order-by order-by :t/created_at)
+        order-direction (normalize-order-dir order-dir)
         query (cond-> {:select [:t.*
                                 [[:raw "COALESCE(mc.member_count, 0)"] :member_count]
                                 [:owner_u.email :owner_email]
@@ -58,7 +73,7 @@
 
                                    [:users :owner_u]
                                    [:= :owner_u.id :om.user_id]]
-                       :order-by [[:t.created_at :desc]]}
+                       :order-by [[order-column order-direction]]}
                 where-clause (assoc :where where-clause)
                 limit (assoc :limit limit)
                 offset (assoc :offset offset))]
@@ -219,9 +234,10 @@
     (fn [request]
       (let [params (:params request)
             pagination (utils/extract-pagination-params params)
+            sort (utils/extract-sort-params params)
             filters {:search (:search params)
                      :status (:status params)}
-            tenants (list-tenants db (merge filters pagination))
+            tenants (list-tenants db (merge filters pagination sort))
             total   (count-tenants db filters)]
         (log/info "Admin list-tenants returned" (count tenants) "tenants"
           {:filters filters :total total})

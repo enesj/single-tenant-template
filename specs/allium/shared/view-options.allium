@@ -2,10 +2,11 @@
 --
 -- Covers: DisplayTogglesMap as single source of truth for display toggle keys;
 --         display-defaults / display-locks resolution semantics;
---         show-selected-rows? and show-unselected-rows? additions.
+--         show-selected-rows? and show-unselected-rows? additions;
+--         list-config behavior formerly passed as page props.
 --
 -- Source: src/app/shared/specs/view_options.cljc
--- Consumers: admin entities.edn (via AdminDisplaySettings), domain view-options.edn
+-- Consumers: admin view-options.edn, domain view-options.edn, template user view-options.edn
 
 entity DisplayTogglesMap {
     show_timestamps: Boolean?
@@ -23,10 +24,44 @@ entity DisplayTogglesMap {
     per_page: Integer?                -- bounded [1, 1000]
 }
 
+value ListConfig {
+    form_display: inline | modal
+    disallowed_action_mode: hide | disable
+    action_gates: Map<String, ActionGateId>?
+}
+
+value ActionGateId {
+    kind: expenses_can_write
+       | expenses_power_user
+       | expenses_access
+       | expenses_expense_write
+       | expenses_expense_delete
+       | expenses_expense_items_manage
+       | expenses_reference_write
+       | expenses_unmapped_access
+       | expenses_articles_manage
+       | expenses_manufacturers_manage
+       | expenses_categories_manage
+       | expenses_expense_categories_manage
+       | expenses_cities_manage
+       | expenses_subcategories_manage
+       | expenses_stores_manage
+       | expenses_store_aliases_manage
+       | expenses_supplier_aliases_manage
+       | expenses_danger_execute
+       | expenses_settings_write
+       | expenses_upload
+       | expenses_reports_export
+       | expenses_receipts_approve
+}
+
 entity EntityViewOptions {
     -- Explicit schema (preferred)
     display_defaults: DisplayTogglesMap?
     display_locks: DisplayTogglesMap?
+
+    -- Declarative list behavior
+    list_config: ListConfig?
 
     -- Column visibility policy
     column_defaults: Map<String, Boolean>?
@@ -88,6 +123,7 @@ surface ViewOptionsResolutionBoundary {
 
     provides:
         ResolveEffectiveToggles(entity, user_overrides)
+        ResolveListConfig(entity)
         ValidateViewOptionsConfig(data)
 
     guarantee:
@@ -103,6 +139,18 @@ surface ViewOptionsResolutionBoundary {
     guarantee:
         ValidateViewOptionsConfig(data) rejects display_locks nested inside
         display_defaults as a misconfiguration.
+
+    guarantee:
+        list_config is view-options-owned configuration. It is not overridden by
+        browser-local display preferences.
+
+    guarantee:
+        action_gates only further restrict runtime behavior. They never widen an
+        action or selection capability beyond the configured display policy.
+
+    guarantee:
+        action_gates are chosen from a fixed, validated vocabulary rather than
+        free-form expressions.
 
     guidance:
         New configurations should prefer the explicit display-defaults / display-locks

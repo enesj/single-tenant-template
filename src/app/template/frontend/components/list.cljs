@@ -1,5 +1,6 @@
 (ns app.template.frontend.components.list
   (:require
+    [app.domain.frontend.expenses.authz :as expenses-authz]
     [app.shared.keywords :as kw]
     [app.template.frontend.components.batch-edit :refer [batch-edit-inline]]
     [app.template.frontend.components.filter :refer [filter-form]]
@@ -47,6 +48,23 @@
   [rows selected-ids {:keys [show-selected-rows? show-unselected-rows?]}]
   (overrides/apply-selection-visibility rows selected-ids {:show-selected-rows? show-selected-rows?
                                                            :show-unselected-rows? show-unselected-rows?}))
+
+(defn- normalize-gate-id
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    :else nil))
+
+(defn- gate-allows-action?
+  [gate-id {:keys [expenses-role can-write? power-user?]}]
+  (let [gate-id (normalize-gate-id gate-id)]
+    (cond
+      (nil? gate-id) true
+      (= gate-id :expenses/can-write) (boolean can-write?)
+      (= gate-id :expenses/power-user) (boolean power-user?)
+      (expenses-authz/can? expenses-role gate-id) true
+      :else false)))
 
 (defui list-view
   "Renders a list of items with pagination, add form, and error handling.
@@ -100,10 +118,20 @@
         ;; Subscribe to hardcoded view-options for hiding settings panel controls
         ;; IMPORTANT: Only view-options.edn settings should hide controls, not entities.edn settings
         hardcoded-view-options (use-subscribe [::ui-subs/hardcoded-view-options entity-name])
-        ;; Use page-level display settings as defaults, but let user state override them
+        resolved-list-config (use-subscribe [::ui-subs/entity-list-config entity-name])
+        expenses-role (use-subscribe [:expenses/user-role])
+        can-write? (use-subscribe [:expenses/can-write?])
+        power-user? (use-subscribe [:expenses/power-user?])
+        gate-ctx {:expenses-role expenses-role
+                  :can-write? can-write?
+                  :power-user? power-user?}
         merged-display-settings (let [subscribed-settings (use-subscribe [::ui-subs/entity-display-settings entity-name])
-                                      merged (merge display-settings subscribed-settings)]
-                                  merged)
+                                      merged (merge (or display-settings {}) subscribed-settings)
+                                      select-allowed? (gate-allows-action?
+                                                        (get-in resolved-list-config [:action-gates :select])
+                                                        gate-ctx)]
+                                  (cond-> merged
+                                    (false? select-allowed?) (assoc :show-select? false)))
         ;; Subscribe to user's filterable field settings from settings panel
         filterable-fields-subscription (use-subscribe [::ui-subs/filterable-fields entity-name])
         user-filterable-settings (use-subscribe [::settings-events/filterable-fields entity-name])
@@ -192,8 +220,21 @@
         [edit-modal-open? set-edit-modal-open!] (use-state false)
         [edit-modal-item set-edit-modal-item!] (use-state nil)
 
+        effective-form-display (or (:form-display resolved-list-config)
+                                 form-display
+                                 :inline)
+        effective-disallowed-action-mode (or (:disallowed-action-mode resolved-list-config)
+                                           disallowed-action-mode
+                                           :hide)
+        effective-allow-add? (and (not (false? allow-add?))
+                               (gate-allows-action? (get-in resolved-list-config [:action-gates :add]) gate-ctx))
+        effective-allow-edit? (and (not (false? (:allow-edit? props)))
+                                (gate-allows-action? (get-in resolved-list-config [:action-gates :edit]) gate-ctx))
+        effective-allow-delete? (and (not (false? (:allow-delete? props)))
+                                  (gate-allows-action? (get-in resolved-list-config [:action-gates :delete]) gate-ctx))
+
         ;; Determine form display mode
-        use-modal-forms? (= form-display :modal)
+        use-modal-forms? (= effective-form-display :modal)
         has-custom-add-form? (some? render-add-form)
         has-custom-edit-form? (some? render-edit-form)]
 
@@ -303,7 +344,7 @@
           (list-handlers/build-handlers
             {:entity-name entity-name
              :entity-kw entity-kw
-             :allow-add? allow-add?
+             :allow-add? effective-allow-add?
              :use-modal-forms? use-modal-forms?
              :has-custom-add-form? has-custom-add-form?
              :has-custom-edit-form? has-custom-edit-form?
@@ -332,6 +373,11 @@
                               :set-show-add-form! #(rf/dispatch [::config-events/set-show-add-form %])
                               :visible-columns visible-columns
                               :column-order column-order
+                              :allow-add? effective-allow-add?
+                              :allow-edit? effective-allow-edit?
+                              :allow-delete? effective-allow-delete?
+                              :disallowed-action-mode effective-disallowed-action-mode
+                              :form-display effective-form-display
                               ;; Pass form-entity-specs as props to avoid hooks in loops
                               :form-entity-spec form-entity-spec
                               :form-entity-spec-edit form-entity-spec-edit
@@ -461,10 +507,10 @@
                 ($ add-item-section base-props)
                 ;; Otherwise, display the table with pagination in same container
                 (let [items-vec visible-items
-                      disallowed-mode (or disallowed-action-mode :hide)
+                      disallowed-mode effective-disallowed-action-mode
                       disable-mode? (= disallowed-mode :disable)
                       policy-show-add-button? (not (false? (:show-add-button? merged-display-settings)))
-                      allowed-add? (not (false? allow-add?))
+                      allowed-add? effective-allow-add?
                       show-add-button? (and policy-show-add-button? (or allowed-add? disable-mode?))
                       add-disabled? (and policy-show-add-button? disable-mode? (not allowed-add?))]
                   ($ :div {:class "w-full" :style {:max-width (str table-width "px")}}  ;; Wrapper to contain header, table and pagination together with table width constraint

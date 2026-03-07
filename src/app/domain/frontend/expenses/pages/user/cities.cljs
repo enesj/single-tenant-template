@@ -1,7 +1,6 @@
 (ns app.domain.frontend.expenses.pages.user.cities
   "Power-user cities list (used for store normalization)."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
     [app.domain.frontend.expenses.components.user-power-forms :refer [user-city-add-form-modal
                                                                       user-city-edit-form-modal]]
@@ -73,8 +72,6 @@
 (defui cities-page
   []
   (let [t (use-t)
-        role (use-subscribe [:expenses/user-role])
-        can-manage? (authz/can? role :expenses/cities.manage)
         entity-name :cities
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
@@ -111,11 +108,6 @@
              {:entity-name entity-name
               :entity-spec entity-spec
               :title (t :cities/title)
-              :form-display :modal
-              :disallowed-action-mode :disable
-              :allow-add? can-manage?
-              :allow-edit? can-manage?
-              :allow-delete? can-manage?
               :render-add-form render-add-form
               :render-edit-form render-edit-form
               :on-add-success refresh-list

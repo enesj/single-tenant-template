@@ -8,5 +8,4 @@
   "Admin backlog page"
   []
   ($ generic-admin-entity-page
-    {:children :backlog
-     :list-overrides {:form-display :modal}}))
+    {:children :backlog}))

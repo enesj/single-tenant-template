@@ -19,14 +19,14 @@
   "Normalize an entity identifier to the canonical app keyword.
 
   This is intentionally entity-key only (top-level). Nested config keys and
-  column ids are handled elsewhere to avoid unintended wide-reaching changes." 
+  column ids are handled elsewhere to avoid unintended wide-reaching changes."
   [x]
   (model-naming/ensure-app-keyword x))
 
 (defn normalize-cols [xs]
   (->> (or xs [])
-       (keep normalize-kw)
-       vec))
+    (keep normalize-kw)
+    vec))
 
 (defn normalize-map-keys
   "Keywordize map keys using normalize-kw, skipping keys that normalize to nil.
@@ -72,7 +72,13 @@
                     (contains? cfg :display-defaults) (update :display-defaults normalize-map-keys)
                     (contains? cfg :display-locks) (update :display-locks normalize-map-keys)
                     (contains? cfg :column-defaults) (update :column-defaults normalize-map-keys)
-                    (contains? cfg :column-locks) (update :column-locks normalize-map-keys))]
+                    (contains? cfg :column-locks) (update :column-locks normalize-map-keys)
+                    (contains? cfg :list-config)
+                    (update :list-config
+                      (fn [lc]
+                        (let [lc (normalize-map-keys lc)]
+                          (cond-> lc
+                            (contains? lc :action-gates) (update :action-gates normalize-map-keys))))))]
           (assoc acc entity-kw cfg))
         acc))
     {}

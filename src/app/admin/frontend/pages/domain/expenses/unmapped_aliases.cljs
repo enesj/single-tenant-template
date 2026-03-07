@@ -41,8 +41,4 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Unmapped Aliases"
-           :form-display :modal
-           :allow-add? false
-           :allow-edit? false
-           :allow-delete? false
-           :disallowed-action-mode :hide})))))
+           })))))

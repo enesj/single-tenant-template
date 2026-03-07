@@ -3,6 +3,7 @@
   (:require
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
+    [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as tc]
     [app.template.backend.utils.query-builders :as qb]
     [cheshire.core :as json]
@@ -203,6 +204,14 @@
         (log/warn "🔍 AUDIT BACKEND: Unknown entity type:" entity-type)
         nil))))
 
+(def ^:private allowed-audit-order-by
+  {:created-at :al/created_at
+   :action :al/action
+   :actor-type :al/actor_type
+   :target-type :al/target_type
+   :admin-email :a/email
+   :admin-name :a/full_name})
+
 (defn- build-audit-filters-map
   [{:keys [admin-id entity-type entity-id action from-date to-date]}]
   (cond-> {}
@@ -216,17 +225,19 @@
                                                :table-alias :al})))
 
 (defn- build-audit-list-query
-  [{:keys [limit offset] :as opts}]
+  [{:keys [limit offset order-by order-dir] :as opts}]
   (let [join-clause [[:admins :a] [:= :al.actor_id :a.id]]
         base-query {:select [:al.*
                              [:a.email :admin_email]
                              [:a.full_name :admin_name]]
                     :from [[:audit_logs :al]]
                     :left-join join-clause}
-        options {:filters (build-audit-filters-map opts)
-                 :sort {:by :created-at :order :desc :table-alias :al}
-                 :pagination {:limit limit :offset offset}}]
-    (qb/compose-admin-query base-query options)))
+        base-options {:filters (build-audit-filters-map opts)
+                      :pagination {:limit limit :offset offset}}
+        order-column (get allowed-audit-order-by order-by :al/created_at)
+        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
+    (-> (qb/compose-admin-query base-query base-options)
+      (shared-qb/apply-order-by order-column order-direction))))
 
 (defn- build-audit-count-query
   [opts]

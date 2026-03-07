@@ -36,6 +36,12 @@
         on-admin-column-visibility-bulk (fn [entity-name column-keys new-state]
                                           (rf/dispatch [::admin-settings-events/set-column-visibility-bulk
                                                         entity-name column-keys new-state]))
+        on-admin-list-config-change (fn [entity-name setting-key value]
+                                      (rf/dispatch [::admin-settings-events/set-list-config-setting-draft
+                                                    entity-name setting-key value]))
+        on-admin-action-gate-change (fn [entity-name action-key gate-id]
+                                      (rf/dispatch [::admin-settings-events/set-action-gate-draft
+                                                    entity-name action-key gate-id]))
         ;; User handlers
         on-user-change (fn [entity-kw setting-key new-state]
                          (rf/dispatch [::user-settings-events/set-display-setting-draft
@@ -49,6 +55,12 @@
         on-user-column-visibility-bulk (fn [entity-kw column-keys new-state]
                                          (rf/dispatch [::user-settings-events/set-column-visibility-bulk
                                                        entity-kw column-keys new-state]))
+        on-user-list-config-change (fn [entity-kw setting-key value]
+                                     (rf/dispatch [::user-settings-events/set-list-config-setting-draft
+                                                   entity-kw setting-key value]))
+        on-user-action-gate-change (fn [entity-kw action-key gate-id]
+                                     (rf/dispatch [::user-settings-events/set-action-gate-draft
+                                                   entity-kw action-key gate-id]))
         on-user-reset (fn [entity-kw]
                         (rf/dispatch [::user-settings-events/reset-entity-display-draft entity-kw]))
         ;; User form-fields/table-columns handlers
@@ -237,7 +249,9 @@
                 {:entity-kw selected-entity
                  :settings settings
                  :on-change on-admin-change
-                 :on-display-settings-bulk on-admin-display-settings-bulk}))))
+                 :on-display-settings-bulk on-admin-display-settings-bulk
+                 :on-list-config-change on-admin-list-config-change
+                 :on-action-gate-change on-admin-action-gate-change}))))
 
         :user
         (let [view-options (get-in user-draft [:view-options selected-entity])
@@ -290,6 +304,8 @@
                  :entity-config entity-config
                  :on-change on-user-change
                  :on-display-settings-bulk on-user-display-settings-bulk
+                 :on-list-config-change on-user-list-config-change
+                 :on-action-gate-change on-user-action-gate-change
                  :on-reset on-user-reset}))))
 
         ($ :div {:class "ds-alert ds-alert-warning"}

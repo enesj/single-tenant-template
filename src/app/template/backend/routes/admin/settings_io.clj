@@ -8,6 +8,7 @@
   (:require
     [app.domain.backend.registry :as domain-registry]
     [app.shared.frontend-config.io :as frontend-config-io]
+    [app.shared.frontend-config.template-user :as template-user]
     [app.shared.specs.entities :as entities-spec]
     [app.shared.specs.form-fields :as form-fields-spec]
     [app.shared.specs.table-columns :as table-columns-spec]
@@ -44,21 +45,19 @@
       {}
       domain-admin-config-paths)))
 
-;; User-facing (domain-owned) UI config defaults come from the primary domain.
+;; User-facing UI config defaults come from the template-user bundle plus the
+;; primary enabled domain. Template defaults load first; domain defaults win.
 (defn- get-user-config-paths []
-  (domain-registry/primary-user-ui-config-paths))
+  (into []
+    (remove nil?)
+    [template-user/paths
+     (domain-registry/primary-user-ui-config-paths)]))
 
-(defn- user-entities-path []
-  (get (get-user-config-paths) :entities))
-
-(defn- user-view-options-path []
-  (get (get-user-config-paths) :view-options))
-
-(defn- user-form-fields-path []
-  (get (get-user-config-paths) :form-fields))
-
-(defn- user-table-columns-path []
-  (get (get-user-config-paths) :table-columns))
+(defn- user-config-paths-of
+  [config-key]
+  (->> (get-user-config-paths)
+    (keep #(get % config-key))
+    vec))
 
 (defn- validate-or-throw!
   [label validation extra-data]
@@ -164,6 +163,15 @@
         {:errors (:errors validation)
          :warnings (:warnings validation)}))
     merged))
+
+(defn- read-user-default-config
+  [config-key label validate-fn]
+  (apply merge-and-validate
+    (concat
+      [(str "merged " label) validate-fn]
+      (map (fn [path]
+             (read-default-config-or-throw path config-key :user-ui-config label validate-fn))
+        (user-config-paths-of config-key)))))
 
 (def ^:private legacy-admin-default-visible-columns
   {:admins ["id"
@@ -279,10 +287,8 @@
 (defn read-user-entities
   "Read user-facing entities defaults and merge persisted runtime overrides."
   [db]
-  (let [defaults (read-default-config-or-throw
-                   (user-entities-path)
+  (let [defaults (read-user-default-config
                    :entities
-                   :user-ui-config
                    "user entities"
                    entities-spec/validate-user-entities)
         runtime-override (read-runtime-override db user-scope :entities)]
@@ -302,10 +308,8 @@
 (defn read-user-view-options
   "Read user-facing view-options defaults and merge persisted runtime overrides."
   [db]
-  (let [defaults (read-default-config-or-throw
-                   (user-view-options-path)
+  (let [defaults (read-user-default-config
                    :view-options
-                   :user-ui-config
                    "user view-options"
                    view-options-spec/validate-view-options-strict)
         runtime-override (read-runtime-override db user-scope :view-options)]
@@ -326,10 +330,8 @@
 (defn read-user-form-fields
   "Read user-facing form-fields defaults and merge persisted runtime overrides."
   [db]
-  (let [defaults (read-default-config-or-throw
-                   (user-form-fields-path)
+  (let [defaults (read-user-default-config
                    :form-fields
-                   :user-ui-config
                    "user form-fields"
                    form-fields-spec/validate-form-fields-strict)
         runtime-override (read-runtime-override db user-scope :form-fields)]
@@ -350,10 +352,8 @@
 (defn read-user-table-columns
   "Read user-facing table-columns defaults and merge persisted runtime overrides."
   [db]
-  (let [defaults (read-default-config-or-throw
-                   (user-table-columns-path)
+  (let [defaults (read-user-default-config
                    :table-columns
-                   :user-ui-config
                    "user table-columns"
                    table-columns-spec/validate-table-columns-strict)
         runtime-override (read-runtime-override db user-scope :table-columns)]

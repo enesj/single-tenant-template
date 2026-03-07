@@ -69,8 +69,11 @@
   Keys are app keywords (kebab-case). Values are HoneySQL identifiers.
 
   This keeps user-facing list endpoints safe while letting the frontend sort by a
-  supported subset of columns (including joined fields like manufacturer name)."
+  supported subset of columns (including joined fields like manufacturer,
+  category, and subcategory names)."
   {:canonical-name :a/canonical_name
+   :category-name :c/name
+   :subcategory-name :s/name
    :manufacturer-display-name :m/display_name
    :link :a/link
    :normalized-key :a/normalized_key

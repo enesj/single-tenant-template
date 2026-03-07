@@ -83,11 +83,6 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Manufacturers"
-           :form-display :modal
-           :allow-add? true
-           :allow-edit? true
-           :allow-delete? true
-           :disallowed-action-mode :hide
            :render-actions render-manufacturer-row-actions})
 
         ($ rr-wizard/related-records-wizard
@@ -98,4 +93,3 @@
                              (or (:display-name entity)
                                (:display_name entity)
                                "Selected manufacturer"))})))))
-

@@ -84,11 +84,6 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Subcategories"
-           :form-display :modal
-           :disallowed-action-mode :hide
-           :allow-add? true
-           :allow-edit? true
-           :allow-delete? true
            :render-actions render-subcategory-row-actions})
 
         ($ rr-wizard/related-records-wizard

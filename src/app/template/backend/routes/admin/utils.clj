@@ -90,6 +90,21 @@
   {:limit (parse-int-param params :limit default-limit)
    :offset (parse-int-param params :offset default-offset)})
 
+(defn extract-sort-params
+  "Extract sort parameters from request.
+
+   Returns normalized :order-by and :order-dir values when present."
+  [params]
+  (let [order-by (some-> (get-param params :order-by) str keyword)
+        order-dir-raw (some-> (get-param params :order-dir) str str/lower-case)
+        order-dir (case order-dir-raw
+                    "asc" :asc
+                    "desc" :desc
+                    nil)]
+    (cond-> {}
+      order-by (assoc :order-by order-by)
+      order-dir (assoc :order-dir order-dir))))
+
 ;; Error Handling Middleware
 
 (defn with-error-handling

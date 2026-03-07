@@ -192,6 +192,11 @@
              :conn-timeout-ms    5000
              :socket-timeout-ms  60000}
 
+ ;; LlamaParse OCR configuration (optional)
+ ;; Tiers: "fast" (~5-15s), "cost_effective", "agentic" (~2-5min), "agentic_plus"
+ ;; See also: LLAMAPARSE_TIER, LLAMAPARSE_POLL_TIMEOUT_MS env overrides.
+ :llamaparse {:tier "agentic"}
+
  ;; Tenant provisioning defaults
  ;; These are copied into each new tenant's lookup tables on creation.
  ;; The first payer_type with :is-default true becomes the tenant's default.

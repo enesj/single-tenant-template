@@ -1,25 +1,9 @@
 (ns app.template.frontend.settings.resolver
-  "Unified display settings resolver.
-   
-   This is the SINGLE source of truth for resolving display settings.
-   It produces:
-   - :effective — the final computed values used by UI
-   - :locked    — map of setting-key → locked-value for settings that cannot be changed
-   - :defaults  — the resolved defaults (for reset to default UX)
-   
-   PRECEDENCE (highest to lowest):
-   1. Locks from feature constraints (read-only, batch-ops-disabled)
-   2. Locks from view-options.edn / admin settings API
-   3. User preferences (new path: [:ui :entity-prefs])
-   4. Organization defaults from view-options.edn (if using new schema)
-   5. Entity config defaults from entities.edn
-   6. Fallback defaults (in-code)
-   
-   NOTE: Resolver supports both:
-   - New explicit schema (:display-defaults / :display-locks)
-   - Legacy admin schema where presence of :show-*? keys means 'locked'
+  "Unified display and list-config resolver.
 
-   Prefer the explicit schema for new configs."
+   Display settings remain the source of truth for list-view toggles.
+   List-config resolves structural list behavior that previously lived in page props
+   (for example modal-vs-inline and disallowed action mode)."
   (:require
     [app.shared.pagination :as pagination]))
 
@@ -30,19 +14,25 @@
 (def fallback-defaults
   "Fallback default values for all display settings.
    Used when no other source provides a value."
-  {:show-timestamps?    true
-   :show-edit?          true
-   :show-delete?        true
-   :show-highlights?    true
-   :show-select?        true
-   :show-filtering?     true
-   :show-pagination?    true
-   :show-add-button?    true
-   :show-batch-edit?    false
-   :show-batch-delete?  false
+  {:show-timestamps? true
+   :show-edit? true
+   :show-delete? true
+   :show-highlights? true
+   :show-select? true
+   :show-filtering? true
+   :show-pagination? true
+   :show-add-button? true
+   :show-batch-edit? false
+   :show-batch-delete? false
    :show-selected-rows? true
    :show-unselected-rows? true
-   :per-page            pagination/default-page-size})
+   :per-page pagination/default-page-size})
+
+(def fallback-list-config
+  "Fallback defaults for declarative list behavior."
+  {:form-display :inline
+   :disallowed-action-mode :hide
+   :action-gates {}})
 
 (def all-setting-keys
   "All known display setting keys."
@@ -57,7 +47,7 @@
 
 (defn feature-constraints->locks
   "Convert entity feature flags to locked settings.
-   
+
    Business rules:
    - read-only? → locks edit/delete/add to false
    - batch-operations? false → locks select/batch-edit/batch-delete to false"
@@ -114,13 +104,51 @@
       {:defaults {}
        :locks (select-keys view-options display-keys)})))
 
+(defn- normalize-list-config-key
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    :else nil))
+
+(defn- normalize-list-config-value
+  [x]
+  (cond
+    (keyword? x) x
+    (string? x) (keyword x)
+    :else x))
+
+(defn parse-list-config
+  "Normalize list-config values from view-options.
+
+   Strings are accepted for JSON/API round-trips and canonicalized to keywords.
+   Returns the fallback shape when no list-config exists."
+  [view-options]
+  (let [list-config (or (:list-config view-options) {})
+        action-gates (into {}
+                       (keep (fn [[k v]]
+                               (when-let [kk (normalize-list-config-key k)]
+                                 [kk (normalize-list-config-value v)])))
+                       (or (:action-gates list-config) {}))]
+    (merge fallback-list-config
+      (cond-> {}
+        (contains? list-config :form-display)
+        (assoc :form-display (normalize-list-config-value (:form-display list-config)))
+
+        (contains? list-config :disallowed-action-mode)
+        (assoc :disallowed-action-mode
+          (normalize-list-config-value (:disallowed-action-mode list-config)))
+
+        (seq action-gates)
+        (assoc :action-gates action-gates)))))
+
 ;; ============================================================================
-;; Main resolver
+;; Main resolvers
 ;; ============================================================================
 
 (defn resolve-display-settings
   "Resolve effective display settings for an entity.
-   
+
    Arguments:
    - entity-key: keyword identifying the entity
    - sources: map containing all data sources:
@@ -128,44 +156,30 @@
      - :entity-config     — from entities.edn (includes :display-settings, :features)
      - :user-prefs        — from [:ui :entity-prefs entity :display]
      - :legacy-prefs      — from [:ui :entity-configs entity] (deprecated)
-   
+
    Returns:
    {:effective {...}  ; final values for UI
     :locked    {...}  ; keys that are locked (and their locked values)
     :defaults  {...}} ; resolved defaults for 'reset' UX"
   [_entity-key {:keys [view-options entity-config user-prefs legacy-prefs]}]
-  (let [;; 1. Parse view-options (locks + defaults)
-        {:keys [defaults locks]} (parse-view-options view-options)
+  (let [{:keys [defaults locks]} (parse-view-options view-options)
         view-options-defaults defaults
         view-options-locks locks
-
-        ;; 2. Get feature-based locks
         features (:features entity-config)
         feature-locks (feature-constraints->locks features)
-
-        ;; 3. Merge all locks (feature locks take precedence, then view-options)
         all-locks (merge view-options-locks feature-locks)
-
-        ;; 4. Build defaults chain:
-        ;;    fallback < entity-config < view-options-defaults
         entity-defaults (:display-settings entity-config)
         resolved-defaults (merge fallback-defaults
                             entity-defaults
                             view-options-defaults)
-
-        ;; 5. Build effective values for each setting
         effective (reduce
                     (fn [acc setting-key]
-                      (let [;; Check if locked
-                            locked? (contains? all-locks setting-key)
+                      (let [locked? (contains? all-locks setting-key)
                             locked-value (get all-locks setting-key)
-                            ;; User preference (new path > legacy)
-                            ;; Use contains? instead of or to properly handle false values
                             user-value (cond
                                          (contains? user-prefs setting-key) (get user-prefs setting-key)
                                          (contains? legacy-prefs setting-key) (get legacy-prefs setting-key)
                                          :else nil)
-                            ;; Default value
                             default-value (get resolved-defaults setting-key)]
                         (assoc acc setting-key
                           (cond
@@ -174,13 +188,14 @@
                             :else default-value))))
                     {}
                     all-setting-keys)]
-
     {:effective effective
      :locked all-locks
      :defaults resolved-defaults}))
 
-;; ============================================================================
-;; Convenience accessors
-;; ============================================================================
+(defn resolve-list-config
+  "Resolve normalized list-config for an entity.
 
-
+   list-config is view-options-owned. It does not participate in browser-local
+   prefs and is intentionally separate from display toggle resolution."
+  [_entity-key {:keys [view-options]}]
+  (parse-list-config view-options))

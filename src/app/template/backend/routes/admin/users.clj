@@ -15,11 +15,12 @@
     (fn [request]
       (let [params (:params request)
             pagination (utils/extract-pagination-params params)
+            sort (utils/extract-sort-params params)
             filters {:search (:search params)
                      :status (:status params)
                      :email-verified (utils/parse-boolean-param params :email-verified)}
             {:keys [users total limit offset]}
-            (admin-users/list-all-users-page db (merge filters pagination))]
+            (admin-users/list-all-users-page db (merge filters pagination sort))]
         (log/info "👥 Admin list-users returned" (count users) "users"
           {:filters filters :pagination pagination :total total})
         (let [converted-users (shared-db/to-app users)]

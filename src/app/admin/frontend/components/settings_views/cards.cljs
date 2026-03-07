@@ -148,6 +148,49 @@
                    :help-text tip
                    :on-change on-column-change})))))))))
 
+(defui list-behavior-card
+  "Card for declarative list behavior stored in view-options :list-config."
+  [{:keys [entity-kw list-config editing? on-setting-change on-action-gate-change]}]
+  (let [editing? (boolean editing?)
+        list-config (or list-config {})
+        action-gates (or (:action-gates list-config) {})]
+    ($ :div {:class "ds-card bg-base-100 shadow-md hover:shadow-lg transition-shadow"}
+      ($ :div {:class "ds-card-body p-4"}
+        ($ :div {:class "flex items-center justify-between mb-2"}
+          ($ :h3 {:class "ds-card-title text-lg"} "List Behavior")
+          ($ :span {:class "ds-badge ds-badge-info ds-badge-sm"}
+            (str (count (remove nil? (vals action-gates))) " gates")))
+
+        ($ :div {:class "text-xs text-base-content/60 mb-4"}
+          "These options replace page-level list props such as modal mode, disallowed action mode, and runtime capability gates.")
+
+        ($ :div {:class "grid grid-cols-1 gap-2"}
+          ($ rows/enum-setting-row
+            {:entity-kw entity-kw
+             :setting-key :form-display
+             :value (:form-display list-config)
+             :editing? editing?
+             :options (get defs/list-config-select-options :form-display)
+             :help-text "Controls whether add/edit forms render inline or in a modal."
+             :on-change on-setting-change})
+          ($ rows/enum-setting-row
+            {:entity-kw entity-kw
+             :setting-key :disallowed-action-mode
+             :value (:disallowed-action-mode list-config)
+             :editing? editing?
+             :options (get defs/list-config-select-options :disallowed-action-mode)
+             :help-text "Controls whether runtime-disallowed actions are hidden or shown disabled."
+             :on-change on-setting-change})
+          (for [action-key defs/action-gate-order]
+            ($ rows/action-gate-row
+              {:key (str (name entity-kw) "-gate-" (name action-key))
+               :entity-kw entity-kw
+               :action-key action-key
+               :gate-id (get action-gates action-key)
+               :editing? editing?
+               :options defs/action-gate-options
+               :on-change on-action-gate-change})))))))
+
 (defui admin-entity-settings-card
   "Card displaying all hardcoded settings for a single entity (admin style).
 

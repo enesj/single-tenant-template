@@ -47,8 +47,4 @@
           {:entity-name entity-name
            :entity-spec entity-spec
            :title "Countries"
-           :form-display :modal
-           :disallowed-action-mode :hide
-           :allow-add? true
-           :allow-edit? true
-           :allow-delete? true})))))
+           })))))

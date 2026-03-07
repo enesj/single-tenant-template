@@ -12,11 +12,16 @@
 (defui admin-entity-card-for-overview
   "Entity card for admin overview - shows current settings (read-only)."
   [{:keys [entity-kw settings]}]
-  ($ cards/admin-entity-settings-card
-    {:entity-name entity-kw
-     :settings settings
-     :editing? false
-     :setting-keys defs/all-setting-keys}))
+  ($ :div {:class "space-y-4"}
+    ($ cards/admin-entity-settings-card
+      {:entity-name entity-kw
+       :settings settings
+       :editing? false
+       :setting-keys defs/all-setting-keys})
+    ($ cards/list-behavior-card
+      {:entity-kw entity-kw
+       :list-config (:list-config settings)
+       :editing? false})))
 
 (defui user-entity-card-for-overview
   "Entity card for user overview - shows current settings (read-only)."
@@ -25,12 +30,17 @@
         immutable-locks (resolver/feature-constraints->locks (:features entity-config))
         draft-defaults (or (get-in view-options [:display-defaults]) {})
         draft-locks (or (get-in view-options [:display-locks]) {})]
+    ($ :div {:class "space-y-4"}
       ($ cards/user-entity-settings-card
-      {:entity-kw entity-kw
-       :draft-defaults draft-defaults
-       :draft-locks draft-locks
-       :immutable-locks immutable-locks
-       :setting-keys defs/all-setting-keys})))
+        {:entity-kw entity-kw
+         :draft-defaults draft-defaults
+         :draft-locks draft-locks
+         :immutable-locks immutable-locks
+         :setting-keys defs/all-setting-keys})
+      ($ cards/list-behavior-card
+        {:entity-kw entity-kw
+         :list-config (:list-config view-options)
+         :editing? false}))))
 
 (defui scope-section-overview
   "Overview section for a single scope."
@@ -62,7 +72,7 @@
   [{:keys [page-scope admin-config user-draft]}]
   (let [user-entity-keys (defs/entities-for-scope :user)
         user-view-options (merge (zipmap user-entity-keys (repeat {}))
-                                 (or (:view-options user-draft) {}))
+                            (or (:view-options user-draft) {}))
         user-entities (or (:entities user-draft) {})]
     ($ :div {:class "space-y-8"}
       (case page-scope

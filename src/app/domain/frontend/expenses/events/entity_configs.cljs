@@ -1,6 +1,6 @@
 (ns app.domain.frontend.expenses.events.entity-configs
   "Configuration maps for expenses domain entities.
-   
+
    Each configuration defines the specific details needed by the event factory
    to generate standard CRUD events for that entity type.")
 
@@ -14,7 +14,6 @@
    :api-endpoint "/admin/api/expenses/suppliers"
    :detail-response-key :supplier
    :has-forms? false
-   :pagination-opts {:default-per-page 25}
    :server-search-keys #{:display-name}})
 
 (def manufacturers-config
@@ -23,7 +22,6 @@
    :api-endpoint "/admin/api/expenses/manufacturers"
    :detail-response-key :manufacturer
    :has-forms? false
-   :pagination-opts {:default-per-page 25}
    :server-search-keys #{:display-name}})
 
 (def payers-config
@@ -32,8 +30,7 @@
    :api-endpoint "/admin/api/expenses/payers"
    :detail-response-key :payer
    :has-forms? false
-   :pagination-opts {:default-per-page 25
-                     :param-keys {:limit-key :limit
+   :pagination-opts {:param-keys {:limit-key :limit
                                   :offset-key :offset
                                   :page-key :page
                                   :per-page-key :per-page}}})
@@ -43,8 +40,7 @@
    :base-path [:admin :expenses :payer-types]
    :api-endpoint "/admin/api/expenses/payer-types"
    :detail-response-key :payer-type
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def articles-config
   {:entity-key :articles
@@ -52,7 +48,6 @@
    :api-endpoint "/admin/api/expenses/articles"
    :detail-response-key :article
    :has-forms? false
-   :pagination-opts {:default-per-page 25}
    ;; Filter field-ids whose text values should be forwarded as the backend
    ;; :search query param. Other column filters remain client-side only.
    :server-search-keys #{:canonical-name}})
@@ -62,8 +57,7 @@
    :base-path [:admin :expenses :receipts]
    :api-endpoint "/admin/api/expenses/receipts"
    :detail-response-key :receipt
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def expenses-config
   {:entity-key :expenses
@@ -71,48 +65,42 @@
    :form-path [:admin :expenses :form]
    :api-endpoint "/admin/api/expenses/entries"
    :detail-response-key :expense  ;; API returns singular :expense, not :expenses
-   :has-forms? true
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? true})
 
 (def expense-items-config
   {:entity-key :expense-items
    :base-path [:admin :expenses :expense-items]
    :api-endpoint "/admin/api/expenses/expense-items"
    :detail-response-key :expense-item
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def article-aliases-config
   {:entity-key :article-aliases
    :base-path [:admin :expenses :article-aliases]
    :api-endpoint "/admin/api/expenses/article-aliases"
    :detail-response-key :article-alias
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def supplier-aliases-config
   {:entity-key :supplier-aliases
    :base-path [:admin :expenses :supplier-aliases]
    :api-endpoint "/admin/api/expenses/supplier-aliases"
    :detail-response-key :supplier-alias
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def stores-config
   {:entity-key :stores
    :base-path [:admin :expenses :stores]
    :api-endpoint "/admin/api/expenses/stores"
    :detail-response-key :store
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def store-aliases-config
   {:entity-key :store-aliases
    :base-path [:admin :expenses :store-aliases]
    :api-endpoint "/admin/api/expenses/store-aliases"
    :detail-response-key :store-alias
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 ;; =============================================================================
 ;; Configuration Registry
@@ -123,39 +111,32 @@
    :base-path [:admin :expenses :categories]
    :api-endpoint "/admin/api/expenses/categories"
    :detail-response-key :category
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def expense-categories-config
   {:entity-key :expense-categories
    :base-path [:admin :expenses :expense-categories]
    :api-endpoint "/admin/api/expenses/expense-categories"
    :detail-response-key :expense-category
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def cities-config
   {:entity-key :cities
    :base-path [:admin :expenses :cities]
    :api-endpoint "/admin/api/expenses/cities"
    :detail-response-key :city
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def countries-config
   {:entity-key :countries
    :base-path [:admin :expenses :countries]
    :api-endpoint "/admin/api/expenses/countries"
    :detail-response-key :country
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
+   :has-forms? false})
 
 (def subcategories-config
   {:entity-key :subcategories
    :base-path [:admin :expenses :subcategories]
    :api-endpoint "/admin/api/expenses/subcategories"
    :detail-response-key :subcategory
-   :has-forms? false
-   :pagination-opts {:default-per-page 25}})
-
-
+   :has-forms? false})

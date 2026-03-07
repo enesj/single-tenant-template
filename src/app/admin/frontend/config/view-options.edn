@@ -3,19 +3,28 @@
   {:show-edit? true, :show-filtering? true, :per-page 10},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :subcategories
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 50},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :cities
  {:display-defaults
   {:show-edit? true, :show-filtering? true, :per-page 50},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
+ :countries
+ {:display-defaults {},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :admins
  {:column-locks {},
   :display-locks
@@ -24,10 +33,14 @@
   :display-defaults {:show-edit? false}},
  :articles
  {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 25},
+  {:show-edit? true,
+   :show-filtering? true,
+   :show-add-button? false,
+   :per-page 25},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :payer-types
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},
@@ -48,7 +61,8 @@
   {:show-edit? true, :show-filtering? true, :per-page 25},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :payers
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},
@@ -59,13 +73,18 @@
   {:show-edit? true, :show-filtering? true, :per-page 50},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :supplier-aliases
  {:display-defaults
-  {:show-edit? true, :show-filtering? true, :per-page 10},
+  {:show-edit? true,
+   :show-filtering? true,
+   :show-add-button? false,
+   :per-page 10},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :audit-logs
  {:display-locks
   {:show-edit? false,
@@ -90,7 +109,8 @@
   {:show-edit? true, :show-filtering? true, :per-page 10},
   :display-locks {:show-add-button? false},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :login-events
  {:display-locks
   {:show-add-button? false,
@@ -99,10 +119,14 @@
   :display-defaults {:show-batch-delete? false}},
  :article-aliases
  {:display-defaults
-  {:show-filtering? true, :show-edit? true, :per-page 10},
+  {:show-filtering? true,
+   :show-edit? true,
+   :show-add-button? false,
+   :per-page 10},
   :display-locks {},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :store-aliases
  {:display-defaults
   {:show-edit? true,
@@ -111,7 +135,8 @@
    :show-delete? false},
   :display-locks {:show-add-button? false},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :expense-categories
  {:display-locks {},
   :display-defaults
@@ -124,9 +149,32 @@
    :per-page 50},
   :column-defaults {},
   :column-locks {}},
+ :unmapped-aliases
+ {:display-defaults {:show-add-button? false,
+                     :show-edit? false,
+                     :show-delete? false},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :users
  {:display-defaults
   {:show-add-button? true, :show-edit? true, :per-page 25},
   :display-locks {:show-batch-edit? true},
   :column-defaults {},
-  :column-locks {:full-name true}}}
+  :column-locks {:full-name true},
+  :list-config {:form-display :modal}},
+ :backlog
+ {:display-defaults {},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {},
+  :list-config {:form-display :modal}},
+ :tenants
+ {:display-defaults {:show-add-button? false,
+                     :show-filtering? false,
+                     :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {},
+  :list-config {:form-display :modal}}}

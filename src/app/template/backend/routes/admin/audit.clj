@@ -15,6 +15,7 @@
       (let [params (:params request)
             pagination (utils/extract-pagination-params params
                          :default-limit 100)
+            sort (utils/extract-sort-params params)
             filters {:admin-id (when (:admin-id params)
                                  (utils/parse-uuid-custom (:admin-id params)))
                      :entity-type (:entity-type params)
@@ -22,7 +23,7 @@
                                   (utils/parse-uuid-custom (:entity-id params)))
                      :action (:action params)}
             {:keys [logs total limit offset]}
-            (audit-service/get-audit-logs-page db (merge filters pagination))]
+            (audit-service/get-audit-logs-page db (merge filters pagination sort))]
         ;; Convert any remaining PostgreSQL objects for JSON serialization
         (utils/json-response {:logs (shared-db/convert-pg-objects logs)
                               :total total

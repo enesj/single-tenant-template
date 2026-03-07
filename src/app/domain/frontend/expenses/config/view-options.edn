@@ -1,6 +1,11 @@
 {:suppliers
  {:display-locks {:show-batch-edit? false},
-  :display-defaults {:per-page 100, :show-edit? false}},
+  :display-defaults {:per-page 100, :show-edit? false},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/reference.write
+                               :edit :expenses/reference.write
+                               :delete :expenses/reference.write}}},
  :subcategories
  {:display-locks {},
   :display-defaults
@@ -12,7 +17,12 @@
    :show-pagination? true,
    :per-page 50},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/subcategories.manage
+                               :edit :expenses/subcategories.manage
+                               :delete :expenses/subcategories.manage}}},
  :cities
  {:display-locks {},
   :display-defaults
@@ -24,15 +34,30 @@
    :show-pagination? true,
    :per-page 50},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/cities.manage
+                               :edit :expenses/cities.manage
+                               :delete :expenses/cities.manage}}},
  :articles
  {:display-locks {},
-  :display-defaults {:show-edit? false, :show-delete? false}},
+  :display-defaults {:show-edit? false, :show-delete? false, :per-page 25},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/articles.manage
+                               :edit :expenses/articles.manage
+                               :delete :expenses/articles.manage}}},
  :payer-types
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/power-user
+                               :edit :expenses/power-user
+                               :delete :expenses/power-user}}},
  :expenses
  {:display-defaults
   {:show-add-button? false,
@@ -42,12 +67,22 @@
   :display-locks {:show-batch-delete? true, :show-batch-edit? true},
   :column-locks
   {:receipt_id false, :is_posted false, :created_at true},
-  :column-defaults {:purchased_at false}},
+  :column-defaults {:purchased_at false},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/can-write
+                               :edit :expenses/can-write
+                               :delete :expenses/can-write}}},
  :payers
  {:display-locks {},
   :display-defaults {:per-page 50, :show-edit? false},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/reference.write
+                               :edit :expenses/reference.write
+                               :delete :expenses/reference.write}}},
  :categories
  {:display-locks {},
   :display-defaults
@@ -59,12 +94,20 @@
    :show-pagination? true,
    :per-page 50},
   :column-defaults {},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/categories.manage
+                               :edit :expenses/categories.manage
+                               :delete :expenses/categories.manage}}},
  :supplier-aliases
- {:display-defaults {:show-edit? false},
+ {:display-defaults {:show-edit? false,
+                     :show-add-button? false,
+                     :per-page 25},
   :display-locks {},
   :column-defaults {},
-  :column-locks {:id false}},
+  :column-locks {:id false},
+  :list-config {:form-display :modal}},
  :receipts
  {:display-defaults
   {:show-select? true,
@@ -75,18 +118,38 @@
    :per-page 50},
   :display-locks {:show-batch-edit? false, :show-batch-delete? true},
   :column-defaults {:created-at true, :updated-at true},
-  :column-locks {}},
+  :column-locks {},
+  :list-config {:action-gates {:add :expenses/can-write
+                               :select :expenses/can-write}}},
  :stores
  {:display-defaults
   {:show-edit? false, :show-delete? false, :per-page 10},
   :display-locks {},
   :column-defaults {},
-  :column-locks {:id false}},
- :article-aliases
- {:display-defaults {:show-edit? false},
+  :column-locks {:id false},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/stores.manage
+                               :edit :expenses/stores.manage
+                               :delete :expenses/stores.manage}}},
+ :manufacturers
+ {:display-defaults {:per-page 25},
   :display-locks {},
   :column-defaults {},
-  :column-locks {:id false}},
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/manufacturers.manage
+                               :edit :expenses/manufacturers.manage
+                               :delete :expenses/manufacturers.manage}}},
+ :article-aliases
+ {:display-defaults {:show-edit? false,
+                     :show-add-button? false,
+                     :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {:id false},
+  :list-config {:form-display :modal}},
  :store-aliases
  {:display-defaults
   {:per-page 100,
@@ -95,7 +158,17 @@
    :show-edit? true},
   :display-locks {:show-add-button? false},
   :column-defaults {},
-  :column-locks {:id false}},
+  :column-locks {:id false},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:edit :expenses/store-aliases.manage
+                               :delete :expenses/store-aliases.manage}}},
+ :expense-items
+ {:display-defaults {:show-add-button? false, :per-page 25},
+  :display-locks {},
+  :column-defaults {},
+  :column-locks {},
+  :list-config {:form-display :modal}},
  :expense-categories
  {:display-locks {},
   :display-defaults
@@ -107,4 +180,9 @@
    :show-pagination? true,
    :per-page 50},
   :column-defaults {},
-  :column-locks {}}}
+  :column-locks {},
+  :list-config {:form-display :modal
+                :disallowed-action-mode :disable
+                :action-gates {:add :expenses/expense-categories.manage
+                               :edit :expenses/expense-categories.manage
+                               :delete :expenses/expense-categories.manage}}}}

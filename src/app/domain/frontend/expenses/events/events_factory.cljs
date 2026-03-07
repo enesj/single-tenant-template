@@ -159,9 +159,10 @@
               {:keys [limit offset] :as pagination} (when-not fetch-mode?
                                                       (resolve-pagination entity-key db params* pag-opts))
               extra-params (extra-query-params params* pag-opts)
+              sort-params (paths/resolved-list-sort-query-params db entity-key)
               request-params (if fetch-mode?
-                               (merge {:limit fetch-limit :offset fetch-offset} extra-params)
-                               (merge {:limit limit :offset offset} extra-params))
+                               (merge {:limit fetch-limit :offset fetch-offset} extra-params sort-params)
+                               (merge {:limit limit :offset offset} extra-params sort-params))
               db* (-> db
                     (begin-load entity-key base-path))
               db* (if pagination

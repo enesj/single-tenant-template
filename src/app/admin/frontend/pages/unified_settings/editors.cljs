@@ -446,38 +446,52 @@
 
 (defui admin-entity-editor
   "Editor for a single admin entity's settings."
-  [{:keys [entity-kw settings on-change on-display-settings-bulk]}]
+  [{:keys [entity-kw settings on-change on-display-settings-bulk on-list-config-change on-action-gate-change]}]
   (let [local-display-prefs (use-subscribe [::ui-subs/entity-display-prefs entity-kw])
         clear-local-display-prefs! (fn [entity-kw]
                                      (rf/dispatch [::list-ui-events/clear-display-prefs entity-kw]))]
-    ($ cards/admin-entity-settings-card
-      {:entity-name entity-kw
-       :settings settings
-       :local-display-prefs local-display-prefs
-       :on-clear-local-display-prefs clear-local-display-prefs!
-       :editing? true
-       :on-change on-change
-       :on-display-settings-bulk on-display-settings-bulk
-       :setting-keys defs/all-setting-keys})))
+    ($ :div {:class "space-y-4"}
+      ($ cards/admin-entity-settings-card
+        {:entity-name entity-kw
+         :settings settings
+         :local-display-prefs local-display-prefs
+         :on-clear-local-display-prefs clear-local-display-prefs!
+         :editing? true
+         :on-change on-change
+         :on-display-settings-bulk on-display-settings-bulk
+         :setting-keys defs/all-setting-keys})
+      ($ cards/list-behavior-card
+        {:entity-kw entity-kw
+         :list-config (:list-config settings)
+         :editing? true
+         :on-setting-change on-list-config-change
+         :on-action-gate-change on-action-gate-change}))))
 
 (defui user-entity-editor
   "Editor for a single user entity's settings."
-  [{:keys [entity-kw view-options entity-config on-change on-display-settings-bulk on-reset]}]
+  [{:keys [entity-kw view-options entity-config on-change on-display-settings-bulk on-reset on-list-config-change on-action-gate-change]}]
   (let [immutable-locks (resolver/feature-constraints->locks (:features entity-config))
         draft-defaults (or (:display-defaults view-options) {})
         draft-locks (or (:display-locks view-options) {})
         local-display-prefs (use-subscribe [::ui-subs/entity-display-prefs entity-kw])
         clear-local-display-prefs! (fn [entity-kw]
                                      (rf/dispatch [::list-ui-events/clear-display-prefs entity-kw]))]
-    ($ cards/user-entity-settings-card
-      {:entity-kw entity-kw
-       :draft-defaults draft-defaults
-       :draft-locks draft-locks
-       :immutable-locks immutable-locks
-       :local-display-prefs local-display-prefs
-       :on-clear-local-display-prefs clear-local-display-prefs!
-       :editing? true
-       :on-change on-change
-       :on-display-settings-bulk on-display-settings-bulk
-       :on-reset on-reset
-       :setting-keys defs/all-setting-keys})))
+    ($ :div {:class "space-y-4"}
+      ($ cards/user-entity-settings-card
+        {:entity-kw entity-kw
+         :draft-defaults draft-defaults
+         :draft-locks draft-locks
+         :immutable-locks immutable-locks
+         :local-display-prefs local-display-prefs
+         :on-clear-local-display-prefs clear-local-display-prefs!
+         :editing? true
+         :on-change on-change
+         :on-display-settings-bulk on-display-settings-bulk
+         :on-reset on-reset
+         :setting-keys defs/all-setting-keys})
+      ($ cards/list-behavior-card
+        {:entity-kw entity-kw
+         :list-config (:list-config view-options)
+         :editing? true
+         :on-setting-change on-list-config-change
+         :on-action-gate-change on-action-gate-change}))))

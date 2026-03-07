@@ -1,7 +1,6 @@
 (ns app.domain.frontend.expenses.pages.user.subcategories
   "Power-user subcategories list (used for articles)."
   (:require
-    [app.domain.frontend.expenses.authz :as authz]
     [app.domain.frontend.expenses.components.page-guard :refer [expenses-page-guard]]
     [app.domain.frontend.expenses.components.user-power-forms :refer [user-subcategory-add-form-modal
                                                                       user-subcategory-edit-form-modal]]
@@ -73,8 +72,6 @@
 (defui subcategories-page
   []
   (let [t (use-t)
-        role (use-subscribe [:expenses/user-role])
-        can-manage? (authz/can? role :expenses/subcategories.manage)
         entity-name :subcategories
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
@@ -113,11 +110,6 @@
              {:entity-name entity-name
               :entity-spec entity-spec
               :title "Subcategories"
-              :form-display :modal
-              :disallowed-action-mode :disable
-              :allow-add? can-manage?
-              :allow-edit? can-manage?
-              :allow-delete? can-manage?
               :render-add-form render-add-form
               :render-edit-form render-edit-form
               :on-add-success refresh-list

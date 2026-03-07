@@ -100,8 +100,6 @@
              {:entity-name entity-name
               :entity-spec entity-spec
               :title (t :article-aliases/title)
-              :form-display :modal
-              :allow-add? false
               :render-edit-form render-edit-form
               :render-actions (fn [item] (render-actions t item))})))})))
 

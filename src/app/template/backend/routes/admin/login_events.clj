@@ -14,9 +14,11 @@
       (let [params (:params request)
             pagination (utils/extract-pagination-params params
                          :default-limit 100)
+            sort (utils/extract-sort-params params)
             principal-type (some-> (:principal-type params) keyword)
             success (utils/parse-boolean-param params :success)
             options (merge pagination
+                      sort
                       {:principal-type principal-type
                        :success? success})
             {:keys [events total limit offset]} (login-monitoring/list-login-events-page db options)]
