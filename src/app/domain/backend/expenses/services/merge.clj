@@ -24,12 +24,15 @@
   - nil (default)          — simple UPDATE SET col = primary-id WHERE col IN secondary-ids
   - :exclude-then-delete   — delete conflicting rows first, then update remaining
 
-  :child-fks — tables that reference this alias table via FK. Their references must be
-  reassigned before we can delete conflicting alias rows. Each entry maps a child
-  table's FK column to its matching column in the alias table (always :id)."
+  :child-fks — tables that reference this child table via FK. Their references must be
+  reassigned before we can delete conflicting child rows. Each entry maps a child
+  table's FK column to its matching column in the deduped table (always :id)."
   {:suppliers
    [{:table :expenses            :col :supplier_id}
-    {:table :stores              :col :supplier_id}
+    {:table :stores              :col :supplier_id  :conflict-strategy :exclude-then-delete
+     :unique-col :normalized_key
+     :child-fks [{:table :expenses :col :store_id}
+                 {:table :store_aliases :col :store_id}]}
     {:table :supplier_aliases    :col :supplier_id  :conflict-strategy :exclude-then-delete
      :unique-col :raw_label_normalized}
     {:table :article_aliases     :col :supplier_id  :conflict-strategy :exclude-then-delete
@@ -89,83 +92,81 @@
 ;; Alias Conflict Handling
 ;; ============================================================================
 
-(defn- get-primary-unique-vals
-  "Get the set of unique-col values that already exist for the primary."
-  [tx table col unique-col primary-id]
-  (->> (jdbc/execute!
-         tx
-         (sql/format {:select [unique-col]
-                      :from [table]
-                      :where [:= col primary-id]})
-         {:builder-fn rs/as-unqualified-lower-maps})
-    (map unique-col)
-    set))
+(defn- conflict-resolution-order
+  [col primary-id row]
+  [(if (= primary-id (get row col)) 0 1)
+   (or (:created_at row) (java.util.Date. Long/MAX_VALUE))
+   (str (:id row))])
 
-(defn- reassign-child-fks-for-conflicting-aliases!
-  "Before deleting conflicting alias rows, reassign child FK references
-  (e.g. expense_items.alias_id) from secondary aliases to the corresponding
-  primary aliases (matched by unique-col).
+(defn- build-conflict-merge-map
+  "Build loser-id -> keeper-id mappings for rows that would collide on unique-col
+  after reassignment to the primary. Prefer an already-primary row when present;
+  otherwise keep the earliest-created row."
+  [rows col unique-col primary-id]
+  (->> rows
+    (group-by unique-col)
+    vals
+    (filter #(> (count %) 1))
+    (mapcat (fn [matches]
+              (let [ordered (sort-by #(conflict-resolution-order col primary-id %) matches)
+                    keeper-id (:id (first ordered))]
+                (map (fn [row] [(:id row) keeper-id]) (rest ordered)))))
+    (into {})))
 
-  Without this step, deleting a secondary alias that is still referenced by
-  expense_items would violate the FK constraint."
-  [tx alias-table alias-col unique-col primary-id secondary-ids child-fks]
-  (when (seq child-fks)
-    ;; Build a mapping: secondary-alias-id -> primary-alias-id
-    ;; for conflicting aliases (same unique-col value)
-    (let [primary-aliases (jdbc/execute!
-                            tx
-                            (sql/format {:select [:id unique-col]
-                                         :from [alias-table]
-                                         :where [:= alias-col primary-id]})
-                            {:builder-fn rs/as-unqualified-lower-maps})
-          primary-by-key (zipmap (map unique-col primary-aliases)
-                           (map :id primary-aliases))
-          secondary-aliases (jdbc/execute!
-                              tx
-                              (sql/format {:select [:id unique-col]
-                                           :from [alias-table]
-                                           :where [:and
-                                                   [:in alias-col secondary-ids]
-                                                   [:in unique-col (vec (keys primary-by-key))]]})
-                              {:builder-fn rs/as-unqualified-lower-maps})]
-      (doseq [sec-alias secondary-aliases]
-        (let [sec-id (:id sec-alias)
-              pri-id (get primary-by-key (get sec-alias unique-col))]
-          (when pri-id
-            (doseq [{child-table :table child-col :col} child-fks]
-              (let [result (jdbc/execute-one!
-                             tx
-                             (sql/format {:update child-table
-                                          :set {child-col pri-id}
-                                          :where [:= child-col sec-id]}))]
-                (log/info "Reassigned child FK for conflicting alias"
-                  {:child-table child-table
-                   :child-col child-col
-                   :from-alias sec-id
-                   :to-alias pri-id
-                   :updated (:next.jdbc/update-count result 0)})))))))))
+(defn- find-conflicting-rows
+  "Find rows that would conflict on unique-col after reassigning all secondary
+  rows to the primary."
+  [tx table col unique-col primary-id secondary-ids]
+  (jdbc/execute!
+    tx
+    (sql/format {:select [:id col unique-col :created_at]
+                 :from [table]
+                 :where [:and
+                         [:in col (vec (cons primary-id secondary-ids))]
+                         [:is-not unique-col nil]]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
-(defn- delete-conflicting-aliases!
-  "Delete secondary alias rows whose unique-col value already exists for primary.
-
-  First reassigns any child FK references (e.g. expense_items.alias_id) to the
-  primary's equivalent alias so the delete doesn't violate FK constraints."
-  [tx table col unique-col primary-id secondary-ids child-fks]
-  (let [primary-vals (get-primary-unique-vals tx table col unique-col primary-id)]
-    (when (seq primary-vals)
-      ;; Step 1: reassign child FKs before deleting
-      (reassign-child-fks-for-conflicting-aliases!
-        tx table col unique-col primary-id secondary-ids child-fks)
-      ;; Step 2: now safe to delete conflicting aliases
+(defn- reassign-child-fks-for-conflicting-rows!
+  "Reassign dependent FK references away from rows that will be deleted."
+  [tx child-fks conflict-map]
+  (when (and (seq child-fks) (seq conflict-map))
+    (doseq [[from-id to-id] conflict-map
+            {child-table :table child-col :col} child-fks]
       (let [result (jdbc/execute-one!
                      tx
-                     (sql/format {:delete-from table
-                                  :where [:and
-                                          [:in col secondary-ids]
-                                          [:in unique-col primary-vals]]}))]
-        (log/info "Deleted conflicting aliases"
-          {:table table :deleted (:next.jdbc/update-count result 0)})
-        result))))
+                     (sql/format {:update child-table
+                                  :set {child-col to-id}
+                                  :where [:= child-col from-id]}))]
+        (log/info "Reassigned child FK for conflicting row"
+          {:child-table child-table
+           :child-col child-col
+           :from-id from-id
+           :to-id to-id
+           :updated (:next.jdbc/update-count result 0)})))))
+
+(defn- delete-conflicting-rows!
+  "Delete rows that would otherwise collide after merge."
+  [tx table conflict-map]
+  (when (seq conflict-map)
+    (let [loser-ids (vec (keys conflict-map))
+          result (jdbc/execute-one!
+                   tx
+                   (sql/format {:delete-from table
+                                :where [:in :id loser-ids]}))]
+      (log/info "Deleted conflicting rows"
+        {:table table
+         :deleted (:next.jdbc/update-count result 0)})
+      result)))
+
+(defn- dedupe-conflicting-rows!
+  "Resolve rows that would collide on unique-col after reassignment to the primary."
+  [tx table col unique-col primary-id secondary-ids child-fks]
+  (let [rows (find-conflicting-rows tx table col unique-col primary-id secondary-ids)
+        conflict-map (build-conflict-merge-map rows col unique-col primary-id)]
+    (when (seq conflict-map)
+      (reassign-child-fks-for-conflicting-rows! tx child-fks conflict-map)
+      (delete-conflicting-rows! tx table conflict-map)
+      conflict-map)))
 
 ;; ============================================================================
 ;; FK Reassignment
@@ -174,9 +175,9 @@
 (defn- reassign-fk!
   "Reassign FK references from secondary IDs to primary ID for one FK table."
   [tx {:keys [table col conflict-strategy unique-col child-fks]} primary-id secondary-ids]
-  ;; Handle alias unique constraint conflicts
+  ;; Handle unique constraint conflicts that would arise after reassignment.
   (when (= conflict-strategy :exclude-then-delete)
-    (delete-conflicting-aliases! tx table col unique-col primary-id secondary-ids child-fks))
+    (dedupe-conflicting-rows! tx table col unique-col primary-id secondary-ids child-fks))
   ;; Reassign remaining rows
   (let [result (jdbc/execute-one!
                  tx

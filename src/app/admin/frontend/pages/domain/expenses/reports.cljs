@@ -6,7 +6,7 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.stats :refer [page-header]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]
+    [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; ---------------------------------------------------------------------------
@@ -16,18 +16,18 @@
 (defn- fmt-amount [v]
   (let [n (if (number? v) v (js/parseFloat (str v)))]
     (if (js/isNaN n)
-      "\u2014"
+      "—"
       (.toLocaleString n "en" #js {:minimumFractionDigits 2 :maximumFractionDigits 2}))))
 
 (defn- fmt-pct [v]
   (let [n (if (number? v) v (js/parseFloat (str v)))]
     (if (or (nil? v) (js/isNaN n))
-      "\u2014"
+      "—"
       (str (.toFixed n 1) "%"))))
 
 (defn- fmt-int [v]
   (let [n (if (number? v) v (js/parseInt (str v) 10))]
-    (if (js/isNaN n) "\u2014" (.toLocaleString n "en"))))
+    (if (js/isNaN n) "—" (.toLocaleString n "en"))))
 
 (defn- parse-sort-val [v]
   (cond
@@ -67,15 +67,23 @@
         (vec (reverse sorted))
         (vec sorted)))))
 
+(defn- supplier-row-id
+  [row]
+  (str (:supplier-id row) "::" (or (:currency row) "all")))
+
+(defn- article-row-id
+  [row]
+  (str (:alias-id row) "::" (or (:currency row) "all")))
+
 ;; ---------------------------------------------------------------------------
-;; Shared UI atoms
+;; Shared UI
 ;; ---------------------------------------------------------------------------
 
 (defui loading-spinner []
   ($ :div {:class "flex justify-center items-center py-12"}
     ($ :div {:class "ds-loading ds-loading-spinner ds-loading-md text-primary"})))
 
-(defui report-section [{:keys [title subtitle children report-key]}]
+(defui report-section [{:keys [title subtitle children report-key body-class]}]
   (let [loading? (use-subscribe [:admin/report-loading? report-key])
         error (use-subscribe [:admin/report-error report-key])]
     ($ :div {:class "bg-base-100 rounded-2xl border border-base-300 shadow-sm overflow-hidden"}
@@ -83,7 +91,7 @@
         ($ :h3 {:class "text-lg font-bold text-base-content"} title)
         (when subtitle
           ($ :p {:class "text-sm text-base-content/60 mt-0.5"} subtitle)))
-      ($ :div {:class "p-6"}
+      ($ :div {:class (str "p-6 " body-class)}
         (cond
           error ($ :div {:class "ds-alert ds-alert-error"} ($ :span error))
           loading? ($ loading-spinner)
@@ -103,81 +111,294 @@
             :desc "↓"
             "↕"))))))
 
-;; ---------------------------------------------------------------------------
-;; Report tables
-;; ---------------------------------------------------------------------------
+(defui detail-card [{:keys [title subtitle loading? error empty? empty-label children]}]
+  ($ :div {:class "rounded-xl border border-base-300 bg-base-100 overflow-hidden"}
+    ($ :div {:class "px-4 py-3 border-b border-base-200 bg-base-200/40"}
+      ($ :div {:class "flex items-center justify-between gap-3"}
+        ($ :h4 {:class "font-semibold text-sm text-base-content"} title)
+        (when subtitle
+          ($ :span {:class "text-[11px] uppercase tracking-wide text-base-content/45"}
+            subtitle))))
+    ($ :div {:class "p-4"}
+      (cond
+        loading? ($ loading-spinner)
+        error ($ :div {:class "ds-alert ds-alert-error ds-alert-sm"}
+                ($ :span error))
+        empty? ($ :p {:class "text-sm text-base-content/50 text-center py-4"}
+                 empty-label)
+        :else children))))
 
-(defui top-suppliers-table []
-  (let [data (use-subscribe [:admin/report-data :top-suppliers])
-        sort-state (use-subscribe [:admin/report-sort :top-suppliers])
-        sorted (sort-data (or data []) sort-state)]
-    ($ report-section {:title "Top Suppliers"
-                       :subtitle "Ranked by total spending across all users"
-                       :report-key :top-suppliers}
-      (if (seq sorted)
-        ($ :div {:class "overflow-x-auto"}
-          ($ :table {:class "ds-table ds-table-sm w-full"}
-            ($ :thead
-              ($ :tr
-                ($ :th {:class "w-10"} "#")
-                ($ sortable-th {:label "Supplier" :column :supplier-name :report-key :top-suppliers})
-                ($ sortable-th {:label "Currency" :column :currency :report-key :top-suppliers :class "text-right"})
-                ($ sortable-th {:label "Total" :column :total-amount :report-key :top-suppliers :class "text-right"})
-                ($ sortable-th {:label "Expenses" :column :expense-count :report-key :top-suppliers :class "text-right"})
-                ($ sortable-th {:label "Share" :column :share-pct :report-key :top-suppliers :class "text-right"})))
-            ($ :tbody
-              (map-indexed
-                (fn [i row]
-                  ($ :tr {:key (str (:supplier-id row) "-" (:currency row) "-" i)}
-                    ($ :td {:class "text-base-content/50 font-mono"} (str (inc i)))
-                    ($ :td {:class "font-medium"} (or (:supplier-name row) "Unknown"))
-                    ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "\u2014"))
-                    ($ :td {:class "text-right font-semibold tabular-nums"}
-                      (fmt-amount (:total-amount row)))
-                    ($ :td {:class "text-right tabular-nums"}
-                      (fmt-int (:expense-count row)))
-                    ($ :td {:class "text-right"}
-                      ($ :span {:class "ds-badge ds-badge-sm ds-badge-primary ds-badge-outline"}
-                        (fmt-pct (:share-pct row))))))
-                sorted))))
-        ($ :p {:class "text-base-content/50 text-center py-4"} "No supplier data available")))))
+(defui nested-table-shell [{:keys [children]}]
+  ($ :div {:class "overflow-auto max-h-72 rounded-lg border border-base-300"}
+    children))
 
-(defui top-items-table []
-  (let [data (->> (or (use-subscribe [:admin/report-data :top-items]) [])
-               (mapv enrich-top-item-row))
-        sort-state (use-subscribe [:admin/report-sort :top-items])
-        sorted (sort-data data sort-state)]
-    ($ report-section {:title "Top Items"
-                       :subtitle "Ranked by total spending, showing observed price per kom/kg/l"
-                       :report-key :top-items}
-      (if (seq sorted)
-        ($ :div {:class "overflow-x-auto"}
-          ($ :table {:class "ds-table ds-table-sm w-full"}
-            ($ :thead
-              ($ :tr
-                ($ :th {:class "w-10"} "#")
-                ($ sortable-th {:label "Article" :column :article-canonical-name :report-key :top-items})
-                ($ sortable-th {:label "Currency" :column :currency :report-key :top-items :class "text-right"})
-                ($ sortable-th {:label "Price / unit" :column :derived-unit-price :report-key :top-items :class "text-right"})
-                ($ sortable-th {:label "Suppliers" :column :supplier-count :report-key :top-items :class "text-right"})
-                ($ sortable-th {:label "Stores" :column :store-count :report-key :top-items :class "text-right"})))
-            ($ :tbody
-              (map-indexed
-                (fn [i row]
-                  (let [unit-label (or (:unit-label row) "unit")]
-                    ($ :tr {:key (str (:alias-id row) "-" (:currency row) "-" i)}
-                      ($ :td {:class "text-base-content/50 font-mono"} (str (inc i)))
+(defui section-table-head [{:keys [headers]}]
+  ($ :thead {:class "sticky top-0 z-10 bg-base-100 shadow-sm"}
+    ($ :tr
+      (map (fn [{:keys [key label class]}]
+             ($ :th {:key key :class class} label))
+        headers))))
+
+(defui supplier-detail-panel [{:keys [detail-id currency]}]
+  (let [stores (or (use-subscribe [:admin/report-detail-data :supplier-stores detail-id]) [])
+        stores-loading? (use-subscribe [:admin/report-detail-loading? :supplier-stores detail-id])
+        stores-error (use-subscribe [:admin/report-detail-error :supplier-stores detail-id])
+        deep-dive (or (use-subscribe [:admin/report-detail-data :supplier-articles detail-id]) {})
+        articles (vec (or (:top-aliases deep-dive) []))
+        articles-loading? (use-subscribe [:admin/report-detail-loading? :supplier-articles detail-id])
+        articles-error (use-subscribe [:admin/report-detail-error :supplier-articles detail-id])]
+    ($ :div {:class "p-4 bg-base-200/20"}
+      ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-4"}
+        ($ detail-card
+          {:title "Stores"
+           :subtitle (or currency "all currencies")
+           :loading? stores-loading?
+           :error stores-error
+           :empty? (empty? stores)
+           :empty-label "No stores found for this supplier in the current filter scope."}
+          ($ nested-table-shell
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ section-table-head
+                {:headers [{:key :store :label "Store"}
+                           {:key :city :label "City"}
+                           {:key :currency :label "Currency" :class "text-right"}
+                           {:key :total :label "Total" :class "text-right"}
+                           {:key :expenses :label "Expenses" :class "text-right"}
+                           {:key :share :label "Share" :class "text-right"}]})
+              ($ :tbody
+                (map-indexed
+                  (fn [idx row]
+                    ($ :tr {:key (str detail-id "-store-" idx)}
+                      ($ :td {:class "font-medium"} (or (:store-name row) "Unmapped store"))
+                      ($ :td {:class "text-base-content/60"} (or (:city-name row) "—"))
+                      ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
+                      ($ :td {:class "text-right font-semibold tabular-nums"} (fmt-amount (:total-amount row)))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:expense-count row)))
+                      ($ :td {:class "text-right"}
+                        ($ :span {:class "ds-badge ds-badge-sm ds-badge-primary ds-badge-outline"}
+                          (fmt-pct (:share-pct row))))))
+                  stores)))))
+        ($ detail-card
+          {:title "Articles"
+           :subtitle (or currency "all currencies")
+           :loading? articles-loading?
+           :error articles-error
+           :empty? (empty? articles)
+           :empty-label "No article spending found for this supplier in the current filter scope."}
+          ($ nested-table-shell
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ section-table-head
+                {:headers [{:key :article :label "Article"}
+                           {:key :currency :label "Currency" :class "text-right"}
+                           {:key :total :label "Total" :class "text-right"}
+                           {:key :lines :label "Lines" :class "text-right"}]})
+              ($ :tbody
+                (map-indexed
+                  (fn [idx row]
+                    ($ :tr {:key (str detail-id "-article-" idx)}
                       ($ :td {:class "font-medium"}
                         (or (:article-canonical-name row) (:alias-label row) "Unmapped"))
                       ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
-                      ($ :td {:class "text-right font-semibold tabular-nums whitespace-nowrap"}
-                        (if-let [price (:derived-unit-price row)]
-                          (str (fmt-amount price) " / " unit-label)
-                          "—"))
-                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:supplier-count row)))
-                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:store-count row))))))
-                sorted))))
-        ($ :p {:class "text-base-content/50 text-center py-4"} "No item data available")))))
+                      ($ :td {:class "text-right font-semibold tabular-nums"}
+                        (fmt-amount (:total-amount row)))
+                      ($ :td {:class "text-right tabular-nums"}
+                        (fmt-int (:line-count row)))))
+                  articles)))))))))
+
+(defui article-detail-panel [{:keys [detail-id currency]}]
+  (let [breakdown (or (use-subscribe [:admin/report-detail-data :article-breakdown detail-id]) {})
+        loading? (use-subscribe [:admin/report-detail-loading? :article-breakdown detail-id])
+        error (use-subscribe [:admin/report-detail-error :article-breakdown detail-id])
+        suppliers (vec (or (:suppliers breakdown) []))
+        stores (vec (or (:stores breakdown) []))]
+    ($ :div {:class "p-4 bg-base-200/20"}
+      ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-4"}
+        ($ detail-card
+          {:title "Suppliers"
+           :subtitle (or currency "all currencies")
+           :loading? loading?
+           :error error
+           :empty? (empty? suppliers)
+           :empty-label "No supplier breakdown found for this article in the current filter scope."}
+          ($ nested-table-shell
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ section-table-head
+                {:headers [{:key :supplier :label "Supplier"}
+                           {:key :currency :label "Currency" :class "text-right"}
+                           {:key :total :label "Total" :class "text-right"}
+                           {:key :qty :label "Qty" :class "text-right"}
+                           {:key :lines :label "Lines" :class "text-right"}]})
+              ($ :tbody
+                (map-indexed
+                  (fn [idx row]
+                    ($ :tr {:key (str detail-id "-supplier-" idx)}
+                      ($ :td {:class "font-medium"} (or (:supplier-name row) "Unknown supplier"))
+                      ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
+                      ($ :td {:class "text-right font-semibold tabular-nums"} (fmt-amount (:total-amount row)))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-amount (:qty-total row)))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:line-count row)))))
+                  suppliers)))))
+        ($ detail-card
+          {:title "Stores"
+           :subtitle (or currency "all currencies")
+           :loading? loading?
+           :error error
+           :empty? (empty? stores)
+           :empty-label "No store breakdown found for this article in the current filter scope."}
+          ($ nested-table-shell
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ section-table-head
+                {:headers [{:key :store :label "Store"}
+                           {:key :supplier :label "Supplier"}
+                           {:key :currency :label "Currency" :class "text-right"}
+                           {:key :total :label "Total" :class "text-right"}
+                           {:key :qty :label "Qty" :class "text-right"}
+                           {:key :lines :label "Lines" :class "text-right"}]})
+              ($ :tbody
+                (map-indexed
+                  (fn [idx row]
+                    ($ :tr {:key (str detail-id "-store-" idx)}
+                      ($ :td {:class "font-medium"} (or (:store-name row) "Unmapped store"))
+                      ($ :td {:class "text-base-content/60"} (or (:supplier-name row) "Unknown supplier"))
+                      ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
+                      ($ :td {:class "text-right font-semibold tabular-nums"} (fmt-amount (:total-amount row)))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-amount (:qty-total row)))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:line-count row)))))
+                  stores)))))))))
+
+(defui supplier-explorer-table []
+  (let [data (use-subscribe [:admin/report-data :top-suppliers])
+        sort-state (use-subscribe [:admin/report-sort :top-suppliers])
+        sorted (sort-data (or data []) sort-state)
+        [expanded set-expanded] (use-state #{})]
+    ($ report-section {:title "Suppliers"
+                       :subtitle "All supplier rows in the current filter scope. Click a row to inspect stores and articles."
+                       :report-key :top-suppliers
+                       :body-class "p-0"}
+      (if (seq sorted)
+        ($ :div {:class "overflow-x-auto"}
+          ($ :div {:class "max-h-[38rem] overflow-y-auto"}
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ :thead {:class "sticky top-0 z-10 bg-base-100 shadow-sm"}
+                ($ :tr
+                  ($ :th {:class "w-12"} "")
+                  ($ sortable-th {:label "Supplier" :column :supplier-name :report-key :top-suppliers})
+                  ($ sortable-th {:label "Currency" :column :currency :report-key :top-suppliers :class "text-right"})
+                  ($ sortable-th {:label "Total" :column :total-amount :report-key :top-suppliers :class "text-right"})
+                  ($ sortable-th {:label "Expenses" :column :expense-count :report-key :top-suppliers :class "text-right"})
+                  ($ sortable-th {:label "Share" :column :share-pct :report-key :top-suppliers :class "text-right"})))
+              ($ :tbody
+                (map-indexed
+                  (fn [idx row]
+                    (let [detail-id (supplier-row-id row)
+                          expandable? (some? (:supplier-id row))
+                          expanded? (contains? expanded detail-id)]
+                      ($ :<> {:key detail-id}
+                        ($ :tr {:class (str "transition-colors "
+                                         (when expandable? "cursor-pointer hover:bg-base-200/40 ")
+                                         (when expanded? "bg-primary/5"))
+                                :on-click (fn []
+                                            (when expandable?
+                                              (let [opening? (not expanded?)]
+                                                (set-expanded (fn [current]
+                                                                (if (contains? current detail-id)
+                                                                  (disj current detail-id)
+                                                                  (conj (or current #{}) detail-id))))
+                                                (when opening?
+                                                  (rf/dispatch [:admin/fetch-supplier-stores-detail
+                                                                detail-id
+                                                                {:supplier-id (:supplier-id row)
+                                                                 :currency (:currency row)}])
+                                                  (rf/dispatch [:admin/fetch-supplier-articles-detail
+                                                                detail-id
+                                                                {:supplier-id (:supplier-id row)
+                                                                 :currency (:currency row)}])))))}
+                          ($ :td {:class "text-center text-base-content/50"}
+                            (if expandable?
+                              (if expanded? "▾" "▸")
+                              "•"))
+                          ($ :td {:class "font-medium"} (or (:supplier-name row) "Unknown"))
+                          ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
+                          ($ :td {:class "text-right font-semibold tabular-nums"}
+                            (fmt-amount (:total-amount row)))
+                          ($ :td {:class "text-right tabular-nums"}
+                            (fmt-int (:expense-count row)))
+                          ($ :td {:class "text-right"}
+                            ($ :span {:class "ds-badge ds-badge-sm ds-badge-primary ds-badge-outline"}
+                              (fmt-pct (:share-pct row)))))
+                        (when expanded?
+                          ($ :tr
+                            ($ :td {:colSpan 6 :class "p-0"}
+                              ($ supplier-detail-panel {:detail-id detail-id
+                                                        :currency (:currency row)})))))))
+                  sorted)))))
+        ($ :p {:class "text-base-content/50 text-center py-6"} "No supplier data available")))))
+
+(defui article-explorer-table []
+  (let [data (->> (or (use-subscribe [:admin/report-data :top-items]) [])
+               (mapv enrich-top-item-row))
+        sort-state (use-subscribe [:admin/report-sort :top-items])
+        sorted (sort-data data sort-state)
+        [expanded set-expanded] (use-state #{})]
+    ($ report-section {:title "Articles"
+                       :subtitle "All article rows in the current filter scope. Click a row to inspect suppliers and stores."
+                       :report-key :top-items
+                       :body-class "p-0"}
+      (if (seq sorted)
+        ($ :div {:class "overflow-x-auto"}
+          ($ :div {:class "max-h-[38rem] overflow-y-auto"}
+            ($ :table {:class "ds-table ds-table-sm w-full"}
+              ($ :thead {:class "sticky top-0 z-10 bg-base-100 shadow-sm"}
+                ($ :tr
+                  ($ :th {:class "w-12"} "")
+                  ($ sortable-th {:label "Article" :column :article-canonical-name :report-key :top-items})
+                  ($ sortable-th {:label "Currency" :column :currency :report-key :top-items :class "text-right"})
+                  ($ sortable-th {:label "Price / unit" :column :derived-unit-price :report-key :top-items :class "text-right"})
+                  ($ sortable-th {:label "Suppliers" :column :supplier-count :report-key :top-items :class "text-right"})
+                  ($ sortable-th {:label "Stores" :column :store-count :report-key :top-items :class "text-right"})))
+              ($ :tbody
+                (map-indexed
+                  (fn [idx row]
+                    (let [detail-id (article-row-id row)
+                          expandable? (some? (:alias-id row))
+                          expanded? (contains? expanded detail-id)
+                          unit-label (or (:unit-label row) "unit")]
+                      ($ :<> {:key detail-id}
+                        ($ :tr {:class (str "transition-colors "
+                                         (when expandable? "cursor-pointer hover:bg-base-200/40 ")
+                                         (when expanded? "bg-secondary/5"))
+                                :on-click (fn []
+                                            (when expandable?
+                                              (let [opening? (not expanded?)]
+                                                (set-expanded (fn [current]
+                                                                (if (contains? current detail-id)
+                                                                  (disj current detail-id)
+                                                                  (conj (or current #{}) detail-id))))
+                                                (when opening?
+                                                  (rf/dispatch [:admin/fetch-article-breakdown-detail
+                                                                detail-id
+                                                                {:alias-id (:alias-id row)
+                                                                 :currency (:currency row)}])))))}
+                          ($ :td {:class "text-center text-base-content/50"}
+                            (if expandable?
+                              (if expanded? "▾" "▸")
+                              "•"))
+                          ($ :td {:class "font-medium"}
+                            (or (:article-canonical-name row) (:alias-label row) "Unmapped"))
+                          ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
+                          ($ :td {:class "text-right font-semibold tabular-nums whitespace-nowrap"}
+                            (if-let [price (:derived-unit-price row)]
+                              (str (fmt-amount price) " / " unit-label)
+                              "—"))
+                          ($ :td {:class "text-right tabular-nums"} (fmt-int (:supplier-count row)))
+                          ($ :td {:class "text-right tabular-nums"} (fmt-int (:store-count row))))
+                        (when expanded?
+                          ($ :tr
+                            ($ :td {:colSpan 6 :class "p-0"}
+                              ($ article-detail-panel {:detail-id detail-id
+                                                       :currency (:currency row)})))))))
+                  sorted)))))
+        ($ :p {:class "text-base-content/50 text-center py-6"} "No article data available")))))
 
 (defui category-allocation-table []
   (let [data (use-subscribe [:admin/report-data :category-allocation])
@@ -208,11 +429,11 @@
                 ($ :th {:class "w-32"} "")))
             ($ :tbody
               (map-indexed
-                (fn [i row]
+                (fn [idx row]
                   (let [pct (or (js/parseFloat (str (:allocation-pct row))) 0)]
-                    ($ :tr {:key (str (:category-key row) "-" (:currency row) "-" i)}
+                    ($ :tr {:key (str (:category-key row) "-" (:currency row) "-" idx)}
                       ($ :td {:class "font-medium"} (or (:category-name row) "Uncategorized"))
-                      ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "\u2014"))
+                      ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
                       ($ :td {:class "text-right font-semibold tabular-nums"}
                         (fmt-amount (:total-amount row)))
                       ($ :td {:class "text-right tabular-nums"} (fmt-int (:line-count row)))
@@ -239,12 +460,12 @@
       (if (seq grouped)
         ($ :div {:class "space-y-4"}
           (map-indexed
-            (fn [i [[_sid sname currency] rows]]
+            (fn [idx [[supplier-id supplier-name currency] rows]]
               (let [sorted-rows (sort-by :month rows)]
-                ($ :div {:key (str _sid "-" currency "-" i)
+                ($ :div {:key (str supplier-id "-" currency "-" idx)
                          :class "bg-base-200/30 rounded-xl p-4"}
                   ($ :div {:class "flex items-center justify-between mb-3"}
-                    ($ :span {:class "font-semibold text-base-content"} (or sname "Unknown"))
+                    ($ :span {:class "font-semibold text-base-content"} (or supplier-name "Unknown"))
                     ($ :span {:class "ds-badge ds-badge-sm ds-badge-ghost font-mono"} currency))
                   ($ :div {:class "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2"}
                     (map (fn [row]
@@ -337,8 +558,8 @@
       ($ filters-bar)
 
       ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
-        ($ top-suppliers-table)
-        ($ top-items-table))
+        ($ supplier-explorer-table)
+        ($ article-explorer-table))
 
       ($ :div {:class "grid grid-cols-1 xl:grid-cols-2 gap-6"}
         ($ category-allocation-table)

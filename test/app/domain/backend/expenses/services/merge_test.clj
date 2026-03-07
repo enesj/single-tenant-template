@@ -83,6 +83,65 @@
         ;; At minimum, validation should pass (no exception from validate-merge-args!)
         (is true "Validation passed")))))
 
+(deftest reassign-fk-supplier-stores-dedupes-secondary-conflicts-before-reassign-test
+  (testing "supplier store reassignment resolves secondary-secondary normalized-key conflicts first"
+    (let [primary-id (UUID/randomUUID)
+          secondary-a-id (UUID/randomUUID)
+          secondary-b-id (UUID/randomUUID)
+          keeper-store-id (UUID/randomUUID)
+          losing-store-id (UUID/randomUUID)
+          operations (atom [])
+          store-fk-spec (some #(when (= :stores (:table %)) %)
+                          (get @#'merge/fk-configs :suppliers))]
+      (with-redefs [jdbc/execute!
+                    (fn [_db sql-params opts]
+                      (let [sql-str (str/lower-case (first sql-params))]
+                        (swap! operations conj {:type :select
+                                                :sql sql-str
+                                                :opts opts})
+                        (cond
+                          (and (str/includes? sql-str "from stores")
+                            (str/includes? sql-str "created_at"))
+                          [{:id keeper-store-id
+                            :supplier_id secondary-a-id
+                            :normalized_key "shared-store-key"
+                            :created_at #inst "2024-01-01"}
+                           {:id losing-store-id
+                            :supplier_id secondary-b-id
+                            :normalized_key "shared-store-key"
+                            :created_at #inst "2024-01-02"}]
+
+                          :else
+                          [])))
+                    jdbc/execute-one!
+                    (fn [_db sql-params & _]
+                      (let [sql-str (str/lower-case (first sql-params))]
+                        (swap! operations conj {:type :write :sql sql-str})
+                        (cond
+                          (str/includes? sql-str "update expenses set store_id = ?")
+                          {::jdbc/update-count 2}
+
+                          (str/includes? sql-str "update store_aliases set store_id = ?")
+                          {::jdbc/update-count 1}
+
+                          (str/includes? sql-str "delete from stores where id in")
+                          {::jdbc/update-count 1}
+
+                          (str/includes? sql-str "update stores set supplier_id = ?")
+                          {::jdbc/update-count 1}
+
+                          :else
+                          {::jdbc/update-count 0})))]
+        (is (= 1 (#'merge/reassign-fk! :tx store-fk-spec primary-id [secondary-a-id secondary-b-id])))
+        (let [writes (->> @operations
+                       (filter #(= :write (:type %)))
+                       (mapv :sql))]
+          (is (= 4 (count writes)))
+          (is (str/includes? (nth writes 0) "update expenses set store_id = ? where store_id = ?"))
+          (is (str/includes? (nth writes 1) "update store_aliases set store_id = ? where store_id = ?"))
+          (is (str/includes? (nth writes 2) "delete from stores where id in"))
+          (is (str/includes? (nth writes 3) "update stores set supplier_id = ? where supplier_id in")))))))
+
 (deftest merge-preview-validation-rejects-bad-args-test
   (testing "preview also validates args"
     (let [id (UUID/randomUUID)]
