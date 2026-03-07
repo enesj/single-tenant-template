@@ -151,7 +151,7 @@
              :supplier-alias-id nil
              :source :unknown}))
         unknown-supplier-id (try
-                              (aliases/get-unknown-supplier-id db)
+                              (aliases/find-unknown-supplier-id db)
                               (catch Exception _
                                 nil))
         undefined-supplier? (or (nil? supplier-id)

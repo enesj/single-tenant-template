@@ -4,18 +4,14 @@
 
 ## MCP tools (default)
 
-- **Clojure/EDN** (`.clj`/`.cljs`/`.cljc`/`.edn`): use `clojure-mcp` structural edits (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit causes reader/compilation errors, stop and redo with `clojure-mcp`.
-- **REPL**: use `clj-nrepl-eval` for exploration, debugging, and focused tests.
+- **Clojure/EDN** (`.clj`/`.cljs`/`.cljc`/`.edn`): use `clojure-mcp` structural edits (prefer `mcp__clojure-mcp__clojure_edit`). If a plain-text edit causes reader/compilation errors (unbalanced parens/invalid EDN), stop and redo with `clojure-mcp`.
+- **REPL**: use `clj-nrepl-eval` (shell) for exploration, debugging, and focused tests (examples below).
 - **DB**: use `postgres-mcp` for queries + schema (e.g. `mcp__postgres__execute_sql`, `mcp__postgres__list_tables`).
+  - For agent-driven DB reads/writes, use `postgres-mcp` only (no direct `psql`, including `bb -e` + `clojure.java.shell`).
+  - If `(empty)`, verify before assuming failure: `mcp__postgres__list_tables` → `SELECT current_database(), current_user;` → `SELECT COUNT(*) FROM <table>;`.
+  - VS Code: if results look inconsistent, reconnect/restart the PostgreSQL MCP session and re-run.
 - **Browser**: use `chrome-mcp`; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
-
-## Clojure CLI fallbacks (clojure-mcp-light)
-
-Use these only when MCP tools aren’t available (or you want native diff UI):
-
-- Auto paren repair: `clj-paren-repair-claude-hook` (configured via `.claude/settings.json`).
-- Manual paren repair: `clj-paren-repair path/to/file.clj` (don’t “hunt parens”).
-- REPL eval without MCP: `clj-nrepl-eval --discover-ports` then `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload)"`. `deps.edn` has `:nrepl` (port **7888**).
+- **Railway (production)**: use `Railway-mcp` tools when the server is configured. Prefer MCP over CLI for structured output. Install once: `claude mcp add Railway npx @railway/mcp-server`. Key tools: `get-logs`, `list-variables`, `list-services`, `deploy`. Full reference: `docs/general/operations/railway-deployment.md#railway-mcp-server-ai-native-debugging`.
 
 ## Entrypoints
 
@@ -23,20 +19,22 @@ Use these only when MCP tools aren’t available (or you want native diff UI):
 - DI container: `src/app/template/di/config.clj`.
 - Routing composition: `src/app/template/backend/routes.clj`.
 - Route boundaries:
-  - Admin API: `src/app/template/backend/routes/admin_api.clj` mounted at `/admin/api`.
-  - User API: `src/app/template/backend/routes/api.clj` mounted at `/api/v1`.
-  - Domain registry: `src/app/domain/backend/registry.clj`.
+  - Admin API: `src/app/template/backend/routes/admin_api.clj` mounted at `/admin/api` (template JSON middleware + `wrap-admin-authentication`).
+  - User API: `src/app/template/backend/routes/api.clj` mounted at `/api/v1` (includes `/config`, `/metrics`, auth routes).
+  - Domain registry: `src/app/domain/backend/registry.clj` (enabled domains, API + SPA routes).
   - Example domain: Expenses admin routes under `/admin/api/expenses` (`src/app/domain/backend/expenses/routes/core.clj`).
 
 ## Local dev
 
-- Run once: `bb run-app` (auto-reloads).
 - Tests: `bb be-test` (backend), `bb fe-test-parallel` (frontend) or `npm run test:cljs`.
+- Temp artifacts: use project-local `tmp/` (not system `/tmp`); delete when done.
 - Save test output once (don’t re-run to grep): `mkdir -p tmp && bb be-test 2>&1 | tee tmp/be-test.txt`.
+- Alias mapping throughput: batch alias→article mappings via one `map_aliases.clj --mappings-file tmp/<name>.edn` run (not one-by-one loops).
 
 ## Config & ports
 
-- Runtime: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**). Secrets: `config/.secrets.edn` or `~/.secrets.edn`.
+- Runtime: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**).
+- Secrets: `config/.secrets.edn` or `~/.secrets.edn` (or env vars). **Agents must not edit secrets files**; tell the user exactly what to change (path + keys/shape) using placeholders like `"REDACTED"`.
 - User UI config: edited via `/admin/user-settings`, loaded dynamically (see `src/app/template/backend/routes/api.clj`).
 - Dev helpers: rate limit/session helpers under `/admin/api/*` (see `docs/template/backend/security-middleware.md`).
 
@@ -44,10 +42,17 @@ Use these only when MCP tools aren’t available (or you want native diff UI):
 
 - Edit canonical schema inputs under `resources/db/{template,shared,domain}`; never hand-edit `resources/db/migrations/*`.
 - REPL helpers: `src/app/template/backend/migrations/simple_repl.clj` (see `docs/general/migrations/migration-overview.md`).
+- After generating migrations, apply to dev + test: `(mig/migrate!)` and `(mig/migrate! :test)` (or `clj -X:migrations` / `clj -X:migrations-test`).
 
 ## Conventions / footguns
 
 - Naming boundary: DB is `snake_case`, app/runtime is kebab-case; normalize with `app.shared.model-naming/db-keyword->app` + `ensure-app-keyword`.
+- Sorting contract (`order-by`/`order-dir` are boundary input):
+  - Normalize `order-by` to an app keyword via `ensure-app-keyword`.
+  - Allowlist by app keywords (`:allowed-order-by` etc).
+  - Only after allowlisting, map to SQL identifiers/expressions.
+  - Don’t convert to DB snake_case before the allowlist check.
+  - Use stable tie-breakers (e.g. primary key `:asc`) for deterministic pagination.
 - Generic CRUD: `/api/v1/entities/*` is deny-by-default allowlisted; domain entities usually need domain APIs + a CRUD bridge (see `docs/template/backend/generic-entity-crud.md`).
 - Frontend entity specs: `src/app/template/frontend/db/entity_specs.cljs` normalizes keys; wrong columns often = snake↔kebab mismatch.
 - Re-frame: `re-frame/trim-v` is in `app.template.frontend.db.interceptors/common-interceptors`; handlers should destructure like `[params]` (not `[_ params]`).
@@ -57,10 +62,11 @@ Use these only when MCP tools aren’t available (or you want native diff UI):
 
 - REPL-first:
   - Use the connected REPL; don’t spawn new REPLs.
-  - Only edit when the REPL is connected; if evaluation errors indicate the REPL is unavailable, reconnect before continuing.
-  - Use `clojure-mcp` structural edits for Clojure/EDN; if you hit reader/compilation errors after a plain-text edit, immediately redo with `clojure-mcp`.
-  - Reload explicitly: `(require 'my.ns :reload)`.
-  - CLJS: select build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
+  - Prefer `clj-nrepl-eval`:
+    - Discover: `clj-nrepl-eval --discover-ports`
+    - Eval: `clj-nrepl-eval -p <PORT> "(require 'my.ns :reload)"`
+    - CLJS: select build first: `(shadow.cljs.devtools.api/nrepl-select :app)` or `:admin`.
+  - Reload explicitly after edits: `(require 'my.ns :reload)`.
   - Prefer returning values over printing.
 - Validation (required for behavior changes / non-trivial changes):
   - Prove the change via REPL and/or focused tests (at least one).
@@ -69,11 +75,18 @@ Use these only when MCP tools aren’t available (or you want native diff UI):
   - If using tests, run the smallest focused set and save output once with `tee`.
   - Remove temporary instrumentation (`println`, extra logging, debug `def`s) before finishing; keep useful `(comment ...)` examples.
 - Docstrings:
-  - Docstring after fn name, before args; use straight `"` and escape interior quotes (`\"`) (avoid smart quotes).
+  - Docstring goes after function name, before args.
   ```clj
   (defn my-fn
     "Does X with Y."
     [x y]
+    ...)
+  ```
+  - Quoting: use straight `"` and escape interior quotes (`\"`); avoid smart quotes.
+  ```clj
+  (defn normalize-arglist
+    "Normalize a Postgres function \"argument\" list."
+    [s]
     ...)
   ```
 - Indentation: align multi-line forms for readability + delimiter safety.
@@ -113,13 +126,13 @@ Use these only when MCP tools aren’t available (or you want native diff UI):
 
 ## Production debugging (Railway)
 
-**Preferred — Railway MCP** (when configured): use MCP tools directly (`get-logs`, `list-variables`, `list-services`, `deploy`, etc.). Install once with `claude mcp add Railway npx @railway/mcp-server`. Full tool list: `docs/general/operations/railway-deployment.md#railway-mcp-server-ai-native-debugging`.
+**Preferred — Railway MCP** (when configured): use MCP tools directly — `get-logs`, `list-variables`, `list-services`, `deploy`. Install once: `claude mcp add Railway npx @railway/mcp-server`.
 
-**Fallback — Railway CLI**: use `railway run` to get a local process with all prod env vars injected (runtime Docker image is JRE-only — no Clojure tooling):
+**Fallback — Railway CLI**: `railway run` spawns a local process with prod env vars injected (runtime Docker image is JRE-only — no Clojure tooling):
 
 ```bash
 railway logs                           # tail live production logs
-railway variables                      # inspect all env vars
+railway variables                      # list all injected env vars
 railway run clj -M:nrepl               # ⚠ nREPL with live prod DATABASE_URL — reads OK, writes affect prod
 railway run bb seed-geo-reference prod  # run a bb task against prod env
 railway shell                          # bash in running container (JRE-only; no clj/bb/npm)

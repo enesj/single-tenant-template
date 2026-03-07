@@ -3,9 +3,12 @@
   (:require
     [app.domain.backend.expenses.services.cities :as cities]
     [app.domain.backend.expenses.services.places-api :as places-api]
+    [app.domain.backend.expenses.services.stores.matching :as store-matching]
+    [app.domain.backend.expenses.services.stores.receipt-fingerprint :as receipt-fp]
     [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.stores.repo :as store-repo]
     [app.domain.backend.expenses.services.stores.upsert :as store-upsert]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
@@ -140,3 +143,32 @@
           (is (= opts @passed-opts))
           (is (string? @called-key))
           (is (str/includes? @called-key "place")))))))
+
+(deftest resolve-store-from-merchant-uses-supplier-display-name-when-store-name-matches-address-test
+  (testing "create flow replaces address-only store names with supplier display name plus address"
+    (let [supplier-id (UUID/randomUUID)
+          created-store (atom nil)
+          merchant {:store_name "71000 Sarajevo"
+                    :address "71000 Sarajevo"}]
+      (with-redefs [suppliers/service
+                    {:get (fn [_db sid]
+                            (is (= supplier-id sid))
+                            {:id sid
+                             :display_name "Hippy klupa"})}
+                    store-repo/find-by-supplier-and-normalized-key (fn [& _] nil)
+                    store-repo/store-candidates-for-supplier (fn [& _] [])
+                    receipt-fp/match-store-id (fn [& _] nil)
+                    store-matching/match-store (fn [& _] nil)
+                    store-upsert/find-or-create-store!
+                    (fn [_db attrs _opts]
+                      (reset! created-store attrs)
+                      {:id (UUID/randomUUID)
+                       :supplier_id (:supplier_id attrs)
+                       :display_name (:display_name attrs)
+                       :address (:address attrs)
+                       :normalized_key (:normalized_key attrs)})]
+        (let [res (stores/resolve-store-from-merchant :db supplier-id merchant {})]
+          (is (= supplier-id (:supplier_id @created-store)))
+          (is (= "Hippy klupa 71000 Sarajevo" (:display_name @created-store)))
+          (is (= "71000 Sarajevo" (:address @created-store)))
+          (is (= "Hippy klupa 71000 Sarajevo" (get-in res [:store :display_name]))))))))

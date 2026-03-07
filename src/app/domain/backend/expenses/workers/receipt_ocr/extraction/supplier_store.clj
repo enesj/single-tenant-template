@@ -271,18 +271,31 @@
         (if mapped-store-id
           (do
             (try
-              (when (seq store-name)
+              (when (or (seq store-name) (seq address))
                 (let [mapped-store (stores/get-store db mapped-store-id)
                       existing-display (some-> mapped-store :display_name str str/trim not-empty)
+                      effective-store-name (or store-name address)
                       looks-like-supplier-name? (and (seq supplier-name)
                                                   (seq existing-display)
                                                   (= (str/lower-case existing-display)
                                                     (str/lower-case supplier-name)))
+                      looks-like-address? (and (seq address)
+                                            (seq existing-display)
+                                            (= (str/lower-case existing-display)
+                                              (str/lower-case address)))
                       should-promote-store-name? (or (not (seq existing-display))
-                                                   looks-like-supplier-name?)]
+                                                   looks-like-supplier-name?
+                                                   looks-like-address?)
+                      promoted-store-display (if (and (seq supplier-name)
+                                                   (seq address)
+                                                   (or (nil? store-name)
+                                                     (= (str/lower-case effective-store-name)
+                                                       (str/lower-case address))))
+                                               (str/join " " [(str/trim supplier-name) (str/trim address)])
+                                               store-name)]
                   (when should-promote-store-name?
                     (stores/update-store! db mapped-store-id
-                      (cond-> {:display_name store-name}
+                      (cond-> {:display_name promoted-store-display}
                         (seq address) (assoc :address address))
                       opts))))
               (catch Exception e

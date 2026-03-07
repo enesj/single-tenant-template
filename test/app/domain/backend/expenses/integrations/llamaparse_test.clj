@@ -296,6 +296,36 @@
     (is (= "Ogranak Sarajevo 1, Milana Preloga 2 S, 71120 Novo Sarajevo"
           (:raw_address merchant)))))
 
+(deftest receipt-extraction-ignores-agentic-merchant-field-header-lines
+  (let [resp {:text {:pages [{:text (str "Privatna apoteka \"MEDISAN\"\n"
+                                      "mr.ph Amela Hodić\n"
+                                      "JUKIĆEVA DO BROJA 2\n"
+                                      "71103 SARAJEVO CENTAR\n"
+                                      "JIB: 4300502820000\n")}]}
+              :items {:pages [{:items [{:type "header"
+                                        :md (str "merchant.name: Privatna apoteka \"MEDISAN\" mr.ph Amela Hodić\n"
+                                              "merchant.store_name: null\n"
+                                              "merchant.address: JUKIĆEVA DO BROJA 2, 71103 SARAJEVO CENTAR\n"
+                                              "merchant.raw_address: null, JUKIĆEVA DO BROJA 2, 71103 SARAJEVO CENTAR")
+                                        :items [{:type "text"
+                                                 :value (str "merchant.name: Privatna apoteka \"MEDISAN\" mr.ph Amela Hodić\n"
+                                                          "merchant.store_name: null\n"
+                                                          "merchant.address: JUKIĆEVA DO BROJA 2, 71103 SARAJEVO CENTAR\n"
+                                                          "merchant.raw_address: null, JUKIĆEVA DO BROJA 2, 71103 SARAJEVO CENTAR")}]}
+                                       {:type "text"
+                                        :md (str "Privatna apoteka \"MEDISAN\"\n"
+                                              "mr.ph Amela Hodić\n"
+                                              "JUKIĆEVA DO BROJA 2\n"
+                                              "71103 SARAJEVO CENTAR")}
+                                       {:type "table"
+                                        :rows [["ITEM" "17,50E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "MEDISAN" (:name merchant)))
+    (is (= "JUKIĆEVA DO BROJA 2, 71103 SARAJEVO CENTAR" (:address merchant)))
+    (is (not (str/includes? (:address merchant) "merchant.address:")))
+    (is (not (str/includes? (:raw_address merchant) "merchant.raw_address:")))))
+
 (deftest receipt-extraction-recognizes-pj-store-line-and-address
   (let [resp {:items {:pages [{:items [{:type "header"
                                         :md (str "\"BINGO\" d.o.o. EXPORT-IMPORT TUZLA\n"

@@ -82,6 +82,25 @@
     flatten-items
     vec))
 
+(def ^:private synthetic-merchant-field-line-re
+  #"(?iu)^merchant\.(?:name|store[_ ]?name|address|raw[_ ]?address)\s*:")
+
+(defn- synthetic-merchant-field-line?
+  [line]
+  (boolean
+    (and (string? line)
+      (re-find synthetic-merchant-field-line-re (str/trim line)))))
+
+(defn- sanitize-header-item-text
+  [s]
+  (when-let [s (safe-trim s)]
+    (->> (str/split-lines s)
+      (remove synthetic-merchant-field-line?)
+      (map safe-trim)
+      (remove nil?)
+      (str/join "\n")
+      safe-trim)))
+
 (defn response->header-text
   [resp-json]
   (let [items (response->all-items resp-json)
@@ -97,8 +116,9 @@
           items)]
     (->> (concat pre-table-text-items header-items)
       (keep (fn [item]
-              (or (safe-trim (:md item))
-                (safe-trim (:value item)))))
+              (sanitize-header-item-text
+                (or (safe-trim (:value item))
+                  (safe-trim (:md item))))))
       (remove str/blank?)
       distinct
       (str/join "\n\n")

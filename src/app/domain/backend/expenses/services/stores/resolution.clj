@@ -6,10 +6,38 @@
     [app.domain.backend.expenses.services.stores.receipt-fingerprint :as receipt-fp]
     [app.domain.backend.expenses.services.stores.repo :as repo]
     [app.domain.backend.expenses.services.stores.upsert :as upsert]
+    [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]))
 
 (def ^:private try-uuid type-conv/try-parse-uuid)
+
+(defn- same-store-text?
+  [a b]
+  (let [a* (some-> a str str/trim not-empty)
+        b* (some-> b str str/trim not-empty)]
+    (and (seq a*)
+      (seq b*)
+      (= (str/lower-case a*)
+        (str/lower-case b*)))))
+
+(defn- normalize-store-display-name
+  [supplier-name store-name address]
+  (let [supplier-name* (some-> supplier-name str str/trim not-empty)
+        store-name* (some-> store-name str str/trim not-empty)
+        address* (some-> address str str/trim not-empty)]
+    (cond
+      (same-store-text? store-name* supplier-name*)
+      nil
+
+      (and (or (same-store-text? store-name* address*)
+             (nil? store-name*))
+        (seq supplier-name*)
+        (seq address*))
+      (str/join " " [supplier-name* address*])
+
+      :else
+      store-name*)))
 
 (defn resolve-store-from-merchant
   "Best-effort store resolution from merchant data."
@@ -17,12 +45,21 @@
    (resolve-store-from-merchant db supplier-id merchant nil))
   ([db supplier-id {:keys [name store_name address]}
     {:keys [places-cfg user-region receipt-markdown
-            store-alias-normalized store-alias-raw-label]
+            store-alias-normalized store-alias-raw-label supplier-display-name]
      :as opts}]
    (let [supplier-id* (try-uuid supplier-id)
-         supplier-name* (some-> name str str/trim not-empty)
+           merchant-name* (some-> name str str/trim not-empty)
+           supplier-display-name* (or (some-> supplier-display-name str str/trim not-empty)
+                                    (when (and (not (seq merchant-name*)) supplier-id*)
+                                      (some-> ((:get suppliers/service) db supplier-id*)
+                                      :display_name
+                                      str
+                                      str/trim
+                                      not-empty)))
+         supplier-name* (or supplier-display-name*
+                            merchant-name*)
          address* (some-> address str str/trim not-empty)
-         store-name* (some-> store_name str str/trim not-empty)
+         store-name* (normalize-store-display-name supplier-name* store_name address)
          store-label (or address* store-name*)
          store-display-basic (or store-name* address* "Store")
          alias-key (or (some-> store-alias-normalized str str/trim not-empty)

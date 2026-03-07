@@ -63,6 +63,19 @@
           {:builder-fn rs/as-unqualified-lower-maps})
         new-id))))
 
+(defn find-unknown-supplier-id
+  "Returns the ID of the 'Unknown Supplier' record, or nil if it doesn't exist.
+   Read-only — does NOT create the record. Use get-unknown-supplier-id when creation is needed."
+  [db]
+  (some-> (jdbc/execute-one!
+            db
+            (sql/format {:select [:id]
+                         :from [:suppliers]
+                         :where [:= :normalized_key unknown-supplier-normalized-key]
+                         :limit 1})
+            {:builder-fn rs/as-unqualified-lower-maps})
+    :id))
+
 ;; ============================================================================
 ;; Core Operations
 ;; ============================================================================

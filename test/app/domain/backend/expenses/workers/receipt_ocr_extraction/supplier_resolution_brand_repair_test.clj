@@ -77,6 +77,123 @@
                 :address "Milana Preloga 2 S, 71120 Novo Sarajevo"}
               (select-keys (:store-merchant @calls) [:name :store_name :address])))))))
 
+(deftest persist-extract-result-replaces-store-name-when-it-duplicates-address
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:store-merchant nil})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id supplier-alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+
+                  store-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id (java.util.UUID/randomUUID)
+                     :store_id nil})
+                  stores/resolve-store-from-merchant
+                  (fn [_db _supplier-id merchant _opts]
+                    (swap! calls assoc :store-merchant merchant)
+                    {:store-id nil
+                     :store-alias-label nil})
+
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "Hippy klupa"
+                                                    :store_name "71000 Sarajevo"
+                                                    :address "71000 Sarajevo"}
+                                         :totals {:total 14.0}
+                                         :items [{:raw_label "ITEM" :line_total 14.0}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})
+            stored-merchant (get-in @stored [:raw_extract_json :extraction :merchant])]
+        (is (= "Hippy klupa 71000 Sarajevo" (:store_name stored-merchant)))
+        (is (= "71000 Sarajevo" (:address stored-merchant)))
+        (is (= "Hippy klupa 71000 Sarajevo" (:store_guess @stored)))
+        (is (= {:name "Hippy klupa"
+                :store_name "Hippy klupa 71000 Sarajevo"
+                :address "71000 Sarajevo"}
+              (select-keys (:store-merchant @calls) [:name :store_name :address])))))))
+
+(deftest persist-extract-result-replaces-store-name-when-store-name-is-absent
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:store-merchant nil})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id supplier-alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+
+                  store-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id (java.util.UUID/randomUUID)
+                     :store_id nil})
+                  stores/resolve-store-from-merchant
+                  (fn [_db _supplier-id merchant _opts]
+                    (swap! calls assoc :store-merchant merchant)
+                    {:store-id nil
+                     :store-alias-label nil})
+
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "Hippy klupa"
+                                                    :address "71000 Sarajevo"}
+                                         :totals {:total 14.0}
+                                         :items [{:raw_label "ITEM" :line_total 14.0}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})
+            stored-merchant (get-in @stored [:raw_extract_json :extraction :merchant])]
+        (is (= "Hippy klupa 71000 Sarajevo" (:store_name stored-merchant)))
+        (is (= "71000 Sarajevo" (:address stored-merchant)))
+        (is (= "Hippy klupa 71000 Sarajevo" (:store_guess @stored)))
+        (is (= {:name "Hippy klupa"
+                :store_name "Hippy klupa 71000 Sarajevo"
+                :address "71000 Sarajevo"}
+              (select-keys (:store-merchant @calls) [:name :store_name :address])))))))
+
 (deftest persist-extract-result-prefers-promoted-brand-over-store-alias-inference
   (let [receipt-id (java.util.UUID/randomUUID)
         supplier-alias-id (java.util.UUID/randomUUID)
@@ -342,3 +459,124 @@
         (is (= {:display_name "Ogranak Sarajevo 1"
                 :address "Milana Preloga 2 S, 71120 Novo Sarajevo"}
               (:store-update @calls)))))))
+
+(deftest persist-extract-result-fixes-existing-store-with-address-only-display-name
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        mapped-store-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:store-update nil})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id supplier-alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+
+                  store-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id (java.util.UUID/randomUUID)
+                     :store_id mapped-store-id})
+                  stores/get-store
+                  (fn [_db store-id]
+                    (when (= mapped-store-id store-id)
+                      {:id store-id
+                       :display_name "71000 Sarajevo"}))
+                  stores/update-store!
+                  (fn [_db store-id data _opts]
+                    (swap! calls assoc :store-update data)
+                    {:id store-id
+                     :display_name (:display_name data)})
+
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "Hippy klupa"
+                                                    :store_name "71000 Sarajevo"
+                                                    :address "71000 Sarajevo"}
+                                         :totals {:total 14.0}
+                                         :items [{:raw_label "ITEM" :line_total 14.0}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})]
+        (is (= {:display_name "Hippy klupa 71000 Sarajevo"
+                :address "71000 Sarajevo"}
+              (:store-update @calls))
+          "existing store with address-only display_name should be updated to supplier + address")))))
+
+(deftest persist-extract-result-fixes-existing-store-when-store-name-is-absent
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        mapped-store-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        calls (atom {:store-update nil})]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id supplier-alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+
+                  store-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id (java.util.UUID/randomUUID)
+                     :store_id mapped-store-id})
+                  stores/get-store
+                  (fn [_db store-id]
+                    (when (= mapped-store-id store-id)
+                      {:id store-id
+                       :display_name "71000 Sarajevo"}))
+                  stores/update-store!
+                  (fn [_db store-id data _opts]
+                    (swap! calls assoc :store-update data)
+                    {:id store-id
+                     :display_name (:display_name data)})
+
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "Hippy klupa"
+                                                    :address "71000 Sarajevo"}
+                                         :totals {:total 14.0}
+                                         :items [{:raw_label "ITEM" :line_total 14.0}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})]
+        (is (= {:display_name "Hippy klupa 71000 Sarajevo"
+                :address "71000 Sarajevo"}
+              (:store-update @calls))
+          "existing store with address-only display_name should be updated even when store_name is absent")))))
