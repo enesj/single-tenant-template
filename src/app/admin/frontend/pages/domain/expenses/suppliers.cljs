@@ -73,8 +73,7 @@
                          (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
                          (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
                                             [::suppliers-events/load-list]])
-                         (rf/dispatch [::suppliers-events/load-list
-                                       {:page 1 :per-page 25}]))
+                         (rf/dispatch [::suppliers-events/load-list {:page 1}]))
                        [])]
     (use-effect
       (fn []

@@ -27,7 +27,7 @@
                          (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
                          (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
                                             [::countries-events/load-list]])
-                         (rf/dispatch [::countries-events/load-list {:page 1 :per-page 25}]))
+                         (rf/dispatch [::countries-events/load-list {:page 1}]))
                        [])]
     (use-effect
       (fn []
