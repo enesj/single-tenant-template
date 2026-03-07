@@ -31,7 +31,8 @@
   :computed-fields
   {:raw_label {},
    :expense_purchased_at {:type "timestamp"},
-   :article_canonical_name {}}},
+   :article_canonical_name {}},
+  :column-config {:alias_id {:type "text"}, :article_id {:type "text"}, :expense_id {:type "text"}}},
  :suppliers
  {:available-columns
   ["display_name"
@@ -123,7 +124,7 @@
   {:manufacturer_display_name {:type "string", :label "Manufacturer"}
    :category_name {:type "string", :label "Category"}
    :subcategory_name {:type "string", :label "Subcategory"}},
-  :column-config {},
+  :column-config {:subcategory_id {:type "text"}, :manufacturer_id {:type "text"}},
   :column-metadata
   {:manufacturer_display_name {:label-key :common/manufacturer},
    :manufacturer_id {:label-key :common/manufacturer-id},
@@ -168,7 +169,8 @@
    "is_posted"
    "created_at"
    "updated_at"],
-  :always-visible []},
+  :always-visible [],
+  :column-config {:receipt_id {:type "text"}, :user_id {:type "text"}, :supplier_id {:type "text"}, :payer_id {:type "text"}, :store_id {:type "text"}, :created_by {:type "text"}, :expense_category_id {:type "text"}}},
  :manufacturers
  {:available-columns
   ["display_name" "normalized_key" "created_at" "updated_at" "id"],
@@ -186,7 +188,7 @@
   :always-visible ["label"],
   :computed-fields
   {:payer_type_label {:type "string", :label "Payer Type"}},
-  :column-config {},
+  :column-config {:payer_type_id {:type "text"}},
   :column-metadata
   {:payer_type_label {:label-key :common/payer-type},
    :payer_type_id {:label-key :common/payer-type-id}}},
@@ -216,7 +218,7 @@
    "created_at"],
   :always-visible ["raw_label"],
   :computed-fields {:supplier_display_name {}},
-  :column-config {}},
+  :column-config {:supplier_id {:type "text"}}},
  :audit-logs
  {:available-columns
   ["action" "entity-name" "admin-email" "admin-name" "user-agent" "id" "actor-type" "actor-id" "target-type" "target-id" "metadata" "ip" "created-at" "updated-at"],
@@ -269,7 +271,7 @@
    "updated-at"],
   :always-visible ["original-filename" "status" "purchased-at-guess"],
   :computed-fields {},
-  :column-config {}},
+  :column-config {:expense-id {:type "text"}, :user-id {:type "text"}, :payer-id {:type "text"}, :supplier-alias-id {:type "text"}, :store-alias-id {:type "text"}, :created-by {:type "text"}}},
  :login-events
  {:available-columns
   ["created-at" "principal-type" "success" "reason" "user-agent" "id" "principal-id" "ip" "updated-at"],
@@ -319,7 +321,9 @@
    :raw_label {:width "260px"},
    :raw_label_normalized {:width "220px"},
    :confidence {:width "110px"},
-   :created_at {:width "160px", :formatter "date"}}},
+   :created_at {:width "160px", :formatter "date"},
+   :supplier_id {:type "text"},
+   :article_id {:type "text"}}},
  :stores
  {:available-columns
   ["supplier_display_name"
@@ -342,7 +346,7 @@
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :city_name {:type "string", :label "City"}}
-  :column-config {}
+  :column-config {:supplier_id {:type "text"}, :city_id {:type "text"}}
   :column-metadata
   {:supplier_display_name {:label-key :common/supplier},
    :supplier_id {:label-key :common/supplier-id},
@@ -385,7 +389,7 @@
   :always-visible ["raw_label"],
   :computed-fields
   {:supplier_display_name {}, :store_display_name {}, :store_address {}},
-  :column-config {}}
+  :column-config {:store_id {:type "text"}}}
 
  :categories
  {:available-columns
@@ -437,7 +441,7 @@
   :always-visible ["name"],
   :computed-fields
   {:category_name {:type "string", :label "Category"}},
-  :column-config {},
+  :column-config {:category_id {:type "text"}},
   :column-metadata
   {:category_name {:label-key :common/category},
    :category_id {:label-key :common/category-id}}},

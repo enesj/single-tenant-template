@@ -103,6 +103,20 @@ rule ComputedColumnInheritsSortAndFilter {
     ensures: fk.computed_column.name in fk.source_entity.filterable_columns
 }
 
+rule FkColumnTypeMustBeText {
+    when: fk: ForeignKey.created
+
+    -- The raw FK ID column MUST have its display type set to "text" in
+    -- column-config. Without this override, the type resolution falls through
+    -- to models.edn which declares FK fields as ForeignKeyField (type = "select").
+    -- A "select" type causes the cell renderer to resolve the UUID to the
+    -- referenced entity's human-readable name — identical to the computed column.
+    --
+    -- Convention: column-config entries for FK ID columns always include
+    -- {:type "text"} so the raw UUID is rendered as plain text when toggled visible.
+    ensures: fk.source_column.display_type = "text"
+}
+
 rule FkColumnLabelMustBeDisambiguated {
     when: fk: ForeignKey.created
 
