@@ -8,6 +8,7 @@
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.list.cells :as list-cells]
+    [app.template.frontend.events.list.ui-state :as ui-state]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -18,7 +19,7 @@
     app.domain.frontend.expenses.admin.adapters.specs
     app.domain.frontend.expenses.admin.adapters.sync
     app.domain.frontend.expenses.events.cities
-    app.domain.frontend.expenses.events.stores
+    [app.domain.frontend.expenses.events.stores :as stores-events]
     app.domain.frontend.expenses.subs.stores))
 
 (defn- show-related-records-actions
@@ -59,6 +60,15 @@
     :label "Articles"
     :description "Articles purchased at this store."}])
 
+(defn dispatch-admin-stores-refresh!
+  [dispatch! dispatch-sync!]
+  (dispatch-sync! [::ui-state/set-pagination-mode :stores :server])
+  (dispatch-sync! [::ui-state/set-refresh-event :stores [::stores-events/load-list]])
+  ;; Cities are reference data for filter/select rendering and should stay unpaginated.
+  (dispatch! [:app.domain.frontend.expenses.events.cities/load-list
+              {:fetch-limit 200 :fetch-offset 0}])
+  (dispatch! [::stores-events/load-list {:page 1 :per-page 25}]))
+
 (defui admin-stores-page
   "Admin route: /admin/stores"
   []
@@ -66,10 +76,7 @@
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
         refresh-list (use-callback
                        (fn []
-                         ;; Cities: reference data for city_id filter dropdown (fetch-mode, no pagination state)
-                         (rf/dispatch [:app.domain.frontend.expenses.events.cities/load-list
-                                       {:fetch-limit 200 :fetch-offset 0}])
-                         (rf/dispatch [:app.domain.frontend.expenses.events.stores/load-list {}]))
+                         (dispatch-admin-stores-refresh! rf/dispatch rf/dispatch-sync))
                        [])]
     (use-effect
       (fn []

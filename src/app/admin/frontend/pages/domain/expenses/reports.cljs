@@ -36,6 +36,28 @@
     :else (let [n (js/parseFloat (str v))]
             (if (js/isNaN n) (str v) n))))
 
+(defn- top-item-unit-label
+  [row]
+  (let [label (str (or (:article-canonical-name row) (:alias-label row) ""))]
+    (cond
+      (re-find #"(?i)(?:/|\b)(?:kg|kilogram(?:a)?)(?:\b|$)" label) "kg"
+      (re-find #"(?i)(?:/|\b)(?:l|lt|ltr|lit|litar|litra)(?:\b|$)" label) "l"
+      (re-find #"(?i)(?:/|\b)(?:ko|kom|komad|komada|pc)(?:\b|$)" label) "kom"
+      :else nil)))
+
+(defn- top-item-unit-price
+  [row]
+  (let [total (parse-sort-val (:total-amount row))
+        qty (parse-sort-val (:qty-total row))]
+    (when (and (number? total) (number? qty) (pos? qty))
+      (/ total qty))))
+
+(defn- enrich-top-item-row
+  [row]
+  (assoc row
+    :unit-label (top-item-unit-label row)
+    :derived-unit-price (top-item-unit-price row)))
+
 (defn- sort-data [data sort-state]
   (if-not (:column sort-state)
     data
@@ -121,11 +143,12 @@
         ($ :p {:class "text-base-content/50 text-center py-4"} "No supplier data available")))))
 
 (defui top-items-table []
-  (let [data (use-subscribe [:admin/report-data :top-items])
+  (let [data (->> (or (use-subscribe [:admin/report-data :top-items]) [])
+               (mapv enrich-top-item-row))
         sort-state (use-subscribe [:admin/report-sort :top-items])
-        sorted (sort-data (or data []) sort-state)]
+        sorted (sort-data data sort-state)]
     ($ report-section {:title "Top Items"
-                       :subtitle "Most purchased articles by total spending"
+                       :subtitle "Ranked by total spending, showing observed price per kom/kg/l"
                        :report-key :top-items}
       (if (seq sorted)
         ($ :div {:class "overflow-x-auto"}
@@ -135,23 +158,24 @@
                 ($ :th {:class "w-10"} "#")
                 ($ sortable-th {:label "Article" :column :article-canonical-name :report-key :top-items})
                 ($ sortable-th {:label "Currency" :column :currency :report-key :top-items :class "text-right"})
-                ($ sortable-th {:label "Total" :column :total-amount :report-key :top-items :class "text-right"})
-                ($ sortable-th {:label "Qty" :column :qty-total :report-key :top-items :class "text-right"})
+                ($ sortable-th {:label "Price / unit" :column :derived-unit-price :report-key :top-items :class "text-right"})
                 ($ sortable-th {:label "Suppliers" :column :supplier-count :report-key :top-items :class "text-right"})
                 ($ sortable-th {:label "Stores" :column :store-count :report-key :top-items :class "text-right"})))
             ($ :tbody
               (map-indexed
                 (fn [i row]
-                  ($ :tr {:key (str (:alias-id row) "-" (:currency row) "-" i)}
-                    ($ :td {:class "text-base-content/50 font-mono"} (str (inc i)))
-                    ($ :td {:class "font-medium"}
-                      (or (:article-canonical-name row) (:alias-label row) "Unmapped"))
-                    ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "\u2014"))
-                    ($ :td {:class "text-right font-semibold tabular-nums"}
-                      (fmt-amount (:total-amount row)))
-                    ($ :td {:class "text-right tabular-nums"} (fmt-int (:qty-total row)))
-                    ($ :td {:class "text-right tabular-nums"} (fmt-int (:supplier-count row)))
-                    ($ :td {:class "text-right tabular-nums"} (fmt-int (:store-count row)))))
+                  (let [unit-label (or (:unit-label row) "unit")]
+                    ($ :tr {:key (str (:alias-id row) "-" (:currency row) "-" i)}
+                      ($ :td {:class "text-base-content/50 font-mono"} (str (inc i)))
+                      ($ :td {:class "font-medium"}
+                        (or (:article-canonical-name row) (:alias-label row) "Unmapped"))
+                      ($ :td {:class "text-right text-xs font-mono"} (or (:currency row) "—"))
+                      ($ :td {:class "text-right font-semibold tabular-nums whitespace-nowrap"}
+                        (if-let [price (:derived-unit-price row)]
+                          (str (fmt-amount price) " / " unit-label)
+                          "—"))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:supplier-count row)))
+                      ($ :td {:class "text-right tabular-nums"} (fmt-int (:store-count row))))))
                 sorted))))
         ($ :p {:class "text-base-content/50 text-center py-4"} "No item data available")))))
 
