@@ -1,0 +1,245 @@
+-- list-view-fk-resolution.allium
+--
+-- Every list-view table that contains a Foreign Key column must expose a
+-- human-readable computed column for that FK and hide the raw ID by default.
+
+-- =============================================================================
+-- Domain Entities
+-- =============================================================================
+
+entity DomainEntity {
+    name: String                              -- e.g. "stores", "subcategories"
+    display_field: String                     -- the human-readable field on THIS entity
+                                              --   e.g. "display_name", "name", "label"
+    columns: List<Column>
+    fk_columns: columns where kind = fk
+}
+
+value Column {
+    name: String                              -- DB column name, snake_case
+    kind: own | fk | computed                 -- own = native field, fk = foreign key ID,
+                                              --   computed = server-side JOIN result
+    visible_by_default: Boolean
+    label_key: String                         -- i18n key for column header
+}
+
+value ForeignKey {
+    source_entity: DomainEntity               -- the entity whose list-view we configure
+    source_column: Column                     -- e.g. supplier_id
+    target_entity: DomainEntity               -- the referenced entity, e.g. suppliers
+    computed_column: Column                   -- the resolved display column, e.g. supplier_display_name
+}
+
+-- =============================================================================
+-- Display-Field Registry
+-- =============================================================================
+-- Each entity declares which field is its "human-readable label".
+-- The computed column name follows the convention:
+--   {target_entity_singular}_{target_display_field}
+-- with two exceptions allowed for legacy naming:
+--   - "canonical_name" prefixed by entity singular  (article_canonical_name)
+--   - coalesce expressions                          (created_by_name)
+
+config {
+    display_field_registry: Map<String, String>
+}
+
+default display_field_registry = {
+    "suppliers":          "display_name",
+    "stores":             "display_name",
+    "manufacturers":      "display_name",
+    "categories":         "name",
+    "subcategories":      "name",
+    "expense_categories": "name",
+    "payer_types":        "label",
+    "payers":             "label",
+    "articles":           "canonical_name",
+    "cities":             "name",
+    "countries":          "country",
+    "users":              "full_name"
+}
+
+-- =============================================================================
+-- Rules
+-- =============================================================================
+
+rule ForeignKeyMustHaveComputedColumn {
+    when: fk: ForeignKey.created
+
+    -- Backend: the list query must LEFT JOIN the target table and SELECT
+    -- the target's display_field aliased as the computed column name.
+    ensures: fk.computed_column != null
+
+    -- The computed column name follows the naming convention.
+    ensures: fk.computed_column.name =
+        fk.target_entity.name.singular + "_" + fk.target_entity.display_field
+}
+
+rule RawFkIdHiddenByDefault {
+    when: fk: ForeignKey.created
+
+    -- The raw FK ID column must be present in available-columns (toggleable)
+    -- but excluded from default-visible-columns.
+    ensures: fk.source_column in fk.source_entity.columns
+    ensures: fk.source_column.visible_by_default = false
+}
+
+rule ComputedColumnVisibleByDefault {
+    when: fk: ForeignKey.created
+
+    -- The computed display column must be present in available-columns
+    -- and included in default-visible-columns.
+    ensures: fk.computed_column in fk.source_entity.columns
+    ensures: fk.computed_column.visible_by_default = true
+    ensures: fk.computed_column.kind = computed
+}
+
+rule ComputedColumnInheritsSortAndFilter {
+    when: fk: ForeignKey.created
+
+    -- If the raw FK column was sortable or filterable, the computed column
+    -- must replace it in those lists. Users sort/filter by name, not by UUID.
+    ensures: fk.computed_column.name in fk.source_entity.sortable_columns
+    ensures: fk.computed_column.name in fk.source_entity.filterable_columns
+}
+
+rule FkColumnLabelMustBeDisambiguated {
+    when: fk: ForeignKey.created
+
+    -- The raw FK column and its computed display column MUST NOT share the
+    -- same i18n label. When both appear in the column-visibility panel the
+    -- user sees two identically-named entries with no way to tell them apart.
+    --
+    -- Convention: the FK ID column's label_key is the entity label suffixed
+    -- with " ID", e.g. :common/supplier-id -> "Dobavljac ID" / "Supplier ID".
+    -- The computed column keeps the plain entity label.
+    ensures: fk.source_column.label_key != fk.computed_column.label_key
+    ensures: fk.source_column.label_key = fk.computed_column.label_key + "-id"
+}
+
+-- =============================================================================
+-- Surface: Admin List View
+-- =============================================================================
+
+surface EntityListView {
+    facing viewer: AdminUser
+
+    context entity: DomainEntity
+
+    exposes:
+        for col in entity.columns where col.visible_by_default:
+            col.name
+            col.kind
+
+    -- Computed FK columns are shown; raw FK IDs are available but hidden.
+    guarantee:
+        for fk in entity.fk_columns:
+            not exists (fk in entity.columns where visible_by_default = true and kind = fk)
+
+    guidance: "Raw FK UUID columns should never appear in the default table view.
+               Users can toggle them on via column-visibility settings if needed."
+}
+
+-- =============================================================================
+-- Gap Analysis: Missing Computed Columns (rules 1-4)
+-- =============================================================================
+--
+-- These are the concrete fixes required to satisfy the rules above:
+--
+-- 1. stores.supplier_id
+--    Backend: JOIN exists (supplier_display_name returned)
+--    Frontend: Add "supplier_display_name" to available-columns,
+--              default-visible-columns, computed-fields, column-metadata.
+--              Remove "supplier_id" from default-visible-columns.
+--
+-- 2. stores.city_id
+--    Backend: JOIN exists (city_fk_name returned)
+--    Frontend: Rename to "city_name" for convention consistency.
+--              Add "city_name" to available-columns, default-visible-columns,
+--              computed-fields, column-metadata.
+--              Remove "city_id" from default-visible-columns.
+--
+-- 3. subcategories.category_id
+--    Backend: Add JOIN to subcategory factory config:
+--              :table-alias :sc
+--              :joins [[:categories :c] [:= :c.id :sc.category_id]]
+--              :select-fields [[:sc.*] [:c.name :category_name]]
+--    Frontend: Add "category_name" to available-columns,
+--              default-visible-columns, computed-fields, column-metadata.
+--              Remove "category_id" from default-visible-columns.
+--
+-- 4. payers.payer_type_id
+--    Backend: JOIN exists (payer_type_label returned)
+--    Frontend: Add "payer_type_label" to available-columns,
+--              default-visible-columns, computed-fields, column-metadata.
+--              "payer_type_id" is already hidden from default-visible.
+--
+-- 5. receipts (hidden FK columns -- no action needed)
+--    user_id, payer_id, expense_id, supplier_alias_id, store_alias_id
+--    are detail-only fields, already hidden by default. No violation.
+
+-- =============================================================================
+-- Gap Analysis: Duplicate Column Labels (rule FkColumnLabelMustBeDisambiguated)
+-- =============================================================================
+--
+-- When both a raw FK column and its computed column exist in available-columns,
+-- they MUST NOT share the same i18n label-key. Otherwise the column-visibility
+-- panel shows two identically-named entries (e.g. two "Proizvođač" on /admin/articles).
+--
+-- Convention: FK ID columns use :common/{entity}-id  ("Supplier ID" / "Dobavljač ID")
+--             Computed columns keep :common/{entity}  ("Supplier" / "Dobavljač")
+--
+-- New i18n keys needed (bs / en):
+--   :common/supplier-id          "Dobavljač ID"           / "Supplier ID"
+--   :common/manufacturer-id      "Proizvođač ID"          / "Manufacturer ID"
+--   :common/subcategory-id       "Potkategorija ID"       / "Subcategory ID"
+--   :common/article-id           "Artikal ID"             / "Article ID"
+--   :common/store-id             "Trgovina ID"            / "Store ID"
+--   :common/city-id              "Grad ID"                / "City ID"
+--   :common/payer-type-id        "Vrsta platitelja ID"    / "Payer Type ID"
+--   :common/category-id          "Kategorija ID"          / "Category ID"
+--   :common/payer-id             "Platitelj ID"           / "Payer ID"
+--   :common/expense-category-id  "Kategorija troška ID"   / "Expense Category ID"
+--   :common/expense-id           "Trošak ID"              / "Expense ID"
+--   :common/user-id              "Korisnik ID"            / "User ID"
+--
+-- table-columns.edn label-key changes (per entity):
+--
+--   articles:
+--     :manufacturer_id   :common/manufacturer  -> :common/manufacturer-id
+--     :subcategory_id    :common/subcategory   -> :common/subcategory-id
+--
+--   supplier-aliases:
+--     :supplier_id       :common/supplier      -> :common/supplier-id
+--
+--   article-aliases:
+--     :supplier_id       :common/supplier      -> :common/supplier-id
+--     :article_id        :common/article       -> :common/article-id
+--
+--   store-aliases:
+--     :store_id          :common/store         -> :common/store-id
+--
+--   stores:
+--     :supplier_id       :common/supplier      -> :common/supplier-id
+--     :city_id           :common/city          -> :common/city-id
+--
+--   payers:
+--     :payer_type_id     :common/payer-type    -> :common/payer-type-id
+--
+--   subcategories:
+--     :category_id       :common/category      -> :common/category-id
+--
+--   expenses (raw FKs have no metadata yet; add when toggled visible):
+--     supplier_id        (add) :common/supplier-id
+--     store_id           (add) :common/store-id
+--     payer_id           (add) :common/payer-id
+--     expense_category_id (add) :common/expense-category-id
+--
+--   receipts (raw FKs already hidden; relabel for consistency):
+--     :user-id           :common/user          -> :common/user-id
+--     :payer-id          :common/payer         -> :common/payer-id
+--     :expense-id        :common/expense       -> :common/expense-id
+
+open question "Should the display_field registry live in a shared config
+               (e.g. an EDN resource) so both backend factory configs and
+               frontend table-columns.edn can reference a single source of truth?"

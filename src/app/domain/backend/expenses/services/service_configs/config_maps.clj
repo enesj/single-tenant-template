@@ -113,6 +113,7 @@
                       :normalized-key :st/normalized_key
                       :address :st/address
                       :city-id :st/city_id
+                      :city-name :c/name
                       :created-at :st/created_at
                       :updated-at :st/updated_at}
    :default-order-by :st/display_name
@@ -120,7 +121,7 @@
    :joins [[:cities :c] [:= :c.id :st/city_id]
            [:suppliers :s] [:= :s/id :st/supplier_id]]
    :select-fields [[:st.*]
-                   [:c/name :city_fk_name]
+                   [:c/name :city_name]
                    [:s/display_name :supplier_display_name]]
    :field-transformers {:normalized_key normalize/normalize-store-key}
    :before-insert (fn [data]
@@ -246,14 +247,18 @@
 
 (def subcategory-config
   {:table-name "subcategories"
+   :table-alias :sc
    :primary-key :id
    :required-fields [:category_id :name]
-   :allowed-order-by {:name :name
-                      :category-id :category_id
-                      :created-at :created_at
-                      :updated-at :updated_at}
-   :default-order-by :name
-   :search-fields [:name :description]
+   :allowed-order-by {:name :sc/name
+                      :category-name :c/name
+                      :created-at :sc/created_at
+                      :updated-at :sc/updated_at}
+   :default-order-by :sc/name
+   :search-fields [:sc/name :sc/description]
+   :joins [[:categories :c] [:= :c/id :sc/category_id]]
+   :select-fields [[:sc.*]
+                   [:c/name :category_name]]
    :before-insert (fn [data]
                     (when-not (:category_id data)
                       (throw (ex-info "category_id is required" {:data data})))
@@ -272,6 +277,7 @@
    :required-fields [:payer_type_id :label]
    :allowed-order-by {:label :p/label
                       :payer-type :pt/label
+                      :payer-type-label :pt/label
                       :created-at :p/created_at
                       :updated-at :p/updated_at}
    :default-order-by :p/label

@@ -123,7 +123,13 @@
   {:manufacturer_display_name {:type "string", :label "Manufacturer"}
    :category_name {:type "string", :label "Category"}
    :subcategory_name {:type "string", :label "Subcategory"}},
-  :column-config {}},
+  :column-config {},
+  :column-metadata
+  {:manufacturer_display_name {:label-key :common/manufacturer},
+   :manufacturer_id {:label-key :common/manufacturer-id},
+   :subcategory_name {:label-key :common/subcategory},
+   :subcategory_id {:label-key :common/subcategory-id},
+   :category_name {:label-key :common/category}}},
  :payer-types
  {:available-columns
   ["label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
@@ -173,11 +179,17 @@
   :always-visible ["display_name"]},
  :payers
  {:available-columns
-  ["label" "payer_type_id" "is_default" "created_at" "updated_at" "id" "tenant_id"],
-  :default-visible-columns ["label" "is_default"],
-  :filterable-columns ["label" "is_default"],
-  :sortable-columns ["label" "is_default"],
-  :always-visible ["label"]},
+  ["label" "payer_type_label" "is_default" "created_at" "payer_type_id" "updated_at" "id" "tenant_id"],
+  :default-visible-columns ["label" "payer_type_label" "is_default"],
+  :filterable-columns ["label" "payer_type_label" "is_default"],
+  :sortable-columns ["label" "payer_type_label" "is_default"],
+  :always-visible ["label"],
+  :computed-fields
+  {:payer_type_label {:type "string", :label "Payer Type"}},
+  :column-config {},
+  :column-metadata
+  {:payer_type_label {:label-key :common/payer-type},
+   :payer_type_id {:label-key :common/payer-type-id}}},
  :supplier-aliases
  {:available-columns
   ["supplier_display_name"
@@ -310,27 +322,32 @@
    :created_at {:width "160px", :formatter "date"}}},
  :stores
  {:available-columns
-  ["supplier_id"
+  ["supplier_display_name"
    "display_name"
    "normalized_key"
    "address"
-   "city_id"
+   "city_name"
    "created_at"
+   "supplier_id"
+   "city_id"
    "updated_at"
    "id"]
   :default-visible-columns
-  ["display_name" "normalized_key" "address" "city_id" "created_at"]
+  ["display_name" "supplier_display_name" "normalized_key" "address" "city_name" "created_at"]
   :filterable-columns
-  ["display_name"
-   "normalized_key"
-   "address"
-   "city_id"
-   "created_at"]
+  ["display_name" "supplier_display_name" "normalized_key" "address" "city_name" "created_at"]
   :sortable-columns
-  ["display_name" "normalized_key" "address" "city_id" "created_at" "updated_at"]
+  ["display_name" "supplier_display_name" "normalized_key" "address" "city_name" "created_at" "updated_at"]
   :always-visible ["display_name"]
-  :computed-fields {}
-  :column-config {}},
+  :computed-fields
+  {:supplier_display_name {:type "string", :label "Supplier"},
+   :city_name {:type "string", :label "City"}}
+  :column-config {}
+  :column-metadata
+  {:supplier_display_name {:label-key :common/supplier},
+   :supplier_id {:label-key :common/supplier-id},
+   :city_name {:label-key :common/city},
+   :city_id {:label-key :common/city-id}}},
  :store-aliases
  {:available-columns
   ["supplier_display_name"
@@ -410,16 +427,20 @@
 
  :subcategories
  {:available-columns
-  ["category_id" "name" "description" "created_at" "updated_at" "id"],
+  ["category_name" "name" "description" "created_at" "category_id" "updated_at" "id"],
   :default-visible-columns
-  ["name" "category_id" "description" "created_at"],
+  ["name" "category_name" "description" "created_at"],
   :filterable-columns
-  ["name" "category_id" "description" "created_at"],
+  ["name" "category_name" "description" "created_at"],
   :sortable-columns
-  ["name" "category_id" "created_at" "updated_at"],
+  ["name" "category_name" "created_at" "updated_at"],
   :always-visible ["name"],
-  :computed-fields {},
-  :column-config {}},
+  :computed-fields
+  {:category_name {:type "string", :label "Category"}},
+  :column-config {},
+  :column-metadata
+  {:category_name {:label-key :common/category},
+   :category_id {:label-key :common/category-id}}},
  :users
  {:available-columns
   ["id"

@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.routes.user-api :as expenses-user-api-routes]
     [app.domain.shared.routes.expenses-user :as expenses-user-route-contract]))
 
+
 (def ^:private expenses-manifest
   {:id :expenses
    :routes
