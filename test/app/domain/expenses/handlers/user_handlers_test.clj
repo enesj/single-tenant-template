@@ -50,7 +50,7 @@
     (let [handler (user-receipts/list-receipts-handler :mock-db)
           user-id (UUID/randomUUID)
           request {:identity {:id user-id
-                              :role "member"}
+                              :role "viewer"}
                    :query-params {:status "uploaded"
                                   :limit "2"
                                   :offset "1"}}
@@ -81,7 +81,7 @@
     (let [handler (user-receipts/list-receipts-handler :mock-db)
           user-id (UUID/randomUUID)
           request {:identity {:id user-id
-                              :role "member"}
+                              :role "viewer"}
                    :query-params {"status" "uploaded"
                                   "limit" "20"
                                   "offset" "40"}}

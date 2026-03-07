@@ -144,9 +144,9 @@
                     :on-failure [:user-expenses/post-selected-receipt-load-failure receipt-id (vec (rest remaining)) succeeded failed]})}
     {:db (-> db
            (assoc-in [:user-expenses :form :loading?] false)
-           (assoc-in [:user-expenses :form :error] nil)
+           (assoc-in [:user-expenses :form :error] (batch-post-summary-message succeeded failed))
            (assoc-in (conj base-path :action-loading?) false)
-           (assoc-in (conj base-path :error) (batch-post-summary-message succeeded failed)))
+           (assoc-in (conj base-path :error) nil))
      :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
                   [:user-expenses/refresh-receipts-list]
                   [:app.template.frontend.events.list/clear-selection :receipts]]}))
@@ -160,9 +160,9 @@
         (post-selected-next-fx db ids [] [])
         {:db (-> db
                (assoc-in [:user-expenses :form :loading?] false)
-               (assoc-in [:user-expenses :form :error] nil)
+               (assoc-in [:user-expenses :form :error] "Select at least one receipt to post.")
                (assoc-in (conj base-path :action-loading?) false)
-               (assoc-in (conj base-path :error) "Select at least one receipt to post."))}))))
+               (assoc-in (conj base-path :error) nil))}))))
 
 (rf/reg-event-fx
   :user-expenses/post-selected-receipt-loaded

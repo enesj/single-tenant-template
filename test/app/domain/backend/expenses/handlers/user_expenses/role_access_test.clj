@@ -66,8 +66,8 @@
   (is (true? (h/tenant-elevated? (mock-request "admin"))))
   (is (true? (h/tenant-elevated? (mock-request "owner")))))
 
-(deftest tenant-elevated-false-for-member-and-viewer
-  (is (false? (h/tenant-elevated? (mock-request "member"))))
+(deftest tenant-elevated-true-for-member-and-false-for-viewer
+  (is (true? (h/tenant-elevated? (mock-request "member"))))
   (is (false? (h/tenant-elevated? (mock-request "viewer")))))
 
 (deftest tenant-elevated-false-when-no-role

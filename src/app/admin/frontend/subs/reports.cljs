@@ -30,3 +30,9 @@
   :<- [:admin/reports]
   (fn [reports [_ report-key]]
     (get-in reports [report-key :error])))
+
+(rf/reg-sub
+  :admin/report-sort
+  :<- [:admin/reports]
+  (fn [reports [_ report-key]]
+    (get-in reports [report-key :sort])))

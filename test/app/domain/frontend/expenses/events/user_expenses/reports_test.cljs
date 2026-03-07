@@ -5,146 +5,104 @@
     [re-frame.core :as rf]
     [re-frame.db :as rf-db]))
 
-(deftest reports-init-fetches-expanded-report-endpoints
-  (testing "expanded report fetch events hit /api/v1/expenses/reports/* endpoints"
+(defn- capture-dispatch-n!
+  [captured]
+  (rf/reg-fx :dispatch-n (fn [events]
+                           (reset! captured events))))
+
+(defn- restore-dispatch-n!
+  []
+  (rf/reg-fx :dispatch-n (fn [events]
+                           (doseq [event events]
+                             (rf/dispatch event)))))
+
+(deftest reports-fetch-events-hit-current-report-endpoints
+  (testing "tenant-scoped report fetch events hit the current /api/v1/expenses/reports/* endpoints"
     (sup/reset-db!)
     (rf/dispatch-sync [:user-expenses/init-reports])
     (reset! sup/captured-http-requests [])
 
     (rf/dispatch-sync [:user-expenses/fetch-report-day-of-week])
-    (rf/dispatch-sync [:user-expenses/fetch-report-top-items])
-    (rf/dispatch-sync [:user-expenses/fetch-report-monthly-comparison])
     (rf/dispatch-sync [:user-expenses/fetch-report-size-distribution])
     (rf/dispatch-sync [:user-expenses/fetch-report-daily-heatmap])
-    (rf/dispatch-sync [:user-expenses/fetch-report-category-allocation])
+    (rf/dispatch-sync [:user-expenses/fetch-report-filter-options])
 
     (let [uris (set (map sup/req-uri @sup/captured-http-requests))]
       (is (contains? uris "/api/v1/expenses/reports/day-of-week"))
-      (is (contains? uris "/api/v1/expenses/reports/top-items"))
-      (is (contains? uris "/api/v1/expenses/reports/monthly-comparison"))
       (is (contains? uris "/api/v1/expenses/reports/size-distribution"))
       (is (contains? uris "/api/v1/expenses/reports/daily-heatmap"))
-      (is (contains? uris "/api/v1/expenses/reports/category-allocation")))))
+      (is (contains? uris "/api/v1/expenses/reports/filter-options")))))
 
-(deftest reports-set-filter-refreshes-and-passes-supplier-param
-  (testing "report requests forward supplier and item filter params"
+(deftest reports-refresh-dispatches-current-fetch-set
+  (testing "reports-refresh dispatches the current summary, trend, supplier, and report fetch events"
     (sup/reset-db!)
     (rf/dispatch-sync [:user-expenses/init-reports])
-
-    (reset! sup/captured-http-requests [])
-    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-deep-dive])
-    (is (= 0 (count @sup/captured-http-requests)))
-
-    (rf/dispatch-sync [:user-expenses/reports-set-filter :supplier-id "supplier-42"])
-    (rf/dispatch-sync [:user-expenses/reports-set-filter :category-id "category-42"])
-    (rf/dispatch-sync [:user-expenses/reports-set-filter :subcategory-id "subcategory-42"])
-    (rf/dispatch-sync [:user-expenses/reports-set-filter :expense-category-id "expense-category-42"])
-    (rf/dispatch-sync [:user-expenses/reports-set-filter :manufacturer-id "manufacturer-42"])
-
-    (reset! sup/captured-http-requests [])
-    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-deep-dive])
-    (rf/dispatch-sync [:user-expenses/fetch-report-top-items])
-    (rf/dispatch-sync [:user-expenses/fetch-report-category-allocation])
-    (rf/dispatch-sync [:user-expenses/fetch-report-monthly-comparison])
-
-    (let [requests @sup/captured-http-requests
-          deep-dive-req (first (filter #(= "/api/v1/expenses/reports/supplier-deep-dive" (sup/req-uri %)) requests))
-          top-items-req (first (filter #(= "/api/v1/expenses/reports/top-items" (sup/req-uri %)) requests))
-          category-allocation-req (first (filter #(= "/api/v1/expenses/reports/category-allocation" (sup/req-uri %)) requests))
-          monthly-req (first (filter #(= "/api/v1/expenses/reports/monthly-comparison" (sup/req-uri %)) requests))
-          deep-dive-params (sup/req-params deep-dive-req)
-          top-items-params (sup/req-params top-items-req)
-          category-allocation-params (sup/req-params category-allocation-req)
-          monthly-params (sup/req-params monthly-req)]
-      (is (some? deep-dive-req))
-      (is (= "supplier-42" (:supplier_id deep-dive-params)))
-      (is (= "category-42" (:category_id deep-dive-params)))
-      (is (= "subcategory-42" (:subcategory_id deep-dive-params)))
-      (is (= "expense-category-42" (:expense_category_id deep-dive-params)))
-      (is (= "manufacturer-42" (:manufacturer_id deep-dive-params)))
-      (is (string? (:from deep-dive-params)))
-      (is (string? (:to deep-dive-params)))
-
-      (is (some? top-items-req))
-      (is (= "supplier-42" (:supplier_id top-items-params)))
-      (is (= "category-42" (:category_id top-items-params)))
-      (is (= "subcategory-42" (:subcategory_id top-items-params)))
-      (is (= "expense-category-42" (:expense_category_id top-items-params)))
-      (is (= "manufacturer-42" (:manufacturer_id top-items-params)))
-
-      (is (some? category-allocation-req))
-      (is (= "category-42" (:category_id category-allocation-params)))
-      (is (= "subcategory-42" (:subcategory_id category-allocation-params)))
-      (is (= "manufacturer-42" (:manufacturer_id category-allocation-params)))
-
-      (is (some? monthly-req))
-      (is (= "supplier-42" (:supplier_id monthly-params)))
-      (is (= "expense-category-42" (:expense_category_id monthly-params)))
-      (is (string? (:month_a monthly-params)))
-      (is (string? (:month_b monthly-params))))))
-
-(deftest reports-toggle-expanded-supplier-fetches-and-clears-stores
-  (testing "expanding a supplier fetches /reports/supplier-stores, toggling same supplier clears drilldown state"
-    (sup/reset-db!)
-    (rf/dispatch-sync [:user-expenses/init-reports])
-
-    (reset! sup/captured-http-requests [])
-    (rf/dispatch-sync [:user-expenses/reports-toggle-expanded-supplier "supplier-99"])
-    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-stores])
-
-    (let [req (sup/last-http-request)
-          params (sup/req-params req)]
-      (is (= :get (sup/req-method req)))
-      (is (= "/api/v1/expenses/reports/supplier-stores" (sup/req-uri req)))
-      (is (= "supplier-99" (:supplier_id params)))
-      (is (= 20 (:limit params)))
-      (is (string? (:from params)))
-      (is (string? (:to params))))
-
-    (is (= "supplier-99"
-          (get-in @rf-db/app-db [:user-expenses :reports :filters :expanded-supplier-id])))
-
-    (swap! rf-db/app-db assoc-in [:user-expenses :reports :supplier-stores :data]
-      [{:store_name "Store A"}])
-    (let [request-count (count @sup/captured-http-requests)]
-      (rf/dispatch-sync [:user-expenses/reports-toggle-expanded-supplier "supplier-99"])
-      (is (= request-count (count @sup/captured-http-requests)))
-      (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :expanded-supplier-id])))
-      (is (= [] (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :data])))
-      (is (false? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :loading?])))
-      (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :error]))))))
-
-(deftest fetch-report-supplier-stores-without-expanded-supplier-is-safe
-  (testing "explicit supplier-stores fetch does not fire HTTP when no expanded supplier is selected"
-    (sup/reset-db!)
-    (rf/dispatch-sync [:user-expenses/init-reports])
-    (reset! sup/captured-http-requests [])
-
-    (rf/dispatch-sync [:user-expenses/fetch-report-supplier-stores])
-
-    (is (= 0 (count @sup/captured-http-requests)))
-    (is (= [] (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :data])))
-    (is (false? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :loading?])))
-    (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :supplier-stores :error])))))
-
-(deftest reports-refresh-requests-supplier-stores-only-when-expanded-supplier-exists
-  (testing "reports-refresh includes supplier-stores fetch only for expanded supplier state"
-    (sup/reset-db!)
-    (rf/dispatch-sync [:user-expenses/init-reports])
-
-    (let [captured-dispatch-n (atom nil)]
-      (rf/reg-fx :dispatch-n (fn [events]
-                               (reset! captured-dispatch-n events)))
+    (let [captured (atom nil)]
+      (capture-dispatch-n! captured)
       (try
         (rf/dispatch-sync [:user-expenses/reports-refresh])
-        (is (not-any? #(= :user-expenses/fetch-report-supplier-stores (first %))
-              @captured-dispatch-n))
-
-        (rf/dispatch-sync [:user-expenses/reports-toggle-expanded-supplier "supplier-42"])
-        (rf/dispatch-sync [:user-expenses/reports-refresh])
-        (is (some #(= :user-expenses/fetch-report-supplier-stores (first %))
-              @captured-dispatch-n))
+        (let [events @captured]
+          (is (some #(= :user-expenses/fetch-summary (first %)) events))
+          (is (some #(= [:user-expenses/fetch-by-month {:months-back 6}] %) events))
+          (is (some #(= [:user-expenses/fetch-by-supplier {:limit 25}] %) events))
+          (is (some #(= :user-expenses/fetch-report-filter-options (first %)) events))
+          (is (some #(= :user-expenses/fetch-report-day-of-week (first %)) events))
+          (is (some #(= :user-expenses/fetch-report-size-distribution (first %)) events))
+          (is (some #(= :user-expenses/fetch-report-daily-heatmap (first %)) events)))
         (finally
-          (rf/reg-fx :dispatch-n (fn [events]
-                                   (doseq [event events]
-                                     (rf/dispatch event)))))))))
+          (restore-dispatch-n!))))))
+
+(deftest reports-set-filter-refreshes-and-forwards-common-params
+  (testing "current report requests forward only the supported common filter params"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :supplier-id "supplier-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :expense-category-id "expense-category-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :months-back 3])
+
+    (reset! sup/captured-http-requests [])
+    (rf/dispatch-sync [:user-expenses/fetch-report-day-of-week])
+    (rf/dispatch-sync [:user-expenses/fetch-report-filter-options])
+
+    (let [requests @sup/captured-http-requests
+          day-req (first (filter #(= "/api/v1/expenses/reports/day-of-week" (sup/req-uri %)) requests))
+          filter-req (first (filter #(= "/api/v1/expenses/reports/filter-options" (sup/req-uri %)) requests))
+          day-params (sup/req-params day-req)
+          filter-params (sup/req-params filter-req)]
+      (is (some? day-req))
+      (is (= "supplier-42" (:supplier_id day-params)))
+      (is (= "expense-category-42" (:expense_category_id day-params)))
+      (is (string? (:from day-params)))
+      (is (string? (:to day-params)))
+
+      (is (some? filter-req))
+      (is (= "supplier-42" (:supplier_id filter-params)))
+      (is (= "expense-category-42" (:expense_category_id filter-params)))
+      (is (string? (:from filter-params)))
+      (is (string? (:to filter-params)))
+      (is (nil? (:category_id day-params)))
+      (is (nil? (:manufacturer_id day-params))))))
+
+(deftest reports-clear-local-filters-resets-current-local-state
+  (testing "clearing local report filters removes supported local filters and triggers refresh"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/init-reports])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :supplier-id "supplier-42"])
+    (rf/dispatch-sync [:user-expenses/reports-set-filter :expense-category-id "expense-category-42"])
+    (rf/dispatch-sync [:user-expenses/reports-toggle-day-of-week 3])
+    (rf/dispatch-sync [:user-expenses/reports-toggle-amount-bucket "small"])
+    (rf/dispatch-sync [:user-expenses/reports-toggle-selected-day "2026-03-01"])
+
+    (let [captured (atom nil)]
+      (rf/reg-fx :dispatch (fn [event]
+                             (reset! captured event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/reports-clear-local-filters])
+        (is (= [:user-expenses/reports-refresh] @captured))
+        (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :supplier-id])))
+        (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :expense-category-id])))
+        (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :day-of-week])))
+        (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :amount-bucket])))
+        (is (nil? (get-in @rf-db/app-db [:user-expenses :reports :filters :selected-day])))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))

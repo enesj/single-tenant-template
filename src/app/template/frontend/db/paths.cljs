@@ -157,6 +157,8 @@
   [entity-type]
   [:ui :lists entity-type :current-page])
 
+(declare list-per-page entity-prefs-display)
+
 (defn parse-positive-int
   "Parse positive numeric values from numbers or strings, returning nil otherwise."
   [value]

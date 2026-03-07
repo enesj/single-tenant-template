@@ -29,6 +29,22 @@
   (let [n (if (number? v) v (js/parseInt (str v) 10))]
     (if (js/isNaN n) "\u2014" (.toLocaleString n "en"))))
 
+(defn- parse-sort-val [v]
+  (cond
+    (nil? v) nil
+    (number? v) v
+    :else (let [n (js/parseFloat (str v))]
+            (if (js/isNaN n) (str v) n))))
+
+(defn- sort-data [data sort-state]
+  (if-not (:column sort-state)
+    data
+    (let [{:keys [column direction]} sort-state
+          sorted (sort-by #(parse-sort-val (get % column)) data)]
+      (if (= direction :desc)
+        (vec (reverse sorted))
+        (vec sorted)))))
+
 ;; ---------------------------------------------------------------------------
 ;; Shared UI atoms
 ;; ---------------------------------------------------------------------------
@@ -51,26 +67,42 @@
           loading? ($ loading-spinner)
           :else children)))))
 
+(defui sortable-th [{:keys [label column report-key class]}]
+  (let [sort-state (use-subscribe [:admin/report-sort report-key])
+        active? (= (:column sort-state) column)
+        direction (when active? (:direction sort-state))]
+    ($ :th {:class (str "cursor-pointer select-none hover:bg-base-200/50 transition-colors " class)
+            :on-click #(rf/dispatch [:admin/report-toggle-sort report-key column])}
+      ($ :span {:class "inline-flex items-center gap-1"}
+        label
+        ($ :span {:class (str "text-xs " (if active? "opacity-100" "opacity-30"))}
+          (case direction
+            :asc "↑"
+            :desc "↓"
+            "↕"))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Report tables
 ;; ---------------------------------------------------------------------------
 
 (defui top-suppliers-table []
-  (let [data (use-subscribe [:admin/report-data :top-suppliers])]
+  (let [data (use-subscribe [:admin/report-data :top-suppliers])
+        sort-state (use-subscribe [:admin/report-sort :top-suppliers])
+        sorted (sort-data (or data []) sort-state)]
     ($ report-section {:title "Top Suppliers"
                        :subtitle "Ranked by total spending across all users"
                        :report-key :top-suppliers}
-      (if (seq data)
+      (if (seq sorted)
         ($ :div {:class "overflow-x-auto"}
           ($ :table {:class "ds-table ds-table-sm w-full"}
             ($ :thead
               ($ :tr
                 ($ :th {:class "w-10"} "#")
-                ($ :th "Supplier")
-                ($ :th {:class "text-right"} "Currency")
-                ($ :th {:class "text-right"} "Total")
-                ($ :th {:class "text-right"} "Expenses")
-                ($ :th {:class "text-right"} "Share")))
+                ($ sortable-th {:label "Supplier" :column :supplier-name :report-key :top-suppliers})
+                ($ sortable-th {:label "Currency" :column :currency :report-key :top-suppliers :class "text-right"})
+                ($ sortable-th {:label "Total" :column :total-amount :report-key :top-suppliers :class "text-right"})
+                ($ sortable-th {:label "Expenses" :column :expense-count :report-key :top-suppliers :class "text-right"})
+                ($ sortable-th {:label "Share" :column :share-pct :report-key :top-suppliers :class "text-right"})))
             ($ :tbody
               (map-indexed
                 (fn [i row]
@@ -85,26 +117,28 @@
                     ($ :td {:class "text-right"}
                       ($ :span {:class "ds-badge ds-badge-sm ds-badge-primary ds-badge-outline"}
                         (fmt-pct (:share-pct row))))))
-                data))))
+                sorted))))
         ($ :p {:class "text-base-content/50 text-center py-4"} "No supplier data available")))))
 
 (defui top-items-table []
-  (let [data (use-subscribe [:admin/report-data :top-items])]
+  (let [data (use-subscribe [:admin/report-data :top-items])
+        sort-state (use-subscribe [:admin/report-sort :top-items])
+        sorted (sort-data (or data []) sort-state)]
     ($ report-section {:title "Top Items"
                        :subtitle "Most purchased articles by total spending"
                        :report-key :top-items}
-      (if (seq data)
+      (if (seq sorted)
         ($ :div {:class "overflow-x-auto"}
           ($ :table {:class "ds-table ds-table-sm w-full"}
             ($ :thead
               ($ :tr
                 ($ :th {:class "w-10"} "#")
-                ($ :th "Article")
-                ($ :th {:class "text-right"} "Currency")
-                ($ :th {:class "text-right"} "Total")
-                ($ :th {:class "text-right"} "Qty")
-                ($ :th {:class "text-right"} "Suppliers")
-                ($ :th {:class "text-right"} "Stores")))
+                ($ sortable-th {:label "Article" :column :article-canonical-name :report-key :top-items})
+                ($ sortable-th {:label "Currency" :column :currency :report-key :top-items :class "text-right"})
+                ($ sortable-th {:label "Total" :column :total-amount :report-key :top-items :class "text-right"})
+                ($ sortable-th {:label "Qty" :column :qty-total :report-key :top-items :class "text-right"})
+                ($ sortable-th {:label "Suppliers" :column :supplier-count :report-key :top-items :class "text-right"})
+                ($ sortable-th {:label "Stores" :column :store-count :report-key :top-items :class "text-right"})))
             ($ :tbody
               (map-indexed
                 (fn [i row]
@@ -118,19 +152,22 @@
                     ($ :td {:class "text-right tabular-nums"} (fmt-int (:qty-total row)))
                     ($ :td {:class "text-right tabular-nums"} (fmt-int (:supplier-count row)))
                     ($ :td {:class "text-right tabular-nums"} (fmt-int (:store-count row)))))
-                data))))
+                sorted))))
         ($ :p {:class "text-base-content/50 text-center py-4"} "No item data available")))))
 
 (defui category-allocation-table []
   (let [data (use-subscribe [:admin/report-data :category-allocation])
-        categories (->> (or data [])
-                     (reduce (fn [acc row]
-                               (let [k [(:category-key row) (:currency row)]]
-                                 (if (contains? acc k) acc (assoc acc k row))))
-                       {})
-                     vals
-                     (sort-by (fn [r] (- (or (js/parseFloat (str (:total-amount r))) 0))))
-                     vec)]
+        sort-state (use-subscribe [:admin/report-sort :category-allocation])
+        deduped (->> (or data [])
+                  (reduce (fn [acc row]
+                            (let [k [(:category-key row) (:currency row)]]
+                              (if (contains? acc k) acc (assoc acc k row))))
+                    {})
+                  vals
+                  vec)
+        categories (if sort-state
+                     (sort-data deduped sort-state)
+                     (sort-by (fn [r] (- (or (js/parseFloat (str (:total-amount r))) 0))) deduped))]
     ($ report-section {:title "Category Allocation"
                        :subtitle "Spending breakdown by product category"
                        :report-key :category-allocation}
@@ -139,11 +176,11 @@
           ($ :table {:class "ds-table ds-table-sm w-full"}
             ($ :thead
               ($ :tr
-                ($ :th "Category")
-                ($ :th {:class "text-right"} "Currency")
-                ($ :th {:class "text-right"} "Total")
-                ($ :th {:class "text-right"} "Items")
-                ($ :th {:class "text-right"} "Allocation")
+                ($ sortable-th {:label "Category" :column :category-name :report-key :category-allocation})
+                ($ sortable-th {:label "Currency" :column :currency :report-key :category-allocation :class "text-right"})
+                ($ sortable-th {:label "Total" :column :total-amount :report-key :category-allocation :class "text-right"})
+                ($ sortable-th {:label "Items" :column :line-count :report-key :category-allocation :class "text-right"})
+                ($ sortable-th {:label "Allocation" :column :allocation-pct :report-key :category-allocation :class "text-right"})
                 ($ :th {:class "w-32"} "")))
             ($ :tbody
               (map-indexed

@@ -41,7 +41,7 @@
       (rf/dispatch-sync [:user-expenses/post-selected selection])
       (is (= 0 (count @sup/captured-http-requests)))
       (is (= "Select at least one receipt to post."
-            (get-in @rf-db/app-db [:user-expenses :receipts :error])))
+            (get-in @rf-db/app-db [:user-expenses :form :error])))
       (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?]))))))
 
 (deftest post-selected-approves-and-continues-sequentially
@@ -84,7 +84,7 @@
                        {:data {:id "rec-1"}}])
     (is (= 1 (count @sup/captured-http-requests)))
     (is (= "Failed to post selected receipt. Supplier, payer, and date are required."
-          (get-in @rf-db/app-db [:user-expenses :receipts :error])))
+          (get-in @rf-db/app-db [:user-expenses :form :error])))
     (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?])))))
 
 (deftest upload-receipt-sends-file-in-formdata

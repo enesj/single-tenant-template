@@ -34,6 +34,20 @@
   (fn [db _]
     (assoc-in db [:admin/reports :filters] {:months-back 6})))
 
+(rf/reg-event-db
+  :admin/report-toggle-sort
+  (fn [db [_ report-key column]]
+    (let [current (get-in db [:admin/reports report-key :sort])
+          new-sort (cond
+                     (not= (:column current) column)
+                     {:column column :direction :asc}
+
+                     (= (:direction current) :asc)
+                     {:column column :direction :desc}
+
+                     :else nil)]
+      (assoc-in db [:admin/reports report-key :sort] new-sort))))
+
 ;; --- Generic report fetch ---
 
 (defn- fetch-report
