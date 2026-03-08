@@ -16,6 +16,13 @@ the real product, ensuring taxonomy, creating articles, and batch-mapping aliase
 Run this **before** touching the article alias backlog. Newly re-processed receipts
 may produce fresh aliases that belong in the current session's work.
 
+> **Resuming across context boundaries?** Re-verify the starting state before acting:
+> ```bash
+> bb list-review-required-receipts dev --pretty   # should be []
+> bb scripts/bb/articles/unmapped_aliases_counts.clj dev --pretty  # confirms backlog size
+> ```
+> Do not assume prior session work is still valid — aliases may have been partially mapped.
+
 ### Step 1 — Check how many receipts need attention
 
 ```bash
@@ -147,8 +154,9 @@ bb scripts/bb/articles/unmapped_aliases_counts.clj dev --pretty
 bb scripts/bb/articles/list_unmapped_aliases.clj dev --pretty
 
 # Save backlog for reference during the session
+# IMPORTANT: use --limit 9999 — the default (200) silently truncates large backlogs
 mkdir -p tmp
-bb scripts/bb/articles/list_unmapped_aliases.clj dev --pretty | tee tmp/phase1-backlog.edn
+bb scripts/bb/articles/list_unmapped_aliases.clj dev --limit 9999 --pretty | tee tmp/phase1-backlog.edn
 
 # Variant groups (required input for phase1_triage.clj)
 bb group-aliases-by-brand dev --json | tee tmp/phase1-variant-groups.json
@@ -223,7 +231,8 @@ bb serper-search "Meggle Mlijeko 1L" --format pretty
 - Label text → decode brand abbreviations.
 - Supplier context → supplier private labels are real manufacturers (Balea → dm, K-Classic → Kaufland).
 - `manufacturer_id = NULL` (Generic) only for truly unbranded items (loose produce, services, bags).
-- After batch creation, if Generic > ~30% of articles, do targeted searches to resolve more.
+- After batch creation, if Generic > ~30% of **branded-product** articles, do targeted searches to resolve more.
+  Exclude from the count: lab/medical tests, café/restaurant services, parking fees, utility charges, bulk produce — these are structurally Generic and do not benefit from re-search.
 
 ---
 
@@ -262,19 +271,32 @@ Write `tmp/articles.edn` as an EDN vector of maps:
   :subcategory-name "Hljeb"}]
 ```
 
-Then run:
+Then run — **always dry-run first** to verify the `normalized_key` values before committing:
 
 ```bash
+# Step 1: Dry-run to preview normalized_key — REQUIRED before writing mappings.edn
+bb scripts/bb/articles/create_articles.clj dev \
+  --articles-file tmp/articles.edn \
+  --dry-run --pretty | tee tmp/articles-planned.edn
+# Inspect planned[*].normalized_key carefully (see Đ warning below), then:
+
+# Step 2: Create for real
 bb scripts/bb/articles/create_articles.clj dev \
   --articles-file tmp/articles.edn \
   --pretty | tee tmp/created-articles.edn
 ```
 
+> **⚠ Đ normalization warning**: The character Đ/đ (U+0110/U+0111) is NOT NFD-decomposable —
+> it is **dropped entirely** from `normalized_key`, leaving a gap.
+> Examples: `"Deterđent za Suđe"` → `deter-ent-za-su-e`; `"Šećer Smeđi"` → `secer-sme-i`.
+> Dž (two chars: D + ž) does decompose → `dz` (e.g. `"Džezva"` → `dzezva`).
+> Always read `normalized_key` from dry-run output — never derive it mentally for names with Đ/đ.
+
 Key facts:
-- `normalized_key` is auto-derived from `canonical-name` if omitted (lowercase, strip diacritics, `[a-z0-9]` runs).
+- `normalized_key` is auto-derived from `canonical-name` if omitted (NFD normalization → lowercase → keep `[a-z0-9]` runs).
 - Include size/volume in the name when known (`"Mlijeko 1L"` not just `"Mlijeko"`).
 - Writes are idempotent (`ON CONFLICT (normalized_key) DO NOTHING`) — safe to re-run.
-- Use `--dry-run` first when unsure.
+- If you discover missing articles after the batch has run, create them in a second pass — idempotency makes it safe.
 
 **Conflict flags** (use only for intentional overwrites):
 - `--update-manufacturer-name`
@@ -298,7 +320,17 @@ bb scripts/bb/articles/map_aliases.clj dev \
 
 ### Mixed targets → mappings file (preferred for many articles)
 
-Write `tmp/mappings.edn` as an EDN vector:
+**Before writing `mappings.edn`**: get the exact `normalized_key` for every article from the
+dry-run output (`tmp/articles-planned.edn`) or by querying the DB for articles created earlier:
+
+```bash
+# Look up keys for pre-existing articles (not in this session's creation batch):
+bb scripts/bb/articles/report_progress.clj dev --coverage-only --pretty
+# For targeted lookup, use postgres-mcp:
+# SELECT normalized_key, canonical_name FROM articles WHERE canonical_name ILIKE '%<query>%' ORDER BY canonical_name LIMIT 20;
+```
+
+Write `tmp/mappings.edn` as an EDN vector using the confirmed keys:
 
 ```clojure
 [{:alias-id "uuid-1"  :article-key "meggle-mlijeko-1l"}
@@ -320,6 +352,10 @@ rm tmp/mappings.edn
 
 Use `--allow-reassign` only for deliberate remaps. The default is safe: only fills `article_id IS NULL` aliases.
 
+> **Large backlog (> 150 aliases)**: Writing a single 200+ entry `mappings.edn` can exhaust the
+> context window. Split into batches of ~80 entries by supplier group, running `map_aliases.clj`
+> once per batch. Each run is safe to re-run (skips already-mapped aliases).
+
 ---
 
 ## Phase 6: Handle remaining unmapped aliases
@@ -335,14 +371,26 @@ Classify each remaining alias:
 - **OCR noise** (blank, digits-only, punctuation-only, < 3 alnum) → candidate for deletion.
 - **Ambiguous** (too generic, cannot determine product) → document and leave unmapped.
 
-Dry-run noise deletion:
+Dry-run noise deletion — `--raw-label` is **required**; use labels identified by triage:
 
 ```bash
-# Dry-run first (default is dry-run)
-bb scripts/bb/articles/delete_unmapped_aliases.clj dev --pretty
+# Dry-run first (default; shows would_delete count — no writes)
+bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
+  --raw-label "0 ML 4f92" \
+  --supplier "SUPPLIER NAME" \
+  --pretty
 
-# Apply only after inspection
-bb scripts/bb/articles/delete_unmapped_aliases.clj dev --apply --pretty
+# Repeat --raw-label for multiple noise labels in one call:
+bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
+  --raw-label "0 ML 4f92" \
+  --raw-label "----" \
+  --pretty
+
+# Apply only after confirming would_delete count looks right
+bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
+  --raw-label "0 ML 4f92" \
+  --supplier "SUPPLIER NAME" \
+  --apply --yes --pretty
 ```
 
 ---
@@ -367,7 +415,7 @@ Check the report:
 - [ ] Variant risks addressed: no different sizes mapped to the same article.
 - [ ] Taxonomy linked for created articles (manufacturer + subcategory where known).
 - [ ] No subcategory named `"General"` — all subcategories are descriptive.
-- [ ] `Generic` manufacturer ≤ ~30% of total articles.
+- [ ] `Generic` manufacturer ≤ ~30% of **branded-product** articles (lab tests, services, parking, bulk produce are exempt).
 - [ ] `Other` category is used sparingly — if > ~20% of articles, suggest better categories.
 - [ ] Progress verified via `report_progress.clj`.
 - [ ] Remaining unmapped aliases are documented (noise vs ambiguity).
