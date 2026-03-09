@@ -252,13 +252,18 @@
                                               [:e.id :expense_id]
                                               [:e.purchased_at :purchased_at]
                                               [:st.id :store_id]
-                                              [:st.display_name :store_display_name]]
+                                              [:st.display_name :store_display_name]
+                                              [:st.address :store_address]
+                                              [:sup.display_name :supplier_display_name]]
                                      :from [[:expense_items :ei]]
                                      :join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
                                             [:expenses :e] [:= :e.id :ei.expense_id]]
-                                     :left-join [[:stores :st] [:= :st.id :e.store_id]]
+                                     :left-join [[:stores :st] [:= :st.id :e.store_id]
+                                                 [:suppliers :sup] [:= :sup.id :e.supplier_id]]
                                      :where ei-where
-                                     :group-by [:e.id :e.purchased_at :st.id :st.display_name]
+                                     :group-by [:e.id :e.purchased_at
+                                                :st.id :st.display_name :st.address
+                                                :sup.display_name]
                                      :order-by [[:e.purchased_at :desc]]
                                      :limit 50})
                         {:builder-fn rs/as-unqualified-lower-maps})
@@ -267,7 +272,8 @@
         stores (jdbc/execute!
                  db
                  (sql/format {:select-distinct [[:st.id :id]
-                                                [:st.display_name :display_name]]
+                                                [:st.display_name :display_name]
+                                                [:st.address :address]]
                               :from [[:expense_items :ei]]
                               :join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
                                      [:expenses :e] [:= :e.id :ei.expense_id]

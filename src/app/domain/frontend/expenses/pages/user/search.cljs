@@ -102,24 +102,53 @@
 
 (defn- detail-row [label value]
   (when value
-    ($ :div {:class "flex justify-between gap-4 py-1.5 border-b border-base-200 last:border-0"}
-      ($ :span {:class "text-xs text-base-content/50 flex-shrink-0"} label)
-      ($ :span {:class "text-xs font-medium text-right truncate"} (str value)))))
+    ($ :div {:class "flex justify-between gap-4 py-2 border-b border-base-200 last:border-0"}
+      ($ :span {:class "text-sm text-base-content/50 flex-shrink-0"} label)
+      ($ :span {:class "text-sm font-medium text-right truncate"} (str value)))))
+
+;; Sortable column header
+(defn- sort-header [{:keys [label col sort-col sort-dir on-sort class]}]
+  (let [active? (= col sort-col)
+        arrow (if active? (if (= sort-dir :asc) " ▲" " ▼") "")]
+    ($ :th {:class (str class " cursor-pointer select-none hover:text-base-content")
+            :on-click #(on-sort col)}
+      (str label arrow))))
 
 ;; Article-specific detail body with interactive store filtering
 (defui article-detail-body [{:keys [related related-loading? t]}]
   (let [[store-filter set-store-filter!] (use-state nil)
+        [[sort-col sort-dir] set-sort!] (use-state [:purchased_at :desc])
         detail (:detail related)
         stats (:stats related)
         price-history (:price_history related)
         stores (:stores related)
+        ;; Price variants (distinct unit prices)
+        price-variants (->> price-history
+                         (keep :unit_price)
+                         distinct
+                         sort
+                         vec)
+        ;; Filter by store
         filtered-history (if store-filter
                            (filter #(= (str (:store_id %)) store-filter) price-history)
-                           price-history)]
+                           price-history)
+        ;; Sort
+        sorted-history (let [key-fn (case sort-col
+                                      :purchased_at :purchased_at
+                                      :unit_price :unit_price
+                                      :qty :qty
+                                      :line_total :line_total
+                                      :store_display_name :store_display_name
+                                      :purchased_at)
+                             sorted (sort-by (fn [row] (or (get row key-fn) "")) filtered-history)]
+                         (if (= sort-dir :desc) (reverse sorted) sorted))
+        toggle-sort (fn [col]
+                      (if (= col sort-col)
+                        (set-sort! [col (if (= sort-dir :asc) :desc :asc)])
+                        (set-sort! [col (if (= col :purchased_at) :desc :asc)])))]
     ($ :div {:class "space-y-4"}
       ;; Metadata rows
       ($ :div {:class "space-y-0"}
-        (detail-row (t :search/detail-name) (:canonical_name detail))
         (detail-row (t :search/article-manufacturer) (:manufacturer_display_name detail))
         ;; Category > Subcategory in one row
         (let [cat (:category_name detail)
@@ -130,9 +159,16 @@
                          cat cat
                          :else nil)]
           (detail-row (t :search/article-subcategory) combined))
-        (detail-row (t :search/article-last-price)
-          (when (:last_price detail)
-            (format-amount (:last_price detail) "BAM")))
+        ;; Price variants instead of single last price
+        (when (seq price-variants)
+          ($ :div {:class "flex justify-between gap-4 py-2 border-b border-base-200"}
+            ($ :span {:class "text-sm text-base-content/50 flex-shrink-0"}
+              (t :search/article-prices))
+            ($ :div {:class "flex flex-wrap gap-1.5 justify-end"}
+              (for [p price-variants]
+                ($ :span {:key (str p)
+                          :class "text-sm font-medium bg-base-200 px-2 py-0.5 rounded"}
+                  (format-amount p "BAM"))))))
         (detail-row (t :search/article-total-turnover)
           (when (and stats (pos? (:total_turnover stats)))
             (format-amount (:total_turnover stats) "BAM")))
@@ -148,65 +184,89 @@
 
       ;; Stores filter chips
       (when (and (not related-loading?) (seq stores))
-        ($ :div {:class "pt-1"}
-          ($ :p {:class "text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1.5"}
+        ($ :div {:class "pt-2"}
+          ($ :p {:class "text-sm font-semibold uppercase tracking-wide text-base-content/50 mb-2"}
             (t :search/article-stores))
-          ($ :div {:class "flex flex-wrap gap-1"}
+          ($ :div {:class "flex flex-wrap gap-1.5"}
             ;; "All" chip
-            ($ :button {:class (str "text-xs px-2 py-0.5 rounded-full border transition-colors "
+            ($ :button {:class (str "text-sm px-3 py-1 rounded-full border transition-colors "
                                  (if (nil? store-filter)
                                    "bg-primary text-primary-content border-primary"
                                    "bg-base-100 border-base-300 hover:bg-base-200"))
                         :on-click #(set-store-filter! nil)}
               (t :search/article-all-stores))
-            ;; Store chips
-            (for [store stores]
-              (let [sid (str (:id store))
-                    active? (= store-filter sid)]
-                ($ :button {:key sid
-                            :class (str "text-xs px-2 py-0.5 rounded-full border transition-colors "
-                                     (if active?
-                                       "bg-primary text-primary-content border-primary"
-                                       "bg-base-100 border-base-300 hover:bg-base-200"))
-                            :on-click #(set-store-filter! (if active? nil sid))}
-                  (:display_name store)))))))
+            ;; Store chips with tooltip (supplier + address)
+            (let [store-supplier (reduce (fn [acc row]
+                                           (let [sid (str (:store_id row))]
+                                             (if (and sid (not (get acc sid)))
+                                               (assoc acc sid (:supplier_display_name row))
+                                               acc)))
+                                   {} price-history)]
+              (for [store stores]
+                (let [sid (str (:id store))
+                      active? (= store-filter sid)
+                      supplier (get store-supplier sid)
+                      tooltip (str (when supplier (str supplier "\n"))
+                                (:address store))]
+                  ($ :button {:key sid
+                              :class (str "text-sm px-3 py-1 rounded-full border transition-colors "
+                                       (if active?
+                                         "bg-primary text-primary-content border-primary"
+                                         "bg-base-100 border-base-300 hover:bg-base-200"))
+                              :title tooltip
+                              :on-click #(set-store-filter! (if active? nil sid))}
+                    (:display_name store))))))))
 
       ;; Price history table
       (when (and (not related-loading?) (seq price-history))
-        ($ :div {:class "pt-1"}
-          ($ :p {:class "text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1.5"}
+        ($ :div {:class "pt-2"}
+          ($ :p {:class "text-sm font-semibold uppercase tracking-wide text-base-content/50 mb-2"}
             (str (t :search/article-price-history)
               (when store-filter
                 (str " (" (count filtered-history) ")"))))
-          (if (seq filtered-history)
+          (if (seq sorted-history)
             ($ :div {:class "overflow-x-auto"}
-              ($ :table {:class "w-full text-xs"}
+              ($ :table {:class "w-full text-sm"}
                 ($ :thead
                   ($ :tr {:class "border-b border-base-300 text-base-content/50"}
-                    ($ :th {:class "text-left py-1 pr-2 font-medium"} (t :search/article-date))
-                    ($ :th {:class "text-right py-1 px-1 font-medium"} (t :search/article-price))
-                    ($ :th {:class "text-right py-1 px-1 font-medium"} (t :search/article-qty))
-                    ($ :th {:class "text-right py-1 pl-1 font-medium"} (t :search/article-total))
+                    (sort-header {:label (t :search/article-date) :col :purchased_at
+                                  :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                  :class "text-left py-1.5 pr-2 font-medium"})
+                    (sort-header {:label (t :search/article-price) :col :unit_price
+                                  :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                  :class "text-right py-1.5 px-1 font-medium"})
+                    (sort-header {:label (t :search/article-qty) :col :qty
+                                  :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                  :class "text-right py-1.5 px-1 font-medium"})
+                    (sort-header {:label (t :search/article-total) :col :line_total
+                                  :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                  :class "text-right py-1.5 pl-1 font-medium"})
                     (when-not store-filter
-                      ($ :th {:class "text-left py-1 pl-2 font-medium"} (t :search/article-store)))))
+                      (sort-header {:label (t :search/article-store) :col :store_display_name
+                                    :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                    :class "text-left py-1.5 pl-2 font-medium"}))))
                 ($ :tbody
-                  (for [row (take 50 filtered-history)]
-                    ($ :tr {:key (str (:purchased_at row) "-" (:unit_price row) "-" (:store_id row))
-                            :class "border-b border-base-200/50 hover:bg-base-200/30"}
-                      ($ :td {:class "py-1 pr-2"} (format-date (:purchased_at row)))
-                      ($ :td {:class "py-1 px-1 text-right font-medium"}
-                        (format-amount (:unit_price row) "BAM"))
-                      ($ :td {:class "py-1 px-1 text-right"} (some-> (:qty row) str))
-                      ($ :td {:class "py-1 pl-1 text-right font-semibold"}
-                        (format-amount (:line_total row) "BAM"))
-                      (when-not store-filter
-                        ($ :td {:class "py-1 pl-2 truncate max-w-[100px]"}
-                          (or (:store_display_name row) "—"))))))))
-            ($ :p {:class "text-xs text-base-content/40"} (t :search/article-no-history)))))
+                  (for [row sorted-history]
+                    (let [store-tip (str (when (:supplier_display_name row)
+                                           (str (:supplier_display_name row) "\n"))
+                                      (or (:store_address row) ""))]
+                      ($ :tr {:key (str (:expense_id row))
+                              :class "border-b border-base-200/50 hover:bg-base-200/30"}
+                        ($ :td {:class "py-1.5 pr-2"} (format-date (:purchased_at row)))
+                        ($ :td {:class "py-1.5 px-1 text-right font-medium"}
+                          (format-amount (:unit_price row) "BAM"))
+                        ($ :td {:class "py-1.5 px-1 text-right"} (some-> (:qty row) str))
+                        ($ :td {:class "py-1.5 pl-1 text-right font-semibold"}
+                          (format-amount (:line_total row) "BAM"))
+                        (when-not store-filter
+                          ($ :td {:class "py-1.5 pl-2 truncate max-w-[150px]"
+                                  :title store-tip}
+                            (or (:store_display_name row) "—")))))))))
+            ($ :p {:class "text-sm text-base-content/40"} (t :search/article-no-history)))))
 
       ;; No data at all
       (when (and (not related-loading?) (empty? price-history) (not (seq stores)))
-        ($ :p {:class "text-xs text-base-content/40 pt-2"} (t :search/article-no-history))))))
+        ($ :p {:class "text-sm text-base-content/40 pt-2"} (t :search/article-no-history))))))
 
 (defui detail-panel [{:keys [selected results related related-loading? t on-close]}]
   (when selected
@@ -216,8 +276,8 @@
           is-article? (= (keyword type) :articles)]
       ($ :div {:class "h-full flex flex-col bg-base-100 border-l border-base-300"}
         ;; Header
-        ($ :div {:class "flex items-center justify-between px-4 py-3 border-b border-base-300 flex-shrink-0"}
-          ($ :p {:class "text-sm font-semibold"}
+        ($ :div {:class "flex items-center justify-between px-5 py-3 border-b border-base-300 flex-shrink-0"}
+          ($ :p {:class "text-base font-semibold"}
             (if is-article?
               (or (:canonical_name item) (t (keyword "search" (str "type-" (name type)))))
               (t (keyword "search" (str "type-" (name type))))))
@@ -227,7 +287,7 @@
               ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                         :d "M6 18L18 6M6 6l12 12"}))))
         ;; Body
-        ($ :div {:class "flex-1 overflow-y-auto p-4"}
+        ($ :div {:class "flex-1 overflow-y-auto p-5"}
           (if item
             (if is-article?
               ;; Rich article detail with price history + store filtering
@@ -333,11 +393,11 @@
 
       ;; Left column — search input + results
       ($ :div {:class (str "flex flex-col overflow-hidden transition-all duration-300 "
-                        (if panel-open? "w-1/2 border-r border-base-300" "w-full"))}
+                        (if panel-open? "w-1/3 border-r border-base-300" "w-full"))}
 
         ;; Search bar
         ($ :div {:class "flex-shrink-0 p-4 border-b border-base-200"}
-          ($ :h1 {:class "text-lg font-semibold mb-3"} (t :search/title))
+          ($ :h1 {:class "text-2xl font-bold mb-3"} (t :search/title))
           ($ :div {:class "relative"}
             ($ :div {:class "absolute inset-y-0 left-3 flex items-center pointer-events-none"}
               ($ :svg {:class "w-4 h-4 text-base-content/40" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
@@ -487,7 +547,7 @@
 
       ;; Right column — detail panel (slides in)
       (when panel-open?
-        ($ :div {:class "w-1/2 overflow-hidden"}
+        ($ :div {:class "w-2/3 overflow-hidden"}
           ($ detail-panel
             {:selected selected
              :results (or results {})

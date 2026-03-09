@@ -54,7 +54,10 @@
       {:db (-> db
              (assoc-in [:user-expenses :search :query] query)
              (assoc-in [:user-expenses :search :loading?] false)
-             (assoc-in [:user-expenses :search :results] {}))})))
+             (assoc-in [:user-expenses :search :results] {})
+             (assoc-in [:user-expenses :search :selected] nil)
+             (assoc-in [:user-expenses :search :related] nil)
+             (assoc-in [:user-expenses :search :related-loading?] false))})))
 
 ;; ---------------------------------------------------------------------------
 ;; HTTP fetch
@@ -77,7 +80,10 @@
   (fn [db [response]]
     (-> db
       (assoc-in [:user-expenses :search :loading?] false)
-      (assoc-in [:user-expenses :search :results] (:results response)))))
+      (assoc-in [:user-expenses :search :results] (:results response))
+      (assoc-in [:user-expenses :search :selected] nil)
+      (assoc-in [:user-expenses :search :related] nil)
+      (assoc-in [:user-expenses :search :related-loading?] false))))
 
 (rf/reg-event-db
   :user-expenses/search-results-failure
