@@ -42,15 +42,15 @@
      :on-click on-click}
     ($ :div {:class "flex items-center justify-between gap-2"}
       ($ :div {:class "min-w-0 flex-1"}
-        ($ :p {:class "text-sm font-medium truncate"}
+        ($ :p {:class "text-base font-medium truncate"}
           (or (:supplier_display_name item) "—"))
-        ($ :p {:class "text-xs text-base-content/60 truncate mt-0.5"}
+        ($ :p {:class "text-sm text-base-content/60 truncate mt-0.5"}
           (str (format-date (:purchased_at item))
             (when (:payer_label item) (str " · " (:payer_label item))))))
       ($ :div {:class "flex-shrink-0 text-right"}
-        ($ :p {:class "text-sm font-semibold"}
+        ($ :p {:class "text-base font-semibold"}
           (format-amount (:total_amount item) (:currency item)))
-        ($ :span {:class (str "text-xs px-1.5 py-0.5 rounded "
+        ($ :span {:class (str "text-sm px-1.5 py-0.5 rounded "
                            (if (:is_posted item)
                              "bg-success/10 text-success"
                              "bg-warning/10 text-warning"))}
@@ -64,9 +64,9 @@
                 "bg-base-100 border-base-300 hover:bg-base-200"))
      :on-click on-click}
     ($ :div {:class "min-w-0"}
-      ($ :p {:class "text-sm font-medium truncate"}
+      ($ :p {:class "text-base font-medium truncate"}
         (or (:original_filename item) "—"))
-      ($ :p {:class "text-xs text-base-content/60 truncate mt-0.5"}
+      ($ :p {:class "text-sm text-base-content/60 truncate mt-0.5"}
         (str (or (:supplier_guess item) "")
           (when (:store_guess item) (str " · " (:store_guess item))))))))
 
@@ -77,9 +77,9 @@
                 "bg-primary/10 border-primary/30"
                 "bg-base-100 border-base-300 hover:bg-base-200"))
      :on-click on-click}
-    ($ :p {:class "text-sm font-medium truncate"} (or label "—"))
+    ($ :p {:class "text-base font-medium truncate"} (or label "—"))
     (when subtitle
-      ($ :p {:class "text-xs text-base-content/60 truncate mt-0.5"} subtitle))))
+      ($ :p {:class "text-sm text-base-content/60 truncate mt-0.5"} subtitle))))
 
 ;; ---------------------------------------------------------------------------
 ;; Result group
@@ -89,9 +89,9 @@
   (when (seq items)
     ($ :div {:class "mb-5"}
       ($ :div {:class "flex items-center gap-2 mb-2"}
-        ($ :span {:class (str "text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full " badge-class)}
+        ($ :span {:class (str "text-sm font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full " badge-class)}
           title)
-        ($ :span {:class "text-xs text-base-content/40"} (count items)))
+        ($ :span {:class "text-sm text-base-content/40"} (count items)))
       ($ :div {:class "space-y-1.5"}
         (for [item items]
           (render-item item))))))
@@ -967,15 +967,15 @@
           ($ :div {:class "flex-1 overflow-y-auto p-4"}
             (cond
               loading?
-              ($ :div {:class "flex items-center justify-center py-12 text-base-content/40 text-sm"}
+              ($ :div {:class "flex items-center justify-center py-12 text-base-content/40 text-base"}
                 (t :search/loading))
 
               (and query (< (count query) 2))
-              ($ :div {:class "flex items-center justify-center py-12 text-base-content/40 text-sm"}
+              ($ :div {:class "flex items-center justify-center py-12 text-base-content/40 text-base"}
                 (t :search/min-chars))
 
               (and query (>= (count query) 2) (not has-results?))
-              ($ :div {:class "flex items-center justify-center py-12 text-base-content/40 text-sm"}
+              ($ :div {:class "flex items-center justify-center py-12 text-base-content/40 text-base"}
                 (t :search/no-results query))
 
               has-results?
@@ -1125,7 +1125,7 @@
                 ($ :svg {:class "w-12 h-12 mb-3" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
                   ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "1.5"
                             :d "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"}))
-                ($ :p {:class "text-sm"} (t :search/placeholder))))))
+                ($ :p {:class "text-base"} (t :search/placeholder))))))
 
         ;; Right column — detail panel (slides in)
         (when panel-open?
